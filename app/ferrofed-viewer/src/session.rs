@@ -171,6 +171,28 @@ struct Session {
     created: Instant,
     /// When the session last saw a request.
     touched: Instant,
+    /// The operator's access token, which the console calls the gateway
+    /// with.
+    access_token: SecretString,
+    /// When the access token expires, when the provider said.
+    expires: Option<Instant>,
+}
+
+/// What a completed sign-in leaves the session: the operator's access
+/// token and how long the provider says it lasts (RFC 6749 §5.1).
+pub struct SignedIn {
+    /// The access token.
+    pub access_token: SecretString,
+    /// Its lifetime, `expires_in`, when the provider sent one.
+    pub expires_in: Option<std::time::Duration>,
+}
+
+impl fmt::Debug for SignedIn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SignedIn")
+            .field("expires_in", &self.expires_in)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Both pools, under one lock.
@@ -288,9 +310,7 @@ impl Sessions {
     /// Returns [`SessionError::Full`] when the pool is at its bound,
     /// [`SessionError::Random`] when no id could be minted, and
     /// [`SessionError::Poisoned`] when the store is unusable.
-    pub fn establish(&self) -> Result<SessionId, SessionError> {
-        // TODO(#276): the code exchange calls this, and the session keeps the
-        // operator's tokens.
+    pub fn establish(&self, signed_in: SignedIn) -> Result<SessionId, SessionError> {
         let id = SessionId::mint()?;
         let now = Instant::now();
         let mut store = self.lock()?;
@@ -306,28 +326,32 @@ impl Sessions {
             Session {
                 created: now,
                 touched: now,
+                access_token: signed_in.access_token,
+                expires: signed_in
+                    .expires_in
+                    .and_then(|lifetime| now.checked_add(lifetime)),
             },
         );
         Ok(id)
     }
 
-    /// Whether `id` is a live signed-in session, which the request now
-    /// touches; an expired one is dropped.
+    /// The access token of the live signed-in session `id`, which the
+    /// request now touches; an expired session is dropped and answers `None`.
     ///
     /// # Errors
     /// Returns [`SessionError::Poisoned`] when the store is unusable.
-    pub fn touch(&self, id: &SessionId) -> Result<bool, SessionError> {
+    pub fn access_token(&self, id: &SessionId) -> Result<Option<SecretString>, SessionError> {
         let now = Instant::now();
         let mut store = self.lock()?;
         let Some(session) = store.sessions.get_mut(id) else {
-            return Ok(false);
+            return Ok(None);
         };
         if live(&self.settings, session, now) {
             session.touched = now;
-            Ok(true)
+            Ok(Some(session.access_token.clone()))
         } else {
             store.sessions.remove(id);
-            Ok(false)
+            Ok(None)
         }
     }
 
@@ -388,11 +412,12 @@ impl Sessions {
     }
 }
 
-/// Whether `session` is inside both its idle and its absolute timeout at
-/// `now`.
+/// Whether `session` is inside its idle and its absolute timeout at `now`,
+/// and its access token has not expired.
 fn live(settings: &SessionSettings, session: &Session, now: Instant) -> bool {
     now.saturating_duration_since(session.touched) < settings.idle_timeout
         && now.saturating_duration_since(session.created) < settings.absolute_timeout
+        && session.expires.is_none_or(|expires| now < expires)
 }
 
 /// The PKCE `S256` challenge of `verifier`: the base64url of its SHA-256
@@ -418,7 +443,7 @@ fn random_token() -> Result<String, SessionError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Occupancy, PendingSignIn, SessionError, SessionId, Sessions, challenge};
+    use super::{Occupancy, PendingSignIn, SessionError, SessionId, Sessions, SignedIn, challenge};
     use crate::config::settings::SessionSettings;
     use secrecy::{ExposeSecret, SecretString};
     use std::time::Duration;
@@ -436,6 +461,13 @@ mod tests {
 
     fn sign_in() -> PendingSignIn {
         PendingSignIn::mint().expect("the random source works")
+    }
+
+    fn signed_in() -> SignedIn {
+        SignedIn {
+            access_token: SecretString::from("synthetic-access-token"),
+            expires_in: None,
+        }
     }
 
     #[test]
@@ -480,7 +512,7 @@ mod tests {
     #[test]
     fn a_full_sign_in_pool_drops_its_oldest_and_never_touches_the_sessions() {
         let sessions = Sessions::new(settings());
-        let operator = sessions.establish().expect("room for a session");
+        let operator = sessions.establish(signed_in()).expect("room for a session");
         let first = sessions.begin(sign_in()).expect("usable");
         let mut last = first.clone();
         for _ in 0..100 {
@@ -495,7 +527,7 @@ mod tests {
         );
         assert!(sessions.take_pending(&first).expect("usable").is_none());
         assert!(sessions.take_pending(&last).expect("usable").is_some());
-        assert!(sessions.touch(&operator).expect("usable"));
+        assert!(sessions.access_token(&operator).expect("usable").is_some());
     }
 
     #[test]
@@ -513,12 +545,12 @@ mod tests {
     #[test]
     fn a_full_session_pool_refuses_a_new_session_and_keeps_the_live_ones() {
         let sessions = Sessions::new(settings());
-        let first = sessions.establish().expect("room");
-        let second = sessions.establish().expect("room");
-        let refused = sessions.establish();
+        let first = sessions.establish(signed_in()).expect("room");
+        let second = sessions.establish(signed_in()).expect("room");
+        let refused = sessions.establish(signed_in());
         assert!(matches!(refused, Err(SessionError::Full)), "{refused:?}");
-        assert!(sessions.touch(&first).expect("usable"));
-        assert!(sessions.touch(&second).expect("usable"));
+        assert!(sessions.access_token(&first).expect("usable").is_some());
+        assert!(sessions.access_token(&second).expect("usable").is_some());
     }
 
     #[test]
@@ -534,8 +566,8 @@ mod tests {
             },
         ] {
             let sessions = Sessions::new(expired);
-            let id = sessions.establish().expect("room");
-            assert!(!sessions.touch(&id).expect("usable"));
+            let id = sessions.establish(signed_in()).expect("room");
+            assert!(sessions.access_token(&id).expect("usable").is_none());
             assert_eq!(0, sessions.occupancy().expect("usable").sessions);
         }
     }

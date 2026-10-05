@@ -34,6 +34,10 @@ path = "src/main.rs"
 leptos.workspace = true
 leptos_meta.workspace = true
 leptos_router.workspace = true
+# The view models the server renders and the browser hydrates from, and
+# their error.
+serde.workspace = true
+thiserror.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }
@@ -55,9 +59,12 @@ base64.workspace = true
 clap.workspace = true
 cookie.workspace = true
 # The type every credential the console is configured with is held in, which
-# never renders its value.
+# never renders its value, and the reports of the gateway's operator surface.
 ferrofed-registry.workspace = true
 http.workspace = true
+# The ID Token of a sign-in, verified against the provider's JWK Set
+# (OpenID Connect Core 1.0 §3.1.3.7).
+jsonwebtoken.workspace = true
 # The gateway's self-description, `OPTIONS {base}/` (§7a.2).
 openehr-federation.workspace = true
 # The ITS-REST client the gateway is called through.
@@ -66,8 +73,7 @@ openehr-its = { workspace = true, features = ["rest-client"] }
 # already brings in.
 reqwest.workspace = true
 secrecy.workspace = true
-serde.workspace = true
-thiserror.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time"] }
 toml.workspace = true
 tower-http = { workspace = true, features = ["set-header"] }
@@ -76,6 +82,11 @@ tracing-subscriber.workspace = true
 url.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The test OpenID Provider: an issuer whose key pair is generated at run
+# time, so no private key is committed, and the ID Tokens it signs.
+ferrofed-testkit.workspace = true
+jiff.workspace = true
+jsonwebtoken.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }

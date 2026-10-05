@@ -170,9 +170,23 @@ pub(crate) fn bearer_as(subject: &str) -> Result<String, IssuerError> {
     Ok(format!("Bearer {}", issuer().mint(&claims)?))
 }
 
+/// The scope value the test issuer admits operators with, which no default
+/// token carries.
+pub(crate) const OPERATOR_SCOPE: &str = "ferrofed:operator";
+
+/// Returns the `Authorization` value of an operator: the default [`claims`]
+/// with [`OPERATOR_SCOPE`] added to the scope.
+pub(crate) fn operator_bearer() -> Result<String, IssuerError> {
+    let mut claims = claims();
+    let scope = claims.scope.take().unwrap_or_default();
+    claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
+    Ok(format!("Bearer {}", issuer().mint(&claims)?))
+}
+
 /// Returns the `[auth]` of every test gateway: the test issuer is trusted,
 /// its key set handed over with the configuration, and the default client is
-/// a demographic client.
+/// a demographic client. Its
+/// entry admits operators with [`OPERATOR_SCOPE`].
 pub(crate) fn auth() -> AuthSettings {
     AuthSettings {
         audience: Some(AUDIENCE.to_owned()),
@@ -181,6 +195,7 @@ pub(crate) fn auth() -> AuthSettings {
             verification: Verification::KeySet(KeySource::Set(issuer().jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::from([claims().client_id]),
+            operator_scope: Some(OPERATOR_SCOPE.to_owned()),
             patient: None,
             requester: None,
         }],

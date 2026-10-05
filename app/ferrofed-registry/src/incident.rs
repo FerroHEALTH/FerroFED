@@ -245,6 +245,7 @@ impl Incident {
         // NOTE: no specification governs this: our own design; an operator
         // alerts on this count, and no webhook is called.
         self.kind().counter().fetch_add(1, Ordering::Relaxed);
+        crate::operator::record(self);
         match self {
             Self::LearnedCreatingSystemConflict {
                 creating_system_id,

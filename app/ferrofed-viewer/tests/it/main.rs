@@ -14,6 +14,8 @@
 #[cfg(test)]
 mod config;
 #[cfg(test)]
+mod exchange;
+#[cfg(test)]
 mod gateway;
 #[cfg(test)]
 mod secrets;
@@ -23,3 +25,5 @@ mod server;
 mod sign_in;
 #[cfg(test)]
 mod support;
+#[cfg(test)]
+mod views;

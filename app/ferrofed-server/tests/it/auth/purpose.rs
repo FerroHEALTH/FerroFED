@@ -9,7 +9,7 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_testkit::issuer::{ACT_REASON, AuthorizationDetail, Coding, Extensions};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, claims, minted, query};

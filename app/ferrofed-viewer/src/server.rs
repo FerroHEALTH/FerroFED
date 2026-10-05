@@ -44,20 +44,37 @@ pub struct ViewerState {
     settings: Arc<Settings>,
     sessions: Sessions,
     gateway: Gateway,
+    provider: reqwest::Client,
 }
 
 impl ViewerState {
     /// The state for `settings`, with an empty session store.
     ///
     /// # Errors
-    /// Returns the [`GatewayError`] of a gateway client that cannot be built.
+    /// Returns the [`GatewayError`] of a gateway client, or of the client of
+    /// the OpenID Provider, that cannot be built.
     pub fn new(settings: Settings) -> Result<Self, GatewayError> {
         let gateway = Gateway::new(&settings.gateway)?;
+        // NOTE: RFC 6749 §3.2: the token endpoint answers the request itself, so
+        // the provider's client follows no redirect.
+        let provider = reqwest::Client::builder()
+            .timeout(settings.gateway.timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|source| GatewayError::Transport { source })?;
         Ok(Self {
             sessions: Sessions::new(settings.session),
             settings: Arc::new(settings),
             gateway,
+            provider,
         })
+    }
+
+    /// The HTTP client of the OpenID Provider, which the sign-in exchanges
+    /// its code with.
+    #[must_use]
+    pub fn provider(&self) -> &reqwest::Client {
+        &self.provider
     }
 
     /// The resolved configuration.
@@ -95,20 +112,61 @@ pub fn leptos_options(settings: &Settings) -> LeptosOptions {
 pub fn router(state: ViewerState) -> axum::Router {
     let options = leptos_options(state.settings());
     let routes = leptos_axum::generate_route_list(crate::app::App);
+    let context = {
+        let state = state.clone();
+        move || {
+            leptos::context::provide_context(state.clone());
+            provide_request_nonce();
+        }
+    };
     let pages = axum::Router::new()
         .route(HEALTH, get(health))
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
-        .leptos_routes_with_context(&options, routes, provide_request_nonce, {
+        .leptos_routes_with_context(&options, routes, context.clone(), {
             let options = options.clone();
             move || crate::app::shell(options.clone())
         })
         .fallback(leptos_axum::file_and_error_handler_with_context(
-            provide_request_nonce,
+            context,
             crate::app::shell,
         ))
+        .layer(axum::middleware::from_fn(require_session))
         .layer(Extension(state));
     with_security_headers(pages).with_state(options)
+}
+
+/// Sends a request for an operator view that carries no live signed-in
+/// session to sign-in, before anything is rendered or asked of the gateway.
+///
+/// The server functions check the session themselves as well, because each
+/// is a public endpoint of its own.
+async fn require_session(
+    Extension(state): Extension<ViewerState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    if !crate::views::PATHS.contains(&path) {
+        return next.run(request).await;
+    }
+    let signed_in = crate::oidc::cookie_named(request.headers(), crate::session::COOKIE)
+        .map(|id| state.sessions().access_token(&id));
+    match signed_in {
+        Some(Ok(Some(_token))) => next.run(request).await,
+        Some(Err(error)) => {
+            tracing::error!(%error, "the session store could not be read");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+        Some(Ok(None)) | None => {
+            let mut response = StatusCode::SEE_OTHER.into_response();
+            response.headers_mut().insert(
+                http::header::LOCATION,
+                HeaderValue::from_static(crate::app::SIGN_IN),
+            );
+            response
+        }
+    }
 }
 
 /// The body of the liveness route.

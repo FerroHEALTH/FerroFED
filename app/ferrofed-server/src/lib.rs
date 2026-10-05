@@ -74,6 +74,7 @@ pub mod jwks;
 pub mod localization;
 pub mod metrics;
 mod onward;
+pub mod operator;
 pub mod panic;
 pub mod reload;
 pub mod request_id;
@@ -155,7 +156,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// its binding names, with no client authentication ([`documents`]).
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
 /// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
-/// from its query string ([`facade::query_aql_get`]). Every other path under
+/// from its query string ([`facade::query_aql_get`]). `GET
+/// {base}/operator/incidents`, `/operator/creating-systems` and
+/// `/operator/stored-queries` answer the read-only operator surface to a
+/// caller with the operator scope ([`operator`]). Every other path under
 /// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
 /// or outside the base, answers `404`. Under a base other than `/`, the base
 /// itself and the base with a trailing `/` are both `{base}/`.
@@ -174,6 +178,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
                 .fallback(facade::route::unrouted),
         )
         .fallback(facade::route::unrouted);
+    let surface = operator::routes(surface);
     let surface = state.processes().routes(surface);
     let routes = if server.base_path.is_root() {
         surface.route("/", base_root())

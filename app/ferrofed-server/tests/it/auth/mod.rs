@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::federation::Federation;

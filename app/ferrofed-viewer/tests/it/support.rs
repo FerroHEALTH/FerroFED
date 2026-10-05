@@ -11,7 +11,9 @@ use axum::body::Body;
 use ferrofed_viewer::config::Config;
 use ferrofed_viewer::config::settings::Settings;
 use ferrofed_viewer::server::{ViewerState, router};
+use ferrofed_viewer::session::{SessionId, SignedIn};
 use http::{Request, Response};
+use secrecy::SecretString;
 use tower::ServiceExt as _;
 
 /// A configuration with an OpenID Provider on loopback, for the sign-in
@@ -23,6 +25,8 @@ secure_cookie = false
 [oidc]
 issuer = "https://idp.example.org/realms/ferrofed"
 authorization_endpoint = "https://idp.example.org/realms/ferrofed/auth?kc_idp_hint=example"
+token_endpoint = "http://127.0.0.1:9/token"
+jwks_uri = "http://127.0.0.1:9/jwks.json"
 client_id = "ferrofed-viewer"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid", "profile"]
@@ -66,4 +70,25 @@ pub(crate) fn header<'a>(response: &'a Response<()>, name: &str) -> &'a str {
         .get(name)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
+}
+
+/// The synthetic access token every test operator signs in with.
+pub(crate) const OPERATOR_TOKEN: &str = "synthetic-operator-token";
+
+/// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`].
+pub(crate) fn signed_in() -> SignedIn {
+    SignedIn {
+        access_token: SecretString::from(OPERATOR_TOKEN),
+        expires_in: None,
+    }
+}
+
+/// A `GET` of `path` carrying the session cookie of `session`.
+pub(crate) fn get_as(path: &str, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
+    Ok(Request::get(path)
+        .header(
+            "cookie",
+            format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
+        )
+        .body(Body::empty())?)
 }
