@@ -32,8 +32,9 @@ aws-lc-rs.workspace = true
 # the outbound gate reads before an exchange (#439).
 base64.workspace = true
 ferrofed-registry.workspace = true
-# The access token request of the Nuts grant, Annex B §B.4 (#88), under nl.
-nl-generic-functions = { workspace = true, optional = true, features = ["nuts-auth"] }
+# The access token request of the Nuts grant, Annex B §B.4 (#88), and the
+# authorizer the Nuts grant gives the NVI client (#539), under nl.
+nl-generic-functions = { workspace = true, optional = true, features = ["nuts-auth", "nvi"] }
 # The authorization server metadata checks (RFC 8414) the OAuth 2.0 issuer
 # audience and the FAPI 2.0 grant hold their server to (#497, #551).
 oauth-server-metadata.workspace = true

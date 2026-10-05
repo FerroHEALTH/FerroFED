@@ -28,6 +28,8 @@ mod masking;
 mod mtls;
 #[cfg(feature = "nl")]
 mod nuts;
+#[cfg(feature = "nl")]
+mod nuts_service;
 mod onward;
 mod pins;
 mod probe;

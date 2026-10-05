@@ -279,6 +279,39 @@ key, a proof or the token: a refusal names the authorization server's
 `error` code and at most 256 characters of its description. An `oauth2`
 section and a `nuts` section for the same endpoint refuse the configuration.
 
+### The NVI's Nuts grant
+
+The same table under `[nl_gf.nvi.credentials.nuts]` authenticates the
+gateway to the NVI, the Localization Service of
+[Dutch localization](identity.md#dutch-localization-nl_gfnvi), as a data
+user on GF-Authentication (the IG's Localization page, GFI-004, GFI-005):
+
+```toml
+[nl_gf.nvi.credentials.nuts]
+authorization_server = "https://nuts.example.org/oauth2/nvi"
+scope = "nl-gf-localization"
+did = "did:web:gateway.example.org"
+kid = "did:web:gateway.example.org#key-1"
+key_file = "/run/secrets/nuts-holder.pem"
+dpop_key_file = "/run/secrets/nvi-dpop.pem"
+
+[[nl_gf.nvi.credentials.nuts.credential]]
+input_descriptor = "organization_credential"
+file = "/run/secrets/organization.jwt"
+```
+
+The token is obtained and cached as a node's is, each token request bounded
+by the localization's `timeout_ms`. Every search carries it under the `DPoP`
+scheme with a proof of `dpop_key_file`'s key over the search URL without its
+query, so the pseudonym never reaches a proof or the authorization server
+(RFC 9449 §4.2, §7.1). A `401` from the NVI drops the token, and a nonce it
+demands is answered once (RFC 9449 §9). A grant the authorization server
+refuses leaves the localization unavailable, so the query fails closed
+(§14.1). The token goes to the NVI alone, never to a node, a log line or an
+error. `authorization_server` must be `https` outside development, or boot
+is refused, naming its key. The NVI's credentials take no `oauth2` or
+`fapi2` grant: the IG defines none for the Localization Service.
+
 ## The FAPI 2.0 grant (Annex B §B.4a)
 
 A `fapi2` section makes the gateway authenticate to a node whose

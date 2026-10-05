@@ -54,14 +54,14 @@ const SUBJECT: &str = "SYNTHETIC-SUBJECT-4f1a";
 
 /// A clock the test moves by hand.
 #[derive(Debug)]
-struct ManualClock(Mutex<Instant>);
+pub(crate) struct ManualClock(Mutex<Instant>);
 
 impl ManualClock {
-    fn new() -> Arc<Self> {
+    pub(crate) fn new() -> Arc<Self> {
         Arc::new(Self(Mutex::new(Instant::now())))
     }
 
-    fn advance(&self, by: Duration) -> TestResult {
+    pub(crate) fn advance(&self, by: Duration) -> TestResult {
         let mut now = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         *now = now.checked_add(by).ok_or("the clock passed its range")?;
         Ok(())

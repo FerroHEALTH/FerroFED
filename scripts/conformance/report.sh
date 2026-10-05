@@ -26,16 +26,19 @@
 #
 # A Node or Operator point is scored against that actor, never the gateway
 # (section 16.2), so it is a class of its own and never a gateway pass. The
-# node profile checks under tools/ write one findings file per check into the
-# --node-profile DIR (target/conformance/node-profile by default): rows of
-# product, point, check, verdict (pass, fail, not-observable) and evidence.
-# Such a row reads node-fail or operator-fail when a finding on it fails,
+# node profile checks under tools/ write one findings file per check and
+# harness CDR product into the --node-profile DIR
+# (target/conformance/node-profile by default): rows of product, point,
+# check, verdict (pass, fail, not-observable) and evidence. Such a row reads
+# node-fail or operator-fail when a finding of any product on it fails,
 # node-pass or operator-pass when one passes and none fails, and
 # node-not-observable or operator-not-observable when none decides it;
 # check-failed when a marked check itself failed, not-run when one did not
 # run, not-reported when the checks ran and wrote no finding, and unchecked
 # (a Node row) or not-applicable (an Operator row) when no check is marked.
-# No specification governs the report's form: our own design.
+# The findings section shows each product's verdict per check side by side,
+# then each product's findings with their evidence. No specification governs
+# the report's form, or which products the harness runs: our own design.
 #
 # It writes DIR/report.tsv, DIR/report.md and DIR/node-profile.tsv (DIR
 # defaults to target/conformance) and exits 1 when a covered row failed or
@@ -218,7 +221,11 @@ render() {
   ' < <(awk -F'\t' '$1 == "track"' "$tsv"; awk -F'\t' '$1 == "gateway"' "$tsv"; awk -F'\t' '$1 == "node"' "$tsv"; awk -F'\t' '$1 == "operator"' "$tsv")
 }
 
-# render_findings FINDINGS: the markdown table of the node-profile findings.
+# render_findings FINDINGS: the markdown tables of the node-profile findings:
+# one row per point and check with a verdict column per product, products in
+# name order and checks in the order first recorded, then one table per
+# product with the evidence. Where a product recorded one check on one point
+# twice, the summary shows the worse verdict (fail, then not-observable).
 render_findings() {
   local findings="$1"
   printf '\n## Node profile findings\n\n'
@@ -226,11 +233,39 @@ render_findings() {
     printf 'No node profile finding was recorded in this run.\n'
     return
   fi
-  printf 'What the node profile checks observed at each harness CDR product, per point they assist (section 16.2).\n\n'
-  printf '| Product | Point | Check | Verdict | Evidence |\n|---|---|---|---|---|\n'
+  printf 'What the node profile checks observed at each harness CDR product, per point they assist (section 16.2). A Node point above reads the worst verdict any product earned on it; this table shows each product apart, and a dash marks a check that product recorded no finding for.\n\n'
   awk -F'\t' '
     function cell(text) { gsub(/\|/, "\\|", text); return text }
-    { print "| " cell($1) " | " $2 " | " cell($3) " | " $4 " | " cell($5) " |" }
+    function rank(verdict) { return verdict == "fail" ? 3 : (verdict == "not-observable" ? 2 : (verdict == "" ? 0 : 1)) }
+    !($1 in seen) { seen[$1] = 1; products[++np] = $1 }
+    {
+      key = $2 "\t" $3
+      if (!(key in known)) { known[key] = 1; keys[++nk] = key }
+      if (rank($4) > rank(verdict[key, $1])) verdict[key, $1] = $4
+      rows[$1] = rows[$1] "| " $2 " | " cell($3) " | " $4 " | " cell($5) " |\n"
+    }
+    END {
+      for (i = 2; i <= np; i++) {
+        name = products[i]
+        for (j = i - 1; j >= 1 && products[j] > name; j--) products[j + 1] = products[j]
+        products[j + 1] = name
+      }
+      header = "| Point | Check |"; rule = "|---|---|"
+      for (i = 1; i <= np; i++) { header = header " " cell(products[i]) " |"; rule = rule "---|" }
+      print header; print rule
+      for (k = 1; k <= nk; k++) {
+        split(keys[k], part, "\t")
+        line = "| " part[1] " | " cell(part[2]) " |"
+        for (i = 1; i <= np; i++) {
+          v = verdict[keys[k], products[i]]
+          line = line " " (v == "" ? "-" : v) " |"
+        }
+        print line
+      }
+      for (i = 1; i <= np; i++) {
+        printf "\n### %s\n\n| Point | Check | Verdict | Evidence |\n|---|---|---|---|\n%s", cell(products[i]), rows[products[i]]
+      }
+    }
   ' "$findings"
 }
 
@@ -340,20 +375,21 @@ self_test() {
   junit "$work/kit.xml" 'e2e::scenario::gated_case|demo::it|' 'e2e::node::node_case|kit::it|' 'e2e::node::operator_case|kit::it|'
   junit "$work/kit-failing.xml" 'e2e::scenario::gated_case|demo::it|' 'e2e::node::node_case|kit::it|<failure message="x"/>' 'e2e::node::operator_case|kit::it|'
   # findings DIR ROWS...: a findings directory of one file holding the
-  # "point|verdict" ROWS for one product.
+  # "point|verdict" ROWS, each of the product Demo CDR 1.0 unless the row
+  # names another as "point|verdict|product".
   findings() {
-    local dir="$1" row point verdict
+    local dir="$1" row point verdict product
     shift
     mkdir -p "$dir"
     {
       printf 'product\tpoint\tcheck\tverdict\tevidence\n'
       for row in "$@"; do
-        IFS='|' read -r point verdict <<< "$row"
-        printf 'Demo CDR 1.0\t%s\ta check\t%s\tseen\n' "$point" "$verdict"
+        IFS='|' read -r point verdict product <<< "$row"
+        printf '%s\t%s\ta check\t%s\tseen\n' "${product:-Demo CDR 1.0}" "$point" "$verdict"
       done
     } > "$dir/demo-check.tsv"
   }
-  findings "$work/nodes-fail" 'CP-4|pass' 'CP-4|fail' 'CP-6|not-observable'
+  findings "$work/nodes-fail" 'CP-4|pass|Other CDR 2.0' 'CP-4|pass' 'CP-4|fail' 'CP-6|not-observable'
   findings "$work/nodes-pass" 'CP-4|pass' 'CP-4|not-observable' 'CP-6|pass'
   findings "$work/nodes-none" 'CP-4|not-observable'
   # expect WANT ROW RESULT OFFLINE GATED [NODES]: the report exits WANT and its
@@ -389,9 +425,16 @@ self_test() {
   expect 0 "operator CP-6" operator-not-observable "$work/offline.xml" "$work/kit.xml" "$work/nodes-fail"
   expect 0 "operator CP-8" not-applicable "$work/offline.xml" "$work/kit.xml" "$work/nodes-pass"
   generate "$tree" "$work/out" "$work/offline.xml" "$work/kit.xml" "$work/nodes-fail" > /dev/null 2>&1 || true
-  if ! grep -q '^| Demo CDR 1.0 | CP-4 | a check | fail | seen |$' "$work/out/report.md" \
+  # Each product is a column of the summary, the worse of two verdicts on
+  # one check shown, and each has its own table with the evidence.
+  if ! grep -q '^| Point | Check | Demo CDR 1.0 | Other CDR 2.0 |$' "$work/out/report.md" \
+    || ! grep -q '^| CP-4 | a check | fail | pass |$' "$work/out/report.md" \
+    || ! grep -q '^| CP-6 | a check | not-observable | - |$' "$work/out/report.md" \
+    || ! grep -q '^### Other CDR 2.0$' "$work/out/report.md" \
+    || ! grep -q '^| CP-4 | a check | fail | seen |$' "$work/out/report.md" \
     || ! grep -q '^## Node points$' "$work/out/report.md" \
-    || [[ "$(grep -c 'Demo CDR' "$work/out/node-profile.tsv")" -ne 3 ]]; then
+    || [[ "$(grep -c 'Demo CDR' "$work/out/node-profile.tsv")" -ne 3 ]] \
+    || [[ "$(grep -c 'Other CDR' "$work/out/node-profile.tsv")" -ne 1 ]]; then
     echo "conformance-report: self-test failed: the node profile findings are not reported." >&2
     failed=1
   fi

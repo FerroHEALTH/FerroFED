@@ -7,7 +7,8 @@
 //! A gateway cannot prove a node's obligations, so these tests score nothing
 //! of the gateway's. Each runs one check of `node_profile` against FerroEHR,
 //! the CDR every harness node runs, and writes its finding to the findings
-//! directory, which the conformance report shows as the node class. A test
+//! directory, which the conformance report shows as the node class. The same
+//! checks run against EHRbase, a second product, in [`ehrbase`]. A test
 //! fails when the check could not observe what the harness arranged for it,
 //! never on the node's verdict: FerroEHR is a node here, never the oracle,
 //! and its verdict is the report's to show.
@@ -39,6 +40,8 @@ use ferrofed_testkit::{oauth, unreachable};
 use openehr_its::json::from_canonical_json;
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use uuid::Uuid;
+
+mod ehrbase;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

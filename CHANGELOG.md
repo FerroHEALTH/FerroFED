@@ -46,6 +46,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `http` token endpoint or node, and TLS material in a service's own
   `credentials` section refuse the configuration. RFC 8705 is vendored
   under `docs/specs/ietf-oauth/`.
+- The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
+  §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
+  GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward
+  credentials take and runs the same grant: a Verifiable Presentation of the
+  gateway's credentials for a token bound to its `DPoP` key, cached until 30
+  seconds before it expires and dropped on the NVI's `401`. Every search
+  carries the token with a proof of the key over the search URL without its
+  query, and a nonce the NVI demands is answered once (RFC 9449 §7.1, §9).
+  The token goes to the NVI alone. A refused grant leaves the localization
+  unavailable, so the query fails closed (§14.1). An `oauth2` or `fapi2`
+  table under `[nl_gf.nvi.credentials]` is refused, naming its key, since the
+  IG defines no such grant for the Localization Service. The
+  `nl-generic-functions` NVI client takes an authorizer that makes each
+  request's headers and is handed the request URL without the query that
+  holds the pseudonym (0.0.12).
 
 - An end-to-end check that the `AVG` the gateway declares decomposable in
   `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
@@ -85,6 +100,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   federation whose nodes hold to the FAPI 2.0 Security Profile, which admits
   ES256 and not ES384 (§5.4.1), signs with a P-256 key. A key on any other
   curve refuses the configuration, naming the key.
+- The Federation-Node profile runs against a second CDR product, EHRbase,
+  behind `FERROFED_E2E` (#549; §16.2, N26, N27, N34, CP-18, CP-19, CP-27,
+  CP-33a). The testkit pins `ehrbase/ehrbase` 2.36.0 and the
+  `ehrbase/ehrbase-v2-postgres` 16.2 database image by digest, each a
+  `docs/VERSIONS.md` row the versions guard compares, and every node profile
+  check runs against it in the `e2e (containers)` job and writes its findings
+  beside FerroEHR's. For the access check (CP-18) an EHRbase started with
+  Basic authentication withholds the request path of one EHR from its user
+  role, the narrowest refusal its `security.additionalAuthorizations`
+  expresses; it records no consent decision, so the consent check (CP-19)
+  reports not observable with that reason. The conformance report shows the
+  findings of each product side by side under the node class, then each
+  product's evidence. EHRbase passes the error pass-through and subjectless
+  EHR checks. It refuses an `EHR_STATUS` subject in a namespace such as
+  `urn:oid:2.999.1.1`, which the BASE `OBJECT_REF.namespace` pattern admits.
+  The admission check therefore creates no test EHR there, and its integrity
+  conditions fail on that cause. Its EHR read omits `ehr_access`, which the RM
+  `EHR` class makes mandatory. As at FerroEHR, both `ehr_id`-scoped query
+  forms release the EHR whose read the node refuses. The invocation finding
+  names why an EHR body does not decode. No specification governs which
+  products the harness runs: our own design.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at

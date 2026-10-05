@@ -14,7 +14,15 @@
 //! in the shape of the IG's example, one per URA; a pseudonym it does not
 //! index gets an empty `searchset`. It performs no access check at a data
 //! holder; a test that needs a provider withheld leaves it out of the index.
-//! No specification governs the device: our own design.
+//!
+//! Started with [`LocalizationService::start_guarded`], it answers only a
+//! search its guard admits, such as the `DPoP`-bound token the harness Nuts
+//! node issued ([`crate::nuts::NutsNode::dpop_bound`]), as an Authenticated
+//! Interaction of the IG's GFI-005, and `401` with a `DPoP` challenge to any
+//! other (RFC 9449 §7.1). It can demand a nonce in every proof
+//! ([`LocalizationService::require_nonce`]), answering a proof without it
+//! with the challenge of RFC 9449 §9. No specification governs the device:
+//! our own design.
 //!
 //! Every pseudonym and URA a test gives it is synthetic, and nothing here
 //! logs one; its `Debug` shows counts only.
@@ -31,9 +39,11 @@ use fhir_types::r4::document_reference::{DocumentReference, DocumentReferenceCon
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
+use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, Request, Respond, ResponseTemplate};
+use wiremock::{Match, Mock, Request, Respond, ResponseTemplate};
 
+use crate::dpop;
 use crate::mock::Server;
 
 /// The FHIR base path the device serves under.
@@ -64,6 +74,8 @@ struct State {
     index: BTreeMap<String, BTreeSet<String>>,
     /// The outage the device plays, if any.
     outage: Option<Outage>,
+    /// The nonce every proof must name, if any.
+    nonce: Option<String>,
 }
 
 /// The stub Localization Service.
@@ -83,6 +95,36 @@ impl LocalizationService {
             .mount(&server)
             .await;
         Self { server, state }
+    }
+
+    /// Starts the device with an empty index, answering only a search
+    /// `guard` admits, and `401` with a `DPoP` challenge to any other.
+    pub async fn start_guarded(guard: impl Match + 'static) -> Self {
+        let server = Server::start().await;
+        let state = Arc::new(Mutex::new(State::default()));
+        Mock::given(method("GET"))
+            .and(path(format!("{BASE}/DocumentReference")))
+            .and(guard)
+            .respond_with(Answer(Arc::clone(&state)))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("{BASE}/DocumentReference")))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .insert_header("WWW-Authenticate", "DPoP algs=\"ES256 ES384\""),
+            )
+            .with_priority(2)
+            .mount(&server)
+            .await;
+        Self { server, state }
+    }
+
+    /// Requires every later proof to name `nonce`, answering one that does
+    /// not with the `401` challenge of RFC 9449 §9 and the nonce.
+    pub fn require_nonce(&self, nonce: &str) {
+        self.lock().nonce = Some(nonce.to_owned());
     }
 
     /// The device's FHIR base URL.
@@ -122,6 +164,25 @@ impl LocalizationService {
             .collect()
     }
 
+    /// The value of the `header` of every search the device received, in
+    /// order, empty for a search without it.
+    pub async fn headers(&self, header: &str) -> Vec<String> {
+        self.server
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(|request| {
+                request
+                    .headers
+                    .get(header)
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -149,6 +210,11 @@ impl Respond for Answer {
                 return ResponseTemplate::new(200).set_delay(Duration::from_secs(60));
             }
             None => {}
+        }
+        if let Some(nonce) = &state.nonce
+            && proof_nonce(request).as_ref() != Some(nonce)
+        {
+            return dpop::challenge(nonce);
         }
         let query: BTreeMap<String, String> = request.url.query_pairs().into_owned().collect();
         if query.get("type").map(String::as_str) != Some("http://loinc.org|55188-7") {
@@ -187,6 +253,20 @@ impl Respond for Answer {
             Err(_unencodable) => ResponseTemplate::new(500),
         }
     }
+}
+
+/// The `nonce` claim of a proof, as the device reads it.
+#[derive(Deserialize)]
+struct Nonce {
+    nonce: Option<String>,
+}
+
+/// The nonce the `DPoP` proof of `request` names, when it carries a proof
+/// that names one.
+fn proof_nonce(request: &Request) -> Option<String> {
+    let proof = request.headers.get(dpop::HEADER)?.to_str().ok()?;
+    let claims = crate::nuts::payload(proof).ok()?;
+    serde_json::from_slice::<Nonce>(&claims).ok()?.nonce
 }
 
 /// The localization record of the IG's example: `pseudonym`'s data held by

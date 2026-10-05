@@ -5,6 +5,9 @@
 //! credential kind of the Dutch binding, the regional realisation of §13.3
 //! (Annex B §B.4).
 //!
+//! The same table under `[nl_gf.nvi.credentials]` authenticates the gateway
+//! to the NVI ([`super::nvi`]).
+//!
 //! The gateway presents its Verifiable Credentials, signed as a presentation
 //! with its `did:web` key, and binds the token with `DPoP` (Nuts RFC021). No
 //! specification governs the shape of the table: our own design.
@@ -130,18 +133,22 @@ impl OnwardGrant for NutsOnward {
 }
 
 /// The client the Nuts grant of `endpoint` sends its requests through.
+fn client(endpoint: &EndpointId) -> Result<NutsClient, FederationError> {
+    http_client().map_err(|source| FederationError::NutsClient {
+        section: format!("credentials.{endpoint}.{KEY}"),
+        source,
+    })
+}
+
+/// The client a Nuts grant sends its token requests through.
 ///
 /// It follows no redirect, since the token request carries the gateway's
 /// credentials (no specification governs the client: our own design).
-fn client(endpoint: &EndpointId) -> Result<NutsClient, FederationError> {
+pub(super) fn http_client() -> Result<NutsClient, reqwest::Error> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map(NutsClient::new)
-        .map_err(|source| FederationError::NutsClient {
-            section: format!("credentials.{endpoint}.{KEY}"),
-            source,
-        })
 }
 
 /// Returns the Nuts grant the `nuts` table at `section` describes (Annex B

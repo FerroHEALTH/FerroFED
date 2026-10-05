@@ -246,9 +246,11 @@ document is. Its credentials go in `[pixm.manager.credentials]`, which takes
 a bearer token or a user and a password, never an `oauth2`, `nuts` or `fapi2`
 grant. Each grant a node's section can name is described in
 [Onward credentials](onward-credentials.md). The same holds for the
-credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[nl_gf.nvi]` and
-`[nl_gf.mitz]`: a grant in any of them is refused at load, and never read as
-no credential.
+credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]` and `[nl_gf.mitz]`: a
+grant in any of them is refused at load, and never read as no credential.
+`[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
+`oauth2` and `fapi2`
+([Dutch localization](identity.md#dutch-localization-nl_gfnvi)).
 
 ### A PIX Manager asked by `GET` or `POST`
 

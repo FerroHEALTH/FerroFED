@@ -28,6 +28,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -37,6 +38,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura};
 use nl_generic_functions::lrza::{self, LrzaError};
 use nl_generic_functions::nvi::NviClient;
+use nl_generic_functions::nvi::authorizer::Authorizer;
 use nl_generic_functions::nvi::error::{InvalidInput, NviError};
 use secrecy::SecretString;
 use thiserror::Error;
@@ -68,8 +70,12 @@ pub struct NviConfig {
     /// The Localization Service's FHIR base URL, which `Debug` shows without
     /// its userinfo.
     pub base: SecretUrl,
-    /// How the gateway authenticates to the service.
+    /// How the gateway authenticates to the service with a fixed header.
     pub auth: Authentication,
+    /// The authorizer that makes the headers of each request, such as the
+    /// Nuts grant's `DPoP`-bound token and its proof (the IG's GFI-005); set
+    /// with [`Authentication::None`] alone.
+    pub authorizer: Option<Arc<dyn Authorizer>>,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; empty when the registry's directory gives the map.
     pub custodians: BTreeMap<String, NodeId>,
@@ -86,6 +92,7 @@ impl fmt::Debug for NviConfig {
         f.debug_struct("NviConfig")
             .field("base", &self.base)
             .field("auth", &self.auth)
+            .field("authorizer", &self.authorizer)
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
             .field("tls", &self.tls)
@@ -144,6 +151,10 @@ pub enum NviConfigError {
     /// `not-localized`.
     #[error("registry member {0} is mapped from no custodian URA")]
     UnlocatedMember(NodeId),
+    /// Both a fixed credential and an authorizer are configured, so a request
+    /// would carry two credentials.
+    #[error("the Localization Service takes a fixed credential or an authorizer, not both")]
+    TwoCredentials,
     /// The HTTP client could not be built: a credential that forms no
     /// `Authorization` value (RFC 7617 §2, RFC 6750 §2.1), or a client the
     /// platform refuses.
@@ -185,11 +196,15 @@ impl NviLocalizer {
     /// naming a member the registry does not hold, a member organisation whose
     /// URAs the LRZa rules refuse, a configured map that disagrees with the
     /// directory's, a member no custodian maps to, and TLS material or a
-    /// credential that cannot be used.
+    /// credential that cannot be used, or a fixed credential beside an
+    /// authorizer.
     pub fn from_config(
         config: NviConfig,
         registry: &RegistrySnapshot,
     ) -> Result<Self, NviConfigError> {
+        if config.authorizer.is_some() && !matches!(config.auth, Authentication::None) {
+            return Err(NviConfigError::TwoCredentials);
+        }
         // NOTE: Annex B §B.1, N33: the NVI is keyed on the pseudonym, so a BSN system listed
         // as its alias would send a BSN there; refused here as well as at configuration load.
         if let Some(bsn) = config
@@ -228,7 +243,10 @@ impl NviLocalizer {
         {
             return Err(NviConfigError::UnlocatedMember(unlocated.clone()));
         }
-        let client = NviClient::new(base, http).map_err(NviConfigError::Base)?;
+        let mut client = NviClient::new(base, http).map_err(NviConfigError::Base)?;
+        if let Some(authorizer) = config.authorizer {
+            client = client.with_authorizer(authorizer);
+        }
         Ok(Self {
             client,
             custodians,
