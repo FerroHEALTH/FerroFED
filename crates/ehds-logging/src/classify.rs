@@ -201,9 +201,14 @@ impl Unclassified {
 
 /// The categories of one access, their bases, and the evidence.
 ///
+/// Only [`CategoryMap::classify`] makes one, and every one it makes holds a
+/// category, is of no category by an exact `none` or a resource kind, or is
+/// [`unclassified`](Classification::unclassified) with its reason: it has no
+/// `Default`, so no empty classification can stand in for a missing one.
+///
 /// `Debug` shows the categories and the marks, never an id: a template id
 /// tied to a patient says what kind of care they had.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Classification {
     categories: BTreeMap<Category, BTreeSet<Basis>>,
     no_category: bool,
@@ -306,9 +311,14 @@ impl CategoryMap {
     #[must_use]
     pub fn classify(&self, evidence: &Evidence) -> Classification {
         let mut classified = Classification {
-            digest: self.digest().map(str::to_owned),
+            categories: BTreeMap::new(),
             no_category: evidence.no_category,
-            ..Classification::default()
+            unclassified: None,
+            templates: BTreeSet::new(),
+            archetypes: BTreeSet::new(),
+            versions: BTreeSet::new(),
+            unmapped: BTreeSet::new(),
+            digest: self.digest().map(str::to_owned),
         };
         if evidence.no_category {
             return classified;
@@ -323,6 +333,11 @@ impl CategoryMap {
         }
         if evidence.objects.is_empty() || evidence.unrooted {
             self.queried(evidence, &mut classified);
+        }
+        // NOTE: no specification governs this: our own design; a result with no category,
+        // no exact `none` and no reason is a path the classifier missed, so it fails closed.
+        if classified.categories.is_empty() && !classified.no_category {
+            classified.unclassify(Unclassified::NamedNothing);
         }
         classified
     }

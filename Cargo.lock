@@ -1235,6 +1235,7 @@ dependencies = [
  "async-trait",
  "ihe-iti",
  "jiff",
+ "proptest",
  "secrecy",
  "serde",
  "serde_json",

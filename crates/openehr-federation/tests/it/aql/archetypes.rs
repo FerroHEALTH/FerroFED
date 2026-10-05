@@ -181,6 +181,60 @@ fn a_query_of_the_ehr_alone_is_bound_and_names_nothing() {
     assert!(found.is_empty());
 }
 
+/// An archetype id a query mentions only where it binds nothing.
+const DECOY: &str = "openEHR-EHR-COMPOSITION.decoy.v1";
+
+/// The places a query can mention [`DECOY`] without binding a class to it:
+/// a `FROM` suffix and a `WHERE` term.
+fn decoys() -> Vec<(&'static str, String)> {
+    vec![
+        ("", format!("-- COMPOSITION c[{DECOY}]\n")),
+        ("", format!("NOT CONTAINS OBSERVATION o[{DECOY}]")),
+        ("WHERE", format!("c/name/value = '{DECOY}'")),
+        ("WHERE", format!("NOT c/archetype_node_id = '{DECOY}'")),
+        ("WHERE", format!("c/archetype_node_id != '{DECOY}'")),
+        (
+            "WHERE",
+            format!("c/archetype_details/template_id/value LIKE '{DECOY}'"),
+        ),
+    ]
+}
+
+proptest::proptest! {
+    #[test]
+    fn a_decoy_in_a_comment_string_negation_or_pattern_is_never_a_constraint(
+        picked in proptest::sample::subsequence(decoys(), 0..=6),
+        bound in proptest::bool::ANY,
+    ) {
+        let class = if bound {
+            "COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1]"
+        } else {
+            "COMPOSITION c"
+        };
+        let mut from = format!("SELECT c FROM EHR e CONTAINS {class}");
+        let mut terms = Vec::new();
+        for (clause, text) in &picked {
+            if clause.is_empty() {
+                from = format!("{from} {text}");
+            } else {
+                terms.push(text.clone());
+            }
+        }
+        let aql = if terms.is_empty() {
+            from
+        } else {
+            format!("{from} WHERE {}", terms.join(" AND "))
+        };
+        let Ok(analysis) = analysed(&aql, &ask_all()) else {
+            return Ok(());
+        };
+        let found = analysis.constrained();
+        proptest::prop_assert!(!found.archetypes().contains(DECOY), "{aql}");
+        proptest::prop_assert!(!found.templates().contains(DECOY), "{aql}");
+        proptest::prop_assert_eq!(found.every_root_bound(), bound, "{}", aql);
+    }
+}
+
 #[test]
 fn a_patient_query_keeps_its_constraints_after_the_rewrite() {
     let found = constrained(

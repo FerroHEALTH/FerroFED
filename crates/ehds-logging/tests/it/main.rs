@@ -14,6 +14,8 @@ mod balp;
 mod classify;
 #[cfg(test)]
 mod map;
+#[cfg(test)]
+mod property;
 
 #[cfg(test)]
 mod support {
