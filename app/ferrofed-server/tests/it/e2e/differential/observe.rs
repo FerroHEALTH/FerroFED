@@ -32,8 +32,12 @@ pub(crate) const NORMALISATIONS: &[(&str, &str)] = &[
         "rows are compared as a sorted multiset unless the query has an ORDER BY (AQL §4.3 leaves the order of an unordered result open)",
     ),
     (
-        "latency_ms and the ITS-REST meta members other than federation",
-        "timings, `_created`, `_generator`, `_executed_aql`, `_href`, `_type` and `_schema_version` describe one run of one implementation (ITS-REST RESULT_SET meta is informative)",
+        "the value of latency_ms, and the ITS-REST meta members other than federation",
+        "a timing is compared only as present or absent (N40), and `_created`, `_generator`, `_executed_aql`, `_href`, `_type` and `_schema_version` describe one run of one implementation (ITS-REST RESULT_SET meta is informative)",
+    ),
+    (
+        "the self-description's deployment values",
+        "of `OPTIONS {base}/` only the schema, the values the specification fixes or both gateways are configured alike for, the presence of every declaration N30 requires, and the endpoint ids are compared; identity, product, the free-form `its_rest` strings, membership status and the declared choices are a deployment's (§7a.2)",
     ),
     (
         "the error code and message text",
@@ -42,6 +46,14 @@ pub(crate) const NORMALISATIONS: &[(&str, &str)] = &[
     (
         "the authority of a Location header",
         "each gateway reaches the node through its own proxy, so only the path is compared",
+    ),
+    (
+        "the identifiers of a created object",
+        "each gateway's create or commit makes its own object at the node, so its `ETag` and `Location` are compared as present or absent and shown",
+    ),
+    (
+        "members and headers the specification makes optional",
+        "the SHOULD and MAY members of an endpoint record (`node_id`, `system_id`, `organisation`, `product`, `version`, `url`, §9.5) are shown, not compared; the records of members not in scope (§11.1 SHOULD), the federation headers on an AQL answer (§7a.3 SHOULD), `openEHR-federation-system-id` (N31 SHOULD) and `Preference-Applied` (RFC 7240) are compared only where both gateways send them",
     ),
     (
         "the text of a dispatched AQL query",
@@ -71,6 +83,9 @@ pub(crate) enum Shape {
 pub(crate) struct Observed {
     /// The compared aspects.
     pub(crate) aspects: BTreeMap<String, String>,
+    /// The aspects the specification leaves optional (SHOULD or MAY),
+    /// compared only where both gateways show them.
+    pub(crate) optional: BTreeMap<String, String>,
     /// What the report shows and the comparison does not read.
     pub(crate) info: BTreeMap<String, String>,
 }
@@ -80,30 +95,52 @@ impl Observed {
         self.aspects.insert(aspect.into(), value.into());
     }
 
+    fn set_optional(&mut self, aspect: impl Into<String>, value: impl Into<String>) {
+        self.optional.insert(aspect.into(), value.into());
+    }
+
     fn note(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.info.insert(key.into(), value.into());
     }
 }
 
-/// The response header fields the comparison reads, by lower-case name.
-const FIELDS: [&str; 4] = [
-    "openehr-federation-endpoint",
-    "openehr-federation-system-id",
-    "preference-applied",
-    "etag",
-];
+/// The endpoint header, which a request routed to one node MUST carry
+/// (N31) and a federated AQL answer SHOULD (§7a.3).
+const ENDPOINT_FIELD: &str = "openehr-federation-endpoint";
 
-/// Reads the aspects of `reply`, as `shape` says.
-pub(crate) fn answer(reply: &Reply, shape: Shape) -> Observed {
+/// The response header fields a gateway SHOULD or MAY send: the `system_id`
+/// (N31, §7a.3) and the RFC 7240 `Preference-Applied`.
+const OPTIONAL_FIELDS: [&str; 2] = ["openehr-federation-system-id", "preference-applied"];
+
+/// Reads the aspects of `reply`, as `shape` says; `creates` marks a request
+/// whose node makes a new object, whose identifiers then differ per gateway.
+pub(crate) fn answer(reply: &Reply, shape: Shape, creates: bool) -> Observed {
     let mut observed = Observed::default();
     observed.set("status", reply.status.as_u16().to_string());
-    for name in FIELDS {
-        if let Some(value) = reply.field(name) {
-            observed.set(format!("header.{name}"), value);
+    if let Some(value) = reply.field(ENDPOINT_FIELD) {
+        if shape == Shape::Passthrough {
+            observed.set(format!("header.{ENDPOINT_FIELD}"), value);
+        } else {
+            observed.set_optional(format!("header.{ENDPOINT_FIELD}"), value);
         }
     }
-    if let Some(location) = reply.field("location") {
-        observed.set("header.location", path_of(location));
+    for name in OPTIONAL_FIELDS {
+        if let Some(value) = reply.field(name) {
+            observed.set_optional(format!("header.{name}"), value);
+        }
+    }
+    for (name, value) in [
+        ("etag", reply.field("etag").map(str::to_owned)),
+        ("location", reply.field("location").map(path_of)),
+    ] {
+        if let Some(value) = value {
+            if creates {
+                observed.set(format!("header.{name}"), "present");
+                observed.note(format!("header.{name}"), value);
+            } else {
+                observed.set(format!("header.{name}"), value);
+            }
+        }
     }
     if reply.text.is_empty() {
         observed.set("body", "empty");
@@ -115,6 +152,9 @@ pub(crate) fn answer(reply: &Reply, shape: Shape) -> Observed {
         return observed;
     };
     match shape {
+        Shape::Passthrough if reply.status.is_client_error() || reply.status.is_server_error() => {
+            error(&mut observed, &body);
+        }
         Shape::Passthrough => passthrough(&mut observed, reply, &body),
         Shape::Options => options(&mut observed, reply, &body),
         Shape::Rows | Shape::OrderedRows => {
@@ -129,13 +169,14 @@ pub(crate) fn answer(reply: &Reply, shape: Shape) -> Observed {
 }
 
 /// Reads what `journal` shows reached the node `name`, whose own `ehr_id`
-/// is the first of `scope` and whose other node's is the second.
+/// is the first of the pair and the other node's the second, and whether
+/// the caller's `authorization`, when it sent one, reached the node.
 pub(crate) fn node(
     observed: &mut Observed,
     name: &str,
     journal: &[Capture],
     (own, other): (Uuid, Uuid),
-    authorization: &str,
+    authorization: Option<&str>,
 ) {
     let requests: Vec<String> = journal
         .iter()
@@ -158,13 +199,15 @@ pub(crate) fn node(
         format!("{name}.patient-identifier"),
         if identifier { "present" } else { "absent" },
     );
-    let token = authorization
-        .strip_prefix("Bearer ")
-        .unwrap_or(authorization);
-    observed.set(
-        format!("{name}.caller-credential"),
-        if carries(token) { "present" } else { "absent" },
-    );
+    if let Some(authorization) = authorization {
+        let token = authorization
+            .strip_prefix("Bearer ")
+            .unwrap_or(authorization);
+        observed.set(
+            format!("{name}.caller-credential"),
+            if carries(token) { "present" } else { "absent" },
+        );
+    }
     let queries: Vec<String> = journal
         .iter()
         .filter(|capture| capture.method == "POST" && capture.path.ends_with("/query/aql"))
@@ -299,20 +342,59 @@ fn meta(observed: &mut Observed, body: &Value) {
         observed.set("meta.federation", "absent");
         return;
     };
-    observed.set("meta.federation.members", keys(federation));
-    if let Some(complete) = federation.get("complete") {
-        observed.set("meta.federation.complete", complete.to_string());
+    observed.note("meta.federation members", keys(federation));
+    let unknown: Vec<String> = federation
+        .keys()
+        .filter(|key| !matches!(key.as_str(), "complete" | "endpoints" | "timeout" | "dedup"))
+        .cloned()
+        .collect();
+    observed.set("meta.federation unknown members", list(&unknown));
+    for member in ["complete", "timeout"] {
+        match federation.get(member) {
+            Some(value) => observed.set(format!("meta.federation.{member}"), value.to_string()),
+            None => observed.set(format!("meta.federation.{member}"), "absent"),
+        }
     }
-    let mut endpoints: Vec<String> = federation
+    observed.set(
+        "meta.federation.dedup",
+        federation
+            .get("dedup")
+            .map_or_else(|| "absent".to_owned(), Value::to_string),
+    );
+    let records = federation
         .get("endpoints")
         .and_then(Value::as_array)
-        .map(|endpoints| endpoints.iter().map(endpoint).collect())
+        .map(Vec::as_slice)
         .unwrap_or_default();
-    endpoints.sort();
-    observed.set("meta.federation.endpoints", list(&endpoints));
+    let (mut in_scope, mut out_of_scope): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    for record in records {
+        let status = record.get("status").and_then(Value::as_str).unwrap_or("?");
+        if matches!(status, "excluded" | "not-localized") {
+            out_of_scope.push(endpoint(record));
+        } else {
+            in_scope.push(endpoint(record));
+        }
+    }
+    in_scope.sort();
+    out_of_scope.sort();
+    observed.set("meta.federation.endpoints in scope", list(&in_scope));
+    observed.set_optional(
+        "meta.federation.endpoints not in scope",
+        list(&out_of_scope),
+    );
+    observed.note(
+        "meta.federation.endpoints",
+        records
+            .iter()
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
 }
 
-/// Renders one `meta.federation.endpoints[]` record without its timing.
+/// Renders one `meta.federation.endpoints[]` record: its id, status, row
+/// count, whether it carries an error and a latency, and any member §9.5
+/// does not define.
 fn endpoint(record: &Value) -> String {
     let id = record.get("id").and_then(Value::as_str).unwrap_or("?");
     let status = record.get("status").and_then(Value::as_str).unwrap_or("?");
@@ -324,11 +406,28 @@ fn endpoint(record: &Value) -> String {
     if record.get("error").is_some() {
         text.push_str(" error");
     }
+    if record.get("latency_ms").is_some() {
+        text.push_str(" latency");
+    }
     if let Some(object) = record.as_object() {
         let extra: Vec<&str> = object
             .keys()
             .map(String::as_str)
-            .filter(|key| !matches!(*key, "id" | "status" | "row_count" | "error" | "latency_ms"))
+            .filter(|key| {
+                !matches!(
+                    *key,
+                    "id" | "status"
+                        | "row_count"
+                        | "error"
+                        | "latency_ms"
+                        | "node_id"
+                        | "system_id"
+                        | "organisation"
+                        | "product"
+                        | "version"
+                        | "url"
+                )
+            })
             .collect();
         if !extra.is_empty() {
             text.push_str(" +");
@@ -366,9 +465,66 @@ fn options(observed: &mut Observed, reply: &Reply, body: &Value) {
     let mut leaves = BTreeMap::new();
     flatten("options", body, &mut leaves);
     for (path, value) in leaves {
-        observed.set(path, value);
+        if FIXED.contains(&path.as_str()) {
+            observed.set(path, value);
+        } else {
+            observed.note(path, value);
+        }
     }
+    for key in DECLARED {
+        let present = key
+            .split('.')
+            .try_fold(body, |value, member| value.get(member))
+            .is_some();
+        observed.set(
+            format!("options.{key} declared"),
+            if present { "present" } else { "absent" },
+        );
+    }
+    let mut ids: Vec<String> = body
+        .get("endpoints")
+        .and_then(Value::as_array)
+        .map(|endpoints| {
+            endpoints
+                .iter()
+                .filter_map(|endpoint| endpoint.get("id").and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    ids.sort();
+    observed.set("options.endpoints ids", list(&ids));
 }
+
+/// The self-description leaves whose value the specification fixes, or
+/// both gateways are configured alike for; every other leaf is a
+/// deployment's choice and is shown, never compared (§7a.2).
+const FIXED: [&str; 9] = [
+    "options.federation.spec_version",
+    "options.federation.aql.fan_out",
+    "options.federation.dedup.default",
+    "options.federation.timeout.per_node_ms",
+    "options.federation.timeout.overall_ms",
+    "options.federation.completeness.default",
+    "options.federation.completeness.best_effort",
+    "options.federation.completeness.opt_in.header",
+    "options.federation.completeness.opt_in.value",
+];
+
+/// The declarations §7a.2 and N30 require, compared by presence: their
+/// values are the deployment's choice.
+const DECLARED: [&str; 10] = [
+    "federation.paging.offset_strategy",
+    "federation.aggregates",
+    "federation.definition.fan_out_template_upload",
+    "federation.definition.stored_query_registry",
+    "federation.localization.on_failure",
+    "federation.auth.jwks_uri",
+    "federation.its_rest.query",
+    "federation.its_rest.ehr",
+    "federation.its_rest.definition",
+    "federation.its_rest.demographic",
+];
 
 /// Collects every leaf of `value` under `path`, an array's items by index.
 fn flatten(path: &str, value: &Value, leaves: &mut BTreeMap<String, String>) {

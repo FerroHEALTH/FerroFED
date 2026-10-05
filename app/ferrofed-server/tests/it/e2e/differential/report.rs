@@ -80,6 +80,19 @@ fn markdown(name: &str, outcomes: &[Outcome]) -> String {
         line(format!("- **{what}:** {why}"));
     }
     line(String::new());
+    line("## Adjudicated causes".to_owned());
+    line(String::new());
+    for entry in register::REGISTER.iter().filter(|entry| entry.test == name) {
+        line(format!(
+            "- **{}** ({}): {} Steps: {}. Aspects: {}.",
+            entry.verdict,
+            entry.recorded,
+            entry.cause,
+            entry.steps.join(", "),
+            entry.aspects.join(", ")
+        ));
+    }
+    line(String::new());
     line("## Summary".to_owned());
     line(String::new());
     line("| Step | Track | FerroFED | Reference | Differences |".to_owned());

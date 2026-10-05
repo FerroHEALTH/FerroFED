@@ -5,9 +5,11 @@
 //! implementation, each with its verdict against the specification and the
 //! place it is recorded.
 //!
-//! A run fails when it finds a difference the register does not hold, and
-//! when the register holds one the run no longer finds, so a new divergence
-//! is adjudicated before it is accepted and a fixed one leaves the register.
+//! An entry covers one cause: every aspect it names, at every step it names,
+//! differs because of it. A run fails when it finds a difference no entry
+//! covers, and when an entry names a step and aspect the run no longer finds
+//! different, so a new divergence is adjudicated before it is accepted and a
+//! fixed one leaves the register.
 
 use std::error::Error;
 use std::fmt;
@@ -26,9 +28,12 @@ pub(crate) enum Verdict {
     /// The reference implementation departs from the specification; an item
     /// is recorded on the standing upstream-report issue.
     ReferenceDivergence,
-    /// The specification admits both answers or neither; an item is
-    /// recorded on the standing upstream-report issue.
+    /// The specification can be read to require either answer, or neither;
+    /// an item is recorded on the standing upstream-report issue.
     SpecificationAmbiguity,
+    /// The specification admits both answers in so many words, so both
+    /// gateways conform; the entry cites the text that admits both.
+    Permitted,
 }
 
 impl fmt::Display for Verdict {
@@ -37,42 +42,44 @@ impl fmt::Display for Verdict {
             Self::FerrofedDefect => "FerroFED defect",
             Self::ReferenceDivergence => "reference divergence",
             Self::SpecificationAmbiguity => "specification ambiguity",
+            Self::Permitted => "both conform",
         })
     }
 }
 
-/// One adjudicated difference.
+/// One adjudicated cause of difference.
 #[derive(Debug)]
 pub(crate) struct Entry {
     /// The test that finds it.
     pub(crate) test: &'static str,
-    /// The step that finds it.
-    pub(crate) step: &'static str,
-    /// The aspect that differs.
-    pub(crate) aspect: &'static str,
+    /// The steps at which it shows.
+    pub(crate) steps: &'static [&'static str],
+    /// The aspects that differ because of it, at each of those steps.
+    pub(crate) aspects: &'static [&'static str],
     /// The verdict.
     pub(crate) verdict: Verdict,
+    /// What differs and why, with the governing citation.
+    pub(crate) cause: &'static str,
     /// Where it is recorded: an issue, or an item of the upstream report.
     pub(crate) recorded: &'static str,
 }
 
-/// Every adjudicated difference.
+/// Every adjudicated cause of difference.
 pub(crate) const REGISTER: &[Entry] = &[];
 
-/// Returns the entry for `aspect` of `step` in `test`, when the register
-/// holds one.
+/// Returns the entry that covers `aspect` at `step` in `test`, when one does.
 pub(crate) fn find(test: &str, step: &str, aspect: &str) -> Option<&'static Entry> {
-    REGISTER
-        .iter()
-        .find(|entry| entry.test == test && entry.step == step && entry.aspect == aspect)
+    REGISTER.iter().find(|entry| {
+        entry.test == test && entry.steps.contains(&step) && entry.aspects.contains(&aspect)
+    })
 }
 
 /// Checks the differences `found` in `test` against the register.
 ///
 /// # Errors
 ///
-/// Returns an error naming every difference the register does not hold and
-/// every entry for `test` no step found.
+/// Returns an error naming every difference no entry covers and every step
+/// and aspect an entry names that the run did not find different.
 pub(crate) fn check(
     test: &str,
     outcomes: &[Outcome],
@@ -86,12 +93,16 @@ pub(crate) fn check(
         })
         .collect();
     let ran: Vec<&str> = outcomes.iter().map(|outcome| outcome.step.id).collect();
-    let stale: Vec<String> = REGISTER
-        .iter()
-        .filter(|entry| entry.test == test && ran.contains(&entry.step))
-        .filter(|entry| !found.contains_key(&(entry.step.to_owned(), entry.aspect.to_owned())))
-        .map(|entry| format!("{} {} ({})", entry.step, entry.aspect, entry.recorded))
-        .collect();
+    let mut stale = Vec::new();
+    for entry in REGISTER.iter().filter(|entry| entry.test == test) {
+        for step in entry.steps.iter().filter(|step| ran.contains(step)) {
+            for aspect in entry.aspects {
+                if !found.contains_key(&((*step).to_owned(), (*aspect).to_owned())) {
+                    stale.push(format!("{step} {aspect} ({})", entry.recorded));
+                }
+            }
+        }
+    }
     if unadjudicated.is_empty() && stale.is_empty() {
         return Ok(());
     }

@@ -39,7 +39,7 @@ use ferrofed_testkit::reference::{self, Reference};
 use ferrofed_testkit::seed::PatientId;
 use http::{Method, Request};
 
-use crate::e2e::scenario::{Options, Reply, dev_rows, development, exchange, gateway_with};
+use crate::e2e::scenario::{Options, Reply, dev_rows, development, gateway_with};
 use crate::e2e::{EHR_A, EHR_B, PATIENT};
 
 mod observe;
@@ -81,6 +81,8 @@ pub(crate) struct Call {
     pub(crate) fields: Vec<(&'static str, String)>,
     /// The JSON body, when the request has one.
     pub(crate) body: Option<String>,
+    /// Whether the request goes without the caller's credential.
+    pub(crate) anonymous: bool,
 }
 
 impl Call {
@@ -95,6 +97,7 @@ impl Call {
             target: "/v1/query/aql".to_owned(),
             fields: Vec::new(),
             body: Some(serde_json::to_string(&Adhoc { q: aql })?),
+            anonymous: false,
         })
     }
 
@@ -105,7 +108,14 @@ impl Call {
             target: target.into(),
             fields: Vec::new(),
             body: None,
+            anonymous: false,
         }
+    }
+
+    /// Sends the request without the caller's credential.
+    pub(crate) fn anonymous(mut self) -> Self {
+        self.anonymous = true;
+        self
     }
 
     /// Adds the header field `name` with `value`.
@@ -175,17 +185,27 @@ impl Outcome {
     /// Returns every aspect whose value differs, with FerroFED's value and
     /// the reference implementation's, absent as `None`.
     pub(crate) fn differences(&self) -> Vec<(String, Option<String>, Option<String>)> {
-        let ours = &self.ferrofed.observed.aspects;
-        let theirs = &self.reference.observed.aspects;
-        let mut keys: Vec<&String> = ours.keys().chain(theirs.keys()).collect();
+        let ours = &self.ferrofed.observed;
+        let theirs = &self.reference.observed;
+        let mut keys: Vec<&String> = ours.aspects.keys().chain(theirs.aspects.keys()).collect();
         keys.sort();
         keys.dedup();
-        keys.into_iter()
+        let mut found: Vec<(String, Option<String>, Option<String>)> = keys
+            .into_iter()
             .filter_map(|key| {
-                let (left, right) = (ours.get(key), theirs.get(key));
+                let (left, right) = (ours.aspects.get(key), theirs.aspects.get(key));
                 (left != right).then(|| (key.clone(), left.cloned(), right.cloned()))
             })
-            .collect()
+            .collect();
+        for (key, left) in &ours.optional {
+            if let Some(right) = theirs.optional.get(key)
+                && left != right
+            {
+                found.push((key.clone(), Some(left.clone()), Some(right.clone())));
+            }
+        }
+        found.sort();
+        found
     }
 }
 
@@ -245,9 +265,13 @@ impl Bench {
                 proxy.set_fault(fault);
             }
         }
-        let authorization = crate::support::bearer()?;
-        let ferrofed = self.ferrofed(&step, &authorization).await;
-        let reference = self.reference(&step, &authorization).await;
+        let authorization = if step.call.anonymous {
+            None
+        } else {
+            Some(crate::support::bearer()?)
+        };
+        let ferrofed = self.ferrofed(&step, authorization.as_deref()).await;
+        let reference = self.reference(&step, authorization.as_deref()).await;
         for proxy in self
             .proxies(Faulted::A)
             .into_iter()
@@ -277,14 +301,21 @@ impl Bench {
     }
 
     /// Sends `step` to FerroFED.
-    async fn ferrofed(&self, step: &Step, authorization: &str) -> Result<Side, Box<dyn Error>> {
+    async fn ferrofed(
+        &self,
+        step: &Step,
+        authorization: Option<&str>,
+    ) -> Result<Side, Box<dyn Error>> {
         let (a, b) = (&self.nodes.a.proxy, &self.nodes.b.proxy);
         a.clear_journal();
         b.clear_journal();
+        let started = std::time::Instant::now();
         let mut request = Request::builder()
             .method(step.call.method.clone())
-            .uri(&step.call.target)
-            .header(http::header::AUTHORIZATION, authorization);
+            .uri(&step.call.target);
+        if let Some(authorization) = authorization {
+            request = request.header(http::header::AUTHORIZATION, authorization);
+        }
         for (name, value) in &step.call.fields {
             request = request.header(*name, value);
         }
@@ -294,23 +325,36 @@ impl Bench {
                 .body(Body::from(body.clone()))?,
             None => request.body(Body::empty())?,
         };
-        let reply = exchange(&self.app, request).await?;
+        let response = crate::support::send_as_is(self.app.clone(), request).await?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024).await?;
+        let reply = Reply {
+            status,
+            headers,
+            text: String::from_utf8(bytes.to_vec())?,
+            took: started.elapsed(),
+        };
         Ok(side(step, reply, &a.journal(), &b.journal(), authorization))
     }
 
     /// Sends `step` to the reference implementation.
-    async fn reference(&self, step: &Step, authorization: &str) -> Result<Side, Box<dyn Error>> {
+    async fn reference(
+        &self,
+        step: &Step,
+        authorization: Option<&str>,
+    ) -> Result<Side, Box<dyn Error>> {
         let (a, b) = (&self.reference_a, &self.reference_b);
         a.clear_journal();
         b.clear_journal();
         let started = std::time::Instant::now();
-        let mut request = self
-            .client
-            .request(
-                step.call.method.clone(),
-                format!("{}{}", self.reference.origin(), step.call.target),
-            )
-            .header(http::header::AUTHORIZATION, authorization);
+        let mut request = self.client.request(
+            step.call.method.clone(),
+            format!("{}{}", self.reference.origin(), step.call.target),
+        );
+        if let Some(authorization) = authorization {
+            request = request.header(http::header::AUTHORIZATION, authorization);
+        }
         for (name, value) in &step.call.fields {
             request = request.header(*name, value);
         }
@@ -339,9 +383,10 @@ fn side(
     reply: Reply,
     node_a: &[Capture],
     node_b: &[Capture],
-    authorization: &str,
+    authorization: Option<&str>,
 ) -> Side {
-    let mut observed = observe::answer(&reply, step.shape);
+    let creates = step.call.method == Method::POST && step.shape == Shape::Passthrough;
+    let mut observed = observe::answer(&reply, step.shape, creates);
     for (name, journal, own, other) in [
         ("node-a", node_a, EHR_A, EHR_B),
         ("node-b", node_b, EHR_B, EHR_A),
@@ -371,7 +416,8 @@ fn ferrofed_options() -> Result<Options, Box<dyn Error>> {
 
 /// The reference implementation's registry document: the organisations,
 /// nodes and endpoint ids FerroFED's registry names, each endpoint at the
-/// proxy the reference implementation reaches its node through.
+/// proxy the reference implementation reaches its node through, and no
+/// product or version, which FerroFED's registry does not carry either.
 fn reference_registry(a: &CapturingProxy, b: &CapturingProxy) -> Result<String, Box<dyn Error>> {
     #[derive(serde::Serialize)]
     struct Document {
@@ -385,12 +431,13 @@ fn reference_registry(a: &CapturingProxy, b: &CapturingProxy) -> Result<String, 
         name: &'static str,
     }
     #[derive(serde::Serialize)]
-    #[serde(rename_all = "camelCase")]
     struct Member {
-        node_id: &'static str,
-        system_id: &'static str,
-        organisation_id: &'static str,
-        product: &'static str,
+        #[serde(rename = "nodeId")]
+        node: &'static str,
+        #[serde(rename = "systemId")]
+        system: &'static str,
+        #[serde(rename = "organisationId")]
+        organisation: &'static str,
     }
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -412,11 +459,10 @@ fn reference_registry(a: &CapturingProxy, b: &CapturingProxy) -> Result<String, 
         connection_type: "openehr-rest-query",
         status: "active",
     };
-    let member = |node_id, system_id, organisation_id| Member {
-        node_id,
-        system_id,
-        organisation_id,
-        product: "FerroEHR",
+    let member = |node, system, organisation| Member {
+        node,
+        system,
+        organisation,
     };
     let document = Document {
         organisations: [
@@ -446,7 +492,8 @@ fn reference_registry(a: &CapturingProxy, b: &CapturingProxy) -> Result<String, 
 fn reference_settings() -> String {
     let seconds = |duration: Duration| duration.as_secs();
     format!(
-        "federation:\n  federation:\n    id: example-federation\n  timeouts:\n    per-node: {}s\n    overall-budget: {}s\n  completeness:\n    offer-best-effort: true\n  identity:\n    mode: static\n    default-namespace: \"{}\"\n    static-mappings:\n      \"{}\":\n        node-a-pub: \"{EHR_A}\"\n        node-b-pub: \"{EHR_B}\"\n      \"{}\":\n        node-a-pub: \"{EHR_A}\"\n",
+        "federation:\n  federation:\n    id: example-federation\n    jwks-uri: \"{}\"\n  timeouts:\n    per-node: {}s\n    overall-budget: {}s\n  completeness:\n    offer-best-effort: true\n  identity:\n    mode: static\n    default-namespace: \"{}\"\n    static-mappings:\n      \"{}\":\n        node-a-pub: \"{EHR_A}\"\n        node-b-pub: \"{EHR_B}\"\n      \"{}\":\n        node-a-pub: \"{EHR_A}\"\n",
+        crate::support::JWKS_URI,
         seconds(PER_NODE),
         seconds(OVERALL),
         PATIENT.namespace(),

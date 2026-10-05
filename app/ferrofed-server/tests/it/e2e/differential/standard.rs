@@ -293,6 +293,13 @@ fn failures() -> Result<Vec<Step>, Box<dyn Error>> {
 /// named by its `ehr_id` in both forms.
 fn consent_and_ehr_forms() -> Result<Vec<Step>, Box<dyn Error>> {
     Ok(vec![
+        step(
+            "t7-anonymous-caller",
+            "7",
+            "a caller that presents no credential",
+            Call::aql(&compositions())?.anonymous(),
+            Shape::Rows,
+        ),
         faulted(
             step(
                 "t7-node-consent-refusal",
