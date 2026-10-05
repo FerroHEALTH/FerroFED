@@ -194,6 +194,8 @@ serde-saphyr = { version = "1.3.0", default-features = false, features = ["deser
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
 # The PEM reader the testkit writes each synthetic key with, and the engine
 # reads the certificate of a mutual-TLS grant's client identity with (#492).
+# It stays on 3 while jsonwebtoken requires `pem ^3`, so the binary carries
+# one pem; rcgen's pem 4 is test-only. Move both when jsonwebtoken moves.
 pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # Test-only for the ATNA audit repository (#418): the testkit's harness
 # repository generates its CA and server certificate at run time over the
