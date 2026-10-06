@@ -8,9 +8,14 @@ Regulation (EU) 2025/327 on the European Health Data Space (the EHDS
 Regulation). The classification was decided on 2026-10-04
 ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): FerroFED is
 built and documented as an EHR system, and its harmonised software components
-are to be delivered before the dates the Regulation applies to it.
+are to be delivered before the dates the Regulation applies to it. The page
+also states FerroFED's position under the Cyber Resilience Act, decided on
+2026-10-06 ([#654](https://github.com/FerroHEALTH/FerroFED/issues/654)):
+each release is a product that Cadasto B.V. places on the market
+([The Cyber Resilience Act](#the-cyber-resilience-act)).
 
-Every quotation is from the Official Journal text (OJ L, 2025/327, 5.3.2025,
+Every quotation from the EHDS Regulation is from the Official Journal text
+(OJ L, 2025/327, 5.3.2025,
 <http://data.europa.eu/eli/reg/2025/327/oj>), vendored verbatim at
 [`docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml).
 This page is not legal advice; [the last section](#not-legal-advice) names
@@ -234,6 +239,123 @@ member CDRs sit in different Member States is in scope. FerroFED neither
 detects nor refuses one; whether such a deployment is lawful, and for which
 data, is the deployment's to answer.
 
+## The Cyber Resilience Act
+
+Regulation (EU) 2024/2847, the Cyber Resilience Act (CRA), "applies to
+products with digital elements made available on the market" whose intended
+purpose includes a data connection to a device or network (Art 2(1)).
+FerroFED is software whose purpose is that connection. The quotations in this
+section are from the Official Journal text (OJ L, 2024/2847, 20.11.2024),
+vendored with Regulation (EU) 2019/1020 at
+[`docs/specs/eu-cra/`](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs/eu-cra),
+and Art 104 of the EHDS Regulation amends three of its articles.
+
+### Why the CRA reaches a release
+
+- **A commercial activity.** Art 3(22) defines making available on the
+  market as "the supply of a product with digital elements for distribution
+  or use on the Union market in the course of a commercial activity, whether
+  in return for payment or free of charge". Recital 15 names "an intention
+  to monetise" as one mark of a commercial activity. FerroFED's licence is
+  free for non-production use and for non-commercial production use, and
+  sells a licence for any other production use ([Licensing](licensing.md)).
+  A release is therefore supplied in the course of a commercial activity,
+  a free download included.
+- **Not free and open-source software.** Art 3(48) asks for "a free and
+  open-source licence which provides for all rights to make it freely
+  accessible, usable, modifiable and redistributable". The Business Source
+  License 1.1 withholds production use outside its Additional Use Grant, so
+  FerroFED is not free and open-source software within the CRA, and the
+  open-source software steward of Art 3(14) and Art 24 does not apply to it.
+- **The same test under the EHDS.** EHDS Art 2(1)(d) takes "placing on the
+  market", "manufacturer" and "economic operator" from Regulation (EU)
+  2019/1020, whose Art 3(1) has the same words: "in the course of a
+  commercial activity, whether in return for payment or free of charge".
+
+### What the manufacturer does
+
+- **One product per release.** Every tagged release, meaning the source tag,
+  the binary tarballs, the gateway image and the console image of one
+  version, is one product with digital elements. Cadasto B.V. places it on
+  the market as its manufacturer (Art 3(13)). The `main` branch is
+  development code and is not supplied for use.
+- **Reporting applies now.** Art 14 has the manufacturer notify an actively
+  exploited vulnerability and a severe incident, with an early warning
+  within 24 hours. Art 71(2) applies Art 14 "from 11 September 2026", and
+  Art 69(3) applies it to "all products with digital elements ... placed on
+  the market before 11 December 2027", the v0.0.x releases among them. The
+  written reporting procedure is planned
+  ([#762](https://github.com/FerroHEALTH/FerroFED/issues/762)); until it
+  lands, report a vulnerability as
+  [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#reporting-a-vulnerability)
+  says.
+- **The rest from 11 December 2027.** Art 71(2) applies the rest of the CRA
+  from 11 December 2027. Each release placed on the market from that date
+  meets the essential requirements of Annex I and has the support period
+  below. Art 69(2) holds a product placed before that date to those
+  requirements only once it is "subject to a substantial modification".
+- **One file, one declaration, one CE marking.** EHDS Art 104 inserts CRA
+  Art 32(5a): the manufacturer of an EHR system shows conformity with CRA
+  Annex I "using the relevant conformity assessment procedure provided for
+  in Chapter III" of the EHDS Regulation. It also replaces CRA Art 31(3), so
+  "a single set of technical documentation shall be drawn up" for both acts.
+  CRA Art 28(3) and EHDS Art 39(2) each require a single EU declaration of
+  conformity. A release placed from 11 December 2027 therefore carries one
+  technical documentation set, one declaration and one CE marking for both
+  acts, all planned under
+  [#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
+- **The economic operators supplied.** EHDS Art 35 has an economic operator
+  identify, for 10 years, "any economic operator to which they have
+  supplied an EHR system". CRA Art 23(1)(b) asks the same "where available";
+  EHDS Art 35 has no such qualifier. The manufacturer's answer is a
+  register, kept for 10 years, of every economic operator it supplies under
+  a contract: commercial licensees, resellers, integrators and hosts. The
+  public release is not gated, and it is supplied for non-production use
+  and for non-commercial production use under the licence. If counsel holds
+  that an anonymous production user is an economic operator, for example
+  one that puts FerroFED into service under EHDS Art 26(2), downloads move
+  behind a registration.
+
+A FerroFED that someone hosts as a service, or that a health institution
+builds and runs for itself, is outside the CRA for that service: EHDS
+recital 112 says that "EHR systems offered through the SaaS licensing and
+delivery model do not fall within the scope of" the CRA, nor do "EHR systems
+that are developed and used in-house". EHDS Art 26(2) still counts both as
+put into service ([A deployment a health institution runs for
+itself](#a-deployment-a-health-institution-runs-for-itself)). The release
+that was downloaded to run it stays a CRA product.
+
+### The support period
+
+Art 13(8) has the manufacturer handle a product's vulnerabilities for its
+support period, and "the support period shall be at least five years". Art
+13(19) has the end date of that period, "including at least the month and
+the year", specified "at the time of purchase", and Annex II, point 7, puts
+"the end-date of the support period" in the information to the user.
+The manufacturer gives every release placed on the market from 11 December
+2027 a support period of at least five years, with its end date published.
+[`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
+says which releases receive security fixes; stating the support period and
+the end date of each release there is planned
+([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)), and so is a
+notice to users when a release reaches its end date
+([#782](https://github.com/FerroHEALTH/FerroFED/issues/782)).
+
+### Already in place
+
+None of these is a conformity claim; each answers a CRA requirement in
+part:
+
+- Each release attaches a CycloneDX SBOM of the source dependency graph and
+  an SPDX SBOM of the shipped binary, with signed provenance (Annex I, Part
+  II, points 1 and 7).
+- Vulnerabilities are reported privately, with an acknowledgement within
+  seven days (Annex I, Part II, points 5 and 6; Art 13(17)).
+- The running system names the manufacturer, its postal address and its
+  single point of contact (Art 13(16)).
+- A published release cannot be changed or deleted, so every update stays
+  available (Art 13(9)).
+
 ## What is built and what is planned
 
 Neither harmonised software component is complete yet. Three built features
@@ -299,6 +421,10 @@ milestone, which is due before the Regulation applies on 26 March 2027:
   the CE marking and the registration.
 - [#526](https://github.com/FerroHEALTH/FerroFED/issues/526): tracking and
   vendoring the implementing acts the components depend on.
+- [#762](https://github.com/FerroHEALTH/FerroFED/issues/762): the written
+  procedure for the reports of CRA Art 14.
+- [#763](https://github.com/FerroHEALTH/FerroFED/issues/763): the support
+  period and its end date for each release.
 
 No EU declaration of conformity has been drawn up and no FerroFED release
 carries the CE marking.
@@ -340,9 +466,14 @@ section's compositions from the members is planned
 
 ## Not legal advice
 
-This page is the manufacturer's reading of the Regulation, written to plan
-the engineering work. It is not legal advice, and it does not decide any
-deployment's obligations. A deployment's counsel should confirm at least:
+This page is the manufacturer's reading of the EHDS Regulation and the CRA,
+written to plan the engineering work. It is not legal advice, and it does
+not decide any deployment's obligations. The manufacturer's own counsel is
+asked to confirm, now, that a release is supplied in the course of a
+commercial activity, that Cadasto B.V. is its manufacturer, and that CRA Art
+14 applies to the v0.0.x releases; the rest of the CRA position is put to
+counsel before the first release placed on the market from 11 December
+2027. A deployment's counsel should confirm at least:
 
 1. The intended-purpose statement and the classification as an EHR system
    under Art 2(2)(k), including the answer to recital 38's
@@ -355,8 +486,14 @@ deployment's obligations. A deployment's counsel should confirm at least:
 4. Whether the deployment changes FerroFED in a way that makes its operator a
    manufacturer under Art 34.
 5. Whether hosting FerroFED for others is offering it as a service under Art
-   26(2), and whether making the source available is placing on the market
-   (Art 2(1)(d) takes that definition from Regulation (EU) 2019/1020).
+   26(2). The manufacturer reads each tagged release as placed on the market
+   by Cadasto B.V. ([The Cyber Resilience Act](#the-cyber-resilience-act);
+   Art 2(1)(d) takes the definition from Regulation (EU) 2019/1020). What
+   remains for a deployment is whether it is an economic operator that
+   Cadasto B.V. supplied, which EHDS Art 35 has the manufacturer identify:
+   2019/1020 Art 3(13) counts whoever puts a product into service under the
+   applicable legislation, and EHDS Art 26(2) counts a hosted or in-house
+   system as put into service.
 6. The dates for the Chapter III articles Art 105 does not name, read
    together with Art 26(1).
 7. The national rules that apply beside the Regulation: national

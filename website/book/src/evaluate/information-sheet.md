@@ -162,6 +162,25 @@ gateway does not serve, and no receive path exists
 The instructions for use list this and the other
 [limitations](../operate/instructions-for-use.md#limitations).
 
+## Support period
+
+Art 38(2) asks for no support period. Regulation (EU) 2024/2847, the Cyber
+Resilience Act, does, and it reaches every FerroFED release as a product
+Cadasto B.V. places on the market
+([Regulatory status](regulatory-status.md#the-cyber-resilience-act)). Its
+Art 13(19) has "the end date of the support period ..., including at least
+the month and the year", specified "at the time of purchase", and its Annex
+II, point 7, puts "the end-date of the support period" in the information
+to the user.
+
+The manufacturer gives every release placed on the market from 11 December
+2027 a support period of at least five years, the minimum of Art 13(8),
+with its end date published.
+[`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
+says which releases receive security fixes. Stating the support period and
+the end date of each release there, and on this sheet, is planned
+([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)).
+
 ## Accessible formats
 
 Recital 37 asks for the sheet and the instructions "including in accessible

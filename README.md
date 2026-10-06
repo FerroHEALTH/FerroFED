@@ -64,14 +64,38 @@ mCSD directory, the audit of every IHE transaction to an ATNA repository,
 the Dutch consent pre-filter Mitz, the Nuts and FAPI 2.0 grants toward a
 node, and traces exported through OpenTelemetry shipped in v0.0.8. v0.0.9
 added the conformance statement, `ferrofed conformance run` and the operator
-console. v0.0.10, being built, is EHDS readiness. The gateway now records
-every access to patient data with the verified caller, as Annex II, point
-3.2, asks of the European logging component
-([the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log)),
-and the component's review tools and retention by origin and category are
-planned. The European interoperability component is a library
-(`crates/eehrxf`) the gateway does not serve yet
-([regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
+console.
+
+v0.0.10, being built on `main`, is EHDS readiness and the production gaps.
+Built so far: every access to patient data recorded with the verified
+caller, the professional and, where the issuer states one, the assurance
+level, as Annex II, point 3.2,
+asks of the European logging component
+([#623](https://github.com/FerroHEALTH/FerroFED/issues/623),
+[#742](https://github.com/FerroHEALTH/FerroFED/issues/742),
+[the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log));
+TLS on the listener
+([#632](https://github.com/FerroHEALTH/FerroFED/issues/632)); overload
+protection ([#631](https://github.com/FerroHEALTH/FerroFED/issues/631));
+restarts without dropped requests
+([#625](https://github.com/FerroHEALTH/FerroFED/issues/625)); several
+replicas ([#626](https://github.com/FerroHEALTH/FerroFED/issues/626),
+[#627](https://github.com/FerroHEALTH/FerroFED/issues/627)); and inbound
+metrics behind an authenticated admin listener
+([#629](https://github.com/FerroHEALTH/FerroFED/issues/629),
+[#635](https://github.com/FerroHEALTH/FerroFED/issues/635)). Planned: the
+logging component's review tools and retention by origin and category
+([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the European
+interoperability component served by the gateway, which today is the
+library `crates/eehrxf`
+([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and the
+conformity file ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
+Each tagged release is a product its manufacturer, Cadasto B.V., places on
+the market under the Cyber Resilience Act; the reporting procedure and the
+support period of each release are planned
+([#762](https://github.com/FerroHEALTH/FerroFED/issues/762),
+[#763](https://github.com/FerroHEALTH/FerroFED/issues/763),
+[regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped, what is planned, and the limitations to
@@ -189,7 +213,11 @@ openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
 docker compose up --wait
 ```
 
-A credential is always a file, never a value in `ferrofed.toml`.
+The release compose file reads every credential from a file in `secrets/`.
+`ferrofed.toml` also accepts a secret inline, under every profile, but a
+value written there sits in the file and in every copy of it, so name a
+file with the `_file` key instead
+([configuration](https://ferrofed.eu/docs/operate/configuration.html)).
 [The container page](https://ferrofed.eu/docs/operate/container.html#the-gateway-from-a-release)
 walks through each step.
 
