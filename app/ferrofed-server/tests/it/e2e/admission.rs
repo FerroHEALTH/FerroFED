@@ -173,7 +173,7 @@ async fn a_run_without_writes_reads_a_ferroehr_node_and_writes_nothing() -> Test
 
     assert_eq!(Mode::ReadOnly, report.mode());
     assert_eq!(
-        vec![crate::e2e::EHR_A.to_string()],
+        1,
         report.read(),
         "the run reads the one EHR the node holds: {report}"
     );

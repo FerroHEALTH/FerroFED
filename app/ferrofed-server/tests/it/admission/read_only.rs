@@ -80,7 +80,7 @@ async fn a_node_holding_version_4_ids_under_its_own_system_id_passes_without_a_w
 
     assert_eq!(Mode::ReadOnly, report.mode());
     assert!(report.created().is_empty(), "nothing was created: {report}");
-    assert_eq!(V4.to_vec(), report.read(), "{report}");
+    assert_eq!(V4.len(), report.read(), "{report}");
     for condition in [Condition::EhrIdGeneration, Condition::SystemIdUniqueness] {
         assert_eq!(Verdict::Pass, verdict(&report, condition)?, "{report}");
     }
@@ -194,10 +194,7 @@ async fn a_row_that_is_not_two_strings_fails_and_is_never_dropped() -> TestResul
         verdict(&report, Condition::EhrIdGeneration)?,
         "{report}"
     );
-    assert!(
-        report.read().is_empty(),
-        "no partial read is kept: {report}"
-    );
+    assert!(report.read() == 0, "no partial read is kept: {report}");
     Ok(())
 }
 
@@ -248,5 +245,34 @@ async fn an_unreachable_node_fails_every_condition_the_run_exercises() -> TestRe
         assert_eq!(Verdict::Fail, verdict(&report, condition)?, "{report}");
     }
     assert!(report.failed(), "{report}");
+    Ok(())
+}
+
+// NOTE: §5.4.1, N33: the ehr_id of an existing EHR is a real patient's pseudonymous identifier,
+// so no report line, sequential or repeated or misrouted, ever carries one.
+#[tokio::test]
+async fn the_report_names_no_ehr_id_it_read() -> TestResult {
+    let repeated = [V4[0], V4[0], V4[1]];
+    for rows in [
+        rows(&V4, SYSTEM_A),
+        rows(&V4, SYSTEM_B),
+        rows(&["9101", "9102", "9103"], SYSTEM_A),
+        rows(&repeated, SYSTEM_A),
+    ] {
+        let a = holding(&rows).await;
+        let dir = tempfile::tempdir()?;
+        let report = check_a(&dev_federation(dir.path(), &a.uri(), unreachable::BASE)?).await?;
+        let text = format!("{report} {report:?}");
+        for id in V4.iter().chain(["9101", "9102", "9103"].iter()) {
+            assert!(
+                !text.contains(id),
+                "the report names the ehr_id {id}: {text}"
+            );
+        }
+        assert!(
+            text.contains("row "),
+            "the report names its EHRs by row: {text}"
+        );
+    }
     Ok(())
 }
