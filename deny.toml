@@ -8,6 +8,13 @@
 # RustSec database cargo audit does and adds yanked, licenses, bans and
 # sources, so there is no separate cargo-audit job.
 
+# Every feature of every member is in the graph, so a dependency behind a
+# feature no member enables yet (fhirconnect behind eehrxf's fhir-r4, #684) is
+# checked as an upload or a later member would bring it in
+# (https://embarkstudios.github.io/cargo-deny/checks/cfg.html#the-graph-field-optional).
+[graph]
+all-features = true
+
 [advisories]
 version = 2
 # Fail on any RustSec advisory. Add exceptions explicitly, dated, and each
@@ -69,6 +76,7 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
   { allow = ["BUSL-1.1"], crate = "oauth-server-metadata" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
+  { allow = ["BUSL-1.1"], crate = "eehrxf" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
@@ -86,6 +94,10 @@ exceptions = [
   # The SMART on openEHR scope grammar the onward grant requests with (#81)
   # and every caller's scopes are read with (#80).
   { allow = ["BUSL-1.1"], crate = "openehr-sdt" },
+  # FerroBRIDGE's FHIRconnect engine and the template index and loader it
+  # takes, behind eehrxf's fhir-r4 feature (#684).
+  { allow = ["BUSL-1.1"], crate = "fhirconnect" },
+  { allow = ["BUSL-1.1"], crate = "openehr-mapping-core" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
   # The share-alike terms cover that data, which FerroFED redistributes

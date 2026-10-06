@@ -296,22 +296,38 @@ errors from the client, and the per-call prover record is gone (#574).
 
 ## FHIR model crate (crates.io)
 
-The FHIR model of the IHE bindings comes from the published `fhir-types`
-crate (`docs/architecture.md` §6, decision A16), compiled only in
-`crates/ihe-iti` with its `pixm` and `pdqm` features, so the gateway core
-never builds it. `scripts/checks/versions.sh` fails when this row and the root
-`Cargo.toml` `[workspace.dependencies]` disagree.
+The FHIR model comes from the published `fhir-types` crate
+(`docs/architecture.md` §6, decisions A16 and A59), compiled in the binding
+crates `crates/ihe-iti` and `crates/nl-generic-functions` and in the
+interoperability component `crates/eehrxf`, never in the engine, so the
+gateway core never builds it. `scripts/checks/versions.sh` fails when this row
+and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.107 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.1.108 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
 `Bundle`). The `pdqm` feature takes `r4` and `resources`, every R4 resource,
 because ITI-78 answers with `Patient` resources, which only `resources`
 carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
-from the same set.
+from the same set. 0.1.108 is the release the FHIRconnect engine builds on
+(#684), so the build carries one `fhir-types`.
+
+## FHIRconnect engine (crates.io)
+
+The European interoperability component (`crates/eehrxf`, feature `fhir-r4`,
+#684) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
+`fhirconnect`, with the template index and the mapping-file loader of
+`openehr-mapping-core` (decision A61). Both are pinned exactly in the root
+`Cargo.toml`, because FerroBRIDGE's crate line moves by patch, and both build
+on the `openehr-*` line above.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `fhirconnect` | =0.1.108 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.108 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
