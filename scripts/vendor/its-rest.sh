@@ -72,7 +72,7 @@ tree_root="$(corpus_fetch "$repo" "$commit" "$tmp")"
 
 rm -rf "$dest"
 mkdir -p "$dest"
-corpus_take "$tree_root" "$dest" "${paths[@]}"
+corpus_take "$tree_root" "$dest" ${paths[@]+"${paths[@]}"}
 
 status_rows=""
 for module in "${modules[@]}"; do

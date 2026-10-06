@@ -25,7 +25,8 @@ Thirteen workflows:
   dashboard and the Prometheus rule file under `deploy/observability/` with
   promtool and holds both to the metrics the gateway exports, the
   comment-style guard, the file-length guard, the
-  versions guard, the favicon guard, the copyright-holder guard, the site
+  versions guard, the favicon guard, the copyright-holder guard, the IHE
+  citation guard over the vendored IHE texts, the bash 3.2 guard, the site
   link guard over the assembled site, the conformance-matrix guard with the
   conformance report script's self-test, the obligations guard, the
   e2e-placement guard, the tracker-helper self-tests, the crate-version
@@ -138,6 +139,12 @@ lowest floor, so every finding gates. A finding is FIXED, or it carries a
 per-line `# shellcheck disable=SCnnnn` directive with its reason on the same
 line. A blanket exclusion is refused, and no `.shellcheckrc` exists, because a
 file that can turn a code off tree-wide eventually does.
+
+Every script runs under bash 3.2, the bash macOS ships, because CI runs
+bash 5 and would never see a construct 3.2 lacks. `scripts/checks/bash-compat.sh`
+refuses those constructs, and an array that can be empty is expanded as
+`${a[@]+"${a[@]}"}`; a script that needs a later bash checks
+`BASH_VERSINFO` and exits with a message saying so.
 
 ## Rust CI lanes (tier 2 of `ci.yml`)
 

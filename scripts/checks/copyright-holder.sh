@@ -37,7 +37,7 @@ while IFS= read -r hit; do
     echo "copyright-holder: $file:$line names \"$holder\", not $HOLDER" >&2
     fail=1
   fi
-done < <(git grep -nE "$header" -- . "${excludes[@]}" || true)
+done < <(git grep -nE "$header" -- . ${excludes[@]+"${excludes[@]}"} || true)
 
 if [[ $fail -ne 0 ]]; then
   exit 1

@@ -352,7 +352,7 @@ book_pins() {
       read -r -a words <<< "$claim"
       case "${#words[@]}" in
       1)
-        for item in "${names[@]}"; do
+        for item in ${names[@]+"${names[@]}"}; do
           value="$(pin_of "$item" "$file")"
           if [[ -n "$value" ]] && [[ "$value" != "${words[0]}" ]]; then
             bad "$page pins $item at ${words[0]}, $file pins $value"
@@ -370,7 +370,7 @@ book_pins() {
             stale=1
           fi
         else
-          for item in "${names[@]}"; do
+          for item in ${names[@]+"${names[@]}"}; do
             if ! claim_holds "$(pin_cell_of "$item" "$file")" "$label" "$value"; then
               bad "$page says $item is $label $value, which its $file row does not pin"
               stale=1
@@ -379,13 +379,13 @@ book_pins() {
         fi
         ;;
       *)
-        bad "$page pins '${names[*]}' as '$claim', a claim the guard cannot read: write a pin or a LABEL VALUE pair"
+        bad "$page pins '${names[*]-}' as '$claim', a claim the guard cannot read: write a pin or a LABEL VALUE pair"
         stale=1
         ;;
       esac
     done < <(tr ',' '\n' <<< "$pin_cell")
     if [[ "$claims" -eq 0 ]]; then
-      bad "$page has a row for '${names[*]}' that pins nothing"
+      bad "$page has a row for '${names[*]-}' that pins nothing"
       stale=1
     fi
   done <<< "$rows"
