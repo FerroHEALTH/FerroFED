@@ -100,7 +100,8 @@
 
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$script_dir/../.." && pwd)"
 if [[ "${1:-}" == "--root" && $# -eq 2 ]]; then
   root="$(cd "$2" && pwd)"
   shift 2
@@ -464,6 +465,30 @@ book_pins() {
   return 0
 }
 
+# read_corpora FILE: sets corpora to the "directory|item" records of the
+# corpus list FILE, which may come from the checkout being judged, so it is
+# only ever read: a line that is not a record, its directory a docs/specs/<name>
+# tree and its item a non-empty cell with no `|`, fails. `#` lines and blank
+# lines are skipped.
+read_corpora() {
+  local file="$1" line n=0 record='^docs/specs/[a-z0-9][a-z0-9-]*[|][^|]+$'
+  corpora=""
+  if [[ ! -f "$file" ]]; then
+    bad "$file is missing; it lists the corpora this check reads"
+    return 0
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    n=$((n + 1))
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    if [[ "$line" =~ $record ]]; then
+      corpora="${corpora:+$corpora$'\n'}$line"
+    else
+      bad "$file line $n is not a 'docs/specs/<name>|<item>' record"
+    fi
+  done < "$file"
+  return 0
+}
+
 # The self-test drives the two checks above against fixtures in a temporary
 # directory: an agreeing input passes, and each kind of drift fails with its
 # reason.
@@ -605,6 +630,26 @@ PAGES
   expect "a sheet that names no release" 1 release_date "$work/sheet-silent.md" "$work/dated.md" 0.0.9
   expect "a sheet that names its release twice" 1 release_date "$work/sheet-twice.md" "$work/dated.md" 0.0.9
   expect "a product version the changelog has no heading for" 1 release_date "$work/sheet.md" "$work/dated.md" 0.0.10
+
+  printf '%s\n' '# A comment' '' 'docs/specs/spec|Spec source' 'docs/specs/new-corpus|A corpus a branch adds' > "$work/corpora.txt"
+  expect "a corpus list of records, comments and blank lines" 0 read_corpora "$work/corpora.txt"
+  if [[ "$(line_count "$corpora")" -ne 2 || "$corpora" != *'docs/specs/new-corpus|A corpus a branch adds'* ]]; then
+    echo "versions: self-test failed: the corpus list read as '$corpora'." >&2
+    exit 1
+  fi
+  local bad_record
+  while IFS= read -r bad_record; do
+    printf '%s\n' 'docs/specs/spec|Spec source' "$bad_record" > "$work/corpora.txt"
+    expect "a corpus list line '$bad_record'" 1 read_corpora "$work/corpora.txt"
+  done <<'RECORDS'
+docs/other/spec|Outside docs/specs
+docs/specs/../spec|A path out of docs/specs
+docs/specs/a/b|A nested directory
+docs/specs/spec|
+docs/specs/spec|Spec|A third cell
+docs/specs/spec
+RECORDS
+  expect "a missing corpus list" 1 read_corpora "$work/no-such-list.txt"
 
   rm -r "$work"
   echo "versions: self-test OK."
@@ -1172,86 +1217,15 @@ pinned_ref_of() {
   }' <<< "$cell"
 }
 
-corpora="docs/specs/federation-spec|Federation Tier with AQL specification
-docs/specs/federation-ref|Federation Tier reference implementation
-docs/specs/its-rest|openEHR ITS-REST OpenAPI
-docs/specs/aql|openEHR AQL specification source
-docs/specs/openehr-rm|openEHR Reference Model specification source
-docs/specs/openehr-base|openEHR BASE specification source
-docs/specs/ihe-pixm|IHE PIXm FHIR package
-docs/specs/ihe-pdqm|IHE PDQm FHIR package
-docs/specs/ihe-mcsd|IHE mCSD FHIR package
-docs/specs/ihe-pmir|IHE PMIR FHIR package
-docs/specs/ihe-iua|IHE IUA supplement
-docs/specs/ihe-balp|IHE BALP FHIR package
-docs/specs/ihe-pixm-pages|IHE PIXm narrative pages
-docs/specs/ihe-pdqm-pages|IHE PDQm narrative pages
-docs/specs/ihe-pmir-pages|IHE PMIR narrative pages
-docs/specs/ihe-mcsd-pages|IHE mCSD narrative pages
-docs/specs/ihe-balp-pages|IHE BALP narrative pages
-docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
-docs/specs/eu-hl7-base|HL7 Europe Base and Core
-docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
-docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
-docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
-docs/specs/eu-hl7-extensions|HL7 Europe Extensions
-docs/specs/hl7-ips|HL7 International Patient Summary
-docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense
-docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
-docs/specs/ihe-atna|IHE RESTful ATNA supplement
-docs/specs/nl-gf|Netherlands Generic Functions IG source
-docs/specs/de-gematik-epa|German ePA für alle (gematik)
-docs/specs/de-gematik-vzd|German VZD FHIR-Directory (gematik)
-docs/specs/de-gematik-zeta|German ZETA (gematik)
-docs/specs/de-hl7-basisprofil|German base profiles (HL7 Deutschland)
-docs/specs/de-gematik-isik|German ISiK (gematik)
-docs/specs/de-mii-consent|German MII consent module
-docs/specs/de-sgb5|German SGB V
-docs/specs/at-gtelg|Austrian GTelG 2012
-docs/specs/at-elga-bes|Austrian ELGA Berechtigungssystem
-docs/specs/at-elga|Austrian ELGA overview
-docs/specs/at-hl7-core|Austrian core profiles (HL7 Austria)
-docs/specs/ch-fedlex-epr|Swiss EPR legislation (Fedlex)
-docs/specs/ch-epr-fhir|Swiss CH EPR FHIR package
-docs/specs/ch-ehs-central-services|Swiss EPR central services interface pack
-docs/specs/ihe-pixm-ch|IHE PIXm FHIR package, Swiss pin
-docs/specs/ihe-pdqm-ch|IHE PDQm FHIR package, Swiss pin
-docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
-docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
-docs/specs/eu-cra|EU Cyber Resilience Act and market surveillance acts
-docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
-docs/specs/ihe-iti-tf|IHE ITI Technical Framework Volume 1 pages
-docs/specs/ihe-iti-tf-vol2|IHE ITI Technical Framework Volume 2 pages
-docs/specs/be-ehealth|Belgian eHealth platform documents
-docs/specs/be-fhir|Belgian core profiles (HL7 Belgium)
-docs/specs/fr-ans|French ANS publications
-docs/specs/dk-nsp|Danish NSP documentation (NSPOP)
-docs/specs/se-inera|Swedish RIV-TA and Inera documentation
-docs/specs/no-nhn|Norwegian NHN developer portal
-docs/specs/fi-kanta|Finnish Kanta documents and packages
-docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)
-docs/specs/nuts-rfc|Nuts specifications
-docs/specs/ietf-oauth|IETF RFC 6749
-docs/specs/ietf-oauth|IETF RFC 7519
-docs/specs/ietf-oauth|IETF RFC 7521
-docs/specs/ietf-oauth|IETF RFC 7523
-docs/specs/ietf-oauth|IETF RFC 7662
-docs/specs/ietf-oauth|IETF RFC 8414
-docs/specs/ietf-oauth|IETF RFC 8705
-docs/specs/ietf-oauth|IETF RFC 9126
-docs/specs/ietf-oauth|IETF RFC 9396
-docs/specs/ietf-oauth|IETF RFC 9449
-docs/specs/w3c-did-vc|W3C Verifiable Credentials Data Model 1.1
-docs/specs/w3c-did-vc|W3C Decentralized Identifiers 1.0
-docs/specs/w3c-did-vc|W3C DID Resolution 1.0
-docs/specs/w3c-did-vc|W3C Bitstring Status List 1.0
-docs/specs/w3c-did-vc|did:web Method Specification
-docs/specs/dif-pe|DIF Presentation Exchange 2.0.0
-docs/specs/dif-pe|DIF Claim Format Registry
-docs/specs/openid|OpenID FAPI 2.0 Security Profile
-docs/specs/openid|OpenID for Verifiable Credential Issuance 1.0
-docs/specs/openid|OpenID for Verifiable Presentations draft 18
-docs/specs/mitz|Mitz closed authorization question"
+# The judged checkout's own corpus list, so a corpus a branch adds is judged
+# by that branch; a checkout without one is judged by the list beside this
+# script. Either is read as data by read_corpora, never sourced.
+corpora_file=scripts/checks/versions-corpora.txt
+if [[ ! -f "$corpora_file" ]]; then
+  note "$root has no $corpora_file; reading the corpus list beside this script"
+  corpora_file="$script_dir/versions-corpora.txt"
+fi
+read_corpora "$corpora_file"
 
 agreed=0
 expected=0
@@ -1285,7 +1259,7 @@ unread="$(LISTED="$corpora" awk -F'|' '
   }' "$matrix")"
 if [[ -n "$unread" ]]; then
   while IFS= read -r row; do
-    bad "the $matrix row '$row' names a provenance stamp this check does not read; add it to the corpora list"
+    bad "the $matrix row '$row' names a provenance stamp this check does not read; add it to $corpora_file"
   done <<< "$unread"
 else
   note "OK: every $matrix row that names a provenance stamp is checked"
