@@ -31,6 +31,8 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   `OBJECT_VERSION_ID`, `OBJECT_REF` and `PARTY_REF` (CC-BY-SA 3.0), pinned by
   tag `Release-1.1.0`, the release paired with the RM; the rendered HTML and
   the UML diagrams are left out (`scripts/vendor/openehr-base.sh`).
+  `scripts/checks/openehr-classes.sh` reads the class definitions of both
+  releases: every class and member the tree names must be one of them.
 - `docs/specs/ihe-pixm/`: the ITI-83 artefacts of the IHE PIXm 3.1.0 FHIR
   package (CC-BY-4.0): the `$ihe-pix` OperationDefinition, the Query
   Parameters profiles, the capability statements, the Consumer's audit
@@ -119,6 +121,12 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     guide index and OpenNCP (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
     (General Introduction §9).
+  - `docs/specs/ihe-iti-tf-vol2/`: the ITI TF Volume 2 page of Cross
+    Gateway Query [ITI-38] (General Introduction §9); the page of Cross
+    Gateway Patient Discovery [ITI-55] is cache only, because it reproduces
+    HL7 tables whose rights HL7 reserves (General Introduction §9.1.2). The
+    IHE citation guard reads both, the second when a local run has fetched
+    it.
   - `docs/specs/be-ehealth/`: the eHealth platform cookbooks, cache only:
     the cookbooks allow circulation, but the platform's re-use terms require
     prior approval for downloadable documents, and the stricter term governs

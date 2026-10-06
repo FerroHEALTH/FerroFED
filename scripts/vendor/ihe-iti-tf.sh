@@ -5,10 +5,14 @@
 #
 # Vendors the three IHE ITI Technical Framework Volume 1 chapters the #488
 # country research cites into docs/specs/ihe-iti-tf/: XUA (ch. 13), XCA
-# (ch. 18) and XCPD (ch. 27), as profiles.ihe.net renders them.
+# (ch. 18) and XCPD (ch. 27), and the two Volume 2 transactions the XCPD code
+# cites by section into docs/specs/ihe-iti-tf-vol2/: Cross Gateway Query
+# [ITI-38], committed, and Cross Gateway Patient Discovery [ITI-55], fetched
+# into the git-ignored .vendor-cache/ihe-iti-tf-vol2/ alone, each as
+# profiles.ihe.net renders it.
 #
 # Each page is pinned by URL and sha256 (scripts/vendor/lib/pinned.sh), and
-# the corpus row of docs/VERSIONS.md carries the pin-set digest.
+# each corpus row of docs/VERSIONS.md carries its pin-set digest.
 #
 # Usage:
 #   scripts/vendor/ihe-iti-tf.sh
@@ -51,6 +55,37 @@ are IHE's own text, which the General Introduction §9
 (<https://profiles.ihe.net/GeneralIntro/ch-9.html>) licenses for
 reproduction and distribution; that licence does not reach base-standard
 material, and these Volume 1 chapters reproduce no HL7 table. The Volume 2
-transaction text of ITI-55, which reproduces HL7 v3 tables, is not vendored."
+transaction text of ITI-38 and ITI-55 is the corpus
+\`docs/specs/ihe-iti-tf-vol2/\`, beside this one."
+
+# The Volume 2 transaction pages the identity code cites by section: Cross
+# Gateway Query [ITI-38], committed, and Cross Gateway Patient Discovery
+# [ITI-55], cache only. General Introduction §9.1.2 reserves every right in
+# the HL7 tables IHE reproduces by permission, and the ITI-55 page carries the
+# HL7 Version 3 message information model tables of its two messages.
+hl7='IHE Technical Frameworks General Introduction §9.1.2: "Health Level Seven, Inc. has granted permission to IHE to reproduce tables from the HL7 standard. The HL7 tables in this document are copyrighted by Health Level Seven, Inc. All rights reserved." The page reproduces the HL7 Version 3 message information model tables of its query and its response, so it is not redistributed.'
+
+pin commit ITI-38.html "ITI TF Revision 20.2, page as served on 2026-10-06" \
+  https://profiles.ihe.net/ITI/TF/Volume2/ITI-38.html \
+  49be7b6b435ff05153c2da655369dfb8eac2c6685489ec237285d05af394a192 "$ihe" \
+  "Rendered HTML page whose bytes may change on a re-render. The page links one figure, media/Figure_3.38.4-1.png, which is not taken."
+pin cache ITI-55.html "ITI TF Volume 2, the page states Revision 20.1, served on 2026-10-06" \
+  https://profiles.ihe.net/ITI/TF/Volume2/ITI-55.html \
+  67dcce3339dd2fae07db50422c02f36e8d11053b5740aceef847361e33bfb801 "$hl7" \
+  "Rendered HTML page whose bytes may change on a re-render."
+pinned_corpus ihe-iti-tf-vol2 "IHE ITI Technical Framework Volume 2 pages" \
+  "IHE ITI Technical Framework Volume 2, transactions ITI-38 and ITI-55" \
+  "The Cross Gateway Query [ITI-38] and Cross Gateway Patient Discovery
+[ITI-55] transactions, whose sections the XCPD code cites and the IHE
+section citation guard (\`scripts/checks/ihe-citations.sh\`) checks. ITI-38 is IHE's own text, which the General Introduction §9
+(<https://profiles.ihe.net/GeneralIntro/ch-9.html>) licenses for
+reproduction and distribution; it names the OASIS ebXML registry standards
+and reproduces none of their text. ITI-55 reproduces HL7 Version 3 tables,
+whose rights HL7 reserves (General Introduction §9.1.2), so it is cache
+only: the guard checks the ITI-55 citations against the cached page when a
+local run has fetched it, and counts them otherwise." \
+  "" "the IHE section citation guard, \`scripts/checks/ihe-citations.sh\`
+  (#719), over the ITI-38 and ITI-55 citations of crates/ihe-iti,
+  app/ferrofed-identity, app/ferrofed-server and the testkit"
 
 say "done"

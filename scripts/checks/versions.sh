@@ -42,7 +42,8 @@
 #                          tag or pin-set digest its docs/VERSIONS.md corpus
 #                          row pins, and the federation specification's
 #                          provenance declares the version the specification
-#                          row pins.
+#                          row pins; every docs/VERSIONS.md row that names a
+#                          docs/specs/*/PROVENANCE.md is one this check reads.
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
@@ -1158,6 +1159,7 @@ docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
 docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
 docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
 docs/specs/ihe-iti-tf|IHE ITI Technical Framework Volume 1 pages
+docs/specs/ihe-iti-tf-vol2|IHE ITI Technical Framework Volume 2 pages
 docs/specs/be-ehealth|Belgian eHealth platform documents
 docs/specs/be-fhir|Belgian core profiles (HL7 Belgium)
 docs/specs/fr-ans|French ANS publications
@@ -1173,6 +1175,7 @@ docs/specs/ietf-oauth|IETF RFC 7521
 docs/specs/ietf-oauth|IETF RFC 7523
 docs/specs/ietf-oauth|IETF RFC 7662
 docs/specs/ietf-oauth|IETF RFC 8414
+docs/specs/ietf-oauth|IETF RFC 8705
 docs/specs/ietf-oauth|IETF RFC 9126
 docs/specs/ietf-oauth|IETF RFC 9396
 docs/specs/ietf-oauth|IETF RFC 9449
@@ -1208,6 +1211,23 @@ while IFS='|' read -r dir item; do
   fi
 done <<< "$corpora"
 [[ "$agreed" -eq "$expected" ]] && note "OK: all $expected corpus provenance stamps name their pin"
+
+# Every matrix row whose source cell names a docs/specs/*/PROVENANCE.md is in
+# the list above, so a corpus row added without its stamp check fails here.
+unread="$(LISTED="$corpora" awk -F'|' '
+  BEGIN { n = split(ENVIRON["LISTED"], l, "\n"); for (i = 1; i <= n; i++) { have[l[i]] = 1 } }
+  NF >= 4 && match($4, /docs\/specs\/[^\/`]+\/PROVENANCE\.md/) {
+    dir = substr($4, RSTART, RLENGTH); sub(/\/PROVENANCE\.md$/, "", dir)
+    item = $2; gsub(/`/, "", item); gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+    if (!((dir "|" item) in have)) { print item " (" dir ")" }
+  }' "$matrix")"
+if [[ -n "$unread" ]]; then
+  while IFS= read -r row; do
+    bad "the $matrix row '$row' names a provenance stamp this check does not read; add it to the corpora list"
+  done <<< "$unread"
+else
+  note "OK: every $matrix row that names a provenance stamp is checked"
+fi
 
 # The specification row pins a version and the corpus row a commit; the
 # provenance records the version that commit's antora.yml declares, so a re-pin
