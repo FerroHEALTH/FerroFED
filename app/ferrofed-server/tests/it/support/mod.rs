@@ -250,6 +250,7 @@ pub(crate) fn settings() -> ServerSettings {
         request_timeout: Duration::from_secs(5),
         drain_delay: Duration::ZERO,
         shutdown_timeout: Duration::from_secs(5),
+        bindings_drain: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),
         overload: ferrofed_server::config::server::Server::default()

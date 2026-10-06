@@ -225,6 +225,9 @@ pub struct ServerSettings {
     /// How long the drain may take once the listener has closed; never
     /// shorter than `request_timeout`.
     pub shutdown_timeout: Duration,
+    /// How long the bindings may take to stop their processes once the drain
+    /// has ended.
+    pub bindings_drain: Duration,
     /// The largest request body the server reads before answering `413`.
     pub body_limit: usize,
     /// Who may call the ITS-REST surface and `OPTIONS {base}/`, from

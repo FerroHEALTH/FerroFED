@@ -109,7 +109,7 @@ body.
 
 ## Stopping without dropping a request
 
-On `SIGTERM` or `SIGINT` the gateway stops in three steps. No specification
+On `SIGTERM` or `SIGINT` the gateway stops in four steps. No specification
 governs this: our own design.
 
 1. Readiness answers `503` at once, with the phase `draining`, and the
@@ -119,6 +119,11 @@ governs this: our own design.
    and is closed, and no new connection is accepted.
 3. The requests in flight get `server.shutdown_timeout_ms` to finish. A
    connection still open after that is dropped.
+4. The bindings get `server.bindings_drain_timeout_ms` (5 seconds by
+   default) to stop their processes, such as deleting the PMIR
+   subscription ([The identity feed](identity.md#the-identity-feed-pmir)).
+   A process still stopping after that is abandoned, and the gateway logs
+   a warning that what it holds at a remote service may be left there.
 
 The delay exists because a load balancer does not stop routing the moment a
 process is asked to stop. A balancer that polls readiness needs up to one
@@ -137,22 +142,26 @@ run for the whole request timeout, so a shorter drain would cut it, and a
 federated query that runs to its overall budget would be lost on every
 rolling restart.
 
-The runtime's grace period must outlast both steps. Docker sends `SIGKILL`
+The runtime's grace period must outlast every step. Docker sends `SIGKILL`
 after `stop_grace_period`, and the kubelet after
 `terminationGracePeriodSeconds`, counted from the moment the pod is deleted.
-Keep each above `drain_delay_ms` plus `shutdown_timeout_ms`, with room for
-the background tasks to stop and for the last metrics and spans to be
-pushed. The shipped examples keep 10 seconds of room:
+Keep each above `drain_delay_ms` plus `shutdown_timeout_ms` plus
+`bindings_drain_timeout_ms`, with room for the last metrics and spans to be
+pushed. The drain is at least the request timeout, so the grace period is
+derived as delay + request timeout + bindings' budget + room. The shipped
+examples keep 5 seconds of room:
 
-| Example | `drain_delay_ms` | `shutdown_timeout_ms` | Grace period |
-|---|---|---|---|
-| `deploy/kubernetes/` | 5000 | 30000 | `terminationGracePeriodSeconds: 45` |
-| `deploy/compose/` | unset, `0` | 30000 | `stop_grace_period: 40s` |
-| the quickstart `compose.yaml` | unset, `0` | unset, the 30-second request timeout | `stop_grace_period: 40s` |
+| Example | `drain_delay_ms` | `shutdown_timeout_ms` | `bindings_drain_timeout_ms` | Arithmetic | Grace period |
+|---|---|---|---|---|---|
+| `deploy/kubernetes/` | 5000 | 30000 | 5000 | 5 + 30 + 5 + 5 | `terminationGracePeriodSeconds: 45` |
+| `deploy/compose/` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
+| the quickstart `compose.yaml` | unset, `0` | unset, the 30-second request timeout | unset, 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
 
 `scripts/checks/kubernetes-example.sh` and
 `scripts/checks/release-compose.sh` fail when an example's grace period
-does not outlast its delay plus its drain.
+does not outlast its delay, its drain and its bindings' budget. Both read
+the three values from the example's configuration and copy no default from
+the code, so each shipped example sets all three.
 
 ## `ferrofed healthcheck`
 

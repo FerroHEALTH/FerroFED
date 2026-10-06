@@ -195,6 +195,7 @@ forwarded_header = "forwarded"   # or "x-forwarded-for": the header those proxie
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
+bindings_drain_timeout_ms = 5000  # then the bindings stop their processes within this; see Health probes
 body_limit_bytes = 1048576    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
 overload_retry_after_s = 1    # the Retry-After of that 503, in seconds

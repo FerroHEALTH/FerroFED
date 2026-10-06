@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The drain delay and the drain: the drain defaults to the request timeout,
-//! and one shorter is refused. No specification governs the process model:
-//! our own design.
+//! The drain delay, the drain and the bindings' drain: the drain defaults to
+//! the request timeout, and one shorter is refused; the bindings' drain has a
+//! budget of its own. No specification governs the process model: our own
+//! design.
 
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
@@ -98,5 +99,32 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
     assert_eq!(Duration::from_secs(7), server.drain_delay);
     let error = refusal("[server]\ndrain_delay_ms = \"five seconds\"\n")?;
     assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_bindings_drain_has_a_budget_read_from_the_file() -> Result<(), Box<dyn StdError>> {
+    let server = resolved("[server]\n")?;
+    assert_eq!(Duration::from_secs(5), server.bindings_drain);
+    let server = resolved("[server]\nbindings_drain_timeout_ms = 8000\n")?;
+    assert_eq!(Duration::from_secs(8), server.bindings_drain);
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_bindings_drain_of_zero_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>> {
+    let error = refusal("[server]\nbindings_drain_timeout_ms = 0\n")?;
+    assert!(
+        matches!(&error, Error::Zero { key } if key == "server.bindings_drain_timeout_ms"),
+        "{error:?}"
+    );
     Ok(())
 }

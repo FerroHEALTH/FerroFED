@@ -13,8 +13,9 @@
 #      configuration names them;
 #   3. checks that each replica keeps its audit spool on a volume claim of its
 #      own and on no emptyDir, which a reschedule loses;
-#   4. checks that terminationGracePeriodSeconds outlasts the drain delay
-#      plus the drain of the configuration's [server] table;
+#   4. checks that terminationGracePeriodSeconds outlasts the drain delay,
+#      the drain and the bindings' drain of the configuration's [server]
+#      table, each of which the configuration must set;
 #   5. checks that each replica serves /metrics on the port [metrics] listen
 #      names, annotated for the scraper, and that networkpolicy.yaml opens
 #      that port to a named source alone;
@@ -112,31 +113,57 @@ else
   bad "statefulset.yaml has no audit-spool volumeClaimTemplate"
 fi
 
-echo "== the grace period covers the drain delay and the drain"
-# server_ms KEY: KEY's value in the [server] table of the configuration,
-# empty when it is unset.
+echo "== the grace period covers the drain delay, the drain and the bindings' drain"
+# server_ms FILE KEY: KEY's value in the [server] table of FILE, empty when
+# it is unset.
 server_ms() {
-  local key="$1"
+  local file="$1" key="$2"
   awk -v key="$key" '
     /^\[/ { inside = ($0 == "[server]"); next }
     inside && $1 == key && $2 == "=" { print $3; exit }
-  ' "$work/ferrofed.toml"
+  ' "$file"
 }
-# An unset key takes the gateway's default: a 30 s request timeout, no
-# delay, and a drain as long as the request timeout.
-request="$(server_ms request_timeout_ms)"
-request="${request:-30000}"
-delay="$(server_ms drain_delay_ms)"
-delay="${delay:-0}"
-shutdown="$(server_ms shutdown_timeout_ms)"
-shutdown="${shutdown:-$request}"
+# grace_covers FILE GRACE: whether a grace period of GRACE seconds outlasts
+# the drain delay, the drain and the bindings' drain FILE sets, printing the
+# arithmetic or the reason it does not. It copies no default from the code,
+# so FILE must set all three.
+grace_covers() {
+  local file="$1" grace="$2" key unset_keys="" delay shutdown bindings
+  for key in drain_delay_ms shutdown_timeout_ms bindings_drain_timeout_ms; do
+    [[ -n "$(server_ms "$file" "$key")" ]] || unset_keys="$unset_keys $key"
+  done
+  delay="$(server_ms "$file" drain_delay_ms)"
+  shutdown="$(server_ms "$file" shutdown_timeout_ms)"
+  bindings="$(server_ms "$file" bindings_drain_timeout_ms)"
+  if [[ -n "$unset_keys" ]]; then
+    echo "the configuration leaves [server]$unset_keys unset; this guard reads each from the configuration and copies no default from the code"
+    return 1
+  elif ! [[ "$delay$shutdown$bindings" =~ ^[0-9]+$ ]] || ! [[ "$grace" =~ ^[0-9]+$ ]]; then
+    echo "the [server] timeouts or the grace period are not whole numbers"
+    return 1
+  elif ((grace * 1000 <= delay + shutdown + bindings)); then
+    echo "a grace period of $grace s does not outlast drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown) plus bindings_drain_timeout_ms ($bindings)"
+    return 1
+  fi
+  echo "a grace period of $grace s outlasts the $delay ms delay, the $shutdown ms drain and the $bindings ms bindings' drain"
+}
 grace="$(sed -nE 's/^[[:space:]]+terminationGracePeriodSeconds: ([0-9]+)$/\1/p' "$EXAMPLE/statefulset.yaml")"
-if ! [[ "$request$delay$shutdown" =~ ^[0-9]+$ ]] || ! [[ "$grace" =~ ^[0-9]+$ ]]; then
-  bad "the [server] timeouts or terminationGracePeriodSeconds are not whole numbers"
-elif (( grace * 1000 <= delay + shutdown )); then
-  bad "terminationGracePeriodSeconds ($grace s) does not outlast drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown)"
+if out="$(grace_covers "$work/ferrofed.toml" "$grace")"; then
+  echo "OK: terminationGracePeriodSeconds: $out"
 else
-  echo "OK: a grace period of $grace s outlasts the $delay ms delay and the $shutdown ms drain"
+  bad "statefulset.yaml terminationGracePeriodSeconds: $out"
+fi
+# The check has teeth: a grace period of one second, and the example without
+# its bindings' drain budget, each fail it.
+grep -v '^bindings_drain_timeout_ms[[:space:]]' "$work/ferrofed.toml" > "$work/unbudgeted.toml" || true
+if grace_covers "$work/ferrofed.toml" 1 > /dev/null; then
+  bad "the grace check accepts a grace period of one second"
+elif cmp -s "$work/ferrofed.toml" "$work/unbudgeted.toml"; then
+  bad "configmap.yaml sets no [server] bindings_drain_timeout_ms to remove"
+elif grace_covers "$work/unbudgeted.toml" "$grace" > /dev/null; then
+  bad "the grace check accepts a configuration that leaves bindings_drain_timeout_ms unset"
+else
+  echo "OK: a short grace period and an unset budget each fail the grace check"
 fi
 
 echo "== the admin listener is scraped, and open to the scraper alone"

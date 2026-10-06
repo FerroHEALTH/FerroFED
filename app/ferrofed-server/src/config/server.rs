@@ -59,6 +59,10 @@ pub struct Server {
     /// `request_timeout_ms`; set, it must be at least that, so the drain
     /// outlasts every request accepted before the listener closed.
     pub shutdown_timeout_ms: Option<u64>,
+    /// How long the bindings may take to stop their processes once the drain
+    /// has ended, such as deleting the PMIR subscription; a process still
+    /// running when it elapses is abandoned with a warning. Zero is refused.
+    pub bindings_drain_timeout_ms: u64,
     /// The largest request body the server reads before answering `413`.
     pub body_limit_bytes: usize,
     /// The most requests the server serves at once. One more is answered `503`
@@ -87,6 +91,7 @@ impl Default for Server {
             request_timeout_ms: 30_000,
             drain_delay_ms: 0,
             shutdown_timeout_ms: None,
+            bindings_drain_timeout_ms: 5_000,
             body_limit_bytes: 1024 * 1024,
             max_concurrent_requests: 512,
             overload_retry_after_s: 1,

@@ -94,7 +94,7 @@ impl Config {
         let forwarding = self.server.resolve_forwarding()?;
         let request_timeout =
             positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
-        let shutdown_timeout = self.resolve_drain(request_timeout)?;
+        let (shutdown_timeout, bindings_drain) = self.resolve_drain(request_timeout)?;
         if self.server.body_limit_bytes == 0 {
             return Err(Error::Zero {
                 key: String::from("server.body_limit_bytes"),
@@ -145,6 +145,7 @@ impl Config {
                 request_timeout,
                 drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
+                bindings_drain,
                 body_limit: self.server.body_limit_bytes,
                 auth: self.auth.resolve(public_url.as_ref())?,
                 public_url,
@@ -187,10 +188,15 @@ impl Config {
 
     /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when unset,
     /// and refused when it is shorter, so the drain never cuts a request the
-    /// server accepted before its listener closed.
-    fn resolve_drain(&self, request_timeout: Duration) -> Result<Duration, Error> {
+    /// server accepted before its listener closed; and beside it
+    /// `server.bindings_drain_timeout_ms`, refused at zero.
+    fn resolve_drain(&self, request_timeout: Duration) -> Result<(Duration, Duration), Error> {
+        let bindings_drain = positive_ms(
+            "server.bindings_drain_timeout_ms",
+            self.server.bindings_drain_timeout_ms,
+        )?;
         let Some(shutdown_ms) = self.server.shutdown_timeout_ms else {
-            return Ok(request_timeout);
+            return Ok((request_timeout, bindings_drain));
         };
         let shutdown_timeout = positive_ms("server.shutdown_timeout_ms", shutdown_ms)?;
         // NOTE: no specification governs this: our own design; a request accepted
@@ -201,7 +207,7 @@ impl Config {
                 request_ms: self.server.request_timeout_ms,
             });
         }
-        Ok(shutdown_timeout)
+        Ok((shutdown_timeout, bindings_drain))
     }
 
     /// Resolves `[federation]`: both budgets positive (§11.5), and the overall

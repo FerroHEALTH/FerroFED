@@ -6,7 +6,8 @@
 #
 # Every file that repeats a pin must agree with the matrix. A check whose
 # subject file is absent SKIPS LOUDLY with a printed reason, and gains teeth
-# the moment the file appears.
+# the moment the file appears, except a file the release ships or builds its
+# images from (the container images check, 9), whose absence FAILS.
 #
 #   1. specification pins  the Federation Tier with AQL, openEHR ITS-REST and
 #                          openEHR AQL rows of the docs/architecture.md pin
@@ -95,11 +96,13 @@
 #       Checks the checkout at <dir>, such as a git worktree, with this script.
 #   scripts/checks/versions.sh --self-test
 #       Drives the specification-constant, landing-release, README-status,
-#       book-pin, release-date and support-period checks against fixtures:
-#       an agreeing input passes and each drift fails.
+#       book-pin, release-date, support-period and Kubernetes manifest
+#       checks against fixtures: an agreeing input passes and each drift,
+#       a missing manifest among them, fails.
 #   Any other argument prints this usage and exits 2.
 #
-# Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
+# Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift
+# or a missing shipped file.
 #
 # No specification governs this file; it is FerroFED's own design.
 
@@ -552,6 +555,36 @@ read_corpora() {
   return 0
 }
 
+# shipped FILE: whether FILE, one the release ships or builds its image from,
+# is present; a missing one fails, because a rename that forgets this guard
+# would otherwise turn its check off.
+shipped() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    bad "$file is missing; the release ships it, so this check cannot skip it"
+    return 1
+  fi
+  return 0
+}
+
+# statefulset_tag FILE WANT: the one ferrofed image tag of the Kubernetes
+# manifest FILE is the product version WANT.
+statefulset_tag() {
+  local file="$1" want="$2" tags
+  shipped "$file" || return 0
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$file" | sort -u)"
+  if [[ -z "$tags" ]]; then
+    bad "$file has no ghcr.io/ferrohealth/ferrofed image tag"
+  elif [[ "$(line_count "$tags")" -gt 1 ]]; then
+    bad "$file names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
+  elif [[ "$tags" != "$want" ]]; then
+    bad "example manifest: $file runs $tags, $matrix pins the product version $want"
+  else
+    note "OK: the $file gateway tag is the product version $tags"
+  fi
+  return 0
+}
+
 # The self-test drives the two checks above against fixtures in a temporary
 # directory: an agreeing input passes, and each kind of drift fails with its
 # reason.
@@ -744,6 +777,14 @@ TABLES
   expect "a support row with another release date" 1 support_rows "$work/supported.md" "$work/security-date.md"
   expect "a release listed twice" 1 support_rows "$work/supported.md" "$work/security-twice.md"
   expect "a release heading with no date" 1 support_rows "$work/undated.md" "$work/security.md"
+
+  printf '%s\n' 'spec:' '  containers:' '    - name: ferrofed' '      image: ghcr.io/ferrohealth/ferrofed:0.0.9' > "$work/statefulset.yaml"
+  printf '%s\n' 'spec:' '  containers:' '    - name: ferrofed' '      image: ghcr.io/ferrohealth/ferrofed:0.0.8' > "$work/stale-statefulset.yaml"
+  printf '%s\n' 'spec:' '  containers:' '    - name: ferrofed' '      image: ghcr.io/ferrohealth/other:0.0.9' > "$work/untagged-statefulset.yaml"
+  expect "a manifest at the product version" 0 statefulset_tag "$work/statefulset.yaml" 0.0.9
+  expect "a manifest a release behind" 1 statefulset_tag "$work/stale-statefulset.yaml" 0.0.9
+  expect "a manifest with no gateway image" 1 statefulset_tag "$work/untagged-statefulset.yaml" 0.0.9
+  expect "a manifest that is missing" 1 statefulset_tag "$work/no-such-statefulset.yaml" 0.0.9
 
   rm -r "$work"
   echo "versions: self-test OK."
@@ -1386,10 +1427,7 @@ echo "== container images (docker/Dockerfile, docker/viewer/Dockerfile, compose.
 # The gateway image and the operator console image build on the one pinned
 # base.
 for dockerfile in docker/Dockerfile docker/viewer/Dockerfile; do
-  if [[ ! -f "$dockerfile" ]]; then
-    note "no $dockerfile yet, skipped"
-    continue
-  fi
+  shipped "$dockerfile" || continue
   # The base is the last stage; an earlier one only stages files for it.
   base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' "$dockerfile" | tail -n1)"
   want_base="$(pin_of "Container base image" "$matrix")"
@@ -1409,7 +1447,7 @@ for dockerfile in docker/Dockerfile docker/viewer/Dockerfile; do
     bad "$dockerfile labels its base as '$label_base' but builds on ${base%@*}"
   fi
 done
-if [[ -f compose.yaml ]]; then
+if shipped compose.yaml; then
   # Every digest-pinned image is one of the matrix's pin cells, verbatim.
   pinned="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+@sha256:[0-9a-f]{64})[[:space:]]*$|\1|p' compose.yaml | sort -u)"
   agreed=0
@@ -1441,13 +1479,11 @@ if [[ -f compose.yaml ]]; then
   else
     note "OK: the compose.yaml gateway tag is the product version $tags"
   fi
-else
-  note "no compose.yaml yet, skipped"
 fi
 # The compose.yaml every release carries runs the gateway image alone, at the
 # version of the release, so its one tag default moves with the cut.
 release_compose=deploy/compose/compose.yaml
-if [[ -f "$release_compose" ]]; then
+if shipped "$release_compose"; then
   images="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
   [[ -n "$images" ]] || bad "$release_compose runs no image"
   while IFS= read -r ref; do
@@ -1467,24 +1503,8 @@ if [[ -f "$release_compose" ]]; then
   else
     note "OK: the $release_compose gateway tag is the product version $tags"
   fi
-else
-  note "no $release_compose yet, skipped"
 fi
-statefulset=deploy/kubernetes/statefulset.yaml
-if [[ -f "$statefulset" ]]; then
-  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$statefulset" | sort -u)"
-  if [[ -z "$tags" ]]; then
-    bad "$statefulset has no ghcr.io/ferrohealth/ferrofed image tag"
-  elif [[ "$(line_count "$tags")" -gt 1 ]]; then
-    bad "$statefulset names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
-  elif [[ "$tags" != "$want_product" ]]; then
-    bad "example manifest: $statefulset runs $tags, $matrix pins the product version $want_product"
-  else
-    note "OK: the $statefulset gateway tag is the product version $tags"
-  fi
-else
-  note "no $statefulset yet, skipped"
-fi
+statefulset_tag deploy/kubernetes/statefulset.yaml "$want_product"
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"
 if [[ -f LICENSE ]]; then

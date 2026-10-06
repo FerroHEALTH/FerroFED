@@ -9,42 +9,37 @@
 //! A server error is logged under the gateway's own id, never the client's
 //! free-text request id, and no answer quotes the query, a parameter value
 //! or a header value (§5.4.3).
+//!
+//! The planning of the targets, the patient confinement, the fan-out and the
+//! rows of the `RESULT_SET` each have a module of their own.
+
+mod confinement;
+mod fan_out;
+mod planning;
+mod result;
 
 use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::conveyance::Conveyance;
-use ferrofed_engine::fanout::{
-    Budget, Completion, FanOutError, FederatedAnswer, Plan, fan_out_within,
-};
+use ferrofed_engine::fanout::{Budget, Completion, FanOutError};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::session::SessionKey;
-use ferrofed_registry::id::EhrId;
-use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, HeaderValue, StatusCode};
-use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::subject::Subject;
-use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
-use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::ResultSet;
 use openehr_its::rest::runtime::ApiError;
-use tracing::Instrument as _;
-use tracing::field::Empty;
 
 use crate::access::{Accessed, NoAccess};
 use crate::error::{self, Code};
 use crate::facade::accessed;
 use crate::facade::provenance::{Dispatch, Provenance};
 use crate::facade::request::{Arrived, Submitted, read};
-use crate::facade::{
-    cells, completeness, confined, dedup, follow_up, intake, owner, plan, prefer, scoped, security,
-    target,
-};
+use crate::facade::{cells, completeness, confined, dedup, intake, plan, prefer, scoped, target};
 use crate::federation::Federation;
 
 /// Runs the federated query `submitted` and answers it (§7, §9, §11).
@@ -264,46 +259,17 @@ struct Query<'a> {
     on_behalf: &'a OnBehalfOf,
 }
 
-/// Drops the `session`'s bindings that name a member the consent pre-filter
-/// denied (N27a), holds the `{node, ehr_id}` set a resolution produced as the
-/// `session`'s resolution bindings (§12.5.1 step 2), teaches the `ehr_id` index where
-/// each `ehr_id` is held (step 3), and records the state the resolution
-/// showed of the resolver.
-fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &plan::Targets) {
-    let resolved = &targets.resolved;
-    if let Some(session) = session {
-        // NOTE: N27a; a consent denial drops every `ehr_id` the session cached for a denied
-        // member before the new bindings are held (no specification governs this: our own design).
-        federation
-            .bindings()
-            .forget_denied(session, &targets.denied);
-        federation.bindings().record(
-            session,
-            Instant::now(),
-            resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
-        );
-    }
-    for (node, ehr_id) in resolved {
-        owner::learn(federation.index(), ehr_id, node);
-    }
-    if let Some(observed) = targets.resolver {
-        federation.dependencies().resolver(observed);
-    }
-}
-
-/// Records what a fan-out showed of each member it dispatched to: its last
-/// state for the health surface, read from the node's own answer, and its
-/// request for the metrics surface, read from its §11.1 record.
-fn observed(federation: &Federation, answer: &FederatedAnswer) {
-    let records = answer.federation().endpoints();
-    for (endpoint, contact) in answer.contacts() {
-        federation.dependencies().contacted(endpoint, contact);
-        let record = records
-            .iter()
-            .find(|record| record.id().as_str() == endpoint.as_str());
-        if let Some(record) = record {
-            let outcome = answer.observed(endpoint).unwrap_or(record.outcome());
-            federation.requests().settled(endpoint, outcome, contact);
+impl<'a> Query<'a> {
+    /// The request this query arrived on, as the `ehr_id`-scoped routing
+    /// reads it ([`scoped::routed`]).
+    fn scope(&self) -> scoped::Scoped<'a> {
+        scoped::Scoped {
+            headers: self.headers,
+            session: self.session,
+            budget: self.budget,
+            started: self.started,
+            outbound: self.outbound,
+            conveyance: self.conveyance,
         }
     }
 }
@@ -320,6 +286,7 @@ async fn federate(
     federation: &Federation,
     query: Query<'_>,
 ) -> Result<(StatusCode, ResultSet, Provenance, Option<Accessed>), Failure> {
+    let scope = query.scope();
     let Query {
         sent,
         headers,
@@ -342,32 +309,24 @@ async fn federate(
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
     let caller = (conveyance, on_behalf);
-    confine(federation, caller, &analysis, (deadline, request_id)).await?;
-    let scope = scoped::Scoped {
-        headers,
-        session,
-        budget,
-        started,
-        outbound,
-        conveyance,
-    };
+    confinement::confine(federation, caller, &analysis, (deadline, request_id)).await?;
     let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
     let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
     let disclosed = federation.discloses_consent_to(conveyance);
-    let (targets, subject) = targeted(
+    let (targets, subject) = planning::targeted(
         federation,
         (&analysis, selection),
         (requester, on_behalf),
         (deadline, disclosed),
     )
     .await?;
-    held_within(federation, conveyance, (&analysis, &targets), request_id)?;
+    confinement::held_within(federation, conveyance, (&analysis, &targets), request_id)?;
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }
-    remember(federation, session, &targets);
+    planning::remember(federation, session, &targets);
     let attributes = analysis.attributes();
-    let plan = planned(
+    let plan = planning::planned(
         disclosed,
         targets.plan,
         &analysis,
@@ -376,32 +335,27 @@ async fn federate(
     let (plan, reached) = accessed::reading(federation, plan, &analysis);
     let routed_to = routed.map(|owner| owner.endpoint.id().as_str().to_owned());
     let dispatch = Dispatch::of(routed, &plan);
-    let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
-        .await
-        .map_err(|error| {
-            security::fan_out(&error, request_id);
-            Failure::FanOut(error)
-        })?;
-    observed(federation, &answer);
-    follow_up::observe(federation, answer.seen(), request_id);
-    let status = settled(answer.status(), targets.resolution_failed, completion);
+    let answer = fan_out::dispatched(
+        federation,
+        plan,
+        budget,
+        (started, conveyance, outbound),
+        request_id,
+    )
+    .await?;
+    let status = fan_out::settled(answer.status(), targets.resolution_failed, completion);
     let acting = dispatch.provenance(federation.snapshot(), answer.federation(), status);
     let meta = accessed::kept(federation, &answer);
     let provenance = answer.attributes().to_vec();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
         .map_err(Failure::Envelope)?;
-    let rows = std::mem::take(&mut result_set.rows);
-    result_set.rows = if status == StatusCode::OK {
-        let added = cells::Added {
-            subject,
-            attributes: &attributes,
-            values: &provenance,
-        };
-        cells::reinject(rows, &targets.sources, &added).map_err(Failure::Cells)?
-    } else {
-        Vec::new()
+    let added = cells::Added {
+        subject,
+        attributes: &attributes,
+        values: &provenance,
     };
+    result::reinjected(&mut result_set, status, &targets.sources, &added)?;
     let accessed = federation.access_log().zip(meta).and_then(|(log, kept)| {
         let answered = accessed::Answered {
             request: &request,
@@ -418,203 +372,6 @@ async fn federate(
         accessed::query(log, federation.snapshot(), &answered)
     });
     Ok((status, result_set, acting, accessed))
-}
-
-/// Refuses, when the caller in `conveyance` is confined to one patient, the
-/// `targets` of `analysis` that reach beyond that patient ([`within`]).
-///
-/// # Errors
-///
-/// Returns [`Failure::Confined`] for such targets, with nothing sent.
-fn held_within(
-    federation: &Federation,
-    conveyance: &Conveyance,
-    (analysis, targets): (&Analysis, &plan::Targets),
-    request_id: &str,
-) -> Result<(), Failure> {
-    if confined::is_confined(conveyance)
-        && !within(federation.snapshot(), conveyance, analysis, targets)
-    {
-        confined::stopped("patient", request_id);
-        return Err(Failure::Confined);
-    }
-    Ok(())
-}
-
-/// `plan` shaped for `analysis` under the request's completion strategy,
-/// dedup mode and ENDPOINT attributes, withholding consent unless the
-/// request is served `disclosed` ([`Federation::discloses_consent_to`]).
-fn planned(
-    disclosed: bool,
-    plan: Plan,
-    analysis: &Analysis,
-    (completion, dedup, attributes): (Completion, DedupMode, Vec<EndpointAttribute>),
-) -> Plan {
-    let mut plan = plan
-        .completing(completion)
-        .ordered(analysis.order().clone())
-        .deduplicating(dedup)
-        .annotating(attributes);
-    if let Some(recombination) = analysis.recombination() {
-        plan = plan.recombining(recombination.clone());
-    }
-    if !disclosed {
-        plan = plan.withholding_consent(ErrorDetail::Text(String::from(plan::UNAVAILABLE)));
-    }
-    plan
-}
-
-/// The status of a fan-out that answered `status`, its resolution failed
-/// at a member when `resolution_failed`, under `completion`.
-fn settled(status: StatusCode, resolution_failed: bool, completion: Completion) -> StatusCode {
-    // NOTE: no specification governs this (§11.3 covers only an answered lookup):
-    // our own design, a cross-reference that could not answer fails the query
-    // 424 under all-or-nothing; under best-effort it stays reported.
-    if resolution_failed && completion == Completion::AllOrNothing && status == StatusCode::OK {
-        return StatusCode::FAILED_DEPENDENCY;
-    }
-    status
-}
-
-/// The targets of `analysis` within `selection`, with the subject a patient
-/// query names: a patient query is localized, consent-checked and resolved
-/// for `requester` on behalf of `on_behalf` before `deadline`
-/// ([`plan::patient`]), and any other query is planned as it stands.
-///
-/// # Errors
-///
-/// Returns [`Failure::Plan`] when the targets cannot be planned.
-async fn targeted<'q>(
-    federation: &Federation,
-    (analysis, selection): (&'q Analysis, plan::Selection<'_>),
-    (requester, on_behalf): (Option<&Requester>, &OnBehalfOf),
-    (deadline, disclosed): (Instant, bool),
-) -> Result<(plan::Targets, Option<&'q Subject>), Failure> {
-    Ok(match analysis {
-        Analysis::Patient(query) => (
-            plan::patient(
-                federation,
-                selection,
-                (query, requester, on_behalf),
-                (deadline, disclosed),
-            )
-            .await
-            .map_err(Failure::Plan)?,
-            Some(query.subject()),
-        ),
-        Analysis::Unscoped(query) => (
-            plan::unscoped(federation.snapshot(), selection, query).map_err(Failure::Plan)?,
-            None,
-        ),
-    })
-}
-
-/// Refuses, when the caller in `conveyance` is confined to one patient, a
-/// query whose node queries read beyond the one `EHR` each is scoped to, and
-/// a query that names another patient than the confined one.
-///
-/// A query beyond the one `EHR` names neither a patient nor an `ehr_id`, or
-/// has a class beside that `EHR`, a second `EHR`, or an `EHR` under
-/// `NOT CONTAINS`. A named patient is resolved at the bound member alone,
-/// on behalf of `on_behalf`, before `deadline` ([`confined::names_own`]), so
-/// no localizer, consent pre-filter or other member learns of another
-/// patient.
-///
-/// # Errors
-///
-/// Returns [`Failure::Confined`] for such a query, before any lookup and
-/// with nothing sent, and [`Failure::Unconfirmed`] when the named patient
-/// cannot be checked at the bound member.
-async fn confine(
-    federation: &Federation,
-    (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
-    analysis: &Analysis,
-    (deadline, request_id): (Instant, &str),
-) -> Result<(), Failure> {
-    let Some(confinement) = conveyance.confinement() else {
-        return Ok(());
-    };
-    // NOTE: master08 §Resource Scopes, §7.1: a patient grant reaches "data within that patient's
-    // EHR", so every class the query reads must be contained under the one scoped EHR.
-    if !analysis.within_one_ehr() {
-        confined::stopped("population", request_id);
-        return Err(Failure::Confined);
-    }
-    if let Analysis::Patient(query) = analysis {
-        let patient = plan::patient_ref(query.subject()).map_err(Failure::Plan)?;
-        let own = confined::names_own(federation, confinement, &patient, on_behalf, deadline)
-            .await
-            .map_err(Failure::Unconfirmed)?;
-        if !own {
-            confined::stopped("patient", request_id);
-            return Err(Failure::Confined);
-        }
-    }
-    Ok(())
-}
-
-/// Whether every `{node, ehr_id}` pair `targets` would dispatch to is one of
-/// the confined patient's in `conveyance`, and there is at least one (§5.2,
-/// §12.5).
-///
-/// A patient query goes to each member under the `ehr_id` its patient
-/// resolved to there, and a query scoped to one `ehr_id` goes under that
-/// `ehr_id`. A plan that dispatches nothing is refused too, so a confined
-/// caller never learns whether another patient is known anywhere.
-fn within(
-    snapshot: &RegistrySnapshot,
-    conveyance: &Conveyance,
-    analysis: &Analysis,
-    targets: &plan::Targets,
-) -> bool {
-    let scope = match analysis {
-        // NOTE: §12.5, an ehr_id that is no HIER_OBJECT_ID names no EHR, so it is no pair
-        // of the confined patient.
-        Analysis::Unscoped(query) => query.ehr_scope().and_then(|value| EhrId::new(value).ok()),
-        Analysis::Patient(_) => None,
-    };
-    let mut dispatched = targets.plan.dispatched().peekable();
-    dispatched.peek().is_some()
-        && dispatched.all(|endpoint| {
-            let ehr_id = match analysis {
-                Analysis::Patient(_) => snapshot.endpoint(endpoint).and_then(|declared| {
-                    targets
-                        .resolved
-                        .iter()
-                        .find(|(node, _)| node == declared.node())
-                        .map(|(_, ehr_id)| ehr_id)
-                }),
-                Analysis::Unscoped(_) => scope.as_ref(),
-            };
-            ehr_id.is_some_and(|ehr_id| confined::admits(conveyance, endpoint, ehr_id))
-        })
-}
-
-/// Runs the fan-out of `plan` inside the `fan_out` span, which names how many
-/// endpoints were asked and the status of the answer.
-async fn fanned_out(
-    federation: &Federation,
-    plan: Plan,
-    budget: Budget,
-    (started, conveyance, outbound): (Instant, &Conveyance, OutboundId),
-) -> Result<FederatedAnswer, FanOutError> {
-    let span = tracing::info_span!(
-        "fan_out",
-        endpoints = plan.dispatched().count(),
-        http.response.status_code = Empty,
-    );
-    let answer = fan_out_within(
-        federation.clients(),
-        federation.snapshot(),
-        plan,
-        budget,
-        started,
-        (conveyance, Some(outbound)),
-    )
-    .instrument(span.clone())
-    .await?;
-    span.record("http.response.status_code", answer.status().as_u16());
-    Ok(answer)
 }
 
 #[cfg(test)]

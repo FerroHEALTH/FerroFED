@@ -725,8 +725,9 @@ listen = "127.0.0.1:9464"
   `outbound-gate-stopped` event is an incident
   ([Hardening](hardening.md#logs-metrics-and-traces)).
 - **Restarts.** On `SIGTERM` readiness turns `503`, the listener stays open
-  for `drain_delay_ms`, and the requests in flight get
-  `shutdown_timeout_ms`. Keep the runtime's grace period above both
+  for `drain_delay_ms`, the requests in flight get `shutdown_timeout_ms`,
+  and the bindings get `bindings_drain_timeout_ms` to stop their
+  processes. Keep the runtime's grace period above all three
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 - **Several replicas.** The replicas share nothing in memory. A follow-up
   write needs the client to name its endpoint, or the balancer to keep a

@@ -458,6 +458,19 @@ a merge depends on: the guard reads the labels itself, and `conclusion`
 fails until a re-run passes. A pull request from a fork gets a read-only
 token there, so a maintainer re-runs the guard by hand.
 
+Each label reaches the workflows as an event of its own. `gh pr create
+--label a --label b` does not attach the labels with the pull request: the
+`opened` event comes first, then one `labeled` event per label (observed on
+#781, which got five CI runs when `ci.yml` still ran on `labeled`). `ci.yml`
+now ignores them, so a label costs no CI run, and `label-guards.yml` starts
+one run per label event. For a label other than `no-changelog` or
+`no-crate-bump` that run's job is skipped and takes no runner. For one of
+those two, the job holds a runner while it waits for the CI run on the head
+commit to finish, up to its 60-minute timeout, and may then re-run the guard
+and `conclusion`. When a pull request is opened with an escape label and its
+guard reads the labels before that label's event lands, the guard fails in
+the first run and passes in the re-run.
+
 ## Owner settings
 
 These are repository settings only the owner can change. The state on
@@ -465,7 +478,7 @@ These are repository settings only the owner can change. The state on
 
 | Setting | State |
 |---|---|
-| `main` ruleset: a pull request, signed commits, and the `conclusion` and `contribution-licence-guard` checks under the strict up-to-date policy; deletion and non-fast-forward pushes blocked; repository administrators may bypass | done |
+| `main` ruleset: a pull request, signed commits, the `conclusion` and `contribution-licence-guard` checks without the strict up-to-date policy (`strict_required_status_checks_policy: false`, read 2026-10-06), and the merge queue (squash, all green, up to five pull requests a group), which tests each pull request on top of `main` and the ones ahead of it, so a branch need not be up to date to merge; deletion and non-fast-forward pushes blocked; repository administrators may bypass | done |
 | `release-tags` ruleset on `refs/tags/v*`: signed tags only, no deletion, no move | done |
 | Secret scanning with push protection | done |
 | Dependabot alerts and security updates | done |
