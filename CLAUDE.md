@@ -278,7 +278,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned
   by digest behind the `FERROFED_E2E` gate (`containers`, #155), with EHRbase
-  as the node profile's second CDR product (`containers::ehrbase`, #549); the
+  as the node profile's second CDR product (`containers::ehrbase`, #549) and
+  Keycloak as the issuer the production guide's recipe is applied to, read
+  from the book page as it prints it (`containers::keycloak`, #724); the
   capturing and fault proxy in front of each node (`proxy`, with
   `Fault::Reply` for an ITS-REST `Error` answer and
   `CapturingProxy::start_reachable` for a proxy a container dials); the
