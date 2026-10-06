@@ -124,6 +124,7 @@ mod timeouts;
 mod traces;
 mod track10;
 mod transport;
+mod troubleshooting;
 mod versioned_write;
 #[cfg(feature = "binding-ihe")]
 mod xcpd;
