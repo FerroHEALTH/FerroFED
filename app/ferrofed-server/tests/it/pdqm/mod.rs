@@ -66,7 +66,7 @@ pub(crate) async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
 }
 
 /// A PIX Manager that resolves the master identifier at node A and node B,
-/// and knows no other identifier (ITI-83 §2:3.83.4.2.3, Case 2).
+/// and knows no other identifier (ITI-83 §2:3.83.4.2.2.1 and §2:3.83.4.2.2.2).
 pub(crate) async fn manager() -> Server {
     let server = Server::start().await;
     Mock::given(method("GET"))

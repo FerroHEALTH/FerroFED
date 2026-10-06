@@ -82,7 +82,7 @@ async fn manager_answering(status: u16, answer: String) -> Server {
     server
 }
 
-/// A PIX Manager that does not know the patient (ITI-83 §2:3.83.4.2.3, case 3).
+/// A PIX Manager that does not know the patient (ITI-83 §2:3.83.4.2.2.2).
 async fn manager_not_knowing() -> Server {
     manager_answering(
         404,
