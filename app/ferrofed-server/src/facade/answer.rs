@@ -353,11 +353,12 @@ async fn federate(
     };
     let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
     let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
+    let disclosed = federation.discloses_consent_to(conveyance);
     let (targets, subject) = targeted(
         federation,
         (&analysis, selection),
         (requester, on_behalf),
-        deadline,
+        (deadline, disclosed),
     )
     .await?;
     held_within(federation, conveyance, (&analysis, &targets), request_id)?;
@@ -367,7 +368,7 @@ async fn federate(
     remember(federation, session, &targets);
     let attributes = analysis.attributes();
     let plan = planned(
-        federation,
+        disclosed,
         targets.plan,
         &analysis,
         (completion, dedup, attributes.clone()),
@@ -441,10 +442,10 @@ fn held_within(
 }
 
 /// `plan` shaped for `analysis` under the request's completion strategy,
-/// dedup mode and ENDPOINT attributes, withholding consent where
-/// `federation` does not disclose it.
+/// dedup mode and ENDPOINT attributes, withholding consent unless the
+/// request is served `disclosed` ([`Federation::discloses_consent_to`]).
 fn planned(
-    federation: &Federation,
+    disclosed: bool,
     plan: Plan,
     analysis: &Analysis,
     (completion, dedup, attributes): (Completion, DedupMode, Vec<EndpointAttribute>),
@@ -457,7 +458,7 @@ fn planned(
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
     }
-    if !federation.discloses_consent() {
+    if !disclosed {
         plan = plan.withholding_consent(ErrorDetail::Text(String::from(plan::UNAVAILABLE)));
     }
     plan
@@ -487,7 +488,7 @@ async fn targeted<'q>(
     federation: &Federation,
     (analysis, selection): (&'q Analysis, plan::Selection<'_>),
     (requester, on_behalf): (Option<&Requester>, &OnBehalfOf),
-    deadline: Instant,
+    (deadline, disclosed): (Instant, bool),
 ) -> Result<(plan::Targets, Option<&'q Subject>), Failure> {
     Ok(match analysis {
         Analysis::Patient(query) => (
@@ -495,7 +496,7 @@ async fn targeted<'q>(
                 federation,
                 selection,
                 (query, requester, on_behalf),
-                deadline,
+                (deadline, disclosed),
             )
             .await
             .map_err(Failure::Plan)?,

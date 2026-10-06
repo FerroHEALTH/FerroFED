@@ -74,6 +74,19 @@ Annex II 3.1). The issuer's authentication sets that level; the gateway
 reads it and refuses a token below it
 ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 
+**A foreign professional is authenticated by their own Member State.** A
+request a national contact point relays comes from a health professional of
+another Member State. The entity that Member State lists identifies,
+authenticates and authorises the professional (Implementing Regulation
+(EU) 2026/2099 Art 6(1), (2)), and its contact point communicates the
+professional's and the provider's identification data (Art 7). The gateway
+verifies the contact point's token, never the professional: it requires
+every attribute of the 2026/2099 Annex Tables 1 and 2 and a purpose of use,
+and passes them to the node and the access record marked as asserted by the
+contact point. Trust in the professional stops at the contact point's
+assertion ([National contact
+points](authentication.md#national-contact-points)).
+
 **The node relies on the gateway's statement.** It does not re-authenticate
 the caller either. It reads who asks from the `openEHR-federation-client`
 token: the `sub` and `iss_upstream` the gateway verified, and `verified_by`,
@@ -82,7 +95,9 @@ token proving it. The caller's own token never reaches a node.
 
 **What changes the answer:** `auth.mode = "edge"` moves end-user
 authentication to your proxy, whose signed assertion the gateway then
-verifies; `[[auth.issuer]]` decides whose authentication you accept.
+verifies; `[[auth.issuer]]` decides whose authentication you accept, and
+`[auth.issuer.national_contact_point]` declares an issuer whose tokens
+relay a professional another Member State authenticated.
 
 ## 3. Purpose of use
 
@@ -233,6 +248,11 @@ reported as one the cross-reference does not know the patient at
 only an excluded member could serve answers `404 subject-unavailable`, and
 `OPTIONS {base}/` declares `federation.consent.disclose: false`. The
 pre-filter metrics still count every exclusion for the operator.
+Every request a national contact point relays is served with
+`disclose = false` whatever the setting: the healthcare provider it relays
+is one to whom the restriction must not be visible either (Art 8, Art
+11(5)), and `OPTIONS {base}/` declares it under
+`federation.national_contact_point`.
 
 ## The operator's template
 
@@ -255,6 +275,9 @@ your deployment's documentation.
    The assurance level each issuer's tokens state, and the least level
      required for patient data ([auth.issuer.assurance]): …
    Issuers whose client tokens act for a named professional, and why: …
+   National contact points ([auth.issuer.national_contact_point]), the
+     entity of each Member State that authenticates its professionals
+     (2026/2099 Art 6(1)), and the claims carrying the Annex attributes: …
    Token mode or edge mode, and for the edge mode which proxy: …
    How each node uses the conveyed caller in its release decision: …
 

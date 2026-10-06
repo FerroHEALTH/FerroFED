@@ -17,7 +17,11 @@
 //! `national_provider_identifier` are read as the professional's
 //! identification, and the string claim an issuer's
 //! `[auth.issuer.assurance]` names as the authentication assurance, by
-//! default `acr` (RFC 9068 §2.2.1). Every other claim is passed over, and the
+//! default `acr` (RFC 9068 §2.2.1). For an issuer declared a national contact
+//! point, the IUA `subject_organization` and `subject_role` and the string
+//! claims its `[auth.issuer.national_contact_point]` names are read as the
+//! Implementing Regulation (EU) 2026/2099 Annex attributes. Every other claim
+//! is passed over, and the
 //! IUA `person_id`, a patient identifier, is never read (§5.4.1, N33).
 //!
 //! IUA is cited from the Revision 2.5 Trial Implementation supplement
@@ -26,6 +30,7 @@
 
 use std::collections::BTreeMap;
 
+use ferrofed_engine::conveyance::relayed::Role;
 use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
@@ -91,6 +96,12 @@ impl AccessToken {
     /// every one of them as a string.
     pub(super) fn requester(&self, named: Option<&RequesterClaims>) -> Option<Requester> {
         named.and_then(|named| self.others.requester(named))
+    }
+
+    /// Returns what the IUA extension states that the 2026/2099 Annex also
+    /// asks for.
+    pub(super) fn annex(&self) -> IuaAnnex {
+        self.declared.annex()
     }
 
     /// Returns what the token states about its caller.
@@ -237,6 +248,12 @@ struct IheIua {
     /// `subject_name`, the user's name.
     #[serde(default)]
     subject_name: Option<String>,
+    /// `subject_organization`, the name of the user's organisation.
+    #[serde(default)]
+    subject_organization: Option<String>,
+    /// `subject_role`, an array of FHIR `Coding`.
+    #[serde(default)]
+    subject_role: Option<Vec<Coding>>,
     /// `national_provider_identifier`, the identifier the professional's
     /// national authority issued.
     #[serde(default)]
@@ -284,6 +301,31 @@ impl Declared {
         }
     }
 
+    /// What the IUA extension states that Implementing Regulation (EU)
+    /// 2026/2099 Annex Tables 1 and 2 also ask for, each member when it is
+    /// set and not empty, and each role that has a code.
+    pub(super) fn annex(&self) -> IuaAnnex {
+        let iua = self.iua();
+        let text = |value: Option<&String>| value.filter(|value| !value.is_empty()).cloned();
+        IuaAnnex {
+            hp_identifier: text(iua.and_then(|iua| iua.national_provider_identifier.as_ref())),
+            roles: iua
+                .and_then(|iua| iua.subject_role.as_deref())
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|coding| {
+                    let code = coding.code.clone().filter(|code| !code.is_empty())?;
+                    Some(Role {
+                        system: coding.system.clone().filter(|system| !system.is_empty()),
+                        code,
+                    })
+                })
+                .collect(),
+            provider_identifier: text(iua.and_then(|iua| iua.subject_organization_id.as_ref())),
+            provider_name: text(iua.and_then(|iua| iua.subject_organization.as_ref())),
+        }
+    }
+
     /// Every purpose of use declared, IUA first, sorted and without
     /// duplicates; a coding with no code declares none.
     pub(super) fn purposes(&self) -> Vec<PurposeOfUse> {
@@ -315,6 +357,21 @@ impl Declared {
     fn iua(&self) -> Option<&IheIua> {
         self.extensions.as_ref()?.ihe_iua.as_ref()
     }
+}
+
+/// What the IHE IUA extension states that Implementing Regulation (EU)
+/// 2026/2099 Annex Tables 1 and 2 also ask for, where the two coincide.
+#[derive(Debug, Default)]
+pub(super) struct IuaAnnex {
+    /// `national_provider_identifier`, the Annex `hp_identifier`.
+    pub(super) hp_identifier: Option<String>,
+    /// `subject_role`, the Annex `hp_professional_role`.
+    pub(super) roles: Vec<Role>,
+    /// `subject_organization_id`, the Annex
+    /// `healthcare_provider_identifier`.
+    pub(super) provider_identifier: Option<String>,
+    /// `subject_organization`, the Annex `healthcare_provider_name`.
+    pub(super) provider_name: Option<String>,
 }
 
 /// Reads `system|code`, or a bare `code`, as a purpose of use; an empty code

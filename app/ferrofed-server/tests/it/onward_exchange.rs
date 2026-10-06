@@ -325,6 +325,7 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            national_contact_point: None,
         }],
         ..AuthSettings::default()
     };

@@ -9,6 +9,7 @@ use std::error::Error;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed, Role};
 use ferrofed_engine::conveyance::{
     Acting, AssuranceLevel, Caller, Conveyance, Principal, Professional, Purpose, Signer, TYPE,
     Verification,
@@ -83,6 +84,7 @@ pub(crate) fn caller() -> Caller {
         },
         acting: Acting::Person,
         assurance_level: Some(AssuranceLevel::Substantial),
+        relayed: None,
     }
 }
 
@@ -127,6 +129,68 @@ pub(crate) struct Read {
     pub(crate) national_provider_identifier: Option<String>,
     pub(crate) acting: Option<String>,
     pub(crate) assurance_level: Option<String>,
+    pub(crate) national_contact_point: Option<ReadContactPoint>,
+}
+
+/// The `national_contact_point` claim as a node reads it.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ReadContactPoint {
+    pub(crate) asserted_by: String,
+    pub(crate) health_professional: ReadProfessional,
+    pub(crate) healthcare_provider: ReadProvider,
+}
+
+/// 2026/2099 Annex Table 1 as a node reads it.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ReadProfessional {
+    pub(crate) family_name: String,
+    pub(crate) given_name: String,
+    pub(crate) country_code: String,
+    pub(crate) hp_identifier: String,
+    pub(crate) issuing_authority_name: String,
+    pub(crate) hp_professional_role: Vec<ReadPurpose>,
+    pub(crate) healthcare_provider_identifier: String,
+}
+
+/// 2026/2099 Annex Table 2 as a node reads it.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ReadProvider {
+    pub(crate) healthcare_provider_identifier: String,
+    pub(crate) issuing_authority_name: String,
+    pub(crate) healthcare_provider_name: String,
+    pub(crate) healthcare_provider_address: String,
+}
+
+/// The synthetic national contact point.
+pub(crate) const CONTACT_POINT: &str = "https://ncp.example.test";
+
+/// What the synthetic contact point relays: a professional and a provider
+/// of a Member State invented for the test (`XA`, an ISO 3166-1 user-assigned
+/// code).
+pub(crate) fn relayed() -> Relayed {
+    Relayed {
+        contact_point: CONTACT_POINT.to_owned(),
+        country_code: "XA".to_owned(),
+        professional: HealthProfessional {
+            family_name: "Example-Family".to_owned(),
+            given_name: "Example-Given".to_owned(),
+            hp_identifier: "XA-HP-0042".to_owned(),
+            issuing_authority_name: "Example Professional Register".to_owned(),
+            hp_professional_role: vec![Role {
+                system: Some("urn:oid:2.999.9".to_owned()),
+                code: "physician".to_owned(),
+            }],
+        },
+        provider: HealthcareProvider {
+            identifier: "XA-HCP-0007".to_owned(),
+            issuing_authority_name: "Example Provider Register".to_owned(),
+            name: "Example Hospital".to_owned(),
+            address: "1 Example Street, Example City".to_owned(),
+        },
+    }
 }
 
 /// Verifies `token` as a node does: its `typ`, its algorithm against the

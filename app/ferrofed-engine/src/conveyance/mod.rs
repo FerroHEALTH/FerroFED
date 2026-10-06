@@ -32,6 +32,7 @@
 //! | `assurance_level` | `low`, `substantial` or `high`, the level of the caller's authentication (Regulation (EU) No 910/2014 Art 8(2)), when its issuer declares how its tokens state one |
 //! | `scope` | the caller's scopes as granted, or the `patient/` scopes that cover the operation under a [`Confinement`] |
 //! | `ehrId` | under a [`Confinement`] only: the patient's own `ehr_id` at the receiving node |
+//! | `national_contact_point` | for a caller a national contact point relays ([`Relayed`]): the professional of Implementing Regulation (EU) 2026/2099 Annex Table 1 under `health_professional` and the provider of Table 2 under `healthcare_provider`, each attribute under its Annex data identifier, and the contact point that asserted them as `asserted_by` |
 //!
 //! It never carries `person_id` or any other patient identifier (§5.4.1,
 //! N33): a [`Caller`] holds no field for one, and the outbound gate reads
@@ -39,6 +40,9 @@
 //! ([`crate::hygiene`]). The caller's own token is never in it. §13.1 leaves
 //! end-user conveyance open, so the header and its claims are FerroFED's own
 //! design.
+
+pub mod confinement;
+pub mod relayed;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -49,6 +53,8 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use jsonwebtoken::Header;
 use serde::{Deserialize, Serialize};
 
+use crate::conveyance::confinement::Confinement;
+use crate::conveyance::relayed::Relayed;
 use crate::onward::grant::exchange::SubjectToken;
 use crate::onward::keys::KeyRing;
 
@@ -128,6 +134,9 @@ pub struct Caller {
     /// The assurance level of the caller's authentication, when its issuer
     /// declares how its tokens state one.
     pub assurance_level: Option<AssuranceLevel>,
+    /// The professional and the provider a national contact point relays,
+    /// as it asserts them, when the caller is one.
+    pub relayed: Option<Box<Relayed>>,
 }
 
 /// The professional's identification a caller's token states, as IHE IUA
@@ -286,58 +295,6 @@ pub enum ConveyanceError {
     NotOwn(EndpointId),
 }
 
-/// A caller's `patient/` grant confined to one patient: that patient's own
-/// `ehr_id` at each endpoint the grant reaches, and no other endpoint.
-///
-/// The node-local `ehr_id` is the one value N33 lets locate a node, so it is
-/// the patient context a node is told, never an identifier of the patient.
-/// No specification defines a patient-confined grant across nodes, so the
-/// confinement is FerroFED's own design.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Confinement {
-    bound: EndpointId,
-    at: BTreeMap<EndpointId, EhrId>,
-}
-
-impl Confinement {
-    /// The confinement to `at`, the patient's `ehr_id` at each endpoint the
-    /// grant reaches, of a token issued at the member `bound` reaches.
-    #[must_use]
-    pub fn new(bound: EndpointId, at: BTreeMap<EndpointId, EhrId>) -> Self {
-        Self { bound, at }
-    }
-
-    /// The endpoint of the member whose platform issued the token, where
-    /// the token's own `ehrId` names the patient's EHR.
-    #[must_use]
-    pub fn bound(&self) -> &EndpointId {
-        &self.bound
-    }
-
-    /// The patient's `ehr_id` at the node `endpoint` reaches, or `None` when
-    /// the grant does not reach it.
-    #[must_use]
-    pub fn ehr_id_at(&self, endpoint: &EndpointId) -> Option<&EhrId> {
-        self.at.get(endpoint)
-    }
-
-    /// Whether the grant reaches `ehr_id` at the node `endpoint` reaches:
-    /// the pair, never the `ehr_id` alone, since one `ehr_id` can name
-    /// another patient's EHR at another node (§12.5, §12.5.2).
-    #[must_use]
-    pub fn admits(&self, endpoint: &EndpointId, ehr_id: &EhrId) -> bool {
-        self.ehr_id_at(endpoint) == Some(ehr_id)
-    }
-
-    /// Every endpoint whose node holds `ehr_id` for the patient.
-    pub fn holding<'a>(&'a self, ehr_id: &'a EhrId) -> impl Iterator<Item = &'a EndpointId> {
-        self.at
-            .iter()
-            .filter(move |(_, held)| *held == ehr_id)
-            .map(|(endpoint, _)| endpoint)
-    }
-}
-
 /// The identity one client request conveys to every node it reaches: the
 /// signer and the principal.
 ///
@@ -383,6 +340,8 @@ struct Claims<'a> {
     acting: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     assurance_level: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    national_contact_point: Option<relayed::Claim<'a>>,
 }
 
 impl Conveyance {
@@ -439,6 +398,16 @@ impl Conveyance {
     #[must_use]
     pub fn principal(&self) -> &Principal {
         &self.0.principal
+    }
+
+    /// The professional and the provider a national contact point relays,
+    /// when the request comes from one.
+    #[must_use]
+    pub fn relayed(&self) -> Option<&Relayed> {
+        match &self.0.principal {
+            Principal::Caller(caller) => caller.relayed.as_deref(),
+            Principal::Gateway => None,
+        }
     }
 
     /// The caller's verified token, when the conveyance carries it.
@@ -524,6 +493,7 @@ impl Conveyance {
             national_provider_identifier: None,
             acting: None,
             assurance_level: None,
+            national_contact_point: None,
         };
         if let Principal::Caller(caller) = &self.0.principal {
             claims.sub = &caller.subject;
@@ -539,6 +509,7 @@ impl Conveyance {
             claims.national_provider_identifier = caller.professional.identifier.as_deref();
             claims.acting = Some(caller.acting.as_str());
             claims.assurance_level = caller.assurance_level.map(AssuranceLevel::as_str);
+            claims.national_contact_point = caller.relayed.as_deref().map(Relayed::claim);
         }
         let key = self.0.signer.keys.current();
         let mut header = Header::new(key.algorithm());
@@ -569,6 +540,9 @@ impl Conveyance {
             carried.extend(purpose.system.as_deref());
             carried.push(&purpose.code);
         }
+        if let Some(relayed) = &caller.relayed {
+            carried.extend(relayed.carried());
+        }
         carried
     }
 }
@@ -583,9 +557,10 @@ pub(crate) mod tests {
     use secrecy::SecretString;
 
     use super::{
-        Acting, AssuranceLevel, Caller, Confinement, Conveyance, ConveyanceError, Principal,
-        Professional, Purpose, Signer, Verification,
+        Acting, AssuranceLevel, Caller, Conveyance, ConveyanceError, Principal, Professional,
+        Purpose, Signer, Verification,
     };
+    use crate::conveyance::confinement::Confinement;
     use crate::onward::SystemClock;
     use crate::onward::keys::{KeyRing, SigningKey};
 
@@ -616,6 +591,7 @@ pub(crate) mod tests {
             },
             acting: Acting::Person,
             assurance_level: Some(AssuranceLevel::High),
+            relayed: None,
         }
     }
 

@@ -141,5 +141,8 @@ fn conveyed(caller: &Caller) -> conveyance::Caller {
         },
         acting: caller.acting(),
         assurance_level: caller.assurance(),
+        // NOTE: 2026/2099 Art 7, §13.4 authn-end-user: the node is told what a contact point
+        // relays, marked as its assertion, which the outbound gate reads with the rest.
+        relayed: caller.relayed().cloned().map(Box::new),
     }
 }

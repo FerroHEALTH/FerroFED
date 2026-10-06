@@ -136,12 +136,37 @@ value it maps; the gateway never infers one, so a record of an issuer that
 declares no mapping carries no level. A client is admitted to patient data
 only when its issuer declares that its client tokens act for the
 professional they name, and the record then names that professional in the
-`agent:user` and the client in the Application agent. A national contact
-point's connector arrives that way: the foreign provider is the provider
-agent, the foreign professional the `agent:user`, and the connector the
-Application agent. BALP fixes no vocabulary for the assurance level and
-names no element for who acts, so both codes, written with no `system`,
-are FerroFED's own design.
+`agent:user` and the client in the Application agent. BALP fixes no
+vocabulary for the assurance level and names no element for who acts, so
+both codes, written with no `system`, are FerroFED's own design.
+
+### A request a national contact point relays
+
+A national contact point's connector acts for the professional of another
+Member State its token names ([National contact
+points](authentication.md#national-contact-points)). Its record names the
+foreign provider as the provider agent, the foreign professional in the
+`agent:user`, and the connector as the Application agent, the client that
+relayed the request. Beside them, one entity named `ehds-relayed` carries
+every attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1
+and 2 the contact point asserted, each a `detail`:
+
+| `detail` | Annex attribute |
+|---|---|
+| `contact-point` | the contact point that asserted them, by its issuer |
+| `asserted` | `true`: the values are the contact point's assertion, never verified by the gateway |
+| `country-code` | Table 1 `country_code` |
+| `hp-family-name`, `hp-given-name` | Table 1 `family_name`, `given_name` |
+| `hp-identifier`, `hp-issuing-authority` | Table 1 `hp_identifier` and its `issuing_authority_name` |
+| `hp-professional-role` | Table 1 `hp_professional_role`, once per role, `system\|code` |
+| `provider-identifier`, `provider-issuing-authority` | Table 2 `healthcare_provider_identifier` and its `issuing_authority_name` |
+| `provider-name`, `provider-address` | Table 2 `healthcare_provider_name`, `healthcare_provider_address` |
+
+A correlation identifier the connector sent in the header its issuer
+declares is a `correlation-id` detail of `entity:transaction`, so the
+record can be joined with the contact point's own exchange log. No log line
+carries any of them. The entity and detail names are FerroFED's own design;
+no text the gateway reads asks the national side for an audit format.
 
 ### Categories
 

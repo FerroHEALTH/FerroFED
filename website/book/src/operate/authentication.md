@@ -93,6 +93,10 @@ demographic_clients = []
 | `auth.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
 | `auth.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[auth.issuer.assurance]` is set. |
 | `auth.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
+| `auth.issuer[].national_contact_point.family_name`, `.given_name`, `.country_code` | none | The string claims of this issuer's tokens that carry the professional's `family_name`, `given_name` and `country_code` (Implementing Regulation (EU) 2026/2099 Annex Table 1). Setting `[auth.issuer.national_contact_point]` declares the issuer a national contact point ([National contact points](#national-contact-points)), and every claim name is then required. |
+| `auth.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
+| `auth.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
+| `auth.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
 | `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
 
 An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
@@ -402,6 +406,97 @@ each node in the caller's conveyance
 gateway sends. Which claims carry them and the refusal are FerroFED's own
 design; the texts above set the obligation and the levels.
 
+## National contact points
+
+A national contact point for digital health relays the request of a health
+professional of another Member State (Regulation (EU) 2025/327 Art 23).
+Implementing Regulation (EU) 2026/2099 gives the identification,
+authentication and authorisation of that professional to the entity their
+Member State lists (Art 6(1), (2)), and has the contact point of the
+professional's Member State communicate the professional's and the
+provider's identification data, the attributes of its Annex Tables 1 and 2
+(Art 7). You declare the issuer of the contact point's tokens as one:
+
+```toml
+[[auth.issuer]]
+issuer = "https://ncp.example.org"
+jwks_uri = "https://ncp.example.org/jwks"
+
+[auth.issuer.national_contact_point]
+family_name = "family_name"
+given_name = "given_name"
+country_code = "country_code"
+professional_issuing_authority = "hp_issuing_authority_name"
+provider_issuing_authority = "hcp_issuing_authority_name"
+provider_address = "healthcare_provider_address"
+correlation_header = "ncp-correlation-id"
+```
+
+**Who authenticates the professional.** The contact point's side does. The
+gateway verifies the contact point's token, as it verifies every caller's,
+and reads the professional and the provider from it as the contact point
+asserts them; it never authenticates the professional, and cannot check the
+other Member State's identification means. Federation Tier §13.4 lets the
+source "rely on the requester's assertion", and the node is told the
+attributes marked as the contact point's assertion. An assurance level the
+token states is read through `[auth.issuer.assurance]` as for any issuer
+([The assurance level](#the-assurance-level)).
+
+**The attributes.** Where IHE IUA defines a claim that carries an Annex
+attribute (ITI TF-2 3.71.4.2.2.1.1), the gateway reads it from
+`extensions.ihe_iua`; the table names the string claim of every other one:
+
+| Annex attribute | Read from |
+|---|---|
+| Table 1 `family_name`, `given_name`, `country_code` | the claims `family_name`, `given_name` and `country_code` name; `country_code` must be two upper-case letters, the ISO 3166-1 alpha-2 form |
+| Table 1 `hp_identifier` | `extensions.ihe_iua.national_provider_identifier` |
+| Table 1 `issuing_authority_name` | the claim `professional_issuing_authority` names |
+| Table 1 `hp_professional_role` | `extensions.ihe_iua.subject_role`, FHIR `Coding`s, at least one with a code |
+| Tables 1 and 2 `healthcare_provider_identifier` | `extensions.ihe_iua.subject_organization_id` |
+| Table 2 `issuing_authority_name` | the claim `provider_issuing_authority` names |
+| Table 2 `healthcare_provider_name` | `extensions.ihe_iua.subject_organization` |
+| Table 2 `healthcare_provider_address` | the claim `provider_address` names |
+
+IUA's `subject_name` is one string, so it does not give the Annex's
+separate family and given names; the gateway still reads it as the
+professional's name. A request that reaches patient data needs every
+attribute, not empty, and a purpose of use, whatever
+`auth.purpose_of_use.required` says. A token that lacks an attribute is
+refused `403 contact-point-attributes-required`, one with no purpose of use
+`403 purpose-of-use-required`, and no node is asked anything. The contact
+point's connector is a client acting for the professional the token names,
+so `client_tokens_act_for_professional` need not be set. The IUA
+`person_id`, a patient identifier, is never read (§5.4.1, N33): the patient
+is named in the request, as for every caller.
+
+**Consent exclusions stay hidden.** Every request of a contact point is
+served with `disclose = false`, whatever `[federation.consent] disclose`
+says ([Withholding consent exclusions](consent-exclusions.md)): the
+provider it relays is a healthcare provider to whom a restriction "shall
+not be visible" (Regulation (EU) 2025/327 Art 8, Art 11(5)). The setting can
+only tighten: a deployment that withholds exclusions from its own callers
+withholds them from the contact point too. The gateway applies no category
+rule of the Member State of treatment; release stays with the node, which
+receives the foreign professional in the conveyance (N26, N27).
+
+**What the record and the node receive.** The access record names the
+foreign professional and provider with their country and issuing
+authorities, marked as asserted by the contact point
+([Audit](audit.md#a-request-a-national-contact-point-relays)), and each node
+is told them in the `national_contact_point` claim of the conveyance
+([below](#what-a-node-is-told-about-the-caller)). A correlation identifier
+the connector sends in `correlation_header` is recorded with the request,
+so the record can be joined with the contact point's own exchange log; it
+reaches no node. A value sent twice, empty, longer than 128 bytes or with a
+byte outside visible ASCII is refused `400 correlation-invalid`.
+
+`OPTIONS {base}/` declares every contact point under
+`federation.national_contact_point`: `disclose: false`, `professional:
+"asserted-by-contact-point"`, `purpose_of_use: "required"`, and per issuer
+the claim each Annex attribute is read from and the correlation header. The
+Annex defines no carrier for its attributes, so the claim names, the
+member and the header are FerroFED's own design.
+
 ## The edge mode
 
 A deployment that authenticates its clients at a proxy configures the edge
@@ -446,6 +541,8 @@ travelled.
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `401` | `natural-person-required` | the request reaches patient data and the token names no natural person, and its issuer does not declare client tokens acting for the professional the token names |
 | `401` | `authentication-assurance-insufficient` | the request reaches patient data and the token states no assurance at the least level its issuer requires |
+| `403` | `contact-point-attributes-required` | the request reaches patient data and a national contact point's token lacks an Implementing Regulation (EU) 2026/2099 Annex attribute ([National contact points](#national-contact-points)) |
+| `400` | `correlation-invalid` | a national contact point's correlation header is sent twice, empty, longer than 128 bytes, or not visible ASCII |
 | `403` | `operation-refused` | the ADMIN API, refused to every caller |
 | `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
 | `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to, or a patient grant addresses the DEMOGRAPHIC API |
@@ -510,6 +607,7 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `subject_name` | the professional's name, when the caller's token states `extensions.ihe_iua.subject_name` (IHE IUA) |
 | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |
 | `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[auth.issuer.assurance]` and the token states a value it lists |
+| `national_contact_point` | for a caller a [national contact point](#national-contact-points) vouched for: `health_professional`, every row of Implementing Regulation (EU) 2026/2099 Annex Table 1 under its data identifier, `healthcare_provider`, every row of Table 2, and `asserted_by`, the contact point's issuer, which marks them as its assertion |
 
 The token never carries the caller's own token, its `client_id`, or a
 patient identifier: an IUA `person_id` is never read (N33). The outbound
@@ -559,4 +657,7 @@ release, and audits who asked:
 7. Apply `scope` and `purpose_of_use` to what you release, confine a
    `patient/` scope to the EHR the `ehrId` claim names, and record `sub`,
    `iss_upstream`, `verified_by` and `subject_organization_id` in your audit
-   trail. Consent stays your own check (§13.2, N27).
+   trail, with `national_contact_point` where a contact point relays the
+   request: its professional and provider are the contact point's
+   assertion, which `asserted_by` names. Consent stays your own check
+   (§13.2, N27).

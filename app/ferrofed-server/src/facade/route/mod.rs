@@ -480,17 +480,19 @@ pub(crate) async fn send(
 /// replaces it.
 pub(crate) fn passed(
     provenance: Provenance,
-    (federation, endpoint): (&Federation, &Endpoint),
+    (federation, endpoint, conveyance): (&Federation, &Endpoint, &Conveyance),
     forwarded: Forwarded,
     ids: (&str, &str),
 ) -> Response {
     provenance.stamp(
-        withheld(federation, endpoint, &forwarded, ids).unwrap_or_else(|| answered(forwarded)),
+        withheld((federation, conveyance), endpoint, &forwarded, ids)
+            .unwrap_or_else(|| answered(forwarded)),
     )
 }
 
 /// The answer to a routed request in place of `forwarded`, the node's own,
-/// in a deployment that does not disclose consent exclusions: `404
+/// where the request on behalf of `conveyance` is served without disclosing
+/// consent exclusions ([`Federation::discloses_consent_to`]): `404
 /// subject-unavailable`, naming the client's `request_id`, for a node that
 /// refused on consent grounds and for a node that answered `404`.
 ///
@@ -503,12 +505,12 @@ pub(crate) fn passed(
 // NOTE: Regulation (EU) 2025/327 Art 8 against §11.2, which passes a node's 404 through: here it
 // is the gateway's, or the gateway's 404 for a refusal would be the only one and name it.
 pub(crate) fn withheld(
-    federation: &Federation,
+    (federation, conveyance): (&Federation, &Conveyance),
     endpoint: &Endpoint,
     forwarded: &Forwarded,
     (request_id, logged): (&str, &str),
 ) -> Option<Response> {
-    if federation.discloses_consent() {
+    if federation.discloses_consent_to(conveyance) {
         return None;
     }
     if is_consent_refusal(forwarded, endpoint.consent_refusal_codes()) {

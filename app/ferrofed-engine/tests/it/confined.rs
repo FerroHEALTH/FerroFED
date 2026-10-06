@@ -16,7 +16,8 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::conveyance::{Confinement, ConveyanceError, HEADER};
+use ferrofed_engine::conveyance::confinement::Confinement;
+use ferrofed_engine::conveyance::{ConveyanceError, HEADER};
 use ferrofed_engine::dispatch::{DispatchError, DispatchOptions, NodeClient, NodeQuery};
 use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_registry::id::{EhrId, EndpointId};

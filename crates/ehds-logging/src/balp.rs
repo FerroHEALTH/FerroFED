@@ -29,7 +29,11 @@
 //! which no slice of a pattern is discriminated by: one for the categories,
 //! one per origin and one per `ehr_id`, each with its `detail` entries named
 //! as [`detail`] lists them (no specification governs the names: our own
-//! design).
+//! design). The professional and the provider a national contact point
+//! relays (Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2) ride
+//! the same way, in one entity `ehds-relayed` that names the contact point
+//! and marks them `asserted`, and a correlation identifier the client sent is
+//! a `detail` of the request id's entity.
 
 use std::sync::Arc;
 
@@ -43,7 +47,7 @@ use secrecy::SecretString;
 use url::Url;
 
 use crate::classify::Classification;
-use crate::record::{AccessRecord, Action, Outcome};
+use crate::record::{AccessRecord, Action, Outcome, Relayed};
 use crate::sink::{AccessSink, SinkError};
 
 /// The names of the `detail` entries a record's added entities carry.
@@ -80,6 +84,34 @@ pub mod detail {
     pub const ROWS: &str = "rows";
     /// The endpoint an `ehr_id` is held at.
     pub const ENDPOINT: &str = "endpoint";
+    /// The identifier the client correlates the request by in its own log.
+    pub const CORRELATION: &str = "correlation-id";
+    /// The national contact point that asserted the relayed professional
+    /// and provider, by the issuer of its token.
+    pub const CONTACT_POINT: &str = "contact-point";
+    /// That the relayed values are the contact point's assertion: `true`.
+    pub const ASSERTED: &str = "asserted";
+    /// The relayed `country_code`.
+    pub const COUNTRY_CODE: &str = "country-code";
+    /// The relayed professional's `family_name`.
+    pub const FAMILY_NAME: &str = "hp-family-name";
+    /// The relayed professional's `given_name`.
+    pub const GIVEN_NAME: &str = "hp-given-name";
+    /// The relayed professional's `hp_identifier`.
+    pub const HP_IDENTIFIER: &str = "hp-identifier";
+    /// The agency that issued the relayed `hp_identifier`.
+    pub const HP_ISSUING_AUTHORITY: &str = "hp-issuing-authority";
+    /// `<system>|<code>`, or `<code>`, once per relayed
+    /// `hp_professional_role`.
+    pub const HP_ROLE: &str = "hp-professional-role";
+    /// The relayed `healthcare_provider_identifier`.
+    pub const PROVIDER_IDENTIFIER: &str = "provider-identifier";
+    /// The agency that issued the relayed provider identifier.
+    pub const PROVIDER_ISSUING_AUTHORITY: &str = "provider-issuing-authority";
+    /// The relayed `healthcare_provider_name`.
+    pub const PROVIDER_NAME: &str = "provider-name";
+    /// The relayed `healthcare_provider_address`.
+    pub const PROVIDER_ADDRESS: &str = "provider-address";
 }
 
 /// The sink that writes each record as a BALP `AuditEvent` and hands it to
@@ -258,7 +290,11 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         role: None,
         name: None,
         description: None,
-        details: Vec::new(),
+        details: request
+            .correlation
+            .iter()
+            .map(|correlation| Detail::new(detail::CORRELATION, correlation.clone()))
+            .collect(),
     })];
     match record.action {
         Action::Query => entities.push(Entity::Query(
@@ -327,7 +363,46 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         details.extend(origin.categories.iter().flat_map(categories));
         entities.push(other(Some(origin.endpoint.clone()), "origin", details));
     }
+    if let Some(relayed) = &record.accessor.relayed {
+        entities.push(other(None, "ehds-relayed", relayed_details(relayed)));
+    }
     entities
+}
+
+/// The `detail` entries of what a national contact point relayed, marked
+/// as its assertion.
+fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
+    let professional = &relayed.professional;
+    let provider = &relayed.provider;
+    let mut details = vec![
+        Detail::new(detail::CONTACT_POINT, relayed.contact_point.clone()),
+        Detail::new(detail::ASSERTED, "true"),
+        Detail::new(detail::COUNTRY_CODE, relayed.country_code.clone()),
+        Detail::new(detail::FAMILY_NAME, professional.family_name.clone()),
+        Detail::new(detail::GIVEN_NAME, professional.given_name.clone()),
+        Detail::new(detail::HP_IDENTIFIER, professional.identifier.clone()),
+        Detail::new(
+            detail::HP_ISSUING_AUTHORITY,
+            professional.issuing_authority.clone(),
+        ),
+    ];
+    details.extend(professional.roles.iter().map(|role| {
+        let coded = match &role.system {
+            Some(system) => format!("{system}|{}", role.code),
+            None => role.code.clone(),
+        };
+        Detail::new(detail::HP_ROLE, coded)
+    }));
+    details.extend([
+        Detail::new(detail::PROVIDER_IDENTIFIER, provider.identifier.clone()),
+        Detail::new(
+            detail::PROVIDER_ISSUING_AUTHORITY,
+            provider.issuing_authority.clone(),
+        ),
+        Detail::new(detail::PROVIDER_NAME, provider.name.clone()),
+        Detail::new(detail::PROVIDER_ADDRESS, provider.address.clone()),
+    ]);
+    details
 }
 
 /// An entity of type `4` named `name`, identified by `value` when given.

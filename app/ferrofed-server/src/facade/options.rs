@@ -24,13 +24,16 @@
 //! `endpoints`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR
 //! system. Beside it, `supported_until` names the last day of the
 //! release's support period, or is `null` for a build with none (Regulation
-//! (EU) 2024/2847 Art 13(19)).
+//! (EU) 2024/2847 Art 13(19)). The issuers declared national contact points
+//! are declared under `federation.national_contact_point`
+//! ([`ContactPoints`]), with how their requests are served.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
 use ferrofed_identity::role::consent::{ConsentPrefilter, ON_UNAVAILABLE};
 use ferrofed_registry::manufacturer;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
@@ -47,6 +50,7 @@ use openehr_federation::options::{
 };
 use openehr_its::rest::routes::{self, Lookup};
 
+use crate::config::auth::AuthSettings;
 use crate::error::{self, Code};
 use crate::facade::{QUERY_AQL, route, stored, subject, write};
 use crate::federation::Federation;
@@ -86,6 +90,10 @@ pub const CONSENT_MS: &str = "consent_ms";
 
 /// The `federation` member that declares the Step-1 consent pre-filter.
 pub const CONSENT: &str = "consent";
+
+/// The `federation` member that declares the national-contact-point
+/// callers ([`ContactPoints`]).
+pub const NATIONAL_CONTACT_POINT: &str = "national_contact_point";
 
 /// The top-level member that names the manufacturer, beside `federation`
 /// and `endpoints` (Regulation (EU) 2025/327 Art 30(1)(g)).
@@ -128,12 +136,18 @@ pub enum DescribeError {
 /// endpoint list is subject to the gateway's normal authentication (§7a.2,
 /// §13.1). Without a federation the gateway federates nothing and answers as
 /// the unserved ITS-REST surface does.
-pub async fn options_root(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+pub async fn options_root(
+    State(state): State<Arc<AppState>>,
+    Extension(contact_points): Extension<Arc<ContactPoints>>,
+    headers: HeaderMap,
+) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
-    match describe(&federation, state.definitions().is_some()) {
+    let described = describe(&federation, state.definitions().is_some())
+        .and_then(|body| contact_points.declared_in(body));
+    match described {
         Ok(body) => (
             StatusCode::OK,
             [(header::ALLOW, HeaderValue::from_static(ROOT_ALLOW))],
@@ -236,11 +250,128 @@ fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
         let declared = Consent {
             prefilter: prefilter.mode(),
             on_unavailable: ON_UNAVAILABLE,
-            disclose: federation.discloses_consent(),
+            disclose: federation.deployment_discloses_consent(),
         };
         extra.insert_serialized(CONSENT, &declared)?;
     }
     Ok(extra)
+}
+
+/// The issuers a deployment declares as national contact points, as
+/// `OPTIONS {base}/` declares them under `federation.national_contact_point`.
+///
+/// The member is present only when some issuer is declared one. It says that
+/// such a request is served with `disclose: false`, whatever
+/// `federation.consent.disclose` declares (Regulation (EU) 2025/327 Art 8,
+/// Art 11(5)); that the professional is authenticated by the contact point's
+/// side and asserted to the gateway, never authenticated by it (Implementing
+/// Regulation (EU) 2026/2099 Art 6(1) and (2); §13.4 authn-end-user, CP-39);
+/// that a patient-data request needs a purpose of use; and, per issuer, the
+/// claim each 2026/2099 Annex attribute is read from and the correlation
+/// header.
+// NOTE: §7a.2 leaves the `federation` object open and names no such member (N30 requires
+// none), so the member is our own design.
+#[derive(Debug, Clone, Default)]
+pub struct ContactPoints(Vec<DeclaredContactPoint>);
+
+/// One issuer declared a national contact point, as `OPTIONS {base}/`
+/// declares it.
+#[derive(Debug, Clone, serde::Serialize)]
+struct DeclaredContactPoint {
+    issuer: String,
+    claims: BTreeMap<&'static str, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    correlation_header: Option<String>,
+}
+
+impl ContactPoints {
+    /// The national contact points `auth` declares.
+    #[must_use]
+    pub fn of(auth: &AuthSettings) -> Self {
+        let iua = |claim: &str| format!("extensions.ihe_iua.{claim}");
+        Self(
+            auth.issuers
+                .iter()
+                .filter_map(|issuer| {
+                    let declared = issuer.national_contact_point.as_ref()?;
+                    let named = &declared.claims;
+                    let claims = BTreeMap::from([
+                        ("health_professional.family_name", named.family_name.clone()),
+                        ("health_professional.given_name", named.given_name.clone()),
+                        (
+                            "health_professional.country_code",
+                            named.country_code.clone(),
+                        ),
+                        (
+                            "health_professional.hp_identifier",
+                            iua("national_provider_identifier"),
+                        ),
+                        (
+                            "health_professional.issuing_authority_name",
+                            named.professional_issuing_authority.clone(),
+                        ),
+                        (
+                            "health_professional.hp_professional_role",
+                            iua("subject_role"),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_identifier",
+                            iua("subject_organization_id"),
+                        ),
+                        (
+                            "healthcare_provider.issuing_authority_name",
+                            named.provider_issuing_authority.clone(),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_name",
+                            iua("subject_organization"),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_address",
+                            named.provider_address.clone(),
+                        ),
+                    ]);
+                    Some(DeclaredContactPoint {
+                        issuer: issuer.issuer.clone(),
+                        claims,
+                        correlation_header: declared
+                            .correlation_header
+                            .as_ref()
+                            .map(|header| header.as_str().to_owned()),
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    /// `body`, with the `national_contact_point` member when some issuer is
+    /// declared one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DescribeError::Wire`] when the member cannot be written.
+    pub fn declared_in(&self, mut body: OptionsRoot) -> Result<OptionsRoot, DescribeError> {
+        #[derive(serde::Serialize)]
+        struct Member<'a> {
+            disclose: bool,
+            professional: &'static str,
+            purpose_of_use: &'static str,
+            issuers: &'a [DeclaredContactPoint],
+        }
+        if self.0.is_empty() {
+            return Ok(body);
+        }
+        let member = Member {
+            disclose: false,
+            professional: "asserted-by-contact-point",
+            purpose_of_use: "required",
+            issuers: &self.0,
+        };
+        body.federation
+            .extra
+            .insert_serialized(NATIONAL_CONTACT_POINT, &member)?;
+        Ok(body)
+    }
 }
 
 /// Whether an undirected query fans out under `targeting`, the node

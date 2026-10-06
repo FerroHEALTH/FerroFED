@@ -37,7 +37,8 @@ use wiremock::{Mock, ResponseTemplate};
 use super::{Gateway, TestResult, assert_refused, bearing, claims, minted, query, sent};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, post, wire};
 use crate::run::binary;
-use crate::support::{self, Conveyed, asked, conveyed_claims, error_body};
+use crate::support::conveyed::{Conveyed, conveyed_claims};
+use crate::support::{self, asked, error_body};
 
 /// The identifier system under which the cross-reference knows node A's
 /// `ehr_id`s, an example OID.

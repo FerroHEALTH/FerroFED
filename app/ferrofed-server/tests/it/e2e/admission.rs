@@ -21,7 +21,7 @@ use ferrofed_testkit::containers::{self, API_PATH};
 use ferrofed_testkit::seed::{self, DemoComposition};
 
 use crate::e2e::{TestResult, federation_resolving};
-use crate::support::searched_claims;
+use crate::support::conveyed::searched_claims;
 
 /// Whether the header `name` with `value` carries `needle`: in its raw
 /// bytes, or for the gateway's `openEHR-federation-client` token only in the
