@@ -27,10 +27,17 @@ async fn only_a_client_certificate_the_client_ca_signed_is_admitted() -> TestRes
         READINESS,
     )
     .await?;
-    assert_eq!(StatusCode::OK, status, "the proxy's certificate is admitted");
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the proxy's certificate is admitted"
+    );
 
     let anonymous = presented(&client(set.ca(), None)?, address, READINESS).await;
-    assert!(anonymous.is_err(), "a client with no certificate is refused");
+    assert!(
+        anonymous.is_err(),
+        "a client with no certificate is refused"
+    );
 
     let stranger = ListenerCertificates::generate()?;
     let other = presented(

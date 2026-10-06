@@ -56,7 +56,13 @@ async fn a_key_that_does_not_match_is_refused_and_the_running_certificate_stays(
         .reload()
         .expect_err("a certificate beside another certificate's key is refused");
     assert!(
-        matches!(refused, CertificateError::Config { table: "server.tls", .. }),
+        matches!(
+            refused,
+            CertificateError::Config {
+                table: "server.tls",
+                ..
+            }
+        ),
         "{refused:?}"
     );
 

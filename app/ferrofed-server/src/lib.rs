@@ -232,7 +232,11 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
             admission,
             overload::admit,
         ));
-    layered(guarded, server, Some(metrics.inbound()))
+    layered(
+        guarded,
+        server,
+        Some(metrics.inbound().serving_tls(server.tls.is_some())),
+    )
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).

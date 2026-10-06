@@ -82,7 +82,10 @@ async fn presented(
     address: SocketAddr,
     path: &str,
 ) -> Result<(StatusCode, Vec<u8>), Box<dyn Error>> {
-    let response = client.get(format!("https://{address}{path}")).send().await?;
+    let response = client
+        .get(format!("https://{address}{path}"))
+        .send()
+        .await?;
     let leaf = response
         .extensions()
         .get::<reqwest::tls::TlsInfo>()
