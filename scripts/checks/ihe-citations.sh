@@ -91,10 +91,18 @@ headings() {
         echo "ihe-citations: $file is a PDF and pdftotext is not on PATH; install poppler (poppler-utils)." >&2
         return 1
       fi
-      pdftotext -layout "$file" - | grep -o -E '^[[:space:]]*[0-9]+(\.[0-9]+)+[[:space:]]+[A-Z]' \
-        | sed -E 's/^[[:space:]]*//; s/[[:space:]]+[A-Z]$//'
+      pdftotext -layout "$file" - | layout_headings
       ;;
   esac
+}
+
+# layout_headings: the section numbers of the headings in pdftotext -layout
+# text on stdin. A supplement printed with line numbers puts the number in
+# the margin before a heading (`920   3.81.4.1.2.1 Date Search Parameters`);
+# the margin number is read past.
+layout_headings() {
+  grep -o -E '^[[:space:]]*([0-9]+[[:space:]]{2,})?[0-9]+(\.[0-9]+)+[[:space:]]+[A-Z]' \
+    | sed -E 's/^[[:space:]]*([0-9]+[[:space:]]{2,})?//; s/[[:space:]]+[A-Z]$//'
 }
 
 # build_index ROOT: one line per present section, `V:S<TAB>FILE<TAB>PROFILE`,
@@ -318,6 +326,18 @@ self_test() {
   expect 0 '/// ITI-55 §3.55.4.2.3 and ITI TF-2 §3.55.'
   expect 1 '/// ITI TF-2 §3.55.4.2.9, which the cached page does not hold.'
   expect 1 '/// ITI-38 §3.55.4.2.3 names another transaction.'
+  # A PDF heading is read with and without a margin line number before it,
+  # and a numbered body line is no heading.
+  local layout
+  layout="$(printf '%s\n' '      3.81.4.1.2 Message Semantics' \
+    '920   3.81.4.1.2.1 Date Search Parameters' \
+    '905   AuditEvent Resources (see the search).' \
+    '930   For example, 3.5 days.' | layout_headings | tr '\n' ' ')"
+  n=$((n + 1))
+  if [[ "$layout" != "3.81.4.1.2 3.81.4.1.2.1 " ]]; then
+    echo "ihe-citations: self-test failed: the layout headings read '$layout'." >&2
+    failed=1
+  fi
   if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
