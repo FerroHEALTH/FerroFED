@@ -89,6 +89,7 @@ pub mod request_log;
 pub mod service;
 pub mod state;
 pub mod stored;
+pub mod support;
 pub mod telemetry;
 
 use std::future::Future;

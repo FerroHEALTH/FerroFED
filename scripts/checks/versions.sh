@@ -77,6 +77,11 @@
 #                          locks, and the thirtyfour row against the root
 #                          Cargo.toml and the Chrome for Testing row against
 #                          the chrome-version ci.yml installs.
+#  15. support periods     every `## [x.y.z]` release of CHANGELOG.md, a
+#                          pre-release aside, has one row in the SECURITY.md
+#                          support table, with its release date and the end
+#                          of its support period five years on (Regulation
+#                          (EU) 2024/2847 Art 13(8)).
 #
 # The container images check (9) holds docker/viewer/Dockerfile to the same
 # base-image row as docker/Dockerfile.
@@ -90,8 +95,8 @@
 #       Checks the checkout at <dir>, such as a git worktree, with this script.
 #   scripts/checks/versions.sh --self-test
 #       Drives the specification-constant, landing-release, README-status,
-#       book-pin and release-date checks against fixtures: an agreeing input
-#       passes and each drift fails.
+#       book-pin, release-date and support-period checks against fixtures:
+#       an agreeing input passes and each drift fails.
 #   Any other argument prints this usage and exits 2.
 #
 # Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
@@ -354,6 +359,64 @@ release_date() {
     return 0
   fi
   note "OK: $page names FerroFED $product, released on $want"
+  return 0
+}
+
+# support_end DATE: the last day of the support period of a release made on
+# DATE (YYYY-MM-DD), the same month and day five years later, 29 February
+# becoming 1 March, as scripts/release/changelog.sh computes it (Regulation
+# (EU) 2024/2847 Art 13(8); the day is our own design).
+support_end() {
+  local date="$1" year
+  year=$((10#${date:0:4} + 5))
+  if [[ "${date:5:5}" == 02-29 ]]; then
+    printf '%04d-03-01' "$year"
+    return
+  fi
+  printf '%04d-%s' "$year" "${date:5:5}"
+}
+
+# support_rows LOG SECURITY: every `## [x.y.z]` release of LOG, a pre-release
+# aside, is dated and has exactly one `| vx.y.z | DATE | END |` row in the
+# support table of SECURITY, with DATE its release date and END the last day
+# of its support period.
+support_rows() {
+  local log=$1 security=$2 heading version date rows released end count=0 stale=0
+  while IFS= read -r heading; do
+    version="$(sed -E 's/^## \[([^]]+)\].*/\1/' <<< "$heading")"
+    date="$(sed -nE 's/^## \[[^]]+\] - ([0-9]{4}-[0-9]{2}-[0-9]{2})$/\1/p' <<< "$heading")"
+    count=$((count + 1))
+    if [[ -z "$date" ]]; then
+      bad "$log release $version has no YYYY-MM-DD date in its heading, so $security cannot hold its support period"
+      stale=1
+      continue
+    fi
+    rows="$(awk -F'|' -v want="v$version" '
+      function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+      trim($2) == want { print trim($3) " " trim($4) }
+    ' "$security")"
+    if [[ -z "$rows" ]]; then
+      bad "$security has no support row for v$version, released on $date; it should read | v$version | $date | $(support_end "$date") |"
+      stale=1
+      continue
+    fi
+    if [[ "$(line_count "$rows")" -ne 1 ]]; then
+      bad "$security lists the support period of v$version more than once"
+      stale=1
+      continue
+    fi
+    released="${rows%% *}"
+    end="${rows#* }"
+    if [[ "$released" != "$date" ]]; then
+      bad "$security says v$version was released on $released; $log says $date"
+      stale=1
+    fi
+    if [[ "$end" != "$(support_end "$date")" ]]; then
+      bad "$security says v$version is supported until $end; five years from $date is $(support_end "$date")"
+      stale=1
+    fi
+  done < <(grep -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$log" || true)
+  [[ "$stale" -eq 0 ]] && note "OK: $security holds the support period of each of the $count releases of $log"
   return 0
 }
 
@@ -650,6 +713,37 @@ docs/specs/spec|Spec|A third cell
 docs/specs/spec
 RECORDS
   expect "a missing corpus list" 1 read_corpora "$work/no-such-list.txt"
+  [[ "$(support_end 2026-10-05)" == 2031-10-05 ]] || {
+    echo "versions: self-test failed: the end date of 2026-10-05 is $(support_end 2026-10-05)." >&2
+    exit 1
+  }
+  [[ "$(support_end 2028-02-29)" == 2033-03-01 ]] || {
+    echo "versions: self-test failed: the end date of 2028-02-29 is $(support_end 2028-02-29)." >&2
+    exit 1
+  }
+  printf '%s\n' '## [Unreleased]' '' '## [0.0.10] - 2028-02-29' '' '## [0.0.9] - 2026-10-05' '' \
+    '## [0.0.1] - 2026-10-01' '' '## [0.0.1-rc.1] - 2026-10-01' > "$work/supported.md"
+  printf '%s\n' '## [0.0.9]' > "$work/undated.md"
+  local table='| Release | Released | Supported until |\n| ------- | -------- | --------------- |\n'
+  local marker='<!-- support periods: rows above this line -->'
+  local name rows
+  while IFS='~' read -r name rows; do
+    printf "%b%b%s\n" "$table" "$rows" "$marker" > "$work/$name.md"
+  done <<'TABLES'
+security~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.9 | 2026-10-05 | 2031-10-05 |\n| v0.0.10 | 2028-02-29 | 2033-03-01 |\n
+security-missing~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.10 | 2028-02-29 | 2033-03-01 |\n
+security-short~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.9 | 2026-10-05 | 2030-10-05 |\n| v0.0.10 | 2028-02-29 | 2033-03-01 |\n
+security-leap~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.9 | 2026-10-05 | 2031-10-05 |\n| v0.0.10 | 2028-02-29 | 2033-02-28 |\n
+security-date~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.9 | 2026-10-04 | 2031-10-05 |\n| v0.0.10 | 2028-02-29 | 2033-03-01 |\n
+security-twice~| v0.0.1 | 2026-10-01 | 2031-10-01 |\n| v0.0.9 | 2026-10-05 | 2031-10-05 |\n| v0.0.9 | 2026-10-05 | 2031-10-05 |\n| v0.0.10 | 2028-02-29 | 2033-03-01 |\n
+TABLES
+  expect "a support row for every release, the leap day ending on 1 March" 0 support_rows "$work/supported.md" "$work/security.md"
+  expect "a release with no support row" 1 support_rows "$work/supported.md" "$work/security-missing.md"
+  expect "a support row that ends before five years" 1 support_rows "$work/supported.md" "$work/security-short.md"
+  expect "a leap-day release that ends on 28 February" 1 support_rows "$work/supported.md" "$work/security-leap.md"
+  expect "a support row with another release date" 1 support_rows "$work/supported.md" "$work/security-date.md"
+  expect "a release listed twice" 1 support_rows "$work/supported.md" "$work/security-twice.md"
+  expect "a release heading with no date" 1 support_rows "$work/undated.md" "$work/security.md"
 
   rm -r "$work"
   echo "versions: self-test OK."
@@ -847,6 +941,13 @@ if [[ -f website/landing/index.html ]] && [[ -f CHANGELOG.md ]]; then
   landing_release website/landing/index.html CHANGELOG.md
 else
   note "no website/landing/index.html or CHANGELOG.md yet, skipped"
+fi
+
+echo "== support periods (CHANGELOG.md <-> SECURITY.md)"
+if [[ -f CHANGELOG.md ]] && [[ -f SECURITY.md ]]; then
+  support_rows CHANGELOG.md SECURITY.md
+else
+  note "no CHANGELOG.md or SECURITY.md yet, skipped"
 fi
 
 book_page=website/book/src/evaluate/versions.md

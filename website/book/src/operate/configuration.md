@@ -105,6 +105,18 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   patient data.
 ```
 
+From v0.0.10, a `Support` line under the releases names the last day of the
+release's support period, as `until YYYY-MM-DD`, five years from its release
+date ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
+The release build compiles the date in, and the gateway never reads it from
+the network. A build from source and a pre-release have no support period,
+and the line says so. Once the date has passed, the line reads
+`ended on YYYY-MM-DD`, and an `UNSUPPORTED` notice under it says the release
+receives no security fixes, in red on a terminal with colour. `config check`
+prints the same notice as a `warning:` line, `serve` logs it at `WARN`, and
+`OPTIONS {base}/` names the date as `supported_until`, or `null` for a build
+with none (Regulation (EU) 2024/2847 Art 13(19)).
+
 The `Registry` line counts the members and endpoints of the registry
 document. The gateway reads the document once, before the banner, and serves
 that same read, so the counts are those of the registry it serves. The line

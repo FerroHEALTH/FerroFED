@@ -85,13 +85,30 @@ jobs:
 
       # The binary records the commit and the target it was built for, which
       # `ferrofed report` writes into the bundle a serious-incident report
-      # attaches (#705).
+      # attaches (#705). A release without a pre-release suffix also records
+      # its release date, the date of its CHANGELOG.md heading, from which it
+      # knows the end of its support period (Regulation (EU) 2024/2847
+      # Art 13(19)); a pre-release has no support period and records none.
       - name: Build the server
         env:
+          TAG: ${{ inputs.tag }}
           TARGET: ${{ inputs.target }}
           FERROFED_BUILD_COMMIT: ${{ github.sha }}
           FERROFED_BUILD_TARGET: ${{ inputs.target }}
-        run: cargo auditable build --release --locked -p ferrofed-server --target "$TARGET"
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            FERROFED_RELEASE_DATE="$(awk -v v="$version" '
+              index($0, "## [" v "] - ") == 1 { print substr($0, length("## [" v "] - ") + 1); exit }
+            ' CHANGELOG.md)"
+            if [[ ! "$FERROFED_RELEASE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "::error::CHANGELOG.md has no dated heading for ${version}, so the binary would not know its support period" >&2
+              exit 1
+            fi
+            export FERROFED_RELEASE_DATE
+          fi
+          cargo auditable build --release --locked -p ferrofed-server --target "$TARGET"
 
       - name: Package the binary with its licence, notice and readme
         env:

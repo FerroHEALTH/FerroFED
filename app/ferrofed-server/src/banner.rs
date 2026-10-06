@@ -5,8 +5,9 @@
 //!
 //! The wordmark, the product version, the maintainer and the repository, the
 //! manufacturer with its contact and postal address (Regulation (EU)
-//! 2025/327 Art 30(1)(g)), the releases the gateway serves, and the
-//! deployment facts an operator checks first. The wordmark is committed text, so the boot path loads no font and
+//! 2025/327 Art 30(1)(g)), the releases the gateway serves, the end of the
+//! release's support period with a notice once it has passed (Regulation
+//! (EU) 2024/2847 Art 13(19)), and the deployment facts an operator checks first. The wordmark is committed text, so the boot path loads no font and
 //! carries no dependency for it. Every pin is read from the crate constant
 //! `scripts/checks/versions.sh` holds to the pin matrix, never typed here.
 //!
@@ -26,6 +27,7 @@ use crate::base_path::BasePath;
 use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::federation::error::FederationError;
+use crate::support::Support;
 use crate::telemetry::{Format, Rendering};
 
 /// The `FerroFED` wordmark in the `FIGlet` "standard" font.
@@ -105,6 +107,9 @@ pub struct Deployment {
     /// memory, which only the development profile allows, and which a
     /// restart loses.
     pub audit_spool_in_memory: bool,
+    /// The release's support period, judged on the day the banner prints
+    /// (Regulation (EU) 2024/2847 Art 13(19)).
+    pub support: Support,
 }
 
 impl Deployment {
@@ -144,6 +149,7 @@ impl Deployment {
             development,
             cleartext: Vec::new(),
             audit_spool_in_memory: false,
+            support: Support::current(),
         }
     }
 
@@ -152,6 +158,13 @@ impl Deployment {
     #[must_use]
     pub fn with_audit_spool_in_memory(mut self, in_memory: bool) -> Self {
         self.audit_spool_in_memory = in_memory;
+        self
+    }
+
+    /// Returns this deployment with the release's `support` standing.
+    #[must_use]
+    pub fn with_support(mut self, support: Support) -> Self {
+        self.support = support;
         self
     }
 
@@ -203,6 +216,14 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
     for (label, pin) in PINS {
         line(&mut out, label, pin);
     }
+    // NOTE: Regulation (EU) 2024/2847 Art 13(19): the end date of the support
+    // period is stated, and a notification is displayed once it is reached.
+    let support = match deployment.support {
+        Support::NoPeriod => "none, this build is no release".to_owned(),
+        Support::Until(end) => format!("until {end}"),
+        Support::Ended(end) => format!("ended on {end}"),
+    };
+    line(&mut out, "Support", &support);
     out.push('\n');
     line(&mut out, "Base path", deployment.base_path.as_str());
     line(&mut out, "Listen", &deployment.listen.to_string());
@@ -234,12 +255,21 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
             "in memory: a restart loses the audit messages not yet delivered",
         );
     }
-    if deployment.development {
-        // The same words with and without colour, because colour is the first
-        // thing a scraped log loses.
-        let (on, off) = if colour { (RED, RESET) } else { ("", "") };
+    // The same words with and without colour, because colour is the first
+    // thing a scraped log loses.
+    let (on, off) = if colour { (RED, RESET) } else { ("", "") };
+    let notices = [
+        deployment
+            .support
+            .notice(version)
+            .map(|notice| format!("UNSUPPORTED: {notice}.")),
+        deployment
+            .development
+            .then(|| DEVELOPMENT_NOTICE.to_owned()),
+    ];
+    for notice in notices.iter().flatten() {
         out.push('\n');
-        for words in wrap(DEVELOPMENT_NOTICE, NOTICE_WIDTH) {
+        for words in wrap(notice, NOTICE_WIDTH) {
             for part in [on, "  ", &words, off, "\n"] {
                 out.push_str(part);
             }

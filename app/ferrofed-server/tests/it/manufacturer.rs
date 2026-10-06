@@ -18,6 +18,7 @@ use clap::CommandFactory as _;
 use ferrofed_registry::manufacturer::MANUFACTURER;
 use ferrofed_server::banner::{Deployment, Registry, render};
 use ferrofed_server::cli::Cli;
+use ferrofed_server::support::Support;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -51,6 +52,7 @@ fn the_banner_names_the_manufacturer_its_contact_and_its_address() -> TestResult
         development: false,
         cleartext: Vec::new(),
         audit_spool_in_memory: false,
+        support: Support::NoPeriod,
     };
     let banner = render("9.9.9", &deployment, false);
     assert!(
