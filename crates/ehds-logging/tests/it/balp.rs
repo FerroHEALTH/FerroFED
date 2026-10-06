@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! An access record written as a BALP `AuditEvent` (BALP 1.1.4): the pattern
-//! of its action, the person, the client and the provider, the patient, and
-//! the Annex II 3.2 points in entities no pattern slice bounds; the patient
-//! and the person reach the record and no `Debug`.
+//! of its action, the person with the professional, the assurance level and
+//! who acts, the client and the provider, the patient, and the Annex II 3.2
+//! points in entities no pattern slice bounds; the patient and the person
+//! reach the record and no `Debug`.
 #![expect(
     clippy::disallowed_types,
     reason = "the test seam: the written record is read as a JSON value"
@@ -16,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use ehds_logging::balp::{BalpSink, exchange};
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::record::{
-    AccessRecord, Accessor, Action, DataSubject, EhrAt, Origin, Outcome, PatientIdentifier,
-    Purpose, Request,
+    AccessRecord, Accessor, Acting, Action, AssuranceLevel, DataSubject, EhrAt, Origin, Outcome,
+    PatientIdentifier, Professional, Purpose, Request,
 };
 use ehds_logging::sink::AccessSink;
 use ihe_iti::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress, Observer};
@@ -33,6 +34,8 @@ const SUBJECT: &str = "Qz7-subject-42";
 const CLIENT: &str = "Qz7-client-43";
 const PROVIDER: &str = "Qz7-provider-44";
 const PROFESSIONAL: &str = "Qz7-professional-45";
+const NAME: &str = "Qz7-name-47";
+const IDENTIFIER: &str = "Qz7-identifier-48";
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 const QUERY: &str = "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE \
                      e/ehr_status/subject/external_ref/id/value = 'Qz7-patient-41'";
@@ -48,7 +51,13 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             client_id: CLIENT.to_owned(),
             audience: Some("https://gateway.example.org".to_owned()),
             provider: Some(PROVIDER.to_owned()),
-            professional: Some(PROFESSIONAL.to_owned()),
+            acting: Acting::Person,
+            assurance: Some(AssuranceLevel::Substantial),
+            professional: Professional {
+                name: Some(NAME.to_owned()),
+                identifier: Some(IDENTIFIER.to_owned()),
+            },
+            alt_id: Some(PROFESSIONAL.to_owned()),
             purposes: vec![Purpose {
                 system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
                 code: "TREAT".to_owned(),
@@ -261,6 +270,106 @@ fn the_categories_and_the_origins_ride_in_their_own_entities() {
     assert_eq!(ehrs[0]["what"]["identifier"]["value"], EHR_ID);
 }
 
+/// The `agent:user` of `written`.
+fn person(written: &Value) -> &Value {
+    written["agent"]
+        .as_array()
+        .expect("agents")
+        .iter()
+        .find(|agent| agent["type"]["coding"][0]["code"] == "IRCP")
+        .expect("agent:user")
+}
+
+/// The extensions of `agent` whose `url` ends in `name`.
+fn extensions<'a>(agent: &'a Value, name: &str) -> Vec<&'a Value> {
+    let url = format!("https://profiles.ihe.net/ITI/BALP/StructureDefinition/{name}");
+    agent["extension"]
+        .as_array()
+        .map(|extensions| {
+            extensions
+                .iter()
+                .filter(|extension| extension["url"] == url.as_str())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Annex II 3.2(b) and BALP 1.1.4 §3:5.7.5.4: the person's agent names the
+/// professional by `who.display` and an `ihe-otherId` typed `NPI`, the
+/// assurance level in `ihe-assuranceLevel`, and who acts as its `role`.
+#[test]
+fn the_persons_agent_carries_the_professional_the_level_and_who_acts() {
+    let written = written(&record(Action::Query, Outcome::Success));
+    let person = person(&written);
+    assert_eq!(person["who"]["identifier"]["value"], SUBJECT);
+    assert_eq!(person["who"]["display"], NAME);
+    let identifiers = extensions(person, "ihe-otherId");
+    let [identifier] = identifiers.as_slice() else {
+        panic!("one otherId, got {identifiers:?}");
+    };
+    assert_eq!(identifier["valueIdentifier"]["value"], IDENTIFIER);
+    assert_eq!(
+        identifier["valueIdentifier"]["type"]["coding"][0]["code"],
+        "NPI"
+    );
+    let levels = extensions(person, "ihe-assuranceLevel");
+    let [level] = levels.as_slice() else {
+        panic!("one assurance level, got {levels:?}");
+    };
+    assert_eq!(
+        level["valueCodeableConcept"]["coding"][0]["code"], "substantial",
+        "Regulation (EU) No 910/2014 Art 8(2)(b)"
+    );
+    assert_eq!(person["role"][0]["coding"][0]["code"], "person");
+}
+
+#[test]
+fn a_client_acting_for_the_professional_is_written_as_a_client() {
+    let mut record = record(Action::Query, Outcome::Success);
+    record.accessor.acting = Acting::Client;
+    let written = written(&record);
+    let person = person(&written);
+    assert_eq!(person["role"][0]["coding"][0]["code"], "client");
+    assert_eq!(
+        person["who"]["display"], NAME,
+        "the professional it acts for"
+    );
+}
+
+#[test]
+fn an_access_with_no_established_level_writes_none() {
+    let mut record = record(Action::Query, Outcome::Success);
+    record.accessor.assurance = None;
+    record.accessor.professional = Professional::default();
+    let written = written(&record);
+    let person = person(&written);
+    assert!(
+        person.get("extension").is_none(),
+        "no level and no identifier is inferred: {person}"
+    );
+    assert!(person["who"].get("display").is_none(), "{person}");
+    assert_eq!(person["role"][0]["coding"][0]["code"], "person");
+}
+
+/// N33 and Annex II 3.2(b): the professional and the level are in the
+/// person's agent and in no other part of the record.
+#[test]
+fn no_other_part_of_the_record_carries_the_professional_or_the_level() {
+    let mut written = written(&record(Action::Query, Outcome::Success));
+    let agents = written["agent"].as_array_mut().expect("agents");
+    agents.retain(|agent| agent["type"]["coding"][0]["code"] != "IRCP");
+    let rest = written.to_string();
+    for value in [
+        NAME,
+        IDENTIFIER,
+        "substantial",
+        "ihe-assuranceLevel",
+        "ihe-otherId",
+    ] {
+        assert!(!rest.contains(value), "{value} outside agent:user: {rest}");
+    }
+}
+
 #[test]
 fn no_debug_shows_the_patient_the_person_or_an_id() {
     let record = record(Action::Query, Outcome::Success);
@@ -271,6 +380,8 @@ fn no_debug_shows_the_patient_the_person_or_an_id() {
         CLIENT,
         PROVIDER,
         PROFESSIONAL,
+        NAME,
+        IDENTIFIER,
         LAB_REPORT,
         EHR_ID,
     ] {
