@@ -195,13 +195,14 @@ with no marked test is not listed.
 
 ## CP-16
 
-24 tests.
+25 tests.
 
 - `app/ferrofed-engine/tests/it/conveyance.rs`: `a_conveyance_header_from_the_client_never_reaches_the_node`, `a_node_the_gateway_has_a_grant_at_knows_it_by_its_client_id`, `a_probe_conveys_the_caller_to_every_member`, `a_query_conveys_the_caller_in_a_token_the_published_key_verifies`, `a_routed_read_and_a_routed_write_convey_the_caller`, `a_stored_query_definition_conveys_the_caller`, `each_node_is_the_audience_of_its_own_token`, `the_admission_checks_ehr_create_and_read_convey_the_gateway`
 - `app/ferrofed-engine/tests/it/exchange.rs`: `the_node_receives_a_token_exchanged_for_the_verified_caller`
 - `app/ferrofed-engine/tests/it/mtls.rs`: `token_exchange_composes_with_mutual_tls`
 - `app/ferrofed-engine/tests/it/signing.rs`: `a_next_key_is_published_ahead_and_never_signs`, `a_rotation_across_curves_publishes_both_and_signs_with_the_new`, `the_conveyance_is_signed_with_the_current_keys_algorithm`
 - `app/ferrofed-server/tests/it/auth/patient.rs`: `a_member_other_than_the_token_s_own_is_told_its_own_ehr_id`, `each_node_is_told_its_own_ehr_id_and_the_covering_patient_scope`
+- `app/ferrofed-server/tests/it/auth/professional.rs`: `the_node_is_told_who_acts_and_the_level_reached`
 - `app/ferrofed-server/tests/it/conveyance.rs`: `a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key`, `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`, `a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node`, `a_registry_from_either_source_without_a_signing_key_does_not_load`, `a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller`, `an_edge_asserted_caller_is_conveyed_as_edge_asserted`, `the_ask_all_probe_conveys_the_caller_to_every_member`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `each_node_is_reached_with_its_onward_token_and_told_the_caller`
 - `app/ferrofed-server/tests/it/onward_exchange.rs`: `the_callers_token_reaches_no_log_span_metric_or_conveyed_claim`

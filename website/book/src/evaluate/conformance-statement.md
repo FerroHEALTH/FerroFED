@@ -64,7 +64,7 @@ statement of the text.
 | Operator points | 3, scored against the federation operator |
 | Test tracks | 10 of 11 scored by a test, 1 deferred, 0 planned |
 | Requirements | 46: 46 reached by a point, 0 by a track only, 0 by neither |
-| Marked tests | 938, carrying 1206 point and track markers |
+| Marked tests | 939, carrying 1207 point and track markers |
 
 ## The nodes
 
@@ -94,7 +94,7 @@ statement of the text.
 | [CP-13](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-13) | Gateway | N19, N20, N21 | 6 | covered | [19 tests](conformance-tests.md#cp-13) |
 | [CP-14](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-14) | Gateway | N22 | 6 | deferred | [deferred](#cp-14) |
 | [CP-15](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-15) | Gateway | N23 | 6 | covered | [31 tests](conformance-tests.md#cp-15) |
-| [CP-16](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-16) | Gateway | N24 | 7 | covered | [24 tests](conformance-tests.md#cp-16) |
+| [CP-16](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-16) | Gateway | N24 | 7 | covered | [25 tests](conformance-tests.md#cp-16) |
 | [CP-17](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-17) | Gateway | N25 | 7 | covered | [151 tests](conformance-tests.md#cp-17) |
 | [CP-18](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-18) | Node | N26 | 7 | node-profile | the member CDR, by [4 harness checks](conformance-tests.md#cp-18) |
 | [CP-19](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-19) | Node | N27, N27a | 7 | node-profile | the member CDR, by [2 harness checks](conformance-tests.md#cp-19) |
