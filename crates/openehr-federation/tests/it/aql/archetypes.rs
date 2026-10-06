@@ -236,6 +236,87 @@ proptest::proptest! {
 }
 
 #[test]
+fn an_archetype_a_selected_path_reads_into_is_read() {
+    let found = constrained(
+        "SELECT c/content[openEHR-EHR-OBSERVATION.lab_test.v1]/data/events/data/items/value \
+         FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.admin.v1]",
+    );
+    assert_eq!(
+        ids(found.archetypes()),
+        [
+            "openEHR-EHR-COMPOSITION.admin.v1",
+            "openEHR-EHR-OBSERVATION.lab_test.v1"
+        ],
+        "the leaf value is lab data, whatever the composition holding it is"
+    );
+    assert!(found.every_root_bound());
+}
+
+#[test]
+fn an_archetype_named_by_archetype_node_id_in_a_selected_path_is_read() {
+    let found = constrained(
+        "SELECT c/content[archetype_node_id='openEHR-EHR-OBSERVATION.lab_test.v1']/data \
+         FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.admin.v1]",
+    );
+    assert!(
+        found
+            .archetypes()
+            .contains("openEHR-EHR-OBSERVATION.lab_test.v1"),
+        "{found:?}"
+    );
+    assert!(found.every_root_bound());
+}
+
+#[test]
+fn a_selected_path_into_an_archetype_no_reader_can_enumerate_leaves_the_query_unbound() {
+    for path in [
+        "c/content[archetype_node_id != 'openEHR-EHR-OBSERVATION.lab_test.v1']/data",
+        "c/content[archetype_node_id matches {/openEHR-EHR-OBSERVATION\\..*/}]/data",
+        "c/content[archetype_details/archetype_id/value > 'openEHR']/data",
+    ] {
+        let aql = format!(
+            "SELECT {path} FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.admin.v1]"
+        );
+        let found = constrained(&aql);
+        assert!(
+            !found.every_root_bound(),
+            "{aql}: the data read is of archetypes no id names"
+        );
+    }
+}
+
+#[test]
+fn an_archetype_id_compared_through_archetype_details_is_read_and_binds() {
+    let found = constrained(
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/archetype_details/archetype_id/value = 'openEHR-EHR-COMPOSITION.report.v1'",
+    );
+    assert_eq!(
+        ids(found.archetypes()),
+        ["openEHR-EHR-COMPOSITION.report.v1"]
+    );
+    assert!(found.every_root_bound());
+}
+
+#[test]
+fn an_archetype_id_in_another_case_or_version_is_kept_as_written() {
+    for id in [
+        "openehr-ehr-composition.report.v1",
+        "openEHR-EHR-COMPOSITION.report.v1.0.0",
+        "org-x::openEHR-EHR-COMPOSITION.report.v1",
+    ] {
+        let found = constrained(&format!(
+            "SELECT c/name/value FROM EHR e CONTAINS COMPOSITION c[{id}]"
+        ));
+        assert_eq!(
+            ids(found.archetypes()),
+            [id],
+            "a map matches exactly, so a variant is unmapped and unclassified, never a near key"
+        );
+    }
+}
+
+#[test]
 fn a_patient_query_keeps_its_constraints_after_the_rewrite() {
     let found = constrained(
         "SELECT c FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1] \

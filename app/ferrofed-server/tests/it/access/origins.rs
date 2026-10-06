@@ -26,7 +26,7 @@ use super::{
     DISCHARGE, LAB_REPORT, TestResult, accesses, composition, gateway, gateway_with, named,
     node_with_rows,
 };
-use crate::facade::{NAMESPACE, PATIENT, body, post, settings_with_room};
+use crate::facade::{EHR_B, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::SETTLE;
 use crate::support::call;
 
@@ -214,6 +214,18 @@ async fn a_capped_member_is_no_origin_of_the_answer() -> TestResult {
     assert_eq!(
         vec!["discharge-report"],
         origin_details(record, "node-b-pub", "ehds-category")
+    );
+    let ehrs: Vec<&str> = named(record, "ehr")
+        .iter()
+        .filter_map(|ehr| {
+            ehr.pointer("/what/identifier/value")
+                .and_then(Value::as_str)
+        })
+        .collect();
+    assert_eq!(
+        vec![EHR_B],
+        ehrs,
+        "the EHR at member A was never reached by the capped query"
     );
     Ok(())
 }

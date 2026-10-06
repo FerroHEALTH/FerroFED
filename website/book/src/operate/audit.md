@@ -122,10 +122,13 @@ specification governs the map: it is FerroFED's own design.
   stands for a template the map does not hold.
 - Where the access delivered a leaf value, an aggregate or no row at all,
   the ids the bound query constrains its data to classify it too: its
-  archetype predicates, and `=` on `archetype_node_id` and
+  archetype predicates in `FROM` and in the paths it selects, and `=` on
+  `archetype_node_id`, `archetype_details/archetype_id/value` and
   `archetype_details/template_id/value` in the top-level `AND` chain of
   `WHERE`, read from the syntax tree, never from a comment, a string
-  compared with another path, `NOT`, `!=` or `NOT CONTAINS`.
+  compared with another path, `NOT`, `!=` or `NOT CONTAINS`. A selected
+  path that names its archetype by a pattern or a parameter leaves the
+  record `unbound`.
 - An access spanning categories records all of them, and `none` never
   removes one. An `EHR`, an `EHR_STATUS`, a `DIRECTORY`, tags and revision
   history hold no category.

@@ -15,6 +15,11 @@
 //! under `NOT` names data the query excludes (AQL §Containment), and only
 //! `=` with a string names an id; a `LIKE` or `matches` pattern names a set
 //! no reader can enumerate. The ids of every branch of an `OR` are kept.
+//! An archetype a selected path reads into by its predicate is a constraint
+//! too, since it names the archetype of the data the query delivers; one a
+//! selected path names by a pattern or a parameter leaves the query unbound.
+//! The archetype id is read as `archetype_node_id` and as
+//! `archetype_details/archetype_id/value` alike.
 //!
 //! [`Constrained::every_root_bound`] says whether every class the query
 //! reads data from is bound to an id: by its own predicate, by an `=` of the
@@ -32,11 +37,15 @@ use openehr_query::ast::{
     SelectQuery, StandardPredicate, Terminal, WhereExpr,
 };
 use openehr_query::lexer::CompOp;
+use openehr_query::visit::{Visit, walk_node_predicate, walk_standard_predicate};
 
 use super::Analysis;
 
 /// The attribute path of an archetype node id.
 const ARCHETYPE_NODE_ID: &[&str] = &["archetype_node_id"];
+
+/// The attribute path of the archetype id of an archetype root.
+const ARCHETYPE_ID: &[&str] = &["archetype_details", "archetype_id", "value"];
 
 /// The attribute path of a template id.
 const TEMPLATE_ID: &[&str] = &["archetype_details", "template_id", "value"];
@@ -88,6 +97,7 @@ impl Constrained {
             constrained.condition(condition, true, &mut bound);
         }
         constrained.containment(&query.from, false, &bound);
+        Selected(&mut constrained).visit_select_clause(&query.select);
         constrained
     }
 
@@ -244,14 +254,15 @@ impl Constrained {
         }
     }
 
-    /// Records `value` when `path` is the archetype node id or the template
-    /// id of the object it is read from, and returns whether it is.
+    /// Records `value` when `path` is the archetype node id, the archetype
+    /// id or the template id of the object it is read from, and returns
+    /// whether it is.
     fn named(&mut self, path: &ObjectPath, value: &str) -> bool {
         if path.parts.iter().any(|part| part.predicate.is_some()) {
             return false;
         }
         let names: Vec<&str> = path.parts.iter().map(|part| part.name.as_str()).collect();
-        if names == ARCHETYPE_NODE_ID {
+        if names == ARCHETYPE_NODE_ID || names == ARCHETYPE_ID {
             self.archetypes.insert(value.to_owned());
             true
         } else if names == TEMPLATE_ID {
@@ -260,5 +271,69 @@ impl Constrained {
         } else {
             false
         }
+    }
+}
+
+/// Whether `path` ends at the archetype node id, the archetype id or the
+/// template id of the object it is read from.
+fn names_an_id(path: &ObjectPath) -> bool {
+    let names: Vec<&str> = path.parts.iter().map(|part| part.name.as_str()).collect();
+    [ARCHETYPE_NODE_ID, ARCHETYPE_ID, TEMPLATE_ID]
+        .iter()
+        .any(|id| names.ends_with(id))
+}
+
+/// Reads the predicates of the paths a query selects, which name the
+/// archetypes of the data it delivers: an id one names exactly is a
+/// constraint, and one named by a pattern, a parameter or any other form no
+/// reader can enumerate leaves the query unbound.
+struct Selected<'c>(&'c mut Constrained);
+
+impl Selected<'_> {
+    /// Marks the query as delivering data no id it names describes.
+    fn unknown(&mut self) {
+        self.0.every_root_bound = false;
+    }
+}
+
+impl<'ast> Visit<'ast> for Selected<'_> {
+    fn visit_archetype_predicate(&mut self, node: &'ast ArchetypePredicate) {
+        match node {
+            ArchetypePredicate::Hrid(id) => {
+                self.0.archetypes.insert(id.clone());
+            }
+            ArchetypePredicate::Parameter(_) => self.unknown(),
+        }
+    }
+
+    fn visit_node_predicate(&mut self, node: &'ast NodePredicate) {
+        match node {
+            NodePredicate::Archetype { hrid, .. } => {
+                self.0.archetypes.insert(hrid.clone());
+            }
+            NodePredicate::Parameter(_) => self.unknown(),
+            NodePredicate::MatchesRegex { path, .. } if names_an_id(path) => self.unknown(),
+            NodePredicate::Code { .. }
+            | NodePredicate::Standard(_)
+            | NodePredicate::MatchesRegex { .. }
+            | NodePredicate::And(..)
+            | NodePredicate::Or(..) => {}
+        }
+        walk_node_predicate(self, node);
+    }
+
+    fn visit_standard_predicate(&mut self, node: &'ast StandardPredicate) {
+        if names_an_id(&node.path) {
+            let named = match (&node.op, &node.operand) {
+                (CompOp::Eq, PathPredicateOperand::Primitive(Primitive::String(value))) => {
+                    self.0.named(&node.path, value)
+                }
+                _ => false,
+            };
+            if !named {
+                self.unknown();
+            }
+        }
+        walk_standard_predicate(self, node);
     }
 }

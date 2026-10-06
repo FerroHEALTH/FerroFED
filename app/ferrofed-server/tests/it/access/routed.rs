@@ -19,8 +19,10 @@ use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{LAB_REPORT, TestResult, accesses, composition, details, gateway, named, profile};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, body, post};
+use super::{
+    LAB_REPORT, TestResult, accesses, composition, details, gateway, gateway_with, named, profile,
+};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
 use crate::support::call;
 
@@ -194,6 +196,57 @@ async fn a_read_of_the_ehr_is_of_no_category() -> TestResult {
     assert_eq!(
         vec!["true"],
         details(record, "ehds-categories", "ehds-no-category")
+    );
+    Ok(())
+}
+
+/// A synthetic patient identifier with a literal `+`, which RFC 3986 keeps
+/// as a plus and HTML form decoding would read as a space.
+const PLUS_PATIENT: &str = "Qz7+plus-55";
+
+#[tokio::test]
+async fn a_read_by_subject_records_the_patient_the_route_resolved() -> TestResult {
+    let node = node().await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let idle = format!("{}/node-b", node.uri());
+    let crossref = format!(
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PLUS_PATIENT}\"\n\
+         member = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+    );
+    let app = gateway_with(
+        dir.path(),
+        (&node.uri(), &idle),
+        &repository,
+        ("", &crossref),
+        &settings_with_room(),
+    )?;
+    let request = Request::get(format!(
+        "/v1/ehr?subject_id={PLUS_PATIENT}&subject_namespace={NAMESPACE}"
+    ))
+    .body(Body::empty())?;
+    let (status, text) = call(app, request).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the route resolves the identifier with its plus: {text}"
+    );
+    let records = accesses(&repository.wait_for(1, SETTLE).await)?;
+    let [record] = records.as_slice() else {
+        return Err(format!("one record, got {records:?}").into());
+    };
+    let patients: Vec<&str> = record["entity"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entity| entity.pointer("/what/identifier/value"))
+        .filter_map(serde_json::Value::as_str)
+        .filter(|value| value.starts_with("Qz7"))
+        .collect();
+    assert_eq!(
+        vec![PLUS_PATIENT],
+        patients,
+        "the record names the patient the route resolved, never another decoding of it"
     );
     Ok(())
 }

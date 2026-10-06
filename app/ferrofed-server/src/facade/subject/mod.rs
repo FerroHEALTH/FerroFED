@@ -94,6 +94,20 @@ pub(crate) fn serves(matched: &RouteMatch) -> bool {
     matched.operation_id == OPERATION
 }
 
+/// The namespace and the identifier of the patient the read of an EHR by
+/// subject `matched` names in `query`, read by the decoder [`serve`]
+/// resolves the subject with, or `None` when that decoder refuses the query
+/// string, which [`serve`] answers before any node is asked.
+pub(crate) fn named(matched: &RouteMatch, query: Option<&str>) -> Option<(String, SecretString)> {
+    // NOTE: no specification governs this: our own design; a query string the decoder
+    // refuses names no patient, and the read it carries is refused before a node acts.
+    let subject = Subject::of(matched, query).ok()?;
+    Some((
+        subject.patient.namespace().as_str().to_owned(),
+        subject.value,
+    ))
+}
+
 /// Answers the read of an EHR by subject: resolves the subject and forwards
 /// `GET {base}/v1/ehr/{ehr_id}` to the one member that holds it.
 ///

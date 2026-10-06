@@ -224,7 +224,12 @@ pub(super) fn reading(
 }
 
 /// Whose data `answered` reached: the patient it names and the `ehr_id` it
-/// resolved to at each member, or the one `ehr_id` it is scoped to.
+/// resolved to at each member the query was sent to, at the endpoint it was
+/// sent through, or the one `ehr_id` it is scoped to at the endpoint it was
+/// routed to, when that endpoint was sent it.
+///
+/// An `ehr_id` at a member the query never left the gateway for was not
+/// reached, so the record does not name it.
 fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject {
     match answered.analysis {
         Analysis::Patient(query) => DataSubject {
@@ -235,15 +240,16 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
             ehrs: answered
                 .resolved
                 .iter()
-                .map(|(node, ehr_id)| EhrAt {
-                    endpoint: snapshot
-                        .endpoints()
-                        .find(|endpoint| endpoint.node() == node)
-                        .map_or_else(
-                            || node.as_str().to_owned(),
-                            |endpoint| endpoint.id().as_str().to_owned(),
-                        ),
-                    ehr_id: ehr_id.as_str().to_owned(),
+                .filter_map(|(node, ehr_id)| {
+                    let sent = answered.sent.iter().find(|sent| {
+                        snapshot
+                            .endpoint(sent)
+                            .is_some_and(|endpoint| endpoint.node() == node)
+                    })?;
+                    Some(EhrAt {
+                        endpoint: sent.as_str().to_owned(),
+                        ehr_id: ehr_id.as_str().to_owned(),
+                    })
                 })
                 .collect(),
         },
@@ -251,6 +257,11 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
             patient: None,
             ehrs: query
                 .ehr_scope()
+                .filter(|_| {
+                    answered.routed.is_none_or(|routed| {
+                        answered.sent.iter().any(|sent| sent.as_str() == routed)
+                    })
+                })
                 .map(|ehr_id| EhrAt {
                     endpoint: answered.routed.unwrap_or_default().to_owned(),
                     ehr_id: ehr_id.to_owned(),
