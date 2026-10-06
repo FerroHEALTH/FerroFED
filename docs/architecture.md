@@ -1602,10 +1602,14 @@ collector, a periodic OTLP push over gRPC, so an instrument cannot exist on
 one surface and not the other. The pull reader is served as the Prometheus
 text exposition at `GET /metrics` on an admin listener of its own,
 `[metrics] listen`, off when unset and never the gateway's client listener,
-so no client reaches it and it needs no gateway authentication; the
+so no client of the federation reaches it; the
 configuration refuses a non-loopback address unless `[metrics]
 allow_remote = true`, an address equal to `server.listen`, and a collector
-that is no `http://` URL. The instruments fill from what the gateway already
+that is no `http://` URL. The scrape is open until `[metrics]
+scrape_token_file` sets a bearer token it must carry, compared in constant
+time; outside the development profile a non-loopback listener is refused
+unless that token or `[metrics.tls] client_ca_file` authenticates the
+scrape (#635). The instruments fill from what the gateway already
 observes and send nothing of their own: `ferrofed.integrity.incidents{kind}`
 reads the per-kind counts `Incident::emit` keeps, `ferrofed.node.requests
 {endpoint, outcome}` and `ferrofed.node.request.duration{endpoint}` read the
@@ -1637,8 +1641,11 @@ registry does not hold, `400` for a request naming no member, a body, a
 deployment without `federation.fan_out_stored_queries`, or an
 endpoint-targeted definition, and `405` with an empty `Allow` at a read-only
 registry (RFC 9110 §10.2.1), whose operator publishes the definitions. With
-`[metrics] listen` unset the action does not exist, and the listener's
-loopback rule with `allow_remote` holds it as it holds the metrics.
+`[metrics] listen` unset the action does not exist. Every write action on
+the admin listener is admitted by the client authentication gate of
+`[auth]`, reused as it stands, only for a token carrying its issuer's
+`operator_scope`, from any peer; the development profile also admits a
+loopback peer that sends no credential (#635).
 
 **Stored queries** (§12.7, N44, #77) are the one state that needs a store.
 A client registers a federated stored query with

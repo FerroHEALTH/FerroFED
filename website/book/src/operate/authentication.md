@@ -82,7 +82,7 @@ demographic_clients = []
 | `auth.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. |
 | `auth.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
 | `auth.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
-| `auth.issuer[].operator_scope` | none | The scope value that admits a caller of this issuer to the read-only [operator surface](#the-operator-surface), one scope token. Without it, no caller of this issuer reaches the surface. |
+| `auth.issuer[].operator_scope` | none | The scope value that admits a caller of this issuer to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves), one scope token. Without it, no caller of this issuer reaches either. |
 | `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
 | `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
 | `auth.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. `[auth.issuer.requester]` names all four claims or none. |
@@ -137,6 +137,7 @@ addresses, only `*` or `**` covers it.
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
 | `GET {base}/operator/incidents`, `/operator/creating-systems` and `/operator/stored-queries` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
+| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
 

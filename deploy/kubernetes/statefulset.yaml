@@ -50,8 +50,10 @@ spec:
         app.kubernetes.io/component: gateway
       # The scrape annotations a Prometheus with the common kubernetes-pods
       # job reads: each replica is scraped on its own admin listener, never
-      # through the Service. With the Prometheus Operator, a PodMonitor over
-      # the metrics port does the same.
+      # through the Service. The job presents the scrape token of
+      # configmap.yaml, with authorization.credentials_file in its
+      # scrape_config. With the Prometheus Operator, a PodMonitor over the
+      # metrics port with an authorization secret does the same.
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9464"

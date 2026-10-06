@@ -22,7 +22,8 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::admin;
+use ferrofed_identity::dev::Profile;
+use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
@@ -37,7 +38,7 @@ use crate::stored_fan_out::{
     COMMENT, ENDPOINT, NAME, Reported, VERSION, definition, get, node_path, put, state, statuses,
     storing, three,
 };
-use crate::support::{asked, call, error_body, exchange, field, mount};
+use crate::support::{asked, call, error_body, exchange, field, mount, operator_bearer};
 use crate::template_fan_out::schema::validate_federation;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -62,7 +63,8 @@ fn differing() -> String {
 }
 
 /// The gateway's client application and its admin listener's application
-/// over node A, node B and node C, with `federation` in `[federation]`.
+/// over node A, node B and node C, with `federation` in `[federation]`; the
+/// admin listener admits the suite's operators, from any peer.
 fn both(
     dir: &Path,
     [a, b, c]: [&Server; 3],
@@ -70,26 +72,24 @@ fn both(
 ) -> Result<(Router, Router), Box<dyn Error>> {
     let state = state(dir, &three(a, b, c), federation)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    // NOTE: no specification governs this: our own design; the operator runs the
-    // write actions from the gateway's host, so the tests speak as a loopback peer.
-    let operator = admin::router(state).layer(axum::extract::connect_info::MockConnectInfo(
-        std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
-    ));
+    let access = Access::new(&crate::support::auth(), Profile::Production, None);
+    let operator = admin::router(state, access);
     Ok((client, operator))
 }
 
 /// The operator's `POST` distributing [`NAME`] at `version`, naming `target`
-/// when given, with `body`.
+/// when given, with `body`, as a caller with the operator scope.
 fn distribute(
     version: &str,
     target: Option<&str>,
     body: &str,
-) -> Result<Request<Body>, http::Error> {
-    let mut request = Request::post(format!("/admin/stored-queries/{NAME}/{version}/distribute"));
+) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = Request::post(format!("/admin/stored-queries/{NAME}/{version}/distribute"))
+        .header(http::header::AUTHORIZATION, operator_bearer()?);
     if let Some(target) = target {
         request = request.header(ENDPOINT, target);
     }
-    request.body(Body::from(body.to_owned()))
+    Ok(request.body(Body::from(body.to_owned()))?)
 }
 
 /// A node that answers its first definition `PUT` with `500` and every later
@@ -421,7 +421,7 @@ fn bare(metrics: &str) -> Result<(Arc<AppState>, Option<std::net::SocketAddr>), 
         .resolve()?;
     let listen = settings.metrics.listen;
     let state = Arc::new(AppState::build(&settings)?);
-    let listener = admin::listener(&settings.metrics, &state).map(|(address, _app)| address);
+    let listener = admin::listener(&settings, &state).map(|(address, _app)| address);
     assert_eq!(listen, listener, "the admin listener is metrics.listen");
     Ok((state, listener))
 }
@@ -457,7 +457,7 @@ fn the_admin_listener_is_refused_off_loopback_without_allow_remote() -> TestResu
     );
     let settings = Config::from_sources(
         Some(&crate::support::signed(&format!(
-            "{remote}allow_remote = true\n"
+            "{remote}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"
         ))),
         &BTreeMap::new(),
     )?

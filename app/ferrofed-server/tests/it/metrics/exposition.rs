@@ -147,7 +147,9 @@ fn a_remote_listener_is_refused_unless_allowed() -> TestResult {
             shown.contains("metrics.listen") && shown.contains("metrics.allow_remote"),
             "{shown}"
         );
-        let allowed = resolved(&format!("{text}allow_remote = true\n"))?;
+        let allowed = resolved(&format!(
+            "{text}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"
+        ))?;
         assert_eq!(Some(remote.parse()?), allowed.metrics.listen);
     }
     for loopback in ["127.0.0.1:9464", "[::1]:9464"] {
@@ -203,9 +205,16 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
         stderr.contains("metrics.listen") && stderr.contains("metrics.allow_remote"),
         "{stderr}"
     );
-    let allowed = binary(
+    let unauthenticated = binary(
         &["config", "check"],
         &format!("{remote}allow_remote = true\n"),
+    )?;
+    assert_eq!(Some(i32::from(EXIT_CONFIG)), unauthenticated.status.code());
+    let stderr = String::from_utf8_lossy(&unauthenticated.stderr);
+    assert!(stderr.contains("metrics.scrape_token_file"), "{stderr}");
+    let allowed = binary(
+        &["config", "check"],
+        &format!("{remote}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"),
     )?;
     assert_eq!(
         Some(0),
@@ -213,6 +222,13 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
         "{}",
         String::from_utf8_lossy(&allowed.stderr)
     );
+    let stdout = String::from_utf8_lossy(&allowed.stdout);
+    assert!(
+        stdout.contains("a scrape that carries metrics.scrape_token")
+            && stdout.contains("operator_scope"),
+        "config check says who the remote listener answers: {stdout}"
+    );
+    assert!(!stdout.contains("synthetic-scrape-token"), "{stdout}");
     Ok(())
 }
 

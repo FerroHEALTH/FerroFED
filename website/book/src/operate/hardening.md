@@ -35,10 +35,10 @@ page: our own design.
   every node's authorization server, and the feed route reachable from the
   PMIR Registry (B1, B3).
 - [ ] **Restrict ingress.** Admit client traffic to the gateway port from
-  the proxy alone, and the admin port from your scraper alone. The
-  Kubernetes example's NetworkPolicy does the second
-  (`deploy/kubernetes/networkpolicy.yaml`); it holds only where the
-  cluster's network plugin enforces NetworkPolicy (B5).
+  the proxy alone, and the admin port from your scraper and your operators
+  alone. The Kubernetes example's NetworkPolicy admits the scraper alone to
+  the admin port (`deploy/kubernetes/networkpolicy.yaml`); it holds only
+  where the cluster's network plugin enforces NetworkPolicy (B5).
 - [ ] **Restrict egress.** The gateway connects only to the URLs in your
   configuration: the members and their token endpoints, the identity
   services, the issuers' key sets, the audit repository and the collector.
@@ -105,8 +105,8 @@ page: our own design.
 
 - [ ] **Read every secret from a file.** Each credential has a `_file` key:
   `bearer_token_file`, `password_file`, `client_secret_file`,
-  `client_identity_file`, `key_file`, `feed_token_file`. Setting a secret
-  both inline and by file is refused
+  `client_identity_file`, `key_file`, `feed_token_file`,
+  `scrape_token_file`. Setting a secret both inline and by file is refused
   ([Configuration](configuration.md#running-it)).
 - [ ] **Make each file readable by the gateway's user alone.** The image
   runs as `65532:65532`; mount the files read-only with mode `0400`, or
@@ -144,14 +144,23 @@ page: our own design.
 - [ ] **Leave `[metrics] listen` unset unless you scrape.** Unset, nothing
   listens.
 - [ ] **Keep it on loopback.** Set `allow_remote = true` only when the
-  address is reachable from your scraper and nothing else. A remote peer
-  reads `GET /metrics` and is refused every write action, whatever
-  `allow_remote` says ([Metrics](metrics.md)).
-- [ ] **Run write actions from the gateway's host**, or through
-  `kubectl port-forward`. The listener has no authentication of its own, so
-  any process that reaches its loopback address can run them
-  ([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)); keep other
-  workloads out of the gateway's pod and host.
+  address is reachable from your scraper and your operators and nothing
+  else ([Metrics](metrics.md#who-the-admin-listener-serves)).
+- [ ] **Authenticate the scrape off loopback.** Set `scrape_token_file` to
+  a file holding a long random token, such as `openssl rand -hex 32`, and
+  give your Prometheus the same token with `authorization.credentials_file`;
+  or set `[metrics.tls]` with a `client_ca_file` that admits the scraper.
+  Outside the development profile the gateway refuses to start with a
+  listener off loopback and neither. Rotate the token with your scraper:
+  both read it at start.
+- [ ] **Name an `operator_scope` on the issuer your operators use**, and
+  grant it to them alone. A write action, such as the stored-query
+  distribution, needs a token carrying it from every peer, loopback
+  included; an issuer that names none admits no operator
+  ([The operator surface](authentication.md#the-operator-surface)).
+- [ ] **Never run a production gateway under `profile = "development"`.**
+  It admits any process that reaches the listener's loopback address to the
+  write actions without a credential.
 
 ## The audit spool
 

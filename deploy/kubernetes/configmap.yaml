@@ -5,14 +5,18 @@
 # registry document, mounted read-only at /etc/ferrofed by statefulset.yaml.
 # It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
 # which statefulset.yaml mounts at /run/secrets/ferrofed, named here by a
-# `_file` key: the signing key below, and for an endpoint that needs
-# credentials, the bearer_token_file or password_file of its
-# [credentials."<endpoint id>"] section. Make the Secret with, for example:
+# `_file` key: the signing key and the metrics scrape token below, and for an
+# endpoint that needs credentials, the bearer_token_file or password_file of
+# its [credentials."<endpoint id>"] section. Make the Secret with, for
+# example:
 #
 #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
 #     -out signing-key.pem
+#   openssl rand -hex 32 > metrics-scrape-token
 #   kubectl create secret generic ferrofed-secrets \
-#     --from-file=signing-key.pem
+#     --from-file=signing-key.pem --from-file=metrics-scrape-token
+#
+# Give your Prometheus the same scrape token in a Secret of its own.
 #
 # The value itself never goes in a ConfigMap.
 # scripts/checks/kubernetes-example.sh runs `ferrofed config check` over this
@@ -50,17 +54,18 @@ data:
     requests_per_second = 10
     burst = 20
 
-    # The admin listener: GET /metrics for the scraper. It has no
-    # authentication of its own, so a remote peer gets GET /metrics alone; its
-    # write actions, such as the stored-query distribution, answer a loopback
-    # peer only: reach them through kubectl port-forward, or by kubectl exec
-    # into a container that shares the pod's network and has an HTTP client,
-    # such as an ephemeral one from kubectl debug, since the gateway's image
-    # carries no shell. networkpolicy.yaml admits the scraper alone to this
-    # port as well.
+    # The admin listener: GET /metrics for the scraper, which presents the
+    # scrape token as its bearer token, and the write actions, such as the
+    # stored-query distribution, for a caller whose access token carries the
+    # operator scope of an [[auth.issuer]] below. Off loopback the gateway
+    # refuses to start unless the scrape token or a client CA authenticates
+    # the scrape. networkpolicy.yaml admits the scraper alone to this port as
+    # well.
+    # https://ferrofed.eu/docs/operate/metrics.html
     [metrics]
     listen = "0.0.0.0:9464"
     allow_remote = true
+    scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"
 
     [telemetry]
     format = "json"
@@ -97,6 +102,11 @@ data:
     [[auth.issuer]]
     issuer = "https://idp.example.org"
     jwks_uri = "https://idp.example.org/jwks"
+    # EDIT: the scope value that admits an operator to {base}/operator/ and
+    # to the admin listener's write actions; unset, no caller of this issuer
+    # reaches either.
+    # operator_scope = "ferrofed:operator"
+    #
     # Whether its client tokens, which name no natural person, act for the
     # professional they name, and so reach patient data.
     # client_tokens_act_for_professional = false

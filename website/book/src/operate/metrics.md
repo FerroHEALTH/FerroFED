@@ -23,6 +23,7 @@ over time.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener; unset, nothing listens
 allow_remote = false          # true lets listen name a non-loopback address
+scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"   # the bearer token a scrape must carry; unset, the scrape is open
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothing is pushed
 ```
 
@@ -30,27 +31,60 @@ The admin listener serves `GET /metrics` and the operator's
 [stored-query distribution](../integrate/stored-queries.md#repairing-drift)
 (`POST /admin/stored-queries/{name}/{version}/distribute`), answers every
 other path `404`, and never sits under the base path. It is never the
-gateway's own listener, so no client of the federation reaches it. It has no
-authentication of its own yet (#635), so its peer decides what it may do:
+gateway's own listener, so no client of the federation reaches it.
 
-| Peer | `GET /metrics` | A write action, such as the distribution |
+### Who the admin listener serves
+
+| Request | Admitted | Refused |
 |---|---|---|
-| loopback (`127.0.0.0/8`, `::1`) | served | served |
-| any other address | served | `403 operation-refused`, whatever `allow_remote` says |
+| `GET /metrics`, no `scrape_token` set | every peer | never |
+| `GET /metrics`, `scrape_token` set | a scrape with `Authorization: Bearer <the scrape token>` | `401 unauthenticated` with a `WWW-Authenticate: Bearer` challenge, for a scrape with no token, another token or another scheme |
+| A write action, such as the distribution | a caller whose access token carries the `operator_scope` of its [`[[auth.issuer]]`](authentication.md#the-operator-surface), from any peer | `401 unauthenticated` without a token that verifies, `403 scope-insufficient` without the operator scope |
+| A write action under `profile = "development"` | as above, and a loopback peer (`127.0.0.0/8`, `::1`) that sends no credential | as above |
 
-`allow_remote = true` therefore opens the scrape to the network and nothing
-else. Run a write action from the gateway's host; in Kubernetes, through
-`kubectl port-forward`, or with `kubectl exec` in a container of the pod that
-has an HTTP client, such as an ephemeral one from `kubectl debug`, since the
-gateway's image carries no shell. `config check` says so for a listener that
-is not on a loopback address. `serve` and `config check` refuse:
+A write action is verified by the same client authentication as the
+gateway's own listener, against the issuers of `[auth]` and in its mode,
+and needs no purpose of use. An issuer that names no `operator_scope`
+admits no operator, so with none the write actions are refused to every
+caller outside the development profile. The scrape token admits the scrape
+alone, never a write action. Every refusal is counted under
+`ferrofed_security_events_total` as `admin-write-refused` or
+`scrape-refused`, and logged under the target `ferrofed::security` with
+its reason, never the credential.
+
+`scrape_token`, or `scrape_token_file` with the token in a file read at
+start, sets the scrape token; give one or the other. Prometheus sends it
+with `authorization` in the scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: ferrofed
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/ferrofed-scrape-token
+    static_configs:
+      - targets: ["gateway.example.org:9464"]
+```
+
+Mutual TLS authenticates the scrape as well: with `[metrics.tls]` and its
+`client_ca_file`, every client of the listener must present a certificate
+that CA signed ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+Give the scraper such a certificate with `tls_config` in its job.
+
+`config check` says who a listener that is not on a loopback address
+answers. `serve` and `config check` refuse:
 
 - a `listen` address that is not a loopback address, such as `0.0.0.0:9464`,
   unless `allow_remote = true` is set. Set it only when the address is
-  reachable from your scraper and nothing else, for example inside a pod
-  network a network policy closes; the policy is defence in depth over the
-  write actions' loopback rule, and holds only where the cluster's network
-  plugin enforces it;
+  reachable from your scraper and your operators and nothing else, for
+  example inside a pod network a network policy closes; the policy is
+  defence in depth, and holds only where the cluster's network plugin
+  enforces it;
+- outside `profile = "development"`, a `listen` address that is not a
+  loopback address with nothing to authenticate the scrape: neither
+  `scrape_token` nor `[metrics.tls] client_ca_file`;
+- `scrape_token` and `scrape_token_file` both set, and a
+  `scrape_token_file` that cannot be read or holds nothing;
 - a `listen` address equal to `server.listen`;
 - an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
   without TLS, so run the collector beside the gateway, on the same host or
@@ -89,7 +123,7 @@ the unit after a histogram.
 | `ferrofed_resolver_request_duration_seconds` | `ferrofed.resolver.request.duration` (unit `s`) | histogram | none | the time each resolver call took |
 | `ferrofed_localizer_request_duration_seconds` | `ferrofed.localizer.request.duration` (unit `s`) | histogram | none | the time each localizer call took, an XCPD or NVI exchange; a `not-configured` call asks nothing and is not timed |
 | `ferrofed_demographics_request_duration_seconds` | `ferrofed.demographics.request.duration` (unit `s`) | histogram | none | the time each PDQm call took |
-| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, and an admin listener write action refused to a peer that is not loopback |
+| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, and an admin listener write action or scrape refused at the listener's authentication |
 | `ferrofed_overload_refusals_total` | `ferrofed.overload.refusals` | counter | `limit`, and `endpoint` on `node-in-flight` | the requests a limit refused ([Overload protection](overload.md)) |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_identity_feed_messages_total` | `ferrofed.identity_feed.messages` | counter | `result` | the ITI-93 messages the [identity feed](identity.md#the-identity-feed-pmir) received, by `applied`, `refused` (not held to the PMIR profiles), `unauthenticated` (no feed token) or `audit-failed` (its audit record could not be stored, and nothing was applied) |
@@ -116,7 +150,7 @@ path reaches the surface:
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
-| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`: the `event` field of the log line |
+| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
@@ -203,11 +237,13 @@ scrape counts nothing. `scripts/checks/observability.sh` holds both files to
 the metrics the gateway exports, and runs `promtool check rules`.
 
 The Kubernetes example (`deploy/kubernetes/`) serves the admin listener on
-port `9464` of each pod, annotates the pods for a Prometheus that reads
-`prometheus.io/scrape`, and opens the port to the Prometheus pods of the
-`monitoring` namespace alone with a network policy. The gateway refuses the
-write actions to every remote peer by itself, so the policy is defence in
-depth.
+port `9464` of each pod, with the scrape token in the `metrics-scrape-token`
+key of the `ferrofed-secrets` Secret, annotates the pods for a Prometheus
+that reads `prometheus.io/scrape`, and opens the port to the Prometheus pods
+of the `monitoring` namespace alone with a network policy. Give the
+Prometheus job the same token with `authorization.credentials_file`. The
+gateway authenticates the scrape and every write action by itself, so the
+policy is defence in depth.
 
 The gateway does not call a webhook. An incident is counted, and its log
 line under `ferrofed::integrity` carries the routing ids you act on; route

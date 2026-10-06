@@ -189,6 +189,7 @@ trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
+# scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"   # the bearer token GET /metrics asks for; needed off loopback outside development, unless client_ca_file is set
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
 # [metrics.tls] takes certificate_file, key_file and client_ca_file, as [server.tls] does.
 

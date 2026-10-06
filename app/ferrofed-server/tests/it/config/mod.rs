@@ -4,6 +4,7 @@
 //! The configuration contract: the file, the environment over it, the `_file`
 //! secrets, and every refusal.
 
+mod admin;
 mod drain;
 #[cfg(feature = "binding-ihe")]
 mod redaction;
