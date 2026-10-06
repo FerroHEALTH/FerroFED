@@ -14,6 +14,7 @@
 //! `EHDSPatientSummary.allergiesAndIntolerances` is the key a crosswalk to
 //! the openEHR side and to the FHIR document is written against.
 
+pub mod constraint;
 mod read;
 
 use std::collections::BTreeMap;
@@ -22,6 +23,8 @@ use std::io;
 use std::io::Read;
 
 use crate::category::Root;
+use crate::dataset::constraint::Pattern;
+use crate::dataset::constraint::Slicing;
 
 /// The extension URL of an element obligation.
 ///
@@ -159,6 +162,8 @@ pub struct Element {
     types: Vec<String>,
     profiles: Vec<String>,
     short: Option<String>,
+    pattern: Option<Pattern>,
+    slicing: Option<Slicing>,
 }
 
 impl Element {
@@ -194,6 +199,19 @@ impl Element {
     #[must_use]
     pub fn short(&self) -> Option<&str> {
         self.short.as_deref()
+    }
+
+    /// Returns the value the element must carry, from its `fixed[x]` or
+    /// `pattern[x]`, when it names one.
+    #[must_use]
+    pub const fn pattern(&self) -> Option<&Pattern> {
+        self.pattern.as_ref()
+    }
+
+    /// Returns how the element is divided into slices, when it is sliced.
+    #[must_use]
+    pub const fn slicing(&self) -> Option<&Slicing> {
+        self.slicing.as_ref()
     }
 }
 
@@ -583,6 +601,25 @@ pub enum DatasetError {
         /// The definition's URL.
         url: String,
         /// The element's `path`.
+        path: String,
+    },
+    /// An element of a definition's snapshot does not parse as an
+    /// `ElementDefinition`.
+    #[error("{url} has an element that does not parse")]
+    ElementJson {
+        /// The definition's URL.
+        url: String,
+        /// The parse failure.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// An element's slicing names a discriminator type or rules outside the
+    /// R4 value sets.
+    #[error("{url} slices {path} with a discriminator or rules outside the R4 value sets")]
+    Slicing {
+        /// The definition's URL.
+        url: String,
+        /// The sliced element's id.
         path: String,
     },
     /// Two elements of one definition carry one id.

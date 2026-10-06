@@ -23,7 +23,11 @@
 //! - `mapping` (feature `openehr`, which turns on `fhir-r4`): a FHIRconnect
 //!   1.0.0 mapping, compiled once against an operational template and run in
 //!   process over a canonical-JSON composition, answering FHIR R4 resources
-//!   with their `Provenance`.
+//!   with their `Provenance`;
+//! - `receive` (feature `fhir-r4`): a document received in the exchange
+//!   format, read under the R4 document rules and checked against the
+//!   profiles of its category; with `openehr`, mapped into one openEHR
+//!   composition that keeps the original document beside the mapped content.
 //!
 //! The feature `fhir-r4` is the FHIR R4 serialisation and compiles no
 //! openEHR crate; only `openehr` brings in the openEHR side the mapping reads.
@@ -53,3 +57,5 @@ pub mod crosswalk;
 pub mod dataset;
 #[cfg(feature = "openehr")]
 pub mod mapping;
+#[cfg(feature = "fhir-r4")]
+pub mod receive;

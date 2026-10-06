@@ -1230,12 +1230,13 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "fhir-types",
  "fhirconnect",
  "flate2",
  "openehr-mapping-core",
+ "openehr-rm",
  "proptest",
  "serde",
  "serde_json",

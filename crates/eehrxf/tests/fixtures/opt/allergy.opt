@@ -3,7 +3,9 @@
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 <!-- A synthetic operational template authored for the eehrxf tests: one
      COMPOSITION holding one EVALUATION with one text element, the shape the
-     synthetic allergy mapping beside it reads. No clinical content. -->
+     synthetic allergy mapping beside it reads. Its category admits persistent
+     and event, the category a composition built from a received document
+     carries. No clinical content. -->
 <template xmlns="http://schemas.openehr.org/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <language>
     <terminology_id>
@@ -75,6 +77,7 @@
               <value>openehr</value>
             </terminology_id>
             <code_list>431</code_list>
+            <code_list>433</code_list>
           </children>
         </attributes>
       </children>

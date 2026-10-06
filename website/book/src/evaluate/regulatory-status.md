@@ -386,8 +386,11 @@ them:
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
-  mapping files you supply. The gateway holds the stored queries that select
-  each patient summary section's compositions
+  mapping files you supply. It also reads a received document, checks it
+  against its profiles and maps it into one openEHR composition that keeps
+  the original document ([Receiving a document](receiving-documents.md)).
+  The gateway holds the stored queries that select each patient summary
+  section's compositions
   ([the section queries](#the-patient-summarys-section-queries)), and does
   not serve the document yet.
 
