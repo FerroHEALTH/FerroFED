@@ -258,8 +258,10 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   node, and `OPTIONS {base}/`, with its two `serde_json::Value` seams
   (`facade::intake`, `facade::cells`); an ITS-REST path it does not serve
   answers `501`. The admin listener (`[metrics] listen`) carries the
-  OpenTelemetry metrics, exported as Prometheus and over OTLP, and the
-  stored-query drift repair.
+  OpenTelemetry metrics, exported as Prometheus and over OTLP, behind an
+  optional scrape token or mutual TLS, and the stored-query drift repair,
+  admitted through the client authentication gate for the issuer's
+  operator scope and recorded with the operator who ran it (#635, #767).
 - `app/ferrofed-viewer`: the operator console, the `ferrofed-viewer` binary
   and its own image (#275, decision A55); never published. A Leptos app
   rendered on the server and hydrated in the browser, built by cargo-leptos,
