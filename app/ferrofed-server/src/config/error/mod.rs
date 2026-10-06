@@ -707,6 +707,9 @@ pub enum Error {
     /// `[access_log]` declares a category map the logging component refuses.
     #[error("[access_log] declares a category map that cannot be used")]
     AccessLogMap(#[source] ehds_logging::map::MapError),
+    /// `[access_log.retention]` declares a retention the logging component refuses.
+    #[error("[access_log.retention] declares a retention that cannot be used")]
+    AccessLogRetention(#[source] ehds_logging::retention::RetentionError),
 }
 
 impl Error {

@@ -221,6 +221,40 @@ left the gateway for, such as one whose request waited out its deadline for
 a slot of `federation.max_in_flight_per_node`, is no origin, and a query
 that left the gateway for no endpoint writes no record.
 
+### How long a record is kept
+
+Regulation (EU) 2025/327 keeps the information on each access "available
+for at least three years from each date of access" (Art 9(2)), and asks
+for "different retention periods ... that take into account the origins and
+categories" of the data (Annex II 3.4). The gateway holds no record, and
+your Audit Record Repository "retains data according to local policies"
+(IHE RESTful ATNA §3.81.4.1.3), so each record states the period it must be
+kept for, and your repository's retention policy applies it.
+
+You declare the periods in `[access_log.retention]`, in whole years: one
+for every record, and one per category and per origin (an endpoint of the
+registry). A record is kept for the longest period among the default, its
+categories and its origins. Its origins are the endpoints its `origin`
+entities name, every endpoint the access was sent to, one that answered
+with nothing included. A record the category map could not classify
+(`ehds-unclassified`) is kept for the longest period you declare anywhere,
+since nothing says which of its parts it holds. Without the table every
+record is kept three years. Taking the longest is FerroFED's own design: no
+specification says how origin and category combine.
+
+The `ehds-categories` entity carries three `detail` entries:
+
+| `detail` | Value |
+|---|---|
+| `ehds-retention-years` | the period, in years |
+| `ehds-retention-ends` | the first date, in UTC, on which the record may be deleted: the date of access plus the period, plus one day, so an access on 29 February keeps its full period |
+| `ehds-retention-ground` | what called for the period: `default`, `unclassified`, `category:<code>` or `origin:<endpoint>` |
+
+Configure your repository to keep each record at least until its
+`ehds-retention-ends`. A repository that cannot read a record's own
+`detail` keeps every record for the longest period you declare, which meets
+every record's period.
+
 ### Failing closed
 
 An access whose record cannot be stored is refused: the gateway stores the
@@ -244,6 +278,47 @@ with `destination = "repository"`. A failure to store a
 record is logged under the gateway's request id with the error chain, which
 names no value.
 
+### Reading the log
+
+The records are read at your Audit Record Repository, with ITI-81 Retrieve
+ATNA Audit Event, the FHIR search an Audit Consumer runs against the
+repository that received them (IHE RESTful ATNA §3.81). The gateway serves
+no route of its own for the log and reads no record back. Annex II 3.3
+asks for tools to review and analyse the log data "or" the connection of
+external software for the same purpose: the repository and any ITI-81
+Audit Consumer are that software. Choose a repository that supports the
+Retrieve Audit Message Option (ITI TF-1 §9.2.3) at the FHIR base
+`[audit.repository] url` names.
+
+Every search names a period with `date` (§3.81.4.1.2.1), matched against
+each record's `recorded`:
+
+| Who reads | The search |
+|---|---|
+| A person, through your Member State's electronic health data access service (Art 9(2)) | `GET [base]/AuditEvent?date=ge2027-01-01&date=le2027-12-31&patient.identifier=<namespace>\|<identifier>`: the patient a request named is the record's `entity:patient`, whose `what.identifier` carries the namespace and the identifier |
+| An operator, for one caller | `agent.identifier=<iss>\|<sub>`, the caller's issuer and subject |
+| An operator, for one EHR at one member | `entity.identifier=\|<ehr_id>`, the record's `ehr` entity |
+| An operator, for one member | `entity.identifier=\|<endpoint>`, the record's `origin` entity |
+| An operator, for refused or failed accesses | `outcome=http://hl7.org/fhir/audit-event-outcome\|4,8,12` |
+
+The repository answers with a FHIR `Bundle` of type `searchset` holding
+the matching `AuditEvent`s (§3.81.4.2.2.2), which is also the documented
+format to export the log in (Annex II 2.6): each record is written as
+[What a record names](#what-a-record-names) lists. The repository returns
+only the records "which the requester is authorized to view"
+(§3.81.4.1.3), so the access rights of each reader are set there, and it
+records every search as an `Audit Log Used` event of its own
+(§3.81.5.1). Neither ITI-81 nor the gateway gives a person's own
+application a route to the log: the person reads it through the access
+service their Member State provides (Art 9(2)).
+
+A routed request addressed by `ehr_id`, such as a composition read, names
+the `ehr_id` and no patient identifier, so the search by
+`patient.identifier` alone does not find it; finding every access to one
+person's data is planned ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)).
+Labelling each record so a repository can limit access to it by category
+and origin is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
+
 ### `[access_log]`
 
 ```toml
@@ -258,6 +333,15 @@ national_categories = ["nl-example"]
 
 [access_log.archetypes]
 "openEHR-EHR-OBSERVATION.laboratory_test_result.v1" = ["medical-test-result"]
+
+[access_log.retention]
+years = 5                      # every record, at least 3 (Art 9(2)); 3 when unset
+
+[access_log.retention.categories]
+"discharge-report" = 20        # an Art 14(1) code, or a national one declared above
+
+[access_log.retention.origins]
+"node-a" = 15                  # an endpoint id of the registry
 ```
 
 Each key is a template id or an archetype id, written exactly as the
@@ -270,6 +354,12 @@ applied by a reload. Without a map every access is recorded unclassified,
 so author one from the templates your members hold
 (`GET {base}/v1/definition/template/adl1.4` at each member).
 
+Each period under `[access_log.retention]` is a whole number of years, at
+least 3. A smaller one, a category code that names no category, and an
+origin that is no endpoint of the registry are refused when the
+configuration loads, naming the key. A change is applied by a reload and
+reaches the records written after it.
+
 ### The Annex II 3.2 checklist
 
 | Item | Requirement | How FerroFED meets it |
@@ -280,8 +370,8 @@ so author one from the templates your members hold
 | 3.2(c) | the categories of data accessed | the `ehds-categories` entity, classified by your `[access_log]` map, `unclassified` with its evidence where the map cannot tell |
 | 3.2(d) | the time and date of access | `recorded` |
 | 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint the query was sent to, with its node, its outcome and its categories |
-| 3.3 | tools to review and analyse the log data, or the connection of external software | the records go to your ATNA Audit Record Repository; FerroFED's own review interface is planned |
-| 3.4 | retention periods and access rights by origin and category | planned: the records carry the origin and the category each needs |
+| 3.3 | tools to review and analyse the log data, or the connection of external software | the records go to your ATNA Audit Record Repository and are read there with ITI-81 by any Audit Consumer, your Member State's access service included: see [Reading the log](#reading-the-log) |
+| 3.4 | retention periods and access rights by origin and category | each record states the period its categories and origins call for, never under three years (Art 9(2)): see [How long a record is kept](#how-long-a-record-is-kept); access rights are set at your repository, and labelling the records for them is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) |
 
 ## `[audit]`
 

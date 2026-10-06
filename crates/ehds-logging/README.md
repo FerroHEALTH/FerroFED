@@ -18,6 +18,12 @@ what classifies it.
   model ids of what it delivered, read or wrote, or by the ids its request
   constrains its data to. An access the map cannot classify is marked
   unclassified with its ids as evidence; it is never refused for it.
+- `retention`: how long a record is kept, in whole years per category and
+  per origin, never under the three years from each date of access of Art
+  9(2): the longest its categories and origins call for, and the longest
+  declared anywhere for an unclassified access. The record states the
+  period, the first date it may be deleted on and what called for it, so the
+  store that holds it can apply it.
 - `sink`: where records go, and the error a sink returns when it cannot
   store one.
 - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`

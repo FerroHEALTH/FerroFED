@@ -21,6 +21,7 @@ use ehds_logging::record::{
     Outcome, PatientIdentifier, Professional, Purpose, Relayed, RelayedProfessional,
     RelayedProvider, Request,
 };
+use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
 use ihe_iti::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress, Observer};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -42,6 +43,15 @@ const QUERY: &str = "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE \
                      e/ehr_status/subject/external_ref/id/value = 'Qz7-patient-41'";
 
 fn record(action: Action, outcome: Outcome) -> AccessRecord {
+    let categories = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![RootObject {
+            template_id: Some(LAB_REPORT.to_owned()),
+            ..RootObject::default()
+        }],
+    ));
+    let retention =
+        RetentionPolicy::default().retain(jiff::Timestamp::UNIX_EPOCH, &categories, ["node-a"]);
     AccessRecord {
         action,
         recorded: jiff::Timestamp::UNIX_EPOCH,
@@ -75,13 +85,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
                 ehr_id: EHR_ID.to_owned(),
             }],
         },
-        categories: map().classify(&Evidence::reached(
-            Basis::Returned,
-            vec![RootObject {
-                template_id: Some(LAB_REPORT.to_owned()),
-                ..RootObject::default()
-            }],
-        )),
+        categories,
         delivered: Some(1),
         origins: vec![Origin {
             endpoint: "node-a".to_owned(),
@@ -100,6 +104,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             client_address: Some(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 7))),
             correlation: None,
         },
+        retention,
     }
 }
 
@@ -271,6 +276,21 @@ fn the_categories_and_the_origins_ride_in_their_own_entities() {
     let ehrs = entity(&written, "ehr");
     assert_eq!(ehrs.len(), 1);
     assert_eq!(ehrs[0]["what"]["identifier"]["value"], EHR_ID);
+}
+
+/// Regulation (EU) 2025/327 Art 9(2) and Annex II 3.4: the record states the
+/// years it is kept, the first date it may be deleted on and what called for
+/// the period, so the repository that stores it can apply it.
+#[test]
+fn the_record_states_how_long_it_is_kept() {
+    let written = written(&record(Action::Query, Outcome::Success));
+    let categories = entity(&written, "ehds-categories");
+    let [categories] = categories.as_slice() else {
+        panic!("one categories entity, got {categories:?}");
+    };
+    assert_eq!(details(categories, "ehds-retention-years"), ["3"]);
+    assert_eq!(details(categories, "ehds-retention-ends"), ["1973-01-02"]);
+    assert_eq!(details(categories, "ehds-retention-ground"), ["default"]);
 }
 
 /// The `agent:user` of `written`.

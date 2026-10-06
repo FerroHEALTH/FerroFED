@@ -89,8 +89,8 @@ pub struct Settings {
     /// `[signing]` is set (§13.1, N25).
     pub signing: Option<SigningSettings>,
     /// The category map every access record is classified with, named by
-    /// its digest.
-    pub access_log: ehds_logging::map::CategoryMap,
+    /// its digest, and how long each record is kept.
+    pub access_log: crate::access::config::AccessLogSettings,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
     #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::AuditSettings,

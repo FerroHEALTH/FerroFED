@@ -16,6 +16,8 @@ mod classify;
 mod map;
 #[cfg(test)]
 mod property;
+#[cfg(test)]
+mod retention;
 
 #[cfg(test)]
 mod support {

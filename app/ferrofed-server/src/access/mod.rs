@@ -12,7 +12,8 @@
 //! delivered, read or wrote. [`record`], the layer inside client
 //! authentication, builds the record from those facts, the verified caller
 //! and the time, classifies it with the deployment's category map
-//! (`ehds_logging`), and hands it to the sink a binding builds, which for the
+//! (`ehds_logging`), states how long it is kept (Art 9(2), Annex II 3.4),
+//! and hands it to the sink a binding builds, which for the
 //! IHE binding writes a BALP `AuditEvent` to the audit spool. The console
 //! reaches the gateway through the same façade, so its queries are recorded
 //! with the operator as the caller.
@@ -43,6 +44,7 @@ use ehds_logging::record::{
     AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
     RelayedProfessional, RelayedProvider,
 };
+use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
 use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
@@ -59,9 +61,11 @@ use crate::error::{self, Code};
 use crate::request_id;
 use crate::state::AppState;
 
-/// The access log of one federation: the category map and the sink.
+/// The access log of one federation: the category map, the retention and
+/// the sink.
 pub struct AccessLog {
     map: CategoryMap,
+    retention: RetentionPolicy,
     sink: Arc<dyn AccessSink>,
 }
 
@@ -74,10 +78,22 @@ impl fmt::Debug for AccessLog {
 }
 
 impl AccessLog {
-    /// The log that classifies with `map` and stores through `sink`.
+    /// The log that classifies with `map` and stores through `sink`, each
+    /// record kept for the three years of Regulation (EU) 2025/327 Art 9(2).
     #[must_use]
     pub fn new(map: CategoryMap, sink: Arc<dyn AccessSink>) -> Self {
-        Self { map, sink }
+        Self {
+            map,
+            retention: RetentionPolicy::default(),
+            sink,
+        }
+    }
+
+    /// This log, each record kept as `retention` says.
+    #[must_use]
+    pub fn with_retention(mut self, retention: RetentionPolicy) -> Self {
+        self.retention = retention;
+        self
     }
 
     /// The category map.
@@ -170,9 +186,15 @@ impl Accessed {
                 categories: per_origin(&self.log.map, asked, contributing, &categories),
             })
             .collect();
+        let recorded = jiff::Timestamp::now();
+        let retention = self.log.retention.retain(
+            recorded,
+            &categories,
+            self.origins.iter().map(|asked| asked.endpoint.as_str()),
+        );
         AccessRecord {
             action: self.action,
-            recorded: jiff::Timestamp::now(),
+            recorded,
             outcome: outcome(status),
             accessor: accessor(caller),
             subject: self.subject.clone(),
@@ -188,6 +210,7 @@ impl Accessed {
                 client_address: address,
                 correlation: caller.correlation().map(str::to_owned),
             },
+            retention,
         }
     }
 }

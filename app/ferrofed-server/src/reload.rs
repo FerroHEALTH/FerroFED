@@ -630,6 +630,7 @@ fn federation_class(error: &FederationError) -> &'static str {
         FederationError::Clients(_) => "node-clients",
         FederationError::Transport(_) => "http-client",
         FederationError::Unsigned => "signing",
+        FederationError::RetentionEndpointUnknown { .. } => "access-log",
         _ => binding::class(error).unwrap_or("binding"),
     }
 }

@@ -184,6 +184,18 @@ impl CategoryMap {
         self.archetypes.get(archetype_id)
     }
 
+    /// The category `code` names: a priority category, or a national one the
+    /// map declares.
+    #[must_use]
+    pub fn category(&self, code: &str) -> Option<Category> {
+        Category::priority(code).or_else(|| {
+            self.national
+                .iter()
+                .find(|declared| declared.as_str() == code)
+                .map(|declared| Category::National(declared.clone()))
+        })
+    }
+
     /// Whether the map holds no key.
     #[must_use]
     pub fn is_empty(&self) -> bool {

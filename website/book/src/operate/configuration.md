@@ -165,7 +165,7 @@ The sections, and the page that covers each:
 | `[nl_gf.mitz]` | the Mitz consent pre-filter of the Dutch Generic Functions | [Dutch consent](consent.md#dutch-consent-nl_gfmitz) |
 | `[pmir]` | the PMIR identity feed: the subscription and the route the Registry sends to | [The identity feed](identity.md#the-identity-feed-pmir) |
 | `[audit]` | where the access records and the audit records of the PIXm, PDQm, mCSD and PMIR transactions go; outside development a gateway with a registry needs `destination = "repository"` | [The audit trail](audit.md) |
-| `[access_log]` | the category map every access record is classified with: template ids and archetype ids to Art 14(1) categories, national categories, or `none` | [The access log](audit.md#access_log) |
+| `[access_log]` | the category map every access record is classified with: template ids and archetype ids to Art 14(1) categories, national categories, or `none`; and `[access_log.retention]`, the years each record is kept by category and origin, at least three | [The access log](audit.md#access_log) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 

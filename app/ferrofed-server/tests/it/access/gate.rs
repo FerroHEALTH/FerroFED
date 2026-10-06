@@ -22,7 +22,7 @@ use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use http::{Request, StatusCode};
 
-use super::{TestResult, map_toml};
+use super::{RETENTION, TestResult, map_toml};
 use crate::facade::{EHR_A, registry};
 use crate::feed_audit::audit_tables;
 use crate::support::call;
@@ -46,7 +46,7 @@ fn forgetful(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n{}{}",
         audit_tables(repository, ""),
-        map_toml()
+        map_toml(RETENTION)
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
