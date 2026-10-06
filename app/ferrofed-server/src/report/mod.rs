@@ -333,8 +333,13 @@ impl Report {
             Some(listen) => match Listener::new(listen, settings.metrics.tls.as_ref(), TIMEOUT) {
                 Err(error) => Err(error),
                 Ok(admin) => {
+                    let scrape = settings
+                        .metrics
+                        .scrape_token
+                        .as_ref()
+                        .map(ferrofed_registry::secret::Secret::to_secret_string);
                     admin
-                        .get(crate::metrics::PATH, None)
+                        .get(crate::metrics::PATH, scrape.as_ref())
                         .await
                         .and_then(|(status, body)| {
                             if status == StatusCode::OK {

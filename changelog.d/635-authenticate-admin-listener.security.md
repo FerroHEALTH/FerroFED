@@ -8,4 +8,5 @@
   constant time, and outside the development profile a listener off
   loopback is refused unless that token or `[metrics.tls] client_ca_file`
   authenticates the scrape. Each refusal is counted as `admin-write-refused`
-  or `scrape-refused`. The Kubernetes example sets a scrape token.
+  or `scrape-refused`. The Kubernetes example sets a scrape token, and the
+  diagnostic report reads `GET /metrics` with it.

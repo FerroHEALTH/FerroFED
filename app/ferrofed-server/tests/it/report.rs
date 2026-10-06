@@ -102,7 +102,7 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> Result<String, 
         "profile = \"development\"\n\n\
          [server]\nlisten = \"{gateway}\"\n\n\
          [telemetry]\notlp_endpoint = \"http://{user}:{password}@127.0.0.1:4317/{path}?key={query}#{fragment}\"\n\n\
-         [metrics]\nlisten = \"{admin}\"\n\n\
+         [metrics]\nlisten = \"{admin}\"\nscrape_token = \"SENTINEL-SCRAPE-r705\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\
          [credentials.\"node-a-pub\"]\nuser = \"{professional}\"\npassword = \"{professional_password}\"\n\n\
@@ -230,7 +230,7 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
         std::future::pending(),
     ));
     let (_, admin_app) =
-        ferrofed_server::admin::listener(&settings.metrics, &state).ok_or("an admin listener")?;
+        ferrofed_server::admin::listener(&settings, &state).ok_or("an admin listener")?;
     tokio::spawn(ferrofed_server::admin::serve(admin_listener, admin_app));
 
     exercise(gateway).await?;
