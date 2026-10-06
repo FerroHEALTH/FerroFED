@@ -45,7 +45,7 @@ pub(crate) const PERSON_ID: &str = "SENTINEL-PERSON-ID-7q3z";
 /// unlike any other text.
 pub(crate) const FAMILY: &str = "Qz7-family-61";
 pub(crate) const GIVEN: &str = "Qz7-given-62";
-pub(crate) const COUNTRY: &str = "XA";
+pub(crate) const COUNTRY: &str = "LU";
 pub(crate) const HP_ID: &str = "Qz7-hp-63";
 pub(crate) const HP_AUTHORITY: &str = "Qz7-hp-authority-64";
 pub(crate) const ROLE_SYSTEM: &str = "urn:oid:2.999.9";
@@ -67,6 +67,7 @@ pub(crate) fn claim_names() -> ContactPointClaims {
         provider_issuing_authority: String::from("ncp_hcp_issuing_authority"),
         provider_address: String::from("ncp_hcp_address"),
         correlation_header: Some(CORRELATION_HEADER.to_owned()),
+        additional_countries: Vec::new(),
     }
 }
 

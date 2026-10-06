@@ -154,3 +154,41 @@ fn an_unknown_key_in_the_table_is_refused() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn an_additional_country_resolves_once_in_the_alpha_2_form() -> Result<(), Box<dyn Error>> {
+    let settings = Config::from_sources(
+        Some(&complete("additional_countries = [\"XA\"]\n")),
+        &BTreeMap::new(),
+    )?
+    .resolve()?;
+    let [issuer] = settings.server.auth.issuers.as_slice() else {
+        return Err("one issuer".into());
+    };
+    let declared = issuer
+        .national_contact_point
+        .as_ref()
+        .ok_or("declared a contact point")?;
+    assert!(declared.admits_country("XA"));
+    assert!(declared.admits_country("LU"), "a Member State always");
+    assert!(!declared.admits_country("XB"));
+    Ok(())
+}
+
+#[test]
+fn an_additional_country_out_of_form_or_a_member_state_is_refused() -> Result<(), Box<dyn Error>> {
+    for code in ["xa", "XAA", "", "NL"] {
+        match refusal(&complete(&format!("additional_countries = [\"{code}\"]\n")))? {
+            Some(ConfigError::Auth { key, fault }) => assert_eq!(
+                (
+                    "auth.issuer[0].national_contact_point.additional_countries",
+                    AuthFault::CountryCode
+                ),
+                (key.as_str(), fault),
+                "{code}"
+            ),
+            other => return Err(format!("{code}: {other:?}").into()),
+        }
+    }
+    Ok(())
+}

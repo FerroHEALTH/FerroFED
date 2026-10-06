@@ -32,7 +32,7 @@ use crate::auth::caller::Caller;
 use crate::auth::claims::IuaAnnex;
 use crate::auth::refusal::Refusal;
 use crate::config::auth::IssuerSettings;
-use crate::config::auth::contact_point::ContactPoint;
+use crate::config::auth::contact_point::{ContactPoint, is_alpha_2};
 
 /// The most bytes a correlation identifier may carry.
 // NOTE: no specification governs this: our own design; 128 holds a UUID, a URN or a
@@ -103,15 +103,19 @@ pub(super) fn relaying(caller: &Caller) -> Result<(), Refusal> {
 /// reads, when the token carries every Annex attribute.
 ///
 /// `None` when any attribute is absent or empty, when no role has a code,
-/// or when `country_code` is not two upper-case letters, the form of an
-/// ISO 3166-1 alpha-2 code the Annex names.
+/// or when `country_code` is not the ISO 3166-1 alpha-2 code of a Member
+/// State, or of a country the deployment adds for this contact point
+/// ([`ContactPoint::admits_country`]).
 fn relayed(
     (issuer, declared): (&str, &ContactPoint),
     iua: IuaAnnex,
     text: impl Fn(&str) -> Option<String>,
 ) -> Option<Box<Relayed>> {
     let claims = &declared.claims;
-    let country_code = text(&claims.country_code).filter(|code| alpha_2(code))?;
+    // NOTE: 2026/2099 Annex Table 1 names "the Member State that issued" the data, and 2025/327
+    // Art 24(3) lets the Commission connect a third country's contact point, which the deployment adds.
+    let country_code = text(&claims.country_code)
+        .filter(|code| is_alpha_2(code) && declared.admits_country(code))?;
     if iua.roles.is_empty() {
         return None;
     }
@@ -134,14 +138,6 @@ fn relayed(
             address: text(&claims.provider_address)?,
         },
     }))
-}
-
-/// Whether `code` has the form of an ISO 3166-1 alpha-2 code: two
-/// upper-case ASCII letters.
-// NOTE: 2026/2099 Annex Table 1 `country_code`; the form is checked, and which Member
-// State it names is the contact point's assertion (no specification lists the codes held).
-fn alpha_2(code: &str) -> bool {
-    code.len() == 2 && code.bytes().all(|byte| byte.is_ascii_uppercase())
 }
 
 /// The correlation identifier `headers` carry in the header `declared`
@@ -177,19 +173,4 @@ pub(super) fn correlation(
     String::from_utf8(value.to_vec())
         .map(Some)
         .map_err(|_unreachable| Refusal::Correlation)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::alpha_2;
-
-    #[test]
-    fn only_two_upper_case_letters_have_the_alpha_2_form() {
-        for code in ["NL", "XA", "BE"] {
-            assert!(alpha_2(code), "{code}");
-        }
-        for code in ["", "N", "nl", "NLD", "N1", "ÑL"] {
-            assert!(!alpha_2(code), "{code}");
-        }
-    }
 }

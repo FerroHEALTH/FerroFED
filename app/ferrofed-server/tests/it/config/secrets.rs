@@ -5,7 +5,8 @@
 
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::error::{BasicFault, Error};
+use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::basic::BasicFault;
 use ferrofed_server::config::settings::Scheme;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use std::collections::BTreeMap;

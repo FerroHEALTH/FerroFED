@@ -21,7 +21,8 @@ use secrecy::SecretString;
 use secrecy::zeroize::Zeroizing;
 
 use crate::binding::Binding;
-use crate::config::error::{BasicFault, Error};
+use crate::config::error::Error;
+use crate::config::error::basic::BasicFault;
 use crate::config::grant;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{Scheme, SigningSettings};

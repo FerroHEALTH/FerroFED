@@ -97,6 +97,7 @@ demographic_clients = []
 | `auth.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
 | `auth.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
 | `auth.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
+| `auth.issuer[].national_contact_point.additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes a `country_code` this contact point relays may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
 | `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
 
 An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
@@ -448,7 +449,7 @@ attribute (ITI TF-2 3.71.4.2.2.1.1), the gateway reads it from
 
 | Annex attribute | Read from |
 |---|---|
-| Table 1 `family_name`, `given_name`, `country_code` | the claims `family_name`, `given_name` and `country_code` name; `country_code` must be two upper-case letters, the ISO 3166-1 alpha-2 form |
+| Table 1 `family_name`, `given_name`, `country_code` | the claims `family_name`, `given_name` and `country_code` name; `country_code` must be the ISO 3166-1 alpha-2 code of an EU Member State, the Annex's "Member State that issued" the data, or of a country `additional_countries` adds |
 | Table 1 `hp_identifier` | `extensions.ihe_iua.national_provider_identifier` |
 | Table 1 `issuing_authority_name` | the claim `professional_issuing_authority` names |
 | Table 1 `hp_professional_role` | `extensions.ihe_iua.subject_role`, FHIR `Coding`s, at least one with a code |

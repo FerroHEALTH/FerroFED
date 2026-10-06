@@ -423,6 +423,9 @@ pub enum AuthFault {
     /// The correlation header names a header that carries a credential,
     /// which the access record would then hold.
     CorrelationCredential,
+    /// An additional country is no ISO 3166-1 alpha-2 code, or is a Member
+    /// State, which every contact point already admits.
+    CountryCode,
 }
 
 impl fmt::Display for AuthFault {
@@ -452,6 +455,9 @@ impl fmt::Display for AuthFault {
             }
             Self::CorrelationCredential => {
                 "names a header that carries a credential, which the access record would then hold"
+            }
+            Self::CountryCode => {
+                "names a code that is not two upper-case letters (ISO 3166-1 alpha-2), or a Member State, which every contact point admits"
             }
         })
     }

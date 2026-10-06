@@ -33,10 +33,12 @@ fn short_of_the_annex() -> Vec<(&'static str, Claims)> {
         }
         claims
     };
-    let mut lowercase_country = relaying();
-    lowercase_country
-        .other
-        .insert(names.country_code.clone(), String::from("xa"));
+    let country_claim = names.country_code.clone();
+    let country = |code: &str| {
+        let mut claims = relaying();
+        claims.other.insert(country_claim.clone(), code.to_owned());
+        claims
+    };
     let mut empty_family = relaying();
     empty_family
         .other
@@ -70,7 +72,9 @@ fn short_of_the_annex() -> Vec<(&'static str, Claims)> {
             "healthcare_provider_name",
             iua(|iua| iua.subject_organization = None),
         ),
-        ("a country code not in the alpha-2 form", lowercase_country),
+        ("a country code not in the alpha-2 form", country("lu")),
+        ("a country that is no Member State", country("XA")),
+        ("a former Member State", country("GB")),
         ("an empty family_name", empty_family),
     ]
 }
@@ -208,4 +212,24 @@ async fn an_issuer_not_declared_a_contact_point_needs_no_annex_attribute() -> Te
         bearing(query()?, &minted(&crate::support::claims())?)?,
     )
     .await
+}
+
+/// Regulation (EU) 2025/327 Art 24(3): a country the deployment adds for a
+/// contact point, such as a third country whose contact point the
+/// Commission connected, is admitted for that contact point alone.
+#[tokio::test]
+async fn a_country_the_deployment_adds_is_admitted() -> TestResult {
+    let mut auth = declared()?;
+    let mut names = claim_names();
+    names.additional_countries = vec![String::from("XA")];
+    let resolved = names.resolve("auth.issuer[0].national_contact_point")?;
+    for issuer in &mut auth.issuers {
+        issuer.national_contact_point = Some(resolved.clone());
+    }
+    let gateway = Gateway::with(auth).await?;
+    let mut claims = relaying();
+    claims
+        .other
+        .insert(claim_names().country_code, String::from("XA"));
+    assert_admitted(&gateway, bearing(query()?, &minted(&claims)?)?).await
 }
