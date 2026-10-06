@@ -174,6 +174,7 @@ impl Routed {
                 status: status.as_str().to_owned(),
                 rows: None,
                 contributed: true,
+                evidence: None,
             }],
         });
         response

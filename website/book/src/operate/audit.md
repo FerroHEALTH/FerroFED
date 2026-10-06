@@ -93,7 +93,7 @@ the caller.
 | (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, `altId` the professional identification the issuer states, and every purpose of use |
 | (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories) |
 | (d) the time and date | `recorded` |
-| (e) the origin or origins of the data | one entity named `origin` per endpoint the access asked: the endpoint id, its node, its `system_id`, how it answered (`active`, `node-error`, `time-out`, and so on, or the node's HTTP status for a routed request) and the rows it sent |
+| (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (`active`, `node-error`, `time-out`, and so on, or the node's HTTP status for a routed request) and the rows it sent |
 
 Beside them, a record names the data subject: the patient by the
 identifier and namespace the request named (`entity:patient`, as the ITI-83
@@ -142,9 +142,15 @@ The `ehds-categories` entity's `detail` entries are `ehds-category`,
 `ehds-no-category`, `ehds-unclassified`, `template-id`, `archetype-id`,
 `version-uid`, `unmapped-id`, `category-map-digest` (the SHA-256 of the
 map's canonical text, so a reader knows which map classified the record),
-`delivered` and `stored-query`. The categories of one origin are named in
-its `origin` entity when that origin alone contributed what the access
-delivered.
+`delivered` and `stored-query`. Each origin that contributed what the
+access delivered names its categories in its `origin` entity. When it alone
+contributed, they are the access's own. When several did, each origin's
+are classified from the rows it answered with, before the merge, so its
+set can name a category of a row the merge then cut by `LIMIT` or
+`DISTINCT`, and never misses one it delivered. An endpoint the query never
+left the gateway for, such as one whose request waited out its deadline for
+a slot of `federation.max_in_flight_per_node`, is no origin, and a query
+that left the gateway for no endpoint writes no record.
 
 ### Failing closed
 
@@ -204,7 +210,7 @@ so author one from the templates your members hold
 | 3.2(b) | the specific natural person or persons who accessed the data | the `agent:user`, from the token the gateway verified |
 | 3.2(c) | the categories of data accessed | the `ehds-categories` entity, classified by your `[access_log]` map, `unclassified` with its evidence where the map cannot tell |
 | 3.2(d) | the time and date of access | `recorded` |
-| 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint asked, with its node and outcome |
+| 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint the query was sent to, with its node, its outcome and its categories |
 | 3.3 | tools to review and analyse the log data, or the connection of external software | the records go to your ATNA Audit Record Repository; FerroFED's own review interface is planned |
 | 3.4 | retention periods and access rights by origin and category | planned: the records carry the origin and the category each needs |
 
