@@ -98,12 +98,14 @@ jobs:
 
   # The adopted-acts half of the EU corpus: Regulation (EU) 2025/327 leaves
   # the harmonised components' content to acts not yet adopted, and
-  # docs/specs/eu-ehds/ vendors each one once it is. This reads EUR-Lex for
-  # every act based on the Regulation and the Commission's Have your say
-  # register for its initiatives, and opens one issue per newly adopted act
-  # and one when a watched initiative moves.
+  # docs/specs/eu-ehds/ vendors each one once it is; docs/specs/eu-cra/ does
+  # the same for Regulation (EU) 2024/2847, the Cyber Resilience Act. This
+  # reads EUR-Lex for every act based on, amending or correcting either
+  # Regulation and the Commission's Have your say register for the EHDS
+  # initiatives, and opens one issue per new act and one when a watched
+  # initiative moves.
   ehds-acts:
-    name: EHDS acts
+    name: EHDS and CRA acts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -140,21 +142,29 @@ jobs:
           set -euo pipefail
           # One issue per CELEX number, never a second for the same act: the
           # search covers closed issues too, so an act already handled is not
-          # filed again before the vendor script pins it.
-          awk '$1 == "NEW-ACT" { print $2 }' ehds-acts.txt | while read -r celex; do
+          # filed again before the vendor script pins it, and an act related
+          # to both Regulations is filed once.
+          awk '$1 == "NEW-ACT" && !seen[$2]++ { print $2, $3, $4 }' ehds-acts.txt | while read -r celex label kind; do
             if ! [[ "$celex" =~ ^[0-9]{5}[A-Z][0-9A-Z()]+$ ]]; then
               echo "not a CELEX number: $celex" >&2
               exit 1
             fi
-            title="EHDS act adopted: CELEX $celex"
+            if ! [[ "$label" =~ ^[A-Z]+$ && "$kind" =~ ^(act|amendment|corrigendum)$ ]]; then
+              echo "not a Regulation label and kind: $label $kind" >&2
+              exit 1
+            fi
+            case "$kind" in
+              corrigendum) title="$label corrigendum published: CELEX $celex" ;;
+              *) title="$label $kind adopted: CELEX $celex" ;;
+            esac
             found="$(gh issue list --state all --limit 100 --search "\"$celex\" in:title" --json title \
-              --jq "[.[] | select(.title == \"$title\")] | length")"
+              --jq "[.[] | select(.title | endswith(\": CELEX $celex\"))] | length")"
             if [ "$found" -ne 0 ]; then
               echo "an issue already carries $celex; not opening a second"
               continue
             fi
             {
-              echo "\`scripts/checks/ehds-acts.sh\` found an act adopted under Regulation (EU) 2025/327 that this repository has not recorded."
+              echo "\`scripts/checks/ehds-acts.sh\` found a $kind of the $label Regulation that this repository has not recorded."
               echo
               echo '```text'
               grep -F "NEW-ACT    $celex " ehds-acts.txt
@@ -163,7 +173,7 @@ jobs:
               echo "EUR-Lex: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:$celex"
               echo
               echo "Read it, then pin it in \`scripts/vendor/eu.sh\` (its Cellar manifestation and sha256) or record"
-              echo "in \`NOT_VENDORED\` of \`scripts/checks/ehds-acts.sh\` why it does not reach an EHR system, and"
+              echo "in \`NOT_VENDORED\` of \`scripts/checks/ehds-acts.sh\` why it is not vendored, and"
               echo "name it where the act it implements is waited for."
               echo
               echo "Reported by [this run]($RUN_URL)."

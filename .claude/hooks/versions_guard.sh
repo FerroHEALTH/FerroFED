@@ -6,8 +6,9 @@
 # Claude Code PostToolUse hook (matcher: Write|Edit).
 #
 # When an edited file is the pin matrix or a file that repeats a pin (the
-# product version, the licence parameters, a vendored corpus's PROVENANCE.md
-# or the vendor script that writes it), run scripts/checks/versions.sh. Exit 2 feeds its findings back as a correction;
+# product version, the licence parameters, a vendored corpus's PROVENANCE.md,
+# the vendor script that writes it or the corpus list), run
+# scripts/checks/versions.sh. Exit 2 feeds its findings back as a correction;
 # every other path is a quiet exit 0.
 
 set -uo pipefail
@@ -27,7 +28,10 @@ fi
 # checkout even then. That tree is data only: it is accepted when it is a
 # worktree of this same repository (the same common git directory), and it is
 # always judged by the versions script of CLAUDE_PROJECT_DIR, never by a script
-# in it. A file outside this repository's checkouts is not a pin.
+# in it. That script reads the tree's own corpus list,
+# scripts/checks/versions-corpora.txt, as data, so a corpus a branch adds is
+# judged by the branch's list. A file outside this repository's checkouts is
+# not a pin.
 trusted="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 common_dir() {
   local dir
@@ -51,7 +55,7 @@ VERSIONS.md | architecture.md | LICENSE | NOTICE | rust-toolchain.toml | CITATIO
 *) ;;
 esac
 case "$rel" in
-scripts/vendor/*.sh) watched=1 ;;
+scripts/vendor/*.sh | scripts/checks/versions-corpora.txt) watched=1 ;;
 *) ;;
 esac
 
