@@ -82,8 +82,8 @@ fn capped_federation(
     let snapshot = RegistrySnapshot::from_toml_str(&document)?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let cap = NonZeroU32::new(cap).ok_or("a cap is positive")?;
-    let clients =
-        NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?.with_in_flight_cap(cap);
+    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?
+        .with_in_flight_cap(cap);
     Ok((snapshot, clients))
 }
 

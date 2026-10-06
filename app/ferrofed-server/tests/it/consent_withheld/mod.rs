@@ -45,12 +45,12 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::settings::ConsentDisclosure;
 use ferrofed_server::federation::Federation;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::ReqwestTransport;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -167,7 +167,7 @@ fn gateway_with(
     disclosure: ConsentDisclosure,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), extra))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,

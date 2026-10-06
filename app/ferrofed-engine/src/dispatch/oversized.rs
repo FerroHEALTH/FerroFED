@@ -63,8 +63,10 @@ impl Oversized {
             return None;
         };
         let top: &(dyn Error + 'static) = &**source;
-        std::iter::successors(Some(top), |cause: &&(dyn Error + 'static)| (*cause).source())
-            .find_map(|cause| cause.downcast_ref::<Self>())
+        std::iter::successors(Some(top), |cause: &&(dyn Error + 'static)| {
+            (*cause).source()
+        })
+        .find_map(|cause| cause.downcast_ref::<Self>())
     }
 }
 

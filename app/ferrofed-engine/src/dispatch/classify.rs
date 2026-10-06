@@ -99,11 +99,25 @@ pub(super) fn failed(
     latency_ms: u64,
     options: &DispatchOptions,
 ) -> Result<NodeReply, DispatchError> {
+    match Oversized::of_client_error(&error) {
+        Some(over) => Ok(node_error(
+            (latency_ms, over.status()),
+            text(over.to_string()),
+        )),
+        None => unread((endpoint, refusal_codes), error, latency_ms, options),
+    }
+}
+
+/// The reply, or the gateway-side error, for a call that reached no
+/// documented answer and no answer past the bound, as [`failed`] reads it.
+fn unread(
+    (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
+    error: ClientError,
+    latency_ms: u64,
+    options: &DispatchOptions,
+) -> Result<NodeReply, DispatchError> {
     let withheld = options.withheld();
     let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
-    if let Some(over) = Oversized::of_client_error(&error) {
-        return Ok(node_error((latency_ms, over.status()), text(over.to_string())));
-    }
     let contacted = dpop::sent_before(&error);
     match error {
         ClientError::DeadlineElapsed { .. } if contacted => failure(

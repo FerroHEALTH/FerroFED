@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
@@ -238,6 +238,10 @@ impl Config {
             .ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_in_flight_per_node"),
             })?;
+        let max_node_answer_bytes = NonZeroUsize::new(self.federation.max_node_answer_bytes)
+            .ok_or_else(|| Error::Zero {
+                key: String::from("federation.max_node_answer_bytes"),
+            })?;
         let max_window =
             NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_offset_window"),
@@ -287,6 +291,7 @@ impl Config {
             fan_out_stored_queries: self.federation.fan_out_stored_queries,
             consent_disclosure: ConsentDisclosure::of(self.federation.consent.disclose),
             max_in_flight_per_node,
+            max_node_answer_bytes,
         })
     }
 }

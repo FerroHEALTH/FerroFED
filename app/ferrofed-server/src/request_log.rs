@@ -125,7 +125,7 @@ pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Nex
     drop(active);
     let latency_ms = elapsed.as_secs_f64() * 1000.0;
     let (method, route, query, request_id) =
-        (method.as_str(), route.as_str(), query.as_str(), id.as_str());
+        (method_label, route.as_str(), query.as_str(), id.as_str());
     let status_code = status.as_u16();
     if status.is_server_error() {
         tracing::error!(
