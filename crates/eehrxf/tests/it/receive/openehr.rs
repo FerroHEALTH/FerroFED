@@ -152,7 +152,7 @@ fn a_document_with_two_resources_of_the_mapped_type_is_refused() -> Result<(), B
 // (<https://hl7.org/fhir/R4/bundle.html#references>), so a Patient entry whose
 // fullUrl is the urn:uuid every reference names is one subject, not two.
 #[test]
-#[ignore = "fhirconnect refuses urn:uuid subjects; FerroBRIDGE issue to follow"]
+#[ignore = "fhirconnect refuses urn:uuid subjects: FerroHEALTH/FerroBRIDGE#399"]
 fn a_published_document_with_urn_full_urls_is_not_refused_as_several_subjects()
 -> Result<(), Box<dyn Error>> {
     let text = eps_example("Bundle-EPSExampleBundle01NoProblemsMedicationAllergies.json")?;
