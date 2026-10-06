@@ -20,7 +20,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
   `PROVENANCE.md` excluded): `0529db44749170016f8cd108645902823476fc2ed1017c0b5e3e8131e60d2382`
 - Read by: #696 (the RM facts the follow-up routing and the A57
   classification cite: `LOCATABLE`, `archetype_details`, the change
-  control classes, `DV_TEXT.mappings` and `TERM_MAPPING`)
+  control classes, `DV_TEXT.mappings` and `TERM_MAPPING`), and
+  `scripts/checks/openehr-classes.sh` (#719), which holds every class and
+  attribute the tree names to the definitions under `docs/UML/classes/`
 
 ## What is here
 

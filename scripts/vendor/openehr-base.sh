@@ -115,7 +115,9 @@ here: change the pin in docs/VERSIONS.md and re-run the script.
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #702 (the identifier classes \`OBJECT_VERSION_ID\`,
   \`OBJECT_REF\` and \`PARTY_REF\` the follow-up routing and the access
-  record cite)
+  record cite), and \`scripts/checks/openehr-classes.sh\` (#719), which holds
+  every class and attribute the tree names to the definitions under
+  \`docs/UML/classes/\`
 
 ## What is here
 

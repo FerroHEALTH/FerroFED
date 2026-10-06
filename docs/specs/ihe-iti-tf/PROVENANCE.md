@@ -9,7 +9,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 3 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 3 besides this one, each verbatim as the
@@ -26,7 +26,8 @@ are IHE's own text, which the General Introduction §9
 (<https://profiles.ihe.net/GeneralIntro/ch-9.html>) licenses for
 reproduction and distribution; that licence does not reach base-standard
 material, and these Volume 1 chapters reproduce no HL7 table. The Volume 2
-transaction text of ITI-55, which reproduces HL7 v3 tables, is not vendored.
+transaction text of ITI-38 and ITI-55 is the corpus
+`docs/specs/ihe-iti-tf-vol2/`, beside this one.
 
 ## Artefacts
 

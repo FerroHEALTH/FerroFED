@@ -28,8 +28,11 @@
 # under docs/specs/ihe-*: the implementation guide pages, the Technical
 # Framework pages, the IUA supplement and the RESTful ATNA supplement, the
 # last read with pdftotext. A section is present when it is a heading or the
-# parent of one. A transaction no vendored text carries is listed in
-# UNVENDORED with the reason; its citations are counted, never checked.
+# parent of one. A text whose licence keeps it out of the repository is
+# fetched into .vendor-cache/ihe-* by its vendor script, and is read from
+# there when a local run has fetched it. A transaction no text at hand
+# carries is listed in UNVENDORED with the reason; its citations are counted,
+# never checked.
 #
 # Usage:
 #   scripts/checks/ihe-citations.sh              check the tracked tree
@@ -39,15 +42,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# The cited sections no vendored text carries, one per line: the section
-# root, a tab, and why it is not checked.
-readonly UNVENDORED='2:3.38	ITI TF-2 §3.38 Cross Gateway Query [ITI-38] is not vendored
-2:3.55	ITI TF-2 §3.55 Cross Gateway Patient Discovery [ITI-55] is not vendored'
+# The cited sections no committed text carries, one per line: the section
+# root, a tab, and why it is not checked. A root the cache holds is checked.
+readonly UNVENDORED='2:3.55	ITI TF-2 §3.55 Cross Gateway Patient Discovery [ITI-55] is cache only (HL7 tables, all rights reserved); run scripts/vendor/ihe-iti-tf.sh to check it'
 
-# corpus_files ROOT: the vendored IHE narrative texts under ROOT, one path
-# per line, the FHIR packages and the provenance records left out.
+# corpus_files ROOT: the IHE narrative texts under ROOT, the vendored ones
+# and the cached ones, one path per line, the FHIR packages and the
+# provenance records left out.
 corpus_files() {
-  find "$1/docs/specs" -path "$1/docs/specs/ihe-*" -type f \
+  local dirs=("$1/docs/specs")
+  [[ -d "$1/.vendor-cache" ]] && dirs+=("$1/.vendor-cache")
+  find "${dirs[@]}" \( -path "$1/docs/specs/ihe-*" -o -path "$1/.vendor-cache/ihe-*" \) -type f \
     \( -name '*.html' -o -name '*.md' -o -name '*.pdf' \) \
     ! -path '*/package/*' ! -name 'PROVENANCE.md' ! -name 'LICENSE*' \
     | LC_ALL=C sort
@@ -158,7 +163,8 @@ citations() {
 }
 
 # judge UNVENDORED INDEX CITATIONS: prints a finding per citation INDEX does
-# not hold, outside the UNVENDORED roots, and exits 1 when there is one.
+# not hold, outside the UNVENDORED roots INDEX does not hold either, and exits
+# 1 when there is one.
 judge() {
   awk -F '\t' '
     FNR == 1 { part++ }
@@ -184,7 +190,7 @@ judge() {
         if (root !~ /\./) { break }
         sub(/\.[0-9]+$/, "", root)
       }
-      if (!(canon in present) && under != "") { unchecked[under]++; next }
+      if (under != "" && !(under in present)) { unchecked[under]++; next }
       checked++
       if (!(canon in present)) {
         parent = canon
@@ -303,6 +309,15 @@ self_test() {
   expect 1 '/// ITI TF-2 §1:41.4.1.'
   expect 1 '/// PMIR §2:3.93.4 the feed.'
   expect 1 '/// ITI TF-1 §9.2 the ATNA chapter.'
+  expect 1 '/// the query of ITI TF-2 §3.38.4.1, which no text carries.'
+  # A cache-only text, once fetched, holds its sections to it.
+  mkdir -p "$work/.vendor-cache/ihe-iti-tf-vol2"
+  printf '<h2 id="3.55">3.55 Cross Gateway Patient Discovery [ITI-55]</h2>\n<h6 id="x">3.55.4.2.3 Expected Actions</h6>\n' \
+    > "$work/.vendor-cache/ihe-iti-tf-vol2/ITI-55.html"
+  expect 0 '/// the five cases of §3.55.4.2.3, from the cache.'
+  expect 0 '/// ITI-55 §3.55.4.2.3 and ITI TF-2 §3.55.'
+  expect 1 '/// ITI TF-2 §3.55.4.2.9, which the cached page does not hold.'
+  expect 1 '/// ITI-38 §3.55.4.2.3 names another transaction.'
   if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
