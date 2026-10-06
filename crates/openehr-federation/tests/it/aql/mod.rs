@@ -8,6 +8,7 @@
 #![cfg(feature = "aql")]
 
 mod aggregate;
+mod archetypes;
 mod attribute;
 mod comparable;
 mod dedup;

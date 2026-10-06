@@ -142,19 +142,22 @@ bearer_token_file = "/run/secrets/ferrofed/pix-token"
 # [pixm.namespaces]
 # "2.999.1" = "urn:oid:2.999.1"
 
-# Where the audit record of each PIXm, mCSD and PMIR transaction goes, as the
-# BALP AuditEvent each profile defines: "log" writes it to the ferrofed::audit
-# log target without a patient identifier; "repository" posts it to your ATNA
-# Audit Record Repository over the FHIR Feed of ITI-20, from a spool that
-# compose.yaml mounts at /var/lib/ferrofed.
+# Where the access record of each request that reaches patient data, and
+# the audit record of each PIXm, mCSD and PMIR transaction, go, as BALP
+# AuditEvents: posted to your ATNA Audit Record Repository over the FHIR Feed
+# of ITI-20, from a spool on the audit-spool volume compose.yaml mounts at
+# /var/lib/ferrofed. A production gateway with a registry refuses "log",
+# which names no caller and no patient (Regulation (EU) 2025/327 Annex II
+# 3.2).
 # https://ferrofed.eu/docs/operate/audit.html
 [audit]
-destination = "log"
-#
-# [audit.repository]
-# url = "https://arr.example.org/fhir"          # EDIT
-# hostname = "gateway.example.org"              # EDIT
-# spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+destination = "repository"
+
+[audit.repository]
+url = "https://arr.example.org/fhir"          # EDIT
+hostname = "gateway.example.org"              # EDIT
+spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+# When the repository asks for a client certificate:
 # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 

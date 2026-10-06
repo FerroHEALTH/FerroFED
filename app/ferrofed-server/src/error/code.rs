@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 56] = [
+    pub const GATEWAY: [Self; 57] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -66,6 +66,7 @@ impl Code {
         Self::SubjectUnavailable,
         Self::Overloaded,
         Self::RateLimited,
+        Self::AccessUnrecorded,
         Self::NaturalPersonRequired,
         Self::AuthenticationAssuranceInsufficient,
     ];
@@ -138,6 +139,7 @@ impl Code {
             Self::SubjectUnavailable => "subject-unavailable",
             Self::Overloaded => "overloaded",
             Self::RateLimited => "rate-limited",
+            Self::AccessUnrecorded => "access-unrecorded",
             Self::NaturalPersonRequired => "natural-person-required",
             Self::AuthenticationAssuranceInsufficient => "authentication-assurance-insufficient",
         }
@@ -200,7 +202,9 @@ impl Code {
             | Self::OperationRefused
             | Self::PatientContextMissing
             | Self::PatientConfinement => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable | Self::Overloaded => StatusCode::SERVICE_UNAVAILABLE,
+            Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
@@ -337,6 +341,9 @@ impl Code {
             Self::RateLimited => {
                 "this caller sent more requests than the gateway admits from one caller; retry after the time Retry-After names"
             }
+            Self::AccessUnrecorded => {
+                "the access could not be recorded, so its answer is withheld; a write may have reached the node, so read before writing again"
+            }
             Self::NaturalPersonRequired => {
                 "the access token names no natural person, and patient data is released to a person or for a professional the token names"
             }
@@ -415,8 +422,9 @@ mod tests {
             Code::SubjectUnavailable => Some(51),
             Code::Overloaded => Some(52),
             Code::RateLimited => Some(53),
-            Code::NaturalPersonRequired => Some(54),
-            Code::AuthenticationAssuranceInsufficient => Some(55),
+            Code::AccessUnrecorded => Some(54),
+            Code::NaturalPersonRequired => Some(55),
+            Code::AuthenticationAssuranceInsufficient => Some(56),
         }
     }
 
@@ -524,6 +532,7 @@ mod tests {
             (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
             (Code::Overloaded, StatusCode::SERVICE_UNAVAILABLE),
             (Code::RateLimited, StatusCode::TOO_MANY_REQUESTS),
+            (Code::AccessUnrecorded, StatusCode::SERVICE_UNAVAILABLE),
             (Code::NaturalPersonRequired, StatusCode::UNAUTHORIZED),
             (
                 Code::AuthenticationAssuranceInsufficient,

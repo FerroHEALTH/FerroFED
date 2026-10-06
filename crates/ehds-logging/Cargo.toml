@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ehds-logging"
+description = "The European logging software component of an EHR system under Regulation (EU) 2025/327: the Annex II 3.2 access record, the Article 14(1) categories and the map that classifies an access, and the record written as an IHE BALP AuditEvent"
+# The name is not reserved on crates.io yet, and it must be claimed before the
+# `publish` switch is turned on (no specification governs this: our own design).
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+documentation = "https://docs.rs/ehds-logging"
+readme = "README.md"
+keywords = ["ehds", "audit", "logging", "health", "balp"]
+categories = ["science"]
+# The workspace switch decides whether this crate is publishable
+# (no specification governs this: our own design); include is the packaged
+# content.
+publish.workspace = true
+include = ["src/**", "README.md", "LICENSE"]
+
+# One crate for the logging component the Regulation defines, with one feature
+# per record format (no specification governs this: our own design). The crate
+# depends on nothing in FerroFED and on no interoperability component, so the
+# two harmonised components stay independent of each other.
+[features]
+# The record written as an IHE BALP AuditEvent (BALP 1.1.4), through the
+# audit types of ihe-iti, and the sink that hands it to an ihe-iti audit
+# recorder, such as one that spools it for an ATNA Audit Record Repository.
+balp = ["dep:ihe-iti", "dep:url"]
+
+[dependencies]
+async-trait.workspace = true
+ihe-iti = { workspace = true, optional = true, features = ["balp"] }
+jiff.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The property that no access the map cannot classify exactly reads as of no
+# category.
+proptest.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+toml.workspace = true
+
+[lints]
+workspace = true

@@ -107,12 +107,13 @@ fn configuration(
 ) -> Result<Config, Box<dyn Error>> {
     let path = toml::Value::String(password_file.to_owned());
     let otlp = otlp_url();
+    let audit = crate::support::audit_toml();
     let text = format!(
         "[credentials.\"node-a-pub\"]\nbearer_token = \"{BEARER}\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
-         [metrics]\notlp_endpoint = \"{otlp}\"\n\n\
-         [audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{pix_url}\"\n\
+         [metrics]\notlp_endpoint = \"{otlp}\"\n{audit}\n\
+         [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
          [pixm.manager.credentials]\nbearer_token = \"{BEARER}\"\n\n{extra}"
     );
@@ -306,7 +307,8 @@ fn a_postgres_url_file_resolves_into_its_redacting_type() -> TestResult {
     let settings = Config::from_sources(
         Some(&format!(
             "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
-             [stored_queries]\nbackend = \"postgres\"\nurl_file = {path}\n"
+             [stored_queries]\nbackend = \"postgres\"\nurl_file = {path}\n{}",
+            crate::support::audit_toml()
         )),
         &BTreeMap::new(),
     )?
