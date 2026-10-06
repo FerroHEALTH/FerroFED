@@ -31,8 +31,11 @@
 
 # Operate
 
+- [A production deployment](operate/production.md)
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)
+- [Upgrading](operate/upgrading.md)
+  - [Rollback](operate/rollback.md)
 - [Configuration](operate/configuration.md)
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)

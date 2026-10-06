@@ -9,9 +9,12 @@
 # 1.1.0 (https://keepachangelog.com/en/1.1.0/).
 #
 # A fragment is changelog.d/<issue>-<kebab-slug>.<section>.md, where <section>
-# is added, changed, deprecated, removed, fixed or security, and its content is
-# one or more Markdown list items exactly as they read in CHANGELOG.md: a line
+# is upgrade, added, changed, deprecated, removed, fixed or security, and its
+# content is one or more Markdown list items exactly as they read in CHANGELOG.md: a line
 # that opens with "- ", continued by lines indented by at least two spaces.
+# An upgrade fragment says what an operator must change to upgrade, and is
+# assembled under "### Upgrade notes", first in its release: a section of our
+# own beside the six Keep a Changelog defines.
 # changelog.d/README.md is the format note and is never read as a fragment.
 #
 #   changelog.sh --check
@@ -20,7 +23,8 @@
 #   changelog.sh --assemble <version> <date>
 #       Writes a new "## [<version>] - <date>" section under a fresh, empty
 #       [Unreleased], holding the entries still under [Unreleased] followed by
-#       the fragments, section by section in the Keep a Changelog order; moves
+#       the fragments, section by section, Upgrade notes first and then the Keep a
+#       Changelog order; moves
 #       the [Unreleased] link reference on and adds the version's; then
 #       `git rm`s the fragments. Exit 1 on any defect, with nothing written.
 #   changelog.sh --self-test
@@ -31,10 +35,12 @@
 set -euo pipefail
 export LC_ALL=C
 
-# The Keep a Changelog 1.1.0 sections, in the order a release lists them.
-readonly SECTIONS=(added changed deprecated removed fixed security)
+# The sections, in the order a release lists them: the Upgrade notes an
+# operator reads before anything else (our own section), then the Keep a
+# Changelog 1.1.0 ones.
+readonly SECTIONS=(upgrade added changed deprecated removed fixed security)
 readonly FRAGMENT_DIR=changelog.d
-readonly NAME_RE='^[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.(added|changed|deprecated|removed|fixed|security)\.md$'
+readonly NAME_RE='^[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.(upgrade|added|changed|deprecated|removed|fixed|security)\.md$'
 
 die() {
   echo "changelog: $*" >&2
@@ -49,6 +55,10 @@ usage() {
 # title SECTION: the heading a section carries in CHANGELOG.md.
 title() {
   local section="$1"
+  if [[ "$section" == upgrade ]]; then
+    printf 'Upgrade notes'
+    return
+  fi
   printf '%s%s' "$(tr '[:lower:]' '[:upper:]' <<<"${section:0:1}")" "${section:1}"
 }
 
@@ -137,8 +147,9 @@ assemble() {
       heading = substr($0, 5)
       sub(/[[:space:]]+$/, "", heading)
       section = tolower(heading)
-      if (section !~ /^(added|changed|deprecated|removed|fixed|security)$/) {
-        print "changelog: [Unreleased] has a section \"" heading "\", which Keep a Changelog 1.1.0 does not define." > "/dev/stderr"
+      if (section == "upgrade notes") section = "upgrade"
+      if (section !~ /^(upgrade|added|changed|deprecated|removed|fixed|security)$/) {
+        print "changelog: [Unreleased] has a section \"" heading "\", which is neither Upgrade notes nor a Keep a Changelog 1.1.0 section." > "/dev/stderr"
         exit 1
       }
       next
@@ -292,6 +303,10 @@ self_test() {
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- An upgrade note written into CHANGELOG.md.
+
 ### Added
 
 - An entry written into CHANGELOG.md
@@ -313,6 +328,7 @@ EOF
   fragment 12-b.added.md '- Fragment 12-b.'
   fragment 7-y.changed.md '- Fragment 7-y.' '' ''
   fragment 5-x.security.md '- Fragment 5-x.'
+  fragment 9-u.upgrade.md '- Upgrade fragment 9-u.'
   stub_git add -A
   stub_git commit -q -m "the stub"
 
@@ -328,6 +344,11 @@ EOF
 ## [Unreleased]
 
 ## [0.0.2] - 2026-10-10
+
+### Upgrade notes
+
+- An upgrade note written into CHANGELOG.md.
+- Upgrade fragment 9-u.
 
 ### Added
 

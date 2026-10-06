@@ -140,7 +140,7 @@ opentelemetry_sdk = { workspace = true, features = ["testing"] }
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 wiremock.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util", "process"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util", "process", "io-util"] }
 tower.workspace = true
 
 [lints]

@@ -4,14 +4,15 @@
 # Overload protection
 
 One federated query becomes a request to every member it asks, so a busy
-gateway passes its load on to every CDR behind it. Three limits keep that in
-bounds:
+gateway passes its load on to every CDR behind it, and holds every answer
+it reads in memory. Four limits keep that in bounds:
 
 | Limit | Key | Default | Past it |
 |---|---|---|---|
 | Requests the gateway serves at once | `server.max_concurrent_requests` | `512` | `503 overloaded`, with `Retry-After` |
 | Requests one verified caller sends | `[server.caller_rate]` | off | `429 rate-limited`, with `Retry-After` |
 | Requests the gateway sends one member endpoint at once | `federation.max_in_flight_per_node` | `64` | the request waits; past its per-node deadline the member is `time-out` |
+| Bytes the gateway reads of one answer from a member or its token endpoint | `federation.max_node_answer_bytes` | `16777216` (16 MiB) | the answer is dropped unread and the member is `node-error` |
 
 `serve`, `config check` and a reload refuse a zero in any of them, naming the
 key. A reload that changes one logs it as needing a restart, like the rest
@@ -28,6 +29,7 @@ burst = 20                      # at once, after a quiet spell
 
 [federation]
 max_in_flight_per_node = 64     # per member endpoint, never shared between endpoints
+max_node_answer_bytes = 16777216  # of one answer; a longer one makes its member node-error
 ```
 
 ## The concurrency limit
@@ -81,6 +83,24 @@ One slow member therefore holds at most its own slots: requests to every
 other member go out at once. Each replica has its own caps, and a registry
 reload starts the new registry's caps while requests on the previous one
 finish under theirs.
+
+## The answer bound
+
+The gateway reads at most `max_node_answer_bytes` of one answer, from a
+member or from its token endpoint, whatever sent the request. An answer
+whose `Content-Length` is past the bound is dropped unread, and one sent
+without a length is read until it passes the bound and dropped then, so a
+member that answers without end holds at most the bound in memory per
+request. The member answered with nothing the gateway could use, so it is
+`node-error` in `meta.federation.endpoints[]`, with an `error` naming the
+bound (§11.1). Under the all-or-nothing default that fails the query with
+`424`; under `partial` the query answers with the other members' rows, and
+`complete` is `false` either way (§11.4). A routed request answers `424`
+with `node-error`.
+
+Set the bound above the largest page a member answers: a member's result
+set is the rows the query selects, and a routed read is the resource as the
+member holds it. A reload that changes it logs it as needing a restart.
 
 ## Counting the refusals
 

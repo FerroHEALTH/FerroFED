@@ -60,6 +60,14 @@ pub enum Error {
         /// The variable that was read.
         name: String,
     },
+    /// A deprecated key and the key that replaces it are both set.
+    #[error("{from} is deprecated and replaced by {to}, and both are set; keep {to}")]
+    Renamed {
+        /// The deprecated key.
+        from: String,
+        /// The key that replaces it.
+        to: String,
+    },
     /// A value and its `_file` sibling are both set.
     #[error("{key} is set together with {key}_file; set one of them")]
     Conflict {

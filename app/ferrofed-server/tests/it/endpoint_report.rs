@@ -28,11 +28,11 @@ use ferrofed_engine::fanout::{Budget, FederatedAnswer, fan_out};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::plan::{self, Selection};
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::aql::{Analysis, Context, Paging, Targeting, analyse};
 use openehr_federation::status::EndpointStatus;
-use openehr_its::rest::client::ReqwestTransport;
 use openehr_query::bind::Parameters;
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -98,7 +98,7 @@ async fn directed(
         .map(|id| EndpointId::new(*id))
         .collect::<Result<_, _>>()?;
     let targets = plan::unscoped(snapshot, Selection::Directed(&named), &query)?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
+    let transport = BoundedTransport::new(Duration::from_secs(10), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(snapshot, &transport, &BTreeMap::new())?;
     let budget = Budget::new(Duration::from_secs(5), Duration::from_secs(8))?;
     let conveyance = crate::support::conveyance()?;

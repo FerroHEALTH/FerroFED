@@ -11,10 +11,13 @@
 //! replicas inserting one pair at once store exactly one of them, in one
 //! statement, with no read before the write
 //! (<https://www.postgresql.org/docs/18/sql-insert.html#SQL-ON-CONFLICT>).
-//! The schema and the table are created when absent each time the store
-//! connects, under a transaction-level advisory lock, so replicas starting
-//! together do not race on the catalogue
+//! Each time the store connects, one transaction under a transaction-level
+//! advisory lock creates the schema when absent, reads the schema version
+//! [`VERSIONS`] records ([`schema`]), runs every migration past it in order
+//! and records the version it reached, so replicas starting together do not
+//! race on the catalogue
 //! (<https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS>).
+//! A database a newer FerroFED migrated is refused and left as it was.
 //!
 //! The client is `tokio-postgres`, on a thread of the store's own with a
 //! runtime of its own, because [`DefinitionStore`] is called where a thread
@@ -39,31 +42,55 @@ use tokio_postgres::config::{Host, SslMode};
 use tokio_postgres::{Client, Config, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
+use crate::stored::schema::{self, SchemaError};
+
 /// The schema the store's table lives in.
 pub const SCHEMA: &str = "ferrofed";
 
 /// The table, qualified by [`SCHEMA`].
 pub const TABLE: &str = "ferrofed.stored_query_definition";
 
-/// Creates the schema and the table when absent, one replica at a time.
+/// The table that records the schema version of each layout, qualified by
+/// [`SCHEMA`].
+pub const VERSIONS: &str = "ferrofed.schema_version";
+
+/// The key [`VERSIONS`] records the definitions' layout under.
+pub const LAYOUT: &str = "stored_query_definition";
+
+/// Takes the lock one replica migrates under, creates the schema when
+/// absent, and the table of schema versions.
 ///
-/// The schema is created only when the catalogue lacks it, so a role
-/// without `CREATE` on the database can use a schema made for it.
-const PREPARE: &str = "BEGIN;
-SELECT pg_advisory_xact_lock(x'666572726f666564'::bigint);
+/// It runs inside the transaction [`prepare`] opens, so the lock is held
+/// until that transaction ends. The schema is created only when the
+/// catalogue lacks it, so a role without `CREATE` on the database can use a
+/// schema made for it.
+const LOCK: &str = "SELECT pg_advisory_xact_lock(x'666572726f666564'::bigint);
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ferrofed') THEN
     CREATE SCHEMA ferrofed;
   END IF;
 END $$;
-CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
+CREATE TABLE IF NOT EXISTS ferrofed.schema_version (
+  layout text PRIMARY KEY,
+  version integer NOT NULL
+);";
+
+/// The schema version the definitions' layout records.
+const SELECT_VERSION: &str = "SELECT version FROM ferrofed.schema_version WHERE layout = $1";
+
+/// Records the schema version a migration reached.
+const RECORD_VERSION: &str = "INSERT INTO ferrofed.schema_version (layout, version) VALUES ($1, $2)
+ON CONFLICT (layout) DO UPDATE SET version = EXCLUDED.version";
+
+/// Version 1: the definitions table. A database written before versions were
+/// recorded holds it already.
+const MIGRATION_1: &str = "CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
   name text NOT NULL,
   version text NOT NULL,
   saved text NOT NULL,
   aql text NOT NULL,
   PRIMARY KEY (name, version)
-);
-COMMIT;";
+);";
 
 /// Stores a definition unless its name and version are held.
 const INSERT: &str = "INSERT INTO ferrofed.stored_query_definition (name, version, saved, aql)
@@ -311,14 +338,61 @@ async fn within<T>(future: impl Future<Output = Result<T, StoreError>>) -> Resul
 /// Opens a connection, drives it on the store's runtime, and creates the
 /// schema and the table when absent.
 async fn connect(config: &Config, tls: &MakeRustlsConnect) -> Result<Client, StoreError> {
-    let (client, connection) = config.connect(tls.clone()).await.map_err(backend)?;
+    let (mut client, connection) = config.connect(tls.clone()).await.map_err(backend)?;
     tokio::spawn(async move {
         if let Err(error) = connection.await {
             tracing::warn!(error = %error, "the stored-query store's connection closed");
         }
     });
-    client.batch_execute(PREPARE).await.map_err(backend)?;
+    prepare(&mut client).await?;
     Ok(client)
+}
+
+/// Creates the schema when absent and migrates the definitions' layout to
+/// [`schema::CURRENT`], in one transaction under the advisory lock; a
+/// refusal rolls it back, so a database a newer FerroFED migrated is left as
+/// it was.
+async fn prepare(client: &mut Client) -> Result<(), StoreError> {
+    let transaction = client.transaction().await.map_err(backend)?;
+    transaction.batch_execute(LOCK).await.map_err(backend)?;
+    let found = transaction
+        .query_opt(SELECT_VERSION, &[&LAYOUT])
+        .await
+        .map_err(backend)?
+        .map(|row| row.try_get::<usize, i32>(0))
+        .transpose()
+        .map_err(corrupt)?
+        .unwrap_or(0);
+    let found = u32::try_from(found).map_err(corrupt)?;
+    let pending = schema::pending("PostgreSQL", found).map_err(schema_error)?;
+    for step in pending {
+        transaction
+            .batch_execute(migration(step)?)
+            .await
+            .map_err(backend)?;
+        let reached = i32::try_from(step).map_err(corrupt)?;
+        transaction
+            .execute(RECORD_VERSION, &[&LAYOUT, &reached])
+            .await
+            .map_err(backend)?;
+    }
+    transaction.commit().await.map_err(backend)
+}
+
+/// The statements that bring the layout to version `step`.
+fn migration(step: u32) -> Result<&'static str, StoreError> {
+    match step {
+        1 => Ok(MIGRATION_1),
+        version => Err(schema_error(SchemaError::NoMigration {
+            store: "PostgreSQL",
+            version,
+        })),
+    }
+}
+
+/// The backend failure a schema refusal is.
+fn schema_error(error: SchemaError) -> StoreError {
+    StoreError::Backend(Box::new(error))
 }
 
 /// Inserts `definition` unless its name and version are held.
@@ -391,7 +465,8 @@ fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError 
 
 #[cfg(test)]
 mod tests {
-    use super::{PostgresError, PostgresStore, parses};
+    use super::{MIGRATION_1, PostgresError, PostgresStore, migration, parses};
+    use crate::stored::schema::{CURRENT, SchemaError};
     use ferrofed_registry::definition::store::StoreError;
     use ferrofed_registry::secret::SecretUrl;
 
@@ -406,6 +481,21 @@ mod tests {
         for refused in ["postgres://a:b@host:notaport/db", "host='unterminated"] {
             assert!(!parses(&SecretUrl::new(refused)), "{refused}");
         }
+    }
+
+    #[test]
+    fn every_version_up_to_the_current_one_has_its_migration() {
+        assert_eq!(MIGRATION_1, migration(1).unwrap());
+        for version in 1..=CURRENT {
+            assert!(migration(version).is_ok(), "version {version}");
+        }
+        let Err(StoreError::Backend(missing)) = migration(CURRENT + 1) else {
+            panic!("no migration past the current version");
+        };
+        assert!(matches!(
+            missing.downcast_ref::<SchemaError>(),
+            Some(SchemaError::NoMigration { .. })
+        ));
     }
 
     #[test]

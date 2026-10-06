@@ -177,7 +177,8 @@ page: our own design.
 
 - [ ] **Size the overload limits from what the members can take.**
   `server.max_concurrent_requests` (512), `[server.caller_rate]` (off by
-  default) and `federation.max_in_flight_per_node` (64)
+  default), `federation.max_in_flight_per_node` (64) and
+  `federation.max_node_answer_bytes` (16 MiB)
   ([Overload protection](overload.md)). Turn the per-caller rate on.
 - [ ] **Keep the request limits.** `server.body_limit_bytes` (1 MiB) and
   `server.request_timeout_ms` (30 s), with the proxy's own timeout longer,

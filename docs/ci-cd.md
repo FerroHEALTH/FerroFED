@@ -163,7 +163,18 @@ claim of its own, and that the pod's grace period outlasts the drain delay
 plus the drain, and runs `ferrofed config check` over it with a
 synthetic file for each secret and a synthetic ES384 signing key, then
 without the `[signing]` table, which it must refuse. Locally, pass any
-`ferrofed` build for the host.
+`ferrofed` build for the host. It then runs
+`scripts/checks/production-guide.sh` with the musl binary: it assembles every
+TOML block of the book's production guide into `ferrofed.toml` and
+`registry.toml`, holds `deploy/nginx/ferrofed.conf` to their listen address,
+base path, JWK Set and PMIR feed routes, runs `ferrofed config check` over
+them in the pinned base image, and refuses them without `[audit]
+destination`. It then serves them with no network, runs the nginx file in the
+gateway's network namespace on the image the `docs/VERSIONS.md` row pins, and
+checks each route through the proxy, the `Strict-Transport-Security` header,
+and that the proxy's access log names the gateway's request id and never a
+query string. Locally, pass a static Linux build for the host's architecture,
+as for `release-compose.sh`; without one the script runs its static checks.
 
 `features (cargo-hack)` lints every feature of the published crates, the
 server, the identity crate and the engine on its own: `cargo hack clippy

@@ -105,8 +105,8 @@ for failing its healthcheck; the healthcheck tells `--wait` and you whether the
 gateway is ready.
 
 To move to a newer release, download its `compose.yaml` over the old one and
-run `docker compose up --wait`. Read the release's changelog for any key that
-changed in `ferrofed.toml`.
+run `docker compose up --wait`. Read the release's Upgrade notes first, and
+follow [Upgrading](upgrading.md); [Rollback](rollback.md) says how to go back.
 
 The files carry no development cross-reference. That table is for trials only,
 and the quickstart below carries it; a deployment resolves patients through

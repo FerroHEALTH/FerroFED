@@ -21,7 +21,7 @@
 //! | was not reachable: a refused connection or a broken stream | `offline` |
 //! | did not answer before the deadline | `time-out` |
 //! | answered `403` with an ITS-REST `Error` whose `code` is one of the endpoint's consent refusal codes in the registry | `consent-denied`, with its latency |
-//! | answered with any other failure: a documented error, an undocumented status, a body that is not a result set, rows shorter than the query selects | `node-error` |
+//! | answered with any other failure: a documented error, an undocumented status, a body that is not a result set, a body longer than the gateway reads of one answer ([`oversized`]), rows shorter than the query selects | `node-error` |
 //!
 //! ITS-REST defines no consent signal, so a refusal is `consent-denied` only
 //! where the registry names the code the node marks it with (§11.1, N27; no
@@ -67,6 +67,7 @@ pub mod definition;
 pub(crate) mod dpop;
 mod gate;
 mod on_behalf;
+pub mod oversized;
 mod query;
 pub mod reported;
 mod transports;
@@ -317,7 +318,9 @@ impl Contact {
     #[must_use]
     pub fn of_forward_error(error: &ForwardError) -> Self {
         match error {
-            ForwardError::Refused { status, .. } => Self::Answered(*status),
+            ForwardError::Refused { status, .. } | ForwardError::Oversized { status, .. } => {
+                Self::Answered(*status)
+            }
             ForwardError::Capped(_) => Self::Capped,
             ForwardError::TimeOut { .. }
             | ForwardError::Unreachable { .. }
@@ -356,9 +359,14 @@ impl Contact {
     /// no answer, and [`Contact::Unsent`] for a failure on the gateway's
     /// side. A deadline that passed, or a proof that could not be made, after
     /// an earlier send of the call left, as the error's `sent` says, is
-    /// [`Contact::Silent`]: that request left and got no answer.
+    /// [`Contact::Silent`]: that request left and got no answer. An answer
+    /// longer than the gateway reads ([`oversized::Oversized`]) is the
+    /// node's status.
     #[must_use]
     pub fn of_client_error(error: &ClientError) -> Self {
+        if let Some(over) = oversized::Oversized::of_client_error(error) {
+            return Self::Answered(over.status());
+        }
         match error {
             ClientError::Unauthorized { .. } => Self::Answered(StatusCode::UNAUTHORIZED),
             ClientError::Forbidden { .. } => Self::Answered(StatusCode::FORBIDDEN),

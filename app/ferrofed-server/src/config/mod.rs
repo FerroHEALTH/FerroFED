@@ -21,6 +21,7 @@ use crate::binding::development::DevSection;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
 pub mod auth;
+pub mod deprecated;
 pub mod error;
 pub mod grant;
 pub mod limits;
@@ -120,6 +121,10 @@ pub struct Config {
     /// (`[audit]`, #486).
     #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::Audit,
+    /// The deprecated keys the configuration set, already read under their
+    /// new names; never read from the file itself.
+    #[serde(skip)]
+    pub deprecated: Vec<deprecated::Deprecated>,
 }
 
 impl Default for Config {
@@ -148,6 +153,7 @@ impl Default for Config {
             auth: auth::Auth::default(),
             #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::Audit::default(),
+            deprecated: Vec::new(),
         }
     }
 }
@@ -277,6 +283,8 @@ pub struct Federation {
     /// still waiting then is `time-out` with nothing sent (§11.5, N38). Zero is
     /// refused.
     pub max_in_flight_per_node: u32,
+    /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
+    pub max_node_answer_bytes: usize,
 }
 
 /// How a member the Step-1 consent pre-filter excludes is reported,
@@ -410,6 +418,7 @@ impl Default for Federation {
             fan_out_stored_queries: false,
             consent: ConsentReporting::default(),
             max_in_flight_per_node: 64,
+            max_node_answer_bytes: 16 * 1024 * 1024,
         }
     }
 }

@@ -49,6 +49,13 @@ user or password holding a control character such as a newline (RFC 7617
 §2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
+A key a release renamed is still read under its old name for at least one
+release. `config check` prints a `warning:` line for it, naming the key that
+replaces it and the release that will refuse it, and `serve` logs the same
+at start; setting both the old and the new key is refused
+([the compatibility policy](upgrading.md#the-compatibility-policy)). No key
+is deprecated in this release.
+
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first
@@ -118,7 +125,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
-| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node` | the overload limits | [Overload protection](overload.md) |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |

@@ -36,6 +36,7 @@ use std::fmt;
 use crate::conveyance::ConveyanceError;
 use crate::declared::{self, Refusal};
 use crate::dispatch::cap::{Capped, Slot};
+use crate::dispatch::oversized::Oversized;
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
@@ -223,6 +224,23 @@ pub enum ForwardError {
         #[source]
         source: Box<ClientError>,
     },
+    /// The node answered with a body longer than the gateway reads of one
+    /// answer, so the answer was not read and has nothing to pass on
+    /// ([`Oversized`], §11.1).
+    #[error(
+        "endpoint {endpoint} answered {status} with a body longer than the {limit} bytes the gateway reads of one answer"
+    )]
+    Oversized {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// The node's status.
+        status: StatusCode,
+        /// The most bytes the gateway reads of one answer.
+        limit: usize,
+        /// What the client runtime reported.
+        #[source]
+        source: Box<ClientError>,
+    },
     /// The node refused the gateway's onward credentials.
     #[error("endpoint {endpoint} refused the gateway's onward credentials with {status}")]
     Refused {
@@ -369,8 +387,9 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// request could not leave, [`ForwardError::Expired`] when the deadline
     /// passed before it left, [`ForwardError::Capped`] when the endpoint's
     /// in-flight cap stayed full until the deadline, [`ForwardError::TimeOut`] and
-    /// [`ForwardError::Unreachable`] when the node gave no answer, and
-    /// [`ForwardError::Refused`] when it answered `401`.
+    /// [`ForwardError::Unreachable`] when the node gave no answer,
+    /// [`ForwardError::Refused`] when it answered `401`, and
+    /// [`ForwardError::Oversized`] when its answer ran past the read bound.
     pub async fn forward_held(
         &self,
         request: HeldRequest,
@@ -592,6 +611,14 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// then the node's time-out (RFC 9449 §9).
     fn unanswered(&self, error: ClientError, options: &DispatchOptions) -> ForwardError {
         let endpoint = self.endpoint().clone();
+        if let Some(over) = Oversized::of_client_error(&error) {
+            return ForwardError::Oversized {
+                endpoint,
+                status: over.status(),
+                limit: over.limit(),
+                source: Box::new(error),
+            };
+        }
         let contacted = dpop::sent_before(&error);
         match error {
             ClientError::DeadlineElapsed { .. } if contacted => ForwardError::TimeOut {

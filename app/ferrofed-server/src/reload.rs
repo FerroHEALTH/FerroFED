@@ -557,6 +557,9 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("federation.max_in_flight_per_node", |boot, fresh| {
         boot.federation.max_in_flight_per_node != fresh.federation.max_in_flight_per_node
     }),
+    ("federation.max_node_answer_bytes", |boot, fresh| {
+        boot.federation.max_node_answer_bytes != fresh.federation.max_node_answer_bytes
+    }),
     ("federation.fan_out_template_upload", |boot, fresh| {
         boot.federation.fan_out_template_upload != fresh.federation.fan_out_template_upload
     }),

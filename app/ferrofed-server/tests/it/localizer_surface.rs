@@ -28,13 +28,13 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::localization::LocalizationPolicy;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{HeaderValue, Request, StatusCode, header};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::ReqwestTransport;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -152,7 +152,7 @@ fn scripted(
     (script, on_failure): (Script, OnFailure),
 ) -> Result<Built, Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let asked = Arc::new(AtomicUsize::new(0));
     let localizer = Scripted {
@@ -359,7 +359,7 @@ async fn a_gateway_with_no_localizer_reports_none() -> TestResult {
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,

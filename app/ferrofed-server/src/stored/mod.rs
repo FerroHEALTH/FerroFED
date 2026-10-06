@@ -34,6 +34,7 @@ pub mod embedded;
 pub mod files;
 #[cfg(feature = "postgres")]
 pub mod postgres;
+pub mod schema;
 
 /// Why the registry refuses a definition's text.
 #[derive(Debug, thiserror::Error)]
