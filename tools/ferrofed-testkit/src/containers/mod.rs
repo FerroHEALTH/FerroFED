@@ -9,15 +9,13 @@
 //! against (§16): two FerroEHR instances, node A and node B, each stamping its
 //! own `system_id`, on one PostgreSQL server that holds a database per node,
 //! and [`two_nodes`] puts a [`CapturingProxy`] in front of each. Every image
-//! is pinned by tag and digest in a [`PinnedImage`] constant, which
-//! `docs/VERSIONS.md` repeats and `scripts/checks/versions.sh` compares.
+//! is pinned by tag and digest in a [`PinnedImage`](images::PinnedImage)
+//! constant of [`images`], which `docs/VERSIONS.md` repeats and
+//! `scripts/checks/versions.sh` compares.
 //!
-//! A database per node, never a schema per node: FerroEHR creates fixed
-//! schema names in the database it connects to, so two nodes in one database
-//! would share their tables. The database server is the same init script the
-//! compose quickstart mounts, [`NODE_DATABASES_SCRIPT`]. [`postgres`] starts
-//! the same server alone, its port published to the host, for the gateway's
-//! own PostgreSQL store, a database per use.
+//! [`database`] starts the PostgreSQL server the nodes share, and the same
+//! server alone for the gateway's own PostgreSQL store. [`restricted`] starts
+//! a FerroEHR node with its access controls on.
 //!
 //! The node profile also runs against a second CDR product, EHRbase, which
 //! [`ehrbase`] starts on its own pinned database image.
@@ -33,16 +31,21 @@
 //! it runs: our own design.
 
 use crate::proxy::{CapturingProxy, ProxyError};
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
-use testcontainers::core::{Healthcheck, IntoContainerPort, WaitFor};
+use testcontainers::core::{Healthcheck, IntoContainerPort};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
+use testcontainers::{ContainerAsync, ContainerRequest, GenericImage, ImageExt};
 
+use database::database_server;
+use images::FERROEHR;
+
+pub mod database;
 pub mod ehrbase;
+pub mod images;
 pub mod keycloak;
+pub mod restricted;
 pub mod santempi;
 
 /// The environment variable that admits the container-backed tests.
@@ -94,24 +97,12 @@ const NODE_A_DATABASE: &str = "ferroehr_a";
 const NODE_B_DATABASE: &str = "ferroehr_b";
 
 /// Returns the development password of the login role `name`, the one
-/// [`NODE_DATABASES_SCRIPT`] gives every role it creates: the name followed by
-/// `_example`.
+/// [`database::NODE_DATABASES_SCRIPT`] gives every role it creates: the name
+/// followed by `_example`.
 #[must_use]
 pub fn role_password(name: &str) -> String {
     format!("{name}_example")
 }
-
-/// The init script that adds a database per node to the FerroEHR PostgreSQL
-/// image, shared with the compose quickstart.
-pub const NODE_DATABASES_SCRIPT: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../docker/postgres/20-ferrofed-node-databases.sh"
-);
-
-/// Where the image's entrypoint finds [`NODE_DATABASES_SCRIPT`]: after the
-/// image's own `10-ferroehr-init.sh`, because the entrypoint runs the init
-/// scripts in sorted order.
-const NODE_DATABASES_TARGET: &str = "/docker-entrypoint-initdb.d/20-ferrofed-node-databases.sh";
 
 /// How long the readiness poll of a CDR waits before it gives up. A cold
 /// runner pulls both images and migrates the database first.
@@ -141,118 +132,6 @@ static NETWORK_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 pub fn e2e_enabled() -> bool {
     std::env::var(E2E_GATE).is_ok_and(|value| value == E2E_GATE_VALUE)
 }
-
-/// One container image, pinned by tag and by digest.
-///
-/// The digest is what Docker resolves; the tag travels beside it so a reader
-/// sees which release the digest is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PinnedImage {
-    /// The repository, registry included for anything but Docker Hub.
-    pub repository: &'static str,
-    /// The tag the digest was published under.
-    pub tag: &'static str,
-    /// The `sha256:` digest of the image index.
-    pub digest: &'static str,
-}
-
-impl PinnedImage {
-    /// Returns the reference Docker resolves this image by.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let reference = ferrofed_testkit::containers::FERROEHR.reference();
-    /// assert!(reference.starts_with("ghcr.io/ferrohealth/ferroehr:"));
-    /// assert!(reference.contains("@sha256:"));
-    /// ```
-    #[must_use]
-    pub fn reference(&self) -> String {
-        format!("{}:{}@{}", self.repository, self.tag, self.digest)
-    }
-
-    /// Returns the image with the digest in the tag position, which is how
-    /// `testcontainers` spells a reference (`name:tag`).
-    fn image(&self) -> GenericImage {
-        GenericImage::new(
-            self.repository.to_owned(),
-            format!("{}@{}", self.tag, self.digest),
-        )
-    }
-}
-
-/// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
-pub const FERROEHR: PinnedImage = PinnedImage {
-    repository: "ghcr.io/ferrohealth/ferroehr",
-    tag: "4.3.3",
-    digest: "sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f",
-};
-
-/// The database image FerroEHR documents, which carries the role, the
-/// database and the extensions its migrations expect.
-pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
-    repository: "ghcr.io/ferrohealth/ferroehr-postgres",
-    tag: "4.3.3",
-    digest: "sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa",
-};
-
-/// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the
-/// node profile runs against beside FerroEHR.
-pub const EHRBASE: PinnedImage = PinnedImage {
-    repository: "ehrbase/ehrbase",
-    tag: "2.36.0",
-    digest: "sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a",
-};
-
-/// The database image EHRbase documents beside that release, which creates
-/// its database, its two login roles and its schemas.
-pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
-    repository: "ehrbase/ehrbase-v2-postgres",
-    tag: "16.2",
-    digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
-};
-
-/// SanteMPI, SanteSuite's open-source master patient index, which answers
-/// PIXm ITI-83 and takes the PMIR ITI-93 feed: the deployable PIX Manager
-/// the identity binding is verified against.
-pub const SANTEMPI: PinnedImage = PinnedImage {
-    repository: "santesuite/santedb-mpi",
-    tag: "2.5.12",
-    digest: "sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207",
-};
-
-/// The PostgreSQL SanteMPI runs on: SanteSuite's compose file names the
-/// official image, and this is the release line current when [`SANTEMPI`]
-/// was published.
-pub const SANTEMPI_POSTGRES: PinnedImage = PinnedImage {
-    repository: "postgres",
-    tag: "15.19",
-    digest: "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
-};
-
-/// The Maven image the Federation Tier reference implementation is built
-/// in, on the Java release its build declares (`java.version` 21).
-pub const MAVEN: PinnedImage = PinnedImage {
-    repository: "maven",
-    tag: "3.9.16-eclipse-temurin-21",
-    digest: "sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320",
-};
-
-/// The Java runtime image the reference implementation runs on, and the
-/// Keycloak recipe's admin CLI.
-pub const TEMURIN_JRE: PinnedImage = PinnedImage {
-    repository: "eclipse-temurin",
-    tag: "21.0.12.1_1-jre-noble",
-    digest: "sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c",
-};
-
-/// Keycloak, the identity provider the production guide's issuer recipe is
-/// written for and [`keycloak`](mod@keycloak) applies.
-pub const KEYCLOAK: PinnedImage = PinnedImage {
-    repository: "quay.io/keycloak/keycloak",
-    tag: "26.8.0",
-    digest: "sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc",
-};
 
 /// A container could not be started, or did not become usable.
 #[derive(Debug, thiserror::Error)]
@@ -451,112 +330,6 @@ pub async fn ferroehr(system_id: &'static str) -> Result<Node, HarnessError> {
     ferroehr_on(&database, NODE_A_DATABASE, system_id).await
 }
 
-/// A started PostgreSQL server the host reaches, holding one database per
-/// name it was started with, torn down when it is dropped.
-#[derive(Debug)]
-pub struct Postgres {
-    /// The server.
-    server: DatabaseServer,
-    /// The host the server's port is published on.
-    host: String,
-    /// The published port.
-    port: u16,
-}
-
-impl Postgres {
-    /// Returns the connection URL of the database `name`, as its own login
-    /// role, with TLS off: the harness server has no certificate.
-    #[must_use]
-    pub fn url(&self, name: &str) -> String {
-        format!(
-            "postgres://{name}:{}@{}:{}/{name}?sslmode=disable",
-            role_password(name),
-            self.host,
-            self.port
-        )
-    }
-
-    /// Returns the server's container.
-    #[must_use]
-    pub fn container(&self) -> &ContainerAsync<GenericImage> {
-        &self.server.container
-    }
-
-    /// Returns the host port the server is published on, which a container
-    /// reaches through the Docker host gateway.
-    #[must_use]
-    pub fn port(&self) -> u16 {
-        self.port
-    }
-}
-
-/// Starts one PostgreSQL server the host reaches, holding a database per
-/// name.
-///
-/// It holds the database `first` and one more for each of `others`, each
-/// owned by a login role of the same name whose development password is
-/// [`role_password`]. The server is the FerroEHR database image the nodes run, built on
-/// PostgreSQL 18.6, so a test of FerroFED's own PostgreSQL use runs on the
-/// release `docs/VERSIONS.md` pins, one database per use.
-///
-/// # Errors
-///
-/// Returns [`HarnessError::Container`] when Docker refuses the container or
-/// its port.
-pub async fn postgres(first: &str, others: &[&str]) -> Result<Postgres, HarnessError> {
-    let server = database_server(first, others).await?;
-    let image = FERROEHR_POSTGRES.repository;
-    let host = server
-        .container
-        .get_host()
-        .await
-        .map_err(|source| HarnessError::Container { image, source })?
-        .to_string();
-    let port = server
-        .container
-        .get_host_port_ipv4(POSTGRES_PORT.tcp())
-        .await
-        .map_err(|source| HarnessError::Container { image, source })?;
-    Ok(Postgres { server, host, port })
-}
-
-/// Starts the FerroEHR PostgreSQL image with the database `first` and one
-/// more for each of `others`, each owned by a login role of the same name
-/// whose development password is [`role_password`].
-///
-/// The image's own init script creates `first`, and
-/// [`NODE_DATABASES_SCRIPT`] runs it once more for each of `others`.
-async fn database_server(first: &str, others: &[&str]) -> Result<DatabaseServer, HarnessError> {
-    let (network, host) = names("ferroehr");
-    let container = FERROEHR_POSTGRES
-        .image()
-        .with_exposed_port(POSTGRES_PORT.tcp())
-        .with_wait_for(WaitFor::healthcheck())
-        .with_health_check(postgres_health_check(first, first))
-        .with_copy_to(
-            CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
-            Path::new(NODE_DATABASES_SCRIPT),
-        )
-        .with_env_var("POSTGRES_PASSWORD", "postgres")
-        .with_env_var("PG_INIT_USER", first)
-        .with_env_var("PG_INIT_PASSWORD", role_password(first))
-        .with_env_var("PG_INIT_DB", first)
-        .with_env_var("FERROFED_NODE_DATABASES", others.join(" "))
-        .with_network(network.clone())
-        .with_container_name(host.clone())
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: FERROEHR_POSTGRES.repository,
-            source,
-        })?;
-    Ok(DatabaseServer {
-        container,
-        network,
-        host,
-    })
-}
-
 /// Starts FerroEHR as `system_id` on the database `name` of `database` and
 /// waits for its readiness endpoint.
 async fn ferroehr_on(
@@ -598,78 +371,13 @@ fn ferroehr_request(
         .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
 }
 
-/// A synthetic user of a node [`ferroehr_restricted`] starts.
+/// A synthetic user of a node [`restricted::ferroehr_restricted`] starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HarnessUser {
     /// The Basic user name.
     pub user: &'static str,
     /// The Basic password, a synthetic development value.
     pub password: &'static str,
-}
-
-/// The administrator of a restricted node, whose role reaches every EHR.
-pub const RESTRICTED_ADMIN: HarnessUser = HarnessUser {
-    user: "harness-admin",
-    password: "harness-admin-example",
-};
-
-/// The clinician of a restricted node, whose role reaches no EHR without
-/// access settings.
-pub const RESTRICTED_CLINICIAN: HarnessUser = HarnessUser {
-    user: "harness-clinician",
-    password: "harness-clinician-example",
-};
-
-/// Where a restricted node reads [`RESTRICTED_CONFIG`] from.
-const RESTRICTED_CONFIG_TARGET: &str = "/tmp/ferrofed-harness-restricted.toml";
-
-/// The configuration file of a restricted node: its two Basic users, each
-/// password stored as the Argon2id hash FerroEHR requires, with cost
-/// parameters above the floor it checks at boot. The users are an array of
-/// tables, which only a file can carry.
-const RESTRICTED_CONFIG: &str = r#"[[auth.basic.users]]
-username = "harness-admin"
-password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1h$t/ra6Wz0qdF31frrVsd1pXhVK2mQdTQLx53fDeIgDS8"
-roles = ["ADMIN"]
-
-[[auth.basic.users]]
-username = "harness-clinician"
-password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1j$eBo26o4ip9ZdPKtCbzkJIjvpp+SfoLqTK0a07Qw6jcU"
-roles = ["USER"]
-"#;
-
-/// Starts FerroEHR as `system_id` on a database server of its own with its
-/// access controls on, and waits for its readiness endpoint.
-///
-/// Basic authentication admits [`RESTRICTED_ADMIN`] and
-/// [`RESTRICTED_CLINICIAN`], the role gate is on, and
-/// `authz.rbac.ehr_access_default` is `restricted`: an EHR with no access
-/// settings, which every new EHR is, reaches the administrator alone, so the
-/// node refuses the clinician by a decision of its own. The node profile's
-/// access check reads that decision (§13, N26).
-///
-/// # Errors
-///
-/// Returns [`HarnessError::Container`] when Docker refuses a container and
-/// [`HarnessError::NotReady`] when the CDR does not become ready in time.
-pub async fn ferroehr_restricted(system_id: &'static str) -> Result<Node, HarnessError> {
-    let database = Arc::new(database_server(NODE_A_DATABASE, &[]).await?);
-    let server = ferroehr_request(&database, NODE_A_DATABASE, system_id)
-        .with_copy_to(
-            RESTRICTED_CONFIG_TARGET,
-            RESTRICTED_CONFIG.as_bytes().to_vec(),
-        )
-        .with_env_var("FERROEHR_CONFIG", RESTRICTED_CONFIG_TARGET)
-        .with_env_var("FERROEHR__AUTH__ENABLED", "true")
-        .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "true")
-        .with_env_var("FERROEHR__AUTHZ__RBAC__EHR_ACCESS_DEFAULT", "restricted")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: FERROEHR.repository,
-            source,
-        })?;
-    ready(FERROEHR_PRODUCT, system_id, server, database).await
 }
 
 /// Returns a network name and a database server container name for a node

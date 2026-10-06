@@ -22,7 +22,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_server::stored::postgres::{LAYOUT, PostgresStore, TABLE, VERSIONS};
 use ferrofed_server::stored::schema::{self, SchemaError};
-use ferrofed_testkit::containers;
+use ferrofed_testkit::containers::{self, database};
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
@@ -91,7 +91,7 @@ async fn the_postgresql_store_passes_the_store_suite() -> TestResult {
         .collect();
     let (first, others) = databases.split_first().ok_or("one database or more")?;
     let others: Vec<&str> = others.iter().map(String::as_str).collect();
-    let server = containers::postgres(first, &others).await?;
+    let server = database::postgres(first, &others).await?;
     for ((scenario, run), database) in SCENARIOS.into_iter().zip(&databases) {
         let url = SecretUrl::new(server.url(database));
         let open = || -> Result<Box<dyn DefinitionStore>, StoreError> {
@@ -113,7 +113,7 @@ async fn two_gateways_racing_one_new_version_store_exactly_one() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = containers::postgres("stored_race", &[]).await?;
+    let server = database::postgres("stored_race", &[]).await?;
     let url = server.url("stored_race");
     let dir = tempfile::tempdir()?;
     let members = ("http://a.invalid", "http://b.invalid");
@@ -167,7 +167,7 @@ async fn a_version_one_instance_stored_is_run_by_name_at_the_other() -> TestResu
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = containers::postgres("stored_shared", &[]).await?;
+    let server = database::postgres("stored_shared", &[]).await?;
     let url = server.url("stored_shared");
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
@@ -227,7 +227,7 @@ async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestR
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = containers::postgres("stored_literal", &[]).await?;
+    let server = database::postgres("stored_literal", &[]).await?;
     let url = server.url("stored_literal");
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
@@ -319,7 +319,7 @@ async fn a_database_written_before_versions_were_recorded_is_migrated_and_keeps_
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = containers::postgres("stored_legacy", &[]).await?;
+    let server = database::postgres("stored_legacy", &[]).await?;
     let url = server.url("stored_legacy");
     executed(
         &url,
@@ -344,7 +344,7 @@ async fn a_database_a_newer_ferrofed_migrated_is_refused_and_left_as_it_was() ->
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = containers::postgres("stored_newer", &[]).await?;
+    let server = database::postgres("stored_newer", &[]).await?;
     let url = server.url("stored_newer");
     let secret = SecretUrl::new(url.clone());
     drop(tokio::task::block_in_place(|| {

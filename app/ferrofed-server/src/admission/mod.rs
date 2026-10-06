@@ -207,7 +207,7 @@ fn generation(
     }
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
     for (one, answer) in created.iter().zip(read) {
-        lines.push(uuid_form(&one.ehr_id));
+        lines.push(uuid_form(&one.ehr_id, &one.ehr_id));
         if let Ok(ehr) = answer
             && !ehr.ehr_id.value().eq_ignore_ascii_case(&one.ehr_id)
         {
@@ -247,7 +247,7 @@ fn generation(
 /// What the form of one `ehr_id` shows about its generation.
 // NOTE: §12b.2 names version-4 UUIDs and no other scheme, so another UUID
 // version is left to the operator's judgement of equivalence.
-fn uuid_form(ehr_id: &str) -> (Verdict, String) {
+fn uuid_form(ehr_id: &str, named: &str) -> (Verdict, String) {
     let Some(uuid) = Uuid::try_parse(ehr_id)
         .ok()
         .filter(|uuid| uuid.hyphenated().to_string().eq_ignore_ascii_case(ehr_id))
@@ -255,25 +255,25 @@ fn uuid_form(ehr_id: &str) -> (Verdict, String) {
         return (
             Verdict::Fail,
             format!(
-                "{ehr_id} is not a UUID in its hyphenated form; §12b.2 asks for version-4 UUIDs, and a sequential, short or deployment-local ehr_id is not admitted without remediation"
+                "{named} is not a UUID in its hyphenated form; §12b.2 asks for version-4 UUIDs, and a sequential, short or deployment-local ehr_id is not admitted without remediation"
             ),
         );
     };
     match (uuid.get_version(), uuid.get_variant()) {
         (Some(Version::Random), Variant::RFC4122) => (
             Verdict::Pass,
-            format!("{ehr_id} is a version-4 UUID (RFC 9562 §5.4)"),
+            format!("{named} is a version-4 UUID (RFC 9562 §5.4)"),
         ),
         (Some(_), Variant::RFC4122) => (
             Verdict::CannotCheck,
             format!(
-                "{ehr_id} is a version-{} UUID; §12b.2 admits a scheme other than version 4 only with equivalent collision resistance and no coordination requirement, which the operator judges",
+                "{named} is a version-{} UUID; §12b.2 admits a scheme other than version 4 only with equivalent collision resistance and no coordination requirement, which the operator judges",
                 uuid.get_version_num()
             ),
         ),
         _ => (
             Verdict::Fail,
-            format!("{ehr_id} is a UUID of no RFC 9562 version and variant"),
+            format!("{named} is a UUID of no RFC 9562 version and variant"),
         ),
     }
 }

@@ -880,7 +880,7 @@ else
 fi
 
 echo "== testkit images (tools/ferrofed-testkit <-> $matrix)"
-harness=tools/ferrofed-testkit/src/containers.rs
+harness=tools/ferrofed-testkit/src/containers/images.rs
 if [[ -f "$harness" ]]; then
   # The repository, tag and digest of the PinnedImage literal named CONST,
   # composed into the one reference the matrix row carries.

@@ -50,6 +50,8 @@ const WIDTH: usize = 2;
 
 /// One existing EHR the node returned.
 struct Existing {
+    /// The row the EHR is in, from 1, which names it in the report.
+    row: usize,
     ehr_id: String,
     system_id: String,
 }
@@ -123,9 +125,7 @@ pub async fn check(
     Ok(Report::read_only(
         endpoint.clone(),
         node.id().clone(),
-        existing
-            .map(|existing| existing.into_iter().map(|one| one.ehr_id).collect())
-            .unwrap_or_default(),
+        existing.map_or(0, |existing| existing.len()),
         findings,
     ))
 }
@@ -148,6 +148,7 @@ fn existing(rows: &[ResultSetRow]) -> Result<Vec<Existing>, String> {
         .map(|(index, row)| {
             match (cells::text(row, 0), cells::text(row, 1)) {
                 (Some(ehr_id), Some(system_id)) => Ok(Existing {
+                    row: index.saturating_add(1),
                     ehr_id: ehr_id.to_owned(),
                     system_id: system_id.to_owned(),
                 }),
@@ -173,20 +174,24 @@ fn generation(existing: &[Existing]) -> Finding {
             ],
         );
     }
-    let mut lines: Vec<(Verdict, String)> =
-        existing.iter().map(|one| uuid_form(&one.ehr_id)).collect();
-    let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+    let mut lines: Vec<(Verdict, String)> = existing
+        .iter()
+        .map(|one| uuid_form(&one.ehr_id, &format!("the ehr_id in row {}", one.row)))
+        .collect();
+    let mut seen: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for one in existing {
-        let times = seen.entry(one.ehr_id.to_ascii_lowercase()).or_default();
-        *times = times.saturating_add(1);
+        seen.entry(one.ehr_id.to_ascii_lowercase())
+            .or_default()
+            .push(one.row);
     }
     let repeated: Vec<(Verdict, String)> = seen
-        .iter()
-        .filter(|(_, times)| **times > 1)
-        .map(|(ehr_id, times)| {
+        .values()
+        .filter(|rows| rows.len() > 1)
+        .map(|rows| {
+            let rows: Vec<String> = rows.iter().map(ToString::to_string).collect();
             (
                 Verdict::Fail,
-                format!("{ehr_id} is the ehr_id of {times} EHRs"),
+                format!("the EHRs in rows {} share one ehr_id", rows.join(", ")),
             )
         })
         .collect();
@@ -230,17 +235,17 @@ fn system_id(snapshot: &RegistrySnapshot, node: &Node, existing: &[Existing]) ->
 // NOTE: §12.2, N21; an existing EHR may predate the node's own system_id, so one the registry
 // routes nowhere leaves the condition undecided, while one routed to another member fails it.
 fn reported(snapshot: &RegistrySnapshot, node: &Node, one: &Existing) -> (Verdict, String) {
-    let (ehr_id, value) = (&one.ehr_id, &one.system_id);
+    let (ehr, value) = (format!("the EHR in row {}", one.row), &one.system_id);
     let Ok(system_id) = SystemId::new(value.as_str()) else {
         return (
             Verdict::Fail,
-            format!("EHR {ehr_id} reports system_id {value}, which is not an openEHR uid"),
+            format!("{ehr} reports system_id {value}, which is not an openEHR uid"),
         );
     };
     match snapshot.registered_creating_system(&system_id) {
         Some((_, CreatingSystemRoute::Member { node: member })) if member == *node.id() => (
             Verdict::Pass,
-            format!("EHR {ehr_id} reports system_id {value}, the one the registry records"),
+            format!("{ehr} reports system_id {value}, the one the registry records"),
         ),
         Some((
             _,
@@ -251,7 +256,7 @@ fn reported(snapshot: &RegistrySnapshot, node: &Node, one: &Existing) -> (Verdic
         )) if member == *node.id() => (
             Verdict::Pass,
             format!(
-                "EHR {ehr_id} reports system_id {value}, which a [[creating_system]] entry routes to endpoint {endpoint} of this node"
+                "{ehr} reports system_id {value}, which a [[creating_system]] entry routes to endpoint {endpoint} of this node"
             ),
         ),
         Some((
@@ -260,14 +265,12 @@ fn reported(snapshot: &RegistrySnapshot, node: &Node, one: &Existing) -> (Verdic
             | CreatingSystemRoute::Registered { node: other, .. },
         )) => (
             Verdict::Fail,
-            format!(
-                "EHR {ehr_id} reports system_id {value}, which the registry routes to node {other}"
-            ),
+            format!("{ehr} reports system_id {value}, which the registry routes to node {other}"),
         ),
         Some(_) | None => (
             Verdict::CannotCheck,
             format!(
-                "EHR {ehr_id} reports system_id {value}, which the registry routes to no member: the EHR may have been created on another system, and a read cannot show which system_id the node stamps into new EHRs"
+                "{ehr} reports system_id {value}, which the registry routes to no member: the EHR may have been created on another system, and a read cannot show which system_id the node stamps into new EHRs"
             ),
         ),
     }

@@ -29,9 +29,10 @@ use ferrofed_server::config::Config;
 use ferrofed_server::conformance::node_profile::interface::{Arrangement, Interface, Principal};
 use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
 use ferrofed_server::federation::Federation;
+use ferrofed_testkit::containers::images::FERROEHR;
+use ferrofed_testkit::containers::restricted::{self, RESTRICTED_ADMIN, RESTRICTED_CLINICIAN};
 use ferrofed_testkit::containers::{
-    self, FERROEHR, HarnessUser, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode, RESTRICTED_ADMIN,
-    RESTRICTED_CLINICIAN,
+    self, HarnessUser, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
 };
 use ferrofed_testkit::node_profile;
 use ferrofed_testkit::pix::PixManager;
@@ -239,7 +240,7 @@ async fn ferroehr_is_checked_for_holding_its_own_access_decision() -> TestResult
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let node = containers::ferroehr_restricted(NODE_A_SYSTEM_ID).await?;
+    let node = restricted::ferroehr_restricted(NODE_A_SYSTEM_ID).await?;
     let ehr_id = created_by_the_administrator(&node.api_root()).await?;
     let arrangement = Arrangement::new(ehr_id, principal(RESTRICTED_CLINICIAN));
 

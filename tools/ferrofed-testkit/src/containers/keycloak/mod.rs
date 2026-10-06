@@ -35,7 +35,8 @@ use url::Url;
 
 pub mod recipe;
 
-use super::{HarnessError, KEYCLOAK, TEMURIN_JRE, await_readiness, names};
+use super::images::{KEYCLOAK, TEMURIN_JRE};
+use super::{HarnessError, await_readiness, names};
 use recipe::{Recipe, RecipeError};
 
 /// The port Keycloak serves HTTP on inside its container.
