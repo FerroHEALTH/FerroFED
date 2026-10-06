@@ -114,6 +114,15 @@ pub enum EhrCallError {
         /// The node's success status, `201` or `204`.
         status: StatusCode,
     },
+    /// The node answered a composition create with success and named no
+    /// version in `ETag` or `Location`.
+    #[error("endpoint {endpoint} created a composition and named no version in ETag or Location")]
+    Unversioned {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// The node's success status, `201` or `204`.
+        status: StatusCode,
+    },
     /// Any other failure: no credential or `DPoP` proof, a request that
     /// could not be composed, the node refusing the credentials, a `5xx`, a
     /// status the operation does not document, a body that is not an `EHR`,
@@ -270,7 +279,7 @@ impl<T: Transport + Clone> NodeClient<T> {
 
     /// The outbound gate over an EHR call to `path` for `ehr_id`, when it
     /// names one, carrying `headers` (§5.4.1, N33).
-    fn gate_ehr(
+    pub(super) fn gate_ehr(
         &self,
         (path, ehr_id): (&str, Option<&str>),
         headers: &[(&'static str, &str)],
@@ -310,7 +319,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     }
 
     /// The error for a documented error answer of the node's.
-    fn rejected(&self, status: StatusCode, body: ErrorBody) -> EhrCallError {
+    pub(super) fn rejected(&self, status: StatusCode, body: ErrorBody) -> EhrCallError {
         EhrCallError::Rejected {
             endpoint: self.endpoint().clone(),
             status,
@@ -320,7 +329,7 @@ impl<T: Transport + Clone> NodeClient<T> {
 
     /// The error for call options that could not be made, so nothing was
     /// sent.
-    fn options_failure(&self, error: OptionsError) -> EhrCallError {
+    pub(super) fn options_failure(&self, error: OptionsError) -> EhrCallError {
         match error {
             OptionsError::Conveyance(source) => EhrCallError::Conveyance {
                 endpoint: self.endpoint().clone(),
@@ -337,7 +346,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// one more send that answers a node's `DPoP` nonce challenge, which
     /// the error's `sent` shows and which is the node's time-out (RFC 9449
     /// §9).
-    fn ehr_failure(&self, error: ClientError) -> EhrCallError {
+    pub(super) fn ehr_failure(&self, error: ClientError) -> EhrCallError {
         let endpoint = self.endpoint().clone();
         let contacted = dpop::sent_before(&error);
         match error {
@@ -376,7 +385,7 @@ impl<T: Transport + Clone> NodeClient<T> {
 
 /// The `ehr_id` an `ETag` carries: the value in double quotes, weak or
 /// strong (RFC 9110 §8.8.3), or `None` for an empty or malformed tag.
-fn from_etag(etag: &str) -> Option<String> {
+pub(super) fn from_etag(etag: &str) -> Option<String> {
     let tag = etag.trim();
     let tag = tag.strip_prefix("W/").unwrap_or(tag);
     tag.strip_prefix('"')
@@ -387,7 +396,7 @@ fn from_etag(etag: &str) -> Option<String> {
 
 /// The `ehr_id` a `Location` names: its last non-empty path segment,
 /// percent-decoded, or `None` when it has none.
-fn from_location(location: &str) -> Option<String> {
+pub(super) fn from_location(location: &str) -> Option<String> {
     let url = url::Url::parse(location.trim()).ok()?;
     let segment = url.path_segments()?.rfind(|segment| !segment.is_empty())?;
     let decoded = crate::hygiene::decode::percent_decoded(segment);

@@ -23,3 +23,9 @@ their uid and template id, and names the patient through `$patient` and
 Every query is built as an AQL syntax tree with `openehr-query` and printed
 with its printer. A test holds each section's archetypes to the vendored
 template and each crosswalk section to a query or a recorded reason.
+
+It also prepares a document received in the exchange format for the one
+member the deployment declares for its category (`receive`): it reads the
+document, names its category, holds it to the category's profiles, maps
+it into one composition that keeps the original, and writes the
+`OperationOutcome` that answers the receipt.

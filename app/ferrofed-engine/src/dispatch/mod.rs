@@ -351,9 +351,9 @@ impl Contact {
     #[must_use]
     pub fn of_ehr_call_error(error: &EhrCallError) -> Self {
         match error {
-            EhrCallError::Rejected { status, .. } | EhrCallError::Unnamed { status, .. } => {
-                Self::Answered(*status)
-            }
+            EhrCallError::Rejected { status, .. }
+            | EhrCallError::Unnamed { status, .. }
+            | EhrCallError::Unversioned { status, .. } => Self::Answered(*status),
             EhrCallError::TimeOut { .. } | EhrCallError::Unreachable { .. } => Self::Silent,
             EhrCallError::Capped(_) => Self::Capped,
             EhrCallError::Withheld { .. }

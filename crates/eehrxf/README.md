@@ -39,10 +39,14 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   byte for byte. `ReceivedDocument::check` walks a `Bundle` and a
   `Composition` profile read from the vendored package over it:
   cardinalities, `fixed[x]` and `pattern[x]` values, and slices, with every
-  constraint it cannot evaluate listed. With `openehr`,
+  constraint it cannot evaluate listed. `ReceivedDocument::category` names
+  the priority category whose document profile fixes a `Composition.type`
+  coding of the document, and `Category::profiles` the profiles a document
+  of it is held to. With `openehr`,
   `Mapping::to_openehr` maps the document into one canonical composition
   through FHIRconnect and keeps the document in the composition's
-  `FEEDER_AUDIT.original_content`.
+  `FEEDER_AUDIT.original_content`; `ReceivedComposition::model` is the
+  composition as the RM model holds it.
 
 The crate authors no mapping language and no profile mapping: the mapping
 files are its input. It depends on no logging component and on no

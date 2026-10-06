@@ -129,8 +129,92 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
     .to_string()
 }
 
-/// The vendored HL7 Europe Patient Summary package.
-fn package() -> PathBuf {
+/// Returns a synthetic patient summary document in the exchange format.
+///
+/// It carries the five sections the EPS `Composition` profile requires, one
+/// allergy that claims the `allergyIntolerance-eu-core` profile the fixture
+/// mapping maps, recording `substance`, and the patient, identified by each
+/// `(system, value)` of `identifiers`.
+///
+/// Every reference is a relative `Type/id` under `example.org` full URLs,
+/// the spelling the FHIRconnect engine resolves.
+#[must_use]
+pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> String {
+    let identifier: Vec<Value> = identifiers
+        .iter()
+        .map(|(system, value)| serde_json::json!({ "system": system, "value": value }))
+        .collect();
+    let section = |title: &str, code: &str, text: &str| {
+        serde_json::json!({
+            "title": title,
+            "code": { "coding": [{ "system": "http://loinc.org", "code": code }] },
+            "text": {
+                "status": "generated",
+                "div": format!("<div xmlns=\"http://www.w3.org/1999/xhtml\">{text}</div>")
+            }
+        })
+    };
+    let mut allergies = section("Allergies", "48765-2", substance);
+    if let Some(allergies) = allergies.as_object_mut() {
+        allergies.insert(
+            String::from("entry"),
+            serde_json::json!([{ "reference": "AllergyIntolerance/synthetic-allergy" }]),
+        );
+    }
+    serde_json::json!({
+        "resourceType": "Bundle",
+        "identifier": { "system": "urn:ietf:rfc:3986", "value": "urn:uuid:0c3e1d20-0000-4000-8000-000000000802" },
+        "type": "document",
+        "timestamp": "2026-10-06T10:00:00Z",
+        "entry": [
+            {
+                "fullUrl": "http://example.org/fhir/Composition/synthetic-composition",
+                "resource": {
+                    "resourceType": "Composition",
+                    "id": "synthetic-composition",
+                    "meta": { "profile": ["http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"] },
+                    "identifier": { "system": "urn:ietf:rfc:3986", "value": "urn:uuid:0c3e1d20-0000-4000-8000-000000000803" },
+                    "status": "final",
+                    "type": { "coding": [{ "system": "http://loinc.org", "code": "60591-5" }] },
+                    "subject": { "reference": "Patient/synthetic-patient" },
+                    "date": "2026-10-06T10:00:00Z",
+                    "author": [{ "display": "Synthetic author" }],
+                    "title": "Synthetic patient summary",
+                    "section": [
+                        section("Problems", "11450-4", "No problems recorded"),
+                        allergies,
+                        section("Medication", "10160-0", "No medication recorded"),
+                        section("Procedures", "47519-4", "No procedures recorded"),
+                        section("Medical devices", "46264-8", "No devices recorded"),
+                    ]
+                }
+            },
+            {
+                "fullUrl": "http://example.org/fhir/Patient/synthetic-patient",
+                "resource": {
+                    "resourceType": "Patient",
+                    "id": "synthetic-patient",
+                    "identifier": identifier
+                }
+            },
+            {
+                "fullUrl": "http://example.org/fhir/AllergyIntolerance/synthetic-allergy",
+                "resource": {
+                    "resourceType": "AllergyIntolerance",
+                    "id": "synthetic-allergy",
+                    "meta": { "profile": ["http://hl7.eu/fhir/base/StructureDefinition/allergyIntolerance-eu-core"] },
+                    "code": { "text": substance },
+                    "patient": { "reference": "Patient/synthetic-patient" }
+                }
+            }
+        ]
+    })
+    .to_string()
+}
+
+/// Returns the path of the vendored HL7 Europe Patient Summary package.
+#[must_use]
+pub fn package() -> PathBuf {
     PathBuf::from(ROOT).join("docs/specs/eu-hl7-eps/hl7.fhir.eu.eps-1.0.0-ballot.tgz")
 }
 
