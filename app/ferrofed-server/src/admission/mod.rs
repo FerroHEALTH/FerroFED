@@ -42,6 +42,7 @@ use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::{Node, RegistrySnapshot};
+use openehr_query::parser::ParseError;
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use uuid::{Uuid, Variant, Version};
 
@@ -69,6 +70,9 @@ pub enum AdmissionError {
     /// (§13.1, N24).
     #[error("the check cannot convey the gateway to the node")]
     Unconveyed(#[source] Unconveyed),
+    /// The check's query template is no AQL the parser reads.
+    #[error("the check's query template is no AQL")]
+    Template(#[source] ParseError),
 }
 
 /// One test EHR the node created: the subject it was created for and the
