@@ -47,7 +47,7 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.43" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.44" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.28" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.21" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }

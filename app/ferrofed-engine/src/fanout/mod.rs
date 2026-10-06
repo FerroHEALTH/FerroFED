@@ -44,6 +44,7 @@
 //! records the mode on every answer, with what it suppressed beside the rows.
 
 mod answer;
+pub mod reader;
 mod seen;
 
 use std::collections::BTreeMap;
@@ -71,6 +72,7 @@ use crate::conveyance::Conveyance;
 use crate::dispatch::{Contact, DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
 use crate::hygiene::Withheld;
 use crate::outbound_id::OutboundId;
+use reader::RowReader;
 
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and
 /// `meta.federation.timeout` name it (§7a.2, §11.5; the value is our own
@@ -195,6 +197,7 @@ pub struct Plan {
     attributes: Vec<EndpointAttribute>,
     unavailable: BTreeMap<&'static str, ErrorDetail>,
     concealed: Option<ErrorDetail>,
+    reader: Option<RowReader>,
 }
 
 impl Plan {
@@ -289,6 +292,14 @@ impl Plan {
     #[must_use]
     pub fn withholding_consent(mut self, error: ErrorDetail) -> Self {
         self.concealed = Some(error);
+        self
+    }
+
+    /// This plan handing the rows each endpoint answered with to `reader`
+    /// before the merge, which leaves the merge and the answer as they are.
+    #[must_use]
+    pub fn reading(mut self, reader: RowReader) -> Self {
+        self.reader = Some(reader);
         self
     }
 
@@ -582,6 +593,7 @@ where
         attributes,
         unavailable,
         concealed,
+        reader,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -625,7 +637,12 @@ where
             Some(NodeReply::Answered {
                 result_set,
                 latency_ms,
-            }) => (Outcome::Active { latency_ms }, Some(result_set.rows)),
+            }) => {
+                if let Some(reader) = &reader {
+                    reader.read(&endpoint, &result_set.rows);
+                }
+                (Outcome::Active { latency_ms }, Some(result_set.rows))
+            }
             Some(NodeReply::Failed { outcome, .. }) => {
                 match answer::concealed(outcome, concealed.as_ref()) {
                     (shown, Some(refusal)) => {

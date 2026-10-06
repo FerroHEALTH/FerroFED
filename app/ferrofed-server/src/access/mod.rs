@@ -97,6 +97,9 @@ pub(crate) struct Asked {
     pub(crate) rows: Option<usize>,
     /// Whether it contributed what the access delivered.
     pub(crate) contributed: bool,
+    /// What its own answer showed of its data, read before a merge with
+    /// other origins' answers, when it contributed.
+    pub(crate) evidence: Option<Evidence>,
 }
 
 /// What a handler saw of the access it served, attached to its response.
@@ -159,7 +162,7 @@ impl Accessed {
                 system_id: asked.system_id.clone(),
                 status: asked.status.clone(),
                 rows: asked.rows,
-                categories: per_origin(asked, contributing, &categories),
+                categories: per_origin(&self.log.map, asked, contributing, &categories),
             })
             .collect();
         AccessRecord {
@@ -183,15 +186,31 @@ impl Accessed {
     }
 }
 
-/// The categories of `asked`: the access's own when it alone contributed
-/// what the access delivered, and unknown otherwise, since a merged answer
-/// does not say which endpoint each row came from.
+/// The categories of `asked`, one of `contributing` origins of what the
+/// access delivered, classified with `map`: the access's own `categories`
+/// when it alone contributed, those of its own answer when several did, and
+/// none when it contributed nothing.
+///
+/// A merged answer does not say which origin each delivered row came from,
+/// so an origin of several is classified by every row it answered with,
+/// one a merge then cut by its `LIMIT` or `DISTINCT` included: its set is
+/// never short of a category it delivered.
 fn per_origin(
+    map: &CategoryMap,
     asked: &Asked,
     contributing: usize,
     categories: &Classification,
 ) -> Option<Classification> {
-    (asked.contributed && contributing == 1).then(|| categories.clone())
+    if !asked.contributed {
+        return None;
+    }
+    if contributing == 1 {
+        return Some(categories.clone());
+    }
+    asked
+        .evidence
+        .as_ref()
+        .map(|evidence| map.classify(evidence))
 }
 
 /// How an access answered with `status` ended: a success, a failure the

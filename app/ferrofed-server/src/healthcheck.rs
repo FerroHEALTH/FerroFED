@@ -228,20 +228,8 @@ pub async fn check(
     timeout: Duration,
     tls: Option<&Tls>,
 ) -> Outcome {
-    let mut builder = reqwest::Client::builder()
-        .timeout(timeout)
-        .connect_timeout(timeout)
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none());
-    let scheme = match tls {
-        None => "http",
-        Some(tls) => {
-            builder = builder.tls_backend_preconfigured(tls.config.clone());
-            "https"
-        }
-    };
-    let client = match builder.build() {
-        Ok(client) => client,
+    let (client, scheme) = match client(timeout, tls) {
+        Ok(built) => built,
         Err(error) => return Outcome::Failed(error),
     };
     match client
@@ -259,6 +247,31 @@ pub async fn check(
         Err(error) if error.is_connect() => Outcome::Refused,
         Err(error) => Outcome::Failed(error),
     }
+}
+
+/// Returns the client that asks a listener on this host, waiting at most
+/// `timeout`, over `tls` when the listener serves it, with the scheme its
+/// URLs take.
+///
+/// No proxy is consulted and no redirect is followed: the listener is on
+/// this host, and only its own answer counts.
+pub(crate) fn client(
+    timeout: Duration,
+    tls: Option<&Tls>,
+) -> Result<(reqwest::Client, &'static str), reqwest::Error> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(timeout)
+        .connect_timeout(timeout)
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none());
+    let scheme = match tls {
+        None => "http",
+        Some(tls) => {
+            builder = builder.tls_backend_preconfigured(tls.config.clone());
+            "https"
+        }
+    };
+    builder.build().map(|client| (client, scheme))
 }
 
 /// Whether a TLS failure is among the causes of `error`.

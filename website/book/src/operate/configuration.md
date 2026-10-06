@@ -25,6 +25,7 @@ federated query and each ITS-REST area run under.
 ferrofed serve --config /etc/ferrofed/ferrofed.toml
 ferrofed config check --config /etc/ferrofed/ferrofed.toml
 ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml
+ferrofed report --config /etc/ferrofed/ferrofed.toml
 ```
 
 `--config` names the file; without it the file is the one `FERROFED_CONFIG`
@@ -32,7 +33,10 @@ names, and without that every default stands. `config check` reads and
 resolves the configuration exactly as `serve` would, secrets included, loads
 a read-only stored-query directory, prints one line and exits, so a deployment
 pipeline can test a file without binding a socket. It opens no store file and
-connects to no database. `ferrofed admission check --endpoint <id>` checks
+connects to no database. `ferrofed report` writes the archive a complaint or a
+serious-incident report attaches, described on the
+[Complaints and incidents](../evaluate/post-market.md#the-report-archive) page.
+`ferrofed admission check --endpoint <id>` checks
 one member against the admission conditions ([Admitting a node](admission.md)).
 `healthcheck` asks the gateway running on this host for its readiness and
 exits `0` or `1`, the two codes a container runtime's health check reads

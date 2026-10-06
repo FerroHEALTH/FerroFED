@@ -16,7 +16,11 @@ supported minor line.
 | ------------------- | ------------------ |
 | Latest release      | :white_check_mark: |
 | Older releases      | :x:                |
+| Withdrawn releases  | :x:                |
 | `main` (unreleased) | best effort        |
+
+A withdrawn release is unsupported whatever its age, and is listed under
+[Withdrawn versions](#withdrawn-versions) below.
 
 ## Reporting a vulnerability
 
@@ -40,3 +44,17 @@ the
 once its advisory is published. The procedures are on the book's
 [Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
 page and in [`docs/post-market.md`](docs/post-market.md).
+
+## Withdrawn versions
+
+A version Cadasto B.V. found not to conform and withdrew (Regulation (EU)
+2025/327 Art 30(1)(i)) stays listed here. It is not supported, and its
+advisory says which version to move to. A published release cannot be
+changed or deleted, so the release, its tag and its image digest remain;
+the `<major>.<minor>` and `latest` image tags move to the replacement.
+`scripts/release/withdraw.sh` adds the row, as
+[`docs/release.md`](docs/release.md) describes.
+
+| Version | Withdrawn | Finding | Advisory |
+| ------- | --------- | ------- | -------- |
+<!-- withdrawn versions: rows above this line -->

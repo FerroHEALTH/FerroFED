@@ -291,7 +291,7 @@ fn collision(ehr_id: &EhrId, claimed: owner::Claimed, request_id: &str) -> Respo
 
 /// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
 /// is no `HIER_OBJECT_ID`.
-fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
+pub(crate) fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
     let param = matched.path_param(EHR_ID_PARAM)?;
     // NOTE: §12.5, a segment that is not UTF-8 or not a HIER_OBJECT_ID names
     // no EHR, so either failure is the malformed-ehr_id answer.
