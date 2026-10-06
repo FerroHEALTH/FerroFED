@@ -28,11 +28,15 @@
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
   - [Complaints and incidents](evaluate/post-market.md)
+- [Data protection](evaluate/data-protection.md)
+- [Threat model](evaluate/threat-model.md)
 
 # Operate
 
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)
+- [Upgrading](operate/upgrading.md)
+  - [Rollback](operate/rollback.md)
 - [Configuration](operate/configuration.md)
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)
@@ -51,6 +55,7 @@
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
 - [The operator console](operate/operator-console.md)
+- [Hardening](operate/hardening.md)
 
 # Integrate
 

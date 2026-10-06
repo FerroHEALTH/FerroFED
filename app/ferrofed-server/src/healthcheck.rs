@@ -10,12 +10,27 @@
 //! Docker `HEALTHCHECK` reads as healthy
 //! (<https://docs.docker.com/reference/dockerfile/#healthcheck>). No
 //! specification governs health probes: our own design.
+//!
+//! Where `[server.tls]` is set, the job speaks TLS ([`Tls`]). It asks over
+//! loopback, where the listener's certificate names no address the job
+//! connects to, so it accepts exactly the certificate
+//! `server.tls.certificate_file` holds and no other, and it presents
+//! `server.tls.healthcheck_identity_file` to a listener that requires a
+//! client certificate.
 
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use http::StatusCode;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::{WebPkiSupportedAlgorithms, verify_tls12_signature, verify_tls13_signature};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
+
+use crate::listener::certificates::{self, CertificateError, TlsFiles};
 
 /// The path the job asks, under the configured base path.
 pub const READINESS: &str = "/health/readiness";
@@ -37,6 +52,12 @@ pub enum Outcome {
     Refused,
     /// The gateway did not answer within the timeout.
     TimedOut(Duration),
+    /// The listener presented a certificate other than the one
+    /// `server.tls.certificate_file` holds: the file was replaced and the
+    /// gateway has not read it again.
+    OtherCertificate,
+    /// The TLS handshake failed.
+    Handshake(reqwest::Error),
     /// The request failed in some other way.
     Failed(reqwest::Error),
 }
@@ -58,10 +79,125 @@ impl fmt::Display for Outcome {
             Self::TimedOut(timeout) => {
                 write!(f, "not ready: no answer within {} ms", timeout.as_millis())
             }
+            Self::OtherCertificate => f.write_str(
+                "not ready: the listener presents a certificate other than server.tls.certificate_file holds; send SIGHUP so the gateway reads it",
+            ),
+            Self::Handshake(error) => {
+                write!(
+                    f,
+                    "not ready: the TLS handshake failed: {}",
+                    crate::chain(error)
+                )
+            }
             Self::Failed(error) => {
                 write!(f, "not ready: the request failed: {}", crate::chain(error))
             }
         }
+    }
+}
+
+/// The TLS the job speaks to a listener that serves it.
+#[derive(Debug, Clone)]
+pub struct Tls {
+    config: ClientConfig,
+    other: Arc<AtomicBool>,
+}
+
+impl Tls {
+    /// Reads the certificate the listener serves and the identity the job
+    /// presents from `files`.
+    ///
+    /// # Errors
+    ///
+    /// A [`CertificateError`] naming the key of a file that does not read,
+    /// and [`CertificateError::Config`] for an identity whose key does not
+    /// match its certificate.
+    pub fn read(files: &TlsFiles) -> Result<Self, CertificateError> {
+        let certificate = format!("{}.certificate_file", files.table);
+        let leaf = certificates::certificates(&certificate, &files.certificate)?
+            .into_iter()
+            .next()
+            .ok_or(CertificateError::NoCertificate { key: certificate })?;
+        let provider = certificates::provider();
+        let other = Arc::new(AtomicBool::new(false));
+        let pinned = Pinned {
+            leaf,
+            algorithms: provider.signature_verification_algorithms,
+            other: Arc::clone(&other),
+        };
+        let config = |source| CertificateError::Config {
+            table: files.table,
+            source,
+        };
+        let builder = ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
+            .map_err(config)?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(pinned));
+        let config = match &files.healthcheck_identity {
+            None => builder.with_no_client_auth(),
+            Some(path) => {
+                let key = format!("{}.healthcheck_identity_file", files.table);
+                let chain = certificates::certificates(&key, path)?;
+                let private = certificates::private_key(&key, path)?;
+                builder
+                    .with_client_auth_cert(chain, private)
+                    .map_err(config)?
+            }
+        };
+        Ok(Self { config, other })
+    }
+}
+
+/// The verifier that accepts one certificate: the one the listener's own
+/// certificate file holds.
+#[derive(Debug)]
+struct Pinned {
+    leaf: CertificateDer<'static>,
+    algorithms: WebPkiSupportedAlgorithms,
+    other: Arc<AtomicBool>,
+}
+
+impl ServerCertVerifier for Pinned {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        // NOTE: no specification governs this: our own design; over loopback the
+        // job trusts the gateway's own certificate byte for byte, and no name.
+        if end_entity.as_ref() == self.leaf.as_ref() {
+            return Ok(ServerCertVerified::assertion());
+        }
+        self.other.store(true, Ordering::SeqCst);
+        Err(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::ApplicationVerificationFailure,
+        ))
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls12_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls13_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algorithms.supported_schemes()
     }
 }
 
@@ -82,28 +218,64 @@ pub fn target(listen: SocketAddr) -> SocketAddr {
 }
 
 /// Asks the gateway at `address` for its readiness at `path`, waiting at
-/// most `timeout`.
+/// most `timeout`, over `tls` when the listener serves it.
 ///
 /// No proxy is consulted and no redirect is followed: the gateway is on
 /// this host, and only its own answer counts.
-pub async fn check(address: SocketAddr, path: &str, timeout: Duration) -> Outcome {
-    let client = match reqwest::Client::builder()
+pub async fn check(
+    address: SocketAddr,
+    path: &str,
+    timeout: Duration,
+    tls: Option<&Tls>,
+) -> Outcome {
+    let mut builder = reqwest::Client::builder()
         .timeout(timeout)
         .connect_timeout(timeout)
         .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-    {
+        .redirect(reqwest::redirect::Policy::none());
+    let scheme = match tls {
+        None => "http",
+        Some(tls) => {
+            builder = builder.tls_backend_preconfigured(tls.config.clone());
+            "https"
+        }
+    };
+    let client = match builder.build() {
         Ok(client) => client,
         Err(error) => return Outcome::Failed(error),
     };
-    match client.get(format!("http://{address}{path}")).send().await {
+    match client
+        .get(format!("{scheme}://{address}{path}"))
+        .send()
+        .await
+    {
         Ok(response) if response.status() == StatusCode::OK => Outcome::Ready,
         Ok(response) => Outcome::NotReady(response.status()),
+        Err(_) if tls.is_some_and(|tls| tls.other.load(Ordering::SeqCst)) => {
+            Outcome::OtherCertificate
+        }
         Err(error) if error.is_timeout() => Outcome::TimedOut(timeout),
+        Err(error) if tls.is_some() && handshake(&error) => Outcome::Handshake(error),
         Err(error) if error.is_connect() => Outcome::Refused,
         Err(error) => Outcome::Failed(error),
     }
+}
+
+/// Whether a TLS failure is among the causes of `error`.
+fn handshake(error: &reqwest::Error) -> bool {
+    let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(current) = cause {
+        let inner = current
+            .downcast_ref::<std::io::Error>()
+            .and_then(std::io::Error::get_ref)
+            .and_then(|inner| inner.downcast_ref::<rustls::Error>())
+            .is_some();
+        if inner || current.is::<rustls::Error>() {
+            return true;
+        }
+        cause = current.source();
+    }
+    false
 }
 
 #[cfg(test)]

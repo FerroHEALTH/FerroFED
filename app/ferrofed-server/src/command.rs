@@ -23,6 +23,8 @@ use crate::conformance::fixture::SyntheticPatient;
 use crate::conformance::run::{RunError, RunOptions};
 use crate::conformance::safety::{self, Refusal};
 use crate::federation::Federation;
+use crate::listener::TlsListener;
+use crate::listener::certificates::{Certificates, TlsFiles};
 use crate::state::AppState;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
@@ -77,7 +79,7 @@ where
         } => match AppState::check(&settings).and_then(|cleartext| {
             state::admits_callers(&settings, settings.federates()).map(|()| cleartext)
         }) {
-            Ok(cleartext) => config_checked(&cleartext, &settings.metrics),
+            Ok(cleartext) => config_checked(&cleartext, &settings.metrics, &settings.deprecated),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -199,8 +201,9 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     code
 }
 
-/// Reports a resolved configuration, its `cleartext` credentials and what a
-/// remote admin listener of `surface` serves, and exits.
+/// Reports a resolved configuration, its `cleartext` credentials, what a
+/// remote admin listener of `surface` serves and every `deprecated` key it
+/// sets, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
@@ -208,8 +211,12 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
 fn config_checked(
     cleartext: &[config::transport::ProtectedSite],
     surface: &config::settings::MetricsSettings,
+    deprecated: &[config::deprecated::Deprecated],
 ) -> ExitCode {
     config::transport::print_warnings(cleartext);
+    for key in deprecated {
+        println!("ferrofed: warning: {key}");
+    }
     if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
         println!(
             "ferrofed: note: metrics.listen {address} is not a loopback address: a remote peer reads GET {} alone, and the admin write actions ({}) answer 403 to every peer that is not loopback",
@@ -429,8 +436,21 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let tls = match settings.server.tls.as_ref().map(healthcheck::Tls::read) {
+        None => None,
+        Some(Ok(tls)) => Some(tls),
+        Some(Err(error)) => {
+            eprintln!("ferrofed: not ready: {}", chain(&error));
+            return ExitCode::FAILURE;
+        }
+    };
     let path = settings.server.base_path.join(healthcheck::READINESS);
-    let outcome = runtime.block_on(healthcheck::check(address, &path, healthcheck::TIMEOUT));
+    let outcome = runtime.block_on(healthcheck::check(
+        address,
+        &path,
+        healthcheck::TIMEOUT,
+        tls.as_ref(),
+    ));
     if outcome.is_ready() {
         println!("ferrofed: {address}: {outcome}");
         ExitCode::SUCCESS
@@ -466,32 +486,60 @@ fn serve_command(
             indicators = state.health().names().join(","),
             "ferrofed starting"
         );
+        let client_tls = certificates(server.tls.as_ref())?;
         let listener = TcpListener::bind(server.listen)
             .await
             .with_context(|| format!("binding {}", server.listen))?;
-        tracing::info!(listen = %server.listen, "listening");
+        tracing::info!(listen = %server.listen, tls = client_tls.is_some(), "listening");
+        let mut listener_certificates: Vec<Arc<Certificates>> =
+            client_tls.iter().cloned().collect();
         if let Some((address, app)) = admin {
+            let admin_tls = certificates(settings.metrics.tls.as_ref())?;
             let metrics = TcpListener::bind(address)
                 .await
                 .with_context(|| format!("binding metrics.listen {address}"))?;
             tracing::info!(
                 listen = %address,
+                tls = admin_tls.is_some(),
                 path = metrics::PATH,
                 distribute = admin::DISTRIBUTE,
                 "serving the admin listener"
             );
+            listener_certificates.extend(admin_tls.iter().cloned());
             tokio::spawn(async move {
-                if let Err(error) = admin::serve(metrics, app).await {
+                let stopped = match admin_tls {
+                    None => admin::serve(metrics, app).await,
+                    Some(certificates) => match TlsListener::new(metrics, certificates) {
+                        Ok(tls) => admin::serve(tls, app).await,
+                        Err(error) => Err(error),
+                    },
+                };
+                if let Err(error) = stopped {
                     tracing::error!(%error, "the metrics listener stopped");
                 }
             });
         }
-        let reloader = Arc::new(reload::Reloader::new(config, settings, Arc::clone(state)));
+        let reloader = Arc::new(
+            reload::Reloader::new(config, settings, Arc::clone(state))
+                .with_certificates(listener_certificates),
+        );
         let running = state.processes().start(&reloader);
         tokio::spawn(reload::on_hangup(reloader));
         let app = router(Arc::clone(state), &server);
         state.lifecycle().booted();
-        let stopped = serve(listener, app, &server, state.lifecycle().clone()).await;
+        let lifecycle = state.lifecycle().clone();
+        let stopped = match client_tls {
+            None => serve(listener, app, &server, lifecycle).await,
+            Some(certificates) => {
+                serve(
+                    TlsListener::new(listener, certificates)?,
+                    app,
+                    &server,
+                    lifecycle,
+                )
+                .await
+            }
+        };
         running.drain().await;
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
@@ -501,6 +549,20 @@ fn serve_command(
         tracing::warn!(error = chain(&error), "the metrics could not be flushed");
     }
     outcome
+}
+
+/// Reads the TLS `files` of a listener, when it serves TLS.
+///
+/// `config check` read the same files, so a failure here means they changed
+/// between the check and the start.
+fn certificates(files: Option<&TlsFiles>) -> anyhow::Result<Option<Arc<Certificates>>> {
+    files
+        .map(|files| {
+            Certificates::load(files.clone())
+                .map(Arc::new)
+                .map_err(anyhow::Error::new)
+        })
+        .transpose()
 }
 
 /// Returns the exit code a command-line refusal deserves.

@@ -203,6 +203,11 @@ covers every key, the registry and the identity service.
   FerroFED's intended purpose and its classification as an EHR system under
   the European Health Data Space Regulation, (EU) 2025/327, with what is
   built and what is planned.
+- [Data protection](https://ferrofed.eu/docs/evaluate/data-protection.html)
+  and the [threat model](https://ferrofed.eu/docs/evaluate/threat-model.html):
+  the personal data the gateway processes and how long it keeps it, the
+  GDPR roles, NIS2 and the medical device question, and every trust
+  boundary with its mitigations and open risks.
 - [Operate](https://ferrofed.eu/docs/operate/deployment-shape.html):
   deployment, the container, configuration, admission, health and metrics.
 - [Integrate](https://ferrofed.eu/docs/integrate/client-contract.html): what

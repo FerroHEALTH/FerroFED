@@ -556,7 +556,7 @@ pub(crate) fn failed(
         }
         ForwardError::Unreachable { .. } => Code::NodeUnreachable,
         ForwardError::Refused { .. } => Code::NodeRefused,
-        ForwardError::Credentials { .. } => Code::NodeError,
+        ForwardError::Credentials { .. } | ForwardError::Oversized { .. } => Code::NodeError,
         _ => Code::Internal,
     };
     if code.status().is_server_error() {

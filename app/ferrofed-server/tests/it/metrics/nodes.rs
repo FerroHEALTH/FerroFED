@@ -20,6 +20,7 @@ use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::federation::Federation;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
@@ -27,7 +28,6 @@ use http::{Request, StatusCode, header};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::headers::{COMPLETENESS, ENDPOINT};
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::ReqwestTransport;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -290,7 +290,7 @@ async fn a_member_request_that_never_left_the_gateway_is_neither_counted_nor_tim
     let b = Server::start().await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
     let only_a = RegistrySnapshot::from_toml_str(&only_node_a(&a.uri()))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     // Node B has no client, so the gateway sends it nothing.
     let clients = NodeClients::from_snapshot(&only_a, &transport, &BTreeMap::new())?;
     let federation = Federation::new(

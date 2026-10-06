@@ -41,6 +41,8 @@
 //!   gateway's client assertion against its published JWK Set and issues
 //!   the token a mock node then requires (#81), exchanges a caller's token
 //!   (RFC 8693) and binds a token to a `DPoP` key (RFC 9449) (#439);
+//! - [`listener`]: synthetic certificates for the gateway's own TLS
+//!   listener and the client CA it admits a proxy by (#632);
 //! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
 //!   span the gateway exports (#437);
 //! - [`pdq`]: the harness PDQm Supplier, a test device that answers ITI-78
@@ -70,6 +72,7 @@ pub mod dpop;
 pub mod fapi;
 pub mod issuer;
 pub mod leak;
+pub mod listener;
 pub mod mcsd;
 pub mod mitz;
 pub mod mock;

@@ -401,7 +401,9 @@ fn failed(error: &ForwardError) -> Option<EndpointStatus> {
     match error {
         ForwardError::TimeOut { .. } => Some(EndpointStatus::TimeOut),
         ForwardError::Unreachable { .. } => Some(EndpointStatus::Offline),
-        ForwardError::Refused { .. } => Some(EndpointStatus::NodeError),
+        ForwardError::Refused { .. } | ForwardError::Oversized { .. } => {
+            Some(EndpointStatus::NodeError)
+        }
         _ => None,
     }
 }

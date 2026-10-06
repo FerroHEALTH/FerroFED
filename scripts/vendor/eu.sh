@@ -6,7 +6,8 @@
 # Vendors the European Union sources of the #488 country research and the
 # EHDS readiness work, one corpus each: the European Health Data Space
 # Regulation, its adopted implementing acts, the exchange format
-# Recommendation and the eHealth Network guidelines (docs/specs/eu-ehds/),
+# Recommendation, the eHealth Network guidelines and the Commission
+# Decision on the reuse of Commission documents (docs/specs/eu-ehds/),
 # and the MyHealth@EU NCPeH API implementation guide with the OpenNCP
 # reference source (docs/specs/ehdsi/).
 #
@@ -36,7 +37,7 @@ cd "$root"
 corpus_require curl shasum awk
 pinned_begin
 
-ec_notice='CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own'
+ec_notice='A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own'
 pin commit reg-eu-2025-327-en.xhtml "OJ L, 2025/327, 5.3.2025 (CELEX 32025R0327), English" \
   https://publications.europa.eu/resource/cellar/531b8c37-f962-11ef-b7db-01aa75ed71a1.0006.03/DOC_1 \
   bf331ac48264118fb0461f793123a2726da88195a11d4bccb2075fd6326909da \
@@ -58,14 +59,14 @@ pin commit rec-eu-2019-243-en.xhtml "OJ L 39, 11.2.2019, p. 18 (CELEX 32019H0243
 pin commit ehn-guidelines-patientsummary.pdf "Release 3.4, November 2024" \
   'https://health.ec.europa.eu/document/download/e020f311-c35b-45ae-ba3d-03212b57fa65_en?filename=ehn_guidelines_patientsummary_en.pdf' \
   9daaab30ef8e8cb5f8ab2be1480d80869b17702d118ab3d13268324184267f5d "$ec_notice"
-pin commit ehn-guidelines-eprescription.pdf "as downloaded on 2026-10-04" \
+pin commit ehn-guidelines-eprescription.pdf "Release 3.1, November 2024" \
   'https://health.ec.europa.eu/document/download/b744f30b-a05e-4b9c-9630-ad96ebd0b2f0_en?filename=ehn_guidelines_eprescriptions_en.pdf' \
-  e0dcb7671e3f5a92707e3bc9f67c38304addb20952da60fea0733c35ae80bbca "$ec_notice"
-pin commit ec-legal-notice.html "as served on 2026-10-05" \
-  https://commission.europa.eu/legal-notice_en \
-  fd6687f313b4b016675c5d74595e3bc343f45a34b430a7ff13a35e2b5cf03a75 \
-  'CC BY 4.0: the page is itself content of a Commission website under the licence it states' \
-  'A live page kept as the licence evidence for the two guidelines; its bytes change with every edit, so a re-run fails until the pin is renewed.'
+  e0dcb7671e3f5a92707e3bc9f67c38304addb20952da60fea0733c35ae80bbca "$ec_notice" \
+  'The eHealth Network guideline on ePrescription and eDispensation, Release 3.1, adopted in Budapest in November 2024, as its title page states.'
+pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D0833), English" \
+  https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1 \
+  2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982 "$eu_act" \
+  'Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents, the reuse terms of the acts and the guidelines here (its Articles 3 and 6), kept as their licence evidence. It replaces the Commission legal notice page, whose bytes changed with every render. Pinned at the Cellar manifestation the CELEX resource resolves to.'
 pin manual ehdsi-interoperability-specifications "not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks' \
   - 'Unknown: the page could not be read' \
@@ -79,11 +80,13 @@ Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
 eHealth Network guidelines on the Patient Summary and on ePrescription and
-eDispensation, and the Commission legal notice that licenses them. The
-Regulation, the implementing acts and the Recommendation are official EU
-legal acts published in the Official Journal; their reuse is governed by
-Commission Decision 2011/833/EU of 12 December 2011 on the reuse of
-Commission documents, which the legal notice names. The eHDSI
+eDispensation, and Commission Decision 2011/833/EU of 12 December 2011 on
+the reuse of Commission documents, which governs the reuse of all of them.
+The Regulation, the implementing acts, the Recommendation and the Decision
+are official EU legal acts published in the Official Journal. The
+Commission legal notice (https://commission.europa.eu/legal-notice_en)
+licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
+the page's bytes change with every render. The eHDSI
 interoperability specifications are on a wiki behind EU Login and are
 recorded for manual retrieval." "" \
   $'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes) and\n  #519 (EHDS readiness)'

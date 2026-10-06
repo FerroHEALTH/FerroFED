@@ -503,3 +503,34 @@ fn the_health_routes_log_the_same_line_as_every_route_and_no_endpoint()
     );
     Ok(())
 }
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_unknown_method_is_logged_as_other_and_never_as_the_client_sent_it()
+-> Result<(), Box<dyn StdError>> {
+    let text = logged(
+        &support::app(),
+        "info",
+        vec![
+            Request::builder()
+                .method(http::Method::from_bytes(b"SYNTHETIC-METHOD-1")?)
+                .uri("/health")
+                .body(Body::empty())?,
+        ],
+    )?;
+    let lines = request_lines(&text)?;
+    let line = lines.first().ok_or("one line")?;
+    assert_eq!(
+        Some("_OTHER"),
+        line.method.as_deref(),
+        "OpenTelemetry HTTP conventions: an unknown method is _OTHER: {text}"
+    );
+    assert!(
+        !text.contains("SYNTHETIC-METHOD-1"),
+        "the client's method token reached the log: {text}"
+    );
+    Ok(())
+}

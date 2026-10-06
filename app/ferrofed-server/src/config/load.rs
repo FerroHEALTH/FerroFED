@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::error::Error;
 use crate::config::error::parse::Stage;
-use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX};
+use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX, deprecated};
 
 impl Config {
     /// Reads the configuration file `path` names, then the environment.
@@ -54,7 +54,9 @@ impl Config {
     /// # Errors
     /// Returns [`Error::Parse`] for TOML that does not read as this tree,
     /// [`Error::EnvName`] and [`Error::EnvShape`] for an override that names
-    /// no key, and [`Error::Assemble`] when the merged tree cannot be written.
+    /// no key, [`Error::Renamed`] for a deprecated key set beside the key
+    /// that replaces it ([`deprecated`]), and [`Error::Assemble`] when the
+    /// merged tree cannot be written.
     pub fn from_sources(
         text: Option<&str>,
         environment: &BTreeMap<String, String>,
@@ -68,14 +70,17 @@ impl Config {
         for (name, raw) in environment {
             apply_override(&mut table, name, raw)?;
         }
+        let deprecated = deprecated::apply(&mut table, deprecated::RENAMED)?;
         // The merged tree is written back and re-read so every refusal carries
         // the key and its position, which a `Table` alone cannot report.
         let merged = toml::to_string(&table).map_err(|source| Error::Assemble { source })?;
-        toml::from_str(&merged).map_err(|error| {
+        let mut config: Self = toml::from_str(&merged).map_err(|error| {
             let fault = Error::parse(&error, &merged, Stage::Merged);
             text.and_then(|text| Self::in_the_file(text, &fault))
                 .unwrap_or(fault)
-        })
+        })?;
+        config.deprecated = deprecated;
+        Ok(config)
     }
 
     /// Reads the file alone again when the merged tree is refused, so a fault

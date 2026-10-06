@@ -40,7 +40,6 @@ binding-nl = ["dep:nl-generic-functions", "ferrofed-identity/nl", "ferrofed-engi
 postgres = [
   "dep:tokio-postgres",
   "dep:tokio-postgres-rustls",
-  "dep:rustls",
   "dep:rustls-platform-verifier",
 ]
 
@@ -101,9 +100,10 @@ tracing-opentelemetry.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true
 # The healthcheck job asks the server beside it for its readiness, over the
-# HTTP client the node dispatch already brings in; the shutdown and
+# HTTP client the node dispatch already brings in, with rustls for a listener
+# that serves TLS (#632); the shutdown and
 # wire-capture tests drive a real socket with it too.
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["rustls"] }
 http.workspace = true
 jiff.workspace = true
 redb.workspace = true
@@ -114,7 +114,11 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync", "fs"] }
 tokio-postgres = { workspace = true, optional = true }
 tokio-postgres-rustls = { workspace = true, optional = true }
-rustls = { workspace = true, optional = true }
+# The TLS of the gateway's own listeners and of the healthcheck job that asks
+# them (#632), and of the PostgreSQL store: rustls over aws-lc-rs, the
+# provider every outbound connection already uses.
+rustls.workspace = true
+tokio-rustls.workspace = true
 rustls-platform-verifier = { workspace = true, optional = true }
 toml.workspace = true
 tower-http.workspace = true
@@ -136,7 +140,7 @@ opentelemetry_sdk = { workspace = true, features = ["testing"] }
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 wiremock.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util", "process"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util", "process", "io-util"] }
 tower.workspace = true
 
 [lints]

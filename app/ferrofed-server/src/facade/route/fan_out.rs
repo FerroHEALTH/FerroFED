@@ -41,6 +41,7 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::dispatch::cap::capped_outcome;
+use ferrofed_engine::dispatch::oversized::Oversized;
 use ferrofed_engine::dispatch::reported;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
 use ferrofed_engine::fanout::TIMEOUT_POLICY;
@@ -461,6 +462,10 @@ fn outcome(
             ),
         },
         Err(ForwardError::Capped(_)) => capped_outcome(latency_ms),
+        Err(ForwardError::Oversized { status, limit, .. }) => Outcome::NodeError {
+            latency_ms,
+            error: error(Oversized::new(status, limit).to_string()),
+        },
         Err(ForwardError::Credentials { error, .. }) => Outcome::NodeError { latency_ms, error },
         Err(ForwardError::Unreachable { .. }) => Outcome::Offline {
             latency_ms,

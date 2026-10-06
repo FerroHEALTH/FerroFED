@@ -115,7 +115,7 @@ path reaches the surface:
 | `http_request_method` | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`, `PATCH`, `CONNECT`, `TRACE`, or `_OTHER` for any other method |
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
-| `url_scheme` | `http`: the listener speaks plain HTTP, and TLS ends in front of it |
+| `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
 | `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |

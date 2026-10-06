@@ -60,6 +60,14 @@ pub enum Error {
         /// The variable that was read.
         name: String,
     },
+    /// A deprecated key and the key that replaces it are both set.
+    #[error("{from} is deprecated and replaced by {to}, and both are set; keep {to}")]
+    Renamed {
+        /// The deprecated key.
+        from: String,
+        /// The key that replaces it.
+        to: String,
+    },
     /// A value and its `_file` sibling are both set.
     #[error("{key} is set together with {key}_file; set one of them")]
     Conflict {
@@ -558,6 +566,19 @@ pub enum Error {
     /// TLS material, or a use of mutual TLS, is refused (RFC 8705).
     #[error(transparent)]
     TlsFault(#[from] crate::config::tls::TlsFault),
+    /// The certificate, the key or the client CA of a listener's TLS cannot
+    /// be served with.
+    #[error(transparent)]
+    ListenerTls(#[from] crate::listener::certificates::CertificateError),
+    /// A healthcheck identity is named where `ferrofed healthcheck` never
+    /// presents it.
+    #[error(
+        "{key} is read only by ferrofed healthcheck, which presents it to a [server.tls] listener that sets client_ca_file; remove it here"
+    )]
+    HealthcheckIdentityUnused {
+        /// The key that names it.
+        key: String,
+    },
     /// A URL the gateway verifies its callers against is plain `http` to a
     /// host that is not loopback.
     #[error(transparent)]

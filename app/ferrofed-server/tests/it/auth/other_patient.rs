@@ -33,12 +33,12 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::auth::{AuthSettings, PatientBinding};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::localization::LocalizationPolicy;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::ReqwestTransport;
 
 use super::{TestResult, bearing, claims, minted, sent};
 use crate::facade::{
@@ -191,7 +191,7 @@ async fn harness() -> Result<Harness, Box<dyn Error>> {
     let a = node_answering("8849182c-82ad-4088-a07f-48ead4180515::node-a::1").await;
     let b = node_answering("6cb19121-4307-4a29-9c1c-b6d6a2ab3b77::node-b::1").await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let (resolved, localized) = (Calls::default(), Calls::default());
     let prefiltered = Arc::new(AtomicUsize::new(0));

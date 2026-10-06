@@ -14,16 +14,20 @@
 # Reads each pin from docs/VERSIONS.md and each newest release tag from the
 # upstream project's GitHub releases, which is the tag the container image and
 # the installer both carry. A corpus pinned by commit on a repository with no
-# releases is read against the newest commit of the branch it follows, and the
-# Chrome for Testing release against the newest stable one of its availability
-# feed. Each container image the testkit harness starts, a `PinnedImage`
-# constant under tools/ferrofed-testkit/src, is read against the newest
-# stable tag of its shape in the registry that serves it. Needs an
-# authenticated `gh`, awk, curl, find, jq and sed.
+# releases is read against the newest commit of the branch it follows, a
+# corpus pinned by a `Release-X.Y.Z` tag against the newest such tag, a FHIR
+# package or implementation guide pinned by version against the versions its
+# entry on the FHIR package registry lists, and the Chrome for Testing release
+# against the newest stable one of its availability feed. Each container
+# image the testkit harness starts, a `PinnedImage` constant under
+# tools/ferrofed-testkit/src, is read against the newest stable tag of its
+# shape in the registry that serves it. Needs an authenticated `gh`, awk,
+# curl, find, jq and sed.
 #
 #   scripts/checks/pin-freshness.sh --self-test
 #
-# Runs the tag comparison and the constant reader over fixtures, offline.
+# Runs the tag and version comparisons and the readers over fixtures,
+# offline.
 #
 # Exit 0 when every pin is current, 1 when at least one is behind (each such
 # line starts with STALE), 2 when a release could not be read, so a network
@@ -134,6 +138,51 @@ newest_release() {
     END { if (best != "") print best }'
 }
 
+# newest_version PINNED: the newest version read on stdin, one per line, in
+# the order of semantic versioning: the dotted release compared by number,
+# and a pre-release (`1.0.0-ballot`) before the release it precedes. A
+# pre-release counts only when the pin is one, so a ballot never reads as a
+# newer release of a released pin, and the first release of a ballot pin
+# does.
+newest_version() {
+  awk -v pinned="$1" '
+    function key(v,   core, pre, n, p, i, k) {
+      core = v; pre = ""
+      if (index(v, "-") > 0) { core = substr(v, 1, index(v, "-") - 1); pre = substr(v, index(v, "-") + 1) }
+      n = split(core, p, ".")
+      k = ""
+      for (i = 1; i <= 4; i++) k = k sprintf("%010d", (i <= n ? p[i] : 0))
+      return k (pre == "" ? "~" : "-" pre)
+    }
+    BEGIN { pre_too = (index(pinned, "-") > 0); best = ""; best_key = "" }
+    /^[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.-]+)?$/ && (pre_too || index($0, "-") == 0) {
+      k = key($0)
+      if (best == "" || k > best_key) { best = $0; best_key = k }
+    }
+    END { if (best != "") print best }'
+}
+
+# matrix_package_version LABEL PACKAGE [MATRIX]: the version that follows the
+# backticked PACKAGE in the pin cell of the matrix row whose first cell is
+# LABEL, past a `version` word. A row that pins two versions names the newer
+# first.
+matrix_package_version() {
+  awk -F'|' -v want="$1" -v package="\`$2\`" '
+    NF >= 3 {
+      label = $2; value = $3
+      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      if (label != want) next
+      n = split(value, word, " ")
+      for (i = 1; i < n; i++) {
+        if (word[i] != package) continue
+        j = i + 1
+        if (word[j] == "version" && j < n) j++
+        v = word[j]; gsub(/`/, "", v); gsub(/[,;:]+$/, "", v)
+        print v; exit
+      }
+    }' "${3:-$MATRIX}"
+}
+
 # The self-test runs newest_release and testkit_images over fixtures and
 # reads nothing from the network, so a broken parser fails CI rather than
 # reading every image as current.
@@ -163,6 +212,17 @@ self_test() {
   got="$(printf '%s\n' latest main | newest_release 2.5.12)"
   expect "" "$got" "a repository with no release of the pinned shape"
 
+  got="$(printf '%s\n' 1.0.0-ballot | newest_version 1.0.0-ballot)"
+  expect 1.0.0-ballot "$got" "a ballot that is the only version"
+  got="$(printf '%s\n' 1.0.0-ballot 1.0.0 | newest_version 1.0.0-ballot)"
+  expect 1.0.0 "$got" "the first release of a ballot"
+  got="$(printf '%s\n' 0.1.0 2.0.0-ballot 2.0.0 2.0.1 2.1.0-ballot | newest_version 2.0.1)"
+  expect 2.0.1 "$got" "a later ballot of a released pin"
+  got="$(printf '%s\n' 1.2.0 1.3.0 1.3.1 1.10.0 | newest_version 1.3.1)"
+  expect 1.10.0 "$got" "a version compared by number"
+  got="$(printf '%s\n' current 1.0.0-comment-2 | newest_version 1.0.0-ballot)"
+  expect 1.0.0-comment-2 "$got" "a registry entry with a non-version key"
+
   work="$(mktemp -d)"
   mkdir "$work/containers"
   printf '%s\n' '/// A.' 'pub const B_IMAGE: PinnedImage = PinnedImage {' '    repository: "example/b",' \
@@ -171,8 +231,21 @@ self_test() {
     '    tag: "2.0.0",' '    digest: "sha256:00",' '};' > "$work/containers/nested.rs"
   got="$(testkit_images "$work" | tr '\t' ' ' | paste -sd ';' -)"
   rm "$work/containers/nested.rs" "$work/containers.rs"
-  rmdir "$work/containers" "$work"
+  rmdir "$work/containers"
   expect "A_IMAGE ghcr.io/example/a 2.0.0;B_IMAGE example/b 1.2.3" "$got" "the PinnedImage literals of a tree"
+
+  # shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' \
+    '| A package | package `a.b` 1.0.0-ballot, pin-set digest `00` | x |' \
+    '| Two | package `c.d` 1.3.1 and 1.3.0, pin-set digest `00` | x |' \
+    '| Pages | the IG of package `e.f` 3.1.0 at `host/E/3.1.0/`, pin-set digest `00` | x |' \
+    '| Worded | `g.h` version `1.1.4` from `packages.fhir.org` | x |' > "$work/matrix.md"
+  got="$(for row in 'A package|a.b' 'Two|c.d' 'Pages|e.f' 'Worded|g.h' 'Two|a.b'; do
+    printf '%s;' "$(matrix_package_version "${row%%|*}" "${row#*|}" "$work/matrix.md")"
+  done)"
+  rm "$work/matrix.md"
+  rmdir "$work"
+  expect "1.0.0-ballot;1.3.1;3.1.0;1.1.4;;" "$got" "the package versions of matrix rows"
 
   [[ "$failed" -eq 0 ]] || exit 1
   echo "pin-freshness: self-test OK."
@@ -201,7 +274,8 @@ actionlint	rhysd/actionlint
 shellcheck	koalaman/shellcheck
 hadolint	hadolint/hadolint
 kubeconform	yannh/kubeconform
-lychee	lycheeverse/lychee"
+lychee	lycheeverse/lychee
+promtool	prometheus/prometheus"
 
 # matrix_pin LABEL: the second cell of the matrix row whose first cell is
 # LABEL, with the backticks stripped and only the first token kept, the same
@@ -291,6 +365,100 @@ while IFS=$'\t' read -r label repo branch; do
     stale=1
   fi
 done <<< "$WATCHED_COMMITS"
+
+# One "matrix label<TAB>upstream repository" record per line: a corpus pinned
+# by a `Release-X.Y.Z` tag, read against the newest tag of that shape. The
+# openEHR specification repositories tag each release and publish no GitHub
+# release.
+readonly WATCHED_TAGS="\
+openEHR Reference Model specification source	openEHR/specifications-RM"
+
+while IFS=$'\t' read -r label repo; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(awk -F'|' -v want="$label" '
+    NF >= 3 {
+      label = $2; value = $3
+      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      gsub(/`/, "", value)
+      if (label == want && match(value, /Release-[0-9]+(\.[0-9]+)+/)) { print substr(value, RSTART + 8, RLENGTH - 8); exit }
+    }' "$MATRIX")"
+  if [[ -z "$pinned" ]]; then
+    printf 'UNREADABLE %s: no Release tag pin in %s\n' "$label" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! tags="$(gh api --paginate "repos/$repo/tags" --jq '.[].name' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the tags of %s (%s)\n' "$label" "$repo" "$tags"
+    unreadable=1
+    continue
+  fi
+  latest="$(sed -nE 's/^Release-([0-9]+(\.[0-9]+)+)$/\1/p' <<< "$tags" | newest_version "$pinned")"
+  if [[ -z "$latest" ]]; then
+    printf 'UNREADABLE %s: %s has no Release-X.Y.Z tag\n' "$label" "$repo"
+    unreadable=1
+  elif [[ "$pinned" = "$latest" ]]; then
+    printf 'current    %s Release-%s (%s)\n' "$label" "$pinned" "$repo"
+  else
+    printf 'STALE      %s: pinned Release-%s, newest release tag Release-%s (https://github.com/%s/tree/Release-%s)\n' \
+      "$label" "$pinned" "$latest" "$repo" "$latest"
+    stale=1
+  fi
+done <<< "$WATCHED_TAGS"
+
+# One "matrix label<TAB>package<TAB>hold" record per line: a FHIR package, or
+# the pages of the implementation guide it publishes, pinned by version and
+# read against the versions its entry on the FHIR package registry lists. A
+# held package is pinned at the version another pinned package depends on
+# (the hold says which), so a newer release of it is printed and is not a
+# stale pin by itself: the dependent's release moves it.
+readonly FHIR_REGISTRY=https://packages.fhir.org
+readonly WATCHED_PACKAGES="\
+Xt-EHR EHDS Logical Information Models	xtehr.eu.ehds.models	-
+HL7 Europe Base and Core	hl7.fhir.eu.base	-
+HL7 Europe Patient Summary	hl7.fhir.eu.eps	-
+HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
+HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
+HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
+HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
+IHE PIXm narrative pages	ihe.iti.pixm	-
+IHE PDQm narrative pages	ihe.iti.pdqm	-
+IHE PMIR narrative pages	ihe.iti.pmir	-
+IHE mCSD narrative pages	ihe.iti.mcsd	-
+IHE BALP narrative pages	ihe.iti.balp	-"
+
+while IFS=$'\t' read -r label package hold; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(matrix_package_version "$label" "$package")"
+  if [[ -z "$pinned" ]]; then
+    printf 'UNREADABLE %s: no version of %s in %s\n' "$label" "$package" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! versions="$(curl --fail --silent --show-error --user-agent "$REGISTRY_UA" "$FHIR_REGISTRY/$package" \
+    | jq --raw-output --exit-status '.versions | keys[]' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the registry entry of %s (%s)\n' "$label" "$package" "$versions"
+    unreadable=1
+    continue
+  fi
+  latest="$(newest_version "$pinned" <<< "$versions")"
+  if [[ -z "$latest" ]]; then
+    printf 'UNREADABLE %s: the registry entry of %s lists no version of the shape of %s\n' "$label" "$package" "$pinned"
+    unreadable=1
+  elif [[ "$pinned" = "$latest" ]]; then
+    printf 'current    %s %s %s (%s/%s)\n' "$label" "$package" "$pinned" "$FHIR_REGISTRY" "$package"
+  elif [[ "$hold" != "-" ]]; then
+    printf 'held       %s: %s pinned %s, newest release %s, held at %s\n' \
+      "$label" "$package" "$pinned" "$latest" "$hold"
+  else
+    printf 'STALE      %s: %s pinned %s, newest release %s (%s/%s)\n' \
+      "$label" "$package" "$pinned" "$latest" "$FHIR_REGISTRY" "$package"
+    stale=1
+  fi
+done <<< "$WATCHED_PACKAGES"
 
 # The Chrome for Testing release the browser journeys run Chrome and
 # chromedriver at, read against the newest stable release of the Chrome for

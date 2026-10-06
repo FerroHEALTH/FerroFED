@@ -192,6 +192,10 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 - One gateway process opens the file at a time. A second process pointed at
   the same file refuses to start, so run one gateway per file. Several
   replicas need the `postgres` backend.
+- The file records its schema version in a table of its own,
+  `ferrofed_schema`. At start an older file is migrated forward and keeps
+  its definitions, and a file a newer FerroFED migrated refuses the start,
+  naming both versions ([Rollback](rollback.md)).
 
 ### Several replicas: `postgres`
 
@@ -221,8 +225,12 @@ url_file = "/run/secrets/ferrofed-stored-queries-url"
   is named in the banner and the log
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
 - At start, and each time it reconnects, the gateway creates the schema
-  `ferrofed` and the table `ferrofed.stored_query_definition` when they are
-  absent, one replica at a time. The role needs `CREATE` on the database to
+  `ferrofed` when it is absent, reads the schema version
+  `ferrofed.schema_version` records, and runs every migration past it in
+  order, which creates `ferrofed.stored_query_definition` on an empty
+  database, one replica at a time in one transaction. A database a newer
+  FerroFED migrated refuses the start, and a reconnect, naming both
+  versions, and is left as it was ([Rollback](rollback.md)). The role needs `CREATE` on the database to
   make the schema, or a `ferrofed` schema made for it on which it holds
   `CREATE` and `USAGE`. A database that cannot be reached within ten seconds
   refuses the start.

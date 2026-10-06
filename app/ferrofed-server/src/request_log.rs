@@ -40,7 +40,7 @@ use tracing::Instrument as _;
 use tracing::field::Empty;
 
 use crate::base_path::BasePath;
-use crate::metrics::inbound::Instruments;
+use crate::metrics::inbound::{self, Instruments};
 use crate::{ITS_REST_PREFIX, request_id};
 
 /// The route a request is logged under when no route matched it.
@@ -93,11 +93,19 @@ pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Nex
     // NOTE: no specification governs this: our own design, an exchange id
     // other than the outbound id is one the client chose, logged as a flag.
     let client_named = request_id::of(request.headers()).is_some_and(|echoed| echoed != id);
+    // NOTE: OpenTelemetry HTTP span conventions: an unknown method is `_OTHER` and names the span
+    // `HTTP`; `http.request.method_original` is left out, since it would carry the client's token.
+    let method_label = inbound::method_label(&method);
+    let span_method = if method_label == inbound::OTHER_METHOD {
+        "HTTP"
+    } else {
+        method_label
+    };
     let span = tracing::info_span!(
         "request",
-        otel.name = %format_args!("{method} {route}"),
+        otel.name = %format_args!("{span_method} {route}"),
         otel.kind = "server",
-        http.request.method = method.as_str(),
+        http.request.method = method_label,
         http.route = route.as_str(),
         http.response.status_code = Empty,
         otel.status_code = Empty,
@@ -117,7 +125,7 @@ pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Nex
     drop(active);
     let latency_ms = elapsed.as_secs_f64() * 1000.0;
     let (method, route, query, request_id) =
-        (method.as_str(), route.as_str(), query.as_str(), id.as_str());
+        (method_label, route.as_str(), query.as_str(), id.as_str());
     let status_code = status.as_u16();
     if status.is_server_error() {
         tracing::error!(

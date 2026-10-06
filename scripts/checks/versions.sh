@@ -24,7 +24,7 @@
 #                          product-version row, and against the root Cargo.toml
 #                          [workspace.package] version.
 #   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint,
-#                          kubeconform and lychee versions
+#                          kubeconform, lychee and promtool versions
 #                          .github/workflows/ci.yml installs, the Kubernetes release and the schema
 #                          commit kubeconform validates against, and the
 #                          cargo-auditable, cargo-cyclonedx and syft versions
@@ -732,6 +732,9 @@ if [[ -f "$ci" ]]; then
     lychee)
       sed -nE 's|^[[:space:]]*LYCHEE_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
+    promtool)
+      sed -nE 's|^[[:space:]]*PROMETHEUS_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      ;;
     'kubeconform schema version')
       sed -nE 's|.*-kubernetes-version[[:space:]]+([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
@@ -741,7 +744,7 @@ if [[ -f "$ci" ]]; then
     *) ;;
     esac
   }
-  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee)
+  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee promtool)
   for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"
@@ -1056,12 +1059,25 @@ corpora="docs/specs/federation-spec|Federation Tier with AQL specification
 docs/specs/federation-ref|Federation Tier reference implementation
 docs/specs/its-rest|openEHR ITS-REST OpenAPI
 docs/specs/aql|openEHR AQL specification source
+docs/specs/openehr-rm|openEHR Reference Model specification source
 docs/specs/ihe-pixm|IHE PIXm FHIR package
 docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
 docs/specs/ihe-pmir|IHE PMIR FHIR package
 docs/specs/ihe-iua|IHE IUA supplement
 docs/specs/ihe-balp|IHE BALP FHIR package
+docs/specs/ihe-pixm-pages|IHE PIXm narrative pages
+docs/specs/ihe-pdqm-pages|IHE PDQm narrative pages
+docs/specs/ihe-pmir-pages|IHE PMIR narrative pages
+docs/specs/ihe-mcsd-pages|IHE mCSD narrative pages
+docs/specs/ihe-balp-pages|IHE BALP narrative pages
+docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
+docs/specs/eu-hl7-base|HL7 Europe Base and Core
+docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
+docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
+docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
+docs/specs/eu-hl7-extensions|HL7 Europe Extensions
+docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
 docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source

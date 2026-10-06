@@ -6,7 +6,9 @@
 //! §10.2.3) and the health family still answers; past `[server.caller_rate]`
 //! a verified caller is `429 rate-limited` with `Retry-After` (RFC 6585 §4),
 //! keyed on the caller and never on a forwarded address; past
-//! `federation.max_in_flight_per_node` a member is `time-out` (§11.5, N38).
+//! `federation.max_in_flight_per_node` a member is `time-out` (§11.5, N38);
+//! and an answer past `federation.max_node_answer_bytes` makes its member
+//! `node-error` (§11.1).
 //! Every refusal is counted by its limit. No specification governs the
 //! limits: our own design.
 #![allow(
@@ -315,6 +317,10 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             "[federation]\nmax_in_flight_per_node = 0\n",
             "federation.max_in_flight_per_node",
         ),
+        (
+            "[federation]\nmax_node_answer_bytes = 0\n",
+            "federation.max_node_answer_bytes",
+        ),
     ] {
         let refused = Config::from_sources(Some(text), &BTreeMap::new())?
             .resolve()
@@ -322,5 +328,54 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             .ok_or_else(|| format!("{key} = 0 is refused"))?;
         assert!(refused.to_string().contains(key), "{key}: {refused}");
     }
+    Ok(())
+}
+
+// NOTE: §11.1, §11.4, N37: a member whose answer runs past the read bound answered with nothing
+// the gateway could use, so it is node-error and the default strategy fails the query 424.
+// conformance: CP-30
+#[tokio::test]
+async fn a_member_answer_past_the_read_bound_is_node_error_and_fails_the_query_424() -> TestResult {
+    let padding = " ".repeat(64 * 1024);
+    let oversized = format!(
+        r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["uid-a::cdr-a.example.org::1"]]{padding}}}"##
+    );
+    let large = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(oversized.into_bytes(), "application/json"),
+        )
+        .mount(&large)
+        .await;
+    let quick = node_answering("uid-b::cdr-b.example.org::1").await;
+    let dir = tempfile::tempdir()?;
+    let (app, _state) = gateway(
+        dir.path(),
+        (&large.uri(), &quick.uri()),
+        "max_node_answer_bytes = 4096",
+        &roomy(),
+    )?;
+    let request = Request::post("/v1/query/aql")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body(&patient_query())?))?;
+    let (status, text) = call(app, request).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert!(
+        text.contains(r#""complete":false"#),
+        "§11.4: the failing answer says it is incomplete: {text}"
+    );
+    assert!(
+        text.contains(r#""id":"node-a-pub","#) && text.contains(r#""status":"node-error""#),
+        "member A is node-error: {text}"
+    );
+    assert!(
+        text.contains("4096 bytes the gateway reads of one answer"),
+        "the error names the bound: {text}"
+    );
+    assert!(
+        !text.contains("uid-a::cdr-a.example.org::1"),
+        "§11.1: the oversized answer contributes no row: {text}"
+    );
     Ok(())
 }

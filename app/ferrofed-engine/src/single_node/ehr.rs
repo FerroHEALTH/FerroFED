@@ -24,6 +24,7 @@ use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
 use crate::conveyance::ConveyanceError;
 use crate::dispatch::cap::Capped;
+use crate::dispatch::oversized::Oversized;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{Composed, Outbound, Part};
 use crate::trace_context;
@@ -115,8 +116,9 @@ pub enum EhrCallError {
     },
     /// Any other failure: no credential or `DPoP` proof, a request that
     /// could not be composed, the node refusing the credentials, a `5xx`, a
-    /// status the operation does not document, or a body that is not an
-    /// `EHR`.
+    /// status the operation does not document, a body that is not an `EHR`,
+    /// or a body longer than the gateway reads of one answer
+    /// ([`Oversized`]).
     #[error("the call to endpoint {endpoint} failed")]
     Failed {
         /// The endpoint.
@@ -354,6 +356,12 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
+            ClientError::Transport { .. } if Oversized::of_client_error(&error).is_some() => {
+                EhrCallError::Failed {
+                    endpoint,
+                    source: Box::new(error),
+                }
+            }
             ClientError::Transport { .. } => EhrCallError::Unreachable {
                 endpoint,
                 source: Box::new(error),

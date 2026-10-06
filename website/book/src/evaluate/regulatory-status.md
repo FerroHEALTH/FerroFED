@@ -37,8 +37,10 @@ answer to the CDR that holds the record.
   genetic data, processed in an electronic form" (Art 2(2)(a)), held in the
   member CDRs as openEHR records. FerroFED holds no clinical data of its own:
   it passes each CDR's answer through, merges the answers, and forwards a
-  write to the CDR that owns the record. What it stores is the registry of
-  members, the `ehr_id` index and the stored-query definitions.
+  write to the CDR that owns the record. What it keeps is the registry of
+  members, routing state in memory, the stored-query definitions and the
+  IHE audit records waiting for delivery;
+  [Data protection](data-protection.md#processing-inventory) lists each.
 - **Priority categories.** Art 14(1) lists six: "(a) patient summaries;
   (b) electronic prescriptions; (c) electronic dispensations; (d) medical
   imaging studies and related imaging reports; (e) medical test results,
