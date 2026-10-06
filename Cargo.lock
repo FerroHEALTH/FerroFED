@@ -1487,6 +1487,7 @@ dependencies = [
  "async-trait",
  "aws-lc-rs",
  "axum",
+ "base64 0.23.1",
  "clap",
  "ehds-logging",
  "ferrofed-eehrxf",
