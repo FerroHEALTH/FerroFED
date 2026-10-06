@@ -200,22 +200,39 @@ and the command prints the same list. The image digest is not visible from
 inside the process. For a container, add the output of
 `docker image inspect --format '{{index .RepoDigests 0}}' <image>`.
 
-Redaction is deny by default. Every key of the configuration stays, so its
-shape is visible. A value stays only when it is one of these:
+Redaction is deny by default and runs over the parsed configuration, so a
+comment or an inline table cannot pass it. A key stays when it is a field
+name, so the shape is visible. The keys of a table keyed by data
+(`credentials`, `members`, `namespaces`, `communities`) and any key that is
+not a `snake_case` field name become `***1`, `***2` and so on. A value stays
+only when it is one of these:
 
 - a number, a boolean or a date;
-- a path under a `*_file` key or the registry `document`;
-- a URL, with its userinfo, query and fragment replaced by `***`;
-- a value under a key known to hold no secret, such as `listen`, `profile`
-  or `base_path`.
+- the scheme, host and port of a URL, with its userinfo, path, query and
+  fragment replaced by `***`;
+- a closed setting or a listen address, such as `profile`, `listen`,
+  `base_path`, `format` or `node_selection`.
 
-Every other value is `***`, and so is every value under `[dev]`, whose
-cross-reference pairs patient identifiers with `ehr_id`s. The live files are
-the routing ids, counts and states the gateway's own health, operator and
-metrics surfaces answer with. The archive therefore carries no patient
-identifier, clinical payload, credential, header value or URL userinfo.
-Read it before you send it all the same. A secret or a patient identifier
-found in an archive is a vulnerability: report it as one.
+Every other value is `***`. That covers file paths, which can name a
+person's home directory, namespaces, user names, and every value under
+`[dev]`, whose cross-reference pairs patient identifiers with `ehr_id`s.
+
+The live files keep only the fields that carry states, counts, kinds, times
+and routing ids:
+
+- Readiness keeps each indicator's state without its detail text.
+- The incidents keep their kind, time, detection and the endpoints and
+  nodes involved, without the description, the `ehr_id` or the
+  `creating_system_id`.
+- The metrics keep the value of a label only when the gateway itself sets
+  that label.
+- A part that cannot be read is named in `missing` without quoting what was
+  answered.
+
+The archive therefore carries no patient identifier, `ehr_id`, clinical
+payload, credential, personal name, header value or URL userinfo. Read it
+before you send it all the same. A secret or a patient identifier found in
+an archive is a vulnerability: report it as one.
 
 ## Cooperation with the authorities
 

@@ -131,6 +131,6 @@ page lists the files. Before forwarding an archive, check its `missing` list:
 a stopped gateway has no live parts, and the incidents need an operator
 token (`--operator-token-file`).
 
-The archive holds no patient identifier, clinical payload, credential,
-header value or URL userinfo. If one is ever found in an archive, that is a
+The archive holds no patient identifier, `ehr_id`, clinical payload,
+credential, personal name, header value or URL userinfo. If one is ever found in an archive, that is a
 vulnerability: report it as one, and delete the archive.

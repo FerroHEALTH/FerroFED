@@ -18,6 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_registry::incident::{Detection, Incident};
 use ferrofed_server::config::Config;
 use ferrofed_server::report::{ROOT, Report};
 use ferrofed_server::state::AppState;
@@ -41,14 +42,28 @@ const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 /// A value inside a committed composition.
 const CLINICAL: &str = "SENTINEL-CLINICAL-r705";
 
-/// Every credential the configuration holds, and the userinfo and query of
-/// its one URL.
-const CREDENTIALS: [&str; 4] = [
-    "SENTINEL-TOKEN-r705",
+/// Every canary the configuration holds: the name and password of a
+/// professional's basic credential, the userinfo, path, query and fragment
+/// of a URL, a namespace under a field no list keeps, and the federation id,
+/// a string no list keeps.
+const CREDENTIALS: [&str; 9] = [
+    "Dr SENTINEL-PROFESSIONAL-r705",
+    "SENTINEL-PASSWORD-r705",
     "SENTINEL-USER-r705",
     "SENTINEL-PASS-r705",
     "SENTINEL-QUERY-r705",
+    "SENTINEL-PATH-r705",
+    "SENTINEL-FRAGMENT-r705",
+    "2.999.4242",
+    "SENTINEL-FEDERATION-r705",
 ];
+
+/// The `ehr_id` of an integrity incident the operator surface reports.
+const INCIDENT_EHR_ID: &str = "c0ffee00-0000-4000-8000-000000000705";
+
+/// The `creating_system_id` of an integrity incident the operator surface
+/// reports.
+const INCIDENT_SYSTEM: &str = "sentinel-system-r705.example.org";
 
 /// A registry of one node whose endpoint nothing listens on.
 const REGISTRY: &str = r#"
@@ -72,15 +87,25 @@ managing_organisation = "org-a"
 /// listener on `admin`, reading the registry `document`.
 fn configuration(gateway: &str, admin: &str, document: &Path) -> Result<String, Box<dyn Error>> {
     let document = toml::Value::String(document.display().to_string());
-    let [token, user, password, query] = CREDENTIALS;
+    let [
+        professional,
+        professional_password,
+        user,
+        password,
+        query,
+        path,
+        fragment,
+        namespace,
+        federation,
+    ] = CREDENTIALS;
     let text = format!(
         "profile = \"development\"\n\n\
          [server]\nlisten = \"{gateway}\"\n\n\
-         [telemetry]\notlp_endpoint = \"http://{user}:{password}@127.0.0.1:4317/?key={query}\"\n\n\
+         [telemetry]\notlp_endpoint = \"http://{user}:{password}@127.0.0.1:4317/{path}?key={query}#{fragment}\"\n\n\
          [metrics]\nlisten = \"{admin}\"\n\n\
          [registry]\ndocument = {document}\n\n\
-         [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n\
-         [credentials.\"node-a-pub\"]\nbearer_token = \"{token}\"\n\n\
+         [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\
+         [credentials.\"node-a-pub\"]\nuser = \"{professional}\"\npassword = \"{professional_password}\"\n\n\
          [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}operator_scope = \"{OPERATOR_SCOPE}\"\n",
         auth_toml()?
     );
@@ -109,9 +134,17 @@ fn files(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, Box<dyn Error>> {
 /// carries a patient identifier, a clinical value or a credential.
 fn nothing_leaks(path: &Path, files: &BTreeMap<String, Vec<u8>>) -> TestResult {
     let archive = String::from_utf8_lossy(&std::fs::read(path)?).into_owned();
-    for value in [PATIENT, NAMESPACE, CLINICAL]
-        .into_iter()
-        .chain(CREDENTIALS)
+    for value in [
+        PATIENT,
+        NAMESPACE,
+        EHR_ID,
+        CLINICAL,
+        INCIDENT_EHR_ID,
+        INCIDENT_SYSTEM,
+        "SENTINEL",
+    ]
+    .into_iter()
+    .chain(CREDENTIALS)
     {
         assert!(!archive.contains(value), "the archive carries {value}");
         for (name, bytes) in files {
@@ -121,6 +154,52 @@ fn nothing_leaks(path: &Path, files: &BTreeMap<String, Vec<u8>>) -> TestResult {
             );
         }
     }
+    Ok(())
+}
+
+/// Sends the gateway at `gateway` the patient's query and a composition, so
+/// both have passed through the process the report reads.
+async fn exercise(gateway: std::net::SocketAddr) -> TestResult {
+    let client = reqwest::Client::new();
+    let query = format!(
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let asked = client
+        .post(format!("http://{gateway}/v1/query/aql"))
+        .header(header::AUTHORIZATION, bearer()?)
+        .json(&BTreeMap::from([("q", query)]))
+        .send()
+        .await?;
+    assert!(!asked.status().is_success(), "the node is unreachable");
+    let committed = client
+        .post(format!("http://{gateway}/v1/ehr/{EHR_ID}/composition"))
+        .header(header::AUTHORIZATION, bearer()?)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(format!(
+            "{{\"_type\":\"COMPOSITION\",\"name\":{{\"_type\":\"DV_TEXT\",\"value\":\"{CLINICAL}\"}}}}"
+        ))
+        .send()
+        .await?;
+    assert!(!committed.status().is_success(), "the node is unreachable");
+    Ok(())
+}
+
+/// Emits two incidents, one naming an `ehr_id` and one a
+/// `creating_system_id`, which the operator surface answers and the archive
+/// leaves out.
+fn emit_incidents() -> TestResult {
+    Incident::EhrIdCollision {
+        ehr_id: INCIDENT_EHR_ID.parse()?,
+        detection: Detection::AskAll,
+        claimants: vec!["node-a-pub".parse()?],
+    }
+    .emit();
+    Incident::LearnedCreatingSystemConflict {
+        creating_system_id: INCIDENT_SYSTEM.parse()?,
+        first: "node-a-pub".parse()?,
+        second: "node-a-pub".parse()?,
+    }
+    .emit();
     Ok(())
 }
 
@@ -154,29 +233,8 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
         ferrofed_server::admin::listener(&settings.metrics, &state).ok_or("an admin listener")?;
     tokio::spawn(ferrofed_server::admin::serve(admin_listener, admin_app));
 
-    // The gateway handles the patient's query and a composition first, so
-    // both have passed through the process the report reads.
-    let client = reqwest::Client::new();
-    let query = format!(
-        "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
-    );
-    let asked = client
-        .post(format!("http://{gateway}/v1/query/aql"))
-        .header(header::AUTHORIZATION, bearer()?)
-        .json(&BTreeMap::from([("q", query)]))
-        .send()
-        .await?;
-    assert!(!asked.status().is_success(), "the node is unreachable");
-    let committed = client
-        .post(format!("http://{gateway}/v1/ehr/{EHR_ID}/composition"))
-        .header(header::AUTHORIZATION, bearer()?)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(format!(
-            "{{\"_type\":\"COMPOSITION\",\"name\":{{\"_type\":\"DV_TEXT\",\"value\":\"{CLINICAL}\"}}}}"
-        ))
-        .send()
-        .await?;
-    assert!(!committed.status().is_success(), "the node is unreachable");
+    exercise(gateway).await?;
+    emit_incidents()?;
 
     let operator = operator_bearer()?;
     let token = secrecy::SecretString::from(
@@ -216,9 +274,12 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
         "{configuration}"
     );
     assert!(
-        configuration.contains("example-federation"),
+        configuration.contains("node_selection = \"ask-all\""),
         "{configuration}"
     );
+    let incidents = String::from_utf8(files["incidents.json"].clone())?;
+    assert!(incidents.contains("EhrIdCollision"), "{incidents}");
+    assert!(incidents.contains("node-a-pub"), "{incidents}");
     let manifest = String::from_utf8(files["manifest.json"].clone())?;
     let digest = ferrofed_server::conformance::fixture::sha256(&files["metrics.txt"]);
     assert!(manifest.contains(&digest), "the manifest hashes every file");
@@ -234,9 +295,19 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     let dir = tempfile::tempdir()?;
     let out = dir.path().join("report.tar");
     let out_arg = out.display().to_string();
+    // A data-keyed table and a URL with a path, in the PIXm
+    // binding, beside a bearer token, a namespace and the cross-reference.
+    let pixm = if cfg!(feature = "binding-ihe") {
+        "\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/SENTINEL-PIX-PATH\"\n\n\
+         [pixm.manager.members]\n\"SENTINEL-MEMBER\" = \"urn:oid:2.999.7777\"\n"
+    } else {
+        ""
+    };
     let toml = format!(
-        "[server]\nlisten = \"127.0.0.1:9\"\n\n[credentials.\"node-a-pub\"]\nbearer_token = \"{}\"\n",
-        CREDENTIALS[0]
+        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:9\"\n\n\
+         [federation]\ndefault_namespace = \"urn:oid:2.999.4242\"\n\n\
+         [credentials.\"node-a-pub\"]\nbearer_token = \"SENTINEL-TOKEN-r705\"\n\n\
+         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{pixm}"
     );
     let output = tokio::task::spawn_blocking(move || {
         binary(&["report", "--out", &out_arg], &toml).map_err(|error| error.to_string())
@@ -258,6 +329,11 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     assert!(manifest.contains("\"missing\""), "{manifest}");
     assert!(manifest.contains("metrics.listen is not set"), "{manifest}");
     nothing_leaks(&out, &files)?;
+    let archive = String::from_utf8_lossy(&std::fs::read(&out)?).into_owned();
+    assert!(
+        !archive.contains("2.999.7777"),
+        "a member's namespace leaked"
+    );
     Ok(())
 }
 

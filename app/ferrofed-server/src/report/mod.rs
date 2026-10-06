@@ -11,19 +11,22 @@
 //! system concerned". The archive carries that data in one step: the build
 //! and its pins ([`provenance::Build`]), the release artefacts and the
 //! commands that verify their attestations ([`provenance::Release`]), the
-//! effective configuration with every credential, URL credential and
-//! development cross-reference redacted ([`redact`]), and, from a gateway
+//! effective configuration redacted deny by default ([`redact`]), and, from a gateway
 //! running on this host, readiness, the dependency states, the integrity
 //! incidents and the metrics ([`source`]). A part that cannot be read is
 //! named in the manifest with the reason, never written as an empty file.
 //!
-//! No part carries a patient identifier or a clinical payload (§5.4.1,
-//! N33): the live parts are the routing ids, counts and states the
-//! gateway's own surfaces answer with, and the configuration keeps no value
-//! of `[dev]`. The archive is an uncompressed POSIX tar under one directory,
+//! No part carries a patient identifier, an `ehr_id`, a clinical payload, a
+//! credential or a personal name (§5.4.1, N33). Each live answer is read
+//! into the fields [`answers`] keeps (states, counts, kinds, times and
+//! routing ids) and written again, the metrics keep only the labels the
+//! gateway sets, a part that does not read is named without quoting it, and
+//! the configuration keeps no key of a data-keyed table and no value of
+//! `[dev]`. The archive is an uncompressed POSIX tar under one directory,
 //! [`ROOT`], with `manifest.json` first. No specification governs the
 //! report's form: our own design.
 
+pub mod answers;
 pub mod provenance;
 pub mod redact;
 pub mod source;
@@ -34,7 +37,6 @@ use std::path::Path;
 
 use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::manufacturer::{MANUFACTURER, Manufacturer};
-use ferrofed_registry::operator::IncidentReport;
 use http::StatusCode;
 use jiff::Timestamp;
 use secrecy::SecretString;
@@ -292,14 +294,15 @@ impl Report {
                     .await
                     .and_then(|(status, body)| {
                         if status == StatusCode::OK || status == StatusCode::SERVICE_UNAVAILABLE {
-                            source::json(&readiness, body).map(|body| (status, body))
+                            source::document::<answers::Readiness>(&readiness, &body)
+                                .map(|body| (status, body))
                         } else {
                             Err(refused(&readiness, status))
                         }
                     });
                 self.add(
                     "health/readiness.json",
-                    "readiness: the phase and every indicator",
+                    "readiness: the phase and the state of every indicator",
                     &readiness,
                     outcome,
                 );
@@ -314,10 +317,10 @@ impl Report {
                 );
                 let incidents = base.join(crate::operator::INCIDENTS);
                 let outcome =
-                    Self::document::<IncidentReport>(&gateway, &incidents, operator).await;
+                    Self::document::<answers::Incidents>(&gateway, &incidents, operator).await;
                 self.add(
                     "incidents.json",
-                    "the integrity incidents: every kind's count and the most recent of each",
+                    "the integrity incidents: every kind's count, and the kind, time and routing ids of the most recent of each",
                     &incidents,
                     outcome,
                 );
@@ -335,7 +338,8 @@ impl Report {
                         .await
                         .and_then(|(status, body)| {
                             if status == StatusCode::OK {
-                                source::text(crate::metrics::PATH, body).map(|body| (status, body))
+                                source::text(crate::metrics::PATH, body)
+                                    .map(|text| (status, answers::metrics(&text).into_bytes()))
                             } else {
                                 Err(refused(crate::metrics::PATH, status))
                             }
@@ -345,7 +349,7 @@ impl Report {
         };
         self.add(
             "metrics.txt",
-            "the metrics in the Prometheus text format",
+            "the metrics in the Prometheus text format, every label the gateway does not set redacted",
             crate::metrics::PATH,
             metrics,
         );
@@ -390,7 +394,7 @@ impl Report {
     fn miss(&mut self, path: &'static str, error: &SourceError) {
         self.missing.push(Missing {
             path,
-            reason: crate::chain(error),
+            reason: error.reason(),
         });
     }
 }

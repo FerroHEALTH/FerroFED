@@ -79,6 +79,26 @@ pub enum SourceError {
     },
 }
 
+impl SourceError {
+    /// Returns why the part is missing, as the manifest records it.
+    ///
+    /// A body that does not read is named without its cause, because a
+    /// parser's message can quote the body.
+    #[must_use]
+    pub fn reason(&self) -> String {
+        match self {
+            Self::NotDocument { .. } | Self::NotText { .. } | Self::Status { .. } => {
+                self.to_string()
+            }
+            Self::NotServed(_)
+            | Self::Tls(_)
+            | Self::Client(_)
+            | Self::Request { .. }
+            | Self::TooLong { .. } => crate::chain(self),
+        }
+    }
+}
+
 /// One listener on this host and how to ask it.
 #[derive(Debug)]
 pub struct Listener {
@@ -164,29 +184,33 @@ where
     Ok(written)
 }
 
-/// Returns `body` when it is JSON, unchanged.
-///
-/// # Errors
-/// [`SourceError::NotDocument`] when it is not.
-pub fn json(path: &str, body: Vec<u8>) -> Result<Vec<u8>, SourceError> {
-    match serde_json::from_slice::<serde::de::IgnoredAny>(&body) {
-        Ok(_) => Ok(body),
-        Err(source) => Err(SourceError::NotDocument {
-            path: path.to_owned(),
-            source,
-        }),
-    }
-}
-
-/// Returns `body` when it is UTF-8 text, unchanged.
+/// Returns `body` when it is UTF-8 text.
 ///
 /// # Errors
 /// [`SourceError::NotText`] when it is not.
-pub fn text(path: &str, body: Vec<u8>) -> Result<Vec<u8>, SourceError> {
-    String::from_utf8(body)
-        .map(String::into_bytes)
-        .map_err(|source| SourceError::NotText {
-            path: path.to_owned(),
-            source,
-        })
+pub fn text(path: &str, body: Vec<u8>) -> Result<String, SourceError> {
+    String::from_utf8(body).map_err(|source| SourceError::NotText {
+        path: path.to_owned(),
+        source,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SourceError, document};
+
+    #[test]
+    fn a_body_that_does_not_read_is_never_quoted_in_the_reason() {
+        let error = document::<crate::report::answers::Incidents>(
+            "/operator/incidents",
+            br#"{"counts":"CANARY-BODY","recent":[]}"#,
+        )
+        .expect_err("not an incident report");
+        assert!(matches!(error, SourceError::NotDocument { .. }));
+        assert!(
+            crate::chain(&error).contains("CANARY-BODY"),
+            "the parser quotes the body, which is why the reason leaves it out"
+        );
+        assert!(!error.reason().contains("CANARY"), "{}", error.reason());
+    }
 }
