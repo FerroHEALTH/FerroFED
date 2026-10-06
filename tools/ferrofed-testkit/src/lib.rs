@@ -18,6 +18,9 @@
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
+//! - [`eps`]: the patient summary fixtures, and the structural check of a
+//!   document against the vendored HL7 Europe Patient Summary profiles
+//!   (#689);
 //! - [`dpop`]: the check a test device makes of a `DPoP` proof, and the
 //!   nonce challenge a node answers with (#439);
 //! - [`fapi`]: the harness FAPI 2.0 authorization server, the token
@@ -69,6 +72,7 @@ pub mod atna;
 pub mod atna_feed;
 pub mod containers;
 pub mod dpop;
+pub mod eps;
 pub mod fapi;
 pub mod issuer;
 pub mod leak;

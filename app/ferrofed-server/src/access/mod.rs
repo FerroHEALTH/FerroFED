@@ -372,6 +372,15 @@ impl Gate {
     /// at a node: a query execution, a request in the EHR area, the creation
     /// of an EHR, a DEMOGRAPHIC request, or the read of an EHR by subject.
     fn reaches_patient_data(&self, method: &Method, path: &str) -> bool {
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.2: every path under the FHIR face but its
+        // capability statement is held to a record, so no variant answers data unrecorded.
+        if let Some(face) = self
+            .state
+            .fhir()
+            .and_then(|fhir| crate::fhir::classify(fhir, path))
+        {
+            return face != crate::fhir::FacePath::Metadata;
+        }
         let under_base = if self.base.is_root() {
             Some(path)
         } else {

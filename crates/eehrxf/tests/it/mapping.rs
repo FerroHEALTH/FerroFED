@@ -46,7 +46,7 @@ const CONTEXT: &str = "ferrofed_allergy.context";
 
 /// A canonical composition of the synthetic template, as a CDR would answer
 /// it, with a synthetic `OBJECT_VERSION_ID`.
-const COMPOSITION: &str = r#"{
+pub(crate) const COMPOSITION: &str = r#"{
   "_type": "COMPOSITION",
   "name": { "_type": "DV_TEXT", "value": "Synthetic allergy summary" },
   "archetype_node_id": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1",
@@ -110,6 +110,18 @@ fn mapping() -> Result<Mapping, Box<dyn Error>> {
 fn a_composition_maps_to_its_resource_with_one_provenance() -> Result<(), Box<dyn Error>> {
     let mapping = mapping()?;
     assert_eq!(mapping.len(), 1, "one context compiled");
+    let contexts: Vec<_> = mapping
+        .contexts()
+        .map(|context| (context.name, context.template, context.profile))
+        .collect();
+    assert_eq!(
+        contexts,
+        [(
+            CONTEXT,
+            "ferrofed.eehrxf.allergy.v1",
+            "http://example.org/fhir/StructureDefinition/ferrofed-allergy"
+        )]
+    );
     let answer = mapping.to_fhir(COMPOSITION, &settings())?;
     let bundle = answer.bundle();
     assert_eq!(bundle.r#type.value.as_deref(), Some("collection"));

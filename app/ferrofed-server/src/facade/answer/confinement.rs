@@ -23,7 +23,7 @@ use crate::federation::Federation;
 /// # Errors
 ///
 /// Returns [`Failure::Confined`] for such targets, with nothing sent.
-pub(super) fn held_within(
+pub(in crate::facade) fn held_within(
     federation: &Federation,
     conveyance: &Conveyance,
     (analysis, targets): (&Analysis, &plan::Targets),
@@ -54,7 +54,7 @@ pub(super) fn held_within(
 /// Returns [`Failure::Confined`] for such a query, before any lookup and
 /// with nothing sent, and [`Failure::Unconfirmed`] when the named patient
 /// cannot be checked at the bound member.
-pub(super) async fn confine(
+pub(in crate::facade) async fn confine(
     federation: &Federation,
     (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
     analysis: &Analysis,

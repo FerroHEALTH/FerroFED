@@ -26,7 +26,7 @@ use crate::federation::Federation;
 /// `session`'s resolution bindings (§12.5.1 step 2), teaches the `ehr_id` index where
 /// each `ehr_id` is held (step 3), and records the state the resolution
 /// showed of the resolver.
-pub(super) fn remember(
+pub(in crate::facade) fn remember(
     federation: &Federation,
     session: Option<&SessionKey>,
     targets: &plan::Targets,
@@ -55,7 +55,7 @@ pub(super) fn remember(
 /// `plan` shaped for `analysis` under the request's completion strategy,
 /// dedup mode and ENDPOINT attributes, withholding consent unless the
 /// request is served `disclosed` ([`Federation::discloses_consent_to`]).
-pub(super) fn planned(
+pub(in crate::facade) fn planned(
     disclosed: bool,
     plan: Plan,
     analysis: &Analysis,
@@ -83,7 +83,7 @@ pub(super) fn planned(
 /// # Errors
 ///
 /// Returns [`Failure::Plan`] when the targets cannot be planned.
-pub(super) async fn targeted<'q>(
+pub(in crate::facade) async fn targeted<'q>(
     federation: &Federation,
     (analysis, selection): (&'q Analysis, plan::Selection<'_>),
     (requester, on_behalf): (Option<&Requester>, &OnBehalfOf),

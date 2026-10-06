@@ -106,6 +106,21 @@ pub enum Resource {
     Unnamed,
     /// The one the path parameter of this name names.
     Path(&'static str),
+    /// Every stored query of the patient summary's sections, which a
+    /// summary on the FHIR face runs: each must be covered (no
+    /// specification governs the scope of the face: our own design).
+    Sections,
+}
+
+/// The qualified names of the patient summary's section queries, which
+/// [`Resource::Sections`] names, or `None` when one cannot be named, which
+/// grants nothing.
+#[must_use]
+pub fn sections() -> Option<Vec<String>> {
+    ferrofed_eehrxf::patient_summary::Section::ALL
+        .into_iter()
+        .map(|section| section.name().ok().map(|name| name.as_str().to_owned()))
+        .collect()
 }
 
 /// What the operation `matched` names requires, or `None` for an operation

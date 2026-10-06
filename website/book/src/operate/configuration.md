@@ -168,6 +168,7 @@ The sections, and the page that covers each:
 | `[access_log]` | the category map every access record is classified with: template ids and archetype ids to Art 14(1) categories, national categories, or `none`; and `[access_log.retention]`, the years each record is kept by category and origin, at least three | [The access log](audit.md#access_log) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
+| `[fhir]` | the FHIR R4 face of the European exchange format: its base, the operator, and the FHIRconnect mappings | [The patient summary over FHIR](../integrate/patient-summary.md) |
 
 ### The bindings and their features
 
