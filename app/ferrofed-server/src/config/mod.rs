@@ -26,6 +26,7 @@ pub mod error;
 pub mod grant;
 pub mod limits;
 mod load;
+pub mod public_url;
 pub(crate) mod resolve;
 pub(crate) mod secrets;
 pub mod server;

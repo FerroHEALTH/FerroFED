@@ -10,11 +10,14 @@
 #   1. every ```toml block of the page opens with `# ferrofed.toml` or
 #      `# registry.toml`, and the blocks of each file assemble into it;
 #   2. the proxy's upstream is the assembled server.listen, its locations sit
-#      under server.base_path, and [signing] jwks_uri and [pmir] callback_url
-#      name the routes the proxy passes;
+#      under server.base_path, server.public_url ends in that path, [signing]
+#      jwks_uri and [pmir] callback_url, as set or as server.public_url gives
+#      them, name the routes the proxy passes, and the proxy sets the
+#      X-Forwarded-For the gateway reads from the proxy's address alone;
 #   3. given a static Linux ferrofed binary, `ferrofed config check` accepts
 #      the assembled files, mounted where the page mounts them, in the pinned
-#      base image of docker/Dockerfile, with a synthetic file for each secret
+#      base image of docker/Dockerfile on a read-only root with no durable
+#      volume, with a synthetic file for each secret
 #      and a synthetic ES384 key for each signing key; and refuses them
 #      without [audit] destination, naming it;
 #   4. with the same binary, the gateway serves the assembled files with no
@@ -116,8 +119,19 @@ value() {
 }
 listen="$(value server listen)"
 base="$(value server base_path)"
+public="$(value server public_url)"
 jwks="$(value signing jwks_uri)"
 feed="$(value pmir callback_url)"
+# An unset jwks_uri or callback_url is its route under server.public_url.
+if [[ -n "$public" ]]; then
+  if [[ "$public" != https://*"$base" ]]; then
+    bad "the page's server.public_url, $public, does not end in server.base_path $base"
+  else
+    echo "OK: server.public_url ends in server.base_path"
+  fi
+  jwks="${jwks:-$public/.well-known/jwks.json}"
+  feed="${feed:-$public/pmir/feed}"
+fi
 upstream="$(sed -nE 's/^[[:space:]]+server ([0-9.:]+);$/\1/p' "$PROXY")"
 if [[ -z "$listen" ]] || [[ "$upstream" != "$listen" ]]; then
   bad "$PROXY passes to '$upstream', and the page's server.listen is '$listen'"
@@ -155,6 +169,19 @@ else
   else
     echo "OK: [pmir] callback_url names the feed route"
   fi
+fi
+# The proxy names the client in X-Forwarded-For, set and never appended, and
+# the gateway reads that header from the proxy's address alone.
+upstream_host="${upstream%:*}"
+# shellcheck disable=SC2016 # $remote_addr is nginx's variable, matched literally
+if ! grep -qE '^[[:space:]]+proxy_set_header X-Forwarded-For \$remote_addr;$' "$PROXY"; then
+  bad "$PROXY does not set X-Forwarded-For to \$remote_addr"
+elif [[ "$(value server forwarded_header)" != "x-forwarded-for" ]]; then
+  bad "the page's server.forwarded_header is not x-forwarded-for, the header $PROXY sets"
+elif ! grep -qE "^trusted_proxies[[:space:]]*=[[:space:]]*\[.*\"${upstream_host//./\\.}\".*\]" "$work/ferrofed.toml"; then
+  bad "the page's server.trusted_proxies does not name $upstream_host, the address $PROXY reaches the gateway from"
+else
+  echo "OK: the gateway takes the client's address from the proxy alone"
 fi
 
 if [[ -z "$binary" ]]; then
@@ -196,7 +223,9 @@ docker pull --quiet "$image" > /dev/null
 docker pull --quiet "$NGINX" > /dev/null
 
 # gateway_run ARGS...: the binary in the gateway's image, as the image runs
-# it: read-only, unprivileged, with no network, and the page's mounts.
+# it: read-only, unprivileged, with no network, and the page's mounts. No
+# durable volume is mounted: config check writes nothing, and serve is given
+# a writable /var/lib/ferrofed in place of the volume.
 gateway_run() {
   docker run --read-only --user 65532:65532 --cap-drop ALL \
     --security-opt no-new-privileges:true --network none \
@@ -204,7 +233,6 @@ gateway_run() {
     --volume "$work/ferrofed.toml:/etc/ferrofed/ferrofed.toml:ro" \
     --volume "$work/registry.toml:/etc/ferrofed/registry.toml:ro" \
     --volume "$work/secrets:/run/secrets/ferrofed:ro" \
-    --tmpfs /var/lib/ferrofed:uid=65532,gid=65532,mode=0700 \
     --entrypoint /usr/local/bin/ferrofed "$@"
 }
 
@@ -231,7 +259,9 @@ fi
 cat "$work/accepted.toml" > "$work/ferrofed.toml"
 
 echo "== the gateway behind the shipped proxy"
-gateway_run --detach --name "$gateway" "$image" serve --config /etc/ferrofed/ferrofed.toml > /dev/null
+gateway_run --detach --name "$gateway" \
+  --tmpfs /var/lib/ferrofed:uid=65532,gid=65532,mode=0700 \
+  "$image" serve --config /etc/ferrofed/ferrofed.toml > /dev/null
 ready=0
 for _ in $(seq 1 30); do
   if docker exec "$gateway" /usr/local/bin/ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml > /dev/null 2>&1; then

@@ -60,6 +60,7 @@ pub mod base_path;
 pub mod binding;
 pub mod body;
 pub mod cli;
+pub mod client_address;
 pub mod command;
 pub mod config;
 pub mod conformance;
@@ -172,7 +173,9 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// reads it, the health family excepted; inside it, a verified caller past
 /// `[server.caller_rate]` is answered `429` ([`overload`]). The request log
 /// records each request in the inbound request metrics of `state`
-/// ([`metrics::inbound`]).
+/// ([`metrics::inbound`]). Before any of them, each request served over a
+/// connection is named by the address it came from, its peer or the client
+/// a trusted proxy names ([`client_address`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
@@ -232,6 +235,10 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             admission,
             overload::admit,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(server.forwarding.clone()),
+            client_address::attach,
         ));
     layered(
         guarded,
@@ -346,6 +353,8 @@ pub async fn serve<L>(
 where
     L: Listener,
     L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
 {
     serve_until(
         listener,
@@ -374,10 +383,15 @@ pub async fn serve_until<L, F>(
 where
     L: Listener,
     L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
     F: Future<Output = ()> + Send + 'static,
 {
     let signalled = Arc::new(tokio::sync::Notify::new());
     let inner = Arc::clone(&signalled);
+    // NOTE: no specification governs this: our own design; the address a request
+    // came from is the connection's peer, which only the connection knows.
+    let app = app.into_make_service_with_connect_info::<listener::Peer>();
     let server = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.await;

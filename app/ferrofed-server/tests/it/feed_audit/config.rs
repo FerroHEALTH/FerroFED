@@ -160,3 +160,97 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
     );
     Ok(())
 }
+
+/// The `[audit]` tables of a repository spooling in `spool`.
+fn spooled_in(spool: &Path) -> String {
+    format!(
+        "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
+        toml::Value::String(spool.display().to_string())
+    )
+}
+
+/// Every path under `dir`, sorted.
+fn tree(dir: &Path) -> Result<Vec<std::path::PathBuf>, Box<dyn Error>> {
+    let mut paths = Vec::new();
+    let mut pending = vec![dir.to_owned()];
+    while let Some(next) = pending.pop() {
+        for entry in std::fs::read_dir(&next)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                pending.push(path.clone());
+            }
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+/// Every cause of `error`, as one line.
+fn chain(error: &dyn Error) -> String {
+    let mut line = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        line.push_str(": ");
+        line.push_str(&source.to_string());
+        cause = source.source();
+    }
+    line
+}
+
+#[test]
+fn config_check_creates_no_spool_directory() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let spool = dir.path().join("lib").join("audit-feed-spool");
+    let settings = resolve(&text(dir.path(), "production", &spooled_in(&spool))?)?
+        .map_err(|error| error.to_string())?;
+    let before = tree(dir.path())?;
+    ferrofed_server::state::AppState::check(&settings).map_err(|error| chain(&error))?;
+    assert!(!spool.exists(), "config check created {}", spool.display());
+    assert_eq!(before, tree(dir.path())?);
+    // The trail the check built is forgotten, so serving opens the spool.
+    drop(ferrofed_server::state::AppState::build(&settings).map_err(|error| chain(&error))?);
+    assert!(spool.is_dir(), "serving opens the spool");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn config_check_leaves_a_spool_in_use_as_it_found_it() -> TestResult {
+    use std::os::unix::fs::DirBuilderExt as _;
+
+    let dir = tempfile::tempdir()?;
+    let spool = dir.path().join("audit-feed-spool");
+    std::fs::DirBuilder::new().mode(0o700).create(&spool)?;
+    std::fs::write(spool.join("00000000000000000003.partial"), b"torn")?;
+    let settings = resolve(&text(dir.path(), "production", &spooled_in(&spool))?)?
+        .map_err(|error| error.to_string())?;
+    let before = tree(dir.path())?;
+    ferrofed_server::state::AppState::check(&settings).map_err(|error| chain(&error))?;
+    assert_eq!(
+        before,
+        tree(dir.path())?,
+        "a partial file serve would remove"
+    );
+    Ok(())
+}
+
+#[test]
+fn config_check_refuses_a_spool_serve_could_not_open_naming_its_key() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("a-file");
+    std::fs::write(&file, b"no directory")?;
+    for spool in [file.clone(), file.join("audit-feed-spool")] {
+        let settings = resolve(&text(dir.path(), "production", &spooled_in(&spool))?)?
+            .map_err(|error| error.to_string())?;
+        let before = tree(dir.path())?;
+        let refused = ferrofed_server::state::AppState::check(&settings)
+            .err()
+            .ok_or("a spool serve cannot create is refused")?;
+        let message = chain(&refused);
+        assert!(message.contains("audit.repository.spool_dir"), "{message}");
+        assert!(message.contains("is no directory"), "{message}");
+        assert_eq!(before, tree(dir.path())?);
+    }
+    Ok(())
+}

@@ -59,6 +59,23 @@ impl TlsListener {
     }
 }
 
+/// The address a connection came from, read the same way from a plain
+/// [`TcpListener`] and from a [`TlsListener`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Peer(pub SocketAddr);
+
+impl axum::extract::connect_info::Connected<axum::serve::IncomingStream<'_, TcpListener>> for Peer {
+    fn connect_info(stream: axum::serve::IncomingStream<'_, TcpListener>) -> Self {
+        Self(*stream.remote_addr())
+    }
+}
+
+impl axum::extract::connect_info::Connected<axum::serve::IncomingStream<'_, TlsListener>> for Peer {
+    fn connect_info(stream: axum::serve::IncomingStream<'_, TlsListener>) -> Self {
+        Self(*stream.remote_addr())
+    }
+}
+
 impl axum::serve::Listener for TlsListener {
     type Io = TlsStream<TcpStream>;
     type Addr = SocketAddr;

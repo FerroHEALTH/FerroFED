@@ -102,7 +102,11 @@ impl Binding for Ihe {
             .map(|section| pixm::resolve(section, &ServiceContext::of(settings)))
             .transpose()?;
         settings.xcpd = xcpd::resolve(config)?;
-        settings.pmir = pmir::config::resolve(config, &ServiceContext::of(settings))?;
+        settings.pmir = pmir::config::resolve(
+            config,
+            &ServiceContext::of(settings),
+            settings.server.public_url.as_ref(),
+        )?;
         let audit = audit::config::resolve(config)?;
         if config.registry.document.is_some() && config.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
@@ -379,6 +383,10 @@ impl Binding for Ihe {
             .repository
             .as_ref()
             .is_some_and(|repository| repository.spool_dir.is_none())
+    }
+
+    fn check_scope(&self) -> Option<Box<dyn std::fmt::Debug>> {
+        Some(Box::new(audit::Checking::enter()))
     }
 
     fn log_summary(&self, settings: &Settings) {

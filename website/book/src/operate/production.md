@@ -34,8 +34,9 @@ in.
 Decide three values before you start, because several settings repeat them:
 
 - the public base URL, here `https://gateway.example.org/fed`: its path is
-  `server.base_path`, the JWK Set and the PMIR feed route sit under it, and
-  `auth.audience` names it;
+  `server.base_path`, and `server.public_url` names it once, from which
+  `auth.audience`, the JWK Set's URL and the PMIR feed's URL follow
+  ([The public base URL](public-address.md#the-public-base-url));
 - the federation id, `federation.id`, which `OPTIONS {base}/` reports;
 - each member's node id and endpoint id, which the registry, the PIX
   Manager's domains and the onward credentials all key on.
@@ -124,6 +125,9 @@ profile = "production"
 [server]
 listen = "127.0.0.1:8080"
 base_path = "/fed"
+public_url = "https://gateway.example.org/fed"
+trusted_proxies = ["127.0.0.1"]
+forwarded_header = "x-forwarded-for"
 drain_delay_ms = 5000
 shutdown_timeout_ms = 30000
 
@@ -139,6 +143,10 @@ overall_timeout_ms = 25000
 
 The image sets `FERROFED__SERVER__LISTEN=0.0.0.0:8080`, which overrides
 `listen` inside the container; the published port decides who reaches it.
+`trusted_proxies` and `forwarded_header` take the client's address from the
+reverse proxy of [step 8](#8-tls-and-the-public-address) on loopback, and
+from no one else
+([Behind a reverse proxy](public-address.md#behind-a-reverse-proxy)).
 `drain_delay_ms` keeps the listener open while a load balancer stops
 routing to a stopping gateway
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
@@ -209,7 +217,8 @@ access token:
 
 - its JOSE header names the type `at+jwt`;
 - it carries `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`, and
-  `aud` names `auth.audience`;
+  `aud` names `auth.audience`, which is `server.public_url` unless you set
+  it;
 - its `scope` holds the SMART on openEHR scopes of each operation, such as
   `user/aql-*.s` for a federated query
   ([Scopes per route](authentication.md#scopes-per-route));
@@ -342,7 +351,6 @@ since the gateway compares `iss` exactly:
 ```toml
 # ferrofed.toml
 [auth]
-audience = "https://gateway.example.org/fed"
 clock_skew_s = 60
 
 [[auth.issuer]]
@@ -379,7 +387,6 @@ scope = "system/aql-*.s system/composition-*.r"
 
 [signing]
 key_file = "/run/secrets/ferrofed/signing-key.pem"
-jwks_uri = "https://gateway.example.org/fed/.well-known/jwks.json"
 ```
 
 Make the signing key, and give every secret file to the gateway's user
@@ -393,9 +400,11 @@ sudo chown -R 65532:65532 secrets && sudo chmod 0400 secrets/*
 Use `ec_paramgen_curve:P-256` instead when a member's authorization server
 holds to the FAPI 2.0 Security Profile
 ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
-`jwks_uri` is the JWK Set route on the public address of
-[step 8](#8-tls-and-the-public-address); give it to `cdr-b`'s operator with
-the `client_id`, and to every member that verifies the caller token.
+The JWK Set is served at `https://gateway.example.org/fed/.well-known/jwks.json`,
+on the public address of [step 8](#8-tls-and-the-public-address), and
+`signing.jwks_uri` takes that value from `server.public_url`; give it to
+`cdr-b`'s operator with the `client_id`, and to every member that verifies
+the caller token.
 
 ## 6. Identity resolution
 
@@ -451,9 +460,12 @@ which [step 8](#8-tls-and-the-public-address) opens to the Registry alone
 # ferrofed.toml
 [pmir]
 url = "https://pmir.example.org/fhir"
-callback_url = "https://gateway.example.org/fed/pmir/feed"
 feed_token_file = "/run/secrets/ferrofed/pmir-feed-token"
 ```
+
+The Registry sends the feed to `pmir.callback_url`, which is
+`https://gateway.example.org/fed/pmir/feed` here, the feed route under
+`server.public_url`.
 
 ## 7. The access log
 
@@ -525,6 +537,10 @@ It also:
   its body limit above the gateway's 1 MiB, so a client gets the gateway's
   own answer and error code;
 - sets `Strict-Transport-Security`, which the gateway does not send;
+- sets `X-Forwarded-For` to the address the request came from, replacing
+  any a client sent, and drops `Forwarded`, so the gateway, which trusts
+  this proxy alone, names the client's address and never one a client
+  wrote;
 - writes an access log line with the gateway's request id in place of the
   request line, because the `GET` form of a query and a read by subject
   carry the patient identifier in the query string. The request id finds
@@ -542,7 +558,10 @@ path its `did:web` names, outside the base; pass that path as well
 
 Check the configuration before every start, with the same image you run.
 It resolves the configuration exactly as `serve` would, secret files
-included, opens no store and binds no socket:
+included, opens no store, binds no socket and writes nothing, so it needs
+no durable volume: the audit spool directory is checked where it stands
+and created by `serve`
+([Running it](configuration.md#running-it)):
 
 ```sh
 docker run --rm -v "$PWD/ferrofed.toml:/etc/ferrofed/ferrofed.toml:ro" \

@@ -39,6 +39,7 @@
 - [Upgrading](operate/upgrading.md)
   - [Rollback](operate/rollback.md)
 - [Configuration](operate/configuration.md)
+  - [The public address](operate/public-address.md)
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)
   - [Localization](operate/localization.md)

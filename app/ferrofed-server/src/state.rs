@@ -160,15 +160,19 @@ impl AppState {
     /// builds, every credential travels over `https` unless the profile is
     /// development ([`transport::check`]), and a read-only stored-query
     /// directory loads. A shared or embedded store is not opened, so the
-    /// check reaches no database and takes no file lock.
+    /// check reaches no database and takes no file lock, and nothing is
+    /// written to disk: a spool directory a binding would create or write is
+    /// checked in place ([`crate::binding::check_scope`]).
     ///
     /// Returns the credentials that travel unencrypted under the
     /// development profile, so the caller can say so.
     ///
     /// # Errors
     /// Returns the [`StateError`] [`AppState::build`] would return for the
-    /// federation, the transport of a credential, or the definition files.
+    /// federation, the transport of a credential, the definition files, or a
+    /// spool directory.
     pub fn check(settings: &Settings) -> Result<Vec<ProtectedSite>, StateError> {
+        let scope = crate::binding::check_scope();
         let federation = Federation::load(settings)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         Processes::build(settings)?;
@@ -177,6 +181,8 @@ impl AppState {
         {
             opened(store, federation)?;
         }
+        drop(federation);
+        drop(scope);
         Ok(cleartext)
     }
 

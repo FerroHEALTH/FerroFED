@@ -363,8 +363,25 @@ pub trait Binding: fmt::Debug + Sync {
         false
     }
 
+    /// Enters `config check` on the calling thread: until the returned guard
+    /// drops, what the binding builds writes nothing to disk, and each file
+    /// or directory it would write is checked in place.
+    fn check_scope(&self) -> Option<Box<dyn fmt::Debug>> {
+        None
+    }
+
     /// Logs what the binding is configured to reach, never a value.
     fn log_summary(&self, _settings: &Settings) {}
+}
+
+/// Enters `config check` on the calling thread for every compiled binding
+/// ([`Binding::check_scope`]); the check holds the guards while it builds.
+#[must_use]
+pub fn check_scope() -> Vec<Box<dyn fmt::Debug>> {
+    compiled()
+        .iter()
+        .filter_map(|binding| binding.check_scope())
+        .collect()
 }
 
 /// Returns the configuration sections a registry reload applies.

@@ -1446,6 +1446,7 @@ dependencies = [
  "governor",
  "http",
  "ihe-iti",
+ "ipnet",
  "jiff",
  "jsonschema",
  "jsonwebtoken",
@@ -2307,7 +2308,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.26"
+version = "0.0.27"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

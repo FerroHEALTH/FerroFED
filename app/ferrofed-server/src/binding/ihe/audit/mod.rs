@@ -18,7 +18,10 @@
 pub mod config;
 pub mod repository;
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
+use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
@@ -27,7 +30,7 @@ use ferrofed_identity::ihe::audit::balp::{
 };
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::atna::repository::{Repository, RepositoryError, TlsSettings};
-use ihe_iti::atna::spool::{Content, Spool, SpoolError};
+use ihe_iti::atna::spool::{Bounds, Content, Spool, SpoolError};
 use ihe_iti::balp::AuditRecorder;
 
 use crate::binding::ihe::audit::config::{AuditSettings, FeedRepositorySettings};
@@ -83,6 +86,83 @@ impl Indicator for FeedTrail {
 static TRAILS: LazyLock<Mutex<BTreeMap<String, Trail>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
+thread_local! {
+    /// The spools a `config check` on this thread built a trail over, while
+    /// one runs ([`Checking`]).
+    static CHECKED: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+}
+
+/// A `config check` running on the calling thread.
+///
+/// While it is held, a trail over a spool directory checks the directory in
+/// place ([`Spool::inspect`]) and holds its messages in memory, creating and
+/// writing nothing, and starts no forwarder. The trails it built are
+/// forgotten when it drops, so a later build opens the spool itself. No
+/// specification governs this: our own design.
+#[derive(Debug)]
+pub struct Checking {
+    // NOTE: no specification governs this: our own design; the scope is the
+    // calling thread's, so the guard stays on it.
+    thread: PhantomData<*const ()>,
+}
+
+impl Checking {
+    /// Enters the check on the calling thread.
+    #[must_use]
+    pub fn enter() -> Self {
+        CHECKED.with_borrow_mut(|checked| {
+            checked.get_or_insert_with(Vec::new);
+        });
+        Self {
+            thread: PhantomData,
+        }
+    }
+}
+
+impl Drop for Checking {
+    fn drop(&mut self) {
+        let built = CHECKED.with_borrow_mut(Option::take).unwrap_or_default();
+        let mut trails = TRAILS.lock().unwrap_or_else(PoisonError::into_inner);
+        for key in built {
+            trails.remove(&key);
+        }
+    }
+}
+
+/// Whether a `config check` runs on the calling thread.
+fn checking() -> bool {
+    CHECKED.with_borrow(Option::is_some)
+}
+
+/// Records that the check running on this thread built the trail at `key`.
+fn checked(key: &str) {
+    CHECKED.with_borrow_mut(|checked| {
+        if let Some(built) = checked {
+            built.push(key.to_owned());
+        }
+    });
+}
+
+/// The spool of a trail at `directory`, which `key` names, or in memory
+/// without one: opened, or, while a check runs, checked in place and held in
+/// memory.
+fn spool(
+    key: &'static str,
+    directory: Option<&Path>,
+    bounds: Bounds,
+    content: Content,
+) -> Result<Spool, AuditTrailError> {
+    let refused = |source| AuditTrailError::Spool { key, source };
+    match directory {
+        Some(directory) if checking() => {
+            Spool::inspect(directory).map_err(refused)?;
+            Ok(Spool::in_memory(bounds))
+        }
+        Some(directory) => Spool::open_for(directory, bounds, content).map_err(refused),
+        None => Ok(Spool::in_memory(bounds)),
+    }
+}
+
 /// One running trail, with the settings it was started over.
 enum Trail {
     /// The ITI-55 syslog trail of the XCPD localizer.
@@ -119,9 +199,15 @@ pub enum AuditTrailError {
     /// The FHIR Feed repository's TLS material does not read.
     #[error("the audit repository TLS material cannot be used")]
     Tls(#[source] TlsRefused),
-    /// The spool could not be opened.
-    #[error("the audit spool cannot be used")]
-    Spool(#[source] SpoolError),
+    /// The spool could not be opened, or, in a check, would not open.
+    #[error("{key} names an audit spool that cannot be used")]
+    Spool {
+        /// The key that names the spool directory.
+        key: &'static str,
+        /// Why the spool cannot be used.
+        #[source]
+        source: SpoolError,
+    },
     /// `destination = "repository"` names no `[audit.repository]`.
     #[error("audit.destination = \"repository\" needs [audit.repository]")]
     NoRepository,
@@ -154,7 +240,9 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
                 settings: started,
                 recorder,
             } if started == settings => {
-                recorder.start();
+                if !checking() {
+                    recorder.start();
+                }
                 Ok(Arc::clone(recorder))
             }
             _ => Err(AuditTrailError::InUse { spool: key }),
@@ -176,18 +264,22 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
         Repository::tls(&settings.url, &tls, settings.timeouts)
     }
     .map_err(AuditTrailError::Repository)?;
-    let spool = match &settings.spool_dir {
-        Some(directory) => {
-            Spool::open(directory, settings.bounds).map_err(AuditTrailError::Spool)?
-        }
-        None => Spool::in_memory(settings.bounds),
-    };
+    let spool = spool(
+        "xcpd.audit_repository.spool_dir",
+        settings.spool_dir.as_deref(),
+        settings.bounds,
+        Content::SyslogFrames,
+    )?;
     let recorder = Arc::new(RepositoryAudit::new(
         Forwarder::new(spool, repository, settings.retry_max),
         settings.sender.clone(),
         settings.source.clone(),
     ));
-    recorder.start();
+    if checking() {
+        checked(&key);
+    } else {
+        recorder.start();
+    }
     trails.insert(
         key,
         Trail::Syslog {
@@ -217,7 +309,9 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
                 settings: started,
                 recorder,
             } if started == settings => {
-                recorder.start();
+                if !checking() {
+                    recorder.start();
+                }
                 Ok(Arc::clone(recorder))
             }
             _ => Err(AuditTrailError::InUse { spool: key }),
@@ -236,16 +330,21 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
         settings.timeout,
     )
     .map_err(AuditTrailError::Feed)?;
-    let spool = match &settings.spool_dir {
-        Some(directory) => Spool::open_for(directory, settings.bounds, Content::AuditEvents)
-            .map_err(AuditTrailError::Spool)?,
-        None => Spool::in_memory(settings.bounds),
-    };
+    let spool = spool(
+        "audit.repository.spool_dir",
+        settings.spool_dir.as_deref(),
+        settings.bounds,
+        Content::AuditEvents,
+    )?;
     let recorder = Arc::new(FeedAudit::new(
         Forwarder::fhir_feed(spool, repository, settings.retry_max),
         settings.observer.clone(),
     ));
-    recorder.start();
+    if checking() {
+        checked(&key);
+    } else {
+        recorder.start();
+    }
     trails.insert(
         key,
         Trail::Feed {
