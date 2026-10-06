@@ -763,8 +763,11 @@ jobs:
   # ConfigMap with synthetic secrets (scripts/checks/kubernetes-example.sh),
   # which kubeconform cannot do, and over the example the last release
   # attached, which, when refused, needs a pending upgrade note
-  # (scripts/checks/upgrade-notes.sh). It sits in the Rust tier because the check
-  # needs the binary; the runner image carries Docker Compose, jq and openssl.
+  # (scripts/checks/upgrade-notes.sh), and over every TOML block of the book's
+  # production guide, which it then serves behind deploy/nginx/ferrofed.conf
+  # (scripts/checks/production-guide.sh). It sits in the Rust tier because the
+  # checks need the binary; the runner image carries Docker Compose, jq and
+  # openssl.
   release-compose:
     name: release compose
     needs: detect
@@ -791,6 +794,7 @@ jobs:
       # A change this build makes to what config check accepts needs an upgrade
       # note: the guard runs it over the example the last release attached.
       - run: bash scripts/checks/upgrade-notes.sh target/x86_64-unknown-linux-musl/debug/ferrofed
+      - run: bash scripts/checks/production-guide.sh target/x86_64-unknown-linux-musl/debug/ferrofed
 
   doc:
     name: rustdoc
