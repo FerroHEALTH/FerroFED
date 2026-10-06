@@ -199,7 +199,7 @@ corpus_drop_manifests() {
     # shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
     printf '| `%s` | `%s` |\n' "${file#"$tree"/}" "$(corpus_sha256 "$file")"
     rm -f "$file"
-  done < <(find "$tree" -type f \( "${args[@]}" \) | LC_ALL=C sort)
+  done < <(find "$tree" -type f \( ${args[@]+"${args[@]}"} \) | LC_ALL=C sort)
 }
 
 # The URL a pin cell names: its first `https://` token.

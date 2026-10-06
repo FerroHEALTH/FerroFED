@@ -33,10 +33,14 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
-  example files it mounts. It also attaches the conformance seed data
-  `scripts/release/seed-data.sh` writes, `ferrofed-conformance-seed-data.json`
-  (the vendored demo data `ferrofed conformance run --seed-data` reads, with
-  its Apache-2.0 licence and notice) and its SHA-256 as
+  example files it mounts. It attaches the nginx reverse proxy
+  configuration of the production guide, `deploy/nginx/ferrofed.conf`, as
+  `ferrofed.conf`, with its SHA-256 as `ferrofed.conf.sha256sum`, and fails
+  when the tag's tree has no such file. It also attaches the conformance
+  seed data `scripts/release/seed-data.sh` writes,
+  `ferrofed-conformance-seed-data.json` (the vendored demo data
+  `ferrofed conformance run --seed-data` reads, with its Apache-2.0 licence
+  and notice) and its SHA-256 as
   `ferrofed-conformance-seed-data.json.sha256sum`, and the Grafana dashboard
   and Prometheus alert rules of `deploy/observability/`,
   `ferrofed-dashboard.json` and `ferrofed-alerts.yaml`. A draft is mutable and
@@ -51,9 +55,10 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   it to `ghcr.io/ferrohealth/ferrofed-viewer`. The console ships as an image
   alone, so it attaches no asset to the draft.
 - **finalize-release** checks that the draft carries every asset this version
-  promises, eight per target, the three compose files and the two seed data
-  files, and publishes only then, and only once both images are pushed. A
-  draft missing any of them fails the check and stays a draft, so a
+  promises, eight per target, the three compose files, the nginx
+  configuration and its checksum, the two seed data files, and the dashboard
+  and alert rules, and publishes only then, and only once both images are
+  pushed. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A pre-release is published with
   `--latest=false`, so it never becomes the repository's latest release.
 
@@ -229,7 +234,7 @@ next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
 ## The crates.io lane
 
 The library crates under `crates/` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`, `oauth-server-metadata`) publish behind one switch: the
+`nl-generic-functions`, `oauth-server-metadata`, `ehds-logging`) publish behind one switch: the
 root `Cargo.toml` sets `[workspace.package] publish = false`, every `crates/*`
 member inherits it, and
 `app/*` and `tools/*` carry a hard `publish = false` of their own
@@ -263,7 +268,8 @@ without a version bump, because a published version is immutable
    environment `crates-io`. `openehr-federation`, `ihe-iti` and
    `nl-generic-functions` already exist (the 0.0.0 placeholders of
    2026-10-01), so they need no first upload with a personal token;
-   `oauth-server-metadata` has no placeholder yet and needs one first.
+   `oauth-server-metadata` and `ehds-logging` have no placeholder yet and
+   need one first.
 3. Set `publish = true` in the root `[workspace.package]` in a pull request.
    The next `v*` tag publishes every library crate at its manifest version.
 

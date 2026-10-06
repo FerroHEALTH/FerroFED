@@ -30,7 +30,7 @@ default = ["binding-ihe", "binding-nl"]
 # The IHE binding of Annex A: the PIXm resolver, the PDQm demographics step,
 # the XCPD localizer, the mCSD care services directory, the PMIR identity feed
 # and the ATNA and BALP audit trail they record through (src/binding/ihe).
-binding-ihe = ["dep:ihe-iti", "ferrofed-identity/ihe"]
+binding-ihe = ["dep:ihe-iti", "ferrofed-identity/ihe", "ehds-logging/balp"]
 # The Dutch binding of Annex B: the NVI localizer, the Mitz consent
 # pre-filter, the LRZa URAs they read, and the Nuts grant (src/binding/nl).
 binding-nl = ["dep:nl-generic-functions", "ferrofed-identity/nl", "ferrofed-engine/nl"]
@@ -52,6 +52,10 @@ anyhow.workspace = true
 aws-lc-rs.workspace = true
 axum.workspace = true
 clap.workspace = true
+# The European logging component (#623): the access record of every access
+# to patient data, its category map, and with binding-ihe the record written
+# as a BALP AuditEvent to the audit spool.
+ehds-logging.workspace = true
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
 # the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
 ferrofed-engine.workspace = true

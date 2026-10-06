@@ -62,8 +62,9 @@ static COMPILED: &[&dyn Binding] = &[
 ];
 
 /// The configuration sections every reload applies whatever the bindings:
-/// the registry and the onward credentials of each endpoint.
-const CORE_RELOADABLE: [&str; 2] = ["registry", "credentials"];
+/// the registry, the onward credentials of each endpoint, and the category
+/// map of the access log.
+const CORE_RELOADABLE: [&str; 3] = ["registry", "credentials", "access_log"];
 
 /// Returns every binding this build compiles, in wiring order.
 #[must_use]
@@ -298,6 +299,19 @@ pub trait Binding: fmt::Debug + Sync {
     /// The [`FederationError`] of a document that cannot be built.
     fn documents(&self, _settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
         Ok(Vec::new())
+    }
+
+    /// Returns the sink the access log stores its records through, when the
+    /// binding's settings name one (Regulation (EU) 2025/327 Annex II 3.2).
+    ///
+    /// # Errors
+    ///
+    /// The [`FederationError`] of a sink that cannot be built.
+    fn access_sink(
+        &self,
+        _settings: &Settings,
+    ) -> Result<Option<Arc<dyn ehds_logging::sink::AccessSink>>, FederationError> {
+        Ok(None)
     }
 
     /// Returns the table of the binding's onward grant that `credentials`

@@ -10,7 +10,10 @@
 # that does not exist and a link to an anchor a page does not carry both fail.
 # It then checks README.md the same way, against the repository tree GitHub
 # renders it in. --offline skips every http(s) link: the guard sends no
-# request anywhere.
+# request anywhere. llms.txt, which the site serves at its root, links only
+# the public pages: the README, the documentation, the governance and policy
+# files and the specifications, never the coding assistant's working files
+# (the root instruction file and the dot-claude tree).
 #
 # Usage:
 #   scripts/checks/site-links.sh              assemble the site and check it
@@ -42,6 +45,16 @@ check_html() {
     --root-dir "$root" "$root/**/*.html"
 }
 
+# check_llms FILE: exit 1 naming each line of FILE that links a working file.
+check_llms() {
+  local found
+  found="$(grep -n -E '\]\([^)]*(/\.claude/|/CLAUDE\.md)' "$1" || true)"
+  if [[ -n "$found" ]]; then
+    printf '%s\n' "$found" | sed "s|^|::error::$1:|; s|\$| links a working file, not a public page|" >&2
+    return 1
+  fi
+}
+
 self_test() {
   local work failed=0
   work="$(mktemp -d)"
@@ -68,6 +81,23 @@ self_test() {
       echo "  ok: a site with a broken $case fails"
     fi
   done
+  printf -- '- [README](https://github.com/o/r/blob/main/README.md): x.\n' > "$work/llms-public.txt"
+  printf -- '- [Rules](https://github.com/o/r/blob/main/.claude/rules/x.md): x.\n' > "$work/llms-rules.txt"
+  printf -- '- [Discipline](https://github.com/o/r/blob/main/CLAUDE.md): x.\n' > "$work/llms-claude.txt"
+  if check_llms "$work/llms-public.txt" > /dev/null 2>&1; then
+    echo "  ok: an llms.txt that links public pages passes"
+  else
+    echo "  FAIL: an llms.txt that links public pages was refused" >&2
+    failed=1
+  fi
+  for case in rules claude; do
+    if check_llms "$work/llms-$case.txt" > /dev/null 2>&1; then
+      echo "  FAIL: an llms.txt that links a $case working file passed" >&2
+      failed=1
+    else
+      echo "  ok: an llms.txt that links a $case working file fails"
+    fi
+  done
   [[ "$failed" -eq 0 ]] && echo "site-links self-test: OK"
   return "$failed"
 }
@@ -84,6 +114,9 @@ case "${1:-}" in
   exit 2
   ;;
 esac
+
+echo "== llms.txt (public pages only)"
+check_llms llms.txt
 
 require mdbook mdbook-toc mdbook-mermaid lychee
 

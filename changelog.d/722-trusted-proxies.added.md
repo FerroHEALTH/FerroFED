@@ -1,4 +1,4 @@
-- The client's address behind a reverse proxy (#722). `server.trusted_proxies`
+- The access record names the client's address behind a reverse proxy (#722). `server.trusted_proxies`
   lists the proxies, each an IP address or a CIDR block, whose forwarded
   client address the gateway takes, and `server.forwarded_header` names the
   header they write: `forwarded` (RFC 7239), the default, or

@@ -1229,6 +1229,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "ehds-logging"
+version = "0.0.2"
+dependencies = [
+ "async-trait",
+ "ihe-iti",
+ "jiff",
+ "proptest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1439,6 +1456,7 @@ dependencies = [
  "aws-lc-rs",
  "axum",
  "clap",
+ "ehds-logging",
  "ferrofed-engine",
  "ferrofed-identity",
  "ferrofed-registry",
@@ -2308,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.27"
+version = "0.0.28"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -3283,7 +3301,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.42"
+version = "0.0.43"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",

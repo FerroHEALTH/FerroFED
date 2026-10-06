@@ -25,6 +25,8 @@ pub mod xcpd;
 
 use std::sync::Arc;
 
+use ehds_logging::balp::BalpSink;
+use ehds_logging::sink::AccessSink;
 use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 use ferrofed_identity::ihe::mcsd::source::DirectoryReadError;
 use ferrofed_identity::role::localizer::Localizer;
@@ -120,6 +122,17 @@ impl Binding for Ihe {
         settings.audit = audit;
         settings.pdqm = pdqm::resolve(config, &ServiceContext::of(settings))?;
         Ok(())
+    }
+
+    fn access_sink(
+        &self,
+        settings: &Settings,
+    ) -> Result<Option<Arc<dyn AccessSink>>, FederationError> {
+        let Some(recorder) = audit::recorder(&settings.audit).map_err(FederationError::Audit)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(Arc::new(BalpSink::new(recorder, gateway(settings)))))
     }
 
     fn budgets(&self, config: &Config) -> StepBudgets {
@@ -404,6 +417,27 @@ impl Binding for Ihe {
             "binding configured"
         );
     }
+}
+
+/// The URL the access records name the gateway by: the audience its callers'
+/// tokens name it by, when that is a URL, and its listen address otherwise.
+#[expect(
+    clippy::expect_used,
+    reason = "a socket address is an IP address, bracketed when IPv6, and a port, which always forms an http URL"
+)]
+fn gateway(settings: &Settings) -> url::Url {
+    settings
+        .server
+        .auth
+        .audience
+        .as_deref()
+        // NOTE: RFC 7519 §4.1.3: an audience is any string, so one that is no URL is
+        // legitimately not one, and the listen address names the gateway instead.
+        .and_then(|audience| url::Url::parse(audience).ok())
+        .unwrap_or_else(|| {
+            url::Url::parse(&format!("http://{}/", settings.server.listen))
+                .expect("a socket address should form an http URL")
+        })
 }
 
 /// The token endpoint of every IHE FHIR service whose credentials are a

@@ -82,7 +82,7 @@ async fn manager_answering(status: u16, answer: String) -> Server {
     server
 }
 
-/// A PIX Manager that does not know the patient (ITI-83 §2:3.83.4.2.3, case 3).
+/// A PIX Manager that does not know the patient (ITI-83 §2:3.83.4.2.2.2).
 async fn manager_not_knowing() -> Server {
     manager_answering(
         404,
@@ -92,10 +92,14 @@ async fn manager_not_knowing() -> Server {
     .await
 }
 
+/// The `[audit]` table of a gateway with no registry, whose PIXm records
+/// the log target may keep outside development: it records no access.
+const NO_REGISTRY_AUDIT: &str = "[audit]\ndestination = \"log\"\n\n";
+
 /// The `[pixm]` table of one Manager at `pix` serving node A and node B.
 fn pixm(pix: &str) -> String {
     format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
+        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
     )
 }
 
@@ -370,7 +374,7 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
 fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
+        "[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
     );
     let error = load_refusal(dir.path(), &text)?;
     assert!(
@@ -422,7 +426,10 @@ fn a_node_selection_the_gateway_does_not_know_refuses_to_boot() -> TestResult {
 #[test]
 fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
     let settings = Config::from_sources(
-        Some(&crate::support::signed(&pixm("https://127.0.0.1:9"))),
+        Some(&crate::support::signed(&format!(
+            "{NO_REGISTRY_AUDIT}{}",
+            pixm("https://127.0.0.1:9")
+        ))),
         &BTreeMap::new(),
     )?
     .resolve()?;
@@ -502,7 +509,7 @@ fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
 #[test]
 fn a_pix_manager_secret_never_reaches_debug_output() -> TestResult {
     let text = format!(
-        "{}\n[pixm.manager.credentials]\nbearer_token = \"synthetic-pix-token\"\n",
+        "{NO_REGISTRY_AUDIT}{}\n[pixm.manager.credentials]\nbearer_token = \"synthetic-pix-token\"\n",
         pixm("https://127.0.0.1:9")
     );
     let settings =

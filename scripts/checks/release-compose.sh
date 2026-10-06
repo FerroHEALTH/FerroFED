@@ -10,15 +10,19 @@
 #      runs the published image and only release-image.yml builds it;
 #   2. Docker Compose renders the release compose file;
 #   3. the stop_grace_period of the release compose file outlasts the drain
-#      delay plus the drain of the example's [server] table;
+#      delay plus the drain of the example's [server] table, and the example
+#      sends the access records of its registry to an Audit Record
+#      Repository, never to the log target, which names no caller and no
+#      patient (Regulation (EU) 2025/327 Annex II 3.2);
 #   4. given a static Linux ferrofed binary, `ferrofed config check` accepts
 #      the example ferrofed.toml and registry.toml exactly as attached, mounted
 #      at the paths the rendered compose file mounts them, in the pinned base
 #      image of docker/Dockerfile, with a synthetic file for each credential
 #      the example names and a synthetic ES384 key for each signing key; and
 #      it refuses the same configuration once a member is left out of the
-#      PIX Manager, naming that member, and once the PIX Manager's credential
-#      would travel over plain http, naming its URL key.
+#      PIX Manager, naming that member, once the PIX Manager's credential
+#      would travel over plain http, naming its URL key, and once its access
+#      records go to the log target, naming audit.destination.
 #
 # Usage:
 #   scripts/checks/release-compose.sh                  checks 1 to 3
@@ -120,6 +124,24 @@ else
   echo "OK: a stop grace period of $grace s outlasts the $delay ms delay and the $shutdown ms drain"
 fi
 
+echo "== the access log names the caller and the patient"
+# audit_destination FILE: the destination key of FILE's [audit] table.
+audit_destination() {
+  local file="$1"
+  awk '
+    /^\[/ { inside = ($0 == "[audit]"); next }
+    inside && $1 == "destination" && $2 == "=" { print $3; exit }
+  ' "$file"
+}
+destination="$(audit_destination "$RELEASE/ferrofed.toml")"
+if ! grep -qE '^\[registry(\.[a-z]+)?\]$' "$RELEASE/ferrofed.toml"; then
+  echo "OK: the example configures no registry, so it records no access"
+elif [[ "$destination" != '"repository"' ]]; then
+  bad "$RELEASE/ferrofed.toml configures a registry and sends its access records to ${destination:-nowhere}; it needs [audit] destination = \"repository\""
+else
+  echo "OK: the example sends its access records to an Audit Record Repository"
+fi
+
 if [[ -z "$binary" ]]; then
   echo "no ferrofed binary given: config check skipped"
 elif [[ -n "$rendered" ]]; then
@@ -131,13 +153,14 @@ elif [[ -n "$rendered" ]]; then
   while IFS= read -r mount; do
     mounts+=(--volume "$mount")
   done < <(jq -r '.services.ferrofed.volumes[] | select(.type == "bind") | "\(.source):\(.target):ro"' <<< "$rendered")
-  # check: runs config check as the image does, read-only and unprivileged.
+  # check: runs config check as the image does, read-only and unprivileged,
+  # with no audit-spool volume, since config check writes nothing.
   check() {
     docker run --rm --read-only --user 65532:65532 --cap-drop ALL \
       --security-opt no-new-privileges:true --network none \
       --env FERROFED_CONFIG="$config" \
       --volume "$(cd "$(dirname "$binary")" && pwd)/$(basename "$binary"):/usr/local/bin/ferrofed:ro" \
-      "${mounts[@]}" --entrypoint /usr/local/bin/ferrofed "$base" config check
+      ${mounts[@]+"${mounts[@]}"} --entrypoint /usr/local/bin/ferrofed "$base" config check
   }
   docker pull --quiet "$base" > /dev/null
   if [[ -z "$config" ]] || [[ "${#mounts[@]}" -eq 0 ]]; then
@@ -170,6 +193,24 @@ elif [[ -n "$rendered" ]]; then
     bad "ferrofed config check refuses a cleartext credential without naming its key: $out"
   else
     echo "OK: a credential sent over plain http is refused by key"
+  fi
+  # The access records of a registry sent to the log target are refused.
+  awk '
+    /^\[audit\.repository\]$/ { skip = 1; next }
+    /^\[/ { skip = 0 }
+    skip { next }
+    $1 == "destination" && $2 == "=" { print "destination = \"log\""; next }
+    { print }
+  ' "$RELEASE/ferrofed.toml" > "$work/refused.toml"
+  cat "$work/refused.toml" > "$work/ferrofed.toml"
+  if [[ "$(audit_destination "$work/ferrofed.toml")" != '"log"' ]]; then
+    bad "the example names no [audit] destination to rewrite"
+  elif out="$(check 2>&1)"; then
+    bad "ferrofed config check accepts the access records of a registry sent to the log target"
+  elif ! grep -qF 'audit.destination' <<< "$out"; then
+    bad "ferrofed config check refuses destination = \"log\" without naming audit.destination: $out"
+  else
+    echo "OK: the access records sent to the log target are refused by key"
   fi
 fi
 

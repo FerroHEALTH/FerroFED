@@ -11,11 +11,12 @@
 # workflows release-build.yml, release-image.yml and release-viewer.yml, the
 # SLSA Build Level 3 lanes.
 #
-# The release is created as a DRAFT, the gateway compose files, the
-# conformance seed data, the binaries, SBOMs and attestation bundles are
-# attached to it, the gateway and operator console images are pushed to
-# GHCR, and only once the expected asset set is complete is it PUBLISHED.
-# Publishing last means a half-assembled release is never visible.
+# The release is created as a DRAFT, the gateway compose files, the nginx
+# reverse proxy configuration, the conformance seed data, the binaries, SBOMs
+# and attestation bundles are attached to it, the gateway and operator
+# console images are pushed to GHCR, and only once the expected asset set is
+# complete is it PUBLISHED. Publishing last means a half-assembled release is
+# never visible.
 #
 # Every tag since v0.0.1 carries the workspace (#28), so `plan` fails a tag
 # whose tree has no root Cargo.toml, because the tag cannot then be checked
@@ -317,6 +318,28 @@ jobs:
             deploy/compose/registry.toml \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+      # The nginx reverse proxy of the production guide, deploy/nginx, under
+      # its file name, with its SHA-256 in sha256sum form, so an operator who
+      # installs from this page verifies it beside the compose files. A tree
+      # without it fails here, before anything is uploaded.
+      - name: Attach the nginx reverse proxy configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ ! -f deploy/nginx/ferrofed.conf ]; then
+            echo "::error::deploy/nginx/ferrofed.conf is missing, so $TAG has no reverse proxy configuration to attach." >&2
+            exit 1
+          fi
+          mkdir -p nginx
+          cp deploy/nginx/ferrofed.conf nginx/ferrofed.conf
+          (cd nginx && sha256sum ferrofed.conf > ferrofed.conf.sha256sum)
+          gh release upload "$TAG" \
+            nginx/ferrofed.conf \
+            nginx/ferrofed.conf.sha256sum \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
       # The Grafana dashboard and the Prometheus alert rules over the
       # gateway's metrics, each under its file name, which
       # scripts/checks/observability.sh holds to the metrics this release
@@ -450,9 +473,11 @@ jobs:
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
           # The release-wide assets github-release attaches: the gateway
-          # compose file, the two example files it mounts, the conformance
-          # seed data with its SHA-256, and the dashboard and alert rules.
+          # compose file, the two example files it mounts, the nginx reverse
+          # proxy configuration with its SHA-256, the conformance seed data
+          # with its SHA-256, and the dashboard and alert rules.
           for asset in compose.yaml ferrofed.toml registry.toml \
+            ferrofed.conf ferrofed.conf.sha256sum \
             ferrofed-conformance-seed-data.json \
             ferrofed-conformance-seed-data.json.sha256sum \
             ferrofed-dashboard.json ferrofed-alerts.yaml; do

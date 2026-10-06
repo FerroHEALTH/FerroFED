@@ -88,7 +88,7 @@ check() {
     echo "upgrade-notes: add $FRAGMENT_DIR/<issue>-<slug>.upgrade.md saying what an operator must change (changelog.d/README.md)." >&2
     return 1
   fi
-  echo "upgrade-notes: this build refuses the $tag example configuration ($out); the upgrade notes are ${notes[*]}."
+  echo "upgrade-notes: this build refuses the $tag example configuration ($out); the upgrade notes are ${notes[*]-}."
 }
 
 self_test() {

@@ -84,6 +84,16 @@ pub(crate) enum Submitted<'a> {
     },
 }
 
+impl Submitted<'_> {
+    /// The qualified name of the stored query invoked, for a stored query.
+    pub(crate) fn stored_name(&self) -> Option<&str> {
+        match self {
+            Self::Stored { name, .. } => Some(name),
+            Self::Body(_) | Self::Query { .. } => None,
+        }
+    }
+}
+
 /// Analyses the façade query of `request` under the request's `completion`
 /// and `dedup` mode, directed at the `named` endpoints when the query names
 /// them, recording a refusal or a strip as a security event (§5.4.3).

@@ -55,6 +55,7 @@ mod rewrite;
 mod scan;
 mod scope;
 
+pub mod archetypes;
 pub mod definition;
 pub mod directive;
 pub mod refusal;
@@ -76,6 +77,7 @@ use crate::aggregate::{AggregateFunction, Recombination};
 use crate::attribute::EndpointAttribute;
 use crate::dedup::DedupMode;
 use crate::order::ResultOrder;
+use archetypes::Constrained;
 use directive::FacadeQuery;
 use refusal::{Indecomposable, Refusal};
 use scan::{Findings, Input};
@@ -397,6 +399,7 @@ pub struct PatientQuery {
     order: ResultOrder,
     recombination: Option<Recombination>,
     within_one_ehr: bool,
+    constrained: Constrained,
 }
 
 impl PatientQuery {
@@ -454,6 +457,7 @@ pub struct UnscopedQuery {
     order: ResultOrder,
     recombination: Option<Recombination>,
     within_one_ehr: bool,
+    constrained: Constrained,
 }
 
 impl UnscopedQuery {
@@ -537,6 +541,7 @@ fn analyse_tree(
 ) -> Result<Analysis, Refusal> {
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
     scope::canonical(&mut query);
+    let constrained = Constrained::of(&query);
     let facade_columns = render_columns(&query.select);
     let endpoint = match directive {
         Some(directive) => directive::strip_endpoint_columns(&mut query, directive)?,
@@ -579,6 +584,7 @@ fn analyse_tree(
     if !endpoint.is_empty() {
         analysis.select_endpoint_attributes(facade_columns, &endpoint);
     }
+    analysis.constrain(constrained);
     let (order, recombined, sources) = match &mut analysis {
         Analysis::Patient(query) => (
             &mut query.order,
@@ -701,6 +707,7 @@ fn patient(
         order,
         recombination: None,
         within_one_ehr,
+        constrained: Constrained::default(),
     }))
 }
 
@@ -737,5 +744,6 @@ fn unscoped(
         order,
         recombination: None,
         within_one_ehr,
+        constrained: Constrained::default(),
     }))
 }

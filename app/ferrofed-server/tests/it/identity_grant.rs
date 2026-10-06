@@ -7,8 +7,9 @@
 //! is asked with a token the grant obtained and incorporated as a bearer
 //! token (ITI-72 §3.72.4.2), the token is reused while it is fresh, a `401`
 //! gets one more request with a fresh token (§3.72.4.3), a refused grant
-//! fails the query before any node is asked, and `config check` names every
-//! key it refuses and never the secret.
+//! fails the query before any node is asked, a query it resolved writes its
+//! access record, and `config check` names every key it refuses and never
+//! the secret.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -23,6 +24,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
+use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::TokenEndpoint;
 use http::StatusCode;
@@ -33,6 +35,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, PATIENT, body, gateway, node_answering, patient_query, post, registry,
     statuses,
 };
+use crate::feed_audit::{SETTLE, audit_tables, transactions};
 use crate::run::binary;
 use crate::support::call;
 
@@ -82,9 +85,19 @@ async fn manager_requiring(endpoint: &TokenEndpoint) -> Server {
 /// The `[pixm]` table of one Manager at `pix`, authenticated by the grant
 /// at `token_url` with the secret in `secret_file`.
 fn pixm(pix: &str, token_url: &str, secret_file: &Path) -> String {
+    pixm_auditing(
+        pix,
+        token_url,
+        secret_file,
+        "[audit]\ndestination = \"log\"\n",
+    )
+}
+
+/// The `[pixm]` table of [`pixm`], beside the `[audit]` table `audit`.
+fn pixm_auditing(pix: &str, token_url: &str, secret_file: &Path, audit: &str) -> String {
     let file = toml::Value::String(secret_file.display().to_string());
     format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
+        "{audit}\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
     )
 }
 
@@ -177,6 +190,51 @@ async fn a_grant_the_token_endpoint_refuses_fails_the_query_424_and_no_node_is_a
     assert_eq!(0, endpoint.issued());
     assert_eq!(0, asked(&pix).await?, "nothing is sent without a token");
     assert_eq!(0, asked(&a).await? + asked(&b).await?, "no node is asked");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_query_resolved_through_the_grant_writes_its_access_record() -> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(3600)).await;
+    endpoint.accept_client_secret(SECRET);
+    endpoint.expect_scope(SCOPE);
+    let pix = manager_requiring(&endpoint).await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let tables = pixm_auditing(
+        &pix.uri(),
+        &endpoint.token_url(),
+        &secret_file(dir.path())?,
+        &audit_tables(&repository, ""),
+    );
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "profile = \"development\"",
+        &tables,
+    )?;
+
+    let (status, text) = call(app, post(body(&patient_query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(1, endpoint.issued(), "the Manager was asked with a token");
+    let records = repository.wait_for(2, SETTLE).await;
+    let mut resolutions = 0;
+    for record in &records {
+        assert!(!record.contains(SECRET), "no record carries the secret");
+        if transactions(record).is_ok_and(|codes| codes == ["ITI-83"]) {
+            resolutions += 1;
+        }
+    }
+    assert_eq!(1, resolutions, "one record of the ITI-83 exchange");
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access is recorded whatever
+    // credential resolved the patient.
+    let accesses: Vec<&String> = records
+        .iter()
+        .filter(|record| record.contains("IHE.BasicAudit.PatientQuery"))
+        .collect();
+    assert_eq!(1, accesses.len(), "one record of the access: {records:?}");
     Ok(())
 }
 

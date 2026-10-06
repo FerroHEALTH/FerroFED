@@ -602,9 +602,10 @@ with no marked test is not listed.
 
 ## Track 10
 
-17 tests.
+18 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
+- `app/ferrofed-server/tests/it/access/query.rs`: `no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/probed_ehr_id.rs`: `a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe`, `a_read_whose_ehr_id_is_no_uuid_and_that_nothing_routes_is_refused_and_probes_nobody`, `an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed`

@@ -213,7 +213,12 @@ pub(crate) async fn unrouted(
             Err(unanswered) => arrived = unanswered,
         }
     }
-    serve(Some(serving), arrived).await
+    let routed = crate::access::routed::Routed::of(serving, &arrived);
+    let response = serve(Some(serving), arrived).await;
+    match routed {
+        Some(routed) => routed.attach(serving, response).await,
+        None => response,
+    }
 }
 
 /// Answers a request under the ITS-REST prefix that no other route serves.

@@ -121,7 +121,7 @@ case "${1:-}" in
     while IFS= read -r page; do
       files+=("$page")
     done < <(pages)
-    found="$(scan "${files[@]}")"
+    found="$(scan ${files[@]+"${files[@]}"})"
     if [[ -n "$found" ]]; then
       printf '%s\n' "$found" >&2
       echo "doc-curl: FAILED" >&2

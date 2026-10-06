@@ -51,6 +51,7 @@
 //! This module holds the two query handlers; `request` reads what a
 //! request submits, and `answer` answers it.
 
+mod accessed;
 mod answer;
 pub mod cells;
 pub mod completeness;
