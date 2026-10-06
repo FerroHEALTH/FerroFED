@@ -20,7 +20,8 @@ use ferrofed_registry::definition::store::{DefinitionStore, StoreError};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
-use ferrofed_server::stored::postgres::{PostgresStore, TABLE};
+use ferrofed_server::stored::postgres::{LAYOUT, PostgresStore, TABLE, VERSIONS};
+use ferrofed_server::stored::schema::{self, SchemaError};
 use ferrofed_testkit::containers;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -284,5 +285,96 @@ async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestR
     );
     assert!(line.contains(NAME), "names the definition: {line}");
     assert!(!line.contains(PATIENT_TAIL), "§5.4.3: never quoted: {line}");
+    Ok(())
+}
+
+/// Runs `statement` against the database at `url`, past the store.
+async fn executed(url: &str, statement: &str) -> TestResult {
+    let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
+    let driven = tokio::spawn(connection);
+    client.batch_execute(statement).await?;
+    drop(client);
+    driven.await??;
+    Ok(())
+}
+
+/// The schema version the database at `url` records for the definitions.
+async fn recorded(url: &str) -> Result<Option<i32>, Box<dyn Error>> {
+    let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
+    let driven = tokio::spawn(connection);
+    let row = client
+        .query_opt(
+            &format!("SELECT version FROM {VERSIONS} WHERE layout = $1"),
+            &[&LAYOUT],
+        )
+        .await?;
+    drop(client);
+    driven.await??;
+    Ok(row.map(|row| row.get(0)))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_database_written_before_versions_were_recorded_is_migrated_and_keeps_its_rows()
+-> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let server = containers::postgres("stored_legacy", &[]).await?;
+    let url = server.url("stored_legacy");
+    executed(
+        &url,
+        &format!(
+            "CREATE SCHEMA ferrofed; CREATE TABLE {TABLE} (name text NOT NULL, \
+             version text NOT NULL, saved text NOT NULL, aql text NOT NULL, \
+             PRIMARY KEY (name, version));"
+        ),
+    )
+    .await?;
+    inserted(&url, (NAME, "1.0.0"), &marked("legacy")).await?;
+    let secret = SecretUrl::new(url.clone());
+    let store = tokio::task::block_in_place(|| PostgresStore::open(&secret))?;
+    let held = tokio::task::block_in_place(|| store.load())?;
+    assert_eq!(1, held.len(), "the row written before the migration stays");
+    assert_eq!(Some(i32::try_from(schema::CURRENT)?), recorded(&url).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_database_a_newer_ferrofed_migrated_is_refused_and_left_as_it_was() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let server = containers::postgres("stored_newer", &[]).await?;
+    let url = server.url("stored_newer");
+    let secret = SecretUrl::new(url.clone());
+    drop(tokio::task::block_in_place(|| {
+        PostgresStore::open(&secret)
+    })?);
+    let newer = i32::try_from(schema::CURRENT + 1)?;
+    executed(
+        &url,
+        &format!("UPDATE {VERSIONS} SET version = {newer} WHERE layout = '{LAYOUT}'"),
+    )
+    .await?;
+    let refused = tokio::task::block_in_place(|| PostgresStore::open(&secret))
+        .err()
+        .ok_or("a newer schema refuses the start")?;
+    let StoreError::Backend(error) = &refused else {
+        return Err(format!("a backend refusal: {refused:?}").into());
+    };
+    assert!(
+        matches!(
+            error.downcast_ref::<SchemaError>(),
+            Some(SchemaError::Newer { .. })
+        ),
+        "{error}"
+    );
+    let line = chain(&refused);
+    assert!(line.contains("newer FerroFED"), "{line}");
+    assert_eq!(
+        Some(newer),
+        recorded(&url).await?,
+        "the database is not rewritten"
+    );
     Ok(())
 }
