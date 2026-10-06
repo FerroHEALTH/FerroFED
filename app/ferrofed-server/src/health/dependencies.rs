@@ -28,6 +28,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::role::consent::ConsentDecision;
 use ferrofed_identity::role::demographics::{DemographicsError, Identification};
+use ferrofed_identity::role::header::HeaderAnswer;
 use ferrofed_identity::role::localizer::{Localization, LocalizerError};
 use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::health::{DependencyReport, Observed};
@@ -132,6 +133,17 @@ pub fn of_identification(identification: &Identification) -> Observed {
     match identification {
         Identification::Unavailable(DemographicsError::AuditFailed(_)) => Observed::Failing,
         Identification::Unavailable(error) => error.status().map_or(Observed::Down, of_answer),
+        _ => Observed::Up,
+    }
+}
+
+/// Returns what a demographics answer about a summary header says of its
+/// service, by the rule of [`of_identification`].
+#[must_use]
+pub fn of_header(answer: &HeaderAnswer) -> Observed {
+    match answer {
+        HeaderAnswer::Unavailable(DemographicsError::AuditFailed(_)) => Observed::Failing,
+        HeaderAnswer::Unavailable(error) => error.status().map_or(Observed::Down, of_answer),
         _ => Observed::Up,
     }
 }

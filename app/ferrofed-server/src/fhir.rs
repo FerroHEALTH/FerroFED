@@ -37,8 +37,12 @@ use axum::routing::get;
 use ferrofed_eehrxf::face::{self, FHIR_JSON, Refusal, SummaryRequest};
 use ferrofed_eehrxf::summary::{self, Author, Request as SummaryDocument};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::header::PatientHeader;
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use http::{HeaderValue, Method, StatusCode, Uri, header};
 use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
+use secrecy::SecretString;
 use serde::Serialize;
 
 use crate::access::NoAccess;
@@ -47,6 +51,7 @@ use crate::auth::permission::{Requirement, Resource};
 use crate::config::fhir::FhirSettings;
 use crate::conveyed;
 use crate::error::Code;
+use crate::facade::demographics::{self, Unheaded};
 use crate::facade::request::Arrived;
 use crate::facade::summary::{self as gathered, Unsummarised};
 use crate::request_id;
@@ -245,18 +250,86 @@ async fn summarised(
         on_behalf: &on_behalf,
     };
     let patient = (read.system(), read.value());
+    // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any member
+    // is asked, so no member is reached for a summary that could name no patient.
+    let header = match headed(&federation, (patient, &on_behalf), started).await {
+        Ok(header) => header,
+        Err(unheaded) => {
+            let mut response = unheaded_outcome(unheaded);
+            response.extensions_mut().insert(NoAccess);
+            return response;
+        }
+    };
     match gathered::gather(Arc::clone(&federation), arrived, patient).await {
-        Ok(gathered) => document(&federation, fhir, &gathered, patient, &logged),
+        Ok(gathered) => document(&federation, fhir, &gathered, (patient, header), &logged),
         Err(unsummarised) => refused(&federation, unsummarised, patient, (request_id, outbound)),
     }
 }
 
-/// The document `gathered` makes, answered with the access it records.
+/// The summary header the identity binding holds of the patient
+/// `system`|`value`, asked on behalf of `on_behalf` within the budget of a
+/// request that started at `started`, or the [`Unheaded`] that says why
+/// there is none.
+async fn headed(
+    federation: &crate::federation::Federation,
+    ((system, value), on_behalf): ((&str, &str), &OnBehalfOf),
+    started: Instant,
+) -> Result<PatientHeader, Unheaded> {
+    // NOTE: the request reader refuses an empty system or value, so a reference that cannot
+    // be built names no identifier the binding is asked about.
+    let patient = IdentifierNamespace::new(system)
+        .and_then(|namespace| PatientRef::new(namespace, SecretString::from(value)))
+        .map_err(|_empty| Unheaded::NoBinding)?;
+    let deadline = started
+        .checked_add(federation.budget().overall())
+        .unwrap_or(started);
+    demographics::header(federation, (&patient, on_behalf), deadline).await
+}
+
+/// The `OperationOutcome` of a summary request whose header `unheaded` says
+/// why the identity binding gives none.
+fn unheaded_outcome(unheaded: Unheaded) -> Response {
+    match unheaded {
+        Unheaded::NoBinding => outcome(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "not-supported",
+            "the demographics binding is not asked about identifiers of this system, so no summary header can be written",
+        ),
+        // NOTE: Federation Tier §11.3; a patient the binding does not know answers as one
+        // no member holds, so the outcome names neither.
+        Unheaded::NoMatch => outcome(
+            StatusCode::NOT_FOUND,
+            "not-found",
+            "no member holds a patient summary for this identifier",
+        ),
+        Unheaded::Ambiguous(reason) => outcome(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "multiple-matches",
+            &format!("no summary header can be written: {reason}"),
+        ),
+        Unheaded::Unnamed => outcome(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "required",
+            "the demographics binding holds no name for this patient, which the HL7 Europe Patient Summary Patient requires (ips-pat-1)",
+        ),
+        Unheaded::Unavailable { failure, timed_out } => {
+            let (status, code) = if timed_out {
+                (StatusCode::GATEWAY_TIMEOUT, "timeout")
+            } else {
+                (StatusCode::BAD_GATEWAY, "exception")
+            };
+            outcome(status, code, &format!("no summary header: {failure}"))
+        }
+    }
+}
+
+/// The document `gathered` makes about the patient the identity binding
+/// describes in `header`, answered with the access it records.
 fn document(
     federation: &crate::federation::Federation,
     fhir: &FhirSettings,
     gathered: &gathered::Gathered,
-    (system, value): (&str, &str),
+    ((system, value), header): ((&str, &str), PatientHeader),
     logged: &str,
 ) -> Response {
     let request = SummaryDocument {
@@ -268,6 +341,7 @@ fn document(
             .to_string(),
         system: system.to_owned(),
         value: value.to_owned(),
+        header,
     };
     let author = Author {
         product: String::from(PRODUCT),

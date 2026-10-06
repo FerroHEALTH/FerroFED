@@ -322,7 +322,7 @@ with no marked test is not listed.
 
 ## CP-26
 
-137 tests.
+138 tests.
 
 - `app/ferrofed-engine/src/declared/headers.rs`: `a_utf_8_charset_passes_and_is_dropped`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable`, `an_unlisted_content_type_is_unsupported`, `any_media_type_reaches_the_node_as_the_first_listed`, `prefer_reaches_the_node_as_its_listed_preferences_only`
 - `app/ferrofed-engine/src/declared/mod.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_date_time_is_refused_by_position_never_by_value`, `a_well_formed_date_time_is_held`
@@ -351,6 +351,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/ehr_by_subject.rs`: `a_plus_in_the_subject_is_a_literal_plus`, `a_short_subject_inside_the_registry_base_path_is_never_forwarded`, `a_short_subject_inside_the_routed_ehr_id_still_forwards`, `a_subject_not_given_once_or_an_undeclared_parameter_is_a_400_that_asks_nobody`, `a_subject_one_member_holds_is_that_members_ehr_read_by_its_ehr_id`, `a_subject_several_members_hold_is_a_409_listing_them_and_asks_nobody`, `a_subject_that_is_no_utf8_text_is_a_400_that_asks_no_resolver`, `the_targeting_header_names_which_of_several_holders_answers`
 - `app/ferrofed-server/tests/it/ehr_id_collision.rs`: `an_ehr_id_that_is_no_uuid_is_never_named_by_an_incident`, `no_incident_or_log_line_names_a_patient_identifier`
 - `app/ferrofed-server/tests/it/ehr_scope.rs`: `an_ehr_id_that_is_no_uuid_is_never_probed_nor_sent`, `neither_form_carries_the_patient_identifier_to_a_node`
+- `app/ferrofed-server/tests/it/fhir/header.rs`: `the_header_is_the_supplier_s_and_no_header_value_reaches_a_node`
 - `app/ferrofed-server/tests/it/fhir/summary.rs`: `the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`
 - `app/ferrofed-server/tests/it/follow_up.rs`: `a_version_read_reaches_the_node_byte_identical_and_carries_no_identifier`
 - `app/ferrofed-server/tests/it/mitz/config.rs`: `the_pseudonym_listed_as_the_bsn_is_refused`
@@ -611,7 +612,7 @@ with no marked test is not listed.
 
 ## Track 10
 
-23 tests.
+24 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
 - `app/ferrofed-server/tests/it/access/accessor.rs`: `the_professional_and_the_patient_reach_no_log_or_metric`
@@ -619,6 +620,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/access/query.rs`: `no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`
+- `app/ferrofed-server/tests/it/fhir/header.rs`: `the_header_is_the_supplier_s_and_no_header_value_reaches_a_node`
 - `app/ferrofed-server/tests/it/fhir/summary.rs`: `the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/probed_ehr_id.rs`: `a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe`, `a_read_whose_ehr_id_is_no_uuid_and_that_nothing_routes_is_refused_and_probes_nobody`, `an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed`

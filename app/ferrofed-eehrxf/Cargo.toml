@@ -27,6 +27,9 @@ fhirconnect.workspace = true
 # The qualified name, version and held form of a stored definition (§12.7,
 # N44).
 ferrofed-registry.workspace = true
+# The patient header the identity binding holds, which the document's
+# Patient is written from; the role seam alone, with no binding.
+ferrofed-identity.workspace = true
 # The `saved` instant of a reserved definition.
 jiff.workspace = true
 # Every query is built as an AQL syntax tree and printed with

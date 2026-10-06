@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 
 use crate::role::behalf::OnBehalfOf;
+use crate::role::header::HeaderAnswer;
 use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// Why a demographics service could not answer.
@@ -124,4 +125,18 @@ pub trait Demographics: Send + Sync {
         on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Identification;
+
+    /// Asks the service what it holds of `patient` for a summary header
+    /// (eHN PS A.1.1, A.1.2), on behalf of `on_behalf`, before `deadline`.
+    ///
+    /// The service is asked by the identifier as the client gave it, in any
+    /// namespace it can name, and never by a node's `ehr_id`. It never
+    /// returns an error to the core: a failure is
+    /// [`HeaderAnswer::Unavailable`].
+    async fn header(
+        &self,
+        patient: &PatientRef,
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> HeaderAnswer;
 }

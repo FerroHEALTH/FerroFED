@@ -53,6 +53,7 @@ use crate::ihe::audit::balp::audited_as;
 use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
+use crate::role::header::{HeaderAnswer, PatientHeader, PersonName, PostalAddress, Telecom};
 use crate::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 
 /// The PDQm transaction the gateway asks the Supplier with.
@@ -237,13 +238,13 @@ impl PdqmDemographics {
         &self.master_namespace
     }
 
-    /// The master identity `patients` name, the Patients the Supplier
-    /// matched, every one of them returned.
-    fn read(
-        &self,
+    /// The one active Patient of `patients`, the Patients the Supplier
+    /// matched, every one of them returned, graded `certain` when `certain`
+    /// asks for it.
+    fn one(
         patients: &[MatchedPatient],
         certain: bool,
-    ) -> Result<Option<SecretString>, Ambiguity> {
+    ) -> Result<Option<&MatchedPatient>, Ambiguity> {
         let active: Vec<&MatchedPatient> = patients
             .iter()
             .filter(|matched| {
@@ -263,6 +264,19 @@ impl PdqmDemographics {
         if certain && matched.grade() != Some(MatchGrade::Certain) {
             return Err(Ambiguity::Uncertain);
         }
+        Ok(Some(matched))
+    }
+
+    /// The master identity `patients` name, the Patients the Supplier
+    /// matched, every one of them returned.
+    fn read(
+        &self,
+        patients: &[MatchedPatient],
+        certain: bool,
+    ) -> Result<Option<SecretString>, Ambiguity> {
+        let Some(matched) = Self::one(patients, certain)? else {
+            return Ok(None);
+        };
         let values: BTreeSet<&str> = matched
             .patient()
             .identifier
@@ -287,27 +301,32 @@ impl PdqmDemographics {
 
     /// The identification an ITI-78 first page `page` gives.
     fn searched(&self, page: &SearchResult) -> Identification {
-        let Ok(total) = usize::try_from(page.total()) else {
-            return Identification::Ambiguous(Ambiguity::SeveralPatients);
-        };
-        if total == 0 {
-            return Identification::NoMatch;
-        }
-        // NOTE: §2:3.78.4.1.3 Case 1, `total` counts every match; one the page
-        // does not hold may be active, so several counted are several matched.
-        if page.patients().len() < total {
-            return if total > 1 {
-                Identification::Ambiguous(Ambiguity::SeveralPatients)
-            } else {
+        match counted(page) {
+            Ok(patients) => self.identified(self.read(patients, false)),
+            Err(Uncounted::Several) => Identification::Ambiguous(Ambiguity::SeveralPatients),
+            Err(Uncounted::Unreturned) => {
                 Identification::Unavailable(DemographicsError::Backend(Box::new(Unreturned)))
-            };
+            }
         }
-        self.identified(self.read(page.patients(), false))
     }
 
     /// The identification an ITI-119 answer `found` gives.
     fn matched(&self, found: &MatchResult) -> Identification {
         self.identified(self.read(found.patients(), true))
+    }
+
+    /// The identifier system the Supplier is asked about an identifier of
+    /// `namespace` in, for a header: the system the namespace is mapped to,
+    /// the master domain, or the namespace itself when it is an absolute
+    /// URI, as a FHIR identifier system is.
+    fn system_of<'a>(&'a self, namespace: &'a IdentifierNamespace) -> Option<&'a str> {
+        if let Some(system) = self.namespaces.get(namespace) {
+            return Some(system);
+        }
+        if *namespace == self.master_namespace {
+            return Some(&self.master);
+        }
+        absolute(namespace.as_str()).then_some(namespace.as_str())
     }
 
     fn identified(&self, read: Result<Option<SecretString>, Ambiguity>) -> Identification {
@@ -380,6 +399,168 @@ impl Demographics for PdqmDemographics {
             }
         }
     }
+
+    async fn header(
+        &self,
+        patient: &PatientRef,
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> HeaderAnswer {
+        let Some(system) = self.system_of(patient.namespace()) else {
+            return HeaderAnswer::NotHandled;
+        };
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        if timeout.is_zero() {
+            return HeaderAnswer::Unavailable(DemographicsError::DeadlineExceeded);
+        }
+        let value = SecretString::from(patient.value());
+        let audited = audited_as(on_behalf);
+        match self.transaction {
+            Transaction::Search => {
+                let query = match PatientQuery::new().identifier(Some(system), &value) {
+                    Ok(query) => query,
+                    Err(refused) => {
+                        return HeaderAnswer::Unavailable(DemographicsError::Backend(Box::new(
+                            refused,
+                        )));
+                    }
+                };
+                match self.client.search(&query, &audited, timeout).await {
+                    Ok(page) => match counted(&page) {
+                        Ok(patients) => headed(Self::one(patients, false)),
+                        Err(Uncounted::Several) => {
+                            HeaderAnswer::Ambiguous(Ambiguity::SeveralPatients)
+                        }
+                        Err(Uncounted::Unreturned) => HeaderAnswer::Unavailable(
+                            DemographicsError::Backend(Box::new(Unreturned)),
+                        ),
+                    },
+                    Err(error) => HeaderAnswer::Unavailable(failure(error)),
+                }
+            }
+            Transaction::Match => {
+                let input = match MatchInput::new(system, &value) {
+                    Ok(input) => input.only_certain_matches(true),
+                    Err(refused) => {
+                        return HeaderAnswer::Unavailable(DemographicsError::Backend(Box::new(
+                            refused,
+                        )));
+                    }
+                };
+                match self.client.match_patient(&input, &audited, timeout).await {
+                    Ok(found) => headed(Self::one(found.patients(), true)),
+                    Err(error) => HeaderAnswer::Unavailable(failure(error)),
+                }
+            }
+        }
+    }
+}
+
+/// Why an ITI-78 first page names no set of Patients to choose from.
+enum Uncounted {
+    /// It counts several matches.
+    Several,
+    /// It counts one match it does not return.
+    Unreturned,
+}
+
+/// The Patients an ITI-78 first page `page` holds, when it holds every
+/// match it counts.
+fn counted(page: &SearchResult) -> Result<&[MatchedPatient], Uncounted> {
+    let Ok(total) = usize::try_from(page.total()) else {
+        return Err(Uncounted::Several);
+    };
+    if total == 0 {
+        return Ok(&[]);
+    }
+    // NOTE: §2:3.78.4.1.3 Case 1, `total` counts every match; one the page
+    // does not hold may be active, so several counted are several matched.
+    if page.patients().len() < total {
+        return Err(if total > 1 {
+            Uncounted::Several
+        } else {
+            Uncounted::Unreturned
+        });
+    }
+    Ok(page.patients())
+}
+
+/// The header answer the one Patient `read` from the Supplier's matches
+/// gives.
+fn headed(read: Result<Option<&MatchedPatient>, Ambiguity>) -> HeaderAnswer {
+    match read {
+        Ok(Some(matched)) => HeaderAnswer::Found(Box::new(header_of(matched))),
+        Ok(None) => HeaderAnswer::NoMatch,
+        Err(ambiguity) => HeaderAnswer::Ambiguous(ambiguity),
+    }
+}
+
+/// The value of a FHIR primitive `$element`, an `Option` of one, when it
+/// has a non-empty one.
+macro_rules! value {
+    ($element:expr) => {
+        $element
+            .as_ref()
+            .and_then(|element| element.value.clone())
+            .filter(|value| !value.is_empty())
+    };
+}
+
+/// The non-empty values of the FHIR primitives `$elements`, in order.
+macro_rules! values {
+    ($elements:expr) => {
+        $elements
+            .iter()
+            .filter_map(|element| element.value.clone())
+            .filter(|value| !value.is_empty())
+            .collect()
+    };
+}
+
+/// What `matched`, a PDQm Patient, holds of the summary header: its names,
+/// birth date, gender, addresses and telecoms, each as the Supplier gives
+/// it, and nothing else.
+fn header_of(matched: &MatchedPatient) -> PatientHeader {
+    let patient = matched.patient();
+    PatientHeader {
+        names: patient
+            .name
+            .iter()
+            .map(|name| PersonName {
+                purpose: value!(name.r#use),
+                text: value!(name.text),
+                family: value!(name.family),
+                given: values!(name.given),
+                prefix: values!(name.prefix),
+                suffix: values!(name.suffix),
+            })
+            .collect(),
+        birth_date: value!(patient.birth_date),
+        gender: value!(patient.gender),
+        addresses: patient
+            .address
+            .iter()
+            .map(|address| PostalAddress {
+                purpose: value!(address.r#use),
+                text: value!(address.text),
+                lines: values!(address.line),
+                city: value!(address.city),
+                district: value!(address.district),
+                state: value!(address.state),
+                postal_code: value!(address.postal_code),
+                country: value!(address.country),
+            })
+            .collect(),
+        telecoms: patient
+            .telecom
+            .iter()
+            .map(|telecom| Telecom {
+                system: value!(telecom.system),
+                value: value!(telecom.value),
+                purpose: value!(telecom.r#use),
+            })
+            .collect(),
+    }
 }
 
 /// The identification of an identifier the client refuses before sending:
@@ -390,7 +571,12 @@ fn refused_input(refused: InvalidInput) -> Identification {
 
 /// The identification of an exchange that failed with `error`.
 fn unavailable(error: PdqmError) -> Identification {
-    let failure = match error {
+    Identification::Unavailable(failure(error))
+}
+
+/// The demographics failure of an exchange that failed with `error`.
+fn failure(error: PdqmError) -> DemographicsError {
+    match error {
         PdqmError::Timeout => DemographicsError::DeadlineExceeded,
         PdqmError::Audit(_) => DemographicsError::AuditFailed(Box::new(SupplierFailed(error))),
         PdqmError::Rejected { status, .. } => DemographicsError::Answered {
@@ -402,8 +588,7 @@ fn unavailable(error: PdqmError) -> Identification {
             source: Box::new(SupplierFailed(error)),
         },
         other => DemographicsError::Backend(Box::new(SupplierFailed(other))),
-    };
-    Identification::Unavailable(failure)
+    }
 }
 
 /// Whether `text` is an absolute URI.

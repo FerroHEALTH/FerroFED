@@ -27,6 +27,8 @@ mod patient;
 #[cfg(feature = "ihe")]
 mod pdqm;
 #[cfg(feature = "ihe")]
+mod pdqm_header;
+#[cfg(feature = "ihe")]
 mod pixm;
 #[cfg(feature = "ihe")]
 mod pixm_identify;

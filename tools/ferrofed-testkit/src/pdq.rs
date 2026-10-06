@@ -37,6 +37,7 @@ use bytes::Bytes;
 use fhir_types::codec::{Json, Path, Value, expect_object};
 use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntrySearch};
 use fhir_types::r4::extension::{Extension, ExtensionValue};
+use fhir_types::r4::human_name::HumanName;
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::parameters::{Parameters, ParametersParameterValue};
@@ -77,6 +78,9 @@ pub enum PdqError {
     /// An identifier system is outside the `urn:oid:2.999` example arc.
     #[error("an identifier system is outside the urn:oid:2.999 example arc")]
     OutsideExampleArc,
+    /// The device holds no Patient of the id a test named.
+    #[error("the PDQm Supplier holds no Patient of that id")]
+    Unknown,
 }
 
 /// One identifier: its system and its value.
@@ -92,6 +96,8 @@ struct Record {
     id: String,
     identifiers: BTreeSet<DomainId>,
     active: bool,
+    name: Option<(String, String)>,
+    birth_date: Option<String>,
 }
 
 impl Record {
@@ -111,6 +117,16 @@ impl Record {
                 })
                 .collect(),
             active: (!self.active).then(|| false.into()),
+            name: self
+                .name
+                .iter()
+                .map(|(family, given)| HumanName {
+                    family: Some(family.as_str().into()),
+                    given: vec![given.as_str().into()],
+                    ..HumanName::default()
+                })
+                .collect(),
+            birth_date: self.birth_date.as_deref().map(Into::into),
             ..Patient::default()
         }
     }
@@ -219,9 +235,31 @@ impl PdqSupplier {
                     })
                     .collect(),
                 active,
+                name: None,
+                birth_date: None,
             },
         );
         Ok(id)
+    }
+
+    /// Gives the Patient `id` the synthetic name `family`, `given` and, when
+    /// `birth_date` names one, a birth date, for a test that reads a summary
+    /// header.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PdqError::Unknown`] for an id the device does not hold.
+    pub fn describe(
+        &self,
+        id: &str,
+        (family, given): (&str, &str),
+        birth_date: Option<&str>,
+    ) -> Result<(), PdqError> {
+        let mut state = self.shared.lock();
+        let record = state.patients.get_mut(id).ok_or(PdqError::Unknown)?;
+        record.name = Some((family.to_owned(), given.to_owned()));
+        record.birth_date = birth_date.map(str::to_owned);
+        Ok(())
     }
 
     /// Returns the FHIR base URL a PDQm client is pointed at, with its

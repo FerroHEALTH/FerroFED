@@ -34,17 +34,20 @@ pub mod mappings;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use eehrxf::document::{Document, DocumentError, EmptyReason, Section as DocumentSection};
+use eehrxf::document::{Document, DocumentError, EmptyReason};
 use eehrxf::mapping::{Mapping, MappingError};
+use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
+use fhir_types::r4::address::Address;
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
+use fhir_types::r4::contact_point::ContactPoint;
 use fhir_types::r4::device::{Device, DeviceDeviceName, DeviceVersion};
 use fhir_types::r4::extension::{Extension, ExtensionValue};
 use fhir_types::r4::human_name::HumanName;
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::organization::Organization;
 use fhir_types::r4::patient::Patient;
-use fhir_types::r4::primitives::Date;
+use fhir_types::r4::primitives::{Code, Date};
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
@@ -146,6 +149,8 @@ pub struct Request {
     pub system: String,
     /// The patient's identifier value.
     pub value: String,
+    /// What the identity binding holds of the patient for the header.
+    pub header: PatientHeader,
 }
 
 /// The document, and what assembling it showed.
@@ -185,6 +190,10 @@ pub enum AssemblyError {
         /// The index.
         index: usize,
     },
+    /// The header names the patient by no family name, given name or text,
+    /// which the HL7 Europe Patient Summary `Patient` requires (`ips-pat-1`).
+    #[error("the patient header holds no name, which the EPS Patient requires (ips-pat-1)")]
+    Unnamed,
 }
 /// Assembles the patient summary `request` asks for from the `sections`
 /// the `origins` answered, mapping each composition with `mappings`, as
@@ -192,6 +201,7 @@ pub enum AssemblyError {
 ///
 /// # Errors
 ///
+/// [`AssemblyError::Unnamed`] for a header with no name,
 /// [`AssemblyError::Mapping`] when a mapping refuses a composition, which
 /// fails the document rather than leaving the composition out, and the
 /// other [`AssemblyError`] variants for a document that cannot be written.
@@ -201,6 +211,9 @@ pub fn assemble(
     (origins, sections): (&[Origin], &[SectionAnswers]),
     mappings: &Mappings,
 ) -> Result<Assembled, AssemblyError> {
+    if !request.header.named() {
+        return Err(AssemblyError::Unnamed);
+    }
     let mut document = Document::new(
         &request.base,
         request.identifier.clone(),
@@ -254,7 +267,7 @@ impl Assembly {
         answers: &SectionAnswers,
         origins: &[Origin],
         mappings: &Mappings,
-    ) -> Result<DocumentSection, AssemblyError> {
+    ) -> Result<eehrxf::document::Section, AssemblyError> {
         let slot = slot_of(answers.section)?;
         let mut entries = Vec::new();
         let mut authors = BTreeSet::new();
@@ -290,7 +303,7 @@ impl Assembly {
         }
         let shown = authors_shown(&authors, &self.members, origins);
         let paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
-        let mut section = DocumentSection::new(slot, paragraphs);
+        let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {
             section = section.with_author(author);
         }
@@ -399,10 +412,14 @@ fn narrative(
     paragraphs
 }
 
-/// The patient of `request`: its identifier, with its name and birth date
-/// absent.
+/// The patient of `request`: the identifier it was asked by, and the
+/// header the identity binding holds, each element as the binding gives it.
+///
+/// An element the binding does not hold is left out, and the birth date,
+/// which the EPS `Patient` requires, then carries a `data-absent-reason` of
+/// `unknown` (eHN PS Art 10(5)).
 fn patient(request: &Request) -> Patient {
-    // TODO(#663): the header from the identity binding, in place of the absent name and birth date.
+    let header = &request.header;
     Patient {
         id: Some(request.patient_id.clone()),
         identifier: vec![Identifier {
@@ -410,16 +427,89 @@ fn patient(request: &Request) -> Patient {
             value: Some(request.value.as_str().into()),
             ..Identifier::default()
         }],
-        name: vec![HumanName {
-            extension: vec![absent()],
-            ..HumanName::default()
-        }],
-        birth_date: Some(Date {
-            extension: vec![absent()],
-            ..Date::default()
-        }),
+        name: header.names.iter().map(human_name).collect(),
+        birth_date: Some(header.birth_date.as_deref().map_or_else(
+            || Date {
+                extension: vec![absent()],
+                ..Date::default()
+            },
+            Date::from,
+        )),
+        gender: header.gender.as_deref().map(Code::from),
+        address: header.addresses.iter().map(address).collect(),
+        telecom: header.telecoms.iter().map(contact_point).collect(),
         ..Patient::default()
     }
+}
+
+/// The FHIR name `name` is written as.
+fn human_name(name: &PersonName) -> HumanName {
+    HumanName {
+        r#use: name.purpose.as_deref().map(Code::from),
+        text: name
+            .text
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        family: name
+            .family
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        given: strings(&name.given),
+        prefix: strings(&name.prefix),
+        suffix: strings(&name.suffix),
+        ..HumanName::default()
+    }
+}
+
+/// The FHIR address `postal` is written as.
+fn address(postal: &PostalAddress) -> Address {
+    Address {
+        r#use: postal.purpose.as_deref().map(Code::from),
+        text: postal
+            .text
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        line: strings(&postal.lines),
+        city: postal
+            .city
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        district: postal
+            .district
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        state: postal
+            .state
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        postal_code: postal
+            .postal_code
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        country: postal
+            .country
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        ..Address::default()
+    }
+}
+
+/// The FHIR contact point `telecom` is written as.
+fn contact_point(telecom: &Telecom) -> ContactPoint {
+    ContactPoint {
+        system: telecom.system.as_deref().map(Code::from),
+        value: telecom
+            .value
+            .as_deref()
+            .map(fhir_types::r4::primitives::String::from),
+        r#use: telecom.purpose.as_deref().map(Code::from),
+        ..ContactPoint::default()
+    }
+}
+
+/// The FHIR `string`s `values` are written as.
+fn strings(values: &[String]) -> Vec<fhir_types::r4::primitives::String> {
+    values.iter().map(|value| value.as_str().into()).collect()
 }
 
 /// The `data-absent-reason` extension stating `unknown`.
