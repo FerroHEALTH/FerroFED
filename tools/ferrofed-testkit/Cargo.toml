@@ -73,6 +73,9 @@ wiremock.workspace = true
 # its CDR products over a node client (#93, #573).
 ferrofed-registry.workspace = true
 ferrofed-server.workspace = true
+# The gateway's own read-only stored queries, which the console's stored-query
+# view lists beside the deployment's (#776).
+ferrofed-eehrxf.workspace = true
 # The ITS-REST query body the node profile's captured queries are read as
 # (#739).
 openehr-its = { workspace = true, features = ["rest"] }

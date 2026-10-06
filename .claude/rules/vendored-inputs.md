@@ -161,6 +161,13 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/ihe-pharm-mpd/`: `ihe.pharm.mpd.r4` 1.0.0-comment-2, the
     version the HL7 Europe Base and Core, Patient Summary and Medication
     Prescription and Dispense guides depend on (CC-BY-SA-4.0).
+- `docs/specs/openehr-ckm-ips/`: the openEHR International Patient Summary
+  template of the openEHR international Clinical Knowledge Manager (CKM cid
+  `1013.26.376`, asset version 1): its source (OET), the operational template
+  CKM generates (OPT) and CKM's record of it, each pinned by its CKM REST URL
+  and sha256 (CC BY-SA, the licence the openEHR Foundation gives the clinical
+  models CKM hosts; `scripts/vendor/openehr-ckm.sh`). The patient summary's
+  stored section queries in `app/ferrofed-eehrxf` are tested against the OET.
 - `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
   stated in each document), pinned by commit: the authorization server, the
   VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.

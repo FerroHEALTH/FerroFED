@@ -31,6 +31,7 @@ docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
 docs/specs/eu-hl7-extensions|HL7 Europe Extensions
 docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense
+docs/specs/openehr-ckm-ips|openEHR CKM International Patient Summary template
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
 docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source

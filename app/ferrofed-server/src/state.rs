@@ -179,7 +179,11 @@ impl AppState {
         if let (Some(store @ Store::Files(_)), Some(federation)) =
             (&settings.stored_queries, federation.as_ref())
         {
-            opened(store, federation)?;
+            // NOTE: no specification governs this: our own design; reading the
+            // files once refuses here what a start refuses, a reserved name included.
+            opened(store, federation)?
+                .load()
+                .map_err(|source| refused(store, source))?;
         }
         drop(federation);
         drop(scope);

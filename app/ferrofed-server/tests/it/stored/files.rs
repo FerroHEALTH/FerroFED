@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::reserved;
 use ferrofed_registry::definition::store::StoreError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
@@ -25,6 +27,7 @@ use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Backend;
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::stored::files::FilesError;
+use ferrofed_server::stored::reserved::Shadowing;
 use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -358,8 +361,41 @@ fn an_empty_definition_directory_offers_an_empty_registry() -> TestResult {
     AppState::check(&settings)?;
     let state = AppState::build(&settings)?;
     let held = state.definitions().ok_or("the registry is offered")?;
-    assert!(held.is_empty());
+    assert_eq!(
+        Section::ALL.len(),
+        held.len(),
+        "the gateway's own section queries alone"
+    );
+    assert!(
+        held.list("")
+            .iter()
+            .all(|definition| reserved::reserves(definition.name())),
+        "no definition of the deployment's"
+    );
     assert!(held.is_read_only());
+    Ok(())
+}
+
+#[test]
+fn a_definition_file_in_the_reserved_namespace_refuses_the_start() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let definitions = dir.path().join("definitions");
+    let name = format!("{}::patient-summary-problems", reserved::NAMESPACE);
+    write(&definitions, &name, "1.0.0", parameterised().as_bytes())?;
+    let refused = refused_start(dir.path(), &definitions)?;
+    let StateError::StoredQueries {
+        backend,
+        source: StoreError::Corrupt(cause),
+        ..
+    } = &refused
+    else {
+        panic!("a corrupt store: {refused:?}");
+    };
+    assert_eq!(Backend::Files, *backend);
+    assert!(cause.is::<Shadowing>(), "{cause}");
+    let line = chain(&refused);
+    assert!(line.contains(&name), "names the definition: {line}");
+    assert!(line.contains("reserves"), "says why: {line}");
     Ok(())
 }
 

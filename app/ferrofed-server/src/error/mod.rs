@@ -179,6 +179,10 @@ pub enum Code {
     /// A stored-query `PUT` at a read-only registry, whose definitions are
     /// loaded from files at start; nothing is stored (§12.7, N44).
     StoredQueryReadOnly,
+    /// A stored-query `PUT` names a definition in the namespace the gateway
+    /// reserves for its own read-only queries, which no `PUT` stores into;
+    /// nothing is stored (§12.7, N44).
+    StoredQueryReserved,
     /// The consent pre-filter does not permit asking the members it names
     /// about the subject of `GET {base}/v1/ehr`, and no other member holds
     /// an EHR for it (N27a, §13.2.1). The body names the endpoints, never the

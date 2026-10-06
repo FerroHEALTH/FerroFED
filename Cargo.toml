@@ -56,6 +56,9 @@ eehrxf = { path = "crates/eehrxf", version = "0.0.5" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
+# The interoperability component's federation half: the stored queries that
+# feed the patient summary sections (#776).
+ferrofed-eehrxf = { path = "app/ferrofed-eehrxf" }
 # The application, a dev-dependency of the harness alone: the harness plays the
 # federation operator of track 11 with the gateway's admission check (#91).
 ferrofed-server = { path = "app/ferrofed-server" }

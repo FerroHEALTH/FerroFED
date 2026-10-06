@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 57] = [
+    pub const GATEWAY: [Self; 58] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -53,6 +53,7 @@ impl Code {
         Self::DefinitionEndpointTargeted,
         Self::StoredQueryFanOutUnsupported,
         Self::StoredQueryReadOnly,
+        Self::StoredQueryReserved,
         Self::ConsentDenied,
         Self::Unauthenticated,
         Self::ScopeInsufficient,
@@ -126,6 +127,7 @@ impl Code {
             Self::DefinitionEndpointTargeted => "definition-endpoint-targeted",
             Self::StoredQueryFanOutUnsupported => "stored-query-fan-out-unsupported",
             Self::StoredQueryReadOnly => "stored-query-read-only",
+            Self::StoredQueryReserved => "stored-query-reserved",
             Self::ConsentDenied => "consent-denied",
             Self::Unauthenticated => "unauthenticated",
             Self::ScopeInsufficient => "scope-insufficient",
@@ -180,6 +182,7 @@ impl Code {
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
+            | Self::StoredQueryReserved
             | Self::SubjectSeveral
             | Self::EhrIdHeld => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -312,6 +315,9 @@ impl Code {
             Self::StoredQueryReadOnly => {
                 "this gateway's stored-query registry is read-only: its definitions are loaded from files when it starts, so nothing was stored; read or run a definition it holds (§12.7, N44)"
             }
+            Self::StoredQueryReserved => {
+                "the namespace eu.ferrofed.eehrxf is reserved for this gateway's own read-only stored queries, so nothing was stored; store the definition under another namespace (§12.7, N44)"
+            }
             Self::ConsentDenied => {
                 "the consent pre-filter does not permit asking the members that might hold this subject's EHR, and no other member holds one (N27a)"
             }
@@ -409,22 +415,23 @@ mod tests {
             Code::DefinitionEndpointTargeted => Some(38),
             Code::StoredQueryFanOutUnsupported => Some(39),
             Code::StoredQueryReadOnly => Some(40),
-            Code::ConsentDenied => Some(41),
-            Code::Unauthenticated => Some(42),
-            Code::ScopeInsufficient => Some(43),
-            Code::PurposeOfUseRequired => Some(44),
-            Code::AuthenticationUnavailable => Some(45),
-            Code::OperationRefused => Some(46),
-            Code::LocalizationUnavailable => Some(47),
-            Code::PatientContextMissing => Some(48),
-            Code::PatientConfinement => Some(49),
-            Code::PatientContextUnavailable => Some(50),
-            Code::SubjectUnavailable => Some(51),
-            Code::Overloaded => Some(52),
-            Code::RateLimited => Some(53),
-            Code::AccessUnrecorded => Some(54),
-            Code::NaturalPersonRequired => Some(55),
-            Code::AuthenticationAssuranceInsufficient => Some(56),
+            Code::StoredQueryReserved => Some(41),
+            Code::ConsentDenied => Some(42),
+            Code::Unauthenticated => Some(43),
+            Code::ScopeInsufficient => Some(44),
+            Code::PurposeOfUseRequired => Some(45),
+            Code::AuthenticationUnavailable => Some(46),
+            Code::OperationRefused => Some(47),
+            Code::LocalizationUnavailable => Some(48),
+            Code::PatientContextMissing => Some(49),
+            Code::PatientConfinement => Some(50),
+            Code::PatientContextUnavailable => Some(51),
+            Code::SubjectUnavailable => Some(52),
+            Code::Overloaded => Some(53),
+            Code::RateLimited => Some(54),
+            Code::AccessUnrecorded => Some(55),
+            Code::NaturalPersonRequired => Some(56),
+            Code::AuthenticationAssuranceInsufficient => Some(57),
         }
     }
 
@@ -513,6 +520,7 @@ mod tests {
             (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),
             (Code::StoredQueryFanOutUnsupported, StatusCode::BAD_REQUEST),
             (Code::StoredQueryReadOnly, StatusCode::METHOD_NOT_ALLOWED),
+            (Code::StoredQueryReserved, StatusCode::CONFLICT),
             (Code::ConsentDenied, StatusCode::FORBIDDEN),
             (Code::Unauthenticated, StatusCode::UNAUTHORIZED),
             (Code::ScopeInsufficient, StatusCode::FORBIDDEN),

@@ -1384,6 +1384,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrofed-eehrxf"
+version = "0.0.1"
+dependencies = [
+ "eehrxf",
+ "ferrofed-registry",
+ "jiff",
+ "openehr-query",
+]
+
+[[package]]
 name = "ferrofed-engine"
 version = "0.0.0"
 dependencies = [
@@ -1472,6 +1482,7 @@ dependencies = [
  "axum",
  "clap",
  "ehds-logging",
+ "ferrofed-eehrxf",
  "ferrofed-engine",
  "ferrofed-identity",
  "ferrofed-registry",
@@ -1530,6 +1541,7 @@ dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
  "bytes",
+ "ferrofed-eehrxf",
  "ferrofed-registry",
  "ferrofed-server",
  "ferrofed-viewer",

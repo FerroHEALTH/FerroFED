@@ -266,6 +266,10 @@ path = "/etc/ferrofed/stored-queries"
   `major.minor.patch.aql`, a nested directory, text that is not UTF-8, or an
   unreadable entry. The refusal names the file and never quotes its content.
   `config check` loads the directory the same way.
+- A definition in the namespace `eu.ferrofed.eehrxf`, which holds the
+  gateway's own read-only queries, refuses the start and `config check`, as
+  a row there in a `redb` or PostgreSQL store refuses the start
+  ([the gateway's own queries](../integrate/stored-queries.md#the-gateways-own-queries)).
 - A `PUT` answers `405` (`stored-query-read-only`) with `Allow: GET,
   OPTIONS`, and `OPTIONS` on a definition path lists no `PUT`. To add or
   change a definition, add its file and restart. Distributing definitions

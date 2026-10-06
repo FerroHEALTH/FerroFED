@@ -13,7 +13,9 @@
 //! façade query before it is held, and one that names its patient by a
 //! literal is refused, so no patient identifier is held at rest (§5.4.1,
 //! N33). A second `PUT` of a held name and version is a `409`, and the held
-//! text stands (§12.7, N44; ITS-REST `409_StoredQuery_version`). A read-only
+//! text stands (§12.7, N44; ITS-REST `409_StoredQuery_version`). The
+//! gateway's own definitions sit read-only under a reserved namespace, and a
+//! `PUT` naming that namespace is a `409` too. A read-only
 //! registry answers a `PUT` with `405`, and over a store several replicas
 //! share, each read and invocation reads the store again first, so every
 //! replica answers what any of them stored.
@@ -40,6 +42,7 @@ use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
+use ferrofed_eehrxf::reserved;
 use ferrofed_engine::declared::query;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::definition::store::{Definitions, Insertion};
@@ -362,6 +365,9 @@ fn members(
 ///
 /// The body is the AQL text (ITS-REST `text/plain`), and a `Content-Type`
 /// naming another media type is a `415` before anything is read or stored.
+/// A name in the namespace the gateway reserves for its own read-only
+/// queries is a `409` (`stored-query-reserved`) at any version, as a held
+/// version is (ITS-REST `409_StoredQuery_version`; RFC 9110 §15.5.10).
 /// It is analysed as a
 /// façade query, with every `$parameter` standing in for a value an
 /// invocation binds, and refused with a `400` when the rewrite would refuse
@@ -391,6 +397,9 @@ async fn store(
         return Ok(response);
     }
     let name = name(matched)?;
+    if reserved::reserves(&name) {
+        return Err(Refused::fixed(Code::StoredQueryReserved));
+    }
     let version = segment(matched, VERSION_PARAM)
         .unwrap_or_default()
         .parse::<QueryVersion>()

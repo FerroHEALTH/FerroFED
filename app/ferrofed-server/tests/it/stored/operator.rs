@@ -6,6 +6,8 @@
 //! scope.
 
 use axum::body::Body;
+use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::reserved;
 use ferrofed_registry::operator::Page;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -29,19 +31,33 @@ async fn an_operator_lists_every_held_version_with_its_text() -> TestResult {
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let report: Page<StoredQuery> = serde_json::from_str(&text)?;
-    let versions: Vec<(&str, &str)> = report
-        .items
+    let (own, deployment): (Vec<&StoredQuery>, Vec<&StoredQuery>) =
+        report.items.iter().partition(|entry| {
+            entry
+                .name
+                .starts_with(&format!("{}::", reserved::NAMESPACE))
+        });
+    let versions: Vec<(&str, &str)> = deployment
         .iter()
         .map(|entry| (entry.name.as_str(), entry.version.as_str()))
         .collect();
     assert_eq!(vec![(NAME, "1.0.0"), (NAME, "1.1.0")], versions);
+    assert_eq!(
+        Section::ALL.len(),
+        own.len(),
+        "the gateway's own section queries are listed beside them"
+    );
     // The gateway holds the definition as it prints it, the patient a
     // parameter and never a value (§12.7, §5.4.1).
     assert!(
+        deployment
+            .iter()
+            .all(|entry| entry.q.starts_with("SELECT c/uid/value FROM EHR e")),
+        "{report:?}"
+    );
+    assert!(
         report.items.iter().all(|entry| {
-            entry.q.starts_with("SELECT c/uid/value FROM EHR e")
-                && entry.q.contains("$patient")
-                && !entry.q.contains(crate::facade::PATIENT)
+            entry.q.contains("$patient") && !entry.q.contains(crate::facade::PATIENT)
         }),
         "{report:?}"
     );

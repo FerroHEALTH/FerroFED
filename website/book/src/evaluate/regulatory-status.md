@@ -380,7 +380,10 @@ them:
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
-  mapping files you supply. The gateway does not serve it yet.
+  mapping files you supply. The gateway holds the stored queries that select
+  each patient summary section's compositions
+  ([the section queries](#the-patient-summarys-section-queries)), and does
+  not serve the document yet.
 
 Five of the manufacturer's obligations have a first answer:
 
@@ -460,9 +463,40 @@ Two elements are open in the [clinical safety risk file](clinical-safety.md)
 - the medical alert (A.2.1.2), which a producer must be able to populate;
 - the functional status (A.2.3.4).
 
-A stored query the gateway holds, one per section, to select each
-section's compositions from the members is planned
-([#776](https://github.com/FerroHEALTH/FerroFED/issues/776)).
+### The patient summary's section queries
+
+Each section openEHR content feeds has a stored query the gateway holds
+itself, read-only, under the namespace `eu.ferrofed.eehrxf` at the one
+version `1.0.0` (§12.7, N44). The crate `app/ferrofed-eehrxf`, the
+federation half of the interoperability component, builds them; `eehrxf`
+links nothing of the gateway. The queries are:
+
+- `eu.ferrofed.eehrxf::patient-summary-allergies-and-intolerances`
+- `eu.ferrofed.eehrxf::patient-summary-problems`
+- `eu.ferrofed.eehrxf::patient-summary-medication-summary`
+- `eu.ferrofed.eehrxf::patient-summary-medical-devices-and-implants`
+- `eu.ferrofed.eehrxf::patient-summary-procedures`
+- `eu.ferrofed.eehrxf::patient-summary-immunisations`
+- `eu.ferrofed.eehrxf::patient-summary-social-history`
+- `eu.ferrofed.eehrxf::patient-summary-pregnancy-history`
+- `eu.ferrofed.eehrxf::patient-summary-advance-directives`
+- `eu.ferrofed.eehrxf::patient-summary-observation-results`
+- `eu.ferrofed.eehrxf::patient-summary-care-plans`
+
+Each one selects, from every member, the whole compositions that contain one
+of the archetypes the openEHR International Patient Summary template names
+for its section, each composition once with its uid and its template id,
+because a FHIRconnect mapping is chosen per template. The patient is the
+`$patient` and `$namespace` parameters alone, so the query passes the
+stored-query admission and the gateway's rewrite asks each member by its own
+`ehr_id`. The section-to-archetype table, and the four sections no query
+feeds, are in the [clinical safety risk file](clinical-safety.md#the-section-queries).
+Vital signs, which the EPS composition carries in a section of its own, feed
+the Xt-EHR observation results. Running a query by name and the reserved
+namespace are described under
+[the gateway's own queries](../integrate/stored-queries.md#the-gateways-own-queries).
+The document assembled from their answers is planned
+([#689](https://github.com/FerroHEALTH/FerroFED/issues/689)).
 
 ## Not legal advice
 
