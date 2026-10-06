@@ -13,6 +13,7 @@ mod faithful;
 #[cfg(feature = "openehr")]
 mod openehr;
 mod read;
+mod reference;
 mod subjects;
 
 use std::error::Error;

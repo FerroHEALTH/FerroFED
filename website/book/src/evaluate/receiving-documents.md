@@ -45,7 +45,17 @@ this order and refuses it at the first rule it breaks:
    by its `fullUrl`, or by a relative `Patient/<id>` resolved against the
    server base of the composition's own `fullUrl`. Every reference in the
    document is found by its R4 type, at any depth: in backbone elements,
-   contained resources and extensions. A `subject`, `patient`,
+   contained resources and extensions, and resolved by one resolver,
+   `receive::reference::resolve`, which answers exactly one entry or a
+   typed refusal. It reads a reference and a `fullUrl` in one canonical
+   spelling only: a relative `Type/id`, an `http` or `https` URL with a
+   lower-case host, `urn:uuid:` with a lower-case UUID, `urn:oid:`, a
+   `_history` version matched on the entry's `meta.versionId`, and a `#id`
+   into the resource's own `contained`. Whitespace, a query string,
+   percent-encoding, a trailing or doubled slash, a dot segment and a
+   resource type in another case are refused, so no reader can take one of
+   them for an entry the resolver would not. A `type` or an `identifier`
+   beside the reference must agree with its target. A `subject`, `patient`,
    `beneficiary` or `for` must name that same entry by reference. Any other
    reference may name it, an entry of another type, a contained resource
    by `#id`, or a resource outside the document whose path names a type

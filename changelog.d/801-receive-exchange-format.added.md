@@ -6,7 +6,9 @@
   was read, holds it to the R4 document rules (`bdl-7` to `bdl-11`, and
   `fullUrl`s that agree with their resource), and resolves its subject to
   its one `Patient` entry. Every reference, found by its R4 type at any
-  depth, is held to that patient: a `subject`, `patient`, `beneficiary` or
+  depth and resolved by one resolver (`receive::reference::resolve`, which
+  reads only canonical spellings and answers exactly one entry or a typed
+  refusal), is held to that patient: a `subject`, `patient`, `beneficiary` or
   `for` must name it, and a reference that could name another patient, a
   `type` that disagrees with its target, a second or contained `Patient` and
   an element the R4 table does not describe are refused. The

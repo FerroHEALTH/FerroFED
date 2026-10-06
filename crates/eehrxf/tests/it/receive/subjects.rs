@@ -15,6 +15,7 @@ use std::error::Error;
 
 use eehrxf::receive::ReceiveError;
 use eehrxf::receive::ReceivedDocument;
+use eehrxf::receive::reference::ReferenceError;
 
 use super::DOCUMENT;
 use super::PATIENT_IDENTIFIER;
@@ -225,7 +226,7 @@ fn refused_at(entry: &str, location: &str, subject: bool) -> Result<(), Box<dyn 
     let error = refused(&document_with_entry(entry)?)?;
     let at = match error {
         ReceiveError::SubjectMismatch { ref location } if subject => location,
-        ReceiveError::PatientReference { ref location } if !subject => location,
+        ReceiveError::Reference { ref location, .. } if !subject => location,
         ref other => return Err(format!("{other:?}").into()),
     };
     assert_eq!(at, location);
@@ -287,7 +288,7 @@ fn another_patient_inside_a_backbone_element_is_refused() -> Result<(), Box<dyn 
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.attester[0].party"),
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::NotInBundle { .. } } if location == "Bundle.entry[0].resource.attester[0].party"),
         "{error:?}"
     );
     Ok(())
@@ -301,7 +302,7 @@ fn another_patient_inside_a_section_is_refused() -> Result<(), Box<dyn Error>> {
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.section[1].entry[1]"),
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::NotInBundle { .. } } if location == "Bundle.entry[0].resource.section[1].entry[1]"),
         "{error:?}"
     );
     Ok(())
@@ -316,7 +317,7 @@ fn another_patient_in_an_extension_of_a_primitive_is_refused() -> Result<(), Box
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource._status.extension[0].valueReference"),
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::NotInBundle { .. } } if location == "Bundle.entry[0].resource._status.extension[0].valueReference"),
         "{error:?}"
     );
     Ok(())
@@ -330,7 +331,7 @@ fn a_reference_typed_patient_by_identifier_alone_is_refused() -> Result<(), Box<
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.author[0]"),
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::Unreferenced { identifier: true } } if location == "Bundle.entry[0].resource.author[0]"),
         "{error:?}"
     );
     Ok(())
@@ -344,7 +345,13 @@ fn a_reference_whose_target_is_unknown_is_refused() -> Result<(), Box<dyn Error>
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::PatientReference { .. }),
+        matches!(
+            error,
+            ReceiveError::Reference {
+                source: ReferenceError::NotInBundle { kind: None },
+                ..
+            }
+        ),
         "{error:?}"
     );
     Ok(())
@@ -358,7 +365,7 @@ fn a_reference_whose_type_disagrees_with_its_target_is_refused() -> Result<(), B
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::ReferenceType { ref location } if location == "Bundle.entry[0].resource.author[0]"),
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::TypeDisagrees } if location == "Bundle.entry[0].resource.author[0]"),
         "{error:?}"
     );
     Ok(())
@@ -372,7 +379,13 @@ fn a_local_reference_to_no_contained_resource_is_refused() -> Result<(), Box<dyn
     )?;
     let error = refused(&text)?;
     assert!(
-        matches!(error, ReceiveError::LocalUnresolved { .. }),
+        matches!(
+            error,
+            ReceiveError::Reference {
+                source: ReferenceError::LocalMissing,
+                ..
+            }
+        ),
         "{error:?}"
     );
     Ok(())

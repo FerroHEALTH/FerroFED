@@ -34,6 +34,7 @@ pub mod conform;
 mod entries;
 #[cfg(feature = "openehr")]
 pub mod openehr;
+pub mod reference;
 mod references;
 mod strict;
 
@@ -46,7 +47,11 @@ use fhir_types::codec::Value;
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::composition::Composition;
 use fhir_types::r4::patient::Patient;
+use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
+
+use crate::receive::reference::ReferenceError;
+use crate::receive::reference::Target;
 
 /// The `Bundle.type` of a document
 /// (<https://hl7.org/fhir/R4/valueset-bundle-type.html>).
@@ -191,6 +196,20 @@ impl ReceivedDocument {
         &self.patient
     }
 
+    /// Resolves `reference`, held by the resource of the entry at `holder`,
+    /// with the one resolver every rule of the receive path uses
+    /// ([`reference::resolve`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`ReferenceError`] that keeps the reference from naming
+    /// exactly one entry of the document.
+    pub fn resolve(&self, holder: usize, reference: &Reference) -> Result<Target, ReferenceError> {
+        let reference =
+            Json::to_json(reference).map_err(|source| ReferenceError::Unencodable { source })?;
+        reference::resolve_in(&reference::entries(&self.tree), holder, &reference)
+    }
+
     /// Returns the JSON the decoded document encodes as, equal to the JSON
     /// it was read from.
     pub(crate) const fn tree(&self) -> &Object {
@@ -301,32 +320,28 @@ pub enum ReceiveError {
         /// The element path of the contained resource.
         location: String,
     },
-    /// A subject element (`subject`, `patient`, `beneficiary`, `for`) names
-    /// anything but the document's `Patient` entry by reference.
+    /// A subject element (`subject`, `patient`, `beneficiary`, `for`)
+    /// resolves to anything but the document's `Patient` entry.
     #[error("{location} names a subject other than the document's Patient entry")]
     SubjectMismatch {
         /// The element path of the reference.
         location: String,
     },
-    /// A reference names, or could name, a patient other than the document's
-    /// `Patient` entry: it resolves to no entry, and its path or `type` says
-    /// `Patient` or nothing says what it names.
-    #[error("{location} could name a patient other than the document's Patient entry")]
-    PatientReference {
+    /// A reference the resolver refuses, and which may not name a resource
+    /// outside the document.
+    #[error("{location} is a reference the document cannot resolve")]
+    Reference {
         /// The element path of the reference.
         location: String,
+        /// Why it does not resolve.
+        #[source]
+        source: ReferenceError,
     },
-    /// A reference's `type` disagrees with the resource it resolves to.
-    #[error("{location} declares a type its target does not have")]
-    ReferenceType {
-        /// The element path of the reference.
-        location: String,
-    },
-    /// A local `#id` reference names no resource contained in its resource.
-    #[error("{location} names no contained resource")]
-    LocalUnresolved {
-        /// The element path of the reference.
-        location: String,
+    /// An entry's `fullUrl` is not spelled in the one canonical form.
+    #[error("entry {entry} has a fullUrl not spelled in its canonical form")]
+    NonCanonicalFullUrl {
+        /// The entry's index.
+        entry: usize,
     },
     /// An element the R4 element table does not describe, which no rule can
     /// read.
