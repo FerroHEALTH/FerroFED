@@ -12,8 +12,9 @@
 # edit rather than a follow-up commit.
 #
 # Runs scripts/checks/crate-version-guard.sh against origin/main, the base CI
-# uses: WORKTREE for a `git commit`, so the staged change is what is
-# checked, and HEAD for a `git push`, where the commits already exist. Exit 2
+# uses: WORKTREE for a `git commit` and for the `--continue` of a merge,
+# cherry-pick, rebase or revert, which commits too, so the staged change is
+# what is checked, and HEAD for a `git push`, where the commits already exist. Exit 2
 # blocks the tool call and returns the guard's findings; every other path is a
 # quiet exit 0.
 #
@@ -43,6 +44,8 @@ fi
 dir_word="(\"[^\"]+\"|'[^']+'|[^[:space:];&|]+)"
 git_word="git([[:space:]]+-C[[:space:]]+$dir_word)?[[:space:]]+"
 if [[ "$command_text" =~ ${git_word}commit ]]; then
+  head=WORKTREE
+elif [[ "$command_text" =~ ${git_word}(merge|cherry-pick|rebase|revert)[[:space:]]+--continue ]]; then
   head=WORKTREE
 elif [[ "$command_text" =~ ${git_word}push ]]; then
   head=HEAD
@@ -100,7 +103,7 @@ git -C "$repo_root" rev-parse --verify --quiet origin/main > /dev/null || exit 0
 
 findings="$(bash "$guard" --root "$repo_root" origin/main "$head" 2>&1)" || {
   printf 'BLOCKED: a crates/* member changed its packaged content without moving its version.\n\n%s\n\n' "$findings" >&2
-  printf 'Bump that member in its own Cargo.toml, move any internal requirement in the root Cargo.toml with it, run cargo update -w, refresh fuzz/Cargo.lock with cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null (check it with --locked), and commit both locks. The published version is immutable, so this cannot be repaired later.\n' >&2
+  printf 'Bump that member in its own Cargo.toml, move any internal requirement in the root Cargo.toml with it, run cargo update -w, refresh fuzz/Cargo.lock with cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null (check it with --locked), and commit both locks. A member that depends on a bumped member needs its own bump too, because the requirement in its packaged manifest moved. The published version is immutable, so this cannot be repaired later.\n' >&2
   exit 2
 }
 
