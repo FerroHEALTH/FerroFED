@@ -305,9 +305,9 @@ without a version bump, because a published version is immutable
    owner `FerroHEALTH`, repository `FerroFED`, workflow `publish-crates.yml`,
    environment `crates-io`. `openehr-federation`, `ihe-iti` and
    `nl-generic-functions` already exist (the 0.0.0 placeholders of
-   2026-10-01), so they need no first upload with a personal token;
-   `oauth-server-metadata`, `ehds-logging` and `eehrxf` have no placeholder yet and
-   need one first.
+   2026-10-01), and so do `eehrxf` and `ehds-logging` (those of
+   2026-10-06), so they need no first upload with a personal token;
+   `oauth-server-metadata` has no placeholder yet and needs one first.
 3. Set `publish = true` in the root `[workspace.package]` in a pull request.
    The next `v*` tag publishes every library crate at its manifest version.
 

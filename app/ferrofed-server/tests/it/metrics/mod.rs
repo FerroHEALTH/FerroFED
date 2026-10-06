@@ -11,6 +11,7 @@
 //! This module holds the exposition reader every test parses with and the
 //! metered gateway the request tests drive.
 
+mod book;
 mod exposition;
 #[cfg(feature = "binding-ihe")]
 mod hygiene;
