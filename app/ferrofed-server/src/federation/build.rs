@@ -309,7 +309,7 @@ fn access_log(
             return Ok(Some(
                 AccessLog::new(settings.access_log.map.clone(), sink)
                     .with_retention(retention.clone())
-                    .with_emergency(settings.access_log.emergency.clone()),
+                    .with_emergency(settings.access_log.emergency.clone())
                     .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
             ));
         }
