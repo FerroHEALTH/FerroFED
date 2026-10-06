@@ -317,7 +317,16 @@ choices revisited where the upstream reports bear on them
 readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the
 European interoperability and logging software components, and the
 manufacturer's conformity work
-([Regulatory status](regulatory-status.md)).
+([Regulatory status](regulatory-status.md)). Under the Cyber Resilience Act
+each tagged release is a product Cadasto B.V. places on the market; the
+written procedure for its Art 14 reports and the support period of each
+release are planned
+([#762](https://github.com/FerroHEALTH/FerroFED/issues/762),
+[#763](https://github.com/FerroHEALTH/FerroFED/issues/763),
+[The Cyber Resilience Act](regulatory-status.md#the-cyber-resilience-act)).
+The changelog fragments in
+[`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
+list what is merged on `main` for v0.0.10 so far.
 
 A `CONTRIBUTION` in canonical XML waits on the openEHR XSD and `openehr-its`
 ([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)).
@@ -354,14 +363,17 @@ These are the ones to know before you deploy FerroFED; the
   no copy, so who reads the records and how long they are kept is the
   repository's. FerroFED ships no category map: until you declare one in
   `[access_log]`, the categories of the data an access reached are recorded
-  `ehds-unclassified`. The record does not yet name the professional's
-  identification or assurance level
-  ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).
-- **The caller may be an application.** Client authentication verifies an
-  access token from an issuer you trust. Whether that token names the health
-  professional, and at which assurance level, depends on the issuer; FerroFED
-  does not yet require either
-  ([#661](https://github.com/FerroHEALTH/FerroFED/issues/661)).
+  `ehds-unclassified`. The record names the professional the token names,
+  and the assurance level when the issuer declares one
+  ([The person behind an access](../operate/audit.md#the-person-behind-an-access)).
+- **The assurance level is yours to set.** Patient data needs a natural
+  person behind the token, or a client application you declare to act for
+  the professional its token names; any other token is refused
+  `401 natural-person-required`. The gateway reads and requires an
+  assurance level only for an issuer with `[auth.issuer.assurance]`, and
+  `config check` names each issuer without one
+  ([Professionals and assurance](../operate/authentication.md#professionals-and-assurance)).
+  Your issuer authenticates the person; the gateway verifies the token.
 - **Consent exclusions are shown by default.** A member a consent pre-filter
   excludes is reported `consent-denied`, as the specification requires
   (N27a). Art 8 of the Regulation forbids showing that restriction to a
@@ -383,10 +395,11 @@ These are the ones to know before you deploy FerroFED; the
   DEMOGRAPHIC area: it answers `501` there unless you name one member to
   serve it, and `501` for any ITS-REST path it does not serve
   ([The DEMOGRAPHIC area](../operate/queries-and-areas.md#the-demographic-area)).
-- **The listener speaks plain HTTP.** Terminate TLS in front of the gateway
-  ([What FerroFED runs beside](../operate/deployment-shape.md#authentication));
-  TLS on the listener itself is
-  [#632](https://github.com/FerroHEALTH/FerroFED/issues/632).
+- **The listener speaks plain HTTP by default.** Terminate TLS in front of
+  the gateway, or set `[server.tls]`, with a client CA to admit only your
+  proxy, when the hop from the proxy to the gateway crosses a network
+  others share
+  ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners)).
 - **Members in several Member States are not detected.** FerroFED neither
   detects nor refuses a federation whose members sit in different Member
   States ([Regulatory status](regulatory-status.md#cross-border-access)).

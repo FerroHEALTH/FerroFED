@@ -13,6 +13,8 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+#[cfg(all(feature = "binding-ihe", feature = "binding-nl"))]
+mod book;
 mod learned;
 mod refusals;
 mod registry;

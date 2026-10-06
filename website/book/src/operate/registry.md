@@ -481,7 +481,7 @@ held to the new document:
 The reload logs `registry reloaded` at `INFO` with `members` (how many the
 registry now holds), `endpoints_added`, `endpoints_removed`,
 `members_removed`, `incidents`, `index_dropped` and `bindings_dropped`. A
-changed setting outside the four sections is logged at `WARN` under
+changed setting outside the reloaded sections is logged at `WARN` under
 `settings`, by key (`server.listen`, `federation.binding_ttl_ms`), and keeps
 its running value until a restart; the rest of the reload applies.
 

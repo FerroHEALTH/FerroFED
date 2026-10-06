@@ -18,6 +18,7 @@ use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::{EndpointId, MAX_ID_LEN};
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::settings::Scheme;
 use http::StatusCode;
 
 use crate::facade::{body, gateway, node_answering, post, registry};
@@ -225,5 +226,43 @@ async fn a_credential_from_a_file_reaches_its_node_as_written() -> TestResult {
             assert_eq!(Some(expected), sent, "the node receives its credential");
         }
     }
+    Ok(())
+}
+
+/// A secret written inline is accepted under the production profile, by
+/// `config check` and by the configuration path `serve` reads, as the book's
+/// configuration page and the README say.
+#[test]
+fn an_inline_secret_is_accepted_under_the_production_profile() -> TestResult {
+    let toml = "profile = \"production\"\n\n[server]\nlisten = \"127.0.0.1:1\"\n\n\
+                [credentials.\"hospital-a\"]\nbearer_token = \"synthetic-inline-token\"\n\n\
+                [credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-pw\"\n";
+    let output = binary(&["config", "check"], toml)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        Some(0),
+        output.status.code(),
+        "config check accepts it: {stderr}"
+    );
+    assert!(
+        !stderr.contains("synthetic-inline"),
+        "config check quotes no secret"
+    );
+
+    let settings = Config::from_sources(Some(toml), &BTreeMap::new())?.resolve()?;
+    assert!(
+        matches!(
+            settings.credentials.get(&EndpointId::new("hospital-a")?),
+            Some(Scheme::Bearer(token)) if token.expose() == "synthetic-inline-token"
+        ),
+        "the inline bearer token resolves"
+    );
+    assert!(
+        matches!(
+            settings.credentials.get(&EndpointId::new("clinic-b")?),
+            Some(Scheme::Basic { .. })
+        ),
+        "the inline user and password resolve"
+    );
     Ok(())
 }

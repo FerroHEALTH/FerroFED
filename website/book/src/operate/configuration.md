@@ -270,9 +270,15 @@ node_jwks_cache_s = 3600      # how long the nodes cache the JWK Set
 rotation_overlap_s = 3900     # at least assertion_lifetime_s + node_jwks_cache_s
 ```
 
+### Secrets, inline or from a file
+
 Every secret has a `_file` sibling, read at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
-environment. The credentials are read and checked at boot and again on each
+environment. A secret written inline, or set through a `FERROFED__`
+variable, is accepted as well, under every profile, `production` included;
+setting both forms of one secret is refused, naming the inline key. Prefer
+the file: an inline value sits in `ferrofed.toml` and in every copy of it.
+The credentials are read and checked at boot and again on each
 [reload](registry.md#reloading-the-registry), and the node client of an endpoint with a
 credentials section sends them on every request to that endpoint.
 

@@ -65,9 +65,11 @@ and no checkout of the repository.
    curl http://127.0.0.1:8080/health
    ```
 
-A credential is never written in `ferrofed.toml`: each one is a file, named by
-a `bearer_token_file` or `password_file` key, and so is the signing key,
-named by `key_file`. Compose mounts `ferrofed.toml`, `registry.toml` and
+This setup writes no credential in `ferrofed.toml`: each one is a file, named
+by a `bearer_token_file` or `password_file` key, and so is the signing key,
+named by `key_file`. The gateway also accepts a secret written inline, under
+every profile ([Configuration](configuration.md#secrets-inline-or-from-a-file)),
+but a file keeps it out of the configuration and out of every copy of it. Compose mounts `ferrofed.toml`, `registry.toml` and
 `secrets/` read-only at `/etc/ferrofed/` and `/run/secrets/ferrofed/`, and
 the named volume `audit-spool` at `/var/lib/ferrofed` for the
 [audit spool](#the-audit-spool). A missing `ferrofed.toml` or `registry.toml`
