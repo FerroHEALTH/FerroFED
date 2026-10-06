@@ -8,8 +8,9 @@
 //! A reference is stable for the life of the process, so the log correlates
 //! one caller's events, and cannot be reversed without the key, which never
 //! leaves memory: the log names no caller (§5.4.1, N33, as the gateway holds
-//! it for every surface but the audit record). No specification governs the
-//! reference: our own design.
+//! it for every surface but the audit record and the record of an operator's
+//! admin listener write action). No specification governs the reference: our
+//! own design.
 
 use std::fmt;
 use std::fmt::Write as _;

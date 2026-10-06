@@ -6,6 +6,7 @@
 #[cfg(feature = "binding-ihe")]
 mod access;
 mod admin_peer;
+mod admin_record;
 mod admission;
 mod aggregate;
 mod ask_all;

@@ -60,11 +60,13 @@ pub enum Event {
     /// A scrape of the admin listener's `GET /metrics` carried no scrape
     /// token, or another one.
     ScrapeRefused,
+    /// An admitted operator ran a write action on the admin listener.
+    AdminWriteAdmitted,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -80,6 +82,7 @@ impl Event {
         Self::PatientContextUnavailable,
         Self::AdminWriteRefused,
         Self::ScrapeRefused,
+        Self::AdminWriteAdmitted,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -101,6 +104,7 @@ impl Event {
             Self::PatientContextUnavailable => "patient-context-unavailable",
             Self::AdminWriteRefused => "admin-write-refused",
             Self::ScrapeRefused => "scrape-refused",
+            Self::AdminWriteAdmitted => "admin-write-admitted",
         }
     }
 

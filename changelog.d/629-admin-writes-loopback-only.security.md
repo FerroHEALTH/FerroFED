@@ -1,8 +1,5 @@
-- The admin listener's write actions answer a loopback peer alone (#629).
-  With `metrics.allow_remote = true` a remote peer reads `GET /metrics` and
-  nothing else: the stored-query distribution, and any later write or
-  administrative action, answers `403 operation-refused` to every peer that
-  is not loopback, until the admin listener authenticates its callers
-  (#635). `config check` says so for a listener off loopback. In Kubernetes,
-  reach the write actions through `kubectl port-forward`. The example's
-  network policy stays as defence in depth.
+- The admin listener no longer serves its write actions, such as the
+  stored-query distribution, to every peer that reaches it (#629): each now
+  needs an access token carrying the issuer's `operator_scope` (#635). The
+  Kubernetes example's network policy admits the scraper alone to the admin
+  port, as defence in depth.

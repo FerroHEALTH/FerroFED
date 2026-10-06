@@ -52,6 +52,17 @@ alone, never a write action. Every refusal is counted under
 `scrape-refused`, and logged under the target `ferrofed::security` with
 its reason, never the credential.
 
+Every write action that runs is recorded too: one line under
+`ferrofed::security` with `event` `admin-write-admitted`, counted under the
+same name. It names the operator by the `issuer` and `subject` of its
+token, so the action stays attributable after a restart, with
+`admitted_by` (`token`, or `development-loopback` for a loopback peer the
+development profile admitted without one, which names no issuer or
+subject), the `method`, the route template as `action`, the `status` it
+was answered, the time as `at` (RFC 3339) and the `request_id`. The line
+never carries the token or a value from the path. Keep these lines as long
+as you keep your other security records.
+
 `scrape_token`, or `scrape_token_file` with the token in a file read at
 start, sets the scrape token; give one or the other. Prometheus sends it
 with `authorization` in the scrape job:
@@ -123,7 +134,7 @@ the unit after a histogram.
 | `ferrofed_resolver_request_duration_seconds` | `ferrofed.resolver.request.duration` (unit `s`) | histogram | none | the time each resolver call took |
 | `ferrofed_localizer_request_duration_seconds` | `ferrofed.localizer.request.duration` (unit `s`) | histogram | none | the time each localizer call took, an XCPD or NVI exchange; a `not-configured` call asks nothing and is not timed |
 | `ferrofed_demographics_request_duration_seconds` | `ferrofed.demographics.request.duration` (unit `s`) | histogram | none | the time each PDQm call took |
-| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, and an admin listener write action or scrape refused at the listener's authentication |
+| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, an admin listener write action or scrape refused at the listener's authentication, and an admin listener write action an admitted operator ran |
 | `ferrofed_overload_refusals_total` | `ferrofed.overload.refusals` | counter | `limit`, and `endpoint` on `node-in-flight` | the requests a limit refused ([Overload protection](overload.md)) |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_identity_feed_messages_total` | `ferrofed.identity_feed.messages` | counter | `result` | the ITI-93 messages the [identity feed](identity.md#the-identity-feed-pmir) received, by `applied`, `refused` (not held to the PMIR profiles), `unauthenticated` (no feed token) or `audit-failed` (its audit record could not be stored, and nothing was applied) |
@@ -150,7 +161,7 @@ path reaches the surface:
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
-| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`: the `event` field of the log line |
+| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`, `admin-write-admitted`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |

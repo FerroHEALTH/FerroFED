@@ -18,7 +18,8 @@
 //! `profile = "development"` a loopback peer that presents no credential is
 //! admitted as well. `GET /metrics` is open unless `[metrics] scrape_token`
 //! is set, and then answers only a scrape that carries that token as its
-//! bearer token ([`scrape`]). Every refusal is an [`AdminRefusal`].
+//! bearer token ([`scrape`]). Every refusal is an [`AdminRefusal`], and every
+//! write action that ran is recorded with its [`Operator`].
 // NOTE: no specification governs this: our own design; §12.7 gives drift repair
 // no request, so the gateway offers it to the operator only, beside the metrics.
 
@@ -29,16 +30,17 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::rejection::ExtensionRejection;
-use axum::extract::{Path, Request, State};
+use axum::extract::{MatchedPath, Path, Request, State};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::serve::{Listener, ListenerExt};
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::Secret;
-use http::{HeaderMap, HeaderValue, StatusCode, header};
+use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 
 use crate::auth::Gate;
+use crate::auth::caller::Caller;
 use crate::auth::permission::Requirement;
 use crate::auth::refusal::{REALM, Refusal};
 use crate::config::auth::AuthSettings;
@@ -116,6 +118,46 @@ impl AdminRefusal {
     }
 }
 
+/// The operator a write action was admitted for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Operator {
+    /// A caller the gate verified, with the operator scope.
+    Verified(Box<Caller>),
+    /// A loopback peer that sent no credential, admitted under
+    /// `profile = "development"` alone.
+    DevelopmentLoopback,
+}
+
+impl Operator {
+    /// How the operator was admitted, as the action record names it.
+    #[must_use]
+    pub const fn admitted_by(&self) -> &'static str {
+        match self {
+            Self::Verified(_) => "token",
+            Self::DevelopmentLoopback => "development-loopback",
+        }
+    }
+
+    /// The issuer that vouched for the operator, when one did.
+    #[must_use]
+    pub fn issuer(&self) -> Option<&str> {
+        match self {
+            Self::Verified(caller) => Some(caller.issuer()),
+            Self::DevelopmentLoopback => None,
+        }
+    }
+
+    /// The operator's subject at that issuer, when one vouched for it.
+    #[must_use]
+    pub fn subject(&self) -> Option<&str> {
+        match self {
+            Self::Verified(caller) => Some(caller.subject()),
+            Self::DevelopmentLoopback => None,
+        }
+    }
+}
+
 /// Who the admin listener admits: the verifier of `[auth]`, the deployment
 /// profile, and the scrape token.
 #[derive(Debug)]
@@ -151,7 +193,8 @@ impl Access {
         )
     }
 
-    /// Admits the caller of a write action with `headers` from `peer`.
+    /// Admits the caller of a write action with `headers` from `peer`, and
+    /// returns the operator it admitted.
     ///
     /// # Errors
     /// Returns [`AdminRefusal::Caller`] with the gate's refusal.
@@ -159,19 +202,19 @@ impl Access {
         &self,
         peer: Option<SocketAddr>,
         headers: &HeaderMap,
-    ) -> Result<(), AdminRefusal> {
+    ) -> Result<Operator, AdminRefusal> {
         // NOTE: no specification governs this: our own design; development keeps the
         // credential-less loopback operator, and every other profile asks the gate.
         if self.profile == Profile::Development
             && !self.gate.presents_credential(headers)
             && peer.is_some_and(|peer| peer.ip().is_loopback())
         {
-            return Ok(());
+            return Ok(Operator::DevelopmentLoopback);
         }
         self.gate
             .admit(headers, (Requirement::Operator, None), false)
             .await
-            .map(|_caller| ())
+            .map(|caller| Operator::Verified(Box::new(caller)))
             .map_err(AdminRefusal::Caller)
     }
 
@@ -250,7 +293,7 @@ where
 /// with the operator scope passes ([`Access::admit_operator`]).
 ///
 /// Every other request is answered with its [`AdminRefusal`] before the
-/// action reads anything.
+/// action reads anything. An admitted action is recorded once it has run.
 pub async fn operator_only(
     State(access): State<Arc<Access>>,
     peer: Result<ConnectInfo<SocketAddr>, ExtensionRejection>,
@@ -261,9 +304,53 @@ pub async fn operator_only(
     // not record is read as unknown, so it is never the loopback operator.
     let peer = peer.ok().map(|ConnectInfo(peer)| peer);
     match access.admit_operator(peer, request.headers()).await {
-        Ok(()) => next.run(request).await,
+        Ok(operator) => {
+            let method = request.method().clone();
+            let action = request
+                .extensions()
+                .get::<MatchedPath>()
+                .map(|matched| matched.as_str().to_owned());
+            let request_id = request_id::of(request.headers()).map(str::to_owned);
+            let response = next.run(request).await;
+            record(
+                &operator,
+                (&method, action.as_deref()),
+                response.status(),
+                request_id.as_deref(),
+            );
+            response
+        }
         Err(refusal) => refuse(refusal, request.headers()),
     }
+}
+
+/// Counts and logs a write action `operator` ran, `method` on the route
+/// template `action`, with the `status` it was answered and the time.
+///
+/// The record names the operator by its issuer and subject, so the action
+/// stays attributable after a restart, and never carries a credential.
+fn record(
+    operator: &Operator,
+    (method, action): (&Method, Option<&str>),
+    status: StatusCode,
+    request_id: Option<&str>,
+) {
+    Event::AdminWriteAdmitted.record();
+    // NOTE: no specification governs this: our own design; an operator is the
+    // deployment's own staff, named so its action is attributable, never a patient.
+    tracing::info!(
+        target: crate::facade::security::TARGET,
+        event = Event::AdminWriteAdmitted.as_str(),
+        admitted_by = operator.admitted_by(),
+        issuer = operator.issuer(),
+        subject = operator.subject(),
+        method = method.as_str(),
+        action,
+        status = status.as_u16(),
+        at = %jiff::Timestamp::now(),
+        request_id,
+        "an operator ran a write action on the admin listener"
+    );
 }
 
 /// The middleware in front of `GET /metrics`: a scrape passes unless a
