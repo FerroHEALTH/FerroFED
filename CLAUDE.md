@@ -152,8 +152,9 @@ is published to crates.io for now, and publishing is a one-line switch:
 `publish = false` inherited from `[workspace.package]`, with the lane, the dry
 run and the version guard built from v0.0.2 (`.claude/memory/crate-split.md`,
 `.claude/rules/crates-publishing.md`). Identity bindings are built here first,
-each as a crate that can move to FerroPIX later
-(`.claude/memory/build-in-fed-first.md`).
+each as a crate that can move to FerroPIX later, because FerroPIX has nothing
+built (`.claude/memory/build-in-fed-first.md`); a capability whose home is a
+sibling that exists is built there, as `eehrxf` moves to FerroBRIDGE (A76).
 
 ## Repo map
 
