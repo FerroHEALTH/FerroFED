@@ -245,9 +245,10 @@ pub(crate) fn settings() -> ServerSettings {
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),
-        overload: ferrofed_server::config::Server::default()
+        overload: ferrofed_server::config::server::Server::default()
             .resolve_overload()
             .expect("the default limits should resolve"),
+        tls: None,
     }
 }
 
@@ -651,15 +652,33 @@ pub(crate) fn conveyed_claims(token: &str) -> Result<Conveyed, Box<dyn StdError>
 /// What a search reads in place of a conveyed token's `aud`.
 pub(crate) const CONVEYED_AUDIENCE: &str = "<audience>";
 
+/// What a search reads in place of a conveyed token's minted `jti`.
+pub(crate) const MINTED_TOKEN_ID: &str = "<minted-token-id>";
+
 /// The claims of `token` as JSON, for a search of what a node received, its
-/// `aud` read as [`CONVEYED_AUDIENCE`].
+/// `aud` read as [`CONVEYED_AUDIENCE`], its `iat` and `exp` as `0` and its
+/// `jti` as [`MINTED_TOKEN_ID`].
 ///
 /// The `aud` is the endpoint id the registry gives the node it is sent to,
-/// composed from no request, as the minted request id is; every other claim
-/// stays as the node reads it, so a client value in one is still found.
+/// composed from no request, as the minted request id is. The gateway mints
+/// `iat` and `exp` from its clock and `jti` at random, from no request
+/// either, and the outbound gate exempts them for that reason: a clock
+/// reading such as `1791234567` or a random UUID holds a short synthetic
+/// identifier such as `12345` by chance. Every other claim stays as the node
+/// reads it, so a client value in one is still found.
+///
+/// # Errors
+///
+/// When the token does not decode, or its `jti` is not in the form the
+/// gateway mints, so no other value is ever masked.
 pub(crate) fn searched_claims(token: &str) -> Result<String, Box<dyn StdError>> {
     let mut claims = conveyed_claims(token)?;
+    if !is_minted_form(&claims.jti) {
+        return Err(format!("{:?} is not a token id the gateway minted", claims.jti).into());
+    }
     CONVEYED_AUDIENCE.clone_into(&mut claims.aud);
+    (claims.iat, claims.exp) = (0, 0);
+    MINTED_TOKEN_ID.clone_into(&mut claims.jti);
     Ok(serde_json::to_string(&claims)?)
 }
 
@@ -671,4 +690,37 @@ pub(crate) fn stable_claims(token: &str) -> Result<String, Box<dyn StdError>> {
     (claims.iat, claims.exp) = (0, 0);
     claims.jti.clear();
     Ok(serde_json::to_string(&claims)?)
+}
+
+// A wire search for the synthetic `12345` never reads the clock or the random
+// `jti`, which the outbound gate exempts, and still reads a caller's claim.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "test assertions in a test that returns its setup errors"
+)]
+fn a_search_reads_no_minted_claim_and_every_caller_claim() -> Result<(), Box<dyn StdError>> {
+    let claims = Conveyed {
+        iss: "example-federation".to_owned(),
+        aud: "node_1".to_owned(),
+        iat: 1_791_234_567,
+        exp: 1_791_234_627,
+        jti: "0f123451-2345-4234-9123-451234512345".to_owned(),
+        sub: "synthetic-caller".to_owned(),
+        iss_upstream: None,
+        verified_by: None,
+        subject_organization_id: None,
+        purpose_of_use: Vec::new(),
+        scope: None,
+        ehr_id: None,
+    };
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::default(),
+        &claims,
+        &jsonwebtoken::EncodingKey::from_secret(b"synthetic"),
+    )?;
+    let searched = searched_claims(&token)?;
+    assert!(!searched.contains("12345"), "{searched}");
+    assert!(searched.contains("synthetic-caller"), "{searched}");
+    Ok(())
 }

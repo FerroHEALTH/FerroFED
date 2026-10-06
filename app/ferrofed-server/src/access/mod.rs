@@ -31,7 +31,7 @@ pub mod config;
 pub(crate) mod routed;
 
 use std::fmt;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::extract::{ConnectInfo, Request, State};
@@ -50,6 +50,7 @@ use secrecy::SecretString;
 use crate::auth::caller::Caller;
 use crate::base_path::BasePath;
 use crate::error::{self, Code};
+use crate::listener::Peer;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -311,8 +312,8 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     let caller = request.extensions().get::<Caller>().cloned();
     let address = request
         .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|ConnectInfo(peer)| peer.ip());
+        .get::<ConnectInfo<Peer>>()
+        .map(|ConnectInfo(Peer(peer))| peer.ip());
     let logged = request
         .extensions()
         .get::<OutboundId>()

@@ -17,6 +17,10 @@
 //! entries and resolution bindings naming a member that left are dropped.
 //! A configuration that does not load leaves the running registry in place.
 //!
+//! The same signal reads the certificate, the key and the client CA of each
+//! listener that serves TLS again from its files
+//! ([`Reloader::reload_certificates`]); a changed path takes a restart.
+//!
 //! The sections [`reloadable`](crate::binding::reloadable) names take effect
 //! on a reload: the registry, the onward credentials, and each section a
 //! binding declares as one a reload applies
@@ -41,6 +45,7 @@ use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
+use crate::listener::certificates::Certificates;
 use crate::metrics::ReloadResult;
 use crate::state::AppState;
 
@@ -57,6 +62,7 @@ pub struct Reloader {
     boot: Settings,
     state: Arc<AppState>,
     serial: Mutex<Option<Settings>>,
+    certificates: Vec<Arc<Certificates>>,
 }
 
 /// What an applied reload changed.
@@ -151,7 +157,42 @@ impl Reloader {
             boot,
             state,
             serial: Mutex::new(None),
+            certificates: Vec::new(),
         }
+    }
+
+    /// Returns this reloader with `certificates`, the TLS of the listeners,
+    /// which [`Reloader::reload_certificates`] reads again from their files.
+    #[must_use]
+    pub fn with_certificates(mut self, certificates: Vec<Arc<Certificates>>) -> Self {
+        self.certificates = certificates;
+        self
+    }
+
+    /// Reads the certificate, the key and the client CA of every listener
+    /// that serves TLS again from the files it started with, logs each
+    /// outcome, and returns the tables whose files were refused.
+    ///
+    /// A listener whose files read puts them in place for every handshake
+    /// that starts afterwards; one whose files do not keeps the certificate it
+    /// serves. No connection already open changes.
+    pub fn reload_certificates(&self) -> Vec<&'static str> {
+        let mut refused = Vec::new();
+        for certificates in &self.certificates {
+            let table = certificates.files().table;
+            match certificates.reload() {
+                Ok(()) => tracing::info!(table, "listener certificate reloaded"),
+                Err(error) => {
+                    tracing::error!(
+                        table,
+                        error = crate::chain(&error),
+                        "listener certificate reload refused, the running certificate stays"
+                    );
+                    refused.push(table);
+                }
+            }
+        }
+        refused
     }
 
     /// Reloads the registry, logs the outcome, and returns it.
@@ -359,7 +400,8 @@ impl std::fmt::Debug for Reloader {
     }
 }
 
-/// Reloads the registry each time the process receives `SIGHUP`.
+/// Reloads the registry, and the certificate of every listener that serves
+/// TLS, each time the process receives `SIGHUP`.
 ///
 /// The reload reads files, so it runs on the blocking pool. A failure to
 /// install the handler is logged, and the registry then changes only on a
@@ -377,9 +419,14 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
         }
     };
     while hangup.recv().await.is_some() {
-        tracing::info!("SIGHUP received, reloading the registry");
+        tracing::info!("SIGHUP received, reloading the registry and the listener certificates");
         let reloader = Arc::clone(&reloader);
-        if let Err(error) = tokio::task::spawn_blocking(move || reloader.reload()).await {
+        let outcome = tokio::task::spawn_blocking(move || {
+            let registry = reloader.reload();
+            reloader.reload_certificates();
+            registry
+        });
+        if let Err(error) = outcome.await {
             tracing::error!(
                 panicked = error.is_panic(),
                 "the registry reload did not finish; the running registry stays"
@@ -436,108 +483,114 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
     shape(boot) != shape(fresh)
 }
 
+/// A key a reload does not apply, with whether its value differs between the
+/// settings the process started with and the fresh ones.
+type RestartKey = (&'static str, fn(&Settings, &Settings) -> bool);
+
+/// The core's keys a reload does not apply, in the order a refusal names
+/// them.
+const RESTART_KEYS: &[RestartKey] = &[
+    ("signing", signing_changed),
+    ("server.listen", |boot, fresh| {
+        boot.server.listen != fresh.server.listen
+    }),
+    ("server.tls", |boot, fresh| {
+        boot.server.tls != fresh.server.tls
+    }),
+    ("metrics.tls", |boot, fresh| {
+        boot.metrics.tls != fresh.metrics.tls
+    }),
+    ("server.base_path", |boot, fresh| {
+        boot.server.base_path != fresh.server.base_path
+    }),
+    ("server.request_timeout_ms", |boot, fresh| {
+        boot.server.request_timeout != fresh.server.request_timeout
+    }),
+    ("server.drain_delay_ms", |boot, fresh| {
+        boot.server.drain_delay != fresh.server.drain_delay
+    }),
+    ("server.shutdown_timeout_ms", |boot, fresh| {
+        boot.server.shutdown_timeout != fresh.server.shutdown_timeout
+    }),
+    ("server.body_limit_bytes", |boot, fresh| {
+        boot.server.body_limit != fresh.server.body_limit
+    }),
+    ("server.overload", |boot, fresh| {
+        boot.server.overload != fresh.server.overload
+    }),
+    ("telemetry.format", |boot, fresh| {
+        boot.telemetry.format != fresh.telemetry.format
+    }),
+    ("telemetry.filter", |boot, fresh| {
+        boot.telemetry.filter != fresh.telemetry.filter
+    }),
+    ("telemetry.otlp_endpoint", |boot, fresh| {
+        boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint
+    }),
+    ("telemetry.trace_sample_ratio", |boot, fresh| {
+        boot.telemetry.trace_sample_ratio != fresh.telemetry.trace_sample_ratio
+    }),
+    ("federation.id", |boot, fresh| {
+        boot.federation.id != fresh.federation.id
+    }),
+    ("federation.timeouts", |boot, fresh| {
+        boot.federation.budget != fresh.federation.budget
+    }),
+    ("federation.default_namespace", |boot, fresh| {
+        boot.federation.default_namespace != fresh.federation.default_namespace
+    }),
+    ("federation.binding_ttl_ms", |boot, fresh| {
+        boot.federation.binding_ttl != fresh.federation.binding_ttl
+    }),
+    ("federation.binding_capacity", |boot, fresh| {
+        boot.federation.binding_capacity != fresh.federation.binding_capacity
+    }),
+    ("federation.ehr_index_capacity", |boot, fresh| {
+        boot.federation.ehr_index_capacity != fresh.federation.ehr_index_capacity
+    }),
+    ("federation.node_selection", |boot, fresh| {
+        boot.federation.node_selection != fresh.federation.node_selection
+    }),
+    ("federation.best_effort", |boot, fresh| {
+        boot.federation.best_effort != fresh.federation.best_effort
+    }),
+    ("federation.max_in_flight_per_node", |boot, fresh| {
+        boot.federation.max_in_flight_per_node != fresh.federation.max_in_flight_per_node
+    }),
+    ("federation.max_node_answer_bytes", |boot, fresh| {
+        boot.federation.max_node_answer_bytes != fresh.federation.max_node_answer_bytes
+    }),
+    ("federation.fan_out_template_upload", |boot, fresh| {
+        boot.federation.fan_out_template_upload != fresh.federation.fan_out_template_upload
+    }),
+    ("federation.fan_out_stored_queries", |boot, fresh| {
+        boot.federation.fan_out_stored_queries != fresh.federation.fan_out_stored_queries
+    }),
+    ("federation.offset", |boot, fresh| {
+        boot.federation.offset != fresh.federation.offset
+    }),
+    ("federation.decomposable_aggregates", |boot, fresh| {
+        boot.federation.decomposable != fresh.federation.decomposable
+    }),
+    ("federation.demographic_endpoint", |boot, fresh| {
+        boot.federation.demographic_endpoint != fresh.federation.demographic_endpoint
+    }),
+    ("stored_queries", stored_queries_changed),
+    ("metrics.listen", |boot, fresh| {
+        boot.metrics.listen != fresh.metrics.listen
+    }),
+    ("metrics.otlp_endpoint", |boot, fresh| {
+        boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
+    }),
+];
+
 /// The keys a reload does not apply whose value in `fresh` differs from the
-/// one the process started with: the core's, then each binding's.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one entry per key a reload does not apply: the table of restart keys"
-)]
+/// one the process started with: the core's ([`RESTART_KEYS`]), then each
+/// binding's.
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
-    let (was, now) = (&boot.federation, &fresh.federation);
-    let (booted, reread) = (&boot.telemetry, &fresh.telemetry);
-    let core = [
-        ("signing", signing_changed(boot, fresh)),
-        ("server.listen", boot.server.listen != fresh.server.listen),
-        (
-            "server.base_path",
-            boot.server.base_path != fresh.server.base_path,
-        ),
-        (
-            "server.request_timeout_ms",
-            boot.server.request_timeout != fresh.server.request_timeout,
-        ),
-        (
-            "server.drain_delay_ms",
-            boot.server.drain_delay != fresh.server.drain_delay,
-        ),
-        (
-            "server.shutdown_timeout_ms",
-            boot.server.shutdown_timeout != fresh.server.shutdown_timeout,
-        ),
-        (
-            "server.body_limit_bytes",
-            boot.server.body_limit != fresh.server.body_limit,
-        ),
-        (
-            "server.overload",
-            boot.server.overload != fresh.server.overload,
-        ),
-        ("telemetry.format", booted.format != reread.format),
-        ("telemetry.filter", booted.filter != reread.filter),
-        (
-            "telemetry.otlp_endpoint",
-            booted.otlp_endpoint != reread.otlp_endpoint,
-        ),
-        (
-            "telemetry.trace_sample_ratio",
-            booted.trace_sample_ratio != reread.trace_sample_ratio,
-        ),
-        ("federation.id", was.id != now.id),
-        ("federation.timeouts", was.budget != now.budget),
-        (
-            "federation.default_namespace",
-            was.default_namespace != now.default_namespace,
-        ),
-        (
-            "federation.binding_ttl_ms",
-            was.binding_ttl != now.binding_ttl,
-        ),
-        (
-            "federation.binding_capacity",
-            was.binding_capacity != now.binding_capacity,
-        ),
-        (
-            "federation.ehr_index_capacity",
-            was.ehr_index_capacity != now.ehr_index_capacity,
-        ),
-        (
-            "federation.node_selection",
-            was.node_selection != now.node_selection,
-        ),
-        ("federation.best_effort", was.best_effort != now.best_effort),
-        (
-            "federation.max_in_flight_per_node",
-            was.max_in_flight_per_node != now.max_in_flight_per_node,
-        ),
-        (
-            "federation.fan_out_template_upload",
-            was.fan_out_template_upload != now.fan_out_template_upload,
-        ),
-        (
-            "federation.fan_out_stored_queries",
-            was.fan_out_stored_queries != now.fan_out_stored_queries,
-        ),
-        ("federation.offset", was.offset != now.offset),
-        (
-            "federation.decomposable_aggregates",
-            was.decomposable != now.decomposable,
-        ),
-        (
-            "federation.demographic_endpoint",
-            was.demographic_endpoint != now.demographic_endpoint,
-        ),
-        ("stored_queries", stored_queries_changed(boot, fresh)),
-        (
-            "metrics.listen",
-            boot.metrics.listen != fresh.metrics.listen,
-        ),
-        (
-            "metrics.otlp_endpoint",
-            boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint,
-        ),
-    ];
-    core.into_iter()
-        .filter_map(|(key, changed)| changed.then_some(key))
+    RESTART_KEYS
+        .iter()
+        .filter_map(|(key, changed)| changed(boot, fresh).then_some(*key))
         .chain(
             binding::compiled()
                 .iter()

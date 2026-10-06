@@ -21,7 +21,10 @@ Thirteen workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
-  Kubernetes manifests, the comment-style guard, the file-length guard, the
+  Kubernetes manifests, the `observability` job, which checks the Grafana
+  dashboard and the Prometheus rule file under `deploy/observability/` with
+  promtool and holds both to the metrics the gateway exports, the
+  comment-style guard, the file-length guard, the
   versions guard, the favicon guard, the copyright-holder guard, the site
   link guard over the assembled site, the conformance-matrix guard with the
   conformance report script's self-test, the obligations guard, the

@@ -77,6 +77,9 @@ data:
     # At most this many requests to one member at once; one past it waits
     # for a slot until its per-node deadline, then is time-out.
     max_in_flight_per_node = 64
+    # At most this many bytes of one answer from a member; a longer one is
+    # dropped unread and the member is node-error.
+    max_node_answer_bytes = 16777216
 
     # Client authentication: every caller presents an RFC 9068 access
     # token from an issuer listed here. A gateway that federates refuses to

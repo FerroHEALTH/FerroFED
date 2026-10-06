@@ -118,7 +118,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
-| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node` | the overload limits | [Overload protection](overload.md) |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
@@ -165,6 +165,14 @@ overload_retry_after_s = 1    # the Retry-After of that 503, in seconds
 requests_per_second = 10      # sustained, per verified issuer and client_id
 burst = 20                    # at once after a quiet spell; one more answers 429 rate-limited
 
+# TLS on the listener, off unless set; see TLS on the listeners. Unset, the
+# listener speaks plain HTTP for a proxy that terminates TLS in front of it.
+# [server.tls]
+# certificate_file = "/run/secrets/ferrofed/listener.crt"   # the chain, its own certificate first
+# key_file = "/run/secrets/ferrofed/listener.key"
+# client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"     # optional: require a client certificate it signed
+# healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"   # what ferrofed healthcheck presents then
+
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"   # what the console logs; never what is traced
@@ -175,6 +183,7 @@ trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
+# [metrics.tls] takes certificate_file, key_file and client_ca_file, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a bearer token, a user and a password, or a grant; see Onward
@@ -468,6 +477,63 @@ printable ASCII, the gateway's own id otherwise.
 
 The metrics are not on this surface: they have a listener of their own, off
 by default ([Metrics](metrics.md)).
+
+## TLS on the listeners
+
+The client listener and the admin listener each run in one of two modes.
+
+- **Plain HTTP**, the default. Use it behind a reverse proxy, a load
+  balancer or a service mesh that terminates TLS and reaches the gateway
+  over a network you trust, such as the loopback interface or a pod's own
+  network namespace. Bearer tokens and patient identifiers cross the hop
+  from the proxy to the gateway in the clear, so pick this mode only where
+  that hop cannot be read.
+- **TLS**, with `[server.tls]` or `[metrics.tls]`. Use it when the hop from
+  the proxy to the gateway crosses a network others share, or when your
+  policy forbids a cleartext hop inside the network (NEN 7510 is one such
+  policy). Set `client_ca_file` as well to admit only the proxy: a client
+  that presents no certificate that CA signed fails its handshake and reaches
+  nothing.
+
+```toml
+[server.tls]
+certificate_file = "/run/secrets/ferrofed/listener.crt"
+key_file = "/run/secrets/ferrofed/listener.key"
+client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"
+healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"
+```
+
+- `certificate_file` holds the chain the listener presents, its own
+  certificate first, and `key_file` its private key, both PEM.
+- `client_ca_file`, optional, holds the CA certificates a client
+  certificate must chain to. Set, every client must present one.
+- `healthcheck_identity_file`, `[server.tls]` only, holds a client
+  certificate chain and its key, PEM, which `ferrofed healthcheck` presents
+  to a listener that requires one. It is refused anywhere else.
+
+The listener negotiates TLS 1.3 (RFC 8446) or TLS 1.2 and nothing older,
+and picks TLS 1.3 whenever the client offers it, as BCP 195 asks (RFC 9325
+§3.1.1). Its TLS 1.2 cipher suites are the four ECDHE AES-GCM suites RFC 9325
+§4.2 recommends, each with forward secrecy. It offers HTTP/1.1 in ALPN. A
+client that does not finish its handshake within 10 seconds is dropped.
+
+`config check` reads every file, and refuses, with exit code 78 and the key
+named, a missing certificate or key, a file that holds no PEM, a key that
+does not match its certificate, and a client CA that is no usable trust
+anchor. It never prints the content of a file.
+
+To renew the certificate, write the new files over the old ones and send
+`SIGHUP`, as for [a registry reload](registry.md). Every handshake after the
+signal presents the new certificate and checks clients against the new CA
+file; connections already open keep the certificate they began with. Files
+that do not form a valid pair are refused, logged with their table, and the
+running certificate stays. A changed path in `[server.tls]` or
+`[metrics.tls]` takes a restart.
+
+`ferrofed healthcheck` follows `[server.tls]`: it asks over `https` on
+loopback and accepts exactly the certificate `certificate_file` holds. If
+the files were replaced and the gateway has not been sent `SIGHUP`, it
+reports so and exits `1`.
 
 ## Request ids
 

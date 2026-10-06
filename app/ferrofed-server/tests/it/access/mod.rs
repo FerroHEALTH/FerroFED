@@ -81,9 +81,21 @@ fn gateway(
 /// The gateway of [`gateway`], served under `server`.
 fn gateway_under(
     dir: &Path,
-    (a, b): (&str, &str),
+    nodes: (&str, &str),
     repository: &FeedRepository,
     extra: &str,
+    server: &ServerSettings,
+) -> Result<Router, Box<dyn Error>> {
+    gateway_with(dir, nodes, repository, (extra, ""), server)
+}
+
+/// The gateway of [`gateway_under`], the `[federation]` keys `federation`
+/// added.
+fn gateway_with(
+    dir: &Path,
+    (a, b): (&str, &str),
+    repository: &FeedRepository,
+    (extra, federation): (&str, &str),
     server: &ServerSettings,
 ) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
@@ -93,7 +105,7 @@ fn gateway_under(
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 4000\noverall_timeout_ms = 6000\n\n\
+         per_node_timeout_ms = 4000\noverall_timeout_ms = 6000\n{federation}\n\
          [stored_queries]\npath = {store}\n{}{}{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
         audit_tables(repository, extra),

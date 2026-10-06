@@ -3,15 +3,16 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/ihe-balp.sh
 #
-# Vendors the IHE Basic Audit Log Patterns (BALP) 1.1.4 FHIR package artefacts
-# the audit records of crates/ihe-iti (feature `balp`, #486) read into
-# docs/specs/ihe-balp/: the RESTful Query, Patient Query, Read, Create and
-# Delete patterns the profiles' audit records derive from, the Audit Creator
-# and Audit Record Repository capability statements, the ImplementationGuide,
-# and the IG's client-side example of a search. The PIXm, mCSD, PDQm and
-# PMIR audit profiles are built on these patterns. The package manifest is read
-# for its name, version and licence and left out of the tree (the
-# dependency-manifest rule of scripts/vendor/lib/corpus.sh).
+# Vendors the IHE Basic Audit Log Patterns (BALP) 1.1.4 FHIR package into
+# docs/specs/ihe-balp/, every file of it but the package manifest: each
+# pattern an audit record of crates/ihe-iti (feature `balp`, #486) or an
+# access record can name, among them Query, Patient Query, Read, Create,
+# Update and Delete and their Patient variants, the Audit Creator and Audit
+# Record Repository capability statements, the code systems and value sets,
+# and the IG's examples. The PIXm, mCSD, PDQm and PMIR audit profiles are
+# built on these patterns. The package manifest is read for its name, version
+# and licence and left out of the tree (the dependency-manifest rule of
+# scripts/vendor/lib/corpus.sh).
 #
 # The "IHE BALP FHIR package" row of docs/VERSIONS.md pins the package by
 # version and by the sha256 of the registry tarball, so a republished package
@@ -42,23 +43,6 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 [ -n "$version" ] || die "the pin names no package version"
 [ -n "$want" ] || die "the pin names no package sha256"
 
-# The RESTful patterns an IHE transaction's audit profile derives from, at
-# their upstream paths inside the package. The OAuth and SAML token-use
-# patterns, the consent, privacy disclosure and update patterns, the Patient
-# Read, Create and Delete variants, the code systems, and the examples but one
-# serve no reader here and are not taken.
-paths=(
-  package/ImplementationGuide-ihe.iti.balp.json
-  package/CapabilityStatement-IHE.BALP.AuditCreator.json
-  package/CapabilityStatement-IHE.BALP.ATNA.AuditRecordRepository.json
-  package/StructureDefinition-IHE.BasicAudit.Query.json
-  package/StructureDefinition-IHE.BasicAudit.PatientQuery.json
-  package/StructureDefinition-IHE.BasicAudit.Read.json
-  package/StructureDefinition-IHE.BasicAudit.Create.json
-  package/StructureDefinition-IHE.BasicAudit.Delete.json
-  package/example/AuditEvent-ex-auditBasicQueryGetClient.json
-)
-
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -77,12 +61,21 @@ fhir="$(jq -r '.fhirVersions | join(", ")' "$tmp/package/package.json")"
 [ "$manifest_version" = "$version" ] || die "the package declares version $manifest_version, not $version"
 [ "$licence" = "CC-BY-4.0" ] || die "the package declares licence $licence, not CC-BY-4.0"
 
+# The manifest is accounted for by its sha256 and left out; every other file
+# of the package is taken at its upstream path.
+dropped="$(corpus_drop_manifests "$tmp")"
+[ -n "$dropped" ] || die "the package carries no package.json"
+
 rm -rf "$dest"
 mkdir -p "$dest"
-corpus_take "$tmp" "$dest" "${paths[@]}"
+corpus_take "$tmp" "$dest" package
 
-# shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
-dropped="$(printf '| `%s` | `%s` |' package/package.json "$(corpus_sha256 "$tmp/package/package.json")")"
+# Each pattern the audit records and the access records name by canonical
+# URL must be here.
+for pattern in Query PatientQuery Read PatientRead Create PatientCreate Update PatientUpdate Delete PatientDelete; do
+  [ -f "$dest/package/StructureDefinition-IHE.BasicAudit.$pattern.json" ] \
+    || die "the package has no IHE.BasicAudit.$pattern pattern"
+done
 
 rows=""
 while IFS= read -r file; do
@@ -123,22 +116,18 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Read by: #486 (the BALP audit records of \`crates/ihe-iti\`, whose tests hold
   each record to the pattern its transaction's audit profile derives from and
   a search to the client-side example, and the ATNA FHIR Feed sender, held to
-  the Audit Creator's \`create\` interaction)
+  the Audit Creator's \`create\` interaction) and #696 (every pattern an access
+  record names by canonical URL). The narrative pages of the same version are
+  in docs/specs/ihe-balp-pages/.
 
 ## What is here
 
-The RESTful audit patterns an IHE transaction's audit profile derives from:
-Query and Patient Query (a search), Read, Create and Delete, the Audit
-Creator capability statement (an
-ATNA Secure Application or Secure Node with the ATX: FHIR Feed Option,
-\`create\` on \`AuditEvent\`) and the Audit Record Repository capability
-statement, the ImplementationGuide, and the IG's client-side example of a
-search. The package's other files serve no reader here: the OAuth and SAML
-token-use, consent, privacy disclosure and update patterns, the Patient Read,
-Create and Delete variants, the other examples, the code systems and value
-sets, the
-Schematron renderings, the OpenAPI renderings and the registry's validation
-output. They are not taken.
+The whole package but its manifest: every audit pattern (the RESTful Query,
+Read, Create, Update and Delete patterns and their Patient variants, the
+OAuth and SAML token-use, consent and privacy disclosure patterns), the Audit
+Creator, Audit Consumer and Audit Record Repository capability statements,
+the code systems and value sets, the IG's examples, the OpenAPI and
+Schematron renderings and the registry's index and validation output.
 
 | File | sha256 |
 |---|---|$rows

@@ -72,8 +72,10 @@ pub mod federation;
 pub mod health;
 pub mod healthcheck;
 pub mod jwks;
+pub mod listener;
 pub mod localization;
 pub mod metrics;
+pub mod node_transport;
 mod onward;
 pub mod operator;
 pub mod overload;
@@ -93,9 +95,9 @@ use std::time::Duration;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use axum::serve::Listener;
 use axum::{Json, Router};
 use http::{HeaderMap, StatusCode};
-use tokio::net::TcpListener;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
@@ -245,7 +247,11 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
             admission,
             overload::admit,
         ));
-    layered(guarded, server, Some(metrics.inbound()))
+    layered(
+        guarded,
+        server,
+        Some(metrics.inbound().serving_tls(server.tls.is_some())),
+    )
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).
@@ -336,19 +342,27 @@ async fn dependencies(
 /// Serves `app` on an already-bound listener until the process receives
 /// `SIGTERM` or `SIGINT`, then drains.
 ///
-/// The signal moves `lifecycle` to draining at once, so readiness answers
-/// `503` from the moment the signal arrives. The listener keeps accepting for
+/// The listener is a [`tokio::net::TcpListener`] for plain HTTP or a
+/// [`listener::TlsListener`] for `[server.tls]`. The signal moves
+/// `lifecycle` to draining at once, so readiness answers `503` from the
+/// moment the signal arrives. The listener keeps accepting for
 /// `server.drain_delay`, then closes, and the requests in flight get
 /// `server.shutdown_timeout` to finish ([`drain_on`]).
 ///
 /// # Errors
 /// Returns the I/O error from accepting or serving connections.
-pub async fn serve(
-    listener: TcpListener,
+pub async fn serve<L>(
+    listener: L,
     app: Router,
     server: &ServerSettings,
     lifecycle: Lifecycle,
-) -> std::io::Result<()> {
+) -> std::io::Result<()>
+where
+    L: Listener,
+    L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
+{
     serve_until(
         listener,
         app,
@@ -367,20 +381,24 @@ pub async fn serve(
 ///
 /// # Errors
 /// Returns the I/O error from accepting or serving connections.
-pub async fn serve_until<F>(
-    listener: TcpListener,
+pub async fn serve_until<L, F>(
+    listener: L,
     app: Router,
     drain: Duration,
     shutdown: F,
 ) -> std::io::Result<()>
 where
+    L: Listener,
+    L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
     F: Future<Output = ()> + Send + 'static,
 {
     let signalled = Arc::new(tokio::sync::Notify::new());
     let inner = Arc::clone(&signalled);
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: an access record names the address the
     // request came from, which the connection alone knows.
-    let app = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+    let app = app.into_make_service_with_connect_info::<listener::Peer>();
     let server = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.await;

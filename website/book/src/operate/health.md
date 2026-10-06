@@ -167,7 +167,10 @@ is a wildcard and on the address itself otherwise, and prints one line. It
 exits `0` only when readiness answers `200` within three seconds, and `1` for
 any other status, a refused connection, no answer in time, or a
 configuration that does not load: the two codes a container runtime's health
-check reads. The [image](container.md#the-image) runs it as its
+check reads. With `[server.tls]` set it asks over `https` and accepts exactly the
+certificate `certificate_file` holds, presenting `healthcheck_identity_file`
+where the listener requires a client certificate
+([TLS on the listeners](configuration.md#tls-on-the-listeners)). The [image](container.md#the-image) runs it as its
 `HEALTHCHECK`, and so does the `compose.yaml` gateway service.
 
 A Kubernetes pod probes the routes directly

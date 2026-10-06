@@ -16,7 +16,10 @@
 //! identifier (§5.4.1, N33). Every
 //! member is asked at once, each under the per-node deadline and all under
 //! the overall budget (§11.5, N38): a slow member is abandoned, never waited
-//! on past the budget, and abandoning it aborts no other probe.
+//! on past the budget, and abandoning it aborts no other probe. A probe
+//! still waiting for a slot of the member's in-flight cap when its deadline
+//! passes was never sent: it is [`ForwardError::Capped`], never abandoned
+//! (§11.1, §11.5, N38).
 //!
 //! The probe reports what each member answered and decides nothing. A member
 //! that answered neither a success nor `404` has not said whether it holds
@@ -53,8 +56,9 @@ pub enum Answer {
     Erred(StatusCode),
     /// The probe got no answer of the member's: it timed out, could not
     /// reach the member, was refused the onward credentials, or was never
-    /// sent, its deadline passed before it left included
-    /// ([`ForwardError::Expired`]).
+    /// sent, its deadline passed before it left ([`ForwardError::Expired`])
+    /// or while it waited for a slot of the member's in-flight cap
+    /// ([`ForwardError::Capped`]) included.
     Failed(ForwardError),
     /// The probe was sent and the overall budget ran out before the member
     /// answered (§11.5).
@@ -219,19 +223,15 @@ where
         tasks.spawn(
             async move {
                 let started = Instant::now();
-                let forwarded = async {
-                    match request {
-                        Ok(request) => client.forward_held(request, &options).await,
-                        Err(refused) => Err(refused),
-                    }
+                let forwarded = match request {
+                    Ok(request) => client.forward_held_until(request, &options, until).await,
+                    Err(refused) => Some(Err(refused)),
                 };
-                // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
-                // probe the budget overtook before it left ends `Expired`, never abandoned.
-                let answer = match tokio::time::timeout_at(until, forwarded).await {
-                    Ok(forwarded) => {
+                let answer = match forwarded {
+                    Some(forwarded) => {
                         classified(forwarded, |answer| client.refuses_on_consent(answer))
                     }
-                    Err(_elapsed) => Answer::Abandoned,
+                    None => Answer::Abandoned,
                 };
                 (
                     index,

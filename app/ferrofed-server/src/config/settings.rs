@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,6 +30,7 @@ use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};
+use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
 
 /// The settings the run path holds, with every secret already read.
@@ -154,6 +155,9 @@ pub struct FederationSettings {
     /// The most requests the gateway sends to one member endpoint at once
     /// (§11.5, N38).
     pub max_in_flight_per_node: NonZeroU32,
+    /// The most bytes the gateway reads of one answer from a member or its
+    /// token endpoint; a longer one makes the member `node-error` (§11.1).
+    pub max_node_answer_bytes: NonZeroUsize,
 }
 
 /// Whether an answer names a member the Step-1 consent pre-filter excludes
@@ -220,6 +224,9 @@ pub struct ServerSettings {
     /// How many requests the listener serves at once, and how many one
     /// verified caller may send.
     pub overload: Overload,
+    /// The TLS the listener serves, from `[server.tls]`; `None` serves plain
+    /// HTTP.
+    pub tls: Option<TlsFiles>,
 }
 
 /// The console and the trace export, resolved.
@@ -244,6 +251,9 @@ pub struct MetricsSettings {
     pub listen: Option<SocketAddr>,
     /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
+    /// plain HTTP.
+    pub tls: Option<TlsFiles>,
 }
 
 /// The authentication scheme a credentials section resolves to.
@@ -375,6 +385,7 @@ impl Settings {
                 .caller_rate
                 .map(|rate| rate.requests_per_second.get()),
             max_in_flight_per_node = self.federation.max_in_flight_per_node.get(),
+            max_node_answer_bytes = self.federation.max_node_answer_bytes.get(),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
             purpose_of_use_required = self.server.auth.purpose_required,

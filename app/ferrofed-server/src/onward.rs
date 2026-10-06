@@ -29,15 +29,16 @@ use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use openehr_its::rest::client::{Credentials, ReqwestTransport};
+use openehr_its::rest::client::Credentials;
 
 use crate::config::settings::{Scheme, Settings};
 use crate::config::tls::TlsSettings;
 use crate::federation::error::FederationError;
+use crate::node_transport::BoundedTransport;
 
 /// The HTTP engine every request to a node and to its token endpoint is
-/// sent through: the `reqwest` engine.
-pub(crate) type NodeTransport = ReqwestTransport;
+/// sent through: the `reqwest` engine, bounded in what it reads of an answer.
+pub(crate) type NodeTransport = BoundedTransport;
 
 /// What the node clients of one federation send each node to authenticate.
 #[derive(Debug)]
@@ -84,7 +85,7 @@ pub(crate) struct Onward {
 /// built with.
 pub(crate) fn onward(
     settings: &Settings,
-    engine: ReqwestTransport,
+    engine: NodeTransport,
     registry: &RegistrySnapshot,
 ) -> Result<Onward, FederationError> {
     let mut credentials = BTreeMap::new();
@@ -223,8 +224,12 @@ fn transport(
         };
     let builder = fhir::http_client_builder(&Authentication::None, &material)
         .map_err(|source| failed(Box::new(source)))?;
-    ReqwestTransport::with_builder_timeout(builder, settings.federation.budget.overall())
-        .map_err(|source| failed(Box::new(source)))
+    BoundedTransport::with_builder(
+        builder,
+        settings.federation.budget.overall(),
+        settings.federation.max_node_answer_bytes.get(),
+    )
+    .map_err(|source| failed(Box::new(source)))
 }
 
 /// What one endpoint's grant provides its node client.
@@ -246,7 +251,7 @@ fn fapi2(
     settings: &Settings,
     endpoint: &EndpointId,
     grant: &Fapi2Grant,
-    engine: &ReqwestTransport,
+    engine: &NodeTransport,
 ) -> Result<Provided, FederationError> {
     let Some(signing) = &settings.signing else {
         return Err(FederationError::Grant {

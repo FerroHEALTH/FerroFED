@@ -21,23 +21,23 @@ use crate::e2e::{TestResult, federation_resolving};
 use crate::support::searched_claims;
 
 /// Whether the header `name` with `value` carries `needle`: in its raw
-/// bytes, and for the gateway's `openEHR-federation-client` token in the
-/// claims a node decodes from it ([`searched_claims`]); a token that does not
-/// decode counts as carrying it.
+/// bytes, or for the gateway's `openEHR-federation-client` token only in the
+/// claims a node decodes from it ([`searched_claims`]), so a short needle
+/// never matches the token's signature bytes; a token that does not decode
+/// counts as carrying it.
 fn header_carries(name: &str, value: &[u8], needle: &str) -> bool {
     let found = |haystack: &[u8]| {
         haystack
             .windows(needle.len())
             .any(|window| window == needle.as_bytes())
     };
-    if found(value) {
-        return true;
+    if !name.eq_ignore_ascii_case(conveyance::HEADER) {
+        return found(value);
     }
-    name.eq_ignore_ascii_case(conveyance::HEADER)
-        && std::str::from_utf8(value)
-            .ok()
-            .and_then(|token| searched_claims(token).ok())
-            .is_none_or(|claims| found(claims.as_bytes()))
+    std::str::from_utf8(value)
+        .ok()
+        .and_then(|token| searched_claims(token).ok())
+        .is_none_or(|claims| found(claims.as_bytes()))
 }
 
 #[tokio::test]

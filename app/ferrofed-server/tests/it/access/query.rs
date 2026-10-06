@@ -16,9 +16,9 @@ use http::{Request, StatusCode, header};
 
 use super::{
     ADMIN, DISCHARGE, LAB_ARCHETYPE, LAB_REPORT, TestResult, UNMAPPED, accesses, composition,
-    details, gateway, named, node_with_rows, profile,
+    details, gateway, gateway_with, named, node_with_rows, profile,
 };
-use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, post};
+use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
 use crate::support::call;
 use ferrofed_testkit::atna_feed::FeedRepository;
@@ -264,6 +264,51 @@ async fn a_query_no_node_was_sent_is_not_an_access() -> TestResult {
     assert!(
         accesses(&repository.records())?.is_empty(),
         "no member knows the patient, so no data was reached"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_answer_past_the_read_bound_is_recorded_as_node_error_with_no_row() -> TestResult {
+    let large: Vec<String> = (0..8).map(|_| composition(LAB_REPORT, UID_A)).collect();
+    let (node_a, node_b) = (
+        node_with_rows(&large).await,
+        node_with_rows(&[composition(DISCHARGE, UID_B)]).await,
+    );
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway_with(
+        dir.path(),
+        (&node_a.uri(), &node_b.uri()),
+        &repository,
+        ("", "max_node_answer_bytes = 4096\n"),
+        &settings_with_room(),
+    )?;
+    let (status, text) = call(app, post(body(&compositions(""))?)?).await?;
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "§11.4: the oversized member fails the query, never access-unrecorded: {text}"
+    );
+    let records = accesses(&repository.wait_for(1, SETTLE).await)?;
+    let [record] = records.as_slice() else {
+        return Err(
+            format!("one record of the query both members were sent, got {records:?}").into(),
+        );
+    };
+    assert_eq!(
+        vec!["node-error", "active"],
+        details(record, "origin", "status"),
+        "§11.1: the record names member A's refused answer"
+    );
+    assert_eq!(
+        vec!["0"],
+        details(record, "ehds-categories", "delivered"),
+        "no row left the gateway"
+    );
+    assert!(
+        !details(record, "ehds-categories", "version-uid").contains(&UID_A.to_owned()),
+        "the oversized answer delivered no data"
     );
     Ok(())
 }

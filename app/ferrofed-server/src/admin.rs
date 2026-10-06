@@ -32,6 +32,7 @@ use axum::extract::{Path, Request, State};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::post;
+use axum::serve::{Listener, ListenerExt};
 use http::{HeaderMap, StatusCode};
 
 use crate::config::settings::MetricsSettings;
@@ -78,14 +79,20 @@ pub fn listener(settings: &MetricsSettings, state: &Arc<AppState>) -> Option<(So
         .map(|address| (address, router(Arc::clone(state))))
 }
 
-/// Serves the admin listener's `app` on `listener`, recording each
-/// connection's peer for [`loopback_only`].
+/// Serves the admin listener's `app` on `listener`, plain or TLS, recording
+/// each connection's peer for [`loopback_only`].
 ///
 /// # Errors
 /// Returns the I/O error from accepting or serving connections.
-pub async fn serve(listener: tokio::net::TcpListener, app: Router) -> std::io::Result<()> {
+pub async fn serve<L>(listener: L, app: Router) -> std::io::Result<()>
+where
+    L: Listener<Addr = SocketAddr>,
+{
+    // NOTE: no specification governs this: our own design; axum records the
+    // peer of any listener whose connections it taps, so a TLS one is tapped.
+    let tapped = listener.tap_io(|_connection: &mut L::Io| {});
     axum::serve(
-        listener,
+        tapped,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await
