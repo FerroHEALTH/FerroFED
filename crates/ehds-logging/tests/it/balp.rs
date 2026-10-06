@@ -19,7 +19,7 @@ use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::record::{
     AccessRecord, Accessor, Acting, Action, AssuranceLevel, Coded, DataSubject, EhrAt, Origin,
-    Outcome, PatientIdentifier, Professional, Purpose, Relayed, RelayedProfessional,
+    Outcome, PatientIdentifier, PatientLookup, Professional, Purpose, Relayed, RelayedProfessional,
     RelayedProvider, Request,
 };
 use ehds_logging::retention::RetentionPolicy;
@@ -84,6 +84,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             ehrs: vec![EhrAt {
                 endpoint: "node-a".to_owned(),
                 ehr_id: EHR_ID.to_owned(),
+                patient: PatientLookup::RequestNamed,
             }],
         },
         categories,
@@ -278,6 +279,123 @@ fn the_categories_and_the_origins_ride_in_their_own_entities() {
     let ehrs = entity(&written, "ehr");
     assert_eq!(ehrs.len(), 1);
     assert_eq!(ehrs[0]["what"]["identifier"]["value"], EHR_ID);
+}
+
+/// A routed read by `ehr_id` whose patient the identity service found:
+/// `found` patients, the `ehr_id` at `node-a`.
+fn read_by_ehr_id(found: PatientLookup) -> AccessRecord {
+    let mut record = record(Action::Read, Outcome::Success);
+    record.subject.patient = None;
+    record.subject.ehrs = vec![EhrAt {
+        endpoint: "node-a".to_owned(),
+        ehr_id: EHR_ID.to_owned(),
+        patient: found,
+    }];
+    record
+}
+
+fn patient(namespace: &str, value: &str) -> PatientIdentifier {
+    PatientIdentifier {
+        namespace: namespace.to_owned(),
+        value: SecretString::from(value),
+    }
+}
+
+/// The `entity:patient` identifier values of `written`.
+fn patient_values(written: &Value) -> Vec<&str> {
+    written["entity"]
+        .as_array()
+        .expect("entities")
+        .iter()
+        .filter(|entity| entity["role"]["code"] == "1" && entity["type"]["code"] == "1")
+        .filter_map(|entity| entity["what"]["identifier"]["value"].as_str())
+        .collect()
+}
+
+/// Regulation (EU) 2025/327 Art 9(1); IHE `RESTful` ATNA §3.81.4.1.2.2: the
+/// patient found behind the `ehr_id` is written as the request's patient is,
+/// so a `patient.identifier` search finds the access, and the read claims
+/// the `PatientRead` pattern.
+#[test]
+fn a_patient_found_behind_the_ehr_id_is_the_records_patient() {
+    let written = written(&read_by_ehr_id(PatientLookup::Found(vec![patient(
+        "urn:oid:2.999.1",
+        PATIENT,
+    )])));
+    assert_eq!(patient_values(&written), [PATIENT]);
+    let patients: Vec<&Value> = written["entity"]
+        .as_array()
+        .expect("entities")
+        .iter()
+        .filter(|entity| entity["what"]["identifier"]["value"] == PATIENT)
+        .collect();
+    assert_eq!(
+        patients[0]["what"]["identifier"]["system"],
+        "urn:oid:2.999.1"
+    );
+    assert_eq!(
+        profile(&written),
+        Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientRead")
+    );
+    let ehrs = entity(&written, "ehr");
+    assert_eq!(details(ehrs[0], "patient-lookup"), ["found"]);
+}
+
+/// A patient the service names in two namespaces is written twice, and the
+/// read claims the plain pattern, whose slices bound no patient.
+#[test]
+fn several_patients_are_each_written_under_the_plain_pattern() {
+    let written = written(&read_by_ehr_id(PatientLookup::Found(vec![
+        patient("urn:oid:2.999.1", PATIENT),
+        patient("urn:oid:2.999.2", "Qz7-other-61"),
+        patient("urn:oid:2.999.1", PATIENT),
+    ])));
+    let mut values = patient_values(&written);
+    values.sort_unstable();
+    assert_eq!(values, ["Qz7-other-61", PATIENT]);
+    assert_eq!(
+        profile(&written),
+        Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read")
+    );
+}
+
+/// A patient not named is said so on the `ehr` entity, which keeps the
+/// `ehr_id` an `entity.identifier` search finds; the access is recorded all
+/// the same.
+#[test]
+fn a_patient_not_named_is_said_so_beside_the_ehr_id() {
+    for (lookup, code) in [
+        (PatientLookup::NotFound, "not-found"),
+        (PatientLookup::Unavailable, "unavailable"),
+        (PatientLookup::NotConfigured, "not-configured"),
+        (PatientLookup::Unsupported, "unsupported"),
+    ] {
+        let written = written(&read_by_ehr_id(lookup));
+        assert!(patient_values(&written).is_empty(), "{code}");
+        let ehrs = entity(&written, "ehr");
+        let [ehr] = ehrs.as_slice() else {
+            panic!("one ehr entity, got {ehrs:?}");
+        };
+        assert_eq!(ehr["what"]["identifier"]["value"], EHR_ID, "{code}");
+        assert_eq!(details(ehr, "patient-lookup"), [code]);
+        assert_eq!(
+            profile(&written),
+            Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read"),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn a_patient_lookup_shows_no_identifier_in_debug() {
+    let lookup = PatientLookup::Found(vec![patient("urn:oid:2.999.1", PATIENT)]);
+    let shown = format!(
+        "{lookup:?} {:?}",
+        read_by_ehr_id(lookup.clone()).subject.ehrs
+    );
+    assert!(!shown.contains(PATIENT), "{shown}");
+    assert!(!shown.contains(EHR_ID), "{shown}");
+    assert!(shown.contains("Found(1)"), "{shown}");
 }
 
 /// Regulation (EU) 2025/327 Art 9(2) and Annex II 3.4: the record states the

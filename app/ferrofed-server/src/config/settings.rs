@@ -83,6 +83,9 @@ pub struct Settings {
     pub pdqm: Option<crate::binding::ihe::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
+    /// The FHIR R4 face of the exchange format, when it is served (Regulation
+    /// (EU) 2025/327 Annex II 2.1).
+    pub fhir: Option<crate::config::fhir::FhirSettings>,
     /// The metrics surface.
     pub metrics: MetricsSettings,
     /// The gateway's signing keys and where they are published, when

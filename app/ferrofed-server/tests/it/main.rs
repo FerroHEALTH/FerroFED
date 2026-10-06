@@ -46,6 +46,7 @@ mod errors;
 mod facade;
 #[cfg(feature = "binding-ihe")]
 mod feed_audit;
+mod fhir;
 mod follow_up;
 mod healthcheck;
 mod http;
@@ -123,6 +124,7 @@ mod timeouts;
 mod traces;
 mod track10;
 mod transport;
+mod troubleshooting;
 mod versioned_write;
 #[cfg(feature = "binding-ihe")]
 mod xcpd;

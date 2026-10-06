@@ -109,6 +109,10 @@ impl Binding for Ihe {
             &ServiceContext::of(settings),
             settings.server.public_url.as_ref(),
         )?;
+        if let (Some(fhir), Some(pmir)) = (&settings.fhir, &settings.pmir) {
+            let route = settings.server.base_path.join(&pmir.path);
+            crate::config::fhir::apart(fhir, &route, "pmir.path")?;
+        }
         let audit = audit::config::resolve(config)?;
         if config.registry.document.is_some() && config.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);

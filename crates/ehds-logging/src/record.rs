@@ -282,19 +282,71 @@ pub struct PatientIdentifier {
     pub value: SecretString,
 }
 
-/// One `ehr_id` an access reached, at the endpoint that holds it.
-#[derive(Clone, PartialEq, Eq)]
+/// Whether the patient behind an `ehr_id` is named, so a search by the
+/// patient's identifier finds the access (Art 9(1)).
+///
+/// `Debug` shows the outcome and how many identifiers were found, never one.
+#[derive(Clone)]
+#[non_exhaustive]
+pub enum PatientLookup {
+    /// The request named the patient, so the record names them already.
+    RequestNamed,
+    /// The identity service holds these identifiers for the patient.
+    Found(Vec<PatientIdentifier>),
+    /// The identity service holds no identifier for the patient in a
+    /// namespace asked.
+    NotFound,
+    /// The identity service could not be asked, or did not answer.
+    Unavailable,
+    /// The recording system names no namespace to ask in.
+    NotConfigured,
+    /// The recording system has no identity service that names a patient
+    /// by an `ehr_id`.
+    Unsupported,
+}
+
+impl PatientLookup {
+    /// The outcome as a record writes it: `request-named`, `found`,
+    /// `not-found`, `unavailable`, `not-configured` or `unsupported`.
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::RequestNamed => "request-named",
+            Self::Found(_) => "found",
+            Self::NotFound => "not-found",
+            Self::Unavailable => "unavailable",
+            Self::NotConfigured => "not-configured",
+            Self::Unsupported => "unsupported",
+        }
+    }
+}
+
+impl fmt::Debug for PatientLookup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Found(found) => write!(f, "Found({})", found.len()),
+            other => f.write_str(other.code()),
+        }
+    }
+}
+
+/// One `ehr_id` an access reached, at the endpoint that holds it, with
+/// whether the patient it belongs to is named.
+#[derive(Clone)]
 pub struct EhrAt {
     /// The endpoint.
     pub endpoint: String,
     /// The `ehr_id` at that endpoint.
     pub ehr_id: String,
+    /// Whether the patient behind the `ehr_id` is named.
+    pub patient: PatientLookup,
 }
 
 impl fmt::Debug for EhrAt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EhrAt")
             .field("endpoint", &self.endpoint)
+            .field("patient", &self.patient)
             .finish_non_exhaustive()
     }
 }

@@ -67,12 +67,13 @@ pub mod owner;
 pub mod plan;
 pub mod prefer;
 mod provenance;
-mod request;
+pub(crate) mod request;
 pub mod route;
 mod scoped;
 pub mod security;
 pub mod stored;
 pub mod subject;
+pub(crate) mod summary;
 pub mod target;
 pub mod write;
 

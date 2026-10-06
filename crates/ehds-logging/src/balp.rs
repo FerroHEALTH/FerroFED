@@ -8,8 +8,11 @@
 //! side of the `RESTful` pattern its action names (BALP 1.1.4): a query is
 //! `IHE.BasicAudit.Query`, a read `IHE.BasicAudit.Read`, a create
 //! `IHE.BasicAudit.Create`, an update `IHE.BasicAudit.Update` and a delete
-//! `IHE.BasicAudit.Delete`, each its `Patient` variant when the request named
-//! the patient, as the implementation guide lists them. The Delete pattern
+//! `IHE.BasicAudit.Delete`, each its `Patient` variant when the record names
+//! one patient, as the implementation guide lists them: the one the request
+//! named, or the one the identity service found behind the `ehr_id` it
+//! reached. Its `entity:patient` slice holds one patient, so a record that
+//! names several writes each and claims the plain pattern. The Delete pattern
 //! fixes `outcome` to `0`, so a failed delete claims no profile. The person
 //! and the client are the token's (BALP 1.1.4 §3:5.7.5.4), with the provider
 //! as an agent of its own, the request id is `entity:transaction`, and the
@@ -51,12 +54,12 @@ use ihe_iti::balp::{
     REQUEST_ID, REST, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, UPDATE, What,
 };
 use ihe_iti::user::{Code, OnBehalfOf, PurposeOfUse, User};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 
 use crate::classify::Classification;
 use crate::emergency::Emergency;
-use crate::record::{AccessRecord, Action, Outcome, Relayed};
+use crate::record::{AccessRecord, Action, Outcome, PatientIdentifier, PatientLookup, Relayed};
 use crate::sink::{AccessSink, SinkError};
 
 /// The names of the `detail` entries a record's added entities carry.
@@ -93,6 +96,10 @@ pub mod detail {
     pub const ROWS: &str = "rows";
     /// The endpoint an `ehr_id` is held at.
     pub const ENDPOINT: &str = "endpoint";
+    /// Whether the patient behind an `ehr_id` is named: `request-named`,
+    /// `found`, `not-found`, `unavailable`, `not-configured` or
+    /// `unsupported`.
+    pub const PATIENT_LOOKUP: &str = "patient-lookup";
     /// The identifier the client correlates the request by in its own log.
     pub const CORRELATION: &str = "correlation-id";
     /// The national contact point that asserted the relayed professional
@@ -239,7 +246,7 @@ fn code(code: &str) -> Code {
 
 /// What the pattern of `record`'s action fixes.
 fn kind(record: &AccessRecord) -> EventKind {
-    let patient = record.subject.patient.is_some();
+    let patient = patients(record).len() == 1;
     let profile = |plain: &'static str, with_patient: &'static str| {
         if patient { with_patient } else { plain }
     };
@@ -349,7 +356,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
             }));
         }
     }
-    if let Some(patient) = &record.subject.patient {
+    for patient in patients(record) {
         entities.push(Entity::Patient {
             system: patient.namespace.clone(),
             value: patient.value.clone(),
@@ -359,7 +366,10 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         entities.push(other(
             Some(ehr.ehr_id.clone()),
             "ehr",
-            vec![Detail::new(detail::ENDPOINT, ehr.endpoint.clone())],
+            vec![
+                Detail::new(detail::ENDPOINT, ehr.endpoint.clone()),
+                Detail::new(detail::PATIENT_LOOKUP, ehr.patient.code()),
+            ],
         ));
     }
     let mut details = categories(&record.categories);
@@ -468,6 +478,31 @@ fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
         Detail::new(detail::PROVIDER_ADDRESS, provider.address.clone()),
     ]);
     details
+}
+
+/// Every patient `record` names, each once: the one the request named, and
+/// each one the identity service found behind an `ehr_id` the access
+/// reached.
+fn patients(record: &AccessRecord) -> Vec<&PatientIdentifier> {
+    let found = record
+        .subject
+        .ehrs
+        .iter()
+        .flat_map(|ehr| match &ehr.patient {
+            PatientLookup::Found(found) => found.as_slice(),
+            _ => &[],
+        });
+    let mut named: Vec<&PatientIdentifier> = Vec::new();
+    for patient in record.subject.patient.iter().chain(found) {
+        let seen = named.iter().any(|kept| {
+            kept.namespace == patient.namespace
+                && kept.value.expose_secret() == patient.value.expose_secret()
+        });
+        if !seen {
+            named.push(patient);
+        }
+    }
+    named
 }
 
 /// An entity of type `4` named `name`, identified by `value` when given.

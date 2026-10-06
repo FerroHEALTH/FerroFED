@@ -20,10 +20,17 @@
 //!   paths to the eHealth Network element ids and to the elements and slices
 //!   of the HL7 Europe profile, with the FHIRconnect contexts admitted to
 //!   feed each, checked against the packages it names;
+//! - `document` (features `patient-summary` and `fhir-r4`): the patient
+//!   summary document, a FHIR R4 `Bundle` of the HL7 Europe Patient Summary
+//!   profiles, assembled from the resources and sections a caller gives;
 //! - `mapping` (feature `openehr`, which turns on `fhir-r4`): a FHIRconnect
 //!   1.0.0 mapping, compiled once against an operational template and run in
 //!   process over a canonical-JSON composition, answering FHIR R4 resources
-//!   with their `Provenance`.
+//!   with their `Provenance`;
+//! - `receive` (feature `fhir-r4`): a document received in the exchange
+//!   format, read under the R4 document rules and checked against the
+//!   profiles of its category; with `openehr`, mapped into one openEHR
+//!   composition that keeps the original document beside the mapped content.
 //!
 //! The feature `fhir-r4` is the FHIR R4 serialisation and compiles no
 //! openEHR crate; only `openehr` brings in the openEHR side the mapping reads.
@@ -51,5 +58,9 @@
 pub mod category;
 pub mod crosswalk;
 pub mod dataset;
+#[cfg(all(feature = "patient-summary", feature = "fhir-r4"))]
+pub mod document;
 #[cfg(feature = "openehr")]
 pub mod mapping;
+#[cfg(feature = "fhir-r4")]
+pub mod receive;

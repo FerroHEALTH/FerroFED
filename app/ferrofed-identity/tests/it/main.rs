@@ -29,6 +29,8 @@ mod pdqm;
 #[cfg(feature = "ihe")]
 mod pixm;
 #[cfg(feature = "ihe")]
+mod pixm_identify;
+#[cfg(feature = "ihe")]
 mod pixm_localizer;
 #[cfg(feature = "ihe")]
 mod pmir;

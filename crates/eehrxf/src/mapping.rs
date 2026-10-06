@@ -19,6 +19,7 @@ use std::fmt;
 use std::path::Path;
 
 use fhir_types::r4::schema::SCHEMAS;
+use fhirconnect::engine::context::CallContext;
 use fhirconnect::engine::traverse::functions::NoMappingFunctions;
 use fhirconnect::model::load::load_set;
 use fhirconnect::model::semantic::StaticMappingCodes;
@@ -105,6 +106,21 @@ impl Mapping {
         self.programs.is_empty()
     }
 
+    /// Returns the compiled programs, for the receive direction.
+    pub(crate) const fn programs(&self) -> &ProgramSet {
+        &self.programs
+    }
+
+    /// Returns the compiled context mappings, each with the template it maps
+    /// and the profile it maps to, in compilation order.
+    pub fn contexts(&self) -> impl Iterator<Item = Context<'_>> {
+        self.programs.programs().iter().map(|program| Context {
+            name: program.context().as_str(),
+            template: program.template().id().as_str(),
+            profile: program.profile().url().as_str(),
+        })
+    }
+
     /// Runs the mapping over one canonical-JSON composition.
     ///
     /// The composition names its template at `archetype_details.template_id`,
@@ -125,6 +141,36 @@ impl Mapping {
         composition: &str,
         settings: &Settings,
     ) -> Result<ToFhirResponse, MappingError> {
+        self.run(composition, settings, None)
+    }
+
+    /// Runs the mapping over one canonical-JSON composition under the call
+    /// context `context`, as [`Mapping::to_fhir`] does.
+    ///
+    /// The context's `patient` is written over the subject of every mapped
+    /// resource whose type has a `subject` or a `patient` element, and its
+    /// `who` and `onBehalfOf` name the agent of the `Provenance`
+    /// (FHIRconnect 1.0.0 `$tofhir` context).
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Mapping::to_fhir`].
+    pub fn to_fhir_with(
+        &self,
+        composition: &str,
+        settings: &Settings,
+        context: CallContext,
+    ) -> Result<ToFhirResponse, MappingError> {
+        self.run(composition, settings, Some(context))
+    }
+
+    /// Runs the mapping over `composition`, under `context` when given.
+    fn run(
+        &self,
+        composition: &str,
+        settings: &Settings,
+        context: Option<CallContext>,
+    ) -> Result<ToFhirResponse, MappingError> {
         let payload =
             CompositionPayload::parse(composition).map_err(|source| MappingError::Run {
                 source: Box::new(source),
@@ -132,17 +178,35 @@ impl Mapping {
         if !matches!(payload, CompositionPayload::Canonical(_)) {
             return Err(MappingError::NotCanonical);
         }
+        let request = ToFhirRequest::new(payload);
+        let request = match context {
+            Some(context) => request.with_context(context),
+            None => request,
+        };
         run::to_fhir(
             &self.programs,
             &SCHEMAS,
             &NoMappingFunctions,
             settings,
-            &ToFhirRequest::new(payload),
+            &request,
         )
         .map_err(|source| MappingError::Run {
             source: Box::new(source),
         })
     }
+}
+
+/// One compiled context mapping: its name, the template it maps and the
+/// profile it maps to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Context<'a> {
+    /// The context mapping's `metadata.name`.
+    pub name: &'a str,
+    /// The id of the operational template it maps.
+    pub template: &'a str,
+    /// The canonical URL of the profile it maps to, as
+    /// `context.profile.url` names it.
+    pub profile: &'a str,
 }
 
 /// Why a mapping cannot be compiled or run.

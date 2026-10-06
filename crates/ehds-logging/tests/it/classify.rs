@@ -331,3 +331,31 @@ fn no_debug_shows_an_id() {
         assert!(!shown.contains(id), "{id} in {shown}");
     }
 }
+
+#[test]
+fn a_request_of_one_category_by_construction_holds_it_beside_its_data() {
+    let classified = map().classify(
+        &Evidence::reached(Basis::Returned, vec![object(Some(LAB_REPORT), None)])
+            .constructed(Category::PatientSummary),
+    );
+    assert_eq!(
+        categories(classified.categories()),
+        ["patient-summary", "medical-test-result"]
+    );
+    assert_eq!(
+        classified.categories().get(&Category::PatientSummary),
+        Some(&BTreeSet::from([Basis::Construction]))
+    );
+    assert!(classified.unclassified().is_none());
+}
+
+#[test]
+fn a_category_by_construction_never_hides_an_unmapped_object() {
+    let classified = map().classify(
+        &Evidence::reached(Basis::Returned, vec![object(Some(UNMAPPED), None)])
+            .constructed(Category::PatientSummary),
+    );
+    assert_eq!(categories(classified.categories()), ["patient-summary"]);
+    assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
+    assert_eq!(classified.unmapped(), &set(&[UNMAPPED]));
+}

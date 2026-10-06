@@ -447,7 +447,7 @@ Eight sections take effect on a reload:
 | `[pdqm]` | `[pmir]` |
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | `[audit]` |
-| `[access_log]` | |
+| `[access_log]` | `[fhir]` |
 
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that

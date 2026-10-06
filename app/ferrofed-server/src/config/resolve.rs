@@ -80,7 +80,9 @@ impl Config {
     /// a `signing.jwks_uri` that names another route under it
     /// ([`Error::PublicUrlDisagrees`]), and an entry of
     /// `server.trusted_proxies` that is no address or CIDR block
-    /// ([`Error::TrustedProxy`]).
+    /// ([`Error::TrustedProxy`]). `[fhir]` is refused as
+    /// [`Fhir::resolve`](crate::config::fhir::Fhir::resolve) refuses it
+    /// ([`Error::Fhir`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -101,22 +103,7 @@ impl Config {
             });
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
-        let mut credentials = BTreeMap::new();
-        let mut onward_tls = BTreeMap::new();
-        for (endpoint, section) in &self.credentials {
-            let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
-                key: endpoint.clone(),
-                source,
-            })?;
-            let (scheme, tls) =
-                resolve_node_credentials(&format!("credentials.{endpoint}"), section)?;
-            if let Some(tls) = tls {
-                onward_tls.insert(id.clone(), tls);
-            }
-            if let Some(scheme) = scheme {
-                credentials.insert(id, scheme);
-            }
-        }
+        let (credentials, onward_tls) = self.resolve_credentials()?;
         let signing = self
             .signing
             .as_ref()
@@ -126,19 +113,10 @@ impl Config {
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
-        // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
-        // of the registry and is never offered without it.
-        if federation.fan_out_stored_queries {
-            match stored_queries.as_ref().map(stored_queries::Store::backend) {
-                None => return Err(Error::StoredQueryFanOutWithoutRegistry),
-                Some(stored_queries::Backend::Files) => {
-                    return Err(Error::StoredQueryFanOutReadOnly);
-                }
-                Some(_) => {}
-            }
-        }
+        stored_query_fan_out(&federation, stored_queries.as_ref())?;
         let mut settings = Settings {
             profile: self.profile,
+            fhir: self.resolve_fhir(&base_path, public_url.as_ref())?,
             server: ServerSettings {
                 listen,
                 base_path,
@@ -184,6 +162,33 @@ impl Config {
             binding.resolve(self, &mut settings)?;
         }
         Ok(settings)
+    }
+
+    /// Resolves `[credentials.<endpoint>]`: the credential each endpoint is
+    /// reached with, and the mutual TLS it presents there, by endpoint id.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::EndpointId`] for a section name that is no endpoint id, and
+    /// the errors of [`resolve_node_credentials`].
+    fn resolve_credentials(&self) -> Result<OnwardCredentials, Error> {
+        let mut credentials = BTreeMap::new();
+        let mut onward_tls = BTreeMap::new();
+        for (endpoint, section) in &self.credentials {
+            let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
+                key: endpoint.clone(),
+                source,
+            })?;
+            let (scheme, tls) =
+                resolve_node_credentials(&format!("credentials.{endpoint}"), section)?;
+            if let Some(tls) = tls {
+                onward_tls.insert(id.clone(), tls);
+            }
+            if let Some(scheme) = scheme {
+                credentials.insert(id, scheme);
+            }
+        }
+        Ok((credentials, onward_tls))
     }
 
     /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when unset,
@@ -447,6 +452,38 @@ pub(crate) fn positive(key: &str, count: usize) -> Result<usize, Error> {
         });
     }
     Ok(count)
+}
+
+/// The outbound credentials by endpoint id, and the mutual TLS each endpoint
+/// is reached with.
+type OnwardCredentials = (
+    BTreeMap<EndpointId, Scheme>,
+    BTreeMap<EndpointId, crate::config::tls::TlsSettings>,
+);
+
+/// Refuses the stored-query fan-out `federation` asks for unless
+/// `stored_queries` is a store the gateway can distribute from.
+///
+/// # Errors
+///
+/// [`Error::StoredQueryFanOutWithoutRegistry`] with no store, and
+/// [`Error::StoredQueryFanOutReadOnly`] with the read-only files backend.
+fn stored_query_fan_out(
+    federation: &FederationSettings,
+    stored_queries: Option<&stored_queries::Store>,
+) -> Result<(), Error> {
+    // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
+    // of the registry and is never offered without it.
+    if federation.fan_out_stored_queries {
+        match stored_queries.map(stored_queries::Store::backend) {
+            None => return Err(Error::StoredQueryFanOutWithoutRegistry),
+            Some(stored_queries::Backend::Files) => {
+                return Err(Error::StoredQueryFanOutReadOnly);
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
 }
 
 /// Returns the duration `millis` names, refusing zero under `key`.

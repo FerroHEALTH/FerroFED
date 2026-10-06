@@ -31,6 +31,7 @@
 //! design.
 
 pub mod config;
+pub(crate) mod patient;
 pub(crate) mod routed;
 
 use std::fmt;
@@ -52,6 +53,7 @@ use ehds_logging::sink::AccessSink;
 use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use http::{Method, StatusCode};
 use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup};
@@ -70,6 +72,7 @@ pub struct AccessLog {
     map: CategoryMap,
     retention: RetentionPolicy,
     emergency: EmergencyPurposes,
+    patient_namespaces: Vec<IdentifierNamespace>,
     sink: Arc<dyn AccessSink>,
 }
 
@@ -91,8 +94,17 @@ impl AccessLog {
             map,
             retention: RetentionPolicy::default(),
             emergency: EmergencyPurposes::default(),
+            patient_namespaces: Vec::new(),
             sink,
         }
+    }
+
+    /// This log, naming the patient behind an `ehr_id` a request addressed
+    /// in each of `namespaces` (Regulation (EU) 2025/327 Art 9(1)).
+    #[must_use]
+    pub fn with_patient_namespaces(mut self, namespaces: Vec<IdentifierNamespace>) -> Self {
+        self.patient_namespaces = namespaces;
+        self
     }
 
     /// This log, each record kept as `retention` says.
@@ -391,6 +403,15 @@ impl Gate {
     /// at a node: a query execution, a request in the EHR area, the creation
     /// of an EHR, a DEMOGRAPHIC request, or the read of an EHR by subject.
     fn reaches_patient_data(&self, method: &Method, path: &str) -> bool {
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.2: every path under the FHIR face but its
+        // capability statement is held to a record, so no variant answers data unrecorded.
+        if let Some(face) = self
+            .state
+            .fhir()
+            .and_then(|fhir| crate::fhir::classify(fhir, path))
+        {
+            return face != crate::fhir::FacePath::Metadata;
+        }
         let under_base = if self.base.is_root() {
             Some(path)
         } else {
@@ -447,7 +468,7 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     let mut response = next.run(request).await;
     let accessed = response.extensions_mut().remove::<Accessed>();
     let declared_none = response.extensions_mut().remove::<NoAccess>().is_some();
-    let Some(accessed) = accessed else {
+    let Some(mut accessed) = accessed else {
         if reaches && !declared_none && carries_data(&response) && gate.logs() {
             tracing::error!(
                 request_id = logged,
@@ -464,6 +485,16 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
         );
         return error::fixed(Code::AccessUnrecorded, &request_id);
     };
+    if let Some(federation) = gate.state.federation() {
+        let namespaces = accessed.log.patient_namespaces.clone();
+        patient::name(
+            &federation,
+            &namespaces,
+            &caller.on_behalf(),
+            &mut accessed.subject,
+        )
+        .await;
+    }
     let record = accessed.record(&caller, address, &logged, response.status());
     if record.emergency.is_some() {
         tracing::warn!(

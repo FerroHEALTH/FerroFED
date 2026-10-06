@@ -19,9 +19,9 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use ferrofed_identity::role::behalf::OnBehalfOf;
-use ferrofed_identity::role::patient::PatientRef;
-use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
-use ferrofed_registry::id::NodeId;
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::resolver::{Identification, Resolution, Resolver, ResolverError};
+use ferrofed_registry::id::{EhrId, NodeId};
 
 use crate::metrics::nodes::Instruments;
 
@@ -115,6 +115,21 @@ impl Resolver for Metered {
         self.instruments
             .resolved(Outcome::of(&answers), started.elapsed());
         answers
+    }
+
+    /// Passes the question on uncounted: naming the patient of an access
+    /// record is no resolution of a query.
+    async fn identify(
+        &self,
+        member: &NodeId,
+        ehr_id: &EhrId,
+        namespaces: &[IdentifierNamespace],
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> Identification {
+        self.inner
+            .identify(member, ehr_id, namespaces, on_behalf, deadline)
+            .await
     }
 }
 

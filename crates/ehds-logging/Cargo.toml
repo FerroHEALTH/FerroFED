@@ -5,7 +5,7 @@ name = "ehds-logging"
 description = "The European logging software component of an EHR system under Regulation (EU) 2025/327: the Annex II 3.2 access record, the Article 14(1) categories and the map that classifies an access, and the record written as an IHE BALP AuditEvent"
 # The name is not reserved on crates.io yet, and it must be claimed before the
 # `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.9"
+version = "0.0.11"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

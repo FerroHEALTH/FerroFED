@@ -378,18 +378,26 @@ them:
   reviewed at the Audit Record Repository with ITI-81, the connection of
   external software point 3.3 admits, and each states how long it is kept
   by its origins and categories, never under three years (point 3.4, Art
-  9(2); [Reading the log](../operate/audit.md#reading-the-log)). Finding
-  every access to one person's data by that search
-  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)) and access
-  rights by origin and category
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) are planned.
+  9(2); [Reading the log](../operate/audit.md#reading-the-log)). A request
+  addressed by `ehr_id` names the patient the identity binding holds under
+  it, so a search by the person's identifier finds it (Art 9(1)); a query
+  over many patients' data names none. Access rights by origin and
+  category are planned
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
-  mapping files you supply. The gateway holds the stored queries that select
-  each patient summary section's compositions
-  ([the section queries](#the-patient-summarys-section-queries)), and does
-  not serve the document yet.
+  mapping files you supply. It also reads a received document, checks it
+  against its profiles and maps it into one openEHR composition that keeps
+  the original document ([Receiving a document](receiving-documents.md)).
+  The gateway holds the stored queries that select each patient summary
+  section's compositions
+  ([the section queries](#the-patient-summarys-section-queries)), and serves
+  the patient summary built from them on a FHIR R4 face of its own, the
+  interface of Annex II, point 2.1
+  ([The patient summary over FHIR](../integrate/patient-summary.md)). The
+  document list on that face is planned
+  ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
 Five of the manufacturer's obligations have a first answer:
 
@@ -501,8 +509,10 @@ Vital signs, which the EPS composition carries in a section of its own, feed
 the Xt-EHR observation results. Running a query by name and the reserved
 namespace are described under
 [the gateway's own queries](../integrate/stored-queries.md#the-gateways-own-queries).
-The document assembled from their answers is planned
-([#689](https://github.com/FerroHEALTH/FerroFED/issues/689)).
+The FHIR face of Annex II 2.1 assembles the patient summary from their
+answers ([The patient summary over FHIR](../integrate/patient-summary.md),
+[#809](https://github.com/FerroHEALTH/FerroFED/issues/809)); the document
+list is planned ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
 ## Not legal advice
 

@@ -111,8 +111,11 @@ the caller.
 
 Beside them, a record names the data subject: the patient by the
 identifier and namespace the request named (`entity:patient`, as the ITI-83
-record names it), and one entity named `ehr` per `ehr_id` the access
-reached, with its endpoint. It carries the request as `entity:query`, the
+record names it) or, for a request that named none, the patient the
+identity binding holds under the `ehr_id` it reached
+([The patient behind an `ehr_id`](#the-patient-behind-an-ehr_id)), and one
+entity named `ehr` per `ehr_id` the access reached, with its endpoint and
+how its patient was looked up. It carries the request as `entity:query`, the
 gateway's request id as `entity:transaction` (the id the request log names
 too), the address the request came from, and the outcome.
 
@@ -369,7 +372,7 @@ each record's `recorded`:
 
 | Who reads | The search |
 |---|---|
-| A person, through your Member State's electronic health data access service (Art 9(2)) | `GET [base]/AuditEvent?date=ge2027-01-01&date=le2027-12-31&patient.identifier=<namespace>\|<identifier>`: the patient a request named is the record's `entity:patient`, whose `what.identifier` carries the namespace and the identifier |
+| A person, through your Member State's electronic health data access service (Art 9(2)) | `GET [base]/AuditEvent?date=ge2027-01-01&date=le2027-12-31&patient.identifier=<namespace>\|<identifier>`: the patient a request named, or the identity binding named behind the `ehr_id` it reached, is the record's `entity:patient`, whose `what.identifier` carries the namespace and the identifier |
 | An operator, for one caller | `agent.identifier=<iss>\|<sub>`, the caller's issuer and subject |
 | An operator, for one EHR at one member | `entity.identifier=\|<ehr_id>`, the record's `ehr` entity |
 | An operator, for one member | `entity.identifier=\|<endpoint>`, the record's `origin` entity |
@@ -386,10 +389,48 @@ records every search as an `Audit Log Used` event of its own
 application a route to the log: the person reads it through the access
 service their Member State provides (Art 9(2)).
 
-A routed request addressed by `ehr_id`, such as a composition read, names
-the `ehr_id` and no patient identifier, so the search by
-`patient.identifier` alone does not find it; finding every access to one
-person's data is planned ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)).
+#### The patient behind an `ehr_id`
+
+A routed request addressed by `ehr_id`, such as a composition read or a
+write under an EHR, and a query scoped to one `ehr_id`, name no patient.
+Art 9(1) gives the person information on "any access", so the gateway
+asks your identity binding which patient the member holds under that
+`ehr_id`, in each namespace `[access_log] patient_namespaces` names, and
+writes each identifier it finds as an `entity:patient`, as it writes a
+patient the request named. The search by `patient.identifier` then finds
+the access. Under the IHE binding the question is one ITI-83 to the
+member's PIX Manager, the `ehr_id` in the member's domain as the source
+identifier and each namespace's assigning authority as a target system
+(PIXm 3.1.0 §2:3.83.4.1.2), recorded as every ITI-83 is. It is asked on
+behalf of the caller, within `federation.per_node_timeout_ms`, of the
+identity service alone: nothing is sent to a node, and no identifier
+reaches a log line (§5.4, N33).
+
+Each `ehr` entity says how its patient was looked up, in a `detail` named
+`patient-lookup`:
+
+| Value | Meaning |
+|---|---|
+| `request-named` | the request named the patient, who is the record's `entity:patient` |
+| `found` | the identity service named the patient, written as an `entity:patient` |
+| `not-found` | the identity service holds no identifier for the patient in a namespace asked |
+| `unavailable` | the identity service failed or did not answer in time; the gateway logs the failure, with no identifier |
+| `not-configured` | `patient_namespaces` is empty |
+| `unsupported` | the identity binding cannot name a patient by an `ehr_id` |
+
+The access is recorded and answered whatever the lookup says. Where the
+patient is not named, the `ehr` entity still carries the `ehr_id`: search
+the record with `entity.identifier=|<ehr_id>` for each `ehr_id` the person
+holds at each member, which your identity service lists (for PIXm, an
+ITI-83 with the person's identifier as the source and each member's
+`ehr_id` domain as a target). A record that names more than one patient,
+such as one identifier in each of two namespaces, writes each and claims
+the plain BALP pattern, whose slices bound no patient.
+
+A query over many patients' data, one that names no patient and is scoped
+to no `ehr_id`, records neither: the gateway does not know whose rows it
+returned, so a search by the person's identifier does not find it.
+
 Labelling each record so a repository can limit access to it by category
 and origin is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
 
@@ -399,6 +440,8 @@ and origin is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797
 [access_log]
 # national categories your national law adds (Art 14(1) third subparagraph)
 national_categories = ["nl-example"]
+# the namespaces the patient behind an ehr_id is named in (Art 9(1))
+patient_namespaces = ["urn:oid:2.999.1"]
 
 [access_log.templates]
 "Example Lab Report.v1" = ["medical-test-result"]
@@ -421,6 +464,13 @@ years = 5                      # every record, at least 3 (Art 9(2)); 3 when uns
 system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
 code = "BTG"                   # break the glass marks an emergency access (Art 11(5))
 ```
+
+`patient_namespaces` lists the namespaces your Member State's access
+service searches the log by, written as your identity binding names them:
+under the IHE binding a namespace that is an absolute URI, or one
+`[pixm]` maps to an assigning authority. An empty namespace is refused
+when the configuration loads. With none, a request addressed by `ehr_id`
+names no patient, and its record says `not-configured`.
 
 Each key is a template id or an archetype id, written exactly as the
 `archetype_details` of your compositions write it. Each value is a list of

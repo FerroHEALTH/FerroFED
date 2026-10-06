@@ -19,6 +19,10 @@ use std::num::NonZeroU32;
 // source compiles here alone, so the sanitized build leaves out the rest of the
 // gateway (The Rust Reference, "The path attribute").
 #[path = "../../app/ferrofed-server/src/facade/intake.rs"]
+#[expect(
+    dead_code,
+    reason = "the target drives the intake of a request alone; the parameters the gateway binds itself are not read here"
+)]
 mod intake;
 
 use libfuzzer_sys::arbitrary::Unstructured;

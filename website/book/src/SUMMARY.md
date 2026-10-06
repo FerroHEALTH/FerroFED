@@ -28,6 +28,7 @@
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
   - [Information sheet](evaluate/information-sheet.md)
+  - [Receiving a document](evaluate/receiving-documents.md)
   - [Clinical safety risk file](evaluate/clinical-safety.md)
   - [Complaints and incidents](evaluate/post-market.md)
 - [Data protection](evaluate/data-protection.md)
@@ -61,6 +62,7 @@
 - [Tracing](operate/tracing.md)
 - [The operator console](operate/operator-console.md)
 - [Hardening](operate/hardening.md)
+- [Troubleshooting](operate/troubleshooting.md)
 
 # Integrate
 
@@ -68,6 +70,7 @@
   - [Follow-ups](integrate/follow-ups.md)
   - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
   - [Stored queries](integrate/stored-queries.md)
+- [The patient summary over FHIR](integrate/patient-summary.md)
 - [Errors and status codes](integrate/errors.md)
 
 # Contribute

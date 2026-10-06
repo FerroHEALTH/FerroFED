@@ -152,6 +152,11 @@ years = 3                      # Art 9(2): at least three years from each access
   `[access_log.retention]` any longer period your national law sets for a
   category or an origin, and keep each record at your repository until its
   `ehds-retention-ends` ([How long a record is kept](audit.md#how-long-a-record-is-kept)).
+- **The patient namespaces.** Art 9(1) gives the person information on
+  "any access". Name in `[access_log] patient_namespaces` the namespaces
+  your Member State's access service searches the log by, so the record of
+  a request addressed by `ehr_id` names the patient
+  ([The patient behind an `ehr_id`](audit.md#the-patient-behind-an-ehr_id)).
 - **The emergency purposes.** Art 11(5) asks that an access to restricted
   data in the vital interests of the patient be logged "in a clear and
   understandable format". FerroFED names no emergency purpose of use.
@@ -269,10 +274,10 @@ deployment in the EU must plan for are:
   gateway has no review route of its own: the records are read there with
   ITI-81, and the repository sets who may read them and keeps each for the
   period it states (Annex II, points 3.3 and 3.4;
-  [Reading the log](audit.md#reading-the-log)). A search by the person's
-  identifier does not yet find a routed request addressed by `ehr_id`
-  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)), and the
-  records carry no label for access rights by origin and category
+  [Reading the log](audit.md#reading-the-log)). A query over many
+  patients' data names no patient in its record, so a search by the
+  person's identifier does not find it, and the records carry no label for
+  access rights by origin and category
   ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
 - **The professional's identification and assurance level are not yet in
   the access record**
@@ -294,6 +299,11 @@ and the book's print page renders every page as one document. Ask the
 another format.
 
 ## Problems and complaints
+
+When the gateway refuses to start, answers with an error code, or logs a
+failure, look the symptom up on [Troubleshooting](troubleshooting.md): it
+leads from the status, the code or the log line to the cause and the
+setting that fixes it.
 
 Report a problem, a complaint or a possible serious incident through the
 channels on [Complaints and incidents](../evaluate/post-market.md#making-a-complaint).

@@ -19,6 +19,7 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
 
 use super::Cardinality;
 use super::DatasetError;
@@ -33,6 +34,13 @@ use super::Obligation;
 use super::ObligationProfile;
 use super::PackageId;
 use super::ResourceProfile;
+use super::constraint::CodingPattern;
+use super::constraint::Discriminator;
+use super::constraint::DiscriminatorKind;
+use super::constraint::Invariant;
+use super::constraint::Pattern;
+use super::constraint::Slicing;
+use super::constraint::SlicingRules;
 
 /// The `package.json` members the model keeps.
 #[derive(Debug, Deserialize)]
@@ -62,11 +70,13 @@ struct StructureDefinition {
     snapshot: Option<Snapshot>,
 }
 
-/// The snapshot of a `StructureDefinition`.
+/// The snapshot of a `StructureDefinition`, each element kept as its JSON
+/// text so it is read twice: once for its typed members, once for its
+/// `fixed[x]` and `pattern[x]` keys.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct Snapshot {
-    element: Vec<ElementDefinition>,
+    element: Vec<Box<RawValue>>,
 }
 
 /// The `ElementDefinition` members the model reads.
@@ -81,7 +91,76 @@ struct ElementDefinition {
     types: Vec<TypeRef>,
     short: Option<String>,
     extension: Vec<Extension>,
+    slicing: Option<SlicingDefinition>,
+    constraint: Vec<ConstraintDefinition>,
+    #[serde(skip)]
+    pattern: Option<Pattern>,
 }
+
+/// One `ElementDefinition.constraint`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ConstraintDefinition {
+    key: String,
+    severity: String,
+    expression: Option<String>,
+}
+
+/// One `ElementDefinition.slicing`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct SlicingDefinition {
+    discriminator: Vec<DiscriminatorDefinition>,
+    ordered: Option<bool>,
+    rules: Option<String>,
+}
+
+/// One `ElementDefinition.slicing.discriminator`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct DiscriminatorDefinition {
+    #[serde(rename = "type")]
+    kind: String,
+    path: String,
+}
+
+/// A `Coding`, or one coding of a `CodeableConcept`, as a pattern writes it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct CodingValue {
+    system: Option<String>,
+    version: Option<String>,
+    code: Option<String>,
+    display: Option<String>,
+}
+
+/// A `CodeableConcept` as a pattern writes it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ConceptValue {
+    coding: Vec<CodingValue>,
+    text: Option<String>,
+}
+
+/// The suffixes of the R4 primitive types whose JSON form is a string
+/// (<https://hl7.org/fhir/R4/datatypes.html#primitive>,
+/// <https://hl7.org/fhir/R4/json.html#primitive>).
+const STRING_PRIMITIVES: &[&str] = &[
+    "Base64Binary",
+    "Canonical",
+    "Code",
+    "Date",
+    "DateTime",
+    "Id",
+    "Instant",
+    "Markdown",
+    "Oid",
+    "String",
+    "Time",
+    "Uri",
+    "Url",
+    "Uuid",
+];
 
 /// One `ElementDefinition.type`.
 #[derive(Debug, Default, Deserialize)]
@@ -244,12 +323,13 @@ fn model(definition: StructureDefinition) -> Result<LogicalModel, DatasetError> 
 /// first, and refusing an element given twice.
 fn elements(
     url: &str,
-    snapshot: Vec<ElementDefinition>,
+    snapshot: Vec<Box<RawValue>>,
     mut visit: impl FnMut(&ElementDefinition) -> Result<(), DatasetError>,
 ) -> Result<Elements, DatasetError> {
     let mut list = Vec::with_capacity(snapshot.len());
     let mut index = BTreeMap::new();
-    for raw in snapshot {
+    for text in snapshot {
+        let raw = definition(url, &text)?;
         visit(&raw)?;
         let element = element(url, raw)?;
         if index.contains_key(&element.path) {
@@ -280,7 +360,28 @@ fn element(url: &str, raw: ElementDefinition) -> Result<Element, DatasetError> {
             path: raw.path,
         });
     };
+    let slicing = raw
+        .slicing
+        .map(|slicing| {
+            slicing_of(slicing).ok_or_else(|| DatasetError::Slicing {
+                url: url.to_owned(),
+                path: id.clone(),
+            })
+        })
+        .transpose()?;
+    let invariants = raw
+        .constraint
+        .iter()
+        .map(|constraint| Invariant {
+            key: constraint.key.clone(),
+            error: constraint.severity == "error",
+            expression: constraint.expression.clone(),
+        })
+        .collect();
     Ok(Element {
+        pattern: raw.pattern,
+        slicing,
+        invariants,
         path: ElementPath(id),
         cardinality: Cardinality { min, max },
         profiles: raw
@@ -294,6 +395,100 @@ fn element(url: &str, raw: ElementDefinition) -> Result<Element, DatasetError> {
             .map(|reference| reference.code)
             .collect(),
         short: raw.short,
+    })
+}
+
+/// Parses one snapshot element, its `fixed[x]` or `pattern[x]` included.
+fn definition(url: &str, text: &RawValue) -> Result<ElementDefinition, DatasetError> {
+    let unparsed = |source| DatasetError::ElementJson {
+        url: url.to_owned(),
+        source,
+    };
+    let mut definition: ElementDefinition = serde_json::from_str(text.get()).map_err(unparsed)?;
+    let members: BTreeMap<String, Box<RawValue>> =
+        serde_json::from_str(text.get()).map_err(unparsed)?;
+    let mut keys = members
+        .iter()
+        .filter(|(key, _)| choice_suffix(key).is_some());
+    definition.pattern = match (keys.next(), keys.next()) {
+        (None, _) => None,
+        (Some((key, value)), None) => Some(pattern_of(key, value)),
+        (Some((key, _)), Some((other, _))) => Some(Pattern::Unread {
+            key: format!("{key}, {other}"),
+        }),
+    };
+    Ok(definition)
+}
+
+/// Returns the type suffix of a `fixed[x]` or `pattern[x]` key, or `None`
+/// for any other key.
+fn choice_suffix(key: &str) -> Option<&str> {
+    let suffix = key
+        .strip_prefix("fixed")
+        .or_else(|| key.strip_prefix("pattern"))?;
+    suffix
+        .chars()
+        .next()
+        .is_some_and(char::is_uppercase)
+        .then_some(suffix)
+}
+
+/// Reads one `fixed[x]` or `pattern[x]` value under its key.
+// NOTE: a form this model does not read, or a value that does not parse as
+// its form, is legitimately unread rather than defective: the profile is
+// valid FHIR and the check reports the constraint as not evaluated.
+fn pattern_of(key: &str, value: &RawValue) -> Pattern {
+    let unread = || Pattern::Unread {
+        key: key.to_owned(),
+    };
+    let Some(suffix) = choice_suffix(key) else {
+        return unread();
+    };
+    match (key.starts_with("pattern"), suffix) {
+        (true, "CodeableConcept") => serde_json::from_str::<ConceptValue>(value.get()).map_or_else(
+            |_| unread(),
+            |concept| Pattern::Concept {
+                codings: concept.coding.into_iter().map(coding_of).collect(),
+                text: concept.text,
+            },
+        ),
+        (true, "Coding") => serde_json::from_str::<CodingValue>(value.get())
+            .map_or_else(|_| unread(), |coding| Pattern::Coding(coding_of(coding))),
+        (_, primitive) if STRING_PRIMITIVES.contains(&primitive) => {
+            serde_json::from_str::<String>(value.get())
+                .map_or_else(|_| unread(), Pattern::Primitive)
+        }
+        _ => unread(),
+    }
+}
+
+/// Moves a pattern's coding into the model.
+fn coding_of(coding: CodingValue) -> CodingPattern {
+    CodingPattern {
+        system: coding.system,
+        version: coding.version,
+        code: coding.code,
+        display: coding.display,
+    }
+}
+
+/// Reads one slicing, or `None` when it names a discriminator type or rules
+/// outside the R4 value sets.
+fn slicing_of(slicing: SlicingDefinition) -> Option<Slicing> {
+    let discriminators = slicing
+        .discriminator
+        .into_iter()
+        .map(|discriminator| {
+            DiscriminatorKind::from_code(&discriminator.kind).map(|kind| Discriminator {
+                kind,
+                path: discriminator.path,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(Slicing {
+        discriminators,
+        ordered: slicing.ordered.unwrap_or(false),
+        rules: SlicingRules::from_code(slicing.rules.as_deref()?)?,
     })
 }
 

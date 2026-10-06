@@ -13,9 +13,9 @@
 //! The planning of the targets, the patient confinement, the fan-out and the
 //! rows of the `RESULT_SET` each have a module of their own.
 
-mod confinement;
-mod fan_out;
-mod planning;
+pub(super) mod confinement;
+pub(super) mod fan_out;
+pub(super) mod planning;
 mod result;
 
 use std::time::{Duration, Instant};
@@ -123,7 +123,7 @@ fn applied_wait(response: &mut Response, wait: Duration) {
 
 /// Why a federated query has no `RESULT_SET` to answer with.
 #[derive(Debug, thiserror::Error)]
-pub(super) enum Failure {
+pub(crate) enum Failure {
     /// The request body is not an ITS-REST `AdhocQueryExecute`.
     #[error("the request body is not an ITS-REST ad hoc query")]
     Body,
@@ -186,7 +186,7 @@ pub(super) enum Failure {
 
 impl Failure {
     /// The code of this failure, which names its status (§11.2).
-    fn code(&self) -> Code {
+    pub(crate) fn code(&self) -> Code {
         match self {
             Self::Body | Self::Query(_) => Code::BodyInvalid,
             Self::Completeness(completeness::CompletenessError::NotOffered) => {
@@ -216,7 +216,7 @@ impl Failure {
     /// never quotes the query, a parameter value or a header value (§5.4.3).
     /// A server error is logged under `outbound`, the id the request line
     /// records, and never under the client's free-text `request_id`.
-    fn respond(self, request_id: &str, outbound: OutboundId) -> Response {
+    pub(crate) fn respond(self, request_id: &str, outbound: OutboundId) -> Response {
         let code = self.code();
         if code.status().is_server_error() {
             tracing::error!(

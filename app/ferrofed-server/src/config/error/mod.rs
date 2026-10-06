@@ -707,6 +707,9 @@ pub enum Error {
     /// `[access_log]` declares a category map the logging component refuses.
     #[error("[access_log] declares a category map that cannot be used")]
     AccessLogMap(#[source] ehds_logging::map::MapError),
+    /// The `[fhir]` face is refused.
+    #[error(transparent)]
+    Fhir(#[from] crate::config::fhir::FhirError),
     /// `[access_log.retention]` declares a retention the logging component refuses.
     #[error("[access_log.retention] declares a retention that cannot be used")]
     AccessLogRetention(#[source] ehds_logging::retention::RetentionError),
@@ -714,6 +717,9 @@ pub enum Error {
     /// component refuses.
     #[error("[[access_log.emergency_purpose]] declares a purpose that cannot be used")]
     AccessLogEmergency(#[source] ehds_logging::emergency::EmergencyError),
+    /// `[access_log] patient_namespaces` names an empty namespace.
+    #[error("[access_log] patient_namespaces names an empty namespace")]
+    AccessLogNamespace(#[source] ferrofed_identity::role::patient::PatientRefError),
 }
 
 impl Error {

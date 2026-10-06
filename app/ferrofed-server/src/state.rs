@@ -13,6 +13,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::pmir::IdentityFeedError;
 use crate::binding::process::{Processes, Sources};
+use crate::config::fhir::FhirSettings;
 use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
@@ -40,6 +41,9 @@ pub struct AppState {
     /// The stored-query registry, when it is offered (§12.7). It sits beside
     /// the federation, which holds no store handle.
     definitions: Option<Arc<Definitions>>,
+    /// The FHIR R4 face of the exchange format, when it is served (Regulation
+    /// (EU) 2025/327 Annex II 2.1). It is fixed for the life of the process.
+    fhir: Option<Arc<FhirSettings>>,
     /// The metrics surface every recording site and the admin listener
     /// share; it outlives every federation a reload builds.
     metrics: Arc<Metrics>,
@@ -151,6 +155,7 @@ impl AppState {
             health: Registry::new(built),
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
+            fhir: settings.fhir.clone().map(Arc::new),
             metrics,
             processes: Processes::build(settings)?,
         })
@@ -199,6 +204,7 @@ impl AppState {
             health,
             federation: RwLock::new(None),
             definitions: None,
+            fhir: None,
             metrics: Arc::default(),
             processes: Processes::default(),
         }
@@ -214,6 +220,7 @@ impl AppState {
             health: Registry::default(),
             federation: RwLock::new(Some(Arc::new(federation.metered(metrics.nodes())))),
             definitions: None,
+            fhir: None,
             metrics,
             processes: Processes::default(),
         }
@@ -287,6 +294,12 @@ impl AppState {
     #[must_use]
     pub fn definitions(&self) -> Option<&Arc<Definitions>> {
         self.definitions.as_ref()
+    }
+
+    /// Returns the FHIR R4 face of the exchange format, when it is served.
+    #[must_use]
+    pub fn fhir(&self) -> Option<&Arc<FhirSettings>> {
+        self.fhir.as_ref()
     }
 
     /// Returns what the bindings run for the life of the process.
