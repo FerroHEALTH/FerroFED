@@ -151,18 +151,6 @@ impl SyntheticPatient {
         }
     }
 
-    /// Returns the patient predicate over `EHR_STATUS.subject.external_ref`
-    /// for an `EHR` bound to `e`, as a client writes it (§7.1).
-    #[must_use]
-    pub fn predicate(&self) -> String {
-        format!(
-            "e/ehr_status/subject/external_ref/id/value = '{}' \
-             AND e/ehr_status/subject/external_ref/namespace = '{}'",
-            self.value.expose_secret(),
-            self.namespace
-        )
-    }
-
     /// Returns `text` with every occurrence of the value replaced, for a
     /// line the report prints.
     #[must_use]

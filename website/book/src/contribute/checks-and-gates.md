@@ -38,6 +38,7 @@ manifest check installs the toolchain only to read the manifests):
 | favicon-sync | the book's favicons match the brand mark |
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
 | e2e-placement | every test that checks the `FERROFED_E2E` gate lives in its crate's `e2e` test module, and the CI end-to-end job still sets the gate and selects `test(/^e2e::/)` |
+| aql-splice | no Rust source outside the tests builds AQL text with `format!`, `concat!`, `push_str` or `+`: a query is a template `openehr-query` parses, its values bound or sent as query parameters |
 | obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
 | site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
@@ -88,6 +89,8 @@ bash scripts/checks/conformance-matrix.sh
 bash scripts/conformance/report.sh --self-test
 bash scripts/checks/e2e-placement.sh --self-test
 bash scripts/checks/e2e-placement.sh
+bash scripts/checks/aql-splice.sh --self-test
+bash scripts/checks/aql-splice.sh
 bash scripts/checks/obligations.sh --self-test
 bash scripts/checks/obligations.sh
 bash scripts/checks/site-links.sh --self-test

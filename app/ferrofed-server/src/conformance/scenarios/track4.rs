@@ -14,9 +14,10 @@
 
 use http::StatusCode;
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::{Federated, Gateway, ask, checked, post_aql};
 use crate::conformance::fixture::{Fixture, SyntheticPatient};
-use crate::conformance::scenarios::{UNRESOLVED, statuses};
+use crate::conformance::scenarios::{COMPOSITION_UIDS, UNRESOLVED, statuses};
 use crate::conformance::{Failure, ensure, ensure_eq};
 
 /// Holds that a patient found nowhere is a `200` with no row.
@@ -34,10 +35,9 @@ pub async fn found_nowhere<G: Gateway>(
     fixture: &Fixture,
     unknown: &SyntheticPatient,
 ) -> Result<Federated, Failure> {
-    let aql = format!(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {}",
-        unknown.predicate()
-    );
+    let aql = ClientQuery::parse(COMPOSITION_UIDS)?
+        .of_patient(unknown)?
+        .to_aql();
     let reply = ask(gateway, post_aql(&aql, &[])?).await?;
     reply.expect(
         StatusCode::OK,

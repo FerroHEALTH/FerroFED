@@ -18,7 +18,7 @@ use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use uuid::Uuid;
 
-use super::interface::{Answer, Arrangement, CheckError, Interface};
+use super::interface::{Answer, Arrangement, CheckError, Interface, NodeQuery};
 use super::{Check, Finding, Verdict};
 
 /// One observation: its verdict and the evidence line.
@@ -26,21 +26,18 @@ type Observation = (Verdict, String);
 
 /// The query of the EHR itself, scoped by its `ehr_id` in the `WHERE`
 /// clause, which answers one row when the node holds the EHR.
-fn ehr_query(ehr_id: Uuid) -> String {
-    format!("SELECT e/ehr_id/value FROM EHR e WHERE e/ehr_id/value = '{ehr_id}'")
-}
+pub(super) const EHR_QUERY: &str =
+    "SELECT e/ehr_id/value FROM EHR e WHERE e/ehr_id/value = $ehr_id";
 
 /// The query of the EHR itself, scoped by its `ehr_id` in the `EHR`
 /// predicate, which answers one row when the node holds the EHR.
-fn ehr_predicate_query(ehr_id: Uuid) -> String {
-    format!("SELECT e/ehr_id/value FROM EHR e[ehr_id/value='{ehr_id}']")
-}
+pub(super) const EHR_PREDICATE_QUERY: &str =
+    "SELECT e/ehr_id/value FROM EHR e[ehr_id/value=$ehr_id]";
 
 /// The query of the EHR's compositions, scoped by its `ehr_id` in the `EHR`
 /// predicate.
-fn composition_query(ehr_id: Uuid) -> String {
-    format!("SELECT c/uid/value FROM EHR e[ehr_id/value='{ehr_id}'] CONTAINS COMPOSITION c")
-}
+pub(super) const COMPOSITION_QUERY: &str =
+    "SELECT c/uid/value FROM EHR e[ehr_id/value=$ehr_id] CONTAINS COMPOSITION c";
 
 /// A query no AQL grammar parses: a `SELECT` with no projection and a `WHERE`
 /// with no condition.
@@ -82,7 +79,8 @@ fn decoded_or_reason<T: serde::de::DeserializeOwned>(answer: &Answer) -> Result<
 ///
 /// # Errors
 ///
-/// Returns [`CheckError`] when a request reaches no answer.
+/// Returns [`CheckError`] when a query of the check cannot be built or a
+/// request reaches no answer.
 pub async fn invocable_on_ehr_id(
     interface: &Interface,
     ehr_id: Uuid,
@@ -139,14 +137,18 @@ pub async fn invocable_on_ehr_id(
         )
     });
 
-    let one = interface.query(&ehr_query(ehr_id), None).await?;
+    let one = interface
+        .query(&NodeQuery::scoped(EHR_QUERY, ehr_id)?, None)
+        .await?;
     seen.push(rows_observed(
         &one,
         "the query of the EHR scoped by e/ehr_id/value",
         |n| n == 1,
         "one row",
     ));
-    let compositions = interface.query(&composition_query(ehr_id), None).await?;
+    let compositions = interface
+        .query(&NodeQuery::scoped(COMPOSITION_QUERY, ehr_id)?, None)
+        .await?;
     seen.push(rows_observed(
         &compositions,
         "the query of its compositions scoped by EHR e[ehr_id/value]",
@@ -275,7 +277,9 @@ async fn subjectless_read(
         )
     });
 
-    let one = interface.query(&ehr_query(ehr_id), None).await?;
+    let one = interface
+        .query(&NodeQuery::scoped(EHR_QUERY, ehr_id)?, None)
+        .await?;
     seen.push(rows_observed(
         &one,
         "the query of the subjectless EHR scoped by e/ehr_id/value",
@@ -311,7 +315,9 @@ pub async fn errors_passed_through(interface: &Interface) -> Result<Finding, Che
         &format!("GET /ehr/{unknown}/ehr_status"),
         StatusCode::NOT_FOUND,
     ));
-    let query = interface.query(UNPARSABLE_QUERY, None).await?;
+    let query = interface
+        .query(&NodeQuery::unparsable(UNPARSABLE_QUERY), None)
+        .await?;
     seen.push(error_observed(
         query.status,
         "POST /query/aql of an unparsable query",
@@ -349,7 +355,8 @@ fn error_observed(status: StatusCode, what: &str, due: StatusCode) -> Observatio
 ///
 /// # Errors
 ///
-/// Returns [`CheckError`] when a request reaches no answer.
+/// Returns [`CheckError`] when a query of the check cannot be built or a
+/// request reaches no answer.
 pub async fn access_decided_at_node(
     interface: &Interface,
     arrangement: &Arrangement,
@@ -369,7 +376,8 @@ pub async fn access_decided_at_node(
 ///
 /// # Errors
 ///
-/// Returns [`CheckError`] when a request reaches no answer.
+/// Returns [`CheckError`] when a query of the check cannot be built or a
+/// request reaches no answer.
 pub async fn consent_before_release(
     interface: &Interface,
     arrangement: &Arrangement,
@@ -415,9 +423,12 @@ async fn refusal(
     ));
 
     let forms = [
-        (ehr_query(ehr_id), "the query scoped by e/ehr_id/value"),
         (
-            ehr_predicate_query(ehr_id),
+            NodeQuery::scoped(EHR_QUERY, ehr_id)?,
+            "the query scoped by e/ehr_id/value",
+        ),
+        (
+            NodeQuery::scoped(EHR_PREDICATE_QUERY, ehr_id)?,
             "the query scoped by EHR e[ehr_id/value]",
         ),
     ];
