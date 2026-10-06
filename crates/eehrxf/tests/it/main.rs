@@ -9,10 +9,15 @@
 #[cfg(test)]
 mod category;
 #[cfg(test)]
+#[cfg(feature = "patient-summary")]
+mod crosswalk;
+#[cfg(test)]
 mod dataset;
 #[cfg(test)]
 #[cfg(feature = "openehr")]
 mod mapping;
+#[cfg(test)]
+mod profile;
 #[cfg(test)]
 mod property;
 #[cfg(test)]

@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use eehrxf::dataset::DatasetModel;
+use eehrxf::dataset::ResourceProfile;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
@@ -24,6 +25,21 @@ pub(crate) fn xtehr_package() -> PathBuf {
 /// Reads the vendored package into a dataset model.
 pub(crate) fn xtehr() -> Result<DatasetModel, Box<dyn Error>> {
     Ok(DatasetModel::read(std::fs::File::open(xtehr_package())?)?)
+}
+
+/// The vendored `hl7.fhir.eu.eps` 1.0.0-ballot package, as the registry
+/// serves it.
+pub(crate) fn eps_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/eu-hl7-eps/hl7.fhir.eu.eps-1.0.0-ballot.tgz")
+}
+
+/// Reads the profile at `url` from the vendored EPS package.
+pub(crate) fn eps(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    Ok(ResourceProfile::read(
+        std::fs::File::open(eps_package())?,
+        url,
+    )?)
 }
 
 /// One archive member: its path and its bytes.

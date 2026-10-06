@@ -303,6 +303,41 @@ milestone, which is due before the Regulation applies on 26 March 2027:
 No EU declaration of conformity has been drawn up and no FerroFED release
 carries the CE marking.
 
+### The patient summary crosswalk
+
+The eHealth Network *Guidelines on Patient Summary* (Release 3.4, §4), the
+Xt-EHR `EHDSPatientSummary` logical model and the HL7 Europe Patient Summary
+composition (`hl7.fhir.eu.eps` 1.0.0-ballot) describe one dataset three
+ways. `eehrxf` holds the crosswalk between them as data, keyed on the Xt-EHR
+element path. Each row names:
+
+- the eHealth Network element ids, such as `A.2.1.1` for allergies;
+- the obligation the Xt-EHR obligations profile puts on a producer;
+- the element or slice of the EPS composition that carries it, such as
+  `Composition.section:sectionAllergies.entry:allergyOrIntolerance`;
+- the profiles a FHIRconnect context may map to in order to feed it. The
+  header, each section's narrative, its empty reason and its note have none,
+  because the document is assembled around them.
+
+Every section of the model has a row, and so does every header element a
+producer must be able to populate. A test fails when an element a producer
+`SHALL:able-to-populate` has no row, when a row names a slice the pinned EPS
+profile lacks, or when one of the five required EPS sections (problems,
+allergies, medications, procedures, devices) is uncovered. Two EPS sections
+have no counterpart in the model and no row: vital signs and the general
+patient history. The presented form, a rendering of the whole summary, has
+no element in the EPS composition.
+
+Two elements are open in the [clinical safety risk file](clinical-safety.md)
+(hazard I-03), because no openEHR content is named to feed them yet:
+
+- the medical alert (A.2.1.2), which a producer must be able to populate;
+- the functional status (A.2.3.4).
+
+A stored query the gateway holds, one per section, to select each
+section's compositions from the members is planned
+([#776](https://github.com/FerroHEALTH/FerroFED/issues/776)).
+
 ## Not legal advice
 
 This page is the manufacturer's reading of the Regulation, written to plan
