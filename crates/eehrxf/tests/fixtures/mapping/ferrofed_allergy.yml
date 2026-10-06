@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# A synthetic model mapping for the eehrxf tests: the substance of the
+# synthetic allergy evaluation becomes AllergyIntolerance.code, and the
+# patient is a fixed synthetic reference, because AllergyIntolerance.patient
+# is 1..1 in R4. The archetype is synthetic too; no clinical content.
+grammar: FHIRConnect/v1.0.0
+type: model
+metadata:
+  name: ferrofed_allergy
+  version: 1.0.0
+spec:
+  system: FHIR
+  version: R4
+  openEhrConfig:
+    archetype: openEHR-EHR-EVALUATION.ferrofed_allergy.v1
+  fhirConfig:
+    structureDefinition: http://hl7.org/fhir/StructureDefinition/AllergyIntolerance
+
+mappings:
+  - name: "substance"
+    with:
+      fhir: "$resource.code"
+      openehr: "$archetype/data[at0001]/items[at0002]"
+      type: "CODEABLECONCEPT"
+
+  - name: "patient"
+    unidirectional: "openehr->fhir"
+    with:
+      fhir: "$resource.patient"
+    manual:
+      - name: "patientReference"
+        fhir:
+          - path: "reference"
+            value: "Patient/synthetic-subject-0684"

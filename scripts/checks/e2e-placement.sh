@@ -165,7 +165,7 @@ self_test() {
   expect 0 app/ferrofed-server/tests/it/e2e/mod.rs "$gated"
   expect 0 tools/ferrofed-testkit/tests/it/e2e.rs "$gated"
   expect 0 crates/ihe-iti/tests/it/e2e/pixm.rs "$by_const"
-  expect 0 tools/ferrofed-testkit/src/containers.rs "$by_const"
+  expect 0 tools/ferrofed-testkit/src/containers/mod.rs "$by_const"
   expect 0 app/ferrofed-server/tests/it/track10/mod.rs "$commented"
   expect 0 app/ferrofed-server/tests/it/e2e_attributes.rs "$offline"
   expect 1 app/ferrofed-viewer/tests/it/journeys/sign_in.rs "$journey"

@@ -35,9 +35,8 @@ use uuid::Uuid;
 
 mod feed;
 
-use super::{
-    HarnessError, POSTGRES_PORT, SANTEMPI, SANTEMPI_POSTGRES, names, postgres_health_check,
-};
+use super::images::{SANTEMPI, SANTEMPI_POSTGRES};
+use super::{HarnessError, POSTGRES_PORT, names, postgres_health_check};
 use crate::seed::{EhrDomain, PatientId};
 use feed::feed_message;
 
