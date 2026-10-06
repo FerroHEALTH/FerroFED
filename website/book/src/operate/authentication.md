@@ -90,6 +90,7 @@ demographic_clients = []
 | `auth.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
 | `auth.issuer[].requester.organisation_type` | none | The claim carrying that organisation's care provider type. |
 | `auth.issuer[].client_tokens_act_for_professional` | `false` | Whether this issuer's client tokens act for the professional they name, so one that names a professional reaches patient data ([Professionals and assurance](#professionals-and-assurance)). |
+| `auth.issuer[].professional_issuing_authority` | none | The string claim of this issuer's tokens that carries the name of the agency that issued the professional's `national_provider_identifier` (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which each node is told. IHE IUA defines no claim for it. Without it, none is read or conveyed. |
 | `auth.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
 | `auth.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[auth.issuer.assurance]` is set. |
 | `auth.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
@@ -632,8 +633,17 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application ([Professionals and assurance](#professionals-and-assurance)) |
 | `subject_name` | the professional's name, when the caller's token states `extensions.ihe_iua.subject_name` (IHE IUA) |
 | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |
+| `national_provider_identifier_authority` | the name of the agency that issued that identifier, when the caller's issuer sets `professional_issuing_authority` and the token states it (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`) |
+| `subject_role` | the professional's roles, each as `{"system", "code"}`, when the caller's token states `extensions.ihe_iua.subject_role` (IHE IUA) |
 | `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[auth.issuer.assurance]` and the token states a value it lists |
 | `national_contact_point` | for a caller a [national contact point](#national-contact-points) vouched for: `health_professional`, every row of Implementing Regulation (EU) 2026/2099 Annex Table 1 under its data identifier, `healthcare_provider`, every row of Table 2, and `asserted_by`, the contact point's issuer, which marks them as its assertion |
+
+With `subject_organization_id`, the provider's identifier, the professional
+claims let a node record the professional and the provider of every
+registration or update it makes on the caller's behalf, which Regulation (EU)
+2025/327 Art 13(4) asks an electronic health record to identify. Declare
+`professional_issuing_authority` for an issuer whose tokens state the agency
+that issued the identifier.
 
 The token never carries the caller's own token, its `client_id`, or a
 patient identifier: an IUA `person_id` is never read (N33). The outbound

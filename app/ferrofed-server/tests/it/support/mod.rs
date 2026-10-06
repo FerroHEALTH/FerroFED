@@ -220,6 +220,7 @@ pub(crate) fn auth() -> AuthSettings {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            professional_issuing_authority: None,
             national_contact_point: None,
         }],
         ..AuthSettings::default()
@@ -601,9 +602,7 @@ pub(crate) fn signer(
 /// A conveyance of a synthetic verified caller, for a test that dispatches
 /// through the engine itself.
 pub(crate) fn conveyance() -> Result<ferrofed_engine::conveyance::Conveyance, Box<dyn StdError>> {
-    use ferrofed_engine::conveyance::{
-        Acting, Caller, Conveyance, Principal, Professional, Verification,
-    };
+    use ferrofed_engine::conveyance::{Acting, Caller, Conveyance, Principal, Verification};
     let caller = Caller {
         issuer: ISSUER.to_owned(),
         subject: "clinician-0042".to_owned(),
@@ -611,7 +610,7 @@ pub(crate) fn conveyance() -> Result<ferrofed_engine::conveyance::Conveyance, Bo
         purposes: Vec::new(),
         scope: String::new(),
         verified_by: Verification::Signature,
-        professional: Professional::default(),
+        professional: Box::default(),
         acting: Acting::Person,
         assurance_level: None,
         relayed: None,

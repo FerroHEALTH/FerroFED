@@ -43,6 +43,15 @@ pub(crate) const PROFESSIONAL_NAME: &str = "Example Clinician";
 /// `national_provider_identifier`).
 pub(crate) const PROFESSIONAL_ID: &str = "urn:oid:2.999.7.1|hp-0042";
 
+/// The agency that issued [`PROFESSIONAL_ID`] (Implementing Regulation (EU)
+/// 2026/2099 Annex Table 1 `issuing_authority_name`).
+pub(crate) const PROFESSIONAL_AUTHORITY: &str = "Example Registration Agency";
+
+/// The code system of the synthetic professional's role (IHE IUA
+/// `subject_role`).
+pub(crate) const PRACTITIONER_ROLE: &str =
+    "http://terminology.hl7.org/CodeSystem/practitioner-role";
+
 /// The HL7 v3 `ActReason` code system the purpose of use is coded in.
 pub(crate) const ACT_REASON: &str = "http://terminology.hl7.org/CodeSystem/v3-ActReason";
 
@@ -78,10 +87,15 @@ pub(crate) fn caller() -> Caller {
         }],
         scope: SCOPE.to_owned(),
         verified_by: Verification::Signature,
-        professional: Professional {
+        professional: Box::new(Professional {
             name: Some(PROFESSIONAL_NAME.to_owned()),
             identifier: Some(PROFESSIONAL_ID.to_owned()),
-        },
+            issuing_authority: Some(PROFESSIONAL_AUTHORITY.to_owned()),
+            roles: vec![Role {
+                system: Some(PRACTITIONER_ROLE.to_owned()),
+                code: "doctor".to_owned(),
+            }],
+        }),
         acting: Acting::Person,
         assurance_level: Some(AssuranceLevel::Substantial),
         relayed: None,
@@ -127,6 +141,9 @@ pub(crate) struct Read {
     pub(crate) scope: Option<String>,
     pub(crate) subject_name: Option<String>,
     pub(crate) national_provider_identifier: Option<String>,
+    pub(crate) national_provider_identifier_authority: Option<String>,
+    #[serde(default)]
+    pub(crate) subject_role: Vec<ReadPurpose>,
     pub(crate) acting: Option<String>,
     pub(crate) assurance_level: Option<String>,
     pub(crate) national_contact_point: Option<ReadContactPoint>,

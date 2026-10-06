@@ -135,10 +135,14 @@ fn conveyed(caller: &Caller) -> conveyance::Caller {
             VerifiedBy::Introspection => Verification::Introspection,
             VerifiedBy::Edge => Verification::Edge,
         },
-        professional: conveyance::Professional {
+        // NOTE: 2025/327 Art 13(4), 2026/2099 Annex Table 1: the node can name the professional
+        // of each registration, and the outbound gate reads these with every other claim.
+        professional: Box::new(conveyance::Professional {
             name: caller.professional().name.clone(),
             identifier: caller.professional().identifier.clone(),
-        },
+            issuing_authority: caller.professional().issuing_authority.clone(),
+            roles: caller.professional().roles.clone(),
+        }),
         acting: caller.acting(),
         assurance_level: caller.assurance(),
         // NOTE: 2026/2099 Art 7, §13.4 authn-end-user: the node is told what a contact point

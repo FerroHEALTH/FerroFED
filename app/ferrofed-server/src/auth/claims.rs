@@ -13,9 +13,11 @@
 //! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
 //! (master04 §Capabilities). The string claims an issuer's
 //! `[auth.issuer.requester]` names are read as the requester the consent
-//! pre-filter asks about (§13.4). The IUA `subject_name` and
-//! `national_provider_identifier` are read as the professional's
-//! identification, and the string claim an issuer's
+//! pre-filter asks about (§13.4). The IUA `subject_name`,
+//! `national_provider_identifier` and `subject_role` are read as the
+//! professional's identification, the string claim an issuer's
+//! `professional_issuing_authority` names as the agency that issued the
+//! identifier, and the string claim an issuer's
 //! `[auth.issuer.assurance]` names as the authentication assurance, by
 //! default `acr` (RFC 9068 §2.2.1). For an issuer declared a national contact
 //! point, the IUA `subject_organization` and `subject_role` and the string
@@ -36,7 +38,7 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 
 use crate::auth::caller::{Professional, PurposeOfUse, Stated};
-use crate::config::auth::RequesterClaims;
+use crate::config::auth::requester::RequesterClaims;
 
 /// The claims of an RFC 9068 access token, as read after its signature, its
 /// issuer, its audience and its validity window were verified.
@@ -87,9 +89,11 @@ impl AccessToken {
         self.others.text(name)
     }
 
-    /// Returns the professional's identification the token states.
-    pub(super) fn professional(&self) -> Professional {
-        self.declared.professional()
+    /// Returns the professional's identification the token states, the
+    /// identifier's issuing authority read from the claim `authority` names.
+    pub(super) fn professional(&self, authority: Option<&str>) -> Professional {
+        self.declared
+            .professional(authority.and_then(|claim| self.others.text(claim)))
     }
 
     /// Returns the requester the claims `named` name, when the token carries
@@ -291,14 +295,33 @@ impl Declared {
     }
 
     /// The professional's identification the IUA extension states, each
-    /// member when it is set and not empty.
-    pub(super) fn professional(&self) -> Professional {
+    /// member when it is set and not empty and each role that has a code,
+    /// with the `issuing_authority` the token states outside IUA.
+    pub(super) fn professional(&self, issuing_authority: Option<String>) -> Professional {
         let iua = self.iua();
         let text = |value: Option<&String>| value.filter(|value| !value.is_empty()).cloned();
         Professional {
             identifier: text(iua.and_then(|iua| iua.national_provider_identifier.as_ref())),
             name: text(iua.and_then(|iua| iua.subject_name.as_ref())),
+            issuing_authority,
+            roles: self.roles(),
         }
+    }
+
+    /// Each IUA `subject_role` that has a code.
+    fn roles(&self) -> Vec<Role> {
+        self.iua()
+            .and_then(|iua| iua.subject_role.as_deref())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|coding| {
+                let code = coding.code.clone().filter(|code| !code.is_empty())?;
+                Some(Role {
+                    system: coding.system.clone().filter(|system| !system.is_empty()),
+                    code,
+                })
+            })
+            .collect()
     }
 
     /// What the IUA extension states that Implementing Regulation (EU)
@@ -309,18 +332,7 @@ impl Declared {
         let text = |value: Option<&String>| value.filter(|value| !value.is_empty()).cloned();
         IuaAnnex {
             hp_identifier: text(iua.and_then(|iua| iua.national_provider_identifier.as_ref())),
-            roles: iua
-                .and_then(|iua| iua.subject_role.as_deref())
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|coding| {
-                    let code = coding.code.clone().filter(|code| !code.is_empty())?;
-                    Some(Role {
-                        system: coding.system.clone().filter(|system| !system.is_empty()),
-                        code,
-                    })
-                })
-                .collect(),
+            roles: self.roles(),
             provider_identifier: text(iua.and_then(|iua| iua.subject_organization_id.as_ref())),
             provider_name: text(iua.and_then(|iua| iua.subject_organization.as_ref())),
         }

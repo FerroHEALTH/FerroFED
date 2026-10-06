@@ -113,6 +113,9 @@ data:
     # Whether its client tokens, which name no natural person, act for the
     # professional they name, and so reach patient data.
     # client_tokens_act_for_professional = false
+    # The string claim that carries the agency that issued the professional's
+    # national_provider_identifier, which each node is told.
+    # professional_issuing_authority = "hp_issuing_authority"
     #
     # The claim and the values that carry the authentication assurance of
     # its tokens, and the least level patient data needs; without it, no

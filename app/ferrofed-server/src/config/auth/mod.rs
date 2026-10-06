@@ -14,6 +14,7 @@
 
 pub mod assurance;
 pub mod contact_point;
+pub mod requester;
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -30,6 +31,7 @@ use url::Url;
 
 use crate::config::auth::assurance::{Assurance, AssuranceClaims};
 use crate::config::auth::contact_point::{ContactPoint, ContactPointClaims};
+use crate::config::auth::requester::RequesterClaims;
 use crate::config::error::Error;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
@@ -168,53 +170,17 @@ pub struct TrustedIssuer {
     /// act for the professional they name; `false` by default, and then such
     /// a token reaches no patient data.
     pub client_tokens_act_for_professional: bool,
+    /// The name of the string claim of this issuer's tokens that carries
+    /// the name of the agency that issued the professional's
+    /// `national_provider_identifier`, the `issuing_authority_name` of
+    /// Implementing Regulation (EU) 2026/2099 Annex Table 1; absent by
+    /// default, and then none is read or conveyed.
+    pub professional_issuing_authority: Option<String>,
     /// The declaration of this issuer as a national contact point for
     /// digital health, with the claims of its tokens that carry the
     /// Implementing Regulation (EU) 2026/2099 Annex attributes
     /// (`[auth.issuer.national_contact_point]`); absent by default.
     pub national_contact_point: Option<ContactPointClaims>,
-}
-
-/// `[auth.issuer.requester]`: the names of the token claims that carry the
-/// professional's UZI number and role and the organisation's URA and type,
-/// each a string claim.
-///
-/// No specification the gateway binds names these claims, so each is
-/// configured, with no default.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct RequesterClaims {
-    /// The claim carrying the professional's UZI number.
-    pub professional: String,
-    /// The claim carrying the professional's UZI role code.
-    pub role: String,
-    /// The claim carrying the organisation's URA.
-    pub organisation: String,
-    /// The claim carrying the organisation's care provider type.
-    pub organisation_type: String,
-}
-
-impl RequesterClaims {
-    /// Checks that this table at `key` names all four claims.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Missing`] for a claim name not set.
-    fn check(&self, key: &str) -> Result<(), Error> {
-        for (name, claim) in [
-            ("professional", &self.professional),
-            ("role", &self.role),
-            ("organisation", &self.organisation),
-            ("organisation_type", &self.organisation_type),
-        ] {
-            if claim.is_empty() {
-                return Err(Error::Missing {
-                    key: format!("{key}.{name}"),
-                });
-            }
-        }
-        Ok(())
-    }
 }
 
 /// `[auth.issuer.patient]`: the one member endpoint whose platform issues
@@ -339,6 +305,9 @@ pub struct IssuerSettings {
     /// Whether this issuer's client tokens act for the professional they
     /// name.
     pub client_tokens_act_for_professional: bool,
+    /// The claim that carries the agency that issued the professional's
+    /// identifier, when this issuer's tokens carry one.
+    pub professional_issuing_authority: Option<String>,
     /// This issuer as a national contact point, when the deployment declares
     /// it one: its requests are served with consent exclusions withheld,
     /// and its tokens relay the professional and the provider of another
@@ -642,6 +611,10 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         .as_ref()
         .map(|assurance| assurance.resolve(&format!("{key}.assurance")))
         .transpose()?;
+    let professional_issuing_authority = claim_name(
+        &format!("{key}.professional_issuing_authority"),
+        written.professional_issuing_authority.as_ref(),
+    )?;
     let national_contact_point = written
         .national_contact_point
         .as_ref()
@@ -657,8 +630,23 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         requester: written.requester.clone(),
         assurance,
         client_tokens_act_for_professional: written.client_tokens_act_for_professional,
+        professional_issuing_authority,
         national_contact_point,
     })
+}
+
+/// Resolves an optional claim name at `key`: absent, or set and not empty.
+///
+/// # Errors
+///
+/// Returns [`Error::Missing`] for a claim name written empty.
+fn claim_name(key: &str, written: Option<&String>) -> Result<Option<String>, Error> {
+    match written {
+        Some(name) if name.is_empty() => Err(Error::Missing {
+            key: key.to_owned(),
+        }),
+        written => Ok(written.cloned()),
+    }
 }
 
 /// Resolves one `[auth.issuer.patient]` at `key`: an endpoint id and a

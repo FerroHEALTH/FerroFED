@@ -24,7 +24,7 @@
 
 use std::fmt;
 
-use ferrofed_engine::conveyance::relayed::Relayed;
+use ferrofed_engine::conveyance::relayed::{Relayed, Role};
 use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
@@ -167,10 +167,11 @@ impl PatientContext {
     }
 }
 
-/// The professional's identification a token states, read from the IHE IUA
-/// extension (ITI TF-2 3.71.4.2.2.1.1).
+/// The professional's identification a token states.
 ///
-/// `Debug` shows which members are present and none of their values.
+/// It is read from the IHE IUA extension (ITI TF-2 3.71.4.2.2.1.1), and the
+/// agency that issued the identifier from the claim the issuer's
+/// `professional_issuing_authority` names. `Debug` shows which members are present and none of their values.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Professional {
     /// `national_provider_identifier`: "A unique identifier issued to health
@@ -178,6 +179,11 @@ pub struct Professional {
     pub identifier: Option<String>,
     /// `subject_name`: "The user's name as String".
     pub name: Option<String>,
+    /// The name of the agency that issued `identifier`: Implementing
+    /// Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`.
+    pub issuing_authority: Option<String>,
+    /// `subject_role`, each role that has a code.
+    pub roles: Vec<Role>,
 }
 
 impl fmt::Debug for Professional {
@@ -185,6 +191,8 @@ impl fmt::Debug for Professional {
         f.debug_struct("Professional")
             .field("identifier", &self.identifier.is_some())
             .field("name", &self.name.is_some())
+            .field("issuing_authority", &self.issuing_authority.is_some())
+            .field("roles", &self.roles.len())
             .finish()
     }
 }
