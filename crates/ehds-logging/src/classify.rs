@@ -83,7 +83,7 @@ pub struct Evidence {
     every_root_bound: bool,
     unrooted: bool,
     no_category: bool,
-    unreadable: Option<String>,
+    unreadable: Option<Unreadable>,
     constructed: BTreeSet<Category>,
 }
 
@@ -122,12 +122,11 @@ impl Evidence {
     }
 
     /// The evidence of an access whose data could not be read for their
-    /// ids, with `why`, a reason that names no value: a body in a format the
-    /// reader does not read, or an object the access did not return.
+    /// ids, for the reason `why`.
     #[must_use]
-    pub fn unreadable(why: impl Into<String>) -> Self {
+    pub fn unreadable(why: Unreadable) -> Self {
         Self {
-            unreadable: Some(why.into()),
+            unreadable: Some(why),
             ..Self::default()
         }
     }
@@ -195,18 +194,49 @@ pub enum Unclassified {
     /// known.
     Unbound,
     /// The data could not be read for their ids, for the reason given.
-    Unreadable(String),
+    Unreadable(Unreadable),
 }
 
 impl Unclassified {
-    /// The reason as a record writes it.
+    /// The reason as a record writes it: `unmapped`, `named-nothing`,
+    /// `unbound`, or the code of the [`Unreadable`] reason.
     #[must_use]
-    pub fn code(&self) -> &str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::Unmapped => "unmapped",
             Self::NamedNothing => "named-nothing",
             Self::Unbound => "unbound",
-            Self::Unreadable(why) => why,
+            Self::Unreadable(why) => why.code(),
+        }
+    }
+}
+
+/// Why the data of an access could not be read for their ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Unreadable {
+    /// The recording system does not read the data of this kind of
+    /// operation: `operation-not-read`.
+    Operation,
+    /// The body is in a format the recording system does not read:
+    /// `format-not-read`.
+    Format,
+    /// The body is in a format the recording system reads, but holds no
+    /// root object it can name: `body-not-read`.
+    Body,
+    /// The access returned no object: `no-object-returned`.
+    NoObject,
+}
+
+impl Unreadable {
+    /// The reason as a record writes it.
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Operation => "operation-not-read",
+            Self::Format => "format-not-read",
+            Self::Body => "body-not-read",
+            Self::NoObject => "no-object-returned",
         }
     }
 }
@@ -335,8 +365,8 @@ impl CategoryMap {
         if evidence.no_category {
             return classified;
         }
-        if let Some(why) = &evidence.unreadable {
-            classified.unclassify(Unclassified::Unreadable(why.clone()));
+        if let Some(why) = evidence.unreadable {
+            classified.unclassify(Unclassified::Unreadable(why));
         }
         if let Some(basis) = evidence.reached {
             for object in &evidence.objects {

@@ -20,7 +20,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{
-    LAB_REPORT, TestResult, accesses, composition, details, gateway, gateway_with, named, profile,
+    LAB_CATEGORY, LAB_REPORT, TestResult, accesses, composition, details, gateway, gateway_with,
+    named, profile,
 };
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
@@ -112,7 +113,7 @@ async fn a_routed_read_names_the_endpoint_and_the_category_of_what_it_read() -> 
     assert_eq!(record["action"], "R");
     names_the_default_caller(&record.to_string())?;
     assert_eq!(
-        vec!["medical-test-result:returned"],
+        vec![format!("{LAB_CATEGORY}:returned")],
         details(record, "ehds-categories", "ehds-category-basis")
     );
     assert_eq!(vec![UID], details(record, "ehds-categories", "version-uid"));
@@ -121,7 +122,7 @@ async fn a_routed_read_names_the_endpoint_and_the_category_of_what_it_read() -> 
     assert_eq!(origins[0]["what"]["identifier"]["value"], "node-a-pub");
     assert_eq!(vec!["200"], details(record, "origin", "status"));
     assert_eq!(
-        vec!["medical-test-result"],
+        vec![LAB_CATEGORY],
         details(record, "origin", "ehds-category"),
         "Annex II 3.4: the category of the one origin"
     );
@@ -148,7 +149,7 @@ async fn a_routed_write_records_the_category_of_what_it_wrote() -> TestResult {
     };
     assert_eq!(record["action"], "C");
     assert_eq!(
-        vec!["medical-test-result:written"],
+        vec![format!("{LAB_CATEGORY}:written")],
         details(record, "ehds-categories", "ehds-category-basis")
     );
     let forwarded = crate::facade::received(&node).await?;

@@ -21,19 +21,20 @@ use std::fmt::Write as _;
 
 use serde::Deserialize;
 
-use crate::category::{Category, CodeError, NationalCode};
+use crate::category::{Category, CodeError, NationalCategory, Reference};
 
 /// The word a declaration uses for data of no category.
 pub const NONE: &str = "none";
 
 /// One declaration as a configuration writes it: the word `none`, or a list
-/// of category codes.
+/// of categories.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
 pub enum Declared {
     /// A word, of which only [`NONE`] is admitted.
     Word(String),
-    /// A list of category codes, at least one.
+    /// A list of categories, at least one: a priority category by its bare
+    /// code or as `<system>|<code>`, a national one as `<system>|<code>`.
     Codes(Vec<String>),
 }
 
@@ -100,10 +101,10 @@ pub enum MapError {
         /// The code.
         code: String,
     },
-    /// A declared national code is refused.
-    #[error("the national category code {code:?} is refused")]
+    /// A declared national category is refused.
+    #[error("the national category {code:?} is refused")]
     National {
-        /// The code.
+        /// The category as declared.
         code: String,
         /// Why.
         #[source]
@@ -114,15 +115,16 @@ pub enum MapError {
 /// The deployment's category map.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CategoryMap {
-    national: BTreeSet<NationalCode>,
+    national: BTreeSet<NationalCategory>,
     templates: BTreeMap<String, Mapping>,
     archetypes: BTreeMap<String, Mapping>,
     digest: Option<String>,
 }
 
 impl CategoryMap {
-    /// The map `templates` and `archetypes` declare, their codes read
-    /// against the six priority categories and the `national` codes.
+    /// The map `templates` and `archetypes` declare, their categories read
+    /// against the six priority categories and the `national` ones, each
+    /// declared `<system>|<code>`.
     ///
     /// # Errors
     ///
@@ -137,7 +139,7 @@ impl CategoryMap {
         let national = national
             .iter()
             .map(|code| {
-                code.parse::<NationalCode>()
+                code.parse::<NationalCategory>()
                     .map_err(|source| MapError::National {
                         code: code.clone(),
                         source,
@@ -184,16 +186,12 @@ impl CategoryMap {
         self.archetypes.get(archetype_id)
     }
 
-    /// The category `code` names: a priority category, or a national one the
-    /// map declares.
+    /// The category `reference` names: a priority category by its bare code
+    /// or as `<system>|<code>`, or a national one the map declares, as
+    /// `<system>|<code>`. Codes are compared exactly.
     #[must_use]
-    pub fn category(&self, code: &str) -> Option<Category> {
-        Category::priority(code).or_else(|| {
-            self.national
-                .iter()
-                .find(|declared| declared.as_str() == code)
-                .map(|declared| Category::National(declared.clone()))
-        })
+    pub fn category(&self, reference: &str) -> Option<Category> {
+        named(reference, &self.national)
     }
 
     /// Whether the map holds no key.
@@ -203,13 +201,14 @@ impl CategoryMap {
     }
 
     /// The map as text that is the same for the same declarations: one line
-    /// per national code, then per template and per archetype key, each
-    /// field separated by a tab, the categories by `,`.
+    /// per national category, then per template and per archetype key, each
+    /// field separated by a tab, the categories by `,`, each category as
+    /// `<system>|<code>`.
     #[must_use]
     pub fn canonical(&self) -> String {
         let mut text = String::new();
-        for code in &self.national {
-            let _written = writeln!(text, "national\t{}", code.as_str());
+        for national in &self.national {
+            let _written = writeln!(text, "national\t{}|{}", national.system(), national.code());
         }
         for (table, keys) in [
             (Table::Templates, &self.templates),
@@ -220,7 +219,7 @@ impl CategoryMap {
                     Mapping::NoCategory => NONE.to_owned(),
                     Mapping::Categories(categories) => categories
                         .iter()
-                        .map(Category::code)
+                        .map(Category::token)
                         .collect::<Vec<_>>()
                         .join(","),
                 };
@@ -236,7 +235,7 @@ fn mapping(
     table: Table,
     key: &str,
     declared: &Declared,
-    national: &BTreeSet<NationalCode>,
+    national: &BTreeSet<NationalCategory>,
 ) -> Result<Mapping, MapError> {
     if key.is_empty() || key.chars().any(char::is_control) {
         return Err(MapError::Key(table));
@@ -260,19 +259,24 @@ fn mapping(
     codes
         .iter()
         .map(|code| {
-            Category::priority(code)
-                .or_else(|| {
-                    national
-                        .iter()
-                        .find(|declared| declared.as_str() == code)
-                        .map(|declared| Category::National(declared.clone()))
-                })
-                .ok_or_else(|| MapError::Unknown {
-                    table,
-                    key: key.to_owned(),
-                    code: code.clone(),
-                })
+            named(code, national).ok_or_else(|| MapError::Unknown {
+                table,
+                key: key.to_owned(),
+                code: code.clone(),
+            })
         })
         .collect::<Result<BTreeSet<_>, _>>()
         .map(Mapping::Categories)
+}
+
+/// The category `reference` names among the priority categories and the
+/// `national` ones.
+fn named(reference: &str, national: &BTreeSet<NationalCategory>) -> Option<Category> {
+    let reference = Reference::read(reference);
+    reference.priority().or_else(|| {
+        national
+            .iter()
+            .find(|declared| reference.names(declared))
+            .map(|declared| Category::National(declared.clone()))
+    })
 }

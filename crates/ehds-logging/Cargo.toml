@@ -3,9 +3,10 @@
 [package]
 name = "ehds-logging"
 description = "The European logging software component of an EHR system under Regulation (EU) 2025/327: the Annex II 3.2 access record, the Article 14(1) categories and the map that classifies an access, and the record written as an IHE BALP AuditEvent"
-# The name is not reserved on crates.io yet, and it must be claimed before the
-# `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.11"
+# The name is held on crates.io by the 0.0.0 placeholder published on
+# 2026-10-06, and the line here starts above it (no specification governs
+# this: our own design).
+version = "0.0.12"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -32,6 +33,11 @@ include = ["src/**", "README.md", "LICENSE"]
 # recorder, such as one that spools it for an ATNA Audit Record Repository.
 balp = ["dep:ihe-iti", "dep:url"]
 
+# docs.rs documents the BALP rendering too (no specification governs this:
+# our own design).
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 async-trait.workspace = true
 ihe-iti = { workspace = true, optional = true, features = ["balp"] }
@@ -42,10 +48,13 @@ thiserror.workspace = true
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+# The vendored HL7 Europe package the priority category codes are held to.
+flate2.workspace = true
 # The property that no access the map cannot classify exactly reads as of no
 # category.
 proptest.workspace = true
 serde_json.workspace = true
+tar.workspace = true
 tokio = { workspace = true, features = ["rt", "macros"] }
 toml.workspace = true
 

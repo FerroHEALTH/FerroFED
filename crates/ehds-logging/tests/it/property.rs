@@ -9,7 +9,7 @@
 use std::collections::BTreeSet;
 
 use ehds_logging::category::Category;
-use ehds_logging::classify::{Basis, Classification, Evidence, Queried, RootObject};
+use ehds_logging::classify::{Basis, Classification, Evidence, Queried, RootObject, Unreadable};
 use proptest::prelude::*;
 
 use super::support::{ADMIN, LAB_ARCHETYPE, LAB_REPORT, SUMMARY_ARCHETYPE, map};
@@ -136,7 +136,7 @@ fn evidence_that_shows_nothing_is_unclassified() {
     for evidence in [
         Evidence::default(),
         Evidence::reached(Basis::Written, Vec::new()),
-        Evidence::unreadable(""),
+        Evidence::unreadable(Unreadable::Body),
     ] {
         let classified = map().classify(&evidence);
         assert!(classified.unclassified().is_some(), "{evidence:?}");

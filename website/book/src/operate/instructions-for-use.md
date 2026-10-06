@@ -119,8 +119,8 @@ high = ["urn:example:loa:high"]
 destination = "repository"     # the access records of Annex II 3.2
 
 [access_log.templates]
-"Example Lab Report.v1" = ["medical-test-result"]
-"Example Discharge.v1" = ["discharge-report"]
+"Example Lab Report.v1" = ["Laboratory-Reports"]
+"Example Discharge.v1" = ["Discharge-Reports"]
 
 [access_log.retention]
 years = 3                      # Art 9(2): at least three years from each access

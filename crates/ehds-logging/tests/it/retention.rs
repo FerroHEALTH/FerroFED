@@ -15,7 +15,7 @@ use jiff::Timestamp;
 use jiff::civil::date;
 use proptest::prelude::*;
 
-use super::support::{DISCHARGE, LAB_REPORT, UNMAPPED, map};
+use super::support::{DISCHARGE, LAB_REPORT, NATIONAL, UNMAPPED, map};
 
 /// The classification of an access that returned compositions of each of
 /// `templates`.
@@ -74,9 +74,9 @@ fn a_period_under_three_years_is_refused_wherever_it_is_declared() {
         })
     );
     assert_eq!(
-        policy(3, &[("medical-test-result", 1)], &[]),
+        policy(3, &[("Laboratory-Reports", 1)], &[]),
         Err(RetentionError::UnderFloor {
-            key: "categories.medical-test-result".to_owned(),
+            key: "categories.Laboratory-Reports".to_owned(),
             years: 1,
         })
     );
@@ -99,7 +99,7 @@ fn a_category_the_map_does_not_declare_is_refused() {
             code: "nl-undeclared".to_owned(),
         })
     );
-    let national = policy(3, &[("nl-example", 10)], &[]).expect("a declared national category");
+    let national = policy(3, &[(NATIONAL, 10)], &[]).expect("a declared national category");
     assert_eq!(national.longest().get(), 10);
 }
 
@@ -116,7 +116,7 @@ fn an_empty_or_malformed_origin_is_refused() {
 fn a_record_is_kept_for_the_longest_its_categories_and_origins_call_for() {
     let policy = policy(
         5,
-        &[("medical-test-result", 10), ("discharge-report", 20)],
+        &[("Laboratory-Reports", 10), ("Discharge-Reports", 20)],
         &[("node-a", 15), ("node-b", 30)],
     )
     .expect("a policy");
@@ -134,7 +134,7 @@ fn a_record_is_kept_for_the_longest_its_categories_and_origins_call_for() {
 
 #[test]
 fn a_period_no_longer_than_the_default_leaves_the_default_as_ground() {
-    let policy = policy(10, &[("medical-test-result", 10)], &[("node-a", 4)]).expect("a policy");
+    let policy = policy(10, &[("Laboratory-Reports", 10)], &[("node-a", 4)]).expect("a policy");
     let retention = policy.retain(
         at("2027-03-05T10:00:00Z"),
         &returned(&[LAB_REPORT]),
@@ -148,7 +148,7 @@ fn a_period_no_longer_than_the_default_leaves_the_default_as_ground() {
 /// anywhere, for a category or an origin the access did not reach too.
 #[test]
 fn an_unclassified_access_takes_the_longest_period_declared() {
-    let policy = policy(5, &[("medical-test-result", 10)], &[("node-b", 25)]).expect("a policy");
+    let policy = policy(5, &[("Laboratory-Reports", 10)], &[("node-b", 25)]).expect("a policy");
     assert_eq!(policy.longest().get(), 25);
     let mixed = policy.retain(
         at("2027-03-05T10:00:00Z"),
@@ -177,7 +177,7 @@ fn a_ground_is_written_by_its_code() {
     assert_eq!(Ground::Default.code(), "default");
     assert_eq!(
         Ground::Category(Category::DischargeReport).code(),
-        "category:discharge-report"
+        "category:http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs|Discharge-Reports"
     );
     assert_eq!(Ground::Origin("node-a".to_owned()).code(), "origin:node-a");
 }
@@ -198,7 +198,7 @@ proptest! {
     ) {
         let policy = policy(
             default,
-            &[("medical-test-result", lab), ("discharge-report", discharge)],
+            &[("Laboratory-Reports", lab), ("Discharge-Reports", discharge)],
             &[("node-a", node_a)],
         )
         .expect("a policy");

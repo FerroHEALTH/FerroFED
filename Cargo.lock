@@ -1246,15 +1246,17 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "async-trait",
+ "flate2",
  "ihe-iti",
  "jiff",
  "proptest",
  "secrecy",
  "serde",
  "serde_json",
+ "tar",
  "thiserror 2.0.21",
  "tokio",
  "toml",

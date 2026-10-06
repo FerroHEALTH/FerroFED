@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ehds_logging::category::Category;
-use ehds_logging::classify::{Basis, Evidence, Queried, RootObject, Unclassified};
+use ehds_logging::classify::{Basis, Evidence, Queried, RootObject, Unclassified, Unreadable};
 
 use super::support::{
     ADMIN, DISCHARGE, LAB_ARCHETYPE, LAB_REPORT, SUMMARY_ARCHETYPE, UNMAPPED, map,
@@ -40,7 +40,7 @@ fn a_returned_object_takes_its_templates_categories() {
             Some("openEHR-EHR-COMPOSITION.report.v1"),
         )],
     ));
-    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(categories(classified.categories()), ["Laboratory-Reports"]);
     assert_eq!(
         classified.categories().get(&Category::MedicalTestResult),
         Some(&BTreeSet::from([Basis::Returned]))
@@ -60,7 +60,7 @@ fn the_template_key_wins_over_the_archetype_key() {
         Basis::Returned,
         vec![object(Some(DISCHARGE), Some(LAB_ARCHETYPE))],
     ));
-    assert_eq!(categories(classified.categories()), ["discharge-report"]);
+    assert_eq!(categories(classified.categories()), ["Discharge-Reports"]);
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn an_unmapped_object_is_unclassified_with_its_ids_and_never_dropped() {
     ));
     assert_eq!(
         categories(classified.categories()),
-        ["medical-test-result"],
+        ["Laboratory-Reports"],
         "the mapped part keeps its category"
     );
     assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
@@ -120,9 +120,9 @@ fn an_access_spanning_categories_records_them_all() {
     assert_eq!(
         categories(classified.categories()),
         [
-            "patient-summary",
-            "medical-test-result",
-            "discharge-report",
+            "Patient-Summaries",
+            "Laboratory-Reports",
+            "Discharge-Reports",
             "nl-example"
         ]
     );
@@ -153,7 +153,7 @@ fn a_query_naming_an_unmapped_id_beside_a_mapped_one_is_unclassified() {
     let classified = map().classify(&Evidence::reached(Basis::Returned, Vec::new()).queried(
         queried(&[], &[LAB_ARCHETYPE, "openEHR-EHR-COMPOSITION.unknown.v1"]),
     ));
-    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(categories(classified.categories()), ["Laboratory-Reports"]);
     assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
     assert_eq!(
         classified.unmapped(),
@@ -189,7 +189,7 @@ fn a_queried_template_wins_over_a_queried_archetype() {
         &Evidence::reached(Basis::Returned, Vec::new())
             .queried(queried(&[DISCHARGE], &[LAB_ARCHETYPE])),
     );
-    assert_eq!(categories(classified.categories()), ["discharge-report"]);
+    assert_eq!(categories(classified.categories()), ["Discharge-Reports"]);
 }
 
 #[test]
@@ -256,7 +256,7 @@ fn none_never_erases_a_category_in_a_mixed_result() {
         Basis::Returned,
         vec![object(Some(ADMIN), None), object(Some(LAB_REPORT), None)],
     ));
-    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(categories(classified.categories()), ["Laboratory-Reports"]);
     assert!(!classified.is_no_category());
 }
 
@@ -300,7 +300,7 @@ fn a_query_whose_classes_are_not_all_bound_is_unclassified_with_what_mapped() {
             ..queried(&[], &[LAB_ARCHETYPE])
         },
     ));
-    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(categories(classified.categories()), ["Laboratory-Reports"]);
     assert_eq!(classified.unclassified(), Some(&Unclassified::Unbound));
 }
 
@@ -313,11 +313,36 @@ fn a_resource_of_no_category_is_classified_by_its_kind() {
 
 #[test]
 fn data_that_could_not_be_read_are_unclassified_with_the_reason() {
-    let classified = map().classify(&Evidence::unreadable("simplified-format"));
+    let classified = map().classify(&Evidence::unreadable(Unreadable::Format));
     assert_eq!(
         classified.unclassified(),
-        Some(&Unclassified::Unreadable("simplified-format".to_owned()))
+        Some(&Unclassified::Unreadable(Unreadable::Format))
     );
+}
+
+#[test]
+fn each_unreadable_reason_is_written_by_its_code() {
+    let written: Vec<&str> = [
+        Unreadable::Operation,
+        Unreadable::Format,
+        Unreadable::Body,
+        Unreadable::NoObject,
+    ]
+    .into_iter()
+    .map(|why| Unclassified::Unreadable(why).code())
+    .collect();
+    assert_eq!(
+        written,
+        [
+            "operation-not-read",
+            "format-not-read",
+            "body-not-read",
+            "no-object-returned"
+        ]
+    );
+    assert_eq!(Unclassified::Unmapped.code(), "unmapped");
+    assert_eq!(Unclassified::NamedNothing.code(), "named-nothing");
+    assert_eq!(Unclassified::Unbound.code(), "unbound");
 }
 
 #[test]
@@ -340,7 +365,7 @@ fn a_request_of_one_category_by_construction_holds_it_beside_its_data() {
     );
     assert_eq!(
         categories(classified.categories()),
-        ["patient-summary", "medical-test-result"]
+        ["Patient-Summaries", "Laboratory-Reports"]
     );
     assert_eq!(
         classified.categories().get(&Category::PatientSummary),
@@ -355,7 +380,7 @@ fn a_category_by_construction_never_hides_an_unmapped_object() {
         &Evidence::reached(Basis::Returned, vec![object(Some(UNMAPPED), None)])
             .constructed(Category::PatientSummary),
     );
-    assert_eq!(categories(classified.categories()), ["patient-summary"]);
+    assert_eq!(categories(classified.categories()), ["Patient-Summaries"]);
     assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
     assert_eq!(classified.unmapped(), &set(&[UNMAPPED]));
 }

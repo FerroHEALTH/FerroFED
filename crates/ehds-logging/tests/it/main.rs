@@ -11,6 +11,8 @@
 #[cfg(feature = "balp")]
 mod balp;
 #[cfg(test)]
+mod category;
+#[cfg(test)]
 mod classify;
 #[cfg(test)]
 mod emergency;
@@ -37,7 +39,10 @@ mod support {
     pub(crate) const UNMAPPED: &str = "Example Unmapped.v1";
     /// An archetype mapped to medical test results.
     pub(crate) const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
-    /// An archetype mapped to patient summaries.
+    /// A synthetic national category, in a system under the example domain.
+    pub(crate) const NATIONAL: &str =
+        "https://example.org/fhir/CodeSystem/national-category|nl-example";
+    /// An archetype mapped to patient summaries and the national category.
     pub(crate) const SUMMARY_ARCHETYPE: &str = "openEHR-EHR-EVALUATION.problem_diagnosis.v1";
 
     fn codes(codes: &[&str]) -> Declared {
@@ -47,18 +52,18 @@ mod support {
     /// The map the tests classify with.
     pub(crate) fn map() -> CategoryMap {
         let templates = BTreeMap::from([
-            (LAB_REPORT.to_owned(), codes(&["medical-test-result"])),
-            (DISCHARGE.to_owned(), codes(&["discharge-report"])),
+            (LAB_REPORT.to_owned(), codes(&["Laboratory-Reports"])),
+            (DISCHARGE.to_owned(), codes(&["Discharge-Reports"])),
             (ADMIN.to_owned(), Declared::Word("none".to_owned())),
         ]);
         let archetypes = BTreeMap::from([
-            (LAB_ARCHETYPE.to_owned(), codes(&["medical-test-result"])),
+            (LAB_ARCHETYPE.to_owned(), codes(&["Laboratory-Reports"])),
             (
                 SUMMARY_ARCHETYPE.to_owned(),
-                codes(&["patient-summary", "nl-example"]),
+                codes(&["Patient-Summaries", NATIONAL]),
             ),
         ]);
-        CategoryMap::declare(&["nl-example".to_owned()], &templates, &archetypes)
+        CategoryMap::declare(&[NATIONAL.to_owned()], &templates, &archetypes)
             .expect("the test map")
             .with_digest("sha256:test".to_owned())
     }

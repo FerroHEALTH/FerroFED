@@ -29,6 +29,10 @@ docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
 docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
 docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
 docs/specs/eu-hl7-extensions|HL7 Europe Extensions
+docs/specs/eu-hl7-health-data-api|HL7 Europe EU Health Data API
+docs/specs/eu-hl7-imaging|HL7 Europe Imaging Report
+docs/specs/eu-hl7-hdr|HL7 Europe Hospital Discharge Report
+docs/specs/ehdsi-mvc|MyHealth@EU Master Value Sets Catalogue
 docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense
 docs/specs/openehr-ckm-ips|openEHR CKM International Patient Summary template

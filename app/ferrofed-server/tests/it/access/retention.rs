@@ -28,8 +28,8 @@ use jiff::tz::Offset;
 use jiff::{Span, Timestamp};
 
 use super::{
-    DISCHARGE, LAB_REPORT, RETENTION, TestResult, UNMAPPED, accesses, composition, details,
-    node_with_rows, settings,
+    DISCHARGE, DISCHARGE_CATEGORY, LAB_REPORT, RETENTION, TestResult, UNMAPPED, accesses,
+    composition, details, node_with_rows, settings,
 };
 use crate::facade::{NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::SETTLE;
@@ -134,7 +134,7 @@ async fn a_category_kept_longer_sets_the_period() -> TestResult {
     )
     .await?;
     assert_eq!("20", years);
-    assert_eq!("category:discharge-report", ground);
+    assert_eq!(format!("category:{DISCHARGE_CATEGORY}"), ground);
     assert_eq!(deletable(accessed, 20)?, ends);
     Ok(())
 }
@@ -167,8 +167,8 @@ fn a_retention_under_three_years_is_refused() {
     for (table, key) in [
         ("[access_log.retention]\nyears = 2\n", "years"),
         (
-            "[access_log.retention.categories]\n\"medical-test-result\" = 1\n",
-            "categories.medical-test-result",
+            "[access_log.retention.categories]\n\"Laboratory-Reports\" = 1\n",
+            "categories.Laboratory-Reports",
         ),
         (
             "[access_log.retention.origins]\n\"node-a-pub\" = 2\n",

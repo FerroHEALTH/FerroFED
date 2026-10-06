@@ -104,7 +104,11 @@ HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
 HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
 HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
 HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
-IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version the pinned HL7 Europe guides depend on"
+IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version the pinned HL7 Europe guides depend on
+HL7 Europe EU Health Data API	hl7.fhir.eu.health-data-api	-
+HL7 Europe Imaging Report	hl7.fhir.eu.imaging	-
+HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-
+MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	-"
 
 # One "matrix label<TAB>URL" record per line: a document IHE publishes at a
 # URL that names no revision, pinned by the sha256 of its bytes. Bytes that
