@@ -395,11 +395,12 @@ with no marked test is not listed.
 
 ## CP-30
 
-32 tests.
+34 tests.
 
 - `app/ferrofed-engine/tests/it/fanout/all_or_nothing.rs`: `a_time_out_and_a_node_error_together_are_a_504`, `an_unreachable_node_is_offline_and_a_504`, `one_node_error_fails_the_query_424_with_the_nodes_error`, `one_node_timing_out_fails_the_query_504_with_the_envelope`
 - `app/ferrofed-engine/tests/it/fanout/best_effort.rs`: `a_consent_denied_node_is_a_200_with_the_rest_in_either_mode`, `a_node_error_under_best_effort_is_a_200_naming_the_nodes_error`, `a_time_out_under_best_effort_is_a_200_with_the_answering_rows`, `an_offline_node_under_best_effort_is_a_200_reporting_it`, `every_node_not_resolved_is_a_200_with_no_rows_in_either_mode`, `members_out_of_scope_never_clear_complete_in_either_mode`
 - `app/ferrofed-engine/tests/it/fanout/consent.rs`: `a_403_carrying_a_listed_code_is_consent_denied_and_fails_nothing`
+- `app/ferrofed-engine/tests/it/oversized.rs`: `an_answer_past_the_bound_is_node_error_and_fails_the_query_424`
 - `app/ferrofed-server/tests/it/completeness.rs`: `all_stated_explicitly_is_accepted_and_fails_closed`, `partial_where_best_effort_is_not_offered_is_refused`, `partial_where_offered_is_a_200_with_the_answering_nodes_rows`
 - `app/ferrofed-server/tests/it/consent.rs`: `a_member_the_prefilter_leaves_in_is_asked_and_its_refusal_still_reported`, `a_node_the_localizer_names_still_refuses_and_the_query_succeeds`, `with_no_consent_service_a_node_refusal_is_reported_and_the_query_succeeds`
 - `app/ferrofed-server/tests/it/e2e/track3.rs` (e2e): `an_undirected_query_asks_only_the_members_the_localizer_names`
@@ -407,6 +408,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `a_member_the_consent_service_admits_still_refuses_and_the_query_succeeds`, `with_no_consent_service_a_node_refusal_is_reported_and_the_query_succeeds`
 - `app/ferrofed-server/tests/it/errors.rs`: `a_424_and_a_504_echo_the_clients_q`, `a_node_error_under_all_or_nothing_is_a_424_carrying_the_envelope`, `a_node_not_found_inside_a_fan_out_is_a_node_error_and_a_424`, `a_node_timing_out_under_all_or_nothing_is_a_504_carrying_the_envelope`, `a_node_timing_out_under_best_effort_is_a_200_reporting_it`, `an_unreachable_node_under_all_or_nothing_is_a_504_carrying_the_envelope`
 - `app/ferrofed-server/tests/it/facade/query.rs`: `a_node_error_carries_the_nodes_message_with_the_subject_masked`
+- `app/ferrofed-server/tests/it/overload.rs`: `a_member_answer_past_the_read_bound_is_node_error_and_fails_the_query_424`
 
 ## CP-31
 

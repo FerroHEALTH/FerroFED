@@ -276,9 +276,7 @@ pub struct Federation {
     /// still waiting then is `time-out` with nothing sent (§11.5, N38). Zero is
     /// refused.
     pub max_in_flight_per_node: u32,
-    /// The most bytes the gateway reads of one answer from a member or its
-    /// token endpoint. A longer answer is dropped unread and the member is
-    /// `node-error` (§11.1). Zero is refused.
+    /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
     pub max_node_answer_bytes: usize,
 }
 

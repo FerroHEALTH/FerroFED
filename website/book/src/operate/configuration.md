@@ -118,7 +118,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
-| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node` | the overload limits | [Overload protection](overload.md) |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |

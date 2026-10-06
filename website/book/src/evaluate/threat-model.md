@@ -108,6 +108,7 @@ version; restrict both at the proxy if your network should not learn them.
 | T | two nodes claim one `ehr_id`, or a node claims another's `creating_system_id` | P4 | a follow-up on a collided `ehr_id` is `409` and an integrity incident; a conflicting learned route is withdrawn (§12.5.2, §12b.2, N21, N42) | `app/ferrofed-server/tests/it/ehr_id_collision.rs`; `FerroFEDIntegrityIncident` |
 | E | a node releases more than the caller may see | P4 | each node gets the caller's scopes and purposes of use and decides what to release (§13.2, N26, N27) | the node's own enforcement |
 | D | a slow or failing node holds the gateway | P4 | per-node and overall budgets; at most `max_in_flight_per_node` requests to one member at once; a silent member is named in the answer and fails it under the all-or-nothing default (§11) | `federation.per_node_timeout_ms`, `overall_timeout_ms`, `max_in_flight_per_node`; `app/ferrofed-server/tests/it/timeouts.rs`, `overload.rs` |
+| D | a node answers without end, or with a body too large to hold, so the gateway buffers it on every request | P4 | the gateway reads at most `max_node_answer_bytes` of one answer from a node or its token endpoint and drops the rest unread; the member is `node-error`, named in the answer, and fails it `424` under the all-or-nothing default (§11.1, §11.4) | `federation.max_node_answer_bytes`; `app/ferrofed-server/tests/it/overload.rs`, `app/ferrofed-server/src/node_transport.rs` |
 
 ## B3: gateway to the identity services
 
