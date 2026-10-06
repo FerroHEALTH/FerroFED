@@ -243,7 +243,11 @@ them:
 - Every caller is authenticated at the gateway
   ([client authentication](../operate/authentication.md)). Annex II, point
   3.1, asks for "reliable mechanisms for the identification and
-  authentication of health professionals".
+  authentication of health professionals". For patient data the gateway
+  requires a natural person behind the token, or a client acting for the
+  professional the token names, and the assurance level the deployment sets
+  per issuer
+  ([Professionals and assurance](../operate/authentication.md#professionals-and-assurance)).
 - Every access to patient data the gateway intermediates is recorded with
   the verified caller, the patient, each endpoint asked and the categories
   of the data, in the record Annex II, point 3.2, sets for the European

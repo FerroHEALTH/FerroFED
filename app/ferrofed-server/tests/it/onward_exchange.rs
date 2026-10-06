@@ -323,6 +323,8 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
             operator_scope: None,
             patient: None,
             requester: None,
+            assurance: None,
+            client_tokens_act_for_professional: false,
         }],
         ..AuthSettings::default()
     };

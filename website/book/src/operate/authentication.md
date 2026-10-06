@@ -89,6 +89,10 @@ demographic_clients = []
 | `auth.issuer[].requester.role` | none | The claim carrying the professional's UZI role code. |
 | `auth.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
 | `auth.issuer[].requester.organisation_type` | none | The claim carrying that organisation's care provider type. |
+| `auth.issuer[].client_tokens_act_for_professional` | `false` | Whether this issuer's client tokens act for the professional they name, so one that names a professional reaches patient data ([Professionals and assurance](#professionals-and-assurance)). |
+| `auth.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
+| `auth.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[auth.issuer.assurance]` is set. |
+| `auth.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
 | `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
 
 An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
@@ -313,6 +317,90 @@ organisation the caller acts for is read from
 `extensions.ihe_iua.subject_organization_id`. The IUA `person_id` claim, a
 patient identifier, is never read.
 
+## Professionals and assurance
+
+Regulation (EU) 2025/327 asks an EHR system "designed to be used by health
+professionals" to "provide reliable mechanisms for the identification and
+authentication of health professionals" (Annex II 3.1). Its Art 12 admits to
+a health professional access service only professionals holding electronic
+identification means recognised under Regulation (EU) No 910/2014 or
+compliant with the Art 36 common specifications. For a cross-border exchange,
+Implementing Regulation (EU) 2026/2099 Art 6(3) has the entity a Member State
+lists authenticate the professional at assurance level "substantial", and at
+level "high" from 26 March 2032. The gateway verifies the token; your issuer
+authenticates the person. Two rules connect the two, and both hold on every
+request that reaches patient data: a query, the EHR API and the DEMOGRAPHIC
+API. A definition request, `OPTIONS` and the operator surface reach none, so
+neither rule applies to them.
+
+### A natural person, or a client acting for a named professional
+
+A token names no natural person when its `sub` is its `client_id`, as IHE
+IUA has an issuer write it for a client without a user ("If known, unique
+identifier of the user; the client\_id otherwise", ITI TF-2 3.71.4.2.2.1),
+or when only `system/` scopes cover the operation, which SMART on openEHR
+grants "to backend applications acting without a user context" (master08).
+Such a token is refused patient data with `401 natural-person-required`.
+
+A client application that acts for a professional, such as a system that
+signs in its user by a means of its own, reaches patient data when you
+declare it for its issuer and its token names the professional:
+
+```toml
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+jwks_uri = "https://idp.example.org/jwks"
+backend_clients = ["example-ward-system"]
+client_tokens_act_for_professional = true
+```
+
+The token names the professional in the IUA extension,
+`extensions.ihe_iua.national_provider_identifier`, or in the professional
+claim `[auth.issuer.requester]` reads. A client token of a declared issuer
+that names neither is still refused: it could tell neither the node nor the
+access record who acted, so no setting admits it.
+
+### The assurance level
+
+You declare per issuer which claim carries the assurance of its tokens, which
+values stand for which level, and the least level patient data needs:
+
+```toml
+[auth.issuer.assurance]
+claim = "acr"
+minimum = "substantial"
+substantial = ["urn:example:loa:substantial"]
+high = ["urn:example:loa:high"]
+```
+
+The levels are the three of Regulation (EU) No 910/2014 Art 8(2): `low`,
+`substantial` and `high`. The claim defaults to `acr`, which an access token
+may carry (RFC 9068 §2.2.1); the gateway reads it from the token, or from
+the introspection answer, as one string. No specification the gateway binds
+says which `acr` values stand for which level, so you list the values your
+issuer writes. A token that carries no value, a value listed at no level, or
+a level below `minimum` is refused patient data with
+`401 authentication-assurance-insufficient`, its challenge
+`error="insufficient_user_authentication"` (RFC 9470 §3), so a client knows to
+authenticate its user again. A client token of a declared issuer is held to
+the level as well.
+
+An issuer without `[auth.issuer.assurance]` has no level read or required,
+and `config check` names each such issuer in a note. Set it for every issuer
+whose tokens reach patient data. Where the gateway serves a cross-border
+exchange, set `minimum = "substantial"`, and `"high"` from 26 March 2032. A
+national contact point's tokens carry the level it asserts for a
+professional another Member State authenticated: the gateway cannot check
+that Member State's means, and Implementing Regulation (EU) 2026/2099
+Art 6(2) gives the check to the requesting Member State's entity. The least
+level applies to such an issuer as to any other.
+
+Who acts, the professional's identification and the level reached travel to
+each node in the caller's conveyance
+([below](#what-a-node-is-told-about-the-caller)), and in nothing else the
+gateway sends. Which claims carry them and the refusal are FerroFED's own
+design; the texts above set the obligation and the levels.
+
 ## The edge mode
 
 A deployment that authenticates its clients at a proxy configures the edge
@@ -355,6 +443,8 @@ travelled.
 | `401` | `unauthenticated` | no token, or one the gateway does not accept; the `WWW-Authenticate` challenge names the reason in `error_description` |
 | `403` | `scope-insufficient` | no granted scope covers the operation, or the client is not admitted to the DEMOGRAPHIC API |
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
+| `401` | `natural-person-required` | the request reaches patient data and the token names no natural person, and its issuer does not declare client tokens acting for the professional the token names |
+| `401` | `authentication-assurance-insufficient` | the request reaches patient data and the token states no assurance at the least level its issuer requires |
 | `403` | `operation-refused` | the ADMIN API, refused to every caller |
 | `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
 | `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to, or a patient grant addresses the DEMOGRAPHIC API |
@@ -415,6 +505,10 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `purpose_of_use` | each purpose of use the token declares, as `{"system", "code"}` (IHE IUA, HL7 v3 `PurposeOfUse`) |
 | `scope` | the caller's scopes as granted; under a [patient grant](#patient-grants), only the `patient/` scopes that cover the operation |
 | `ehrId` | under a [patient grant](#patient-grants) only: the patient's own `ehr_id` at this node (SMART on openEHR master04 §Capabilities) |
+| `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application ([Professionals and assurance](#professionals-and-assurance)) |
+| `subject_name` | the professional's name, when the caller's token states `extensions.ihe_iua.subject_name` (IHE IUA) |
+| `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |
+| `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[auth.issuer.assurance]` and the token states a value it lists |
 
 The token never carries the caller's own token, its `client_id`, or a
 patient identifier: an IUA `person_id` is never read (N33). The outbound

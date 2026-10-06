@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The production guide's Keycloak recipe, read from the book page offline:
-//! the commands, the three protocol mapper files they read and the gateway's
+//! the commands, the four protocol mapper files they read and the gateway's
 //! `[auth]` table, which the gated test applies to a pinned Keycloak.
 
 use std::error::Error;
@@ -23,7 +23,12 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
         .map(|file| file.name.as_str())
         .collect();
     assert_eq!(
-        vec!["audience.json", "purpose-of-use.json", "client-id.json"],
+        vec![
+            "audience.json",
+            "purpose-of-use.json",
+            "client-id.json",
+            "professional.json"
+        ],
         names
     );
     for file in recipe.files() {
@@ -38,6 +43,15 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
     );
     let auth = recipe.auth_against("http://127.0.0.1:8080");
     assert!(auth.contains("[[auth.issuer]]"), "{auth}");
+    assert!(
+        auth.contains("client_tokens_act_for_professional = true")
+            && auth.contains("[auth.issuer.assurance]"),
+        "the service acts for a named professional, at a declared level: {auth}"
+    );
+    assert!(
+        commands.contains("acr.loa.map"),
+        "the realm names its levels in acr: {commands}"
+    );
     assert!(!auth.contains(PAGE_SERVER), "{auth}");
     Ok(())
 }

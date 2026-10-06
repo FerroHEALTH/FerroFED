@@ -9,11 +9,13 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
+use ferrofed_engine::conveyance::AssuranceLevel;
 use ferrofed_registry::secret::Secret;
 use ferrofed_server::auth::refusal::Refusal;
+use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_server::config::auth::{AuthSettings, Introspection, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::ACT_REASON;
 use ferrofed_testkit::mock::Server;
@@ -51,6 +53,8 @@ fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
             operator_scope: None,
             patient: None,
             requester: None,
+            assurance: None,
+            client_tokens_act_for_professional: false,
         }],
         ..AuthSettings::default()
     })
@@ -144,4 +148,41 @@ async fn an_endpoint_answering_an_error_is_503() -> TestResult {
 async fn an_unreachable_endpoint_is_503() -> TestResult {
     let gateway = Gateway::with(introspecting(unreachable::BASE)?).await?;
     assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Unavailable).await
+}
+
+/// Regulation (EU) 2025/327 Annex II 3.1: the assurance claim the issuer's
+/// entry names is read from the introspection answer as from a token, and a
+/// level below the least one is refused.
+#[tokio::test]
+async fn an_answer_is_held_to_the_issuers_least_level() -> TestResult {
+    let stating = |acr: &str| {
+        answer(true, AUDIENCE, in_an_hour()).replacen(
+            r#""active":true,"#,
+            &format!(r#""active":true,"acr":"{acr}","#),
+            1,
+        )
+    };
+    let requiring = |endpoint: &str| -> Result<AuthSettings, Box<dyn Error>> {
+        let mut auth = introspecting(endpoint)?;
+        for issuer in &mut auth.issuers {
+            issuer.assurance = Some(Assurance {
+                claim: String::from("acr"),
+                minimum: AssuranceLevel::High,
+                values: BTreeMap::from([
+                    (
+                        String::from("urn:example:loa:substantial"),
+                        AssuranceLevel::Substantial,
+                    ),
+                    (String::from("urn:example:loa:high"), AssuranceLevel::High),
+                ]),
+            });
+        }
+        Ok(auth)
+    };
+    let substantial = endpoint(200, stating("urn:example:loa:substantial")).await;
+    let gateway = Gateway::with(requiring(&substantial.uri())?).await?;
+    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Assurance).await?;
+    let high = endpoint(200, stating("urn:example:loa:high")).await;
+    let gateway = Gateway::with(requiring(&high.uri())?).await?;
+    assert_admitted(&gateway, bearing(query()?, OPAQUE)?).await
 }

@@ -79,6 +79,8 @@ async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
             operator_scope: None,
             patient: None,
             requester: None,
+            assurance: None,
+            client_tokens_act_for_professional: false,
         }],
         ..AuthSettings::default()
     });

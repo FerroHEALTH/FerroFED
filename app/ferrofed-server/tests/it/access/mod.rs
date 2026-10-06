@@ -15,6 +15,7 @@
 
 mod gate;
 mod limits;
+mod professional;
 mod query;
 mod routed;
 

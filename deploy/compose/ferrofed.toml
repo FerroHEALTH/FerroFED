@@ -93,6 +93,9 @@ jwks_uri = "https://idp.example.org/jwks"
 # backend_clients = ["example-reporting-service"]
 # The client_ids admitted to the DEMOGRAPHIC API.
 # demographic_clients = []
+# Whether its client tokens, which name no natural person, act for the
+# professional they name, and so reach patient data.
+# client_tokens_act_for_professional = false
 #
 # Introspection instead of jwks_uri:
 # introspection_endpoint = "https://idp.example.org/introspect"
@@ -106,6 +109,16 @@ jwks_uri = "https://idp.example.org/jwks"
 # [auth.issuer.patient]
 # endpoint = "node-a-query"
 # ehr_id_system = "urn:oid:2.999.9.1"
+#
+# The claim and the values that carry the authentication assurance of its
+# tokens, and the least level patient data needs; without it, no level is
+# read or required, and config check notes it.
+# https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
+# [auth.issuer.assurance]
+# claim = "acr"
+# minimum = "substantial"
+# substantial = ["urn:example:loa:substantial"]
+# high = ["urn:example:loa:high"]
 
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html

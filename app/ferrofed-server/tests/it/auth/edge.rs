@@ -43,6 +43,8 @@ fn at_the_edge(edge: &Issuer) -> AuthSettings {
             operator_scope: None,
             patient: None,
             requester: None,
+            assurance: None,
+            client_tokens_act_for_professional: false,
         }],
         ..AuthSettings::default()
     }

@@ -80,6 +80,13 @@ page: our own design.
   `system/aql-*`, `demographic_clients` for the DEMOGRAPHIC API, and an
   `operator_scope` only on the issuer your operators sign in at
   ([Client authentication](authentication.md)).
+- [ ] **Require an assurance level per issuer.** Set
+  `[auth.issuer.assurance]` on every issuer whose tokens reach patient data,
+  with the values it writes for each level and the least level you accept;
+  `config check` names each issuer without one. Declare
+  `client_tokens_act_for_professional` only for an issuer whose client
+  tokens name the professional they act for
+  ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 - [ ] **Keep `auth.purpose_of_use.required = true`**, its default, unless
   your §13.4 decisions say why not
   ([Purpose of use](authentication.md#purpose-of-use)).
