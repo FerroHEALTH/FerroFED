@@ -85,6 +85,7 @@ const BROKEN_DEV_ROWS: [&str; 3] = [
 /// registry document is only named, since resolving never reads it.
 fn federating(request_ms: u64, overall_ms: u64) -> String {
     format!(
-        "[server]\nrequest_timeout_ms = {request_ms}\n\n[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[federation]\nper_node_timeout_ms = 1000\noverall_timeout_ms = {overall_ms}\n"
+        "[server]\nrequest_timeout_ms = {request_ms}\n\n[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[federation]\nper_node_timeout_ms = 1000\noverall_timeout_ms = {overall_ms}\n{}",
+        crate::support::audit_toml()
     )
 }

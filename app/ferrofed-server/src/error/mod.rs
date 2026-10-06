@@ -225,6 +225,9 @@ pub enum Code {
     /// The verified caller sent more requests than `[server.caller_rate]`
     /// allows; the answer carries `Retry-After` (RFC 6585 §4).
     RateLimited,
+    /// The access the request made could not be recorded in the access log,
+    /// so its answer is withheld (Regulation (EU) 2025/327 Annex II 3.2).
+    AccessUnrecorded,
 }
 
 /// The code of a refused query: the refusal's stable kind

@@ -83,7 +83,9 @@ services:
         read_only: true
         bind:
           create_host_path: true
-      # The ITI-20 audit spool of [xcpd] audit = "repository", with
+      # The ITI-20 audit spools: of [audit] destination = "repository", with
+      # audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool",
+      # and of [xcpd] audit = "repository", with
       # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool":
       # the one directory the gateway writes. Docker fills a new named volume
       # from the image's /var/lib/ferrofed, which is owned by the gateway

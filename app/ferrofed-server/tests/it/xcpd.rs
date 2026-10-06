@@ -515,8 +515,15 @@ async fn each_discovery_writes_an_audit_event_without_the_identifier() -> TestRe
     let audit: Vec<&str> = text
         .lines()
         .filter(|line| line.contains(ferrofed_identity::ihe::audit::AUDIT_TARGET))
+        .filter(|line| line.contains("\"event_type\":\"ITI-55\""))
         .collect();
     assert_eq!(1, audit.len(), "one audit event per exchange: {text}");
+    let accesses = text
+        .lines()
+        .filter(|line| line.contains(ferrofed_identity::ihe::audit::AUDIT_TARGET))
+        .filter(|line| line.contains("IHE.BasicAudit.PatientQuery"))
+        .count();
+    assert_eq!(1, accesses, "Annex II 3.2: one access record: {text}");
     for expected in [
         "\"event_id\":\"110112\"",
         "\"event_type\":\"ITI-55\"",
@@ -627,5 +634,6 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
 fn audit_events(text: &str) -> usize {
     text.lines()
         .filter(|line| line.contains(ferrofed_identity::ihe::audit::AUDIT_TARGET))
+        .filter(|line| line.contains("\"event_type\":\"ITI-55\""))
         .count()
 }

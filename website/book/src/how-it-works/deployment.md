@@ -134,7 +134,9 @@ flowchart TB
   that name patients, so it belongs on an encrypted volume
   ([The audit trail](../operate/audit.md)). Under `[xcpd] audit = "log"`
   or `[audit] destination = "log"` the records go to the log target
-  `ferrofed::audit` instead.
+  `ferrofed::audit` instead, without the patient or the caller; a
+  production gateway with a registry refuses `log` for `[audit]`, because
+  its access records must name both.
 - **The PMIR Patient Identity Registry**, under `[pmir]`, takes the
   gateway's ITI-94 subscription and sends each identity change to the
   gateway's feed route, which drops the resolution bindings the change could

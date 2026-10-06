@@ -5,7 +5,10 @@
 //!
 //! The transactions are PIXm ITI-83 (`[pixm]`), PDQm ITI-78 and ITI-119
 //! (`[pdqm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and PMIR ITI-93 and
-//! ITI-94 (`[pmir]`).
+//! ITI-94 (`[pmir]`). The access log of every federated query, stored-query
+//! execution, routed read and routed write writes its records here too
+//! ([`crate::access`]; Regulation (EU) 2025/327 Annex II 3.2), so a gateway
+//! with a registry needs a destination outside development.
 //!
 //! ```toml
 //! [audit]
@@ -24,7 +27,8 @@
 //! §2:3.91.5.1, PMIR §2:3.93.5.1 and §2:3.94.5.1), which BALP sends over the ATX: FHIR Feed Option of ITI-20
 //! (BALP §1:52.1.1.1): `destination = "repository"` posts each record to
 //! the Audit Record Repository's FHIR base, `log` writes it to the
-//! `ferrofed::audit` log target without a patient identifier, and `off`,
+//! `ferrofed::audit` log target without a patient identifier or a caller,
+//! which outside development a gateway with a registry refuses, and `off`,
 //! which only `profile = "development"` admits, records nothing. The
 //! repository is reached over `https`; plain `http` is admitted under
 //! development alone, through the protected-payload policy of
@@ -54,7 +58,8 @@ use crate::config::secrets::secret;
 pub struct Audit {
     /// Where the records go: `repository`, `log`, or `off`, which only
     /// `profile = "development"` admits. Outside development it has no
-    /// default once a PIXm, PDQm, mCSD or PMIR binding is configured.
+    /// default once a PIXm, PDQm, mCSD or PMIR binding or a registry is
+    /// configured, and a registry needs `repository`.
     pub destination: Option<AuditDestination>,
     /// The Audit Record Repository, under `destination = "repository"`.
     pub repository: Option<FeedRepository>,
@@ -170,7 +175,8 @@ const KEY: &str = "audit";
 /// PIXm, PDQm, mCSD or PMIR binding is configured, for no `[audit.repository]`
 /// under `repository`, and for no `url`, `hostname` or, outside
 /// development, `spool_dir`; [`Error::FeedAuditOff`] for `off` outside
-/// development; [`Error::FeedAuditRepositoryUnused`] for a repository under
+/// development; [`Error::AccessAuditLog`] for `log` outside development
+/// while a registry is configured; [`Error::FeedAuditRepositoryUnused`] for a repository under
 /// another destination; [`Error::Url`] for a `url` that does not parse;
 /// [`Error::Zero`] for a zero bound or timeout; and the errors of a secret or
 /// a file that cannot be read.
@@ -179,10 +185,10 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let table = &config.audit;
     let audited = config.pixm.is_some()
         || config.pdqm.is_some()
-        || config.registry.mcsd.is_some()
+        || config.registry.configured()
         || config.pmir.is_some();
-    // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 have each
-    // actor record its transactions, so no audit at all is a development-only choice.
+    // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 and
+    // Regulation (EU) 2025/327 Annex II 3.2 have every exchange and access recorded.
     let destination = match table.destination {
         Some(AuditDestination::Off) if profile != Profile::Development => {
             return Err(Error::FeedAuditOff {
@@ -209,6 +215,16 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
         (_, Some(_)) => return Err(Error::FeedAuditRepositoryUnused),
         (_, None) => None,
     };
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2 has the access log name who accessed and
+    // whose data, which `log` never names (§5.4, N33), so a registry needs `repository`.
+    if destination == AuditDestination::Log
+        && config.registry.configured()
+        && profile != Profile::Development
+    {
+        return Err(Error::AccessAuditLog {
+            key: format!("{KEY}.destination"),
+        });
+    }
     Ok(AuditSettings {
         destination,
         repository,

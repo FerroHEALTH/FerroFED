@@ -126,20 +126,31 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
     )?;
     let guard = tracing::subscriber::set_default(capture);
     let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
-    let records = repository.wait_for(1, SETTLE).await;
+    let records = repository.wait_for(2, SETTLE).await;
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, records.len(), "one record per ITI-83 exchange");
-    assert_eq!(vec!["ITI-83"], transactions(&records[0])?);
+    assert_eq!(
+        2,
+        records.len(),
+        "one record per ITI-83 exchange, and one of the access (Annex II 3.2)"
+    );
+    let resolutions = resolutions(&records);
+    assert_eq!(1, resolutions.len(), "one record per ITI-83 exchange");
     assert!(
-        records[0].contains(PATIENT) && records[0].contains(NAMESPACE),
+        resolutions[0].contains(PATIENT) && resolutions[0].contains(NAMESPACE),
         "the patient entity names the source identifier toward the repository"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|record| record.contains("IHE.BasicAudit.PatientQuery")),
+        "the access record"
     );
     assert_eq!(Some("up"), await_feed_state(&app, "up").await?.as_deref());
     let exposition = Metrics::default().render()?;
     let samples = parse(&exposition)?;
     assert_eq!(
-        Some("1".to_owned()),
+        Some("2".to_owned()),
         count(&samples, "ferrofed_audit_delivered_total", &[])
     );
     assert!(!exposition.contains(PATIENT), "no identifier in a metric");
@@ -177,11 +188,15 @@ async fn a_repository_that_is_down_holds_the_records_and_the_queries_go_on() -> 
         Some("degraded"),
         await_feed_state(&app, "degraded").await?.as_deref()
     );
-    assert_eq!(1, spooled(&spool)?, "the record is on disk");
-    repository.set_up(true);
-    let records = repository.wait_for(1, SETTLE).await;
     assert_eq!(
-        1,
+        2,
+        spooled(&spool)?,
+        "the ITI-83 record and the access record are on disk"
+    );
+    repository.set_up(true);
+    let records = repository.wait_for(2, SETTLE).await;
+    assert_eq!(
+        2,
         records.len(),
         "the spool drains once the repository is back"
     );
@@ -217,7 +232,11 @@ async fn a_repository_that_never_answers_holds_no_query_and_the_records_are_spoo
         "the forwarder's delivery is in flight, and is never answered"
     );
     answered_by_both(&app, "a delivery in flight holds no query").await?;
-    assert_eq!(2, spooled(&spool)?, "both records are on disk");
+    assert_eq!(
+        4,
+        spooled(&spool)?,
+        "both queries' ITI-83 and access records are on disk"
+    );
     assert_eq!(
         1,
         repository.asked(),
@@ -240,7 +259,9 @@ async fn a_record_the_spool_cannot_take_fails_the_query_closed_and_asks_no_membe
         dir.path(),
         [&a.uri(), &b.uri(), &pix.uri()],
         &repository,
-        "spool_max_events = 1",
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the first query stores its ITI-83
+        // record and its access record, which fill the spool for the second.
+        "spool_max_events = 2",
     )?;
     let (status, _) = call(app.clone(), post(body(&patient_query())?)?).await?;
     assert_eq!(StatusCode::OK, status);
@@ -324,11 +345,21 @@ async fn each_resolution_names_the_verified_caller_as_its_user_agent() -> TestRe
         "",
     )?;
     answered_by_both(&app, "a patient query of the default caller").await?;
-    let records = repository.wait_for(1, SETTLE).await;
-    assert_eq!(1, records.len(), "one record per ITI-83 exchange");
+    let records = repository.wait_for(2, SETTLE).await;
+    let resolutions = resolutions(&records);
+    assert_eq!(1, resolutions.len(), "one record per ITI-83 exchange");
     // NOTE: PIXm §2:3.83.5.2.1 augments the record "following IHE-BALP" with the agent
     // details of the OAuth token, which BALP 1.1.4 §3:5.7.5.4 maps.
-    names_the_default_caller(&records[0])
+    names_the_default_caller(resolutions[0])
+}
+
+/// The ITI-83 records of `records`, beside the access records of the
+/// queries they resolved for (Regulation (EU) 2025/327 Annex II 3.2).
+fn resolutions(records: &[String]) -> Vec<&String> {
+    records
+        .iter()
+        .filter(|record| transactions(record).is_ok_and(|codes| codes == ["ITI-83"]))
+        .collect()
 }
 
 #[tokio::test]
@@ -352,12 +383,15 @@ async fn a_header_naming_another_user_never_reaches_the_record() -> TestResult {
     }
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let records = repository.wait_for(1, SETTLE).await;
-    assert_eq!(1, records.len(), "one record per ITI-83 exchange");
+    let records = repository.wait_for(2, SETTLE).await;
+    let resolutions = resolutions(&records);
+    assert_eq!(1, resolutions.len(), "one record per ITI-83 exchange");
     // NOTE: PIXm §2:3.83.5.2.1 takes the agent details from the OAuth token; a header the
     // gate did not verify names no one.
-    assert!(!records[0].contains("Qz7-forged-user"), "{}", records[0]);
-    names_the_default_caller(&records[0])
+    for record in &records {
+        assert!(!record.contains("Qz7-forged-user"), "{record}");
+    }
+    names_the_default_caller(resolutions[0])
 }
 
 #[tokio::test]

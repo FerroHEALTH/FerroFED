@@ -70,9 +70,19 @@ const HTTP_ENGINES: &[&str] = &[
 /// depend on it either.
 const APPLICATION: &str = "ferrofed-server";
 
-/// The binding crates, and the specification crates they share, that carry no
-/// FerroFED dependency at all; one may depend on another.
-const STANDALONE: &[&str] = &["ihe-iti", "nl-generic-functions", "oauth-server-metadata"];
+/// The binding crates, the specification crates they share, and the EHDS
+/// logging component, that carry no FerroFED dependency at all; one may
+/// depend on another.
+const STANDALONE: &[&str] = &[
+    "ihe-iti",
+    "nl-generic-functions",
+    "oauth-server-metadata",
+    "ehds-logging",
+];
+
+/// The European logging software component, which the server's composition
+/// root alone builds records for (Regulation (EU) 2025/327 Art 2(2)(o)).
+const LOGGING: &str = "ehds-logging";
 
 /// The operator console, a client of the gateway's public surface.
 const VIEWER: &str = "ferrofed-viewer";
@@ -240,6 +250,28 @@ fn the_operator_console_reaches_the_gateway_over_http_alone() -> Result<(), Box<
     assert!(
         breaches.is_empty(),
         "the operator console links a part of the gateway, so it could do what no client can (#275): {breaches:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn no_crate_but_the_server_builds_an_access_record() -> Result<(), Box<dyn Error>> {
+    let mut breaches = Vec::new();
+    for member in members("app")?.iter().chain(&members("crates")?) {
+        if member == APPLICATION || member == LOGGING {
+            continue;
+        }
+        if closure(member)?.contains(LOGGING) {
+            breaches.push(member.clone());
+        }
+    }
+    assert!(
+        breaches.is_empty(),
+        "a crate other than the server reaches the logging component, so it could build or emit a record (#623): {breaches:?}"
     );
     Ok(())
 }

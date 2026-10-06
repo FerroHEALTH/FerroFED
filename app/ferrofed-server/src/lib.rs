@@ -52,6 +52,7 @@ compile_error!(
     "ferrofed-server builds for Unix targets only: it drains on SIGTERM and reloads on SIGHUP through tokio::signal::unix, and every release binary and the container image are Linux"
 );
 
+pub mod access;
 pub mod admin;
 pub mod admission;
 pub mod auth;
@@ -170,7 +171,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// Outside client authentication, a request past
 /// `server.max_concurrent_requests` is answered `503` before anything else
 /// reads it, the health family excepted; inside it, a verified caller past
-/// `[server.caller_rate]` is answered `429` ([`overload`]). The request log
+/// `[server.caller_rate]` is answered `429` ([`overload`]). Inside both, every
+/// access to patient data is stored in the access log, naming the verified
+/// caller, before its answer leaves ([`access`]); a request refused by
+/// either limit writes no record. The request log
 /// records each request in the inbound request metrics of `state`
 /// ([`metrics::inbound`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
@@ -208,7 +212,17 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         Arc::clone(&state),
     ));
     let metrics = Arc::clone(state.metrics());
-    let routes = routes.with_state(Arc::clone(&state));
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
+    // and the caller rate, so a record names the verified caller and a refusal writes none.
+    let routes = routes
+        .with_state(Arc::clone(&state))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(access::Gate::new(
+                Arc::clone(&state),
+                server.base_path.clone(),
+            )),
+            access::record,
+        ));
     let rated = match server.overload.caller_rate {
         Some(rate) => routes.layer(axum::middleware::from_fn_with_state(
             Arc::new(overload::CallerLimit::new(rate, Arc::clone(&metrics))),
@@ -346,6 +360,8 @@ pub async fn serve<L>(
 where
     L: Listener,
     L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
 {
     serve_until(
         listener,
@@ -374,10 +390,15 @@ pub async fn serve_until<L, F>(
 where
     L: Listener,
     L::Addr: std::fmt::Debug,
+    listener::Peer:
+        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
     F: Future<Output = ()> + Send + 'static,
 {
     let signalled = Arc::new(tokio::sync::Notify::new());
     let inner = Arc::clone(&signalled);
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: an access record names the address the
+    // request came from, which the connection alone knows.
+    let app = app.into_make_service_with_connect_info::<listener::Peer>();
     let server = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.await;

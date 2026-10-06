@@ -205,9 +205,11 @@ impl AuditRecorder for LogFeedAudit {
             .iter()
             .map(|subtype| subtype.code)
             .collect();
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.2: a client that sent a request may be
+        // the application of the person who accessed data, so a log line names no client.
         let (direction, peer) = match &exchange.direction {
             Direction::Sent { server } => ("sent", server.who.as_str()),
-            Direction::Received { client, .. } => ("received", client.who.as_str()),
+            Direction::Received { .. } => ("received", ""),
             _ => ("other", ""),
         };
         let (mut patients, mut queries, mut resources) = (0_usize, 0_usize, 0_usize);
