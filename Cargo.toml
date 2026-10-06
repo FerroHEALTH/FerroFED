@@ -48,10 +48,11 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.43" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.27" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.19" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.28" }
+nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.20" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.1" }
+ehds-logging = { path = "crates/ehds-logging", version = "0.0.2" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.1" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -159,13 +160,28 @@ tokio-rustls = { version = "0.26.6", default-features = false }
 # against crates.io on 2026-10-04.
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
-# ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
-# test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. Each binding names the root set it reads:
-# `terminology` for PIXm (#42), `resources` for the PDQm Patient (#119) and the
-# mCSD Organization and Endpoint (#74); the testkit's Manager adds `resources`
-# for the ITI-104 Patient (#47).
-fhir-types = { version = "0.1.107", default-features = false }
+# ImplementationGuide), compiled in crates/ihe-iti, crates/nl-generic-functions
+# and crates/eehrxf and, for its PIX Manager test device, in
+# tools/ferrofed-testkit, never in the engine; checked against
+# docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the root
+# set it reads: `terminology` for PIXm (#42), `resources` for the PDQm Patient
+# (#119) and the mCSD Organization and Endpoint (#74); the testkit's Manager
+# adds `resources` for the ITI-104 Patient (#47). 0.1.108 is the release
+# fhirconnect builds on, so the build carries one fhir-types (#684).
+fhir-types = { version = "0.1.108", default-features = false }
+# The FHIRconnect 1.0.0 mapping engine the European interoperability component
+# runs in process (#684), and the template index and mapping-file loader it
+# takes, both from FerroBRIDGE on the openehr-* 0.0.84 line. Pinned exactly,
+# because FerroBRIDGE's crate line moves by patch. Verified against crates.io
+# on 2026-10-06.
+fhirconnect = "=0.1.108"
+openehr-mapping-core = "=0.1.108"
+# The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
+# crates/eehrxf is read from (#684): flate2 on its pure-Rust backend, at the
+# version tower-http already locks, and tar without the extended attributes.
+# Verified against crates.io on 2026-10-06.
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+tar = { version = "0.4.46", default-features = false }
 # The XML reader and writer of the XCPD ITI-55 SOAP 1.2 and HL7 v3 messages
 # (#85), behind crates/ihe-iti's `xcpd` feature, and of the Mitz closed
 # authorization question (#475), behind crates/nl-generic-functions' `mitz`

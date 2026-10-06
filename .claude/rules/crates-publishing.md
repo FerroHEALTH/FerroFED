@@ -12,10 +12,14 @@ switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
 implement, never `ferrofed-*` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`, `oauth-server-metadata`;
-`.claude/memory/published-crate-naming.md`), one crate per specification
-with a feature per layer or profile; FerroFED's own glue and the server binary
-live under `app/`, and the tools under `tools/`.
+`nl-generic-functions`, `oauth-server-metadata`, and the two harmonised
+software components of Regulation (EU) 2025/327, `ehds-logging` and
+`eehrxf`; `.claude/memory/published-crate-naming.md`), one crate per
+specification with a feature per layer or profile; FerroFED's own glue and
+the server binary live under `app/`, and the tools under `tools/`. The
+Regulation defines the two components as independent of each other, so they
+are two crates that never list each other, which the architecture test in
+`app/ferrofed-engine/tests/it/architecture.rs` holds (decision A58).
 
 ## The switch
 
@@ -52,10 +56,11 @@ an owner decision recorded per crate when the switch flips, never assumed.
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
   before the crate has content (`openehr-federation`, `ihe-iti` and
   `nl-generic-functions`, published on 2026-10-01), and the crate's line in
-  the workspace starts at 0.0.1, above the placeholder. The name
-  `oauth-server-metadata` (#551) is not reserved on crates.io yet: the owner
-  decided not to claim it while publishing is off, and it must be claimed
-  before the `publish` switch is turned on.
+  the workspace starts at 0.0.1, above the placeholder. The names
+  `oauth-server-metadata` (#551), `ehds-logging` (#623) and `eehrxf` (#684)
+  are not reserved on crates.io yet: the owner decided not to claim them
+  while publishing is off, and each must be claimed before the `publish`
+  switch is turned on.
 
 ## The bump rule
 
@@ -120,11 +125,11 @@ reaches the registry.
 
 ## Owner steps when the switch is flipped
 
-Three of the four names exist on crates.io (the 0.0.0 placeholders of
+Three of the six names exist on crates.io (the 0.0.0 placeholders of
 2026-10-01), so every later version of those can go through Trusted
-Publishing with no first upload by a personal token. `oauth-server-metadata`
-needs its placeholder claimed the same way before the switch flips. Two
-steps, done once:
+Publishing with no first upload by a personal token. `oauth-server-metadata`,
+`ehds-logging` and `eehrxf` need their placeholders claimed the same way
+before the switch flips. Two steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and
    a deployment policy that admits `main` and `v*` tags.
