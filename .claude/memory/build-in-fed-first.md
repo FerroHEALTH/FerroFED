@@ -37,8 +37,10 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   (owner, 2026-10-06: "that rule to build everything first in FED is only for
   the PIX because we do not have anything in PIX yet"). A capability whose
   natural home is a sibling that exists and publishes, such as FerroBRIDGE
-  for the openEHR and FHIR exchange format (`eehrxf`), is built in that
-  sibling and consumed here by version. This does not override
+  for the openEHR and FHIR exchange format (`eehrxf`), belongs there. The
+  owner chose the same day to keep building `eehrxf` here until it is
+  complete and publishable, because nothing goes to crates.io yet, and to
+  move it in one step then (#813, A76). This does not override
   [[openehr-crates-are-the-model]]: a gap in a crate that is published is
   still that crate's issue, never a local copy.
 

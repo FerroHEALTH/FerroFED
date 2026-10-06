@@ -154,7 +154,8 @@ run and the version guard built from v0.0.2 (`.claude/memory/crate-split.md`,
 `.claude/rules/crates-publishing.md`). Identity bindings are built here first,
 each as a crate that can move to FerroPIX later, because FerroPIX has nothing
 built (`.claude/memory/build-in-fed-first.md`); a capability whose home is a
-sibling that exists is built there, as `eehrxf` moves to FerroBRIDGE (A76).
+sibling that exists belongs there: `eehrxf` is built here until it is complete
+and publishable, then moves to FerroBRIDGE in one step (A76, #813).
 
 ## Repo map
 
