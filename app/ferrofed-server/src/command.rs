@@ -5,7 +5,7 @@
 //!
 //! The command line is parsed, the configuration read, and each command run
 //! to its exit code: `serve`, `config check`, `admission check`,
-//! `conformance run` and `healthcheck`.
+//! `conformance run`, `healthcheck` and `report`.
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -16,7 +16,9 @@ use clap::Parser;
 use ferrofed_identity::dev::Profile;
 use tokio::net::TcpListener;
 
-use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, RunArgs};
+use crate::cli::{
+    AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs, RunArgs,
+};
 use crate::config::Config;
 use crate::config::settings::Settings;
 use crate::conformance::fixture::SyntheticPatient;
@@ -28,7 +30,7 @@ use crate::listener::certificates::{Certificates, TlsFiles};
 use crate::state::AppState;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
-    metrics, panic, reload, router, serve, state, telemetry,
+    metrics, panic, reload, report, router, serve, state, telemetry,
 };
 
 /// Runs the binary with `args` and returns the process exit code.
@@ -59,8 +61,10 @@ where
         );
         return ExitCode::from(EXIT_USAGE);
     }
-    let settings = match Config::load(cli.config.as_deref()).and_then(|config| config.resolve()) {
-        Ok(settings) => settings,
+    let loaded = Config::load_with_tree(cli.config.as_deref())
+        .and_then(|(config, tree)| config.resolve().map(|settings| (settings, tree)));
+    let (settings, tree) = match loaded {
+        Ok(loaded) => loaded,
         Err(error) if cli.command == Command::Healthcheck => {
             // NOTE: no specification governs this: our own design; a runtime
             // reads any exit but 0 and 1 as reserved, so a refusal is unhealthy.
@@ -96,7 +100,81 @@ where
         Command::Conformance {
             command: ConformanceCommand::Run(args),
         } => conformance_command(&settings, args),
+        Command::Report(args) => report_command(&settings, &tree, &args),
         Command::Serve => serve_job(settings, cli.config),
+    }
+}
+
+/// Runs `report`: collects the report of the deployment `settings`
+/// configure, from `tree`, the merged configuration, and writes the
+/// archive.
+///
+/// The exit code is `0` when the archive is written, whatever parts the
+/// gateway could not answer, each named on standard error and in the
+/// manifest; [`EXIT_USAGE`] for an operator token file that does not read
+/// or is empty; and `1` when the archive cannot be written.
+#[expect(
+    clippy::print_stdout,
+    reason = "`report` answers the operator who ran it"
+)]
+#[expect(
+    clippy::print_stderr,
+    reason = "a missing part or a refusal is reported with no log subscriber installed"
+)]
+fn report_command(settings: &Settings, tree: &toml::Table, args: &ReportArgs) -> ExitCode {
+    let operator = match args
+        .operator_token_file
+        .as_deref()
+        .map(std::fs::read_to_string)
+    {
+        None => None,
+        Some(Ok(text)) if !text.trim().is_empty() => {
+            Some(secrecy::SecretString::from(text.trim().to_owned()))
+        }
+        Some(Ok(_)) => {
+            eprintln!("ferrofed: cannot write the report: the operator token file is empty");
+            return ExitCode::from(EXIT_USAGE);
+        }
+        Some(Err(error)) => {
+            eprintln!(
+                "ferrofed: cannot write the report: the operator token file could not be read: {error}"
+            );
+            return ExitCode::from(EXIT_USAGE);
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("ferrofed: cannot write the report: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let collected = runtime.block_on(report::Report::collect(settings, tree, operator.as_ref()));
+    let written = collected.and_then(|report| {
+        let out = args
+            .out
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(report.default_name()));
+        report.write(&out).map(|()| (report, out))
+    });
+    match written {
+        Ok((report, out)) => {
+            for missing in report.missing() {
+                eprintln!(
+                    "ferrofed: note: the report has no {}: {}",
+                    missing.path, missing.reason
+                );
+            }
+            println!("ferrofed: wrote {}", out.display());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("ferrofed: cannot write the report: {}", chain(&error));
+            ExitCode::FAILURE
+        }
     }
 }
 

@@ -116,6 +116,8 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync", "fs"] }
+# The archive of the report bundle (#705).
+tar.workspace = true
 tokio-postgres = { workspace = true, optional = true }
 tokio-postgres-rustls = { workspace = true, optional = true }
 # The TLS of the gateway's own listeners and of the healthcheck job that asks

@@ -36,7 +36,8 @@
 //! §16.3 driven against a configured deployment, and its report (§16.4).
 //! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
 //! the server, and [`health`] answers liveness, readiness and the last
-//! observed state of every dependency. [`jwks`] serves the gateway's public
+//! observed state of every dependency. [`report`] is the `report` job: the
+//! archive a complaint or a serious-incident report attaches. [`jwks`] serves the gateway's public
 //! signing keys, which its OAuth 2.0 client assertions to the nodes are
 //! verified against (§13.1, N25).
 //!
@@ -81,6 +82,7 @@ pub mod operator;
 pub mod overload;
 pub mod panic;
 pub mod reload;
+pub mod report;
 pub mod request_id;
 pub mod request_log;
 pub mod service;

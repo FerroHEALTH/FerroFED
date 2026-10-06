@@ -39,6 +39,17 @@ pub const WORDMARK: &str = r"
 |  _|  __/ |  | | | (_) |  _| | |___| |_| |
 |_|  \___|_|  |_|  \___/|_|   |_____|____/";
 
+/// The releases the gateway serves, by label: the specifications it is
+/// pinned to and the `openehr-*` family it is built on.
+///
+/// The banner prints them and `ferrofed report` records them.
+pub const PINS: [(&str, &str); 4] = [
+    ("Federation Tier", openehr_federation::FEDERATION_SPEC),
+    ("ITS-REST", ferrofed_engine::ITS_REST),
+    ("AQL", openehr_federation::AQL),
+    ("openehr-*", crate::OPENEHR_FAMILY),
+];
+
 /// The words of the development notice, before wrapping.
 pub const DEVELOPMENT_NOTICE: &str = "DEVELOPMENT: this deployment runs the development profile, \
      which may resolve patients from a static development table. It must not hold or reach \
@@ -189,13 +200,7 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
         MANUFACTURER.email,
         MANUFACTURER.postal_address,
     );
-    let pins = [
-        ("Federation Tier", openehr_federation::FEDERATION_SPEC),
-        ("ITS-REST", ferrofed_engine::ITS_REST),
-        ("AQL", openehr_federation::AQL),
-        ("openehr-*", crate::OPENEHR_FAMILY),
-    ];
-    for (label, pin) in pins {
+    for (label, pin) in PINS {
         line(&mut out, label, pin);
     }
     out.push('\n');

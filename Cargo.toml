@@ -81,6 +81,10 @@ rust_decimal = { version = "1.43.0", default-features = false, features = ["std"
 # The configuration file format, parsed into the server's Config tree.
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "serde"] }
 secrecy = "0.10.3"
+# The archive `ferrofed report` writes (#705): an uncompressed POSIX tar,
+# without the extended-attribute support the default feature adds. Verified
+# against crates.io on 2026-10-06.
+tar = { version = "0.4.46", default-features = false }
 # The onward grant (#81): the ES256 or ES384 client assertion of RFC 7523 §2.2 is
 # signed with it, and its JWK and RFC 7638 thumbprint name the published key.
 # aws_lc_rs is its one crypto backend, the provider rustls already builds on;
