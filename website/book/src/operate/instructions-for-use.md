@@ -152,6 +152,12 @@ years = 3                      # Art 9(2): at least three years from each access
   `[access_log.retention]` any longer period your national law sets for a
   category or an origin, and keep each record at your repository until its
   `ehds-retention-ends` ([How long a record is kept](audit.md#how-long-a-record-is-kept)).
+- **The emergency purposes.** Art 11(5) asks that an access to restricted
+  data in the vital interests of the patient be logged "in a clear and
+  understandable format". FerroFED names no emergency purpose of use.
+  Declare in `[[access_log.emergency_purpose]]` the codes your issuers put
+  in the token for it, such as the HL7 v3 `ActReason` code `BTG`, or no
+  access is marked ([Emergency access](audit.md#emergency-access)).
 - **The receiving members.** Annex II, points 2.2 and 2.3, ask that an EHR
   system "be able to receive" data in the European exchange format. This
   release has no receive path, so there is no receiving member to configure;

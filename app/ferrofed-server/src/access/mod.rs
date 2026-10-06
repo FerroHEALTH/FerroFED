@@ -13,6 +13,8 @@
 //! authentication, builds the record from those facts, the verified caller
 //! and the time, classifies it with the deployment's category map
 //! (`ehds_logging`), states how long it is kept (Art 9(2), Annex II 3.4),
+//! marks it an emergency access when the verified token declares a purpose
+//! of use the deployment names as one (Art 11(5)),
 //! and hands it to the sink a binding builds, which for the
 //! IHE binding writes a BALP `AuditEvent` to the audit spool. The console
 //! reaches the gateway through the same façade, so its queries are recorded
@@ -39,6 +41,7 @@ use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
+use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
     AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
@@ -61,11 +64,12 @@ use crate::error::{self, Code};
 use crate::request_id;
 use crate::state::AppState;
 
-/// The access log of one federation: the category map, the retention and
-/// the sink.
+/// The access log of one federation: the category map, the retention, the
+/// emergency purposes and the sink.
 pub struct AccessLog {
     map: CategoryMap,
     retention: RetentionPolicy,
+    emergency: EmergencyPurposes,
     sink: Arc<dyn AccessSink>,
 }
 
@@ -79,12 +83,14 @@ impl fmt::Debug for AccessLog {
 
 impl AccessLog {
     /// The log that classifies with `map` and stores through `sink`, each
-    /// record kept for the three years of Regulation (EU) 2025/327 Art 9(2).
+    /// record kept for the three years of Regulation (EU) 2025/327 Art 9(2),
+    /// and no access marked an emergency access.
     #[must_use]
     pub fn new(map: CategoryMap, sink: Arc<dyn AccessSink>) -> Self {
         Self {
             map,
             retention: RetentionPolicy::default(),
+            emergency: EmergencyPurposes::default(),
             sink,
         }
     }
@@ -93,6 +99,14 @@ impl AccessLog {
     #[must_use]
     pub fn with_retention(mut self, retention: RetentionPolicy) -> Self {
         self.retention = retention;
+        self
+    }
+
+    /// This log, an access whose caller declares one of `emergency` marked
+    /// an emergency access (Art 11(5)).
+    #[must_use]
+    pub fn with_emergency(mut self, emergency: EmergencyPurposes) -> Self {
+        self.emergency = emergency;
         self
     }
 
@@ -192,11 +206,15 @@ impl Accessed {
             &categories,
             self.origins.iter().map(|asked| asked.endpoint.as_str()),
         );
+        let accessor = accessor(caller);
+        // NOTE: Regulation (EU) 2025/327 Art 11(5); the mark is read from the purposes the
+        // verified token declares alone, never inferred from the query or a node's answer.
+        let emergency = self.log.emergency.mark(&accessor.purposes);
         AccessRecord {
             action: self.action,
             recorded,
             outcome: outcome(status),
-            accessor: accessor(caller),
+            accessor,
             subject: self.subject.clone(),
             categories,
             delivered: self.delivered,
@@ -211,6 +229,7 @@ impl Accessed {
                 correlation: caller.correlation().map(str::to_owned),
             },
             retention,
+            emergency,
         }
     }
 }
@@ -446,6 +465,12 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
         return error::fixed(Code::AccessUnrecorded, &request_id);
     };
     let record = accessed.record(&caller, address, &logged, response.status());
+    if record.emergency.is_some() {
+        tracing::warn!(
+            request_id = logged,
+            "the access was declared an emergency access by its purpose of use"
+        );
+    }
     match accessed.log.sink.store(record).await {
         Ok(()) => response,
         Err(failure) => {

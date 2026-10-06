@@ -9,7 +9,9 @@
 //! the categories of data accessed, (d) the time and date, and (e) the
 //! origin or origins of the data. An [`AccessRecord`] carries each, and
 //! beside them the data subject whose data were accessed and the purpose of
-//! use the access was made for, which Art 9(2) asks the patient be told.
+//! use the access was made for, which Art 9(2) asks the patient be told. A
+//! record whose accessor declared an emergency purpose carries the mark
+//! Art 11(5) asks for ([`emergency`](crate::emergency)).
 //!
 //! A record names the patient and the person who accessed their data, so
 //! `Debug` shows neither, nor any id the classification read: a record
@@ -22,6 +24,7 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 
 use crate::classify::Classification;
+use crate::emergency::Emergency;
 use crate::retention::Retention;
 
 /// What the access did to the data.
@@ -404,6 +407,10 @@ pub struct AccessRecord {
     pub request: Request,
     /// How long the record is kept (Art 9(2), Annex II 3.4).
     pub retention: Retention,
+    /// The mark of an access the accessor declared, through its purpose of
+    /// use, as made to protect the vital interests of the data subject (Art
+    /// 11(5)), when it did.
+    pub emergency: Option<Emergency>,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -419,6 +426,7 @@ impl fmt::Debug for AccessRecord {
             .field("origins", &self.origins)
             .field("request", &self.request)
             .field("retention", &self.retention)
+            .field("emergency", &self.emergency)
             .finish()
     }
 }

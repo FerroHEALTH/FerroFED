@@ -119,7 +119,7 @@ carry.
 | L-06 | The record names an origin that sent nothing, an `ehr_id` at a member the query never reached, or the categories of one member's rows under another | the record misstates which CDRs released which data | S2, P3 | an endpoint is an origin only when the query was sent to it, through the endpoint it was sent through; a query sent to no member writes no record; each origin of a merged answer carries the categories of its own rows; a member past the answer bound is `node-error` with no row | `app/ferrofed-server/tests/it/access/origins.rs` (`a_query_every_member_of_which_was_capped_writes_no_record`, `a_capped_member_is_no_origin_of_the_answer`, `each_origin_of_a_merged_answer_carries_the_categories_of_its_own_rows`); `app/ferrofed-server/tests/it/access/query.rs` (`a_query_no_node_was_sent_is_not_an_access`, `a_member_answer_past_the_read_bound_is_recorded_as_node_error_with_no_row`) | S2, P1 |
 | L-07 | The records cannot be reviewed, or are not kept by origin and category (Annex II, points 3.3 and 3.4) | misuse is not found, or records go before their time | S3, P2 | the records go to the deployment's Audit Record Repository, external software point 3.3 admits; the gateway's own review, retention and export are planned ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)) | `[audit] destination = "repository"`, refused unset or `off` outside development: `app/ferrofed-server/tests/it/feed_audit/config.rs` (`a_binding_outside_development_needs_a_declared_destination`, `off_is_refused_outside_development_and_admitted_inside`) | open, S3, P2 |
 | L-08 | The record discloses the patient or the caller where it must not: to a node, the operator log, a span or a metric | a patient identifier leaks (§5.4, N33) | S3, P2 | no record content reaches a node or a log; `Debug` shows no identifier | `app/ferrofed-server/tests/it/access/query.rs` (`no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`); `crates/ehds-logging/tests/it/balp.rs` (`no_debug_shows_the_patient_the_person_or_an_id`); `crates/ehds-logging/tests/it/classify.rs` (`no_debug_shows_an_id`) | S3, P1 |
-| L-09 | Emergency access to restricted data is not marked | the person cannot see that a restriction was overridden (Art 8) | S3, P2 | planned: [#659](https://github.com/FerroHEALTH/FerroFED/issues/659) | | open, S3, P2 |
+| L-09 | Emergency access to restricted data is not marked | the person cannot see that a restriction was overridden (Art 8) | S3, P2 | a record whose verified token declares a purpose of use the deployment names in `[[access_log.emergency_purpose]]` carries the `ehds-emergency-access` entity, stated in words, with the purposes that marked it; the mark is read from the token alone, never inferred, and changes no dispatch and no answer, so the node still decides (N26); `config check` notes a deployment that names no emergency purpose, and the instructions for use ask for one; whether restricted data were released is the node's to record | `app/ferrofed-server/tests/it/access/emergency.rs` (`a_declared_emergency_purpose_marks_the_record`, `no_access_is_marked_without_a_declared_purpose`, `a_token_without_the_purpose_is_not_marked`, `a_nodes_refusal_of_an_emergency_access_stands`, `config_check_notes_an_access_log_without_an_emergency_purpose`); `crates/ehds-logging/tests/it/emergency.rs` (`only_an_exact_match_marks_the_access`); `crates/ehds-logging/tests/it/balp.rs` (`an_emergency_access_is_marked_in_its_own_entity`) | S3, P1 |
 
 ## The interoperability component
 
@@ -216,11 +216,11 @@ one header away.
 
 ## Overall residual risk
 
-- **Logging component:** L-01, L-02, L-03, L-05, L-06 and L-08 are
-  controlled and tested. L-04 is open at S2. L-07 and L-09 are open at S3 and are carried by the
-  deployment's Audit Record Repository until
-  [#660](https://github.com/FerroHEALTH/FerroFED/issues/660) and
-  [#659](https://github.com/FerroHEALTH/FerroFED/issues/659) land. The
+- **Logging component:** L-01, L-02, L-03, L-05, L-06, L-08 and L-09 are
+  controlled and tested; L-09 depends on the deployment naming its
+  emergency purposes. L-04 is open at S2. L-07 is open at S3 and is
+  carried by the deployment's Audit Record Repository until
+  [#660](https://github.com/FerroHEALTH/FerroFED/issues/660) lands. The
   component records every access the gateway serves today.
 - **Interoperability component:** I-07 and I-08 are controlled. Every other hazard is
   open, most at S4, so the component is not offered for its Annex II purpose

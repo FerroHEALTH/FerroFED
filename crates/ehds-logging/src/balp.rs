@@ -35,6 +35,13 @@
 //! `ehds-relayed` that names the contact point and marks them `asserted`,
 //! and a correlation identifier the client sent is a `detail` of the request
 //! id's entity.
+//!
+//! An emergency access (Regulation (EU) 2025/327 Art 11(5)) keeps its
+//! purposes of use where BALP puts every purpose, in `agent:user`
+//! `purposeOfUse`, and is marked in one entity of its own,
+//! `ehds-emergency-access`, whose `description` states the mark in words and
+//! whose `detail` entries name the purposes that marked it, so a reader of
+//! the record need not know which codes the deployment maps.
 
 use std::sync::Arc;
 
@@ -48,6 +55,7 @@ use secrecy::SecretString;
 use url::Url;
 
 use crate::classify::Classification;
+use crate::emergency::Emergency;
 use crate::record::{AccessRecord, Action, Outcome, Relayed};
 use crate::sink::{AccessSink, SinkError};
 
@@ -120,7 +128,20 @@ pub mod detail {
     /// What called for the period: `default`, `unclassified`,
     /// `category:<code>` or `origin:<endpoint>`.
     pub const RETENTION_GROUND: &str = "ehds-retention-ground";
+    /// That the access is an emergency access (Art 11(5)): `true`.
+    pub const EMERGENCY_ACCESS: &str = "ehds-emergency-access";
+    /// `<system>|<code>`, or `<code>`, once per purpose of use that marked
+    /// the access an emergency access.
+    pub const EMERGENCY_PURPOSE: &str = "ehds-emergency-purpose";
 }
+
+/// The name of the entity that marks an emergency access.
+pub const EMERGENCY_ENTITY: &str = "ehds-emergency-access";
+
+/// The `description` of the entity that marks an emergency access.
+pub const EMERGENCY_DESCRIPTION: &str = "Emergency access: the accessor declared that the access \
+     was necessary to protect the vital interests of the data subject \
+     (Regulation (EU) 2025/327 Art 11(5)).";
 
 /// The sink that writes each record as a BALP `AuditEvent` and hands it to
 /// an `ihe-iti` audit recorder, such as one that spools it for an ATNA
@@ -380,7 +401,38 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if let Some(relayed) = &record.accessor.relayed {
         entities.push(other(None, "ehds-relayed", relayed_details(relayed)));
     }
+    if let Some(emergency) = &record.emergency {
+        entities.push(emergency_entity(emergency));
+    }
     entities
+}
+
+/// The entity that marks an emergency access, naming the purposes that
+/// marked it.
+fn emergency_entity(emergency: &Emergency) -> Entity {
+    let mut details = vec![Detail::new(detail::EMERGENCY_ACCESS, "true")];
+    details.extend(emergency.purposes().iter().map(|purpose| {
+        Detail::new(
+            detail::EMERGENCY_PURPOSE,
+            coded(purpose.system.as_deref(), &purpose.code),
+        )
+    }));
+    Entity::Described(Described {
+        what: None,
+        kind: OTHER,
+        role: None,
+        name: Some(EMERGENCY_ENTITY.to_owned()),
+        description: Some(EMERGENCY_DESCRIPTION.to_owned()),
+        details,
+    })
+}
+
+/// `<system>|<code>`, or `<code>` when no system is named.
+fn coded(system: Option<&str>, code: &str) -> String {
+    match system {
+        Some(system) => format!("{system}|{code}"),
+        None => code.to_owned(),
+    }
 }
 
 /// The `detail` entries of what a national contact point relayed, marked
@@ -400,13 +452,12 @@ fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
             professional.issuing_authority.clone(),
         ),
     ];
-    details.extend(professional.roles.iter().map(|role| {
-        let coded = match &role.system {
-            Some(system) => format!("{system}|{}", role.code),
-            None => role.code.clone(),
-        };
-        Detail::new(detail::HP_ROLE, coded)
-    }));
+    details.extend(
+        professional
+            .roles
+            .iter()
+            .map(|role| Detail::new(detail::HP_ROLE, coded(role.system.as_deref(), &role.code))),
+    );
     details.extend([
         Detail::new(detail::PROVIDER_IDENTIFIER, provider.identifier.clone()),
         Detail::new(

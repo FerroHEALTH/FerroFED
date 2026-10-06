@@ -13,6 +13,8 @@ mod balp;
 #[cfg(test)]
 mod classify;
 #[cfg(test)]
+mod emergency;
+#[cfg(test)]
 mod map;
 #[cfg(test)]
 mod property;
