@@ -11,7 +11,9 @@
 #   2. Docker Compose renders the release compose file;
 #   3. the stop_grace_period of the release compose file outlasts the drain
 #      delay, the drain and the bindings' drain of the example's [server]
-#      table, each of which the example must set, and the example
+#      table, each of which the example must set, the quickstart
+#      compose.yaml's stop_grace_period outlasts those of
+#      docker/quickstart/ferrofed.toml the same way, and the example
 #      sends the access records of its registry to an Audit Record
 #      Repository, never to the log target, which names no caller and no
 #      patient (Regulation (EU) 2025/327 Annex II 3.2);
@@ -132,24 +134,33 @@ grace_covers() {
   fi
   echo "a grace period of $grace s outlasts the $delay ms delay, the $shutdown ms drain and the $bindings ms bindings' drain"
 }
-grace="$(sed -nE 's/^[[:space:]]+stop_grace_period: ([0-9]+)s$/\1/p' "$RELEASE/compose.yaml")"
-if out="$(grace_covers "$RELEASE/ferrofed.toml" "$grace")"; then
-  echo "OK: stop_grace_period: $out"
-else
-  bad "$RELEASE/compose.yaml stop_grace_period: $out"
-fi
-# The check has teeth: a grace period of one second, and the example without
-# its bindings' drain budget, each fail it.
-grep -v '^bindings_drain_timeout_ms[[:space:]]' "$RELEASE/ferrofed.toml" > "$work/unbudgeted.toml" || true
-if grace_covers "$RELEASE/ferrofed.toml" 1 > /dev/null; then
-  bad "the grace check accepts a grace period of one second"
-elif cmp -s "$RELEASE/ferrofed.toml" "$work/unbudgeted.toml"; then
-  bad "$RELEASE/ferrofed.toml sets no [server] bindings_drain_timeout_ms to remove"
-elif grace_covers "$work/unbudgeted.toml" "$grace" > /dev/null; then
-  bad "the grace check accepts a configuration that leaves bindings_drain_timeout_ms unset"
-else
-  echo "OK: a short grace period and an unset budget each fail the grace check"
-fi
+# grace_holds COMPOSE CONFIG: the stop_grace_period of COMPOSE outlasts the
+# timeouts of CONFIG, the configuration it mounts; and the check has teeth: a
+# grace period of one second, and CONFIG without its bindings' drain budget,
+# each fail it.
+grace_holds() {
+  local compose="$1" config="$2" grace out unbudgeted
+  unbudgeted="$work/unbudgeted-$(basename "$(dirname "$config")").toml"
+  grace="$(sed -nE 's/^[[:space:]]+stop_grace_period: ([0-9]+)s$/\1/p' "$compose")"
+  if out="$(grace_covers "$config" "$grace")"; then
+    echo "OK: $compose stop_grace_period: $out"
+  else
+    bad "$compose stop_grace_period: $out"
+  fi
+  grep -v '^bindings_drain_timeout_ms[[:space:]]' "$config" > "$unbudgeted" || true
+  if grace_covers "$config" 1 > /dev/null; then
+    bad "the grace check accepts a grace period of one second over $config"
+  elif cmp -s "$config" "$unbudgeted"; then
+    bad "$config sets no [server] bindings_drain_timeout_ms to remove"
+  elif grace_covers "$unbudgeted" "$grace" > /dev/null; then
+    bad "the grace check accepts $config with bindings_drain_timeout_ms unset"
+  else
+    echo "OK: a short grace period and an unset budget each fail the grace check over $config"
+  fi
+}
+grace_holds "$RELEASE/compose.yaml" "$RELEASE/ferrofed.toml"
+# The quickstart is no release asset, and its grace period is held the same way.
+grace_holds compose.yaml docker/quickstart/ferrofed.toml
 
 echo "== the access log names the caller and the patient"
 # audit_destination FILE: the destination key of FILE's [audit] table.

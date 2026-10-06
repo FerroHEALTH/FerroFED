@@ -16,6 +16,16 @@
 
 profile = "development"
 
+# compose.yaml sets FERROFED__SERVER__LISTEN. On SIGTERM the listener closes
+# at once, the requests in flight get the 30-second request timeout to
+# finish, and the bindings then get 5 seconds to stop their processes;
+# compose.yaml's stop_grace_period outlasts all three, and
+# scripts/checks/release-compose.sh holds it to them.
+[server]
+drain_delay_ms = 0
+shutdown_timeout_ms = 30000
+bindings_drain_timeout_ms = 5000
+
 [registry]
 document = "/etc/ferrofed/registry.toml"
 
