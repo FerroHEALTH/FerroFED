@@ -117,6 +117,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     eHDSI wiki needs manual retrieval. The Commission's legal notice page
     is cited by URL and not pinned, because its bytes change with every
     render.
+  - `docs/specs/eu-cra/`: Regulation (EU) 2024/2847 (the Cyber Resilience
+    Act) with its three English corrigenda, Implementing Regulation (EU)
+    2025/2392, Regulation (EU) 2019/1020 and Regulation (EC) No 765/2008,
+    each as published (official EU acts, reused under Commission Decision
+    2011/833/EU), read by the market-placement research of #654.
   - `docs/specs/ehdsi/`: the NCPeH API package and page (CC0-1.0); the
     guide index and OpenNCP (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
