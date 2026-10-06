@@ -486,6 +486,7 @@ jobs:
           set -euo pipefail
           bash scripts/release/changelog.sh --self-test
           bash scripts/checks/changelog-guard.sh --self-test
+          bash scripts/checks/upgrade-notes.sh --self-test
           bash scripts/release/changelog.sh --check
 
   # The manifest guard (#454), the one tier-1 job with a toolchain: every
@@ -760,7 +761,9 @@ jobs:
   # compose file mounts them in the pinned base image of docker/Dockerfile.
   # The same binary runs `config check` over the example Kubernetes
   # ConfigMap with synthetic secrets (scripts/checks/kubernetes-example.sh),
-  # which kubeconform cannot do. It sits in the Rust tier because the check
+  # which kubeconform cannot do, and over the example the last release
+  # attached, which, when refused, needs a pending upgrade note
+  # (scripts/checks/upgrade-notes.sh). It sits in the Rust tier because the check
   # needs the binary; the runner image carries Docker Compose, jq and openssl.
   release-compose:
     name: release compose
@@ -785,6 +788,9 @@ jobs:
       - run: cargo build --locked -p ferrofed-server --bin ferrofed --target x86_64-unknown-linux-musl
       - run: bash scripts/checks/release-compose.sh target/x86_64-unknown-linux-musl/debug/ferrofed
       - run: bash scripts/checks/kubernetes-example.sh target/x86_64-unknown-linux-musl/debug/ferrofed
+      # A change this build makes to what config check accepts needs an upgrade
+      # note: the guard runs it over the example the last release attached.
+      - run: bash scripts/checks/upgrade-notes.sh target/x86_64-unknown-linux-musl/debug/ferrofed
 
   doc:
     name: rustdoc
