@@ -155,13 +155,14 @@ examples keep 5 seconds of room:
 |---|---|---|---|---|---|
 | `deploy/kubernetes/` | 5000 | 30000 | 5000 | 5 + 30 + 5 + 5 | `terminationGracePeriodSeconds: 45` |
 | `deploy/compose/` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
-| the quickstart `compose.yaml` | unset, `0` | unset, the 30-second request timeout | unset, 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
+| the quickstart `compose.yaml` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
 
 `scripts/checks/kubernetes-example.sh` and
 `scripts/checks/release-compose.sh` fail when an example's grace period
-does not outlast its delay, its drain and its bindings' budget. Both read
-the three values from the example's configuration and copy no default from
-the code, so each shipped example sets all three.
+does not outlast its delay, its drain and its bindings' budget;
+`release-compose.sh` holds the quickstart too. Both read the three values
+from the example's configuration and copy no default from the code, so each
+example sets all three.
 
 ## `ferrofed healthcheck`
 
