@@ -15,19 +15,26 @@
 # upstream project's GitHub releases, which is the tag the container image and
 # the installer both carry. A corpus pinned by commit on a repository with no
 # releases is read against the newest commit of the branch it follows, a
-# corpus pinned by a `Release-X.Y.Z` tag against the newest such tag, a FHIR
-# package or implementation guide pinned by version against the versions its
-# entry on the FHIR package registry lists, and the Chrome for Testing release
-# against the newest stable one of its availability feed. Each container
-# image the testkit harness starts, a `PinnedImage` constant under
+# corpus pinned by a release tag (`Release-X.Y.Z`, `vX.Y.Z` or a bare
+# version) against the newest tag of that shape, a FHIR package or
+# implementation guide pinned by version against the versions its entry on
+# the FHIR package registry lists, a document at an unversioned URL against
+# the sha256 of the bytes served there now, an RFC against the RFC Editor's
+# record of what obsoletes it, a dated W3C publication against the newest
+# version the W3C API lists, and the Chrome for Testing release against the
+# newest stable one of its availability feed. Every corpus row of
+# docs/VERSIONS.md has a reader, or its vendor script is listed in
+# UNWATCHED_SCRIPTS with the reason none is needed. Each container image
+# the testkit harness starts, a `PinnedImage` constant under
 # tools/ferrofed-testkit/src, is read against the newest stable tag of its
 # shape in the registry that serves it. Needs an authenticated `gh`, awk,
-# curl, find, jq and sed.
+# curl, find, jq, sed and shasum.
 #
 #   scripts/checks/pin-freshness.sh --self-test
 #
-# Runs the tag and version comparisons and the readers over fixtures,
-# offline.
+# Runs the tag and version comparisons and the readers over fixtures, and
+# checks that every corpus row of docs/VERSIONS.md has a reader or a
+# recorded reason, offline.
 #
 # Exit 0 when every pin is current, 1 when at least one is behind (each such
 # line starts with STALE), 2 when a release could not be read, so a network
@@ -43,6 +50,157 @@ readonly MATRIX=docs/VERSIONS.md
 # and compose files, never a Rust constant.
 readonly TESTKIT_SRC=tools/ferrofed-testkit/src
 readonly REGISTRY_UA=ferrofed-pin-check
+# The most pages of one tag list the read follows before it gives up.
+readonly MAX_TAG_PAGES=200
+
+# One "matrix label<TAB>upstream repository<TAB>branch" record per line: a
+# corpus pinned by commit on a repository that publishes no releases, read
+# against the newest commit of the branch the pin follows.
+readonly WATCHED_COMMITS="\
+Federation Tier with AQL specification	syntaric/openehr-federation-spec	main
+Federation Tier reference implementation	syntaric/openehr-federation-ref	main
+Nuts specifications	nuts-foundation/nuts-specification	master
+did:web Method Specification	w3c-ccg/did-method-web	main
+DIF Presentation Exchange 2.0.0	decentralized-identity/presentation-exchange	main
+DIF Claim Format Registry	decentralized-identity/claim-format-registry	main"
+
+# One "matrix label<TAB>upstream repository<TAB>tag prefix<TAB>hold" record
+# per line: a corpus pinned by a release tag, read against the newest tag of
+# the same shape, the prefix (`-` for none) and a dotted version. The
+# openEHR specification repositories, the IHE IUA supplement and the Dutch
+# Generic Functions IG tag each release and publish no GitHub release. A
+# held corpus is pinned at the release another pin binds (the hold says
+# which), so a newer release of it is printed and is not a stale pin.
+readonly WATCHED_TAGS="\
+openEHR ITS-REST OpenAPI	openEHR/specifications-ITS-REST	Release-	the release the Federation Tier specification binds by name
+openEHR AQL specification source	openEHR/specifications-QUERY	Release-	-
+openEHR Reference Model specification source	openEHR/specifications-RM	Release-	-
+openEHR BASE specification source	openEHR/specifications-BASE	Release-	the release paired with the pinned Reference Model release
+IHE IUA supplement	IHE/ITI.IUA	-	-
+Netherlands Generic Functions IG source	nuts-foundation/nl-generic-functions-ig	v	-"
+
+# One "matrix label<TAB>package<TAB>hold" record per line: a FHIR package, or
+# the pages of the implementation guide it publishes, pinned by version and
+# read against the versions its entry on the FHIR package registry lists. A
+# held package is pinned at the version another pinned package depends on
+# (the hold says which), so a newer release of it is printed and is not a
+# stale pin by itself: the dependent's release moves it.
+readonly FHIR_REGISTRY=https://packages.fhir.org
+readonly WATCHED_PACKAGES="\
+IHE PIXm FHIR package	ihe.iti.pixm	-
+IHE PDQm FHIR package	ihe.iti.pdqm	-
+IHE mCSD FHIR package	ihe.iti.mcsd	-
+IHE PMIR FHIR package	ihe.iti.pmir	-
+IHE BALP FHIR package	ihe.iti.balp	-
+IHE PIXm narrative pages	ihe.iti.pixm	-
+IHE PDQm narrative pages	ihe.iti.pdqm	-
+IHE PMIR narrative pages	ihe.iti.pmir	-
+IHE mCSD narrative pages	ihe.iti.mcsd	-
+IHE BALP narrative pages	ihe.iti.balp	-
+Xt-EHR EHDS Logical Information Models	xtehr.eu.ehds.models	-
+HL7 Europe Base and Core	hl7.fhir.eu.base	-
+HL7 Europe Patient Summary	hl7.fhir.eu.eps	-
+HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
+HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
+HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
+HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
+IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version the pinned HL7 Europe guides depend on"
+
+# One "matrix label<TAB>URL" record per line: a document IHE publishes at a
+# URL that names no revision, pinned by the sha256 of its bytes. Bytes that
+# differ from the pin mean a new revision or an edit of the pinned one.
+readonly WATCHED_DOCUMENTS="\
+IHE ITI-20 Record Audit Event	https://profiles.ihe.net/ITI/TF/Volume2/ITI-20.html
+IHE RESTful ATNA supplement	https://www.ihe.net/uploadedFiles/Documents/ITI/IHE_ITI_Suppl_RESTful-ATNA.pdf"
+
+# Every corpus row labelled `IETF RFC <number>` is read against the RFC
+# Editor's record of the RFC: an RFC is never revised in place, so it is
+# stale only once a later RFC obsoletes it.
+readonly RFC_INDEX=https://www.rfc-editor.org/rfc
+
+# One "matrix label<TAB>W3C shortname<TAB>hold" record per line: a dated W3C
+# publication, read against the newest version of its specification the W3C
+# API lists.
+readonly W3C_API=https://api.w3.org/specifications
+readonly WATCHED_W3C="\
+W3C Verifiable Credentials Data Model 1.1	vc-data-model	the version the pinned Netherlands Generic Functions IG cites
+W3C Decentralized Identifiers 1.0	did-core	-
+W3C DID Resolution 1.0	did-resolution	-
+W3C Bitstring Status List 1.0	vc-bitstring-status-list	-"
+
+# One "vendor script<TAB>reason" record per line: a script whose corpus rows
+# no reader above watches, with the reason none is needed. The self-test
+# fails on a corpus row with neither.
+readonly UNWATCHED_SCRIPTS="\
+openid.sh	the OpenID Foundation publishes no release feed; FAPI 2.0 and OpenID4VCI 1.0 are pinned at their Final text, and OpenID4VP draft 18 is the draft Nuts RFC021 cites
+mitz.sh	VZVZ publishes no release feed for the Mitz architecture documents
+eu.sh	scripts/checks/ehds-acts.sh, the second job of the weekly run, reads EUR-Lex and the Commission's register for the acts this corpus vendors
+ihe-iti-tf.sh	the IHE ITI-20 Record Audit Event row reads the same ITI Technical Framework revision, and the script fails when an upstream byte of a Volume 1 or Volume 2 page moves
+de.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+at.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+ch.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+be.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+fr.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+dk.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+se.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+no.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
+fi.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves"
+
+# corpus_rows [MATRIX]: one "label<TAB>script" record per row of MATRIX whose
+# third cell names a scripts/vendor/ script, which is what makes it a corpus
+# row.
+corpus_rows() {
+  awk -F'|' '
+    NF >= 4 {
+      label = $2; where = $4
+      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      if (match(where, /scripts\/vendor\/[a-z0-9-]+\.sh/)) print label "\t" substr(where, RSTART + 15, RLENGTH - 15)
+    }' "${1:-$MATRIX}"
+}
+
+# unwatched_rows [MATRIX]: the label of every corpus row of MATRIX that no
+# reader watches and whose script UNWATCHED_SCRIPTS does not list, one per
+# line.
+unwatched_rows() {
+  local label script watched
+  watched="$(printf '%s\n' "$WATCHED_COMMITS" "$WATCHED_TAGS" "$WATCHED_PACKAGES" \
+    "$WATCHED_DOCUMENTS" "$WATCHED_W3C" | cut -f1)"
+  while IFS=$'\t' read -r label script; do
+    [[ -n "$label" ]] || continue
+    grep -qxF -- "$label" <<< "$watched" && continue
+    [[ "$label" =~ ^IETF\ RFC\ [0-9]+$ ]] && continue
+    awk -F'\t' -v s="$script" '$1 == s { found = 1 } END { exit !found }' <<< "$UNWATCHED_SCRIPTS" && continue
+    printf '%s\n' "$label"
+  done < <(corpus_rows "$@")
+}
+
+# matrix_cell_token LABEL KEY [MATRIX]: the token after the word KEY in the
+# pin cell of the matrix row whose first cell is LABEL, backticks and
+# trailing punctuation removed.
+matrix_cell_token() {
+  awk -F'|' -v want="$1" -v key="$2" '
+    NF >= 3 {
+      label = $2; value = $3
+      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      if (label != want) next
+      gsub(/`/, "", value)
+      n = split(value, word, " ")
+      for (i = 1; i < n; i++) if (word[i] == key) { t = word[i + 1]; gsub(/[,.;:]+$/, "", t); print t; exit }
+    }' "${3:-$MATRIX}"
+}
+
+# matrix_first LABEL PATTERN [MATRIX]: the first match of the awk regular
+# expression PATTERN in the pin cell of the matrix row whose first cell is
+# LABEL, backticks removed.
+matrix_first() {
+  awk -F'|' -v want="$1" -v pattern="$2" '
+    NF >= 3 {
+      label = $2; value = $3
+      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      gsub(/`/, "", value)
+      if (label == want && match(value, pattern)) { print substr(value, RSTART, RLENGTH); exit }
+    }' "${3:-$MATRIX}"
+}
 
 # One "constant<TAB>reason" record per line: a constant compared only within
 # the major line its tag names, because the consumer needs that line. The
@@ -92,15 +250,37 @@ registry_tags() {
     --data-urlencode "service=$service" --data-urlencode "scope=repository:$path:pull" "$realm" \
     | jq --raw-output --exit-status '.token // .access_token')" || return 1
   headers="$registry_scratch/headers"
-  curl --fail --silent --show-error --user-agent "$REGISTRY_UA" --dump-header "$headers" \
-    --header "Authorization: Bearer $token" "https://$host/v2/$path/tags/list?n=100000" \
-    > "$registry_scratch/tags.json" || return 1
-  # A registry that pages the list past this request would hide the newest
-  # tags, so a second page is a failure, never a shorter list.
-  if grep -qi '^link:' "$headers"; then
-    return 1
-  fi
-  jq --raw-output --exit-status '.tags[]' "$registry_scratch/tags.json"
+  # A registry may page the list whatever size is asked for (Quay stops at
+  # 100), and names the next page in a `Link` header, so every page is read
+  # and the list is never cut short. A page that fails fails the read.
+  local url="https://$host/v2/$path/tags/list?n=100000" pages=0 next
+  : > "$registry_scratch/tags.txt"
+  while [[ -n "$url" ]]; do
+    pages=$((pages + 1))
+    [[ "$pages" -le "$MAX_TAG_PAGES" ]] || return 1
+    curl --fail --silent --show-error --user-agent "$REGISTRY_UA" --dump-header "$headers" \
+      --header "Authorization: Bearer $token" "$url" > "$registry_scratch/tags.json" || return 1
+    jq --raw-output '.tags // [] | .[]' "$registry_scratch/tags.json" >> "$registry_scratch/tags.txt" \
+      || return 1
+    next="$(next_page "$headers")"
+    case "$next" in
+      '') url="" ;;
+      https://*) url="$next" ;;
+      /*) url="https://$host$next" ;;
+      *) return 1 ;;
+    esac
+  done
+  [[ -s "$registry_scratch/tags.txt" ]] || return 1
+  cat "$registry_scratch/tags.txt"
+}
+
+# next_page HEADERS: the target of the `rel="next"` link in the response
+# header file HEADERS (RFC 8288 §3), or nothing on the last page.
+next_page() {
+  tr -d '\r' < "$1" | awk '
+    tolower($1) == "link:" && /rel="?next"?/ && match($0, /<[^>]+>/) {
+      print substr($0, RSTART + 1, RLENGTH - 2); exit
+    }'
 }
 
 # newest_release PINNED [LINE]: the newest tag read on stdin that is a stable
@@ -244,8 +424,40 @@ self_test() {
     printf '%s;' "$(matrix_package_version "${row%%|*}" "${row#*|}" "$work/matrix.md")"
   done)"
   rm "$work/matrix.md"
-  rmdir "$work"
   expect "1.0.0-ballot;1.3.1;3.1.0;1.1.4;;" "$got" "the package versions of matrix rows"
+
+  # shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' \
+    '| Release | `org/spec` tag `Release-1.1.0`, the sources | `scripts/vendor/spec.sh` |' \
+    '| Bare | `org/supp` tag `2.5`, the text | `scripts/vendor/supp.sh` |' \
+    '| Doc | `https://example.org/a.html` sha256 `'"$(printf 'a%.0s' {1..64})"'` | `scripts/vendor/doc.sh` |' \
+    '| Commit | `org/x` commit `'"$(printf 'b%.0s' {1..40})"'` | `scripts/vendor/x.sh` |' \
+    '| A tool | 1.2.3 | `.github/workflows/ci.yml` |' > "$work/matrix.md"
+  got="$(printf '%s;' "$(matrix_cell_token Release tag "$work/matrix.md")" \
+    "$(matrix_cell_token Bare tag "$work/matrix.md")" "$(matrix_cell_token Doc tag "$work/matrix.md")" \
+    "$(matrix_first Doc '[0-9a-f]{64}' "$work/matrix.md" | cut -c1-4)" \
+    "$(matrix_first Commit '[0-9a-f]{40}' "$work/matrix.md" | cut -c1-4)")"
+  expect "Release-1.1.0;2.5;;aaaa;bbbb;" "$got" "the tags, sha256 and commits of matrix rows"
+  got="$(corpus_rows "$work/matrix.md" | tr '\t' ' ' | paste -sd ';' -)"
+  expect "Release spec.sh;Bare supp.sh;Doc doc.sh;Commit x.sh" "$got" "the corpus rows of a matrix"
+
+  # shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' \
+    '| Federation Tier reference implementation | commit | `scripts/vendor/federation-ref.sh` |' \
+    '| IETF RFC 9999 | the RFC | `scripts/vendor/ietf-oauth.sh` |' \
+    '| A country page | pin-set digest | `scripts/vendor/de.sh` |' \
+    '| An unread corpus | commit | `scripts/vendor/new.sh` |' > "$work/matrix.md"
+  got="$(unwatched_rows "$work/matrix.md" | paste -sd ';' -)"
+  expect "An unread corpus" "$got" "a corpus row with no reader and no recorded reason"
+  rm "$work/matrix.md"
+  printf 'HTTP/2 200\r\nLink: </v2/a/b/tags/list?n=100&last=1.0>; rel="next"\r\n\r\n' > "$work/headers"
+  expect "/v2/a/b/tags/list?n=100&last=1.0" "$(next_page "$work/headers")" "the next page a registry links"
+  printf 'HTTP/2 200\r\ncontent-type: application/json\r\n\r\n' > "$work/headers"
+  expect "" "$(next_page "$work/headers")" "the last page"
+  rm "$work/headers"
+  rmdir "$work"
+  got="$(unwatched_rows "$MATRIX" | paste -sd ';' -)"
+  expect "" "$got" "the corpus rows of $MATRIX with no reader and no recorded reason"
 
   [[ "$failed" -eq 0 ]] || exit 1
   echo "pin-freshness: self-test OK."
@@ -264,7 +476,7 @@ case "${1:-}" in
 esac
 
 registry_scratch="$(mktemp -d)"
-trap 'rm -f "$registry_scratch/headers" "$registry_scratch/tags.json"; rmdir "$registry_scratch"' EXIT
+trap 'rm -f "$registry_scratch/headers" "$registry_scratch/tags.json" "$registry_scratch/tags.txt"; rmdir "$registry_scratch"' EXIT
 
 # One "matrix label<TAB>upstream repository" record per line. The label is the
 # first cell of the row in docs/VERSIONS.md, backticks and all.
@@ -322,29 +534,11 @@ while IFS=$'\t' read -r label repo; do
   fi
 done <<< "$WATCHED"
 
-# One "matrix label<TAB>upstream repository<TAB>branch" record per line: a
-# corpus pinned by commit on a repository that publishes no releases, read
-# against the newest commit of the branch the pin follows.
-readonly WATCHED_COMMITS="\
-Federation Tier with AQL specification	syntaric/openehr-federation-spec	main
-Federation Tier reference implementation	syntaric/openehr-federation-ref	main"
-
-# matrix_commit LABEL: the first 40-hex commit in the second cell of the
-# matrix row whose first cell is LABEL.
-matrix_commit() {
-  local label="$1"
-  awk -F'|' -v want="$label" '
-    NF >= 3 {
-      label = $2; value = $3
-      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
-      if (label == want && match(value, /[0-9a-f]{40}/)) { print substr(value, RSTART, RLENGTH); exit }
-    }' "$MATRIX"
-}
-
+# The commit-pinned corpora, each against the head of its branch.
 while IFS=$'\t' read -r label repo branch; do
   [[ -n "$label" ]] || continue
 
-  pinned="$(matrix_commit "$label")"
+  pinned="$(matrix_first "$label" '[0-9a-f]{40}')"
   if [[ -z "$pinned" ]]; then
     printf 'UNREADABLE %s: no commit pin in %s\n' "$label" "$MATRIX"
     unreadable=1
@@ -366,25 +560,16 @@ while IFS=$'\t' read -r label repo branch; do
   fi
 done <<< "$WATCHED_COMMITS"
 
-# One "matrix label<TAB>upstream repository" record per line: a corpus pinned
-# by a `Release-X.Y.Z` tag, read against the newest tag of that shape. The
-# openEHR specification repositories tag each release and publish no GitHub
-# release.
-readonly WATCHED_TAGS="\
-openEHR Reference Model specification source	openEHR/specifications-RM"
-
-while IFS=$'\t' read -r label repo; do
+# The tag-pinned corpora, each against the newest tag of its shape.
+while IFS=$'\t' read -r label repo prefix hold; do
   [[ -n "$label" ]] || continue
+  [[ "$prefix" != "-" ]] || prefix=""
 
-  pinned="$(awk -F'|' -v want="$label" '
-    NF >= 3 {
-      label = $2; value = $3
-      gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
-      gsub(/`/, "", value)
-      if (label == want && match(value, /Release-[0-9]+(\.[0-9]+)+/)) { print substr(value, RSTART + 8, RLENGTH - 8); exit }
-    }' "$MATRIX")"
-  if [[ -z "$pinned" ]]; then
-    printf 'UNREADABLE %s: no Release tag pin in %s\n' "$label" "$MATRIX"
+  pinned_tag="$(matrix_cell_token "$label" tag)"
+  pinned="${pinned_tag#"$prefix"}"
+  if [[ -z "$pinned_tag" || "$pinned" = "$pinned_tag" && -n "$prefix" ]] \
+    || ! [[ "$pinned" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+    printf 'UNREADABLE %s: no %sX.Y tag pin in %s\n' "$label" "$prefix" "$MATRIX"
     unreadable=1
     continue
   fi
@@ -394,40 +579,24 @@ while IFS=$'\t' read -r label repo; do
     unreadable=1
     continue
   fi
-  latest="$(sed -nE 's/^Release-([0-9]+(\.[0-9]+)+)$/\1/p' <<< "$tags" | newest_version "$pinned")"
+  latest="$(sed -nE "s/^$prefix([0-9]+(\.[0-9]+)+)$/\1/p" <<< "$tags" | newest_version "$pinned")"
   if [[ -z "$latest" ]]; then
-    printf 'UNREADABLE %s: %s has no Release-X.Y.Z tag\n' "$label" "$repo"
+    printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$repo" "$prefix"
     unreadable=1
   elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s Release-%s (%s)\n' "$label" "$pinned" "$repo"
+    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$repo"
+  elif [[ "$hold" != "-" ]]; then
+    printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
+      "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
   else
-    printf 'STALE      %s: pinned Release-%s, newest release tag Release-%s (https://github.com/%s/tree/Release-%s)\n' \
-      "$label" "$pinned" "$latest" "$repo" "$latest"
+    printf 'STALE      %s: pinned %s, newest release tag %s%s (https://github.com/%s/tree/%s%s)\n' \
+      "$label" "$pinned_tag" "$prefix" "$latest" "$repo" "$prefix" "$latest"
     stale=1
   fi
 done <<< "$WATCHED_TAGS"
 
-# One "matrix label<TAB>package<TAB>hold" record per line: a FHIR package, or
-# the pages of the implementation guide it publishes, pinned by version and
-# read against the versions its entry on the FHIR package registry lists. A
-# held package is pinned at the version another pinned package depends on
-# (the hold says which), so a newer release of it is printed and is not a
-# stale pin by itself: the dependent's release moves it.
-readonly FHIR_REGISTRY=https://packages.fhir.org
-readonly WATCHED_PACKAGES="\
-Xt-EHR EHDS Logical Information Models	xtehr.eu.ehds.models	-
-HL7 Europe Base and Core	hl7.fhir.eu.base	-
-HL7 Europe Patient Summary	hl7.fhir.eu.eps	-
-HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
-HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
-HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
-HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
-IHE PIXm narrative pages	ihe.iti.pixm	-
-IHE PDQm narrative pages	ihe.iti.pdqm	-
-IHE PMIR narrative pages	ihe.iti.pmir	-
-IHE mCSD narrative pages	ihe.iti.mcsd	-
-IHE BALP narrative pages	ihe.iti.balp	-"
-
+# The FHIR packages and the guides they publish, each against its registry
+# entry.
 while IFS=$'\t' read -r label package hold; do
   [[ -n "$label" ]] || continue
 
@@ -459,6 +628,84 @@ while IFS=$'\t' read -r label package hold; do
     stale=1
   fi
 done <<< "$WATCHED_PACKAGES"
+
+# The documents at unversioned URLs, each against the bytes served now.
+while IFS=$'\t' read -r label url; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(matrix_first "$label" '[0-9a-f]{64}')"
+  if [[ -z "$pinned" ]]; then
+    printf 'UNREADABLE %s: no sha256 pin in %s\n' "$label" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! served="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" "$url" \
+    | shasum -a 256 | cut -d' ' -f1)" || ! [[ "$served" =~ ^[0-9a-f]{64}$ ]]; then
+    printf 'UNREADABLE %s: could not read %s\n' "$label" "$url"
+    unreadable=1
+    continue
+  fi
+  if [[ "$pinned" = "$served" ]]; then
+    printf 'current    %s sha256 %s (%s)\n' "$label" "$pinned" "$url"
+  else
+    printf 'STALE      %s: pinned sha256 %s, %s now serves %s, a new revision or an edit\n' \
+      "$label" "$pinned" "$url" "$served"
+    stale=1
+  fi
+done <<< "$WATCHED_DOCUMENTS"
+
+# The RFCs, each against what the RFC Editor records as obsoleting it.
+while IFS=$'\t' read -r label _; do
+  [[ "$label" =~ ^IETF\ RFC\ ([0-9]+)$ ]] || continue
+  number="${BASH_REMATCH[1]}"
+  if ! obsoleted="$(curl --fail --silent --show-error --user-agent "$REGISTRY_UA" "$RFC_INDEX/rfc$number.json" \
+    | jq --raw-output --exit-status '.obsoleted_by | join(", ")' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the RFC Editor record %s/rfc%s.json (%s)\n' \
+      "$label" "$RFC_INDEX" "$number" "$obsoleted"
+    unreadable=1
+  elif [[ -z "$obsoleted" ]]; then
+    printf 'current    %s, obsoleted by none (%s/rfc%s.json)\n' "$label" "$RFC_INDEX" "$number"
+  else
+    printf 'STALE      %s: obsoleted by %s (%s/rfc%s.json)\n' "$label" "$obsoleted" "$RFC_INDEX" "$number"
+    stale=1
+  fi
+done < <(corpus_rows "$MATRIX")
+
+# The dated W3C publications, each against the newest version of its
+# specification.
+while IFS=$'\t' read -r label shortname hold; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(matrix_first "$label" 'https://www\.w3\.org/TR/[^ ,;]+')"
+  if [[ -z "$pinned" ]]; then
+    printf 'UNREADABLE %s: no W3C publication URL in %s\n' "$label" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! latest="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" \
+    --header 'Accept: application/json' "$W3C_API/$shortname/versions/latest" \
+    | jq --raw-output --exit-status '.uri' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the newest version of %s from %s (%s)\n' \
+      "$label" "$shortname" "$W3C_API" "$latest"
+    unreadable=1
+  elif [[ "$pinned" = "$latest" ]]; then
+    printf 'current    %s %s\n' "$label" "$pinned"
+  elif [[ "$hold" != "-" ]]; then
+    printf 'held       %s: pinned %s, newest version %s, held at %s\n' "$label" "$pinned" "$latest" "$hold"
+  else
+    printf 'STALE      %s: pinned %s, newest version %s\n' "$label" "$pinned" "$latest"
+    stale=1
+  fi
+done <<< "$WATCHED_W3C"
+
+# A corpus row with no reader and no recorded reason is a pin nobody reads.
+while IFS= read -r label; do
+  [[ -n "$label" ]] || continue
+  printf 'UNREADABLE %s: no freshness reader, and its vendor script is not in UNWATCHED_SCRIPTS\n' "$label"
+  unreadable=1
+done < <(unwatched_rows "$MATRIX")
 
 # The Chrome for Testing release the browser journeys run Chrome and
 # chromedriver at, read against the newest stable release of the Chrome for

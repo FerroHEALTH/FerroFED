@@ -17,19 +17,25 @@ See how it works: [the quickstart and a production layout](../how-it-works/deplo
 ## The gateway from a release
 
 Every release carries three files that run the gateway alone, at that
-release's image, in front of the CDRs you already run. You need Docker
-Compose and no checkout of the repository.
+release's image, in front of the CDRs you already run, and the nginx
+reverse proxy that puts it on its public address. You need Docker Compose
+and no checkout of the repository.
 
-1. Download the three files into a directory of their own:
+1. Download the files into a directory of their own, and check the proxy
+   configuration against its checksum:
 
    ```sh
    mkdir ferrofed && cd ferrofed
-   for f in compose.yaml ferrofed.toml registry.toml; do
+   for f in compose.yaml ferrofed.toml registry.toml ferrofed.conf ferrofed.conf.sha256sum; do
      curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
    done
+   sha256sum -c ferrofed.conf.sha256sum
    ```
 
    `…/releases/download/vX.Y.Z/$f` downloads the files of one version.
+   `ferrofed.conf` is the nginx configuration of the
+   [production guide](production.md#8-tls-and-the-public-address); Compose
+   does not read it.
 2. Edit `registry.toml`, the [registry document](registry.md): replace the two
    example members with your organisations, nodes and endpoints, as many as the
    federation has.

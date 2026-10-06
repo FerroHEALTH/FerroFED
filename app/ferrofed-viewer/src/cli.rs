@@ -10,14 +10,25 @@
 //! design.
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use clap::{Parser, Subcommand};
+
+use crate::manufacturer::MANUFACTURER;
+
+/// What `ferrofed-viewer --version` prints after the binary's name.
+///
+/// The version, then the manufacturer with its postal address, its single
+/// point of contact and its website (Regulation (EU) 2025/327 Art 30(1)(g)).
+pub static LONG_VERSION: LazyLock<String> =
+    LazyLock::new(|| MANUFACTURER.version_text(env!("CARGO_PKG_VERSION")));
 
 /// The `ferrofed-viewer` command line.
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(
     name = "ferrofed-viewer",
     version,
+    long_version = LONG_VERSION.as_str(),
     about = "The FerroFED operator console"
 )]
 pub struct Cli {

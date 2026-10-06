@@ -21,9 +21,12 @@
 //! | `ehr_id` exchange | the cross-reference maps each subject to the `ehr_id` the node created |
 //!
 //! A node that cannot be reached fails every condition the check exercises,
-//! with the typed cause: a check that reached nothing passes nothing. No
+//! with the typed cause: a check that reached nothing passes nothing. A
+//! member whose governance forbids test data is checked by [`read_only`],
+//! which makes no write and names the conditions it leaves unproven. No
 //! specification governs the form of the check: our own design.
 
+pub mod read_only;
 pub mod report;
 pub mod subject;
 
@@ -322,7 +325,13 @@ fn system_id(
     }
     for (one, answer) in created.iter().zip(read) {
         lines.push(match answer {
-            Ok(ehr) => reported(snapshot, node.id(), recorded, &one.ehr_id, ehr),
+            Ok(ehr) => reported(
+                snapshot,
+                node.id(),
+                recorded,
+                &one.ehr_id,
+                ehr.system_id.value(),
+            ),
             Err(error) => (
                 Verdict::Fail,
                 format!("reading EHR {} failed: {}", one.ehr_id, chain(error)),
@@ -332,15 +341,14 @@ fn system_id(
     finding(Condition::SystemIdUniqueness, lines)
 }
 
-/// What the `system_id` the node reports in `ehr` shows.
+/// What the `system_id` `value` the node reports in EHR `ehr_id` shows.
 fn reported(
     snapshot: &RegistrySnapshot,
     node: &NodeId,
     recorded: &SystemId,
     ehr_id: &str,
-    ehr: &Ehr,
+    value: &str,
 ) -> (Verdict, String) {
-    let value = ehr.system_id.value();
     let Ok(reported) = SystemId::new(value) else {
         return (
             Verdict::Fail,

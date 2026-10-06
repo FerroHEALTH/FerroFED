@@ -5,7 +5,9 @@
 
 **FerroFED** is a pure-Rust openEHR federation gateway: a transparent
 ITS-REST intermediary in front of many openEHR CDRs. A client sends it an
-ordinary AQL query and never learns it was federated. The gateway resolves the
+ordinary ITS-REST request, with AQL that carries no federation syntax, and
+gets an ordinary ITS-REST answer back, whose `meta.federation` names each
+member node with its status. The gateway resolves the
 patient outside AQL, through an identifier cross-reference service, to a set of
 `{node, local ehr_id}`; it sends standard, non-federated AQL to each node,
 scoped to that node's own `ehr_id`; and it merges what comes back with each

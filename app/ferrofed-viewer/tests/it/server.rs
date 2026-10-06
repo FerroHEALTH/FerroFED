@@ -42,6 +42,45 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
 }
 
 #[tokio::test]
+async fn every_page_names_the_manufacturer_in_its_footer() -> Result<(), Box<dyn Error>> {
+    let (_state, service) = console("")?;
+    for path in ["/", "/no/such/page"] {
+        let (_response, body) = send(&service, get(path)?).await?;
+        let footer = body
+            .split_once("<footer>")
+            .and_then(|(_, rest)| rest.split_once("</footer>"))
+            .map(|(inside, _)| inside)
+            .ok_or_else(|| format!("{path} has no footer: {body}"))?;
+        // Regulation (EU) 2025/327 Art 30(1)(g): the name, the postal address
+        // and the single point of contact, in the system.
+        for text in [
+            "FerroFED operator console",
+            env!("CARGO_PKG_VERSION"),
+            "Cadasto B.V.",
+            "Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands",
+            r#"<a href="mailto:info@cadasto.com">info@cadasto.com</a>"#,
+            r#"<a href="https://www.cadasto.com/contact/">https://www.cadasto.com/contact/</a>"#,
+        ] {
+            assert!(footer.contains(text), "{path}: {text}: {footer}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_long_version_names_the_manufacturer() {
+    use clap::CommandFactory as _;
+    let version = ferrofed_viewer::cli::Cli::command().render_long_version();
+    for text in [
+        "Cadasto B.V.",
+        "Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands",
+        "info@cadasto.com",
+    ] {
+        assert!(version.contains(text), "{text}: {version}");
+    }
+}
+
+#[tokio::test]
 async fn a_path_the_console_does_not_serve_answers_not_found() -> Result<(), Box<dyn Error>> {
     let (_state, service) = console("")?;
     let (response, body) = send(&service, get("/no/such/page")?).await?;

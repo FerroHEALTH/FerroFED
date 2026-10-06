@@ -108,7 +108,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #696 (the RM facts the follow-up routing and the A57
   classification cite: \`LOCATABLE\`, \`archetype_details\`, the change
-  control classes, \`DV_TEXT.mappings\` and \`TERM_MAPPING\`)
+  control classes, \`DV_TEXT.mappings\` and \`TERM_MAPPING\`), and
+  \`scripts/checks/openehr-classes.sh\` (#719), which holds every class and
+  attribute the tree names to the definitions under \`docs/UML/classes/\`
 
 ## What is here
 
@@ -124,7 +126,8 @@ The rendered \`.html\` pages, the UML class diagrams under
 \`docs/UML/diagrams/\` and the UML tool's project files under
 \`computable/\` are left out. The identifier classes (\`OBJECT_VERSION_ID\`,
 \`OBJECT_REF\`, \`PARTY_REF\`) are defined in the openEHR BASE component,
-which the RM chapters cite and this tree does not carry.
+which the RM chapters cite; \`docs/specs/openehr-base/\` carries its paired
+release (\`scripts/vendor/openehr-base.sh\`).
 PROV
 
 say "$files files, tree digest $digest"

@@ -67,10 +67,11 @@
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
-          ordinary AQL query and never learns it was federated: the gateway
-          resolves the patient outside the query, sends standard AQL to each
-          CDR scoped to that node's own EHR id, and merges the answers with
-          each node's provenance. It holds no clinical data of its own.
+          ordinary AQL query with no federation syntax: the gateway resolves
+          the patient outside the query, sends standard AQL to each CDR scoped
+          to that node's own EHR id, and merges the answers with each node's
+          provenance into one ordinary result set. It holds no clinical data
+          of its own.
         </p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="./docs/operate/container.html">Install and run</a>
@@ -100,10 +101,12 @@
         </div>
         <pre class="cmd"><code>git clone https://github.com/FerroHEALTH/FerroFED.git
 cd FerroFED
+scripts/quickstart/signing-key.sh
 docker compose up --wait
 scripts/quickstart/seed.sh
 
 curl -s http://127.0.0.1:8080/v1/query/aql \
+  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
   -H 'Content-Type: application/json' -d @- &lt;&lt;'EOF'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF</code></pre>
@@ -158,12 +161,13 @@ EOF</code></pre>
 
           <article class="card">
             <span class="tag">In v0.0.3</span>
-            <h3>No identifier reaches a node</h3>
+            <h3>No identifier in what the gateway sends a node</h3>
             <p>
               The patient identifier is resolved to each node's local EHR id
               outside AQL, through an IHE PIXm PIX Manager, and consumed at the
               gateway. The rewrite refuses a query that would leak it, and an
-              outbound gate checks every request again before it leaves.
+              outbound gate checks every request again before it leaves. A
+              body the client writes reaches its node as the client sent it.
             </p>
           </article>
 
@@ -238,8 +242,8 @@ EOF</code></pre>
             <h3>Every caller verified, every node reached its own way</h3>
             <p>
               Each caller is authenticated at the gateway, and each node is
-              reached with its own credential: OAuth 2.0 with DPoP, the Dutch
-              Nuts and FAPI 2.0 grants, or mutual TLS. Patients are located
+              reached with its own credential: OAuth 2.0 with DPoP, or the
+              Dutch Nuts and FAPI 2.0 grants. Patients are located
               through XCPD, PIXm, PDQm or the Dutch NVI, consent can be
               checked with Mitz first, and every IHE exchange is audited.
             </p>
@@ -252,10 +256,11 @@ EOF</code></pre>
               The operator console shows the members, incidents and stored
               queries and runs a federated query with every node's status and
               completeness, signed in through OpenID Connect with no
-              JavaScript of its own. The conformance statement scores every
-              conformance point of the Federation Tier against FerroEHR and
-              EHRbase, and <code>ferrofed conformance run</code> repeats it
-              against your own nodes.
+              JavaScript of its own. The conformance statement scores each
+              conformance point of the Federation Tier by a test or a recorded
+              deferral, with the node profile checked against FerroEHR and
+              EHRbase, and <code>ferrofed conformance run</code> scores your
+              own deployment.
             </p>
           </article>
 
@@ -389,6 +394,11 @@ EOF</code></pre>
             family. The software is licensed under the
             <a href="https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE" rel="noopener">Business Source License 1.1</a>.
           </p>
+          <p>
+            Manufactured by Cadasto B.V., Comeniusstraat 2d, 1817 MS Alkmaar,
+            The Netherlands:
+            <a href="mailto:info@cadasto.com">info@cadasto.com</a>.
+          </p>
         </div>
         <div class="footer-links">
           <div>
@@ -399,6 +409,7 @@ EOF</code></pre>
               <li><a href="./docs/evaluate/the-federation-tier.html">The specification</a></li>
               <li><a href="./docs/evaluate/licensing.html">Licensing</a></li>
               <li><a href="./docs/evaluate/regulatory-status.html">Regulatory status</a></li>
+              <li><a href="./docs/evaluate/post-market.html">Complaints and incidents</a></li>
               <li><a href="https://syntaric.github.io/openehr-federation-spec/" rel="noopener">Federation Tier with AQL</a></li>
             </ul>
           </div>

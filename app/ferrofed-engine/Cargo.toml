@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-engine"
-description = "The federation engine: dispatch and fan-out to each node over ITS-REST, the per-node and overall budgets, the completeness decision and the outbound identifier-hygiene gate; follow-up routing on the creating system id is planned"
+description = "The federation engine: dispatch and fan-out to each node over ITS-REST, the per-node and overall budgets, the completeness decision, the single-node forwarding of follow-up requests and the outbound identifier-hygiene gate"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true

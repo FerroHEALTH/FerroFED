@@ -5,8 +5,9 @@
 //! §12b.2, each with its verdict and the evidence behind it.
 //!
 //! The report prints the endpoint id, the node id, `system_id`s and the
-//! `ehr_id`s the node created, and never a synthetic subject: the evidence
-//! is redacted against every subject of the run before it is kept.
+//! `ehr_id`s the node created or the run read, and never a synthetic
+//! subject: the evidence is redacted against every subject of the run before
+//! it is kept.
 
 use std::fmt;
 
@@ -107,18 +108,31 @@ impl Finding {
     }
 }
 
+/// How a check gathered its evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// The check created test EHRs on the node and read each back.
+    Full,
+    /// The check made no write: it read the `ehr_id` and `system_id` of
+    /// EHRs the node already holds, for a node whose governance forbids
+    /// test data.
+    ReadOnly,
+}
+
 /// What one admission check found on one member's endpoint.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     endpoint: EndpointId,
     node: NodeId,
+    mode: Mode,
     created: Vec<String>,
+    read: Vec<String>,
     findings: Vec<Finding>,
 }
 
 impl Report {
-    /// The report on `endpoint` of `node`: the `ehr_id`s the node created
-    /// and the findings, each line redacted against `subjects`.
+    /// The report of a full run on `endpoint` of `node`: the `ehr_id`s the
+    /// node created and the findings, each line redacted against `subjects`.
     pub(super) fn new(
         endpoint: EndpointId,
         node: NodeId,
@@ -130,7 +144,9 @@ impl Report {
         Self {
             endpoint,
             node,
+            mode: Mode::Full,
             created: created.into_iter().map(redacted).collect(),
+            read: Vec::new(),
             findings: findings
                 .into_iter()
                 .map(|finding| Finding {
@@ -139,6 +155,47 @@ impl Report {
                 })
                 .collect(),
         }
+    }
+
+    /// The report of a run without writes on `endpoint` of `node`: the
+    /// `ehr_id`s of the existing EHRs it read and the findings.
+    pub(super) fn read_only(
+        endpoint: EndpointId,
+        node: NodeId,
+        read: Vec<String>,
+        findings: Vec<Finding>,
+    ) -> Self {
+        Self {
+            endpoint,
+            node,
+            mode: Mode::ReadOnly,
+            created: Vec::new(),
+            read,
+            findings,
+        }
+    }
+
+    /// How the check gathered its evidence.
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    /// The `ehr_id`s of the existing EHRs a run without writes read.
+    #[must_use]
+    pub fn read(&self) -> &[String] {
+        &self.read
+    }
+
+    /// The conditions the run left unproven: those it reports
+    /// `cannot-check`, in the order of the §12b.2 table.
+    #[must_use]
+    pub fn unproven(&self) -> Vec<Condition> {
+        self.findings
+            .iter()
+            .filter(|finding| finding.verdict == Verdict::CannotCheck)
+            .map(|finding| finding.condition)
+            .collect()
     }
 
     /// The endpoint the check ran against.
@@ -189,19 +246,21 @@ impl fmt::Display for Report {
             "ferrofed admission check: endpoint {} of node {}",
             self.endpoint, self.node
         )?;
-        writeln!(
-            f,
-            "This check creates test EHRs on the node, each with a synthetic EHR_STATUS subject in namespace {NAMESPACE}, and the node keeps every one it created."
-        )?;
-        if self.created.is_empty() {
-            writeln!(f, "EHRs created: none")?;
-        } else {
-            writeln!(
-                f,
-                "EHRs created ({}): {}",
-                self.created.len(),
-                self.created.join(", ")
-            )?;
+        match self.mode {
+            Mode::Full => {
+                writeln!(
+                    f,
+                    "This check creates test EHRs on the node, each with a synthetic EHR_STATUS subject in namespace {NAMESPACE}, and the node keeps every one it created."
+                )?;
+                listed(f, "EHRs created", &self.created)?;
+            }
+            Mode::ReadOnly => {
+                writeln!(
+                    f,
+                    "This run made no write to the node: it read the ehr_id and system_id of EHRs the node already holds, and created no test EHR."
+                )?;
+                listed(f, "EHRs read", &self.read)?;
+            }
         }
         for finding in &self.findings {
             writeln!(f)?;
@@ -222,6 +281,16 @@ impl fmt::Display for Report {
                 .count()
         };
         writeln!(f)?;
+        if self.mode == Mode::ReadOnly {
+            let unproven: Vec<&str> = self.unproven().into_iter().map(Condition::name).collect();
+            if !unproven.is_empty() {
+                writeln!(
+                    f,
+                    "Left unproven by a run without writes: {}. §12b.1 asks for verification by test: prove these by a full run against a staging copy of the node, or by the node operator's documented procedures.",
+                    unproven.join(", ")
+                )?;
+            }
+        }
         write!(
             f,
             "Result: {} passed, {} failed, {} cannot be checked. The tool supplies evidence; the federation operator decides admission (§12b.1, N42a, CP-33a).",
@@ -229,6 +298,15 @@ impl fmt::Display for Report {
             count(Verdict::Fail),
             count(Verdict::CannotCheck)
         )
+    }
+}
+
+/// Writes the line naming `what` and the `ehr_id`s of `ehr_ids`.
+fn listed(f: &mut fmt::Formatter<'_>, what: &str, ehr_ids: &[String]) -> fmt::Result {
+    if ehr_ids.is_empty() {
+        writeln!(f, "{what}: none")
+    } else {
+        writeln!(f, "{what} ({}): {}", ehr_ids.len(), ehr_ids.join(", "))
     }
 }
 

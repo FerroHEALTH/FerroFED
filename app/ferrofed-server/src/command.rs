@@ -86,8 +86,13 @@ where
             }
         },
         Command::Admission {
-            command: AdmissionCommand::Check { endpoint, count },
-        } => admission_command(&settings, &endpoint, count),
+            command:
+                AdmissionCommand::Check {
+                    endpoint,
+                    count,
+                    read_only,
+                },
+        } => admission_command(&settings, &endpoint, count, read_only),
         Command::Conformance {
             command: ConformanceCommand::Run(args),
         } => conformance_command(&settings, args),
@@ -228,8 +233,9 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
     ExitCode::SUCCESS
 }
 
-/// Runs the admission check against `endpoint` with `count` test EHRs and
-/// writes the report to standard output.
+/// Runs the admission check against `endpoint` with `count` test EHRs, or
+/// with `read_only` reading at most `count` existing EHRs and writing
+/// nothing, and writes the report to standard output.
 ///
 /// The exit code is `0` when no condition failed, `1` when one did,
 /// [`EXIT_USAGE`] for an endpoint the registry does not hold, and
@@ -243,7 +249,7 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
     clippy::print_stderr,
     reason = "a refusal is reported to the operator, with no log subscriber installed"
 )]
-fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode {
+fn admission_command(settings: &Settings, endpoint: &str, count: u8, read_only: bool) -> ExitCode {
     let federation = match Federation::load(settings) {
         Ok(Some(federation)) => federation,
         Ok(None) => {
@@ -278,7 +284,12 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(admission::check(&federation, &endpoint, count)) {
+    let checked = if read_only {
+        runtime.block_on(admission::read_only::check(&federation, &endpoint, count))
+    } else {
+        runtime.block_on(admission::check(&federation, &endpoint, count))
+    };
+    match checked {
         Ok(report) => {
             println!("{report}");
             if report.failed() {

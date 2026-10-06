@@ -4,8 +4,9 @@
 //! The startup banner `ferrofed serve` prints before its log starts.
 //!
 //! The wordmark, the product version, the maintainer and the repository, the
-//! releases the gateway serves, and the deployment facts an operator checks
-//! first. The wordmark is committed text, so the boot path loads no font and
+//! manufacturer with its contact and postal address (Regulation (EU)
+//! 2025/327 Art 30(1)(g)), the releases the gateway serves, and the
+//! deployment facts an operator checks first. The wordmark is committed text, so the boot path loads no font and
 //! carries no dependency for it. Every pin is read from the crate constant
 //! `scripts/checks/versions.sh` holds to the pin matrix, never typed here.
 //!
@@ -18,6 +19,7 @@
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 
+use ferrofed_registry::manufacturer::MANUFACTURER;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;
@@ -179,9 +181,13 @@ pub fn prints(format: Format, stdout_is_terminal: bool) -> bool {
 #[must_use]
 pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
     let mut out = format!(
-        "{WORDMARK}\n\n  openEHR federation gateway · v{version}\n  Maintained by {} · {}\n\n",
+        "{WORDMARK}\n\n  openEHR federation gateway · v{version}\n  Maintained by {} · {}\n  \
+         Manufactured by {} · {}\n  {}\n\n",
         env!("CARGO_PKG_AUTHORS"),
         env!("CARGO_PKG_REPOSITORY"),
+        MANUFACTURER.name,
+        MANUFACTURER.email,
+        MANUFACTURER.postal_address,
     );
     let pins = [
         ("Federation Tier", openehr_federation::FEDERATION_SPEC),

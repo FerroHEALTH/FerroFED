@@ -33,10 +33,14 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
-  example files it mounts. It also attaches the conformance seed data
-  `scripts/release/seed-data.sh` writes, `ferrofed-conformance-seed-data.json`
-  (the vendored demo data `ferrofed conformance run --seed-data` reads, with
-  its Apache-2.0 licence and notice) and its SHA-256 as
+  example files it mounts. It attaches the nginx reverse proxy
+  configuration of the production guide, `deploy/nginx/ferrofed.conf`, as
+  `ferrofed.conf`, with its SHA-256 as `ferrofed.conf.sha256sum`, and fails
+  when the tag's tree has no such file. It also attaches the conformance
+  seed data `scripts/release/seed-data.sh` writes,
+  `ferrofed-conformance-seed-data.json` (the vendored demo data
+  `ferrofed conformance run --seed-data` reads, with its Apache-2.0 licence
+  and notice) and its SHA-256 as
   `ferrofed-conformance-seed-data.json.sha256sum`, and the Grafana dashboard
   and Prometheus alert rules of `deploy/observability/`,
   `ferrofed-dashboard.json` and `ferrofed-alerts.yaml`. A draft is mutable and
@@ -51,9 +55,10 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   it to `ghcr.io/ferrohealth/ferrofed-viewer`. The console ships as an image
   alone, so it attaches no asset to the draft.
 - **finalize-release** checks that the draft carries every asset this version
-  promises, eight per target, the three compose files and the two seed data
-  files, and publishes only then, and only once both images are pushed. A
-  draft missing any of them fails the check and stays a draft, so a
+  promises, eight per target, the three compose files, the nginx
+  configuration and its checksum, the two seed data files, and the dashboard
+  and alert rules, and publishes only then, and only once both images are
+  pushed. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A pre-release is published with
   `--latest=false`, so it never becomes the repository's latest release.
 
@@ -180,7 +185,13 @@ slow one.
    (`website/landing/index.html`) name the same version in the same pull
    request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull
    request is where it changes; the release lane never writes to `main`.
-4. **The version bump lands as its own pull request** and merges like any
+4. **The public texts are reviewed against Regulation (EU) 2025/327 Art 28.**
+   Every public text is read for a claim the release does not ship, a
+   limitation it leaves out, or a use outside the intended purpose, and the
+   [claims review](https://ferrofed.eu/docs/evaluate/claims-review.html) gets
+   a row for the release, in the version-bump pull request. Its method is on
+   that page.
+5. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).

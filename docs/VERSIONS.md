@@ -96,6 +96,9 @@ fetched under the ignored `.vendor-cache/`, and only its `PROVENANCE.md` is
 committed. Each script below reads
 its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 `PROVENANCE.md` back and fails when it names a different commit or tag.
+`scripts/checks/pin-freshness.sh` reads every corpus row of this file, in
+every table below, against its upstream, or lists its vendor script with the
+reason no reader is needed; its self-test fails on a row with neither.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -104,6 +107,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules, the Query validation document and the SMART on openEHR source (`docs/smart_app_launch/`, DEVELOPMENT status in this release) | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
 | openEHR Reference Model specification source | `openEHR/specifications-RM` tag `Release-1.1.0`, the AsciiDoc sources of the RM 1.1.0 specifications and the class definitions they include | `scripts/vendor/openehr-rm.sh`, `docs/specs/openehr-rm/PROVENANCE.md` |
+| openEHR BASE specification source | `openEHR/specifications-BASE` tag `Release-1.1.0`, the release paired with the RM `Release-1.1.0` (decided 2026-10-06): the AsciiDoc sources of the BASE 1.1.0 specifications and the class definitions they include | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
 | IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 and ITI-119 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
@@ -181,6 +185,7 @@ change with every render, is cited and not pinned.
 | EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, two eHealth Network guidelines and Commission Decision 2011/833/EU on the reuse of Commission documents, pin-set digest `4af818fc47ead2a2a5120225d68a338ba068bed71c46b4e65b064491ceddf148` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
 | MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0, two guide pages and OpenNCP v10.1.0, pin-set digest `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
 | IHE ITI Technical Framework Volume 1 pages | ITI TF Revision 20.2 chapters 13, 18 and 27, pin-set digest `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf/PROVENANCE.md` |
+| IHE ITI Technical Framework Volume 2 pages | the ITI-38 page (Revision 20.2), committed, and the ITI-55 page (Revision 20.1), cache only, pin-set digest `84c3ff8cfad148b5c066ae364d1f8a3044c6210ed806e9b87f363d8dda2d5546` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf-vol2/PROVENANCE.md` |
 | Belgian eHealth platform documents | ten cookbooks, two Swagger documents and the re-use conditions, pin-set digest `62377196eaf498ce49beca04948308cc78d02a718b5ecd1471514c1567b2c025` | `scripts/vendor/be.sh`, `docs/specs/be-ehealth/PROVENANCE.md` |
 | Belgian core profiles (HL7 Belgium) | package `hl7.fhir.be.core` 2.2.0, pin-set digest `ad5ae8d7d42c01757df5c7ed3a879fd69151e19a90b17636ad1c6fba8f6b3ca7` | `scripts/vendor/be.sh`, `docs/specs/be-fhir/PROVENANCE.md` |
 | French ANS publications | FR Core, the Annuaire Santé, Pro Santé Connectée transport security, PDSm and PDSm for DMP, pin-set digest `26094f61487a2a7e02d324a0ae7890f38f09bc4be4b7bfb90a266e6489c40eb0` | `scripts/vendor/fr.sh`, `docs/specs/fr-ans/PROVENANCE.md` |
@@ -195,8 +200,9 @@ change with every render, is cited and not pinned.
 The published proxies for the European electronic health record exchange
 format of Regulation (EU) 2025/327 Article 15(1), until its implementing act
 is adopted: the Xt-EHR EHDS Logical Information Models and the HL7 Europe
-FHIR guides, with the HL7 Europe Extensions and the International Patient
-Summary at the versions those guides depend on. Each is the registry tarball
+FHIR guides, with the HL7 Europe Extensions, the International Patient
+Summary and the IHE Pharmacy Medication Prescription and Dispense profile at
+the versions those guides depend on. Each is the registry tarball
 of `packages.fhir.org`, pinned in `scripts/vendor/eehrxf.sh` by URL and
 sha256 through `scripts/vendor/lib/pinned.sh` and committed whole, and each
 row carries the pin-set digest first and the tarball sha256 after it.
@@ -211,6 +217,7 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 Europe Laboratory Report | package `hl7.fhir.eu.laboratory` 2.0.0, pin-set digest `716111c5e8d1a60490dd0ac34f5e98534fd83cce8055218e05f7d675778af682`, tarball sha256 `097aa45c6efcdbc3f25ead8b7d448fee5011b5e7ecf264aa400c5e2c69c5c488` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-laboratory/PROVENANCE.md` |
 | HL7 Europe Extensions | package `hl7.fhir.eu.extensions.r4` 1.3.1 and 1.3.0, pin-set digest `6a5701133f97d68913f2b007f01a9b654b339cff1f8340493b5f2b615b6be24d`, tarball sha256 `37f3ee7ae7a2312e71a4e855e6c36f45d2bc3b13f995bcf4a9fb499ca014cff6` (1.3.1, which `hl7.fhir.eu.base` 2.0.1 depends on) and `8510e930856961d550c04d43f243ef0bdcb27089431fe183ab11c7f805f0c2f1` (1.3.0, which `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.laboratory` 2.0.0 depend on) | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-extensions/PROVENANCE.md` |
 | HL7 International Patient Summary | package `hl7.fhir.uv.ips` 2.0.0, pin-set digest `b26ce0cf1012b4a97f3678efa9ece6198b4b353f85ec0090a1de057643b31c5a`, tarball sha256 `b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979`, the version `hl7.fhir.eu.eps` 1.0.0-ballot depends on | `scripts/vendor/eehrxf.sh`, `docs/specs/hl7-ips/PROVENANCE.md` |
+| IHE Pharmacy Medication Prescription and Dispense | package `ihe.pharm.mpd.r4` 1.0.0-comment-2, pin-set digest `12effdefce443cb7b61ff9b7f39a4431b54d9267becdeef7d3505770ddc8398e`, tarball sha256 `05eda0d1871d2980cb13023d18a5a9618c9945c3a85cf721c14c5e989e0d3776`, the version `hl7.fhir.eu.base` 2.0.1, `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.mpd` 1.0.0 depend on | `scripts/vendor/eehrxf.sh`, `docs/specs/ihe-pharm-mpd/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
@@ -433,6 +440,7 @@ it.
 | SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.0@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | nginx reverse proxy image | `nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94` | read from this row by `scripts/checks/production-guide.sh`, which runs `deploy/nginx/ferrofed.conf` in it |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
@@ -471,6 +479,14 @@ gateway in the image above: nginx 1.30.5 on Alpine, the release the
 Hub by the digest of its image index. The guard reads the image from this
 row, so the row is its one pin. nginx is published under the 2-clause BSD
 licence, and the image is public.
+
+The production guide's Keycloak recipe (#724) runs against Keycloak 26.8.0,
+the newest stable release, resolved on 2026-10-06 from Quay by the digest of
+its image index. The Keycloak image carries no `awk`, which the recipe pipes
+into, so its `kcadm.sh` commands run on the runtime image of the reference
+implementation row with the admin CLI copied out of the Keycloak container.
+Keycloak is published under the Apache License 2.0, and the image is public.
+Quay pages its tag list, and the freshness read follows every page.
 
 The differential run (#94) builds the Federation Tier reference
 implementation from the vendored source at its pinned commit, with the Maven

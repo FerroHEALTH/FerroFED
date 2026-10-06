@@ -15,15 +15,25 @@
 //! of its own. No specification governs the command line: our own design.
 
 use clap::{Parser, Subcommand};
+use ferrofed_registry::manufacturer::MANUFACTURER;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use crate::admission::DEFAULT_COUNT;
+
+/// What `ferrofed --version` prints after the binary's name.
+///
+/// The version, then the manufacturer with its postal address, its single
+/// point of contact and its website (Regulation (EU) 2025/327 Art 30(1)(g)).
+pub static LONG_VERSION: LazyLock<String> =
+    LazyLock::new(|| MANUFACTURER.version_text(env!("CARGO_PKG_VERSION")));
 
 /// The `ferrofed` command line.
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(
     name = "ferrofed",
     version,
+    long_version = LONG_VERSION.as_str(),
     about = "The FerroFED openEHR federation gateway"
 )]
 pub struct Cli {
@@ -82,7 +92,8 @@ pub enum AdmissionCommand {
         #[arg(long, value_name = "ENDPOINT_ID")]
         endpoint: String,
         /// How many test EHRs to create on the node, at least two so their
-        /// `ehr_id`s can be compared.
+        /// `ehr_id`s can be compared, or with `--read-only` the most existing
+        /// EHRs to read.
         #[arg(
             long,
             value_name = "N",
@@ -90,6 +101,11 @@ pub enum AdmissionCommand {
             value_parser = clap::value_parser!(u8).range(2..=50)
         )]
         count: u8,
+        /// Makes no write to the node: reads the `ehr_id` and `system_id` of
+        /// EHRs it already holds, and names every condition the run leaves
+        /// unproven.
+        #[arg(long)]
+        read_only: bool,
     },
 }
 
@@ -152,7 +168,7 @@ mod tests {
 
     #[test]
     fn every_documented_subcommand_parses() {
-        let cases: [(&[&str], Command); 5] = [
+        let cases: [(&[&str], Command); 6] = [
             (&["ferrofed", "serve"], Command::Serve),
             (&["ferrofed", "healthcheck"], Command::Healthcheck),
             (
@@ -167,6 +183,7 @@ mod tests {
                     command: AdmissionCommand::Check {
                         endpoint: "node-a-pub".to_owned(),
                         count: 3,
+                        read_only: false,
                     },
                 },
             ),
@@ -184,6 +201,24 @@ mod tests {
                     command: AdmissionCommand::Check {
                         endpoint: "node-a-pub".to_owned(),
                         count: 5,
+                        read_only: false,
+                    },
+                },
+            ),
+            (
+                &[
+                    "ferrofed",
+                    "admission",
+                    "check",
+                    "--endpoint",
+                    "node-a-pub",
+                    "--read-only",
+                ],
+                Command::Admission {
+                    command: AdmissionCommand::Check {
+                        endpoint: "node-a-pub".to_owned(),
+                        count: 3,
+                        read_only: true,
                     },
                 },
             ),

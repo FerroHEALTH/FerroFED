@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The page tree the server renders and the browser hydrates: the document
-//! shell, the landing page, and the page for a path the console does not
-//! serve.
+//! shell, the landing page, the page for a path the console does not serve,
+//! and the footer every page carries.
 
 use leptos::prelude::*;
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::{SsrMode, path};
 
+use crate::manufacturer::MANUFACTURER;
 use crate::views;
 
 /// The product name as an operator reads it.
 pub const PRODUCT: &str = "FerroFED operator console";
+
+/// The product version the footer names.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The path of the sign-in route the server serves.
 pub const SIGN_IN: &str = "/login";
@@ -101,7 +105,24 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/query") view=crate::query::QueryPage ssr=SsrMode::Async />
                 </Routes>
             </main>
+            <Footer />
         </Router>
+    }
+}
+
+/// The footer of every page: the product, its version and its manufacturer,
+/// named in the system as Regulation (EU) 2025/327 Art 30(1)(g) asks.
+#[component]
+fn Footer() -> impl IntoView {
+    view! {
+        <footer>
+            <p>
+                {PRODUCT} " v" {VERSION} ". Manufactured by " {MANUFACTURER.name} ", "
+                {MANUFACTURER.postal_address} ". Contact: "
+                <a href=format!("mailto:{}", MANUFACTURER.email)>{MANUFACTURER.email}</a> ", "
+                <a href=MANUFACTURER.website>{MANUFACTURER.website}</a> "."
+            </p>
+        </footer>
     }
 }
 

@@ -103,12 +103,12 @@ do_package() {
   # and it works while the switch is off; `cargo publish --dry-run` refuses a
   # member whose `publish` is false, so it runs only over the publishable set,
   # and without the patches, so it meets the registry as an upload would.
-  cargo package --locked "${patches[@]}" "${args[@]}"
+  cargo package --locked ${patches[@]+"${patches[@]}"} ${args[@]+"${args[@]}"}
   selected="$(select_crates)"
   if [[ -n "$selected" ]]; then
     args=()
     while IFS= read -r crate; do args+=(-p "$crate"); done <<<"$selected"
-    cargo publish --dry-run --locked "${args[@]}"
+    cargo publish --dry-run --locked ${args[@]+"${args[@]}"}
   else
     echo "publish-crates: the workspace publish switch is false, so the registry dry run is skipped"
   fi
