@@ -160,8 +160,8 @@ pub(super) async fn route(
         Ok(forwarded) => {
             let read = follow_up::version_of(arrived.method, matched);
             learn(federation, (&ehr_id, read), endpoint, &forwarded, &logged);
-            let ids = (request_id, logged.as_str());
-            passed(provenance, (federation, endpoint), forwarded, ids)
+            let at = (federation, endpoint, &arrived.conveyance);
+            passed(provenance, at, forwarded, (request_id, logged.as_str()))
         }
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
@@ -332,7 +332,8 @@ pub(crate) async fn ask_all<'a>(
         .into_iter()
         .map(|(endpoint, probed)| (endpoint, probed.answer))
         .collect();
-    let (endpoint, answer) = match owner::settled(answers, federation.discloses_consent()) {
+    let disclosed = federation.discloses_consent_to(&probe.conveyance);
+    let (endpoint, answer) = match owner::settled(answers, disclosed) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),
         owner::Settled::Failed(unsettled) => {
             if let owner::Unsettled::Claimed(claimants) = &unsettled {

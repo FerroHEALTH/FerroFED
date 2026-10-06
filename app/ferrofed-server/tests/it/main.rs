@@ -23,6 +23,7 @@ mod conformance_run;
 mod consent;
 mod consent_everywhere;
 mod consent_withheld;
+mod contact_point;
 mod contribution_write;
 mod conveyance;
 mod created_ehr_id;

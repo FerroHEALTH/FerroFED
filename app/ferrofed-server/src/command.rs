@@ -28,6 +28,7 @@ use crate::federation::Federation;
 use crate::listener::TlsListener;
 use crate::listener::certificates::{Certificates, TlsFiles};
 use crate::state::AppState;
+use crate::support::Support;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
     metrics, panic, reload, report, router, serve, state, telemetry,
@@ -286,13 +287,19 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
 
 /// Reports the resolved configuration `settings`, its `cleartext`
 /// credentials, what a remote admin listener serves, every deprecated key
-/// it sets and every issuer that declares no assurance, and exits.
+/// it sets, every issuer that declares no assurance and a release past its
+/// support period, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
 )]
 fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Settings) -> ExitCode {
     config::transport::print_warnings(cleartext);
+    // NOTE: Regulation (EU) 2024/2847 Art 13(19): a release past the end of its
+    // support period says so to the operator who checks its configuration.
+    if let Some(notice) = Support::current().notice(body::VERSION) {
+        println!("ferrofed: warning: {notice}");
+    }
     for key in &settings.deprecated {
         println!("ferrofed: warning: {key}");
     }
@@ -586,6 +593,9 @@ fn serve_command(
             indicators = state.health().names().join(","),
             "ferrofed starting"
         );
+        if let Some(notice) = Support::current().notice(body::VERSION) {
+            tracing::warn!("{notice}");
+        }
         let client_tls = certificates(server.tls.as_ref())?;
         let listener = TcpListener::bind(server.listen)
             .await

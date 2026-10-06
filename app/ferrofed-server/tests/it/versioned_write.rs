@@ -30,7 +30,8 @@ use crate::facade::{
     CONVEYED, EHR_A, EHR_B, PATIENT, body, gateway, node_answering, post, registry,
 };
 use crate::path_ehr_id::{answer, probe_at};
-use crate::support::{asked, error_body, mount, searched_claims, send};
+use crate::support::conveyed::searched_claims;
+use crate::support::{asked, error_body, mount, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

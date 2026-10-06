@@ -46,6 +46,7 @@ fn trusting(source: KeySource, refetch: Duration) -> AuthSettings {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            national_contact_point: None,
         }],
         ..AuthSettings::default()
     }

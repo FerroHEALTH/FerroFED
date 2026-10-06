@@ -45,9 +45,8 @@ use crate::facade::{
     EHR_A, EHR_B, PATIENT, body, crossref, dev_gateway, gateway, patient_query, post, registry,
     wire,
 };
-use crate::support::{
-    AUDIENCE, CLIENT_TOKEN, Conveyed, ConveyedPurpose, ISSUER, JWKS_URI, call, error_body, send,
-};
+use crate::support::conveyed::{Conveyed, ConveyedPurpose};
+use crate::support::{AUDIENCE, CLIENT_TOKEN, ISSUER, JWKS_URI, call, error_body, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -350,6 +349,7 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            national_contact_point: None,
         }],
         ..AuthSettings::default()
     })

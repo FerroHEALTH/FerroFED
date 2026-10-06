@@ -188,7 +188,15 @@ slow one.
    files carry, so give it the day the tag will be pushed. A pre-release
    gets no support period. Five years is the number `SUPPORT_YEARS` in
    `scripts/release/changelog.sh`; a longer period the owner sets changes
-   it, the text of `SECURITY.md` and this paragraph together.
+   it, `SUPPORT_YEARS` in `app/ferrofed-server/src/support.rs`, the
+   support-period check of `scripts/checks/versions.sh`, the text of
+   `SECURITY.md` and this paragraph together. The release build reads the
+   date of the version's heading in `CHANGELOG.md` and compiles it into the
+   binary as `FERROFED_RELEASE_DATE`, so the gateway names its own end date
+   and says when it has passed; the build fails when the heading has no date.
+   `scripts/checks/versions.sh` fails when a release in `CHANGELOG.md` has no
+   row in the support table, or a row whose end date is not five years after
+   the release date.
    Its "Upgrade notes" must say everything an operator changes to upgrade:
    CI's `release compose` job already refuses a change whose build refuses
    the last release's example configuration with no upgrade note pending

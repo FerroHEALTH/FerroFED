@@ -64,7 +64,7 @@ statement of the text.
 | Operator points | 3, scored against the federation operator |
 | Test tracks | 10 of 11 scored by a test, 1 deferred, 0 planned |
 | Requirements | 46: 46 reached by a point, 0 by a track only, 0 by neither |
-| Marked tests | 945, carrying 1214 point and track markers |
+| Marked tests | 953, carrying 1223 point and track markers |
 
 ## The nodes
 
@@ -94,17 +94,17 @@ statement of the text.
 | [CP-13](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-13) | Gateway | N19, N20, N21 | 6 | covered | [19 tests](conformance-tests.md#cp-13) |
 | [CP-14](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-14) | Gateway | N22 | 6 | deferred | [deferred](#cp-14) |
 | [CP-15](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-15) | Gateway | N23 | 6 | covered | [31 tests](conformance-tests.md#cp-15) |
-| [CP-16](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-16) | Gateway | N24 | 7 | covered | [25 tests](conformance-tests.md#cp-16) |
+| [CP-16](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-16) | Gateway | N24 | 7 | covered | [27 tests](conformance-tests.md#cp-16) |
 | [CP-17](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-17) | Gateway | N25 | 7 | covered | [151 tests](conformance-tests.md#cp-17) |
 | [CP-18](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-18) | Node | N26 | 7 | node-profile | the member CDR, by [4 harness checks](conformance-tests.md#cp-18) |
 | [CP-19](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-19) | Node | N27, N27a | 7 | node-profile | the member CDR, by [2 harness checks](conformance-tests.md#cp-19) |
 | [CP-20](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-20) | Operator | N19 | 6 | operator | the federation operator |
 | [CP-21](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-21) | Gateway | N28 | 9 | covered | [9 tests](conformance-tests.md#cp-21) |
 | [CP-22](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-22) | Gateway | N29 | 9 | covered | [12 tests](conformance-tests.md#cp-22) |
-| [CP-23](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-23) | Gateway | N30 | 9 | covered | [33 tests](conformance-tests.md#cp-23) |
+| [CP-23](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-23) | Gateway | N30 | 9 | covered | [35 tests](conformance-tests.md#cp-23) |
 | [CP-24](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-24) | Gateway | N31 | 9 | covered | [23 tests](conformance-tests.md#cp-24) |
 | [CP-25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-25) | Gateway | N32 | 9 | covered | [14 tests](conformance-tests.md#cp-25) |
-| [CP-26](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-26) | Gateway | N33 | 10 | covered | [134 tests](conformance-tests.md#cp-26) |
+| [CP-26](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-26) | Gateway | N33 | 10 | covered | [135 tests](conformance-tests.md#cp-26) |
 | [CP-27](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-27) | Node | N34 | 10 | node-profile | the member CDR, by [6 harness checks](conformance-tests.md#cp-27) |
 | [CP-28](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-28) | Gateway | N35 | 3 | covered | [18 tests](conformance-tests.md#cp-28) |
 | [CP-29](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-29) | Gateway | N36 | 5, 6 | covered | [5 tests](conformance-tests.md#cp-29) |
@@ -115,7 +115,7 @@ statement of the text.
 | [CP-33a](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33a) | Operator | N42a | 11 | operator | the federation operator, assisted by [3 harness checks](conformance-tests.md#cp-33a) |
 | [CP-34](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-34) | Gateway | N43 | 9 | covered | [30 tests](conformance-tests.md#cp-34) |
 | [CP-35](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-35) | Gateway | N17, N18 | 1 | covered | [13 tests](conformance-tests.md#cp-35) |
-| [CP-36](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-36) | Gateway | N8 | 2, 7 | covered | [38 tests](conformance-tests.md#cp-36) |
+| [CP-36](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-36) | Gateway | N8 | 2, 7 | covered | [41 tests](conformance-tests.md#cp-36) |
 | [CP-37](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-37) | Gateway | N12 | 3 | covered | [19 tests](conformance-tests.md#cp-37) |
 | [CP-39](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-39) | Operator | N25 | 7 | operator | the federation operator |
 | [CP-40](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-40) | Gateway | N44 | 9 | covered | [49 tests](conformance-tests.md#cp-40) |
@@ -131,7 +131,7 @@ statement of the text.
 | [7](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-7) | Auth conveyance + consent-deny | CP-16, CP-17, CP-18, CP-19, CP-36, CP-39 | covered | [6 tests](conformance-tests.md#track-7) |
 | [8](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-8) | PMIR merge/split (ITI-93/94) _(provisional)_ | - | deferred | [deferred](#track-8) |
 | [9](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-9) | REST surface & self-description | CP-21, CP-22, CP-23, CP-24, CP-25, CP-34, CP-40 | covered | [7 tests](conformance-tests.md#track-9) |
-| [10](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-10) | Identifier leakage (adversarial) | CP-38, CP-26, CP-27 | covered | [20 tests](conformance-tests.md#track-10) |
+| [10](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-10) | Identifier leakage (adversarial) | CP-38, CP-26, CP-27 | covered | [21 tests](conformance-tests.md#track-10) |
 | [11](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-11) | Integrity: `ehr_id` collision & admission conditions | CP-33, CP-33a | covered | [4 tests](conformance-tests.md#track-11) |
 
 ## Deferrals

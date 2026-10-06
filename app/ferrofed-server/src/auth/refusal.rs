@@ -67,11 +67,19 @@ pub enum Refusal {
     /// authentication assurance at or above the least level its issuer's
     /// entry requires.
     Assurance,
+    /// The request reaches patient data, and the token of a national contact
+    /// point does not carry every attribute of Implementing Regulation (EU)
+    /// 2026/2099 Annex Tables 1 and 2.
+    ContactPoint,
+    /// The national contact point's correlation header is repeated, empty,
+    /// longer than [`MAX_CORRELATION`](crate::auth::contact_point::MAX_CORRELATION)
+    /// bytes, or not visible ASCII.
+    Correlation,
 }
 
 impl Refusal {
     /// Every refusal, in declaration order.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 22] = [
         Self::Missing,
         Self::Malformed,
         Self::Algorithm,
@@ -92,6 +100,8 @@ impl Refusal {
         Self::PatientDemographic,
         Self::NaturalPerson,
         Self::Assurance,
+        Self::ContactPoint,
+        Self::Correlation,
     ];
 
     /// The reason the security log and the challenge name.
@@ -118,6 +128,8 @@ impl Refusal {
             Self::PatientDemographic => "patient-demographic",
             Self::NaturalPerson => "natural-person",
             Self::Assurance => "assurance",
+            Self::ContactPoint => "contact-point-attributes",
+            Self::Correlation => "correlation",
         }
     }
 
@@ -153,6 +165,12 @@ impl Refusal {
             Self::Assurance => {
                 "the access token states no authentication assurance at the level patient data requires"
             }
+            Self::ContactPoint => {
+                "the national contact point's access token does not carry every attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2"
+            }
+            Self::Correlation => {
+                "the correlation header is sent once, as 1 to 128 visible ASCII characters"
+            }
         }
     }
 
@@ -168,6 +186,8 @@ impl Refusal {
             Self::PatientDemographic => Code::PatientConfinement,
             Self::NaturalPerson => Code::NaturalPersonRequired,
             Self::Assurance => Code::AuthenticationAssuranceInsufficient,
+            Self::ContactPoint => Code::ContactPointAttributesRequired,
+            Self::Correlation => Code::CorrelationInvalid,
             Self::Missing
             | Self::Malformed
             | Self::Algorithm
@@ -190,12 +210,13 @@ impl Refusal {
             error::response(self.code(), self.description(), request_id).into_response();
         let challenge = match self {
             Self::Missing => Some(format!("Bearer realm=\"{REALM}\"")),
-            Self::Unavailable | Self::Operation => None,
+            Self::Unavailable | Self::Operation | Self::Correlation => None,
             Self::Scope
             | Self::Demographic
             | Self::PurposeOfUse
             | Self::PatientContext
-            | Self::PatientDemographic => Some(format!(
+            | Self::PatientDemographic
+            | Self::ContactPoint => Some(format!(
                 "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
                 self.description()
             )),
@@ -247,6 +268,8 @@ mod tests {
             Refusal::PatientDemographic => 17,
             Refusal::NaturalPerson => 18,
             Refusal::Assurance => 19,
+            Refusal::ContactPoint => 20,
+            Refusal::Correlation => 21,
         }
     }
 

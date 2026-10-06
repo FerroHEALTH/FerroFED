@@ -5,9 +5,10 @@
 //! query, stored-query execution, routed read and routed write that reaches
 //! patient data at a node is recorded as a BALP `AuditEvent` at the harness
 //! Audit Record Repository, naming the verified caller, the patient, the
-//! origins and the categories the deployment's map classifies it under; an
-//! access whose record cannot be stored answers `503 access-unrecorded`; and
-//! no record content reaches a node, the log or a metric (§5.4, N33).
+//! origins, the categories the deployment's map classifies it under and how
+//! long it is kept (Art 9(2), Annex II 3.4); an access whose record cannot
+//! be stored answers `503 access-unrecorded`; and no record content reaches
+//! a node, the log or a metric (§5.4, N33).
 #![expect(
     clippy::disallowed_types,
     reason = "the test seam: the records are read as JSON values"
@@ -20,6 +21,8 @@ mod limits;
 mod origins;
 mod professional;
 mod query;
+mod relayed;
+mod retention;
 mod routed;
 
 use std::collections::BTreeMap;
@@ -29,7 +32,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::settings::ServerSettings;
+use ferrofed_server::config::settings::{ServerSettings, Settings};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
@@ -39,6 +42,7 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, crossref, registry, settings_with_room};
 use crate::feed_audit::audit_tables;
+use crate::metrics::holds_series;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -60,14 +64,21 @@ const REPORT: &str = "openEHR-EHR-COMPOSITION.report.v1";
 /// The archetype the test map gives medical test results.
 const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
 
-/// The `[access_log]` tables of the test map.
-fn map_toml() -> String {
+/// The `[access_log]` tables of the test map, with the retention
+/// `retention`.
+fn map_toml(retention: &str) -> String {
     format!(
         "\n[access_log.templates]\n\"{LAB_REPORT}\" = [\"medical-test-result\"]\n\
          \"{DISCHARGE}\" = [\"discharge-report\"]\n\"{ADMIN}\" = \"none\"\n\n\
-         [access_log.archetypes]\n\"{LAB_ARCHETYPE}\" = [\"medical-test-result\"]\n"
+         [access_log.archetypes]\n\"{LAB_ARCHETYPE}\" = [\"medical-test-result\"]\n{retention}"
     )
 }
+
+/// The retention of the test gateway: four years for every record, twenty
+/// for a discharge report, twelve for what node B sent.
+const RETENTION: &str = "\n[access_log.retention]\nyears = 4\n\n\
+     [access_log.retention.categories]\n\"discharge-report\" = 20\n\n\
+     [access_log.retention.origins]\n\"node-b-pub\" = 12\n";
 
 /// A development gateway over node A at `a` and node B at `b`, the patient
 /// known at both, recording to `repository` with the `[audit.repository]`
@@ -115,6 +126,20 @@ fn gateway_and_state(
     (extra, federation): (&str, &str),
     server: &ServerSettings,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    let settings = settings(dir, (a, b), repository, (extra, federation), RETENTION)?;
+    let state = Arc::new(AppState::build(&settings)?);
+    Ok((ferrofed_server::router(Arc::clone(&state), server), state))
+}
+
+/// The settings of the gateway of [`gateway_and_state`], its records kept as
+/// the `[access_log.retention]` tables `retention` say.
+fn settings(
+    dir: &Path,
+    (a, b): (&str, &str),
+    repository: &FeedRepository,
+    (extra, federation): (&str, &str),
+    retention: &str,
+) -> Result<Settings, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
@@ -126,27 +151,20 @@ fn gateway_and_state(
          [stored_queries]\npath = {store}\n{}{}{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
         audit_tables(repository, extra),
-        map_toml()
+        map_toml(retention)
     );
-    let settings =
-        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
-    let state = Arc::new(AppState::build(&settings)?);
-    Ok((ferrofed_server::router(Arc::clone(&state), server), state))
+    Ok(Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?)
 }
 
-/// Fails unless `exposition`, rendered from the registry a federated query
-/// recorded into, holds the node request series of the endpoint `endpoint`,
-/// so a check that no value reaches a metric reads what the request wrote.
+/// Fails unless `exposition` holds the node request series of the endpoint
+/// `endpoint`, so a check that no value reaches a metric reads the registry
+/// the federated query recorded into.
 fn recorded_the_query(exposition: &str, endpoint: &str) -> Result<(), Box<dyn Error>> {
-    let series = exposition
-        .lines()
-        .filter(|line| line.starts_with("ferrofed_node_requests"))
-        .any(|line| line.contains(&format!("endpoint=\"{endpoint}\"")));
-    if series {
-        Ok(())
-    } else {
-        Err(format!("no node request series of {endpoint} in {exposition}").into())
-    }
+    holds_series(
+        exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", endpoint)],
+    )
 }
 
 /// A canonical `COMPOSITION` of `template`, the version `uid`.

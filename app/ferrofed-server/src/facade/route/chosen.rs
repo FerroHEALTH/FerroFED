@@ -106,7 +106,7 @@ pub(super) async fn to_named(
         Ok(forwarded) if area == DEFINITION_GROUP => provenance.stamp(answered(forwarded)),
         Ok(forwarded) => passed(
             provenance,
-            (federation, endpoint),
+            (federation, endpoint, &arrived.conveyance),
             forwarded,
             (request_id, &logged),
         ),

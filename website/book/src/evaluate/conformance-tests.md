@@ -195,14 +195,15 @@ with no marked test is not listed.
 
 ## CP-16
 
-25 tests.
+27 tests.
 
-- `app/ferrofed-engine/tests/it/conveyance.rs`: `a_conveyance_header_from_the_client_never_reaches_the_node`, `a_node_the_gateway_has_a_grant_at_knows_it_by_its_client_id`, `a_probe_conveys_the_caller_to_every_member`, `a_query_conveys_the_caller_in_a_token_the_published_key_verifies`, `a_routed_read_and_a_routed_write_convey_the_caller`, `a_stored_query_definition_conveys_the_caller`, `each_node_is_the_audience_of_its_own_token`, `the_admission_checks_ehr_create_and_read_convey_the_gateway`
+- `app/ferrofed-engine/tests/it/conveyance.rs`: `a_conveyance_header_from_the_client_never_reaches_the_node`, `a_node_the_gateway_has_a_grant_at_knows_it_by_its_client_id`, `a_probe_conveys_the_caller_to_every_member`, `a_query_conveys_the_caller_in_a_token_the_published_key_verifies`, `a_relayed_caller_conveys_every_annex_attribute_marked_as_asserted`, `a_routed_read_and_a_routed_write_convey_the_caller`, `a_stored_query_definition_conveys_the_caller`, `each_node_is_the_audience_of_its_own_token`, `the_admission_checks_ehr_create_and_read_convey_the_gateway`
 - `app/ferrofed-engine/tests/it/exchange.rs`: `the_node_receives_a_token_exchanged_for_the_verified_caller`
 - `app/ferrofed-engine/tests/it/mtls.rs`: `token_exchange_composes_with_mutual_tls`
 - `app/ferrofed-engine/tests/it/signing.rs`: `a_next_key_is_published_ahead_and_never_signs`, `a_rotation_across_curves_publishes_both_and_signs_with_the_new`, `the_conveyance_is_signed_with_the_current_keys_algorithm`
 - `app/ferrofed-server/tests/it/auth/patient.rs`: `a_member_other_than_the_token_s_own_is_told_its_own_ehr_id`, `each_node_is_told_its_own_ehr_id_and_the_covering_patient_scope`
 - `app/ferrofed-server/tests/it/auth/professional.rs`: `the_node_is_told_who_acts_and_the_level_reached`
+- `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `each_node_is_told_every_annex_attribute_marked_as_asserted`
 - `app/ferrofed-server/tests/it/conveyance.rs`: `a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key`, `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`, `a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node`, `a_registry_from_either_source_without_a_signing_key_does_not_load`, `a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller`, `an_edge_asserted_caller_is_conveyed_as_edge_asserted`, `the_ask_all_probe_conveys_the_caller_to_every_member`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `each_node_is_reached_with_its_onward_token_and_told_the_caller`
 - `app/ferrofed-server/tests/it/onward_exchange.rs`: `the_callers_token_reaches_no_log_span_metric_or_conveyed_claim`
@@ -276,10 +277,11 @@ with no marked test is not listed.
 
 ## CP-23
 
-33 tests.
+35 tests.
 
 - `app/ferrofed-server/tests/it/auth/token.rs`: `options_root_is_behind_the_gate`
 - `app/ferrofed-server/tests/it/consent_withheld/mod.rs`: `by_default_the_exclusion_is_disclosed_and_declared`, `the_configured_setting_withholds_the_exclusion_and_is_declared`
+- `app/ferrofed-server/tests/it/contact_point/declared.rs`: `a_declared_contact_point_is_described_with_how_its_requests_are_served`, `a_deployment_with_no_contact_point_declares_none`
 - `app/ferrofed-server/tests/it/e2e/track9_surface.rs` (e2e): `the_self_description_lists_the_members_and_demographic_answers_as_declared`
 - `app/ferrofed-server/tests/it/its_rest_areas/definition.rs`: `the_definition_declaration_states_that_a_request_goes_to_the_one_named_node`, `the_definition_declaration_states_the_distribution_only_where_offered`, `the_definition_declaration_states_the_template_fan_out_only_where_offered`, `the_definition_declaration_states_where_stored_queries_are_held`
 - `app/ferrofed-server/tests/it/its_rest_areas/demographic.rs`: `the_demographic_declaration_matches_the_demographic_area_in_each_mode`
@@ -318,7 +320,7 @@ with no marked test is not listed.
 
 ## CP-26
 
-134 tests.
+135 tests.
 
 - `app/ferrofed-engine/src/declared/headers.rs`: `a_utf_8_charset_passes_and_is_dropped`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable`, `an_unlisted_content_type_is_unsupported`, `any_media_type_reaches_the_node_as_the_first_listed`, `prefer_reaches_the_node_as_its_listed_preferences_only`
 - `app/ferrofed-engine/src/declared/mod.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_date_time_is_refused_by_position_never_by_value`, `a_well_formed_date_time_is_held`
@@ -337,6 +339,7 @@ with no marked test is not listed.
 - `app/ferrofed-engine/tests/it/onward.rs`: `a_token_endpoint_description_never_reaches_the_answer`
 - `app/ferrofed-identity/tests/it/mitz.rs`: `a_patient_named_by_a_pseudonym_is_never_sent_to_mitz`
 - `app/ferrofed-identity/tests/it/nvi_localizer.rs`: `a_bsn_system_never_stands_for_the_pseudonym`
+- `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/contribution_write.rs`: `a_contribution_its_path_node_controls_reaches_it_once_byte_identical`, `a_simplified_contribution_its_path_node_controls_reaches_it_once_byte_identical`
 - `app/ferrofed-server/tests/it/conveyance.rs`: `a_caller_claim_carrying_the_patient_stops_the_query_before_any_node`
 - `app/ferrofed-server/tests/it/declared.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_path_uid_is_refused_by_position_and_no_node_is_asked`, `a_malformed_version_at_time_is_refused_and_no_node_is_asked`, `a_well_formed_version_at_time_reaches_the_node_byte_identical`, `an_accept_that_admits_nothing_listed_is_a_406_that_asks_no_node`, `an_unlisted_content_type_is_a_415_that_asks_no_node`, `the_listed_values_of_a_commit_reach_the_node_and_no_client_text`
@@ -501,7 +504,7 @@ with no marked test is not listed.
 
 ## CP-36
 
-38 tests.
+41 tests.
 
 - `app/ferrofed-server/tests/it/consent.rs`: `a_directed_query_reaches_the_node_that_checks_consent_itself`, `a_member_the_prefilter_denies_is_reported_and_never_contacted`, `a_member_the_prefilter_leaves_in_is_asked_and_its_refusal_still_reported`, `a_node_the_localizer_names_still_refuses_and_the_query_succeeds`, `a_prefilter_that_cannot_answer_leaves_every_candidate_to_its_node`, `the_prefilter_runs_after_localization_over_its_candidates_only`, `with_no_consent_service_a_node_refusal_is_reported_and_the_query_succeeds`
 - `app/ferrofed-server/tests/it/consent_everywhere.rs`: `the_read_by_subject_never_contacts_a_member_the_prefilter_denies`, `the_read_by_subject_whose_holders_are_all_denied_is_consent_denied`
@@ -509,6 +512,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/consent_withheld/node.rs`: `a_node_refusal_is_reported_as_a_member_without_the_patient`, `a_node_refusal_reads_exactly_as_a_member_that_does_not_know_the_patient`, `a_read_by_subject_the_holder_refuses_answers_as_one_no_member_holds`, `a_routed_read_the_node_refuses_answers_subject_unavailable`, `an_ask_all_probe_the_holder_refuses_answers_as_one_no_member_holds`, `with_disclosure_a_node_refusal_stays_consent_denied`
 - `app/ferrofed-server/tests/it/consent_withheld/not_asked.rs`: `a_withheld_deployment_answers_a_prefilter_that_did_not_ask_as_one_that_found_nothing`
 - `app/ferrofed-server/tests/it/consent_withheld/routed.rs`: `a_read_of_an_ehr_id_the_prefilter_excluded_is_left_to_its_node`, `a_targeted_read_the_node_refuses_reads_exactly_as_one_the_node_cannot_find`, `an_ask_all_probe_a_member_refuses_reads_exactly_as_one_no_member_answers`
+- `app/ferrofed-server/tests/it/contact_point/withheld.rs`: `a_restricted_patient_and_an_unknown_one_answer_alike`, `an_excluded_member_and_one_without_the_patient_answer_alike`, `the_deployments_own_caller_still_sees_the_exclusion_disclosed`
 - `app/ferrofed-server/tests/it/e2e/pixm.rs` (e2e): `a_pix_resolved_query_asks_only_the_member_that_knows_the_patient`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `a_directed_query_is_consent_checked_at_the_node`, `a_member_the_consent_service_admits_still_refuses_and_the_query_succeeds`, `a_member_the_consent_service_denies_is_reported_and_never_dispatched_to`, `with_no_consent_service_a_node_refusal_is_reported_and_the_query_succeeds`
 - `app/ferrofed-server/tests/it/mitz/decision.rs`: `a_denial_and_a_failure_together_deny_one_and_leave_the_other_to_its_node`, `a_member_mitz_denies_is_consent_denied_and_never_asked`, `a_member_mitz_permits_is_asked_and_its_node_still_decides`
@@ -604,11 +608,12 @@ with no marked test is not listed.
 
 ## Track 10
 
-20 tests.
+21 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
 - `app/ferrofed-server/tests/it/access/accessor.rs`: `the_professional_and_the_patient_reach_no_log_or_metric`
 - `app/ferrofed-server/tests/it/access/query.rs`: `no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`
+- `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/probed_ehr_id.rs`: `a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe`, `a_read_whose_ehr_id_is_no_uuid_and_that_nothing_routes_is_refused_and_probes_nobody`, `an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed`

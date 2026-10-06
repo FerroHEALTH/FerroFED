@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 58] = [
+    pub const GATEWAY: [Self; 60] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -70,6 +70,8 @@ impl Code {
         Self::AccessUnrecorded,
         Self::NaturalPersonRequired,
         Self::AuthenticationAssuranceInsufficient,
+        Self::ContactPointAttributesRequired,
+        Self::CorrelationInvalid,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -144,6 +146,8 @@ impl Code {
             Self::AccessUnrecorded => "access-unrecorded",
             Self::NaturalPersonRequired => "natural-person-required",
             Self::AuthenticationAssuranceInsufficient => "authentication-assurance-insufficient",
+            Self::ContactPointAttributesRequired => "contact-point-attributes-required",
+            Self::CorrelationInvalid => "correlation-invalid",
         }
     }
 
@@ -174,7 +178,8 @@ impl Code {
             | Self::PrecedingVersionInvalid
             | Self::ParameterValueInvalid
             | Self::DefinitionEndpointTargeted
-            | Self::StoredQueryFanOutUnsupported => StatusCode::BAD_REQUEST,
+            | Self::StoredQueryFanOutUnsupported
+            | Self::CorrelationInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination
             | Self::NotFound
             | Self::StoredQueryUnknown
@@ -204,7 +209,8 @@ impl Code {
             | Self::PurposeOfUseRequired
             | Self::OperationRefused
             | Self::PatientContextMissing
-            | Self::PatientConfinement => StatusCode::FORBIDDEN,
+            | Self::PatientConfinement
+            | Self::ContactPointAttributesRequired => StatusCode::FORBIDDEN,
             Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
                 StatusCode::SERVICE_UNAVAILABLE
             }
@@ -356,6 +362,12 @@ impl Code {
             Self::AuthenticationAssuranceInsufficient => {
                 "the access token states no authentication assurance at the level patient data requires"
             }
+            Self::ContactPointAttributesRequired => {
+                "the national contact point's access token does not carry every health professional and healthcare provider attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2"
+            }
+            Self::CorrelationInvalid => {
+                "the national contact point's correlation header is sent once, as 1 to 128 visible ASCII characters"
+            }
         }
     }
 }
@@ -432,6 +444,8 @@ mod tests {
             Code::AccessUnrecorded => Some(55),
             Code::NaturalPersonRequired => Some(56),
             Code::AuthenticationAssuranceInsufficient => Some(57),
+            Code::ContactPointAttributesRequired => Some(58),
+            Code::CorrelationInvalid => Some(59),
         }
     }
 
@@ -546,6 +560,8 @@ mod tests {
                 Code::AuthenticationAssuranceInsufficient,
                 StatusCode::UNAUTHORIZED,
             ),
+            (Code::ContactPointAttributesRequired, StatusCode::FORBIDDEN),
+            (Code::CorrelationInvalid, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

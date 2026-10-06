@@ -23,8 +23,12 @@
 //! reaches patient data also needs a natural person behind the token, or a
 //! client its issuer declares as acting for the professional the token
 //! names, and the authentication assurance its issuer's entry requires
-//! (Regulation (EU) 2025/327 Annex II 3.1). A request that
-//! fails is answered `401`, `403` or `503` and reaches nothing behind the
+//! (Regulation (EU) 2025/327 Annex II 3.1). An issuer declared a national
+//! contact point vouches for the professional of another Member State whose
+//! request its connector relays ([`contact_point`]): such a request needs
+//! every Implementing Regulation (EU) 2026/2099 Annex attribute and a
+//! purpose of use. A request that
+//! fails is answered `400`, `401`, `403` or `503` and reaches nothing behind the
 //! gate; one that passes carries its [`Caller`] in its extensions. The
 //! caller's credential is never forwarded to a node: the node dispatch sends
 //! each endpoint its own onward credentials and copies no client header
@@ -38,6 +42,7 @@
 
 pub mod caller;
 mod claims;
+pub mod contact_point;
 pub mod fetch;
 pub mod keys;
 pub mod permission;
@@ -165,7 +170,13 @@ impl Gate {
         }
         let credential = self.credential(headers)?;
         let (caller, trusted) = self.verify(credential).await?;
-        let caller = caller.with_audience(self.audience.clone());
+        let correlation = match &trusted.settings.national_contact_point {
+            Some(declared) => contact_point::correlation(headers, declared)?,
+            None => None,
+        };
+        let caller = caller
+            .with_audience(self.audience.clone())
+            .with_correlation(correlation);
         let mut caller = if exchanging {
             caller.with_token(SecretString::from(credential.to_owned()))
         } else {
@@ -242,6 +253,7 @@ impl Gate {
             }
         }
         if requirement.reaches_patient_data() {
+            contact_point::relaying(&caller)?;
             professional(&caller, &trusted.settings)?;
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
@@ -363,6 +375,9 @@ impl Gate {
         let requester = token.claims.requester(trusted.settings.requester.as_ref());
         let professional = token.claims.professional();
         let assurance = assurance_of(&trusted.settings, |claim| token.claims.text(claim));
+        let relayed = contact_point::read(&trusted.settings, token.claims.annex(), |claim| {
+            token.claims.text(claim)
+        });
         let stated = token.claims.stated();
         let acting = acting(&stated.subject, &stated.client_id);
         let caller = Caller::new(stated, verified_by)
@@ -371,7 +386,7 @@ impl Gate {
             .with_professional(professional)
             .with_assurance(assurance)
             .with_acting(acting);
-        Ok((caller, trusted))
+        Ok((contact_point::vouched(caller, relayed), trusted))
     }
 
     /// Asks `trusted`'s introspection endpoint about `token` and reads its
@@ -442,12 +457,16 @@ impl Gate {
             .as_ref()
             .and_then(|named| answer.others.requester(named));
         let assurance = assurance_of(&trusted.settings, |claim| answer.others.text(claim));
-        Ok(Caller::new(stated, VerifiedBy::Introspection)
+        let relayed = contact_point::read(&trusted.settings, answer.declared.annex(), |claim| {
+            answer.others.text(claim)
+        });
+        let caller = Caller::new(stated, VerifiedBy::Introspection)
             .with_launch_ehr_id(answer.ehr_id)
             .with_requester(requester)
             .with_professional(answer.declared.professional())
             .with_assurance(assurance)
-            .with_acting(acting))
+            .with_acting(acting);
+        Ok(contact_point::vouched(caller, relayed))
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.
@@ -528,9 +547,10 @@ fn patient_context(caller: &Caller, trusted: &Trusted) -> Result<PatientContext,
 /// or the token names none, and [`Refusal::Assurance`] when the issuer
 /// requires a level and the token states none at or above it.
 fn professional(caller: &Caller, issuer: &IssuerSettings) -> Result<(), Refusal> {
-    if caller.acting() == Acting::Client
-        && !(issuer.client_tokens_act_for_professional && caller.names_professional())
-    {
+    // NOTE: 2026/2099 Art 7: a contact point's connector relays the professional its token
+    // names, so its client tokens act for that professional as a declared issuer's do.
+    let acts_for = issuer.client_tokens_act_for_professional || caller.is_contact_point();
+    if caller.acting() == Acting::Client && !(acts_for && caller.names_professional()) {
         return Err(Refusal::NaturalPerson);
     }
     if let Some(assurance) = &issuer.assurance

@@ -4,7 +4,9 @@
 //! Shared helpers: a capturing log writer, test settings, a test state, the
 //! typed shapes the tests read the server's JSON with, a mock node's routes
 //! and what it was asked, the reads of a routed answer, and the dependency
-//! report.
+//! report. A conveyed token as a node reads it is in [`conveyed`].
+
+pub(crate) mod conveyed;
 
 use axum::Router;
 use axum::body::Body;
@@ -218,6 +220,7 @@ pub(crate) fn auth() -> AuthSettings {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            national_contact_point: None,
         }],
         ..AuthSettings::default()
     }
@@ -610,143 +613,10 @@ pub(crate) fn conveyance() -> Result<ferrofed_engine::conveyance::Conveyance, Bo
         professional: Professional::default(),
         acting: Acting::Person,
         assurance_level: None,
+        relayed: None,
     };
     Ok(Conveyance::new(
         signer("example-federation")?,
         Principal::Caller(caller),
     ))
-}
-
-/// One purpose of use of a conveyed token, as a node reads it.
-#[derive(Debug, Deserialize, serde::Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ConveyedPurpose {
-    /// The code system.
-    pub(crate) system: Option<String>,
-    /// The code.
-    pub(crate) code: String,
-}
-
-/// The claims of an `openEHR-federation-client` token as a node reads them;
-/// a claim not named here, `person_id` among them, fails the read (§5.4.1,
-/// N33).
-#[derive(Debug, Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Conveyed {
-    pub(crate) iss: String,
-    pub(crate) aud: String,
-    pub(crate) iat: i64,
-    pub(crate) exp: i64,
-    pub(crate) jti: String,
-    pub(crate) sub: String,
-    pub(crate) iss_upstream: Option<String>,
-    pub(crate) verified_by: Option<String>,
-    pub(crate) subject_organization_id: Option<String>,
-    #[serde(default)]
-    pub(crate) purpose_of_use: Vec<ConveyedPurpose>,
-    pub(crate) scope: Option<String>,
-    /// The confined patient's own `ehr_id` at the node, under a confined
-    /// `patient/` grant only.
-    #[serde(default, rename = "ehrId", skip_serializing_if = "Option::is_none")]
-    pub(crate) ehr_id: Option<String>,
-    /// The professional's name, IHE IUA `subject_name`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) subject_name: Option<String>,
-    /// The professional's identifier, IHE IUA
-    /// `national_provider_identifier`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) national_provider_identifier: Option<String>,
-    /// `person` or `client`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) acting: Option<String>,
-    /// `low`, `substantial` or `high`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) assurance_level: Option<String>,
-}
-
-/// The claims `token` carries, read without verifying it.
-pub(crate) fn conveyed_claims(token: &str) -> Result<Conveyed, Box<dyn StdError>> {
-    Ok(jsonwebtoken::dangerous::insecure_decode_claims::<Conveyed>(
-        token,
-    )?)
-}
-
-/// What a search reads in place of a conveyed token's `aud`.
-pub(crate) const CONVEYED_AUDIENCE: &str = "<audience>";
-
-/// What a search reads in place of a conveyed token's minted `jti`.
-pub(crate) const MINTED_TOKEN_ID: &str = "<minted-token-id>";
-
-/// The claims of `token` as JSON, for a search of what a node received, its
-/// `aud` read as [`CONVEYED_AUDIENCE`], its `iat` and `exp` as `0` and its
-/// `jti` as [`MINTED_TOKEN_ID`].
-///
-/// The `aud` is the endpoint id the registry gives the node it is sent to,
-/// composed from no request, as the minted request id is. The gateway mints
-/// `iat` and `exp` from its clock and `jti` at random, from no request
-/// either, and the outbound gate exempts them for that reason: a clock
-/// reading such as `1791234567` or a random UUID holds a short synthetic
-/// identifier such as `12345` by chance. Every other claim stays as the node
-/// reads it, so a client value in one is still found.
-///
-/// # Errors
-///
-/// When the token does not decode, or its `jti` is not in the form the
-/// gateway mints, so no other value is ever masked.
-pub(crate) fn searched_claims(token: &str) -> Result<String, Box<dyn StdError>> {
-    let mut claims = conveyed_claims(token)?;
-    if !is_minted_form(&claims.jti) {
-        return Err(format!("{:?} is not a token id the gateway minted", claims.jti).into());
-    }
-    CONVEYED_AUDIENCE.clone_into(&mut claims.aud);
-    (claims.iat, claims.exp) = (0, 0);
-    MINTED_TOKEN_ID.clone_into(&mut claims.jti);
-    Ok(serde_json::to_string(&claims)?)
-}
-
-/// The claims of `token` as JSON with the values minted per token, `iat`,
-/// `exp` and `jti`, cleared, so two requests the gateway sent for the same
-/// caller compare equal.
-pub(crate) fn stable_claims(token: &str) -> Result<String, Box<dyn StdError>> {
-    let mut claims = conveyed_claims(token)?;
-    (claims.iat, claims.exp) = (0, 0);
-    claims.jti.clear();
-    Ok(serde_json::to_string(&claims)?)
-}
-
-// A wire search for the synthetic `12345` never reads the clock or the random
-// `jti`, which the outbound gate exempts, and still reads a caller's claim.
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "test assertions in a test that returns its setup errors"
-)]
-fn a_search_reads_no_minted_claim_and_every_caller_claim() -> Result<(), Box<dyn StdError>> {
-    let claims = Conveyed {
-        iss: "example-federation".to_owned(),
-        aud: "node_1".to_owned(),
-        iat: 1_791_234_567,
-        exp: 1_791_234_627,
-        jti: "0f123451-2345-4234-9123-451234512345".to_owned(),
-        sub: "synthetic-caller".to_owned(),
-        iss_upstream: None,
-        verified_by: None,
-        subject_organization_id: None,
-        purpose_of_use: Vec::new(),
-        scope: None,
-        ehr_id: None,
-        subject_name: None,
-        national_provider_identifier: None,
-        acting: None,
-        assurance_level: None,
-    };
-    let token = jsonwebtoken::encode(
-        &jsonwebtoken::Header::default(),
-        &claims,
-        &jsonwebtoken::EncodingKey::from_secret(b"synthetic"),
-    )?;
-    let searched = searched_claims(&token)?;
-    assert!(!searched.contains("12345"), "{searched}");
-    assert!(searched.contains("synthetic-caller"), "{searched}");
-    Ok(())
 }

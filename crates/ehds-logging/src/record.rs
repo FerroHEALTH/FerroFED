@@ -22,6 +22,7 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 
 use crate::classify::Classification;
+use crate::retention::Retention;
 
 /// What the access did to the data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +131,91 @@ impl fmt::Debug for Professional {
     }
 }
 
+/// A coded value, such as a professional role: a code and the system that
+/// defines it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Coded {
+    /// The code system, when one is named.
+    pub system: Option<String>,
+    /// The code.
+    pub code: String,
+}
+
+/// What a national contact point for digital health relays with a request.
+///
+/// The health professional and the healthcare provider of another Member
+/// State, as the contact point asserts them (Implementing Regulation (EU)
+/// 2026/2099 Art 7 and its Annex Tables 1 and 2). The recording system verified the contact point, never the professional:
+/// Art 6(1) and (2) give their identification and authentication to the
+/// entity the Member State of the professional lists. `Debug` shows the
+/// country and none of the other values.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Relayed {
+    /// The contact point that asserted them, by the issuer of its token.
+    pub contact_point: String,
+    /// `country_code`: the ISO 3166-1 alpha-2 code of the Member State that
+    /// issued the professional's identification data.
+    pub country_code: String,
+    /// The health professional (Annex Table 1).
+    pub professional: RelayedProfessional,
+    /// The healthcare provider (Annex Table 2).
+    pub provider: RelayedProvider,
+}
+
+impl fmt::Debug for Relayed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Relayed")
+            .field("country_code", &self.country_code)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The health professional a contact point relays (2026/2099 Annex
+/// Table 1).
+#[derive(Clone, PartialEq, Eq)]
+pub struct RelayedProfessional {
+    /// `family_name`.
+    pub family_name: String,
+    /// `given_name`.
+    pub given_name: String,
+    /// `hp_identifier`, unique among the identifiers the Member State where
+    /// the professional is registered issues.
+    pub identifier: String,
+    /// `issuing_authority_name`: the agency that issued `hp_identifier`.
+    pub issuing_authority: String,
+    /// `hp_professional_role`, as the codes the contact point states.
+    pub roles: Vec<Coded>,
+}
+
+impl fmt::Debug for RelayedProfessional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RelayedProfessional")
+            .field("roles", &self.roles.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The healthcare provider a contact point relays (2026/2099 Annex
+/// Table 2), where the professional provides the treatment.
+#[derive(Clone, PartialEq, Eq)]
+pub struct RelayedProvider {
+    /// `healthcare_provider_identifier`, unique in the Member State that
+    /// issued it.
+    pub identifier: String,
+    /// `issuing_authority_name`: the agency that issued the identifier.
+    pub issuing_authority: String,
+    /// `healthcare_provider_name`.
+    pub name: String,
+    /// `healthcare_provider_address`: the official registered full address.
+    pub address: String,
+}
+
+impl fmt::Debug for RelayedProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RelayedProvider").finish_non_exhaustive()
+    }
+}
+
 /// Who accessed the data (Annex II 3.2(a), (b)): the person, as the token
 /// the access was authenticated by names them, the client they used, and
 /// the provider they act for.
@@ -163,6 +249,10 @@ pub struct Accessor {
     pub alt_id: Option<String>,
     /// Every purpose of use the token declares.
     pub purposes: Vec<Purpose>,
+    /// The professional and the provider of another Member State a national
+    /// contact point relays, marked as asserted by it, when the client is
+    /// one (Implementing Regulation (EU) 2026/2099 Art 7).
+    pub relayed: Option<Relayed>,
 }
 
 impl fmt::Debug for Accessor {
@@ -174,6 +264,7 @@ impl fmt::Debug for Accessor {
             .field("professional", &self.professional)
             .field("alt_id", &self.alt_id.is_some())
             .field("purposes", &self.purposes)
+            .field("relayed", &self.relayed)
             .finish_non_exhaustive()
     }
 }
@@ -273,6 +364,10 @@ pub struct Request {
     pub stored_query: Option<String>,
     /// The address the request came from, when known.
     pub client_address: Option<IpAddr>,
+    /// The identifier the client correlates the request by in its own
+    /// log, such as a national contact point's exchange log, when it sent
+    /// one.
+    pub correlation: Option<String>,
 }
 
 impl fmt::Debug for Request {
@@ -281,6 +376,7 @@ impl fmt::Debug for Request {
             .field("id", &self.id)
             .field("operation", &self.operation)
             .field("query", &self.query.is_some())
+            .field("correlation", &self.correlation.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -306,6 +402,8 @@ pub struct AccessRecord {
     pub origins: Vec<Origin>,
     /// What the access asked for.
     pub request: Request,
+    /// How long the record is kept (Art 9(2), Annex II 3.4).
+    pub retention: Retention,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -320,6 +418,7 @@ impl fmt::Debug for AccessRecord {
             .field("delivered", &self.delivered)
             .field("origins", &self.origins)
             .field("request", &self.request)
+            .field("retention", &self.retention)
             .finish()
     }
 }

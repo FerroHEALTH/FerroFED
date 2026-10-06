@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_identity::role::resolver::Resolution;
@@ -70,22 +71,31 @@ impl<'a> Resolved<'a> {
     }
 }
 
+/// The subject a read names, the members the consent pre-filter denied, and
+/// whom the read is on behalf of.
+pub(super) type Unbound<'r> = (
+    &'r PatientRef,
+    &'r BTreeSet<NodeId>,
+    (&'r OnBehalfOf, &'r Conveyance),
+);
+
 /// Resolves `patient` at every endpoint of `candidates` on behalf of
 /// `on_behalf` before `deadline`, except where the consent pre-filter
-/// `denied` the member and the deployment discloses consent exclusions.
+/// `denied` the member and the request on behalf of `conveyance` is served
+/// disclosing consent exclusions ([`Federation::discloses_consent_to`]).
 ///
 /// Without a cross-reference service, every candidate is unanswered: the
-/// gateway fails closed, as a federated query does. Where the deployment does
-/// not disclose consent exclusions, a denied member is resolved with the
+/// gateway fails closed, as a federated query does. Where the request is not
+/// served disclosing consent exclusions, a denied member is resolved with the
 /// others and is never a holder, so it is answered for as a member that does
 /// not know the subject, or as one the cross-reference could not answer for.
 pub(super) async fn resolve<'a>(
     federation: &Federation,
     candidates: Vec<&'a Endpoint>,
-    (patient, denied, on_behalf): (&PatientRef, &BTreeSet<NodeId>, &OnBehalfOf),
+    (patient, denied, (on_behalf, conveyance)): Unbound<'_>,
     deadline: Instant,
 ) -> Resolved<'a> {
-    let disclosed = federation.discloses_consent();
+    let disclosed = federation.discloses_consent_to(conveyance);
     let (refused, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
         .into_iter()
         .partition(|endpoint| disclosed && denied.contains(endpoint.node()));

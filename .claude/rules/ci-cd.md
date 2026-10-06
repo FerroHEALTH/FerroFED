@@ -17,7 +17,7 @@ the rules every workflow keeps.
 
 ## What runs
 
-Thirteen workflows:
+Fourteen workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
@@ -45,6 +45,11 @@ Thirteen workflows:
   the pull-request licence checkbox, the second required check. It passes a
   merge group without reading a body, because each pull request in it was
   checked on its own.
+- `.github/workflows/label-guards.yml`: when the `no-changelog` or
+  `no-crate-bump` label changes, it waits for the CI run on the head commit
+  and re-runs the guard that label escapes when its result is stale, with
+  `conclusion` after it. `ci.yml` runs on no label event, so one commit gets
+  one run (`docs/ci-cd.md` §Triggers and concurrency).
 - `main` merges through GitHub's merge queue, so a branch is never updated by
   hand. Both required checks also run on `merge_group`, and the queue tests
   each pull request on top of the ones ahead of it. Auto-merge on a pull

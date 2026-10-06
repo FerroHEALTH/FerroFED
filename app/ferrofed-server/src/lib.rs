@@ -89,6 +89,7 @@ pub mod request_log;
 pub mod service;
 pub mod state;
 pub mod stored;
+pub mod support;
 pub mod telemetry;
 
 use std::future::Future;
@@ -219,8 +220,10 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let metrics = Arc::clone(state.metrics());
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
     // and the caller rate, so a record names the verified caller and a refusal writes none.
+    let contact_points = Arc::new(facade::options::ContactPoints::of(&server.auth));
     let routes = routes
         .with_state(Arc::clone(&state))
+        .layer(axum::Extension(contact_points))
         .layer(axum::middleware::from_fn_with_state(
             Arc::new(access::Gate::new(
                 Arc::clone(&state),

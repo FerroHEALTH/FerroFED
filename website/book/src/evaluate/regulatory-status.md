@@ -374,9 +374,15 @@ them:
   the verified caller, the patient, each endpoint asked and the categories
   of the data, in the record Annex II, point 3.2, sets for the European
   logging component ([the access log](../operate/audit.md#the-access-log)).
-  The library that builds it is `crates/ehds-logging`. The component's
-  review tools (point 3.3) and retention by origin and category (point 3.4)
-  are planned ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
+  The library that builds it is `crates/ehds-logging`. The records are
+  reviewed at the Audit Record Repository with ITI-81, the connection of
+  external software point 3.3 admits, and each states how long it is kept
+  by its origins and categories, never under three years (point 3.4, Art
+  9(2); [Reading the log](../operate/audit.md#reading-the-log)). Finding
+  every access to one person's data by that search
+  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)) and access
+  rights by origin and category
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) are planned.
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the

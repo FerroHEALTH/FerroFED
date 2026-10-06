@@ -44,7 +44,10 @@ vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
 - **After the end date:** a release past its end date is unsupported. The
   releases page keeps every version available, and running one past its
   end date leaves each vulnerability found after that date unfixed in it
-  (Art 13(11)).
+  (Art 13(11)). From v0.0.10 on, the gateway knows its own end date from
+  its build, names it in the startup banner and in `OPTIONS {base}/`, and
+  once the date has passed says so in the banner, at start in its log and
+  in `ferrofed config check` (Art 13(19)).
 
 Art 13(8) binds the releases placed on the market from 11 December 2027
 (Art 69(2), Art 71(2)). Cadasto B.V. gives the releases placed before that

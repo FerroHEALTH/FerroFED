@@ -241,6 +241,13 @@ pub enum Code {
     /// authentication assurance at the least level its issuer's entry
     /// requires (Regulation (EU) 2025/327 Annex II 3.1; RFC 9470 §3).
     AuthenticationAssuranceInsufficient,
+    /// The request reaches patient data, and the access token of a national
+    /// contact point does not carry every attribute of Implementing
+    /// Regulation (EU) 2026/2099 Annex Tables 1 and 2 (Art 7).
+    ContactPointAttributesRequired,
+    /// The national contact point's correlation header is repeated, empty,
+    /// too long, or not visible ASCII.
+    CorrelationInvalid,
 }
 
 /// The code of a refused query: the refusal's stable kind
