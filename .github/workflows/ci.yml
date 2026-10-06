@@ -938,7 +938,9 @@ jobs:
   # per regional binding (the Cargo
   # reference, Features; no specification governs the layout: our own
   # design), so every feature must build and lint on its own as well as
-  # together. Per package, never the workspace all-features union.
+  # together: eehrxf's fhir-r4 without its openehr mapping, and
+  # nl-generic-functions' authorizer without nvi (#730). Per package, never
+  # the workspace all-features union.
   features:
     name: features (cargo-hack)
     needs: detect

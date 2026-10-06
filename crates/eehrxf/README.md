@@ -19,11 +19,13 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   (`patient-summary`, `prescription`, `dispensation`, `imaging`,
   `laboratory`, `discharge`), each naming the logical model and the
   obligations profile of its dataset.
-- `mapping` (feature `fhir-r4`): FHIRconnect 1.0.0 context mappings compiled
-  once against an openEHR operational template and run in process, through
-  FerroBRIDGE's `fhirconnect` engine, over a canonical-JSON composition. The
-  answer is a FHIR R4 `Bundle` of the mapped resources with one `Provenance`
-  covering them.
+- `fhir-r4`: the FHIR R4 serialisation of the exchange format. It compiles
+  the R4 resources and no openEHR crate.
+- `mapping` (feature `openehr`, which turns on `fhir-r4`): FHIRconnect 1.0.0
+  context mappings compiled once against an openEHR operational template and
+  run in process, through FerroBRIDGE's `fhirconnect` engine, over a
+  canonical-JSON composition. The answer is a FHIR R4 `Bundle` of the mapped
+  resources with one `Provenance` covering them.
 
 The crate authors no mapping language and no profile mapping: the mapping
 files are its input. It depends on no logging component and on no
