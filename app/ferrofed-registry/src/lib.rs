@@ -59,6 +59,9 @@
 //! Every credential FerroFED is configured with, and every URL that may carry
 //! one in its userinfo, is held in a [`Secret`](secret::Secret) or a
 //! [`SecretUrl`](secret::SecretUrl), whose renderings never show it.
+//!
+//! [`manufacturer`] names the manufacturer of FerroFED, the one source the
+//! gateway and the operator console both read it from.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod creating_system;
@@ -69,6 +72,7 @@ pub mod error;
 pub mod health;
 pub mod id;
 pub mod incident;
+pub mod manufacturer;
 pub mod operator;
 pub mod secret;
 pub mod snapshot;

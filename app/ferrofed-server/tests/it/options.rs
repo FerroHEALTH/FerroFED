@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::MAX_WINDOW;
+use ferrofed_server::facade::options::{MANUFACTURER, MAX_WINDOW};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
@@ -190,9 +190,11 @@ async fn the_options_root_answer_names_the_methods_of_the_base() -> TestResult {
 #[tokio::test]
 async fn no_targeting_mechanism_no_carrier_and_no_async_member_is_declared() -> TestResult {
     let body = described("").await?;
-    assert!(
-        body.extra.is_empty(),
-        "only federation and endpoints at the top"
+    let top: Vec<&str> = body.extra.iter().map(|(name, _)| name).collect();
+    assert_eq!(
+        vec![MANUFACTURER],
+        top,
+        "federation, endpoints and the manufacturer at the top"
     );
     assert!(
         body.federation.extra.is_empty(),
@@ -441,6 +443,25 @@ async fn the_member_endpoints_follow_the_registry() -> TestResult {
         assert_eq!(None, endpoint.latency_ms_p50, "no latency is tracked");
         assert!(endpoint.extra.is_empty());
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_manufacturer_is_named_beside_federation_and_endpoints() -> TestResult {
+    let text = described_text("").await?;
+    let body: OptionsRoot = serde_json::from_str(&text)?;
+    let named = body.extra.get(MANUFACTURER).map(|raw| raw.get().to_owned());
+    assert_eq!(
+        Some(serde_json::to_string(
+            &ferrofed_registry::manufacturer::MANUFACTURER
+        )?),
+        named,
+        "Regulation (EU) 2025/327 Art 30(1)(g): the name, the postal address and the contact"
+    );
+    assert!(
+        text.contains(r#""postal_address":"Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands""#),
+        "{text}"
+    );
     Ok(())
 }
 

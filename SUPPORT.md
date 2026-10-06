@@ -3,7 +3,7 @@
 
 # Getting help
 
-Three destinations, and they are not interchangeable. Picking the right one is
+Four destinations, and they are not interchangeable. Picking the right one is
 the difference between an answer and a thread nobody is paged for.
 
 ## I have a question
@@ -69,6 +69,18 @@ it should have refused, is a vulnerability.
 deployed alongside FerroFED, goes to that project**, not here, unless it has a
 FerroFED-specific impact.
 
+## I want to make a complaint
+
+Write to [info@cadasto.com](mailto:info@cadasto.com) with "FerroFED
+complaint" in the subject, or open an issue when the complaint can be public.
+Cadasto B.V. is FerroFED's manufacturer under Regulation (EU) 2025/327, and
+every complaint enters its
+[register of complaints](docs/registers/complaints.tsv), whatever the channel.
+The book's
+[Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
+page says what happens next, and what to do when FerroFED may have harmed a
+person.
+
 ## I want to change something
 
 [CONTRIBUTING.md](CONTRIBUTING.md) is the practical guide: what helps most,
@@ -83,7 +95,10 @@ Business Source License 1.1, with no warranty. Read the [LICENSE](LICENSE),
 which says exactly that in the language that binds. Everything above describes
 what the project *intends* to do, and the intent is sincere; none of it is a
 contractual commitment, and only the security-report windows in SECURITY.md are
-stated as promises at all.
+stated as promises at all. The manufacturer's duties under Regulation (EU)
+2025/327, described on the
+[Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
+page, are set by that Regulation, not by this file.
 
 If your deployment needs a stronger guarantee than a one-person project can
 give, the honest options are to fork and maintain, or to fund the capacity that

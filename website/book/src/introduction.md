@@ -6,11 +6,13 @@
 FerroFED is a pure-Rust openEHR federation gateway, one of the
 [FerroHEALTH](https://ferrohealth.eu/) family. It sits in front of several
 openEHR CDRs as a transparent ITS-REST intermediary. A client sends it an
-ordinary AQL query and never learns it was federated. The gateway resolves
-the patient first, outside the query, through an identifier cross-reference
-service. It then sends each node standard AQL scoped to that node's own
-`ehr_id`, so no directly identifying patient identifier travels to a node,
-and it merges the answers with each node's provenance. It holds no clinical
+ordinary AQL query with no federation syntax, and gets back an ordinary
+ITS-REST result set whose `meta.federation` names each node with its status.
+The gateway resolves the patient first, outside the query, through an
+identifier cross-reference service. It then sends each node standard AQL
+scoped to that node's own `ehr_id`, so no request the gateway composes for a
+node carries a directly identifying patient identifier, and it merges the
+answers with each node's provenance. It holds no clinical
 data of its own.
 
 FerroFED implements the openEHR Federation Working Group's
@@ -68,7 +70,9 @@ the gateway:
 
 Every client authenticates with an access token from an issuer you trust
 ([Client authentication](operate/authentication.md)). Each page says what is
-built and names the issue of what is planned.
+built and names the issue of what is planned, and the claims page lists the
+[limitations](evaluate/what-ferrofed-claims.md#limitations) to know before
+you deploy it.
 
 ## How this book is organised
 

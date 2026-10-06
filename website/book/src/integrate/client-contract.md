@@ -396,8 +396,10 @@ configuration, so the body says what the gateway does today:
 | `timeout.demographics_ms` | present with `[pdqm]` configured: the demographics step's own budget, a part of `overall_ms` |
 | `timeout.consent_ms` | present with a consent pre-filter that asks a service, Mitz: the pre-filter's own budget, a part of `overall_ms`; the development table asks none and declares none |
 | `consent` | present with a consent pre-filter configured: its `prefilter` mode (`"nl-gf-mitz"` or `"development-static"`), `on_unavailable: "pass-to-node"`, and `disclose`: `true`, the default, where a member the pre-filter excludes is `consent-denied` (N27a), or `false` where it is reported `not-resolved` like a member that does not know the patient, for Regulation (EU) 2025/327 Art 8 ([Withholding consent exclusions](../operate/consent-exclusions.md)) |
+| `auth.jwks_uri` | the absolute URL of the JWK Set the gateway serves at `{base}/.well-known/jwks.json`, with the keys it signs the caller token and its client assertions with; every federating gateway has `[signing]`, so it is always declared (§13.1, N25, N30) |
 | `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, naming the template upload fan-out where it is offered, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
+| `manufacturer` | FerroFED's manufacturer, beside `federation` and `endpoints`: its `name`, `postal_address`, `email` (the single point of contact) and `website`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR system; FerroFED's own member at the open top level of the schema |
 
 What is absent is absent on purpose:
 
@@ -406,8 +408,6 @@ What is absent is absent on purpose:
   (§7a.2, N33, N35).
 - No asynchronous queries. The schema has no member for them, and the gateway
   does not offer them (§11.7).
-- No `auth.jwks_uri`. The gateway publishes no JWKS yet, and the schema says
-  a gateway with none configured omits the key (§13.1).
 - No latency. The gateway keeps no latency statistic per member.
 - `paging.max_window` is FerroFED's own member inside the open `paging`
   object: the specification names no member for the bound of the `bounded`

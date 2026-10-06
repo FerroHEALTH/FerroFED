@@ -15,5 +15,6 @@ mod definition;
 mod fixture;
 mod ids;
 mod load;
+mod manufacturer;
 mod namespaces;
 mod refusal;
