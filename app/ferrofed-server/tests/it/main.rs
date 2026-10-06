@@ -100,6 +100,7 @@ mod registry_fhir;
 #[cfg(feature = "binding-ihe")]
 mod registry_mcsd;
 mod reload;
+mod report;
 mod request_log;
 #[cfg(feature = "binding-ihe")]
 mod resolution;

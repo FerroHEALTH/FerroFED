@@ -32,7 +32,7 @@ use std::time::Duration;
 pub const CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The state of one indicator, or of the aggregate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum State {
     /// The subsystem answered.

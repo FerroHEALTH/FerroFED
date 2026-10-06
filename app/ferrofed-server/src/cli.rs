@@ -12,7 +12,9 @@
 //! Connectathon tracks of §16.3 against the configured deployment and writes
 //! the per-track and per-point report (§16.4). `healthcheck` asks the gateway on
 //! this host for its readiness, for a container runtime with no HTTP client
-//! of its own. No specification governs the command line: our own design.
+//! of its own. `report` writes the archive a complaint or a serious-incident
+//! report attaches (Regulation (EU) 2025/327 Art 44(7)). No specification
+//! governs the command line: our own design.
 
 use clap::{Parser, Subcommand};
 use ferrofed_registry::manufacturer::MANUFACTURER;
@@ -71,6 +73,23 @@ pub enum Command {
     /// Asks the gateway running on this host whether it is ready, and exits
     /// `0` only when readiness answers `200`.
     Healthcheck,
+    /// Writes the report a complaint or a serious-incident report attaches:
+    /// the build, the release, the redacted configuration and what the
+    /// gateway on this host reports, as one archive.
+    Report(ReportArgs),
+}
+
+/// The arguments of `report`.
+#[derive(Debug, clap::Args, PartialEq, Eq)]
+pub struct ReportArgs {
+    /// The archive to write, which must not exist yet; by default
+    /// `ferrofed-report-<UTC time>.tar` in the working directory.
+    #[arg(long, value_name = "PATH")]
+    pub out: Option<PathBuf>,
+    /// A file holding a bearer token with the operator scope, which reads
+    /// the integrity incidents; without it they are asked with no token.
+    #[arg(long, value_name = "PATH")]
+    pub operator_token_file: Option<PathBuf>,
 }
 
 /// The `config` jobs.
@@ -162,7 +181,7 @@ pub struct RunArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand};
+    use super::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs};
     use clap::Parser;
     use std::path::PathBuf;
 
@@ -228,6 +247,34 @@ mod tests {
             assert_eq!(expected, cli.command, "{argv:?}");
             assert_eq!(None, cli.config, "no --config was given");
         }
+    }
+
+    #[test]
+    fn a_report_parses_with_and_without_its_flags() {
+        let cli = Cli::try_parse_from(["ferrofed", "report"]).expect("the report parses");
+        assert_eq!(
+            Command::Report(ReportArgs {
+                out: None,
+                operator_token_file: None,
+            }),
+            cli.command
+        );
+        let cli = Cli::try_parse_from([
+            "ferrofed",
+            "report",
+            "--out",
+            "/tmp/bundle.tar",
+            "--operator-token-file",
+            "/run/operator-token",
+        ])
+        .expect("the flags parse");
+        assert_eq!(
+            Command::Report(ReportArgs {
+                out: Some(PathBuf::from("/tmp/bundle.tar")),
+                operator_token_file: Some(PathBuf::from("/run/operator-token")),
+            }),
+            cli.command
+        );
     }
 
     #[test]

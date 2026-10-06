@@ -5,7 +5,7 @@ name = "eehrxf"
 description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, mapped from openEHR by FHIRconnect"
 # The name is not reserved on crates.io yet, and it must be claimed before the
 # `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -40,12 +40,18 @@ imaging = []
 laboratory = []
 # Article 14(1)(f), discharge reports.
 discharge = []
-# The exchange format in FHIR R4, mapped from openEHR compositions in process
-# by the FHIRconnect 1.0.0 engine, which writes R4 alone.
+# The exchange format in FHIR R4: the R4 resources the serialisation writes,
+# with no openEHR crate, so the dataset and serialisation layers stay
+# openEHR-free.
 fhir-r4 = [
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/resources",
+]
+# The mapping from openEHR compositions to the FHIR R4 exchange format, run in
+# process by the FHIRconnect 1.0.0 engine, which writes R4 alone.
+openehr = [
+  "fhir-r4",
   "dep:fhirconnect",
   "dep:openehr-mapping-core",
 ]

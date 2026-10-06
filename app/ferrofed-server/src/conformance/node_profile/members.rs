@@ -195,13 +195,13 @@ async fn observed(
     vec![invocable, subjectless, errors]
 }
 
-/// The finding of a check, or the one that it reached no answer.
+/// The finding of a check, or the one that it could not observe the node.
 fn reached(check: Check, outcome: Result<Finding, super::interface::CheckError>) -> Finding {
     outcome.unwrap_or_else(|error| {
         Finding::new(
             check,
             Verdict::NotObservable,
-            vec![format!("the check reached no answer: {}", chain(&error))],
+            vec![format!("the check {}: {}", error.outcome(), chain(&error))],
         )
     })
 }

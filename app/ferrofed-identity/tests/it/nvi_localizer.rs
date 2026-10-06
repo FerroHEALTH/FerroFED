@@ -20,7 +20,7 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::nvi::{LocalizationService, PSEUDO_BSN_SYSTEM};
 use http::{HeaderMap, Method, StatusCode};
-use nl_generic_functions::nvi::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
+use nl_generic_functions::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
 use secrecy::SecretString;
 use url::Url;
 

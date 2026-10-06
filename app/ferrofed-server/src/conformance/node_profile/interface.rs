@@ -144,6 +144,23 @@ pub enum CheckError {
     },
 }
 
+impl CheckError {
+    /// Returns what happened to the check, worded for a finding: "the check
+    /// reached no answer" only when a request was sent and none came back.
+    #[must_use]
+    pub fn outcome(&self) -> &'static str {
+        match self {
+            Self::NoClient(_) => "found no node client for the endpoint",
+            Self::Unconveyed(_) => "could not convey the gateway to the node",
+            Self::Clock => "could not set a deadline within the clock's range",
+            Self::Body(_) => "could not write its query body",
+            Self::Template(_) => "holds a query template that is no AQL",
+            Self::Parameter(_) => "holds a query template that does not take the ehr_id alone",
+            Self::Unanswered { .. } => "reached no answer",
+        }
+    }
+}
+
 /// The name of the parameter that carries the `ehr_id` of a scoped query.
 const EHR_ID: &str = "ehr_id";
 

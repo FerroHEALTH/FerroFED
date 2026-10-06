@@ -25,6 +25,7 @@ federated query and each ITS-REST area run under.
 ferrofed serve --config /etc/ferrofed/ferrofed.toml
 ferrofed config check --config /etc/ferrofed/ferrofed.toml
 ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml
+ferrofed report --config /etc/ferrofed/ferrofed.toml
 ```
 
 `--config` names the file; without it the file is the one `FERROFED_CONFIG`
@@ -40,7 +41,10 @@ and hold no file the gateway did not write; one that does not exist needs a
 parent directory that does, whose mode lets a user write in it. Only the
 modes are read, so whether the gateway's own user may write there, and on a
 filesystem mounted writable, is left to `serve`, which creates the directory
-and refuses to start, naming its key, when it cannot.
+and refuses to start, naming its key, when it cannot. `ferrofed report`
+writes the archive a complaint or a serious-incident report attaches,
+described on the
+[Complaints and incidents](../evaluate/post-market.md#the-report-archive) page.
 `ferrofed admission check --endpoint <id>` checks
 one member against the admission conditions ([Admitting a node](admission.md)).
 `healthcheck` asks the gateway running on this host for its readiness and

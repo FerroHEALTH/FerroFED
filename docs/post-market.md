@@ -59,8 +59,13 @@ conform.
    current milestone, and ship it as a patch release. A published release is
    immutable, so the fix ships forward ([`release.md`](release.md)).
 3. Decide between correction, recall and withdrawal, and write the decision
-   and its timetable into `action`. Withdrawing a release is scripted under
-   [#706](https://github.com/FerroHEALTH/FerroFED/issues/706).
+   and its timetable into `action`. A withdrawal runs
+   `scripts/release/withdraw.sh` once the correcting release is out
+   ([`release.md`](release.md#withdrawing-a-release)). It refuses a version
+   with no row here, moves the `<major>.<minor>` and `latest` image tags to
+   the correcting release, publishes the advisory, writes the upgrade note,
+   lists the version as withdrawn in `SECURITY.md`, fills `users_told` and
+   adds the withdrawal to `action`.
 4. Tell the national authorities of each Member State where the version was
    made available or put into service: the non-conformity, the corrective
    action with its timetable, and the date of conformity, recall or
@@ -80,10 +85,13 @@ days after" that (Art 44(7)).
 
 1. **Day 0, on awareness.** Enter the complaint row as `serious-incident`
    and the non-conforming row with `serious_incident` set. Write down the
-   date and hour of awareness. Ask the deployment for the version it runs,
-   how it is deployed and what happened; the report bundle that answers this
-   in one step is planned under
-   [#705](https://github.com/FerroHEALTH/FerroFED/issues/705).
+   date and hour of awareness. Ask the deployment for the archive
+   `ferrofed report` writes on the host the gateway runs on (see below), and
+   for how it is deployed and what happened. The archive names the version,
+   the commit, the target, the bindings, the pins and the release
+   attestations to verify, so it carries "the data necessary for the
+   identification of the EHR system concerned" (Art 44(5)). Attach it to the
+   report.
 2. **By day 3 at the latest.** Report to the market surveillance authority of
    each Member State where the incident occurred and where FerroFED is placed
    on the market or put into service. The report says what happened, which
@@ -110,3 +118,19 @@ and the declaration of conformity the answer draws on are built under
 [#525](https://github.com/FerroHEALTH/FerroFED/issues/525). Art 43(5) lets an
 authority restrict, recall or withdraw FerroFED when the manufacturer does
 not cooperate or answers incompletely.
+
+## The report archive
+
+`ferrofed report` writes one uncompressed tar archive, by default
+`ferrofed-report-<UTC time>.tar`, that a deployment attaches to a complaint
+or an incident report. It reads the configuration the way `serve` does and
+asks the gateway on the same host for its live state. A part it cannot read
+is named in the manifest with the reason, never left empty. The book's
+[Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html#the-report-archive)
+page lists the files. Before forwarding an archive, check its `missing` list:
+a stopped gateway has no live parts, and the incidents need an operator
+token (`--operator-token-file`).
+
+The archive holds no patient identifier, `ehr_id`, clinical payload,
+credential, personal name, header value or URL userinfo. If one is ever found in an archive, that is a
+vulnerability: report it as one, and delete the archive.

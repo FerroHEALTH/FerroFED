@@ -17,7 +17,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 /// One phase of the process.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {
     /// The process has not finished building what it serves.

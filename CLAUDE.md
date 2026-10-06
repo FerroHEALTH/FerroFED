@@ -204,16 +204,19 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
   `xcpd`, and the ATNA audit as `atna` and `balp`), `nl-generic-functions`
-  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, and the BSN
-  naming systems in `identification`), `oauth-server-metadata` (RFC 8414,
+  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, the
+  FHIR-free request `authorizer` the engine implements, and the BSN naming
+  systems in `identification`), `oauth-server-metadata` (RFC 8414,
   the issuer and the checks a client holds authorization server metadata to,
   with no feature; #551), and the two harmonised software components of
   Regulation (EU) 2025/327 (decision A58): `ehds-logging` (the logging
   component: the Annex II 3.2 access record, the Art 14(1) categories and
   their map, the sink, and `balp`; #623) and `eehrxf` (the interoperability
   component: the format-neutral dataset model read from the Xt-EHR logical
-  models package, one feature per Art 14(1) category, and `fhir-r4`, which
-  runs FerroBRIDGE's FHIRconnect engine in process; #684). The two never
+  models package, one feature per Art 14(1) category, `fhir-r4`, the FHIR
+  R4 serialisation with no openEHR crate, and `openehr`, which maps openEHR
+  to it through FerroBRIDGE's FHIRconnect engine in process; #684, #730).
+  The two never
   list each other and only `ferrofed-server` links both, which the
   architecture test holds. A library may depend on another library
   (`nuts-auth` on `oauth-server-metadata`), and `cargo package` resolves it

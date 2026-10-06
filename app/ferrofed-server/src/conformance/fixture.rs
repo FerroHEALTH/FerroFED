@@ -59,7 +59,7 @@ pub enum PatientError {
     /// The value is empty, or holds a character other than an ASCII letter,
     /// digit, `.`, `_` or `-`.
     #[error(
-        "the patient value must be ASCII letters, digits, '.', '_' or '-', so it is a plain AQL string literal"
+        "the patient value must be ASCII letters, digits, '.', '_' or '-', so it is written into a composition's JSON as it stands and found verbatim in every captured request"
     )]
     Value,
     /// The identifier is no patient reference.

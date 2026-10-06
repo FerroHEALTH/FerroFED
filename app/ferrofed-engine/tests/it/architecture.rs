@@ -16,8 +16,9 @@
 //! of the gateway, so it reaches it over HTTP as any client does (#275). The
 //! two harmonised software components of Regulation (EU) 2025/327, `eehrxf`
 //! and `ehds-logging`, reach neither each other nor the application, only the
-//! server links both, and the engine compiles neither, nor any FHIR outside a
-//! binding crate (#684).
+//! server links both, and the engine compiles neither, nor any FHIR model
+//! (#684, #730). `eehrxf`'s FHIR R4 serialisation compiles no openEHR crate
+//! without its `openehr` mapping feature (#730).
 //!
 //! The checks read the graph with `cargo tree`, so they hold from the
 //! placeholder modules on and turn red the day a dependency edge would break
@@ -105,12 +106,15 @@ const INTEROPERABILITY_GLUE: &str = "ferrofed-eehrxf";
 /// The engine, the gateway core.
 const ENGINE: &str = "ferrofed-engine";
 
-/// The FHIR model crate, which the core never compiles of its own.
+/// The FHIR model crate, which the core never compiles.
 const FHIR_MODEL: &str = "fhir-types";
 
-/// The binding crates, the only path by which the FHIR model may reach the
-/// engine.
-const BINDINGS: &[&str] = &["ihe-iti", "nl-generic-functions"];
+/// The interoperability component's FHIR R4 serialisation, which compiles no
+/// openEHR crate without the mapping from openEHR.
+const SERIALISATION: &str = "fhir-r4";
+
+/// The prefix of every crate of the openEHR family, by crates.io name.
+const OPENEHR: &str = "openehr-";
 
 /// The operator console, a client of the gateway's public surface.
 const VIEWER: &str = "ferrofed-viewer";
@@ -125,6 +129,18 @@ const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// The package names in the normal and build dependency closure of `package`,
 /// with every feature on, so a dependency behind a feature is seen too.
 fn closure(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
+    tree(package, &["--all-features"])
+}
+
+/// The package names in the normal and build dependency closure of `package`
+/// with `feature` alone on.
+fn closure_of(package: &str, feature: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
+    tree(package, &["--no-default-features", "--features", feature])
+}
+
+/// The package names in the normal and build dependency closure of `package`,
+/// with the features `selection` names.
+fn tree(package: &str, selection: &[&str]) -> Result<BTreeSet<String>, Box<dyn Error>> {
     let manifest = Path::new(ROOT).join("Cargo.toml");
     let output = Command::new(env!("CARGO"))
         .arg("tree")
@@ -133,7 +149,8 @@ fn closure(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .args(["--package", package])
         .args(["--edges", "normal,build"])
         .args(["--prefix", "none", "--format", "{p}"])
-        .args(["--all-features", "--locked"])
+        .args(selection)
+        .arg("--locked")
         .output()?;
     if !output.status.success() {
         return Err(format!(
@@ -438,7 +455,7 @@ fn no_crate_but_the_composition_root_links_both_components() -> Result<(), Box<d
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-fn the_engine_compiles_neither_component_and_no_fhir_of_its_own() -> Result<(), Box<dyn Error>> {
+fn the_engine_compiles_neither_component_and_no_fhir() -> Result<(), Box<dyn Error>> {
     let reached = closure(ENGINE)?;
     assert!(
         reached.contains(ENGINE),
@@ -450,14 +467,39 @@ fn the_engine_compiles_neither_component_and_no_fhir_of_its_own() -> Result<(), 
         .filter(|name| reached.contains(**name))
         .map(|name| format!("{ENGINE} reaches {name}"))
         .collect();
-    for dependent in dependents(ENGINE, FHIR_MODEL)? {
-        if !BINDINGS.contains(&dependent.as_str()) {
-            breaches.push(format!("{dependent} brings {FHIR_MODEL} into {ENGINE}"));
-        }
+    breaches.extend(
+        dependents(ENGINE, FHIR_MODEL)?
+            .into_iter()
+            .map(|dependent| format!("{dependent} brings {FHIR_MODEL} into {ENGINE}")),
+    );
+    if reached.contains(FHIR_MODEL) && breaches.is_empty() {
+        breaches.push(format!("{ENGINE} reaches {FHIR_MODEL}"));
     }
     assert!(
         breaches.is_empty(),
-        "the core compiles a harmonised component or FHIR outside a binding crate: {breaches:?}"
+        "the core compiles a harmonised component or a FHIR model: {breaches:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_fhir_serialisation_alone_compiles_no_openehr() -> Result<(), Box<dyn Error>> {
+    let reached = closure_of(INTEROPERABILITY, SERIALISATION)?;
+    assert!(
+        reached.contains(INTEROPERABILITY) && reached.contains(FHIR_MODEL),
+        "cargo tree for {INTEROPERABILITY} with {SERIALISATION} did not list the crate or its FHIR model, so its output was not read"
+    );
+    let breaches: Vec<&String> = reached
+        .iter()
+        .filter(|name| name.starts_with(OPENEHR) || MAPPING_ENGINE.contains(&name.as_str()))
+        .collect();
+    assert!(
+        breaches.is_empty(),
+        "{INTEROPERABILITY} with {SERIALISATION} alone compiles openEHR, which only its mapping feature may: {breaches:?}"
     );
     Ok(())
 }

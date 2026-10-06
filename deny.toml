@@ -9,8 +9,8 @@
 # sources, so there is no separate cargo-audit job.
 
 # Every feature of every member is in the graph, so a dependency behind a
-# feature no member enables yet (fhirconnect behind eehrxf's fhir-r4, #684) is
-# checked as an upload or a later member would bring it in
+# feature no member enables yet (fhirconnect behind eehrxf's openehr, #684,
+# #730) is checked as an upload or a later member would bring it in
 # (https://embarkstudios.github.io/cargo-deny/checks/cfg.html#the-graph-field-optional).
 [graph]
 all-features = true
@@ -95,7 +95,7 @@ exceptions = [
   # and every caller's scopes are read with (#80).
   { allow = ["BUSL-1.1"], crate = "openehr-sdt" },
   # FerroBRIDGE's FHIRconnect engine and the template index and loader it
-  # takes, behind eehrxf's fhir-r4 feature (#684).
+  # takes, behind eehrxf's openehr feature (#684, #730).
   { allow = ["BUSL-1.1"], crate = "fhirconnect" },
   { allow = ["BUSL-1.1"], crate = "openehr-mapping-core" },
   # The openEHR terminology data openehr-term redistributes (through

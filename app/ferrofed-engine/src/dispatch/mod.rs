@@ -300,6 +300,15 @@ pub enum Contact {
 }
 
 impl Contact {
+    /// Returns whether the request left the gateway: the node answered it,
+    /// or gave no answer to it. A request that waited out its deadline for
+    /// a slot of the in-flight cap, or failed on the gateway's side, never
+    /// left.
+    #[must_use]
+    pub fn left(self) -> bool {
+        matches!(self, Self::Answered(_) | Self::Silent)
+    }
+
     /// Returns what a forwarded request's outcome showed of the node.
     ///
     /// A refusal of the gateway's onward credentials is the node's answer,

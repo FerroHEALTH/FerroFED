@@ -23,18 +23,19 @@ use axum::body::Body;
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier};
+use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
 use openehr_base::prelude::UidBasedId;
 use openehr_federation::headers;
 use openehr_its::json::from_canonical_json;
-use openehr_its::rest::routes::{self, Lookup};
+use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use openehr_rm::v1_2::common::change_control::original_version::OriginalVersion;
 use openehr_rm::v1_2::composition::composition::Composition;
-use secrecy::SecretString;
 
 use super::{AccessLog, Accessed, Asked};
 use crate::error::{self, Code};
-use crate::facade::route::Arrived;
+use crate::facade::route::{self, Arrived};
+use crate::facade::subject;
 use crate::federation::Federation;
 
 /// The operations whose resource holds data of no category.
@@ -64,10 +65,8 @@ const NO_CATEGORY: &[&str] = &[
 /// The media type of canonical JSON.
 const JSON: &str = "application/json";
 
-/// The query parameters of the read of an EHR by subject.
-const SUBJECT_ID: &str = "subject_id";
-/// See [`SUBJECT_ID`].
-const SUBJECT_NAMESPACE: &str = "subject_namespace";
+/// The path parameter that names the EHR of a request in the EHR area.
+const EHR_ID: &str = "ehr_id";
 
 /// What one routed request shows before it is sent.
 #[derive(Debug)]
@@ -76,9 +75,13 @@ pub(crate) struct Routed {
     action: Action,
     operation: &'static str,
     resource: String,
-    ehr_id: Option<String>,
+    ehr_id: Option<EhrId>,
     patient: Option<PatientIdentifier>,
     written: Option<Evidence>,
+    /// Whether the path `ehr_id` or the subject the route is served by
+    /// could not be read, so no record of an access it made could name whose
+    /// data it reached.
+    unread: bool,
     request_id: String,
 }
 
@@ -89,14 +92,14 @@ impl Routed {
         let Lookup::Matched(matched) = routes::lookup(arrived.method, arrived.path) else {
             return None;
         };
-        let (method, path, query) = (arrived.method, arrived.path, arrived.uri.query());
+        let (method, query) = (arrived.method, arrived.uri.query());
         let (headers, body) = (arrived.headers, arrived.body.as_ref());
         let matched = &matched;
         let log = federation.access_log()?;
-        let patient_data = crate::facade::route::in_ehr_area(matched)
+        let patient_data = route::in_ehr_area(matched)
             || crate::facade::write::creates_ehr(matched)
-            || crate::facade::route::in_demographic_area(matched)
-            || crate::facade::subject::serves(matched);
+            || route::in_demographic_area(matched)
+            || subject::serves(matched);
         if !patient_data {
             return None;
         }
@@ -109,18 +112,24 @@ impl Routed {
         };
         let written = matches!(action, Action::Create | Action::Update)
             .then(|| written(matched.operation_id, headers, body));
+        // NOTE: no specification governs this: our own design; the record reads the
+        // `ehr_id` and the subject with the parsers the route itself is served by.
+        let ehr_id = route::ehr::path_ehr_id(matched);
+        let patient = subject::serves(matched)
+            .then(|| subject::named(matched, query))
+            .flatten()
+            .map(|(namespace, value)| PatientIdentifier { namespace, value });
+        let unread = (matched.path_param(EHR_ID).is_some() && ehr_id.is_none())
+            || (subject::serves(matched) && patient.is_none());
         Some(Self {
             log: Arc::clone(log),
             action,
             operation: matched.operation_id,
-            resource: path.to_owned(),
-            ehr_id: matched
-                .path_param("ehr_id")
-                .and_then(|param| param.decoded().ok()),
-            patient: crate::facade::subject::serves(matched)
-                .then(|| patient(query))
-                .flatten(),
+            resource: resource(matched),
+            ehr_id,
+            patient,
             written,
+            unread,
             request_id: arrived.request_id.to_owned(),
         })
     }
@@ -131,6 +140,14 @@ impl Routed {
         let Some(endpoint) = acting(response.headers(), headers::ENDPOINT) else {
             return response;
         };
+        if self.unread {
+            tracing::error!(
+                operation = self.operation,
+                "an endpoint acted for a request whose ehr_id or subject could not be read, \
+                 so its answer is withheld"
+            );
+            return error::fixed(Code::AccessUnrecorded, &self.request_id);
+        }
         let system_id = acting(response.headers(), headers::SYSTEM_ID);
         let node = federation
             .snapshot()
@@ -153,7 +170,7 @@ impl Routed {
                 .into_iter()
                 .map(|ehr_id| EhrAt {
                     endpoint: endpoint.clone(),
-                    ehr_id,
+                    ehr_id: ehr_id.as_str().to_owned(),
                 })
                 .collect(),
         };
@@ -174,6 +191,7 @@ impl Routed {
                 status: status.as_str().to_owned(),
                 rows: None,
                 contributed: true,
+                evidence: None,
             }],
         });
         response
@@ -190,21 +208,21 @@ fn acting(headers: &HeaderMap, name: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The patient the read of an EHR by subject names, from its query string.
-fn patient(query: Option<&str>) -> Option<PatientIdentifier> {
-    let mut id = None;
-    let mut namespace = None;
-    for (name, value) in url::form_urlencoded::parse(query?.as_bytes()) {
-        match name.as_ref() {
-            SUBJECT_ID => id = Some(value.into_owned()),
-            SUBJECT_NAMESPACE => namespace = Some(value.into_owned()),
-            _ => {}
-        }
-    }
-    Some(PatientIdentifier {
-        namespace: namespace?,
-        value: SecretString::from(id?),
-    })
+/// The resource `matched` addresses, as the route matcher read it: its
+/// template with each path parameter as the segment the matcher took, still
+/// percent-encoded, so the record names the path the route served.
+fn resource(matched: &RouteMatch) -> String {
+    let parts: Vec<&str> = matched
+        .template
+        .split('/')
+        .map(|part| {
+            part.strip_prefix('{')
+                .and_then(|name| name.strip_suffix('}'))
+                .and_then(|name| matched.path_param(name))
+                .map_or(part, |param| param.raw.as_str())
+        })
+        .collect();
+    parts.join("/")
 }
 
 /// What a write of `operation` with `body` sent: the root object of a

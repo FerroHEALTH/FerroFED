@@ -309,6 +309,53 @@ fix the changelog and cut the next version. The lane enforces the half it can:
 `github-release` refuses to reopen an already-published release for the same
 tag, and fails with that message instead.
 
+## Withdrawing a release
+
+A released version found not to conform is withdrawn when the corrective
+action in its row of `docs/registers/non-conforming-versions.tsv` says so
+(Regulation (EU) 2025/327 Art 30(1)(i); the procedure is
+[`post-market.md`](post-market.md)). Nothing published is edited: the
+release, its notes, its assets and its tag stay as they are, under the
+immutable-releases setting and the `release-tags` ruleset. The withdrawal
+is recorded beside it instead.
+
+1. **The correcting release ships first,** as a patch release in the same
+   `<major>.<minor>` line. Its tag moves `<major>.<minor>` and `latest`
+   onto it in the normal way.
+2. **Run the script dry, then for real:**
+
+   ```sh
+   scripts/release/withdraw.sh --version 0.0.9 --replacement 0.0.10 \
+     --finding N-2026-1 --issue 812
+   scripts/release/withdraw.sh --version 0.0.9 --replacement 0.0.10 \
+     --finding N-2026-1 --issue 812 --apply
+   ```
+
+   `--issue` is the tracker issue of the finding, and names the upgrade
+   note. For a vulnerability, add `--security-advisory GHSA-…`: the script
+   appends the withdrawal to that advisory and publishes it. Without one,
+   it writes `docs/advisories/v<version>-withdrawn.md`.
+
+   It refuses a version with no row naming it in the register, a version
+   SECURITY.md already lists as withdrawn, and a replacement that is not a
+   later published release of the same line. With `--apply` it moves the
+   `<major>.<minor>` and `latest` tags of `ghcr.io/ferrohealth/ferrofed` and
+   `ghcr.io/ferrohealth/ferrofed-viewer` to the replacement wherever they
+   still point at the withdrawn version. It then publishes the advisory,
+   writes the upgrade note under `changelog.d/` that the next release's notes
+   carry, lists the version in SECURITY.md, and records the action and the
+   date users were told in the register row. Last, it prints the notices for
+   the national authorities and for distributors, importers and users.
+3. **Commit what it wrote** (the register, SECURITY.md, the fragment and any
+   advisory page) in one pull request, and send the notices.
+
+The `<version>` image tag stays. GHCR removes a tag only by deleting the
+package version, which is the image digest itself. That would break every
+deployment pinned by digest, and the attestations that name the digest
+would no longer resolve. A deployment that pulls `<version>` or the digest
+keeps running the withdrawn version until it moves. One that follows
+`<major>.<minor>` or `latest` gets the replacement on its next pull.
+
 ## Sources
 
 - SLSA v1.2 build requirements: <https://slsa.dev/spec/v1.2/build-requirements>

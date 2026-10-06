@@ -1230,7 +1230,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "fhir-types",
  "fhirconnect",
@@ -1504,6 +1504,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "tar",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -3162,7 +3163,7 @@ checksum = "60993920e071b0c9b66f14e2b32740a4e27ffc82854dcd72035887f336a09a28"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "base64 0.23.1",
  "ferrofed-testkit",
@@ -3397,7 +3398,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.43"
+version = "0.0.44"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema 0.58.3",
