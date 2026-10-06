@@ -1,6 +1,6 @@
 ---
 name: e2e-gate
-description: Container-backed tests run only with FERROFED_E2E=1 through the testkit harness (two FerroEHR instances as the two nodes, each with its own database and system_id, each behind a capturing and fault proxy, EHRbase for the node profile, the reference implementation for the differential run, all images pinned by digest); unset, they return early and the suite stays offline
+description: Container-backed tests run only with FERROFED_E2E=1 through the testkit harness (two FerroEHR instances as the two nodes, each with its own database and system_id, each behind a capturing and fault proxy, EHRbase for the node profile, Keycloak for the production guide's issuer recipe, the reference implementation for the differential run, all images pinned by digest); unset, they return early and the suite stays offline
 metadata:
   type: project
 ---
@@ -12,17 +12,24 @@ Landed with #39 (2026-10-01), on the FerroBRIDGE gate model; the topology
 became two FerroEHR nodes with #155 (2026-10-02, [[two-ferroehr-nodes]]). The
 harness is `tools/ferrofed-testkit`:
 
-- `containers.rs`: `two_nodes()` starts one pinned FerroEHR PostgreSQL
+- `containers/`: `two_nodes()` starts one pinned FerroEHR PostgreSQL
   container holding a database per node (`ferroehr_a`, `ferroehr_b`, through
   `docker/postgres/20-ferrofed-node-databases.sh`, decision A47), then node A
   (`NODE_A_SYSTEM_ID`) and node B (`NODE_B_SYSTEM_ID`) on the pinned FerroEHR
   image with `FERROEHR__SERVER__SYSTEM_ID` set, and puts a proxy in front of
   each; `ferroehr(system_id)` starts one node on a database server of its
-  own, and `ferroehr_restricted(system_id)` one with its access controls on.
-  `Node::stop()` makes a node offline the way an outage does.
-  `containers/ehrbase.rs` starts the pinned EHRbase (`ehrbase`,
+  own, and `restricted::ferroehr_restricted(system_id)` one with its access
+  controls on. `Node::stop()` makes a node offline the way an outage does.
+  Every image is a `PinnedImage` constant in `images.rs`, and `database.rs`
+  holds the PostgreSQL server, alone for the gateway's own store through
+  `database::postgres()`. `ehrbase.rs` starts the pinned EHRbase (`ehrbase`,
   `ehrbase_restricted`), the second CDR product the node profile runs
-  against (#549).
+  against (#549). `keycloak/` starts the pinned Keycloak and applies the
+  production guide's issuer recipe to it, read from the book page as the
+  page prints it (`recipe.rs`), then mints a client-credentials token and a
+  user's authorization-code token (#724). The gated test that sends those
+  tokens to the gateway is `app/ferrofed-server/tests/it/e2e/keycloak.rs`;
+  the testkit's `tests/it/keycloak_recipe.rs` reads the recipe offline.
 - `proxy.rs`: `CapturingProxy` journals every request (method, path, query,
   headers, body) and injects `Fault::Refuse`, `Fault::Delay`,
   `Fault::Status` or `Fault::Reply` (a status with an ITS-REST `Error` body)

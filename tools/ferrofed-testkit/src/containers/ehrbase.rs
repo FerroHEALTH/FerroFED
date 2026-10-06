@@ -22,9 +22,10 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerRequest, GenericImage, ImageExt};
 use uuid::Uuid;
 
+use super::images::{EHRBASE, EHRBASE_POSTGRES};
 use super::{
-    CDR_PORT, DatabaseServer, EHRBASE, EHRBASE_POSTGRES, HarnessError, HarnessUser, Node,
-    POSTGRES_PORT, Product, names, postgres_health_check, ready, role_password,
+    CDR_PORT, DatabaseServer, HarnessError, HarnessUser, Node, POSTGRES_PORT, Product, names,
+    postgres_health_check, ready, role_password,
 };
 
 /// The path of EHRbase's ITS-REST API root, the path `/v1/ehr` lives under:

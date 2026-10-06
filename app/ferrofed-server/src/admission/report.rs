@@ -126,7 +126,7 @@ pub struct Report {
     node: NodeId,
     mode: Mode,
     created: Vec<String>,
-    read: Vec<String>,
+    read: usize,
     findings: Vec<Finding>,
 }
 
@@ -146,7 +146,7 @@ impl Report {
             node,
             mode: Mode::Full,
             created: created.into_iter().map(redacted).collect(),
-            read: Vec::new(),
+            read: 0,
             findings: findings
                 .into_iter()
                 .map(|finding| Finding {
@@ -157,12 +157,14 @@ impl Report {
         }
     }
 
-    /// The report of a run without writes on `endpoint` of `node`: the
-    /// `ehr_id`s of the existing EHRs it read and the findings.
+    /// The report of a run without writes on `endpoint` of `node`: how many
+    /// existing EHRs it read, and the findings.
+    // NOTE: an existing EHR's ehr_id is the pseudonymous identifier of a real patient at the
+    // node, so a run without writes names its EHRs by row and keeps no ehr_id (§5.4.1, N33).
     pub(super) fn read_only(
         endpoint: EndpointId,
         node: NodeId,
-        read: Vec<String>,
+        read: usize,
         findings: Vec<Finding>,
     ) -> Self {
         Self {
@@ -181,10 +183,11 @@ impl Report {
         self.mode
     }
 
-    /// The `ehr_id`s of the existing EHRs a run without writes read.
+    /// How many existing EHRs a run without writes read; their `ehr_id`s
+    /// are never kept.
     #[must_use]
-    pub fn read(&self) -> &[String] {
-        &self.read
+    pub fn read(&self) -> usize {
+        self.read
     }
 
     /// The conditions the run left unproven: those it reports
@@ -259,7 +262,7 @@ impl fmt::Display for Report {
                     f,
                     "This run made no write to the node: it read the ehr_id and system_id of EHRs the node already holds, and created no test EHR."
                 )?;
-                listed(f, "EHRs read", &self.read)?;
+                writeln!(f, "EHRs read: {}", self.read)?;
             }
         }
         for finding in &self.findings {

@@ -34,7 +34,9 @@ use testcontainers::core::{Host, IntoContainerPort};
 use testcontainers::runners::{AsyncBuilder, AsyncRunner};
 use testcontainers::{ContainerAsync, GenericBuildableImage, GenericImage, ImageExt};
 
-use crate::containers::{self, HarnessError, MAVEN, Postgres, TEMURIN_JRE};
+use crate::containers::database::{self, Postgres};
+use crate::containers::images::{MAVEN, TEMURIN_JRE};
+use crate::containers::{self, HarnessError};
 
 /// The upstream commit the vendored reference implementation is.
 pub const REFERENCE_COMMIT: &str = "92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5";
@@ -142,7 +144,7 @@ impl Reference {
     /// [`ReferenceError::NotReady`] when the gateway never answers.
     pub async fn start(registry: &str, settings: &str) -> Result<Self, ReferenceError> {
         let image = build().await?;
-        let database = containers::postgres(DATABASE, &[])
+        let database = database::postgres(DATABASE, &[])
             .await
             .map_err(|error| ReferenceError::Harness(Box::new(error)))?;
         let server = image
