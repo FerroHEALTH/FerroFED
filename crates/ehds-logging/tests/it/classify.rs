@@ -162,6 +162,28 @@ fn a_query_naming_an_unmapped_id_beside_a_mapped_one_is_unclassified() {
 }
 
 #[test]
+fn a_queried_archetype_written_in_another_form_is_unmapped_never_classified() {
+    for written in [
+        "openehr-ehr-observation.laboratory_test_result.v1",
+        "openEHR-EHR-OBSERVATION.laboratory_test_result.v1.0.0",
+        "openEHR-EHR-OBSERVATION.laboratory_test_result.v1-rc",
+        "org-x::openEHR-EHR-OBSERVATION.laboratory_test_result.v1",
+        "'openEHR-EHR-OBSERVATION.laboratory_test_result.v1'",
+    ] {
+        let classified = map().classify(
+            &Evidence::reached(Basis::Returned, Vec::new()).queried(queried(&[], &[written])),
+        );
+        assert!(!classified.is_no_category(), "{written}");
+        assert_eq!(
+            classified.unclassified(),
+            Some(&Unclassified::Unmapped),
+            "{written}: a key matches exactly, so a variant is marked unclassified"
+        );
+        assert_eq!(classified.unmapped(), &set(&[written]), "{written}");
+    }
+}
+
+#[test]
 fn a_queried_template_wins_over_a_queried_archetype() {
     let classified = map().classify(
         &Evidence::reached(Basis::Returned, Vec::new())

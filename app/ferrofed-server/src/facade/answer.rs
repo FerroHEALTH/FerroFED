@@ -372,6 +372,7 @@ async fn federate(
         &analysis,
         (completion, dedup, attributes.clone()),
     );
+    let (plan, reached) = accessed::reading(federation, plan, &analysis);
     let routed_to = routed.map(|owner| owner.endpoint.id().as_str().to_owned());
     let dispatch = Dispatch::of(routed, &plan);
     let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
@@ -384,7 +385,7 @@ async fn federate(
     follow_up::observe(federation, answer.seen(), request_id);
     let status = settled(answer.status(), targets.resolution_failed, completion);
     let acting = dispatch.provenance(federation.snapshot(), answer.federation(), status);
-    let meta = federation.access_log().map(|_| answer.federation().clone());
+    let meta = accessed::kept(federation, &answer);
     let provenance = answer.attributes().to_vec();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
@@ -400,14 +401,16 @@ async fn federate(
     } else {
         Vec::new()
     };
-    let accessed = federation.access_log().zip(meta).and_then(|(log, meta)| {
+    let accessed = federation.access_log().zip(meta).and_then(|(log, kept)| {
         let answered = accessed::Answered {
             request: &request,
             stored: stored.as_deref(),
             analysis: &analysis,
             resolved: &targets.resolved,
             routed: routed_to.as_deref(),
-            federation: &meta,
+            federation: &kept.0,
+            sent: &kept.1,
+            reached: reached.as_deref(),
             rows: &result_set.rows,
             status,
         };

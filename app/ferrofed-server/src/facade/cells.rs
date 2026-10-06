@@ -171,17 +171,46 @@ fn cell(
 /// design.
 #[must_use]
 pub fn root_objects(rows: &[ResultSetRow], sources: &[ColumnSource]) -> (Vec<RootObject>, bool) {
+    roots(rows.iter().flat_map(|row| {
+        row.iter()
+            .zip(sources)
+            .filter(|(_, source)| matches!(source, ColumnSource::Node(_)))
+            .map(|(cell, _)| Some(cell))
+    }))
+}
+
+/// Returns what the `rows` one node answered show of their data, read as
+/// [`root_objects`] reads the delivered rows, before the merge.
+///
+/// A node row holds the node columns alone, each at the position its
+/// [`ColumnSource::Node`] names. A cell the row is too short to hold counts
+/// as unrooted, so the query's own constraints classify it.
+#[must_use]
+pub fn node_root_objects(
+    rows: &[ResultSetRow],
+    sources: &[ColumnSource],
+) -> (Vec<RootObject>, bool) {
+    roots(rows.iter().flat_map(|row| {
+        sources.iter().filter_map(move |source| match source {
+            ColumnSource::Node(index) => Some(row.get(*index)),
+            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint(_) => None,
+        })
+    }))
+}
+
+/// The root objects among `cells`, and whether any cell is no root: a
+/// missing cell is unrooted, and `null` holds no data.
+fn roots<'a>(cells: impl Iterator<Item = Option<&'a Value>>) -> (Vec<RootObject>, bool) {
     let mut objects = Vec::new();
     let mut unrooted = false;
-    for row in rows {
-        for (cell, source) in row.iter().zip(sources) {
-            if !matches!(source, ColumnSource::Node(_)) || cell.is_null() {
-                continue;
-            }
-            match root(cell) {
+    for cell in cells {
+        match cell {
+            Some(cell) if cell.is_null() => {}
+            Some(cell) => match root(cell) {
                 Some(object) => objects.push(object),
                 None => unrooted = true,
-            }
+            },
+            None => unrooted = true,
         }
     }
     (objects, unrooted)

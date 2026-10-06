@@ -162,6 +162,32 @@ async fn a_template_declared_none_is_of_no_category() -> TestResult {
 }
 
 #[tokio::test]
+async fn a_leaf_read_through_an_archetype_predicate_takes_that_archetypes_category() -> TestResult {
+    let aql = format!(
+        "SELECT c/content[{LAB_ARCHETYPE}]/data/events/data/items/value/magnitude \
+         FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let (status, text, records) = run(&aql, &["7".to_owned()], &[]).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let [record] = records.as_slice() else {
+        return Err(format!("one record, got {records:?}").into());
+    };
+    assert_eq!(
+        vec!["medical-test-result"],
+        details(record, "ehds-categories", "ehds-category"),
+        "Annex II 3.2(c): the value is lab data, read through its archetype"
+    );
+    assert_eq!(
+        vec!["unbound"],
+        details(record, "ehds-categories", "ehds-unclassified"),
+        "the composition itself is bound to no id"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn leaf_values_of_an_unbound_class_are_unclassified_never_none() -> TestResult {
     let aql = format!(
         "SELECT c/name/value FROM EHR e CONTAINS COMPOSITION c \
