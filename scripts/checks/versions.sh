@@ -1158,6 +1158,7 @@ docs/specs/ihe-pixm-ch|IHE PIXm FHIR package, Swiss pin
 docs/specs/ihe-pdqm-ch|IHE PDQm FHIR package, Swiss pin
 docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
 docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
+docs/specs/eu-cra|EU Cyber Resilience Act and market surveillance acts
 docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
 docs/specs/ihe-iti-tf|IHE ITI Technical Framework Volume 1 pages
 docs/specs/ihe-iti-tf-vol2|IHE ITI Technical Framework Volume 2 pages
