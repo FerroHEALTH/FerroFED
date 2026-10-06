@@ -137,7 +137,7 @@ elif [[ -n "$rendered" ]]; then
       --security-opt no-new-privileges:true --network none \
       --env FERROFED_CONFIG="$config" \
       --volume "$(cd "$(dirname "$binary")" && pwd)/$(basename "$binary"):/usr/local/bin/ferrofed:ro" \
-      "${mounts[@]}" --entrypoint /usr/local/bin/ferrofed "$base" config check
+      ${mounts[@]+"${mounts[@]}"} --entrypoint /usr/local/bin/ferrofed "$base" config check
   }
   docker pull --quiet "$base" > /dev/null
   if [[ -z "$config" ]] || [[ "${#mounts[@]}" -eq 0 ]]; then

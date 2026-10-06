@@ -19,7 +19,8 @@ health route, the landing page, OpenID Connect sign-in with PKCE, the code
 exchange and the ID Token check, the server-side session, the typed gateway
 client, and the operator views: the members and their health, the integrity
 incidents and the `creating_system_id` routing table, the stored queries, and
-the self-description. The query console (#277) is planned.
+the self-description. The query console runs an AQL or a stored query through
+the gateway and shows every node's status beside the rows.
 
 Build it with cargo-leptos, from this directory:
 

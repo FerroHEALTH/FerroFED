@@ -13,7 +13,9 @@ the README and the GitHub repository description give it:
 
 > An openEHR federation gateway, in pure Rust: where else the record is.
 > FerroFED is a transparent ITS-REST intermediary: a client sends it an
-> ordinary AQL query and never learns it was federated. The gateway resolves
+> ordinary ITS-REST request, with AQL that carries no federation syntax, and
+> gets an ordinary ITS-REST answer back, whose `meta.federation` names each
+> member node with its status. The gateway resolves
 > the patient first, through the index, so no directly identifying identifier
 > travels in a query; then it sends standard AQL to each node, the local
 > FerroEHR or a remote CDR, scoped to that node's own EHR id, and merges what

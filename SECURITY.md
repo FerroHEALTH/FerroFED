@@ -25,3 +25,18 @@ privately through GitHub's private vulnerability reporting:
 <https://github.com/FerroHEALTH/FerroFED/security/advisories/new>. You will get
 an acknowledgement within seven days. If that window passes with no response,
 public disclosure to protect other users is your call.
+
+## Serious incidents and non-conforming versions
+
+FerroFED's manufacturer, Cadasto B.V., has duties under Regulation (EU)
+2025/327 beyond fixing a vulnerability. A vulnerability that harmed a person,
+or could, may be a serious incident, which the manufacturer reports to the
+market surveillance authorities within three days of becoming aware of it
+(Art 44(7)). Report it as above, and also write to
+[info@cadasto.com](mailto:info@cadasto.com) with "FerroFED incident" in the
+subject. A vulnerability that made a version non-conforming is entered in
+the
+[register of non-conforming versions](docs/registers/non-conforming-versions.tsv)
+once its advisory is published. The procedures are on the book's
+[Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
+page and in [`docs/post-market.md`](docs/post-market.md).

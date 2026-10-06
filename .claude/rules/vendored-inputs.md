@@ -21,6 +21,18 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   (content CC-BY-ND 3.0).
 - `docs/specs/aql/`: the openEHR AQL 1.1.0 specification source, its examples
   and the grammar `.g4` files (CC-BY-SA 3.0).
+- `docs/specs/openehr-rm/`: the openEHR Reference Model 1.1.0 AsciiDoc
+  sources with their figures and the class definitions they include
+  (CC-BY-SA 3.0), pinned by tag `Release-1.1.0`; the rendered HTML and the
+  UML diagrams are left out (`scripts/vendor/openehr-rm.sh`).
+- `docs/specs/openehr-base/`: the openEHR BASE 1.1.0 AsciiDoc sources
+  (architecture overview, foundation types, base types, resource) with their
+  figures and the class definitions they include, among them
+  `OBJECT_VERSION_ID`, `OBJECT_REF` and `PARTY_REF` (CC-BY-SA 3.0), pinned by
+  tag `Release-1.1.0`, the release paired with the RM; the rendered HTML and
+  the UML diagrams are left out (`scripts/vendor/openehr-base.sh`).
+  `scripts/checks/openehr-classes.sh` reads the class definitions of both
+  releases: every class and member the tree names must be one of them.
 - `docs/specs/ihe-pixm/`: the ITI-83 artefacts of the IHE PIXm 3.1.0 FHIR
   package (CC-BY-4.0): the `$ihe-pix` OperationDefinition, the Query
   Parameters profiles, the capability statements, the Consumer's audit
@@ -43,12 +55,16 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   sha256 (`scripts/vendor/ihe-pmir.sh`).
 - `docs/specs/ihe-iua/`: the IHE IUA supplement client authentication cites,
   pinned by tag `2.5` and commit (CC-BY-4.0, `scripts/vendor/ihe-iua.sh`).
-- `docs/specs/ihe-balp/`: the RESTful Query, Read, Create and Delete
-  patterns of the IHE Basic Audit Log Patterns 1.1.4 FHIR package
-  (CC-BY-4.0), the profiles' audit records are built on, with the Audit
-  Creator and Audit Record Repository capability statements and the IG's
-  client-side example of a search, pinned by package version and tarball
-  sha256.
+- `docs/specs/ihe-balp/`: the IHE Basic Audit Log Patterns 1.1.4 FHIR
+  package (CC-BY-4.0), the whole package but its manifest, which the
+  profiles' audit records are built on, pinned by package version and
+  tarball sha256.
+- `docs/specs/ihe-pixm-pages/`, `docs/specs/ihe-pdqm-pages/`,
+  `docs/specs/ihe-pmir-pages/`, `docs/specs/ihe-mcsd-pages/`,
+  `docs/specs/ihe-balp-pages/`: the narrative pages of the same IHE guides
+  (the Volume 1 page and the transaction pages, and for BALP Volume 1 and
+  Volume 3) from `profiles.ihe.net`, CC-BY-4.0 by each ImplementationGuide
+  resource, each pinned by URL and sha256 (`scripts/vendor/ihe-iti-pages.sh`).
 - `docs/specs/ihe-atna/`: the Record Audit Event [ITI-20] page of the IHE
   ITI Technical Framework Volume 2 (Revision 20.2) with its figure, and the
   RESTful ATNA supplement (Rev. 3.6), IHE International's own text under
@@ -94,14 +110,23 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     `docs/specs/ihe-iua-ch/`: IHE PIXm 3.0.4, PDQm 3.1.0 and IUA 2.3, the
     revisions Swiss Annex 5 pins (CC-BY-4.0).
   - `docs/specs/eu-ehds/`: Regulation (EU) 2025/327, Implementing
-    Regulations (EU) 2026/2083 and 2026/2099 and Recommendation (EU)
-    2019/243 (official EU acts, reused under Commission Decision
-    2011/833/EU), the eHealth Network guidelines and the Commission legal
-    notice (CC BY 4.0); the eHDSI wiki needs manual retrieval.
+    Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243
+    and Commission Decision 2011/833/EU on the reuse of Commission
+    documents (official EU acts, reused under that Decision), and two
+    eHealth Network guidelines (reusable under the same Decision); the
+    eHDSI wiki needs manual retrieval. The Commission's legal notice page
+    is cited by URL and not pinned, because its bytes change with every
+    render.
   - `docs/specs/ehdsi/`: the NCPeH API package and page (CC0-1.0); the
     guide index and OpenNCP (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
     (General Introduction §9).
+  - `docs/specs/ihe-iti-tf-vol2/`: the ITI TF Volume 2 page of Cross
+    Gateway Query [ITI-38] (General Introduction §9); the page of Cross
+    Gateway Patient Discovery [ITI-55] is cache only, because it reproduces
+    HL7 tables whose rights HL7 reserves (General Introduction §9.1.2). The
+    IHE citation guard reads both, the second when a local run has fetched
+    it.
   - `docs/specs/be-ehealth/`: the eHealth platform cookbooks, cache only:
     the cookbooks allow circulation, but the platform's re-use terms require
     prior approval for downloadable documents, and the stricter term governs
@@ -115,6 +140,22 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/no-nhn/`: the NHN developer portal pages, cache only.
   - `docs/specs/fi-kanta/`: the Kanta documents and packages, cache only.
   - `docs/specs/fi-hl7/`: `hl7.fhir.fi.base` (CC0-1.0).
+- The exchange-format proxies of #683, each the FHIR package registry's
+  tarball committed whole and pinned by URL and sha256 through
+  `scripts/vendor/eehrxf.sh`:
+  - `docs/specs/eu-xtehr-models/`: `xtehr.eu.ehds.models` 1.0.0 (CC0-1.0).
+  - `docs/specs/eu-hl7-base/`: `hl7.fhir.eu.base` 2.0.1 (CC0-1.0).
+  - `docs/specs/eu-hl7-eps/`: `hl7.fhir.eu.eps` 1.0.0-ballot (CC0-1.0).
+  - `docs/specs/eu-hl7-mpd/`: `hl7.fhir.eu.mpd` 1.0.0 (CC0-1.0).
+  - `docs/specs/eu-hl7-laboratory/`: `hl7.fhir.eu.laboratory` 2.0.0
+    (CC0-1.0).
+  - `docs/specs/eu-hl7-extensions/`: `hl7.fhir.eu.extensions.r4` 1.3.1 and
+    1.3.0, the versions the guides depend on (CC0-1.0).
+  - `docs/specs/hl7-ips/`: `hl7.fhir.uv.ips` 2.0.0, the version the Patient
+    Summary depends on (CC0-1.0).
+  - `docs/specs/ihe-pharm-mpd/`: `ihe.pharm.mpd.r4` 1.0.0-comment-2, the
+    version the HL7 Europe Base and Core, Patient Summary and Medication
+    Prescription and Dispense guides depend on (CC-BY-SA-4.0).
 - `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
   stated in each document), pinned by commit: the authorization server, the
   VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.
@@ -147,7 +188,10 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 
 A new corpus (an IHE profile's published artefacts, the Dutch
 Generic Functions IG) gets its own directory, script, pin and `PROVENANCE.md`
-in the change that first needs it, and this list grows with it.
+in the change that first needs it, and this list grows with it. Its
+`docs/VERSIONS.md` row gets a reader in `scripts/checks/pin-freshness.sh`, or
+its script goes in that file's `UNWATCHED_SCRIPTS` with the reason none is
+needed; the guard's self-test fails on a corpus row with neither.
 
 ## The rule
 

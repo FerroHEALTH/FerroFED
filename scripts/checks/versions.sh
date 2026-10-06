@@ -22,7 +22,9 @@
 #                          Cargo.toml edition, rust-version and resolver.
 #   4. product version     CITATION.cff version against the docs/VERSIONS.md
 #                          product-version row, and against the root Cargo.toml
-#                          [workspace.package] version.
+#                          [workspace.package] version; the release the
+#                          README.md status line names ("is at vX.Y.Z") is
+#                          not older than the product version.
 #   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint,
 #                          kubeconform, lychee and promtool versions
 #                          .github/workflows/ci.yml installs, the Kubernetes release and the schema
@@ -40,7 +42,8 @@
 #                          tag or pin-set digest its docs/VERSIONS.md corpus
 #                          row pins, and the federation specification's
 #                          provenance declares the version the specification
-#                          row pins.
+#                          row pins; every docs/VERSIONS.md row that names a
+#                          docs/specs/*/PROVENANCE.md is one this check reads.
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
@@ -82,8 +85,9 @@
 #   scripts/checks/versions.sh --root <dir>
 #       Checks the checkout at <dir>, such as a git worktree, with this script.
 #   scripts/checks/versions.sh --self-test
-#       Drives the specification-constant, landing-release and book-pin checks
-#       against fixtures: an agreeing input passes and each drift fails.
+#       Drives the specification-constant, landing-release, README-status and
+#       book-pin checks against fixtures: an agreeing input passes and each
+#       drift fails.
 #   Any other argument prints this usage and exits 2.
 #
 # Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
@@ -285,6 +289,39 @@ landing_release() {
   return 0
 }
 
+# version_older A B: the dotted version A is older than B.
+version_older() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    n = split(a, x, "."); m = split(b, y, ".")
+    for (i = 1; i <= (n > m ? n : m); i++) {
+      if (x[i] + 0 < y[i] + 0) exit 0
+      if (x[i] + 0 > y[i] + 0) exit 1
+    }
+    exit 1
+  }'
+}
+
+# readme_status README PRODUCT: every "is at vX.Y.Z" status line of README
+# names a release no older than PRODUCT, the product version, and README has
+# at least one. A newer one is a release being built and passes.
+readme_status() {
+  local readme=$1 product=$2 found v count=0 stale=0
+  found="$(grep -oE 'is at v[0-9]+\.[0-9]+\.[0-9]+' "$readme" | sed -E 's/^is at v//' || true)"
+  if [[ -z "$found" ]]; then
+    bad "$readme has no status line naming its release (\"is at vX.Y.Z\")"
+    return 0
+  fi
+  while IFS= read -r v; do
+    count=$((count + 1))
+    if version_older "$v" "$product"; then
+      bad "$readme says it is at v$v, older than the product version $product"
+      stale=1
+    fi
+  done <<< "$found"
+  [[ "$stale" -eq 0 ]] && note "OK: $readme names a release no older than $product, $count times"
+  return 0
+}
+
 # claim_holds CELL LABEL VALUE: the pin cell CELL of a matrix row carries
 # `LABEL VALUE` as two adjacent words. A VALUE of seven or more hex digits also
 # matches as the prefix of the 40-hex commit that follows LABEL, so the book
@@ -352,7 +389,7 @@ book_pins() {
       read -r -a words <<< "$claim"
       case "${#words[@]}" in
       1)
-        for item in "${names[@]}"; do
+        for item in ${names[@]+"${names[@]}"}; do
           value="$(pin_of "$item" "$file")"
           if [[ -n "$value" ]] && [[ "$value" != "${words[0]}" ]]; then
             bad "$page pins $item at ${words[0]}, $file pins $value"
@@ -370,7 +407,7 @@ book_pins() {
             stale=1
           fi
         else
-          for item in "${names[@]}"; do
+          for item in ${names[@]+"${names[@]}"}; do
             if ! claim_holds "$(pin_cell_of "$item" "$file")" "$label" "$value"; then
               bad "$page says $item is $label $value, which its $file row does not pin"
               stale=1
@@ -379,13 +416,13 @@ book_pins() {
         fi
         ;;
       *)
-        bad "$page pins '${names[*]}' as '$claim', a claim the guard cannot read: write a pin or a LABEL VALUE pair"
+        bad "$page pins '${names[*]-}' as '$claim', a claim the guard cannot read: write a pin or a LABEL VALUE pair"
         stale=1
         ;;
       esac
     done < <(tr ',' '\n' <<< "$pin_cell")
     if [[ "$claims" -eq 0 ]]; then
-      bad "$page has a row for '${names[*]}' that pins nothing"
+      bad "$page has a row for '${names[*]-}' that pins nothing"
       stale=1
     fi
   done <<< "$rows"
@@ -429,6 +466,18 @@ self_test() {
   expect "a stale status panel" 1 landing_release "$work/stale-panel.html" "$work/CHANGELOG.md"
   expect "a landing page that names no release" 1 landing_release "$work/silent.html" "$work/CHANGELOG.md"
   expect "a changelog with no release" 1 landing_release "$work/agree.html" "$work/unreleased.md"
+
+  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.9 on its 0.0.x line.' > "$work/readme-current.md"
+  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.10 on its 0.0.x line.' > "$work/readme-ahead.md"
+  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.7 on its 0.0.x line.' > "$work/readme-stale.md"
+  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.9.' 'It was at v0.0.8 before.' 'Now it is at v0.0.8 again.' > "$work/readme-mixed.md"
+  printf '%s\n' '## Status' '' 'Built on main for v0.0.9.' > "$work/readme-silent.md"
+  expect "a README at the product version" 0 readme_status "$work/readme-current.md" 0.0.9
+  expect "a README at a release being built, compared by number" 0 readme_status "$work/readme-ahead.md" 0.0.9
+  expect "a README two releases behind" 1 readme_status "$work/readme-stale.md" 0.0.9
+  expect "a README with one stale status line among current ones" 1 readme_status "$work/readme-mixed.md" 0.0.9
+  expect "a README with no status line" 1 readme_status "$work/readme-silent.md" 0.0.9
+  expect "a README behind a newer minor line" 1 readme_status "$work/readme-ahead.md" 0.1.0
 
   mkdir -p "$work/tree/crates/spec-crate/src/inner" "$work/tree/app/app-crate/src"
   printf '%s\n' 'pub const SPEC: &str = "0.9.0";' > "$work/tree/crates/spec-crate/src/lib.rs"
@@ -692,6 +741,13 @@ if [[ -f Cargo.toml ]]; then
   fi
 else
   note "no root Cargo.toml yet, skipped its version"
+fi
+
+echo "== README status (README.md <-> $matrix product version)"
+if [[ -f README.md ]] && [[ -n "$want_product" ]]; then
+  readme_status README.md "$want_product"
+else
+  note "no README.md or no product version yet, skipped"
 fi
 
 echo "== landing-page release (website/landing/index.html <-> CHANGELOG.md)"
@@ -1061,6 +1117,7 @@ docs/specs/federation-ref|Federation Tier reference implementation
 docs/specs/its-rest|openEHR ITS-REST OpenAPI
 docs/specs/aql|openEHR AQL specification source
 docs/specs/openehr-rm|openEHR Reference Model specification source
+docs/specs/openehr-base|openEHR BASE specification source
 docs/specs/ihe-pixm|IHE PIXm FHIR package
 docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
@@ -1079,6 +1136,7 @@ docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
 docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
 docs/specs/eu-hl7-extensions|HL7 Europe Extensions
 docs/specs/hl7-ips|HL7 International Patient Summary
+docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
 docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source
@@ -1102,6 +1160,7 @@ docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
 docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
 docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
 docs/specs/ihe-iti-tf|IHE ITI Technical Framework Volume 1 pages
+docs/specs/ihe-iti-tf-vol2|IHE ITI Technical Framework Volume 2 pages
 docs/specs/be-ehealth|Belgian eHealth platform documents
 docs/specs/be-fhir|Belgian core profiles (HL7 Belgium)
 docs/specs/fr-ans|French ANS publications
@@ -1117,6 +1176,7 @@ docs/specs/ietf-oauth|IETF RFC 7521
 docs/specs/ietf-oauth|IETF RFC 7523
 docs/specs/ietf-oauth|IETF RFC 7662
 docs/specs/ietf-oauth|IETF RFC 8414
+docs/specs/ietf-oauth|IETF RFC 8705
 docs/specs/ietf-oauth|IETF RFC 9126
 docs/specs/ietf-oauth|IETF RFC 9396
 docs/specs/ietf-oauth|IETF RFC 9449
@@ -1152,6 +1212,23 @@ while IFS='|' read -r dir item; do
   fi
 done <<< "$corpora"
 [[ "$agreed" -eq "$expected" ]] && note "OK: all $expected corpus provenance stamps name their pin"
+
+# Every matrix row whose source cell names a docs/specs/*/PROVENANCE.md is in
+# the list above, so a corpus row added without its stamp check fails here.
+unread="$(LISTED="$corpora" awk -F'|' '
+  BEGIN { n = split(ENVIRON["LISTED"], l, "\n"); for (i = 1; i <= n; i++) { have[l[i]] = 1 } }
+  NF >= 4 && match($4, /docs\/specs\/[^\/`]+\/PROVENANCE\.md/) {
+    dir = substr($4, RSTART, RLENGTH); sub(/\/PROVENANCE\.md$/, "", dir)
+    item = $2; gsub(/`/, "", item); gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+    if (!((dir "|" item) in have)) { print item " (" dir ")" }
+  }' "$matrix")"
+if [[ -n "$unread" ]]; then
+  while IFS= read -r row; do
+    bad "the $matrix row '$row' names a provenance stamp this check does not read; add it to the corpora list"
+  done <<< "$unread"
+else
+  note "OK: every $matrix row that names a provenance stamp is checked"
+fi
 
 # The specification row pins a version and the corpus row a commit; the
 # provenance records the version that commit's antora.yml declares, so a re-pin

@@ -185,7 +185,13 @@ slow one.
    (`website/landing/index.html`) name the same version in the same pull
    request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull
    request is where it changes; the release lane never writes to `main`.
-4. **The version bump lands as its own pull request** and merges like any
+4. **The public texts are reviewed against Regulation (EU) 2025/327 Art 28.**
+   Every public text is read for a claim the release does not ship, a
+   limitation it leaves out, or a use outside the intended purpose, and the
+   [claims review](https://ferrofed.eu/docs/evaluate/claims-review.html) gets
+   a row for the release, in the version-bump pull request. Its method is on
+   that page.
+5. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).

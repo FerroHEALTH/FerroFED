@@ -732,7 +732,7 @@ esac
 }
 
 fail=0
-for f in "${files[@]}"; do
+for f in ${files[@]+"${files[@]}"}; do
   check_file "$f" || fail=1
 done
 

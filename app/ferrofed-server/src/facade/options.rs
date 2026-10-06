@@ -20,6 +20,9 @@
 //! A configured Step-1 consent pre-filter is declared under
 //! `federation.consent`, with what a query does when it cannot answer
 //! (N27a, §13.2.1) and whether an answer names a member it excludes.
+//! The manufacturer is named at the top level, beside `federation` and
+//! `endpoints`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR
+//! system.
 
 use std::sync::Arc;
 
@@ -27,6 +30,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use ferrofed_identity::role::consent::{ConsentPrefilter, ON_UNAVAILABLE};
+use ferrofed_registry::manufacturer;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use openehr_federation::aql::{OffsetStrategy, Targeting};
@@ -79,6 +83,12 @@ pub const CONSENT_MS: &str = "consent_ms";
 
 /// The `federation` member that declares the Step-1 consent pre-filter.
 pub const CONSENT: &str = "consent";
+
+/// The top-level member that names the manufacturer, beside `federation`
+/// and `endpoints` (Regulation (EU) 2025/327 Art 30(1)(g)).
+// NOTE: §7a.2 and options-root.schema.json leave the top level open
+// (`additionalProperties: true`): our own design, the member names the manufacturer.
+pub const MANUFACTURER: &str = "manufacturer";
 
 /// Why the self-description cannot be built from the running federation.
 #[derive(Debug, thiserror::Error)]
@@ -180,10 +190,12 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         its_rest: its_rest(federation, registry)?,
         extra: consent(federation)?,
     };
+    let mut extra = Extra::new();
+    extra.insert_serialized(MANUFACTURER, &manufacturer::MANUFACTURER)?;
     Ok(OptionsRoot {
         federation: gateway,
         endpoints: members(federation.snapshot())?,
-        extra: Extra::new(),
+        extra,
     })
 }
 

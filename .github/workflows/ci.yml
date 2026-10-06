@@ -327,6 +327,84 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/copyright-holder.sh
 
+  # Every IHE section the tree cites is a heading of the vendored text of that
+  # profile and version. The RESTful ATNA supplement is a PDF, read with
+  # pdftotext, so poppler-utils is installed from the runner's own archive.
+  ihe-citations:
+    name: ihe-citations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pdftotext
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends poppler-utils
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/ihe-citations.sh --self-test
+          bash scripts/checks/ihe-citations.sh
+
+  # Every shell program runs under bash 3.2, the bash macOS ships, or declares
+  # the bash it needs. CI runs bash 5, so the guard reads the scripts for the
+  # constructs bash 3.2 lacks; its self-test proves each refusal and pass.
+  bash-compat:
+    name: bash-compat
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/bash-compat.sh --self-test
+          bash scripts/checks/bash-compat.sh
+
+  # Every shell program under scripts/ and the session hooks is committed
+  # executable, and every scripts/<area>/*.sh program starts with its
+  # interpreter line. The guard is called by its path, so it proves its own
+  # mode too.
+  script-modes:
+    name: script-modes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          scripts/checks/script-modes.sh --self-test
+          scripts/checks/script-modes.sh
+
+  # Every openEHR class the tree names (an AQL class expression, a canonical
+  # JSON `_type`, a `CLASS.member` in a comment or a Markdown page) is defined
+  # by the vendored RM or BASE class tables or titled by ITS-REST, and every
+  # member is one the class or an ancestor carries.
+  openehr-classes:
+    name: openehr-classes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/openehr-classes.sh --self-test
+          bash scripts/checks/openehr-classes.sh
+
   # The conformance-matrix guard (the §17 conformance points and the §16.3
   # tracks): the matrix's derived columns against the vendored specification,
   # every
@@ -1107,6 +1185,10 @@ jobs:
       - versions
       - favicon-sync
       - copyright-holder
+      - ihe-citations
+      - bash-compat
+      - script-modes
+      - openehr-classes
       - conformance-matrix
       - obligations
       - e2e-placement

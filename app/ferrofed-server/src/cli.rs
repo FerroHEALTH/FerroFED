@@ -15,15 +15,25 @@
 //! of its own. No specification governs the command line: our own design.
 
 use clap::{Parser, Subcommand};
+use ferrofed_registry::manufacturer::MANUFACTURER;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use crate::admission::DEFAULT_COUNT;
+
+/// What `ferrofed --version` prints after the binary's name.
+///
+/// The version, then the manufacturer with its postal address, its single
+/// point of contact and its website (Regulation (EU) 2025/327 Art 30(1)(g)).
+pub static LONG_VERSION: LazyLock<String> =
+    LazyLock::new(|| MANUFACTURER.version_text(env!("CARGO_PKG_VERSION")));
 
 /// The `ferrofed` command line.
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(
     name = "ferrofed",
     version,
+    long_version = LONG_VERSION.as_str(),
     about = "The FerroFED openEHR federation gateway"
 )]
 pub struct Cli {

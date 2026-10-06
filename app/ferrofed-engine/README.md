@@ -3,7 +3,7 @@
 
 # ferrofed-engine
 
-The federation engine: dispatch and fan-out to each node over ITS-REST, the per-node and overall budgets, the completeness decision and the outbound identifier-hygiene gate. Follow-up routing on the creating system id is planned.
+The federation engine: dispatch and fan-out to each node over ITS-REST, the per-node and overall budgets, the completeness decision, the single-node forwarding of follow-up requests and the outbound identifier-hygiene gate.
 
 Part of [FerroFED](https://ferrofed.eu), a pure-Rust openEHR federation
 gateway: a transparent ITS-REST intermediary that resolves the patient outside
@@ -18,9 +18,10 @@ one deadline, builds `meta.federation` from every outcome and applies the
 all-or-nothing decision: `504` for an unanswered node, `424` for a node error,
 `200` otherwise. The `hygiene` module (#45) is the outbound gate every request
 to a node passes before it is sent: it refuses a request that still carries a
-patient identifier resolution consumed (§5.4.1, N33). Follow-up routing on the
-creating system id (§12) is planned (#61 to #66). The design is recorded in
-the repository's architecture document.
+patient identifier resolution consumed (§5.4.1, N33). The `single_node`
+module forwards a follow-up request, byte for byte, to the one node that owns
+it (§7a.3, §12, N22, N31). The design is recorded in the repository's
+architecture document.
 
 ## Licence
 

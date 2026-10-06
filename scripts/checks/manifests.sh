@@ -15,10 +15,17 @@
 #   scripts/checks/manifests.sh --self-test  prove a manifest with a key
 #                                            written twice fails, and a sound
 #                                            one passes
-# Needs cargo on PATH. Exits with Cargo's own non-zero code when a manifest
-# does not parse, 1 when the self-test fails, 0 otherwise.
+# Needs cargo on PATH, and stops with exit 1 naming it when it is missing, so
+# a missing tool is never read as a manifest that does not parse. Exits with
+# Cargo's own non-zero code when a manifest does not parse, 1 when the
+# self-test fails, 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+
+if ! command -v cargo > /dev/null 2>&1; then
+  echo "manifests: cargo is not on PATH; install the pinned toolchain (rust-toolchain.toml) or add its directory (often ~/.cargo/bin) to PATH" >&2
+  exit 1
+fi
 
 # check MANIFEST: cargo metadata over the manifest at MANIFEST.
 check() {

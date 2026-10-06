@@ -234,11 +234,9 @@ Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
   the order it was queued
   ([#532](https://github.com/FerroHEALTH/FerroFED/issues/532)).
 
-### v0.0.9, on `main`, in the next release
+### v0.0.9: conformance and the operator console
 
-The v0.0.9 milestone, conformance (§16, §17), is being built. `main`
-carries these parts of it, and v0.0.9 is cut from `main` once the milestone
-closes.
+Released on 2026-10-05. It carries §16 and §17.
 
 - Every conformance point of §17 scored by a marked test, or deferred by a
   recorded decision with its actor and reason, and the
@@ -267,6 +265,11 @@ closes.
   ([#275](https://github.com/FerroHEALTH/FerroFED/issues/275),
   [#276](https://github.com/FerroHEALTH/FerroFED/issues/276),
   [The operator console](../operate/operator-console.md)).
+- The console's query console, signing out, and its browser journeys in CI
+  ([#274](https://github.com/FerroHEALTH/FerroFED/issues/274),
+  [#277](https://github.com/FerroHEALTH/FerroFED/issues/277),
+  [#584](https://github.com/FerroHEALTH/FerroFED/issues/584),
+  [#608](https://github.com/FerroHEALTH/FerroFED/issues/608)).
 - Each regional binding one module behind one feature, `binding-ihe` and
   `binding-nl`, wired through one `Binding` trait, and RFC 8414 in a crate
   of its own, `oauth-server-metadata`
@@ -307,21 +310,75 @@ Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-The rest of v0.0.9: the operator console's query console, signing out, and
-its browser journeys in CI
-([#274](https://github.com/FerroHEALTH/FerroFED/issues/274),
-[#277](https://github.com/FerroHEALTH/FerroFED/issues/277),
-[#584](https://github.com/FerroHEALTH/FerroFED/issues/584),
-[#608](https://github.com/FerroHEALTH/FerroFED/issues/608)).
-
 v0.0.10: the re-pin to the specification's 1.0 release, with FerroFED's
 choices revisited where the upstream reports bear on them
 ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17),
 [#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and EHDS
-readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)).
+readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the
+European interoperability and logging software components, and the
+manufacturer's conformity work
+([Regulatory status](regulatory-status.md)).
 
 A `CONTRIBUTION` in canonical XML waits on the openEHR XSD and `openehr-its`
 ([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)).
+
+## Limitations
+
+Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the
+professional user of likely limitations related to interoperability or
+security features of the EHR system in relation to its intended purpose".
+These are the ones to know before you deploy FerroFED; the
+[claims review](claims-review.md) records how this list is kept.
+
+- **The specification is a release candidate.** FerroFED implements v0.9.0
+  of the Federation Tier with AQL. Requirement and conformance-point numbers
+  can move at the 1.0 release, and the re-pin is
+  [#17](https://github.com/FerroHEALTH/FerroFED/issues/17).
+- **No EHDS harmonised component yet.** The European interoperability
+  software component and the European logging software component (Art 25(1))
+  are not built, no EU declaration of conformity has been drawn up, and no
+  release carries the CE marking
+  ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
+- **Access to patient data is not audited yet.** Only the IHE transactions
+  the gateway makes or receives are audited
+  ([The audit trail](../operate/audit.md)). A federated query, a routed read
+  or write, and a query from the operator console leave no access record
+  naming the patient; that record is
+  [#623](https://github.com/FerroHEALTH/FerroFED/issues/623) and
+  [#521](https://github.com/FerroHEALTH/FerroFED/issues/521).
+- **The caller may be an application.** Client authentication verifies an
+  access token from an issuer you trust. Whether that token names the health
+  professional, and at which assurance level, depends on the issuer; FerroFED
+  does not yet require either
+  ([#661](https://github.com/FerroHEALTH/FerroFED/issues/661)).
+- **Consent exclusions are shown by default.** A member a consent pre-filter
+  excludes is reported `consent-denied`, as the specification requires
+  (N27a). Art 8 of the Regulation forbids showing that restriction to a
+  healthcare provider, so a deployment in the EU sets
+  `[federation.consent] disclose = false`
+  ([Withholding consent exclusions](../operate/consent-exclusions.md)). A
+  node's own consent refusal fails the query `424` until you list the codes
+  that node uses ([Consent](../operate/consent.md)).
+- **One silent member fails the query.** A federated query is all-or-nothing
+  by default (N37): when a member that was asked does not answer, the client
+  gets no rows. A client that accepts a partial answer asks for one per
+  request ([Queries and API areas](../operate/queries-and-areas.md#completeness)).
+- **A write body travels as the client sent it.** The gateway keeps the
+  patient identifier out of every request it composes for a node, but a
+  committed `COMPOSITION` reaches its node byte for byte, a `DV_IDENTIFIER`
+  inside it included (§5.4, N22;
+  [Where the patient identifier stops](../how-it-works/identifier-hygiene.md#what-the-outbound-gate-reads)).
+- **Part of ITS-REST is not served.** The gateway never federates the
+  DEMOGRAPHIC area: it answers `501` there unless you name one member to
+  serve it, and `501` for any ITS-REST path it does not serve
+  ([The DEMOGRAPHIC area](../operate/queries-and-areas.md#the-demographic-area)).
+- **The listener speaks plain HTTP.** Terminate TLS in front of the gateway
+  ([What FerroFED runs beside](../operate/deployment-shape.md#authentication));
+  TLS on the listener itself is
+  [#632](https://github.com/FerroHEALTH/FerroFED/issues/632).
+- **Members in several Member States are not detected.** FerroFED neither
+  detects nor refuses a federation whose members sit in different Member
+  States ([Regulatory status](regulatory-status.md#cross-border-access)).
 
 ## Not claimed
 

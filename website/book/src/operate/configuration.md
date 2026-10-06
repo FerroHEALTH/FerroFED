@@ -465,7 +465,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 
 | Route | Answers |
 |---|---|
-| `GET {base}/` | the product name and version |
+| `GET {base}/` | the product name and version, and its manufacturer with the postal address and the contact |
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
 | `GET {base}/health` | `200` while the process is up |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
