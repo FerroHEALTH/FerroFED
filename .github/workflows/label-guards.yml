@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# Re-runs a label guard of ci.yml when its escape label changes.
+#
+# ci.yml does not run on `labeled` or `unlabeled`: a second run on the commit
+# under test could cancel the newer run and leave its `conclusion`, the
+# required check, failed. Its two guards read their escape labels from the
+# API when they run instead (`no-changelog` for changelog-guard,
+# `no-crate-bump` for crate-version-guard). When one of those labels is added
+# or removed, this job waits for the CI run on the head commit to finish and,
+# when the guard's result no longer matches the labels, re-runs that guard.
+# Re-running a job re-runs its dependent jobs (the REST API, re-run a job from
+# a workflow run), so `conclusion` reports again in the same run.
+#
+# This job decides nothing a merge depends on: the guard reads the labels
+# itself, and `conclusion` fails until a re-run passes. A pull request from a
+# fork gets a read-only token here, so a maintainer re-runs the guard by hand.
+name: Label guards
+
+on:
+  pull_request:
+    branches: [main]
+    types: [labeled, unlabeled]
+
+concurrency:
+  group: label-guards-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: label-guards
+    if: github.event.label.name == 'no-changelog' || github.event.label.name == 'no-crate-bump'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write # read the CI run and re-run one of its jobs
+    steps:
+      - name: Re-run the guard the label escapes when its result is stale
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+          case "${LABEL}" in
+            no-changelog) JOB=changelog-guard ;;
+            no-crate-bump) JOB=crate-version-guard ;;
+            *) echo "::error::no guard reads the label ${LABEL}"; exit 1 ;;
+          esac
+          export JOB
+          run=""
+          for _ in $(seq 1 30); do
+            run=$(gh run list --workflow ci.yml --commit "${HEAD}" --event pull_request \
+              --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            [ -n "${run}" ] && break
+            sleep 10
+          done
+          if [ -z "${run}" ]; then
+            echo "::error::no CI run on ${HEAD} to re-run ${JOB} in"
+            exit 1
+          fi
+          for _ in 1 2 3 4 5; do
+            gh run watch "${run}" --interval 30 > /dev/null
+            if [ "$(gh run view "${run}" --json conclusion --jq .conclusion)" = "cancelled" ]; then
+              echo "CI run ${run} was cancelled; a newer run reads the labels itself"
+              exit 0
+            fi
+            read -r job outcome < <(gh run view "${run}" --json jobs \
+              --jq '.jobs[] | select(.name == env.JOB) | "\(.databaseId) \(.conclusion)"')
+            case "${ACTION}:${outcome}" in
+              labeled:failure | unlabeled:success) ;;
+              *)
+                echo "${JOB} reported ${outcome}, which already holds after ${ACTION} ${LABEL}"
+                exit 0
+                ;;
+            esac
+            if gh run rerun --job "${job}"; then
+              echo "re-ran ${JOB} and its dependents in CI run ${run}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::could not re-run ${JOB} in CI run ${run}; re-run it by hand"
+          exit 1
