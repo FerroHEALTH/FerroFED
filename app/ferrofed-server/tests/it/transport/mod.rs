@@ -84,7 +84,7 @@ fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
 /// A PIX Manager at `url` with a bearer token, resolving node A.
 fn pix(url: &str) -> String {
     format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
+        "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
          [pixm.manager.credentials]\nbearer_token = \"{SECRET}\"\n"
     )
 }
@@ -133,7 +133,7 @@ fn pix_site() -> ProtectedSite {
 /// A PIX Manager at `url` with no credentials, resolving node A and node B.
 fn bare_pix(url: &str) -> String {
     format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
+        "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
     )
 }
 

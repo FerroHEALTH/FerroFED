@@ -99,6 +99,11 @@ managing_organisation = "org-c"
 
 /// The federation over `registry`, written into `dir` with a synthetic
 /// signing key beside it.
+///
+/// The gateway runs under the production profile, where a registry needs an
+/// audit repository for its access records (Regulation (EU) 2025/327 Annex
+/// II 3.2). The repository is an `https` base no connection reaches: each
+/// record is kept in the spool under `dir`, and nothing here reads it.
 fn federation(dir: &Path, registry: &str) -> Result<Option<Federation>, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
@@ -106,9 +111,11 @@ fn federation(dir: &Path, registry: &str) -> Result<Option<Federation>, Box<dyn 
     std::fs::write(&key, oauth::es384_pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
-        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
+        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
         quoted(&document),
-        quoted(&key)
+        quoted(&key),
+        unreachable::ADDRESS,
+        quoted(&dir.join("audit-feed-spool"))
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     Ok(Federation::load(&settings)?)

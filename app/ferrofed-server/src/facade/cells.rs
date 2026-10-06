@@ -10,16 +10,21 @@
 //! column from where each one comes from: a node cell by position, the
 //! resolution input as a constant `STRING` (N5), or the value the registry
 //! holds for the endpoint the row came from, as a `STRING` (§9.3). A cell
-//! travels as the node sent it.
+//! travels as the node sent it. The access log reads the template and
+//! archetype ids of the archetype roots a delivered row holds, and no other
+//! member of a cell ([`root_objects`]).
 #![expect(
     clippy::disallowed_types,
     reason = "the result-cell seam: ITS-REST types a RESULT_SET cell as a JSON value"
 )]
 
+use ehds_logging::classify::RootObject;
 use openehr_federation::aql::ColumnSource;
 use openehr_federation::aql::subject::Subject;
 use openehr_federation::attribute::EndpointAttribute;
+use openehr_its::json::from_canonical_value;
 use openehr_its::rest::generated::query::ResultSetRow;
+use openehr_rm::v1_2::common::archetyped::archetyped::Archetyped;
 use serde_json::Value;
 
 /// A node row that cannot be read against the façade's columns.
@@ -152,6 +157,63 @@ fn cell(
             .map(|value| Value::String(value.clone()))
             .ok_or(CellError::EndpointAttribute),
     }
+}
+
+/// Returns what the delivered façade `rows` show of their data, for the
+/// access log.
+///
+/// That is the model ids of every cell in a node column of `sources` that is
+/// an archetype root, and whether any such cell is not one. A root is an RM object with `archetype_details` (ITS-REST `Locatable`,
+/// `Archetyped`), or an `ORIGINAL_VERSION` whose `data` is one. A cell of
+/// any other kind, a leaf value or an aggregate, and a root whose ids do not
+/// read, is unrooted, so the query's own constraints classify it; `null`
+/// holds no data. No specification governs which cells are read: our own
+/// design.
+#[must_use]
+pub fn root_objects(rows: &[ResultSetRow], sources: &[ColumnSource]) -> (Vec<RootObject>, bool) {
+    let mut objects = Vec::new();
+    let mut unrooted = false;
+    for row in rows {
+        for (cell, source) in row.iter().zip(sources) {
+            if !matches!(source, ColumnSource::Node(_)) || cell.is_null() {
+                continue;
+            }
+            match root(cell) {
+                Some(object) => objects.push(object),
+                None => unrooted = true,
+            }
+        }
+    }
+    (objects, unrooted)
+}
+
+/// The root object `cell` is, or `None` when it is no archetype root whose
+/// ids read.
+fn root(cell: &Value) -> Option<RootObject> {
+    let object = cell.as_object()?;
+    if let Some(data) = object.get("data")
+        && object.get("_type").and_then(Value::as_str) == Some("ORIGINAL_VERSION")
+    {
+        let mut root = root(data)?;
+        root.version_uid = object
+            .get("uid")
+            .and_then(|uid| uid.get("value"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        return Some(root);
+    }
+    // NOTE: ITS-REST `Archetyped`: a details object that is not one names no id, and the
+    // cell counts as unrooted, which classifies it by the query and never as of no category.
+    let details: Archetyped = from_canonical_value(object.get("archetype_details")?).ok()?;
+    Some(RootObject {
+        template_id: details.template_id.map(|template| template.value),
+        archetype_id: Some(details.archetype_id.value),
+        version_uid: object
+            .get("uid")
+            .and_then(|uid| uid.get("value"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    })
 }
 
 #[cfg(test)]

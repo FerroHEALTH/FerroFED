@@ -206,6 +206,12 @@ pub enum FederationError {
     #[error("the [audit] trail cannot start")]
     #[cfg(feature = "binding-ihe")]
     Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
+    /// No binding of this build records accesses, which every profile but
+    /// development requires (Regulation (EU) 2025/327 Annex II 3.2).
+    #[error(
+        "no access log: every access to patient data is recorded outside the development profile, and no binding of this build records it; build with binding-ihe and set [audit]"
+    )]
+    AccessLogUnavailable,
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
