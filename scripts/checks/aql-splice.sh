@@ -176,7 +176,7 @@ check_tree() {
     echo "::error::aql-splice: no Rust file found under app/, crates/ or tools/." >&2
     return 1
   fi
-  hits="$(scan "${files[@]}")" || fail=1
+  hits="$(scan ${files[@]+"${files[@]}"})" || fail=1
   if [[ "$fail" -ne 0 ]]; then
     while IFS= read -r hit; do
       [[ -z "$hit" ]] && continue
