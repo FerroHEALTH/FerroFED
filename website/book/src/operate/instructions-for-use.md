@@ -289,6 +289,11 @@ another format.
 
 ## Problems and complaints
 
+When the gateway refuses to start, answers with an error code, or logs a
+failure, look the symptom up on [Troubleshooting](troubleshooting.md): it
+leads from the status, the code or the log line to the cause and the
+setting that fixes it.
+
 Report a problem, a complaint or a possible serious incident through the
 channels on [Complaints and incidents](../evaluate/post-market.md#making-a-complaint).
 Never send patient data.

@@ -61,6 +61,7 @@
 - [Tracing](operate/tracing.md)
 - [The operator console](operate/operator-console.md)
 - [Hardening](operate/hardening.md)
+- [Troubleshooting](operate/troubleshooting.md)
 
 # Integrate
 
