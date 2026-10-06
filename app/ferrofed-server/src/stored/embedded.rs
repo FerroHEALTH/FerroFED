@@ -12,7 +12,7 @@
 //! names, versions, instants and parameterised AQL, and never a patient
 //! identifier: a definition names its patient through a `$parameter`, and an
 //! invocation's values are never written. A second table records the
-//! schema version the file holds ([`schema`](crate::stored::schema)): an
+//! schema version the file holds ([`schema`]): an
 //! older file is migrated forward when it is opened, and a newer one is
 //! refused. No specification governs the storage: our own design.
 
