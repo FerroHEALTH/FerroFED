@@ -41,7 +41,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{
-    self, ACT_REASON, GATEWAY, ORGANISATION, ReadPurpose, SCOPE, SUBJECT, UPSTREAM,
+    self, ACT_REASON, GATEWAY, ORGANISATION, PROFESSIONAL_ID, PROFESSIONAL_NAME, ReadPurpose,
+    SCOPE, SUBJECT, UPSTREAM,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -170,6 +171,20 @@ fn names_the_caller(read: &conveyed::Read) {
         Some(SCOPE),
         read.scope.as_deref(),
         "the caller's scopes as granted (N26)"
+    );
+    assert_eq!(
+        (Some(PROFESSIONAL_NAME), Some(PROFESSIONAL_ID)),
+        (
+            read.subject_name.as_deref(),
+            read.national_provider_identifier.as_deref()
+        ),
+        "the professional's identification, as IHE IUA names it"
+    );
+    assert_eq!(Some("person"), read.acting.as_deref(), "a person acts");
+    assert_eq!(
+        Some("substantial"),
+        read.assurance_level.as_deref(),
+        "the authentication's assurance level (Annex II 3.1)"
     );
 }
 
@@ -301,6 +316,16 @@ async fn the_admission_checks_ehr_create_and_read_convey_the_gateway() -> TestRe
         assert_eq!(None, read.subject_organization_id);
         assert!(read.purpose_of_use.is_empty());
         assert_eq!(None, read.scope);
+        assert_eq!(
+            (None, None, None, None),
+            (
+                read.subject_name,
+                read.national_provider_identifier,
+                read.acting,
+                read.assurance_level
+            ),
+            "the gateway names no professional and no assurance of its own"
+        );
     }
     Ok(())
 }
@@ -418,6 +443,8 @@ fn smuggling() -> Vec<Caller> {
         carrying(|caller| caller.organisation = Some(format!("urn:x:{PATIENT}"))),
         carrying(|caller| caller.issuer = format!("https://{PATIENT}.example.test")),
         carrying(|caller| caller.scope = format!("user/aql-{PATIENT}.s")),
+        carrying(|caller| caller.professional.name = Some(PATIENT.to_owned())),
+        carrying(|caller| caller.professional.identifier = Some(format!("urn:x:{PATIENT}"))),
         carrying(|caller| {
             if let Some(purpose) = caller.purposes.first_mut() {
                 PATIENT.clone_into(&mut purpose.code);

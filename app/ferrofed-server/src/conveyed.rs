@@ -135,5 +135,11 @@ fn conveyed(caller: &Caller) -> conveyance::Caller {
             VerifiedBy::Introspection => Verification::Introspection,
             VerifiedBy::Edge => Verification::Edge,
         },
+        professional: conveyance::Professional {
+            name: caller.professional().name.clone(),
+            identifier: caller.professional().identifier.clone(),
+        },
+        acting: caller.acting(),
+        assurance_level: caller.assurance(),
     }
 }

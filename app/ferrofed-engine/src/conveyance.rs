@@ -26,6 +26,10 @@
 //! | `verified_by` | how the gateway verified the caller: `signature`, `introspection` or `edge` |
 //! | `subject_organization_id` | the caller's organisation, when its token names one (IHE IUA) |
 //! | `purpose_of_use` | the caller's purposes of use, each a `system` and `code` (IHE IUA, HL7 v3 `PurposeOfUse`) |
+//! | `subject_name` | the professional's name, when the caller's token states one (IHE IUA) |
+//! | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states one (IHE IUA) |
+//! | `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application |
+//! | `assurance_level` | `low`, `substantial` or `high`, the level of the caller's authentication (Regulation (EU) No 910/2014 Art 8(2)), when its issuer declares how its tokens state one |
 //! | `scope` | the caller's scopes as granted, or the `patient/` scopes that cover the operation under a [`Confinement`] |
 //! | `ehrId` | under a [`Confinement`] only: the patient's own `ehr_id` at the receiving node |
 //!
@@ -43,7 +47,7 @@ use std::time::Duration;
 
 use ferrofed_registry::id::{EhrId, EndpointId};
 use jsonwebtoken::Header;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::onward::grant::exchange::SubjectToken;
 use crate::onward::keys::KeyRing;
@@ -117,6 +121,83 @@ pub struct Caller {
     pub scope: String,
     /// How the gateway verified the caller.
     pub verified_by: Verification,
+    /// The professional's identification the caller's token states.
+    pub professional: Professional,
+    /// Who acts behind the caller's token.
+    pub acting: Acting,
+    /// The assurance level of the caller's authentication, when its issuer
+    /// declares how its tokens state one.
+    pub assurance_level: Option<AssuranceLevel>,
+}
+
+/// The professional's identification a caller's token states, as IHE IUA
+/// names it (ITI TF-2 3.71.4.2.2.1.1).
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Professional {
+    /// `subject_name`, the professional's name.
+    pub name: Option<String>,
+    /// `national_provider_identifier`, the identifier the professional's
+    /// national authority issued.
+    pub identifier: Option<String>,
+}
+
+impl fmt::Debug for Professional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Professional")
+            .field("name", &self.name.is_some())
+            .field("identifier", &self.identifier.is_some())
+            .finish()
+    }
+}
+
+/// Who acts behind a caller's token.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Acting {
+    /// The natural person the caller's `sub` names.
+    #[default]
+    Person,
+    /// A client application: the caller's `sub` is its `client_id` (IHE IUA
+    /// ITI TF-2 3.71.4.2.2.1), or only `system/` scopes cover the operation
+    /// (SMART on openEHR master08 §Resource Scopes).
+    Client,
+}
+
+impl Acting {
+    /// The `acting` claim's value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Person => "person",
+            Self::Client => "client",
+        }
+    }
+}
+
+/// An assurance level of an electronic identification means, as Regulation
+/// (EU) No 910/2014 Art 8(2) names them, lowest first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AssuranceLevel {
+    /// Level low, Art 8(2)(a).
+    Low,
+    /// Level substantial, Art 8(2)(b).
+    Substantial,
+    /// Level high, Art 8(2)(c).
+    High,
+}
+
+impl AssuranceLevel {
+    /// The level's name: the `assurance_level` claim's value, and the name
+    /// a configuration writes.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Substantial => "substantial",
+            Self::High => "high",
+        }
+    }
 }
 
 impl fmt::Debug for Caller {
@@ -294,6 +375,14 @@ struct Claims<'a> {
     scope: Option<&'a str>,
     #[serde(rename = "ehrId", skip_serializing_if = "Option::is_none")]
     ehr_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    national_provider_identifier: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    acting: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assurance_level: Option<&'static str>,
 }
 
 impl Conveyance {
@@ -431,6 +520,10 @@ impl Conveyance {
             purpose_of_use: &[],
             scope: None,
             ehr_id: None,
+            subject_name: None,
+            national_provider_identifier: None,
+            acting: None,
+            assurance_level: None,
         };
         if let Principal::Caller(caller) = &self.0.principal {
             claims.sub = &caller.subject;
@@ -442,6 +535,10 @@ impl Conveyance {
             // NOTE: SMART on openEHR master04 §Capabilities names the claim `ehrId`, and N33
             // lets a node be located by its own ehr_id, so each node is told its own.
             claims.ehr_id = ehr_id.map(EhrId::as_str);
+            claims.subject_name = caller.professional.name.as_deref();
+            claims.national_provider_identifier = caller.professional.identifier.as_deref();
+            claims.acting = Some(caller.acting.as_str());
+            claims.assurance_level = caller.assurance_level.map(AssuranceLevel::as_str);
         }
         let key = self.0.signer.keys.current();
         let mut header = Header::new(key.algorithm());
@@ -466,6 +563,8 @@ impl Conveyance {
             caller.scope.as_str(),
         ];
         carried.extend(caller.organisation.as_deref());
+        carried.extend(caller.professional.name.as_deref());
+        carried.extend(caller.professional.identifier.as_deref());
         for purpose in &caller.purposes {
             carried.extend(purpose.system.as_deref());
             carried.push(&purpose.code);
@@ -484,7 +583,8 @@ pub(crate) mod tests {
     use secrecy::SecretString;
 
     use super::{
-        Caller, Confinement, Conveyance, ConveyanceError, Principal, Purpose, Signer, Verification,
+        Acting, AssuranceLevel, Caller, Confinement, Conveyance, ConveyanceError, Principal,
+        Professional, Purpose, Signer, Verification,
     };
     use crate::onward::SystemClock;
     use crate::onward::keys::{KeyRing, SigningKey};
@@ -510,6 +610,12 @@ pub(crate) mod tests {
             }],
             scope: "user/aql-*.s".to_owned(),
             verified_by: Verification::Edge,
+            professional: Professional {
+                name: Some("Example Clinician".to_owned()),
+                identifier: Some("hp-0042".to_owned()),
+            },
+            acting: Acting::Person,
+            assurance_level: Some(AssuranceLevel::High),
         }
     }
 
@@ -534,6 +640,8 @@ pub(crate) mod tests {
             "http://terminology.hl7.org/CodeSystem/v3-ActReason",
             "TREAT",
             "user/aql-*.s",
+            "Example Clinician",
+            "hp-0042",
         ] {
             assert!(carried.contains(&claim), "{claim} in {carried:?}");
         }
@@ -603,9 +711,35 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_client_acting_at_level_high_is_told_as_such() {
+        #[derive(serde::Deserialize)]
+        struct Acted {
+            acting: String,
+            assurance_level: String,
+            subject_name: String,
+        }
+        let mut client = caller();
+        client.acting = Acting::Client;
+        let token = Conveyance::new(signer(), Principal::Caller(client))
+            .signed_for(&EndpointId::new("node-a-pub").expect("an id"))
+            .expect("a signed token");
+        let claims: Acted =
+            jsonwebtoken::dangerous::insecure_decode_claims(&token).expect("the claims read");
+        assert_eq!(
+            ("client", "high", "Example Clinician"),
+            (
+                claims.acting.as_str(),
+                claims.assurance_level.as_str(),
+                claims.subject_name.as_str()
+            )
+        );
+    }
+
+    #[test]
     fn a_conveyance_shows_no_caller_value_in_debug() {
         let shown = format!("{:?}", conveyance());
         assert!(!shown.contains("clinician-0042"), "{shown}");
+        assert!(!shown.contains("Example Clinician"), "{shown}");
         assert!(shown.contains("Edge"), "{shown}");
     }
 }

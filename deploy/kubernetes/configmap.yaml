@@ -97,6 +97,19 @@ data:
     [[auth.issuer]]
     issuer = "https://idp.example.org"
     jwks_uri = "https://idp.example.org/jwks"
+    # Whether its client tokens, which name no natural person, act for the
+    # professional they name, and so reach patient data.
+    # client_tokens_act_for_professional = false
+    #
+    # The claim and the values that carry the authentication assurance of
+    # its tokens, and the least level patient data needs; without it, no
+    # level is read or required, and config check notes it.
+    # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
+    # [auth.issuer.assurance]
+    # claim = "acr"
+    # minimum = "substantial"
+    # substantial = ["urn:example:loa:substantial"]
+    # high = ["urn:example:loa:high"]
 
     # The gateway's ES384 signing key, required with a registry: every
     # request to a node carries the caller's identity signed with it

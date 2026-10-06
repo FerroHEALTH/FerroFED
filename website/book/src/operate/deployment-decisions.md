@@ -65,6 +65,15 @@ the token. The gateway never authenticates an end user and never
 re-authenticates one: it verifies the token the organisation's authorization
 server signed, and that is where its check stops.
 
+**The gateway holds the token to who acts and how they authenticated.** A
+request that reaches patient data needs a natural person behind the token,
+or a client its issuer declares as acting for the professional the token
+names, and, where you declare it per issuer, the least assurance level the
+token's `acr` (or the claim you name) must state (Regulation (EU) 2025/327
+Annex II 3.1). The issuer's authentication sets that level; the gateway
+reads it and refuses a token below it
+([Professionals and assurance](authentication.md#professionals-and-assurance)).
+
 **The node relies on the gateway's statement.** It does not re-authenticate
 the caller either. It reads who asks from the `openEHR-federation-client`
 token: the `sub` and `iss_upstream` the gateway verified, and `verified_by`,
@@ -243,6 +252,9 @@ your deployment's documentation.
 
 2. End-user authentication
    Who authenticates the clinicians of each calling organisation: …
+   The assurance level each issuer's tokens state, and the least level
+     required for patient data ([auth.issuer.assurance]): …
+   Issuers whose client tokens act for a named professional, and why: …
    Token mode or edge mode, and for the edge mode which proxy: …
    How each node uses the conveyed caller in its release decision: …
 
