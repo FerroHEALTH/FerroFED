@@ -26,6 +26,9 @@
 //! which [`santempi`](mod@santempi) starts and provisions on its own pinned
 //! database image.
 //!
+//! The production guide's issuer recipe runs against Keycloak, which
+//! [`keycloak`](mod@keycloak) starts.
+//!
 //! No specification governs the harness, and none governs which CDR products
 //! it runs: our own design.
 
@@ -39,6 +42,7 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
 
 pub mod ehrbase;
+pub mod keycloak;
 pub mod santempi;
 
 /// The environment variable that admits the container-backed tests.
@@ -234,11 +238,20 @@ pub const MAVEN: PinnedImage = PinnedImage {
     digest: "sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320",
 };
 
-/// The Java runtime image the reference implementation runs on.
+/// The Java runtime image the reference implementation runs on, and the
+/// Keycloak recipe's admin CLI.
 pub const TEMURIN_JRE: PinnedImage = PinnedImage {
     repository: "eclipse-temurin",
     tag: "21.0.12.1_1-jre-noble",
     digest: "sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c",
+};
+
+/// Keycloak, the identity provider the production guide's issuer recipe is
+/// written for and [`keycloak`](mod@keycloak) applies.
+pub const KEYCLOAK: PinnedImage = PinnedImage {
+    repository: "quay.io/keycloak/keycloak",
+    tag: "26.8.0",
+    digest: "sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc",
 };
 
 /// A container could not be started, or did not become usable.

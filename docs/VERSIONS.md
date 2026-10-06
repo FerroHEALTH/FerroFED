@@ -433,6 +433,7 @@ it.
 | SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.0@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | nginx reverse proxy image | `nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94` | read from this row by `scripts/checks/production-guide.sh`, which runs `deploy/nginx/ferrofed.conf` in it |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
@@ -471,6 +472,14 @@ gateway in the image above: nginx 1.30.5 on Alpine, the release the
 Hub by the digest of its image index. The guard reads the image from this
 row, so the row is its one pin. nginx is published under the 2-clause BSD
 licence, and the image is public.
+
+The production guide's Keycloak recipe (#724) runs against Keycloak 26.8.0,
+the newest stable release, resolved on 2026-10-06 from Quay by the digest of
+its image index. The Keycloak image carries no `awk`, which the recipe pipes
+into, so its `kcadm.sh` commands run on the runtime image of the reference
+implementation row with the admin CLI copied out of the Keycloak container.
+Keycloak is published under the Apache License 2.0, and the image is public.
+Quay pages its tag list, and the freshness read follows every page.
 
 The differential run (#94) builds the Federation Tier reference
 implementation from the vendored source at its pinned commit, with the Maven

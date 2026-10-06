@@ -495,13 +495,15 @@ The listener speaks plain HTTP by default. Choose one of two shapes:
   `client_ca_file` to admit the proxy alone
   ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
 
-`deploy/nginx/ferrofed.conf` is the nginx configuration for the settings
-above. Take it from the release tag you run, set your server name and
-certificate, and reload nginx:
+`ferrofed.conf` is the nginx configuration for the settings above, and
+every release carries it with its checksum. Download it from the release
+you run, check it, set your server name and certificate, and reload nginx:
 
 ```sh
-curl -Lo /etc/nginx/conf.d/ferrofed.conf \
-  https://raw.githubusercontent.com/FerroHEALTH/FerroFED/vX.Y.Z/deploy/nginx/ferrofed.conf
+for f in ferrofed.conf ferrofed.conf.sha256sum; do
+  curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/download/vX.Y.Z/$f"
+done
+sha256sum -c ferrofed.conf.sha256sum && sudo cp ferrofed.conf /etc/nginx/conf.d/
 nginx -t && nginx -s reload
 ```
 
@@ -574,6 +576,11 @@ reach, so agree the run with the member's operator first
 ```sh
 docker compose exec ferrofed /usr/local/bin/ferrofed admission check --endpoint cdr-a-query
 ```
+
+When the member's governance forbids test data in its production CDR, run
+the full check against a staging copy of it, and check the production CDR
+with `--read-only`, which writes nothing and names every condition it leaves
+unproven ([A run without writes](admission.md#a-run-without-writes)).
 
 When both members pass, remove `status = "suspended"` from their endpoints
 and reload the registry:

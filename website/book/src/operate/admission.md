@@ -45,6 +45,10 @@ hexadecimal digits, minted fresh for each run. No real identifier is used.
 The report states in its first lines that it created test EHRs. Remove them
 under the node's own procedure if your governance requires it.
 
+A member whose governance forbids test data in its production CDR can be
+checked without a write, below
+([A run without writes](#a-run-without-writes)).
+
 The subjects travel only in the `EHR_STATUS` body and to your
 cross-reference. Every request passes the same outbound gate as a query, with
 the run's subjects withheld from the path, the query string and the headers
@@ -67,6 +71,53 @@ endpoint the registry does not hold, and `78` for a configuration that does
 not load or has no registry document. A node the check cannot reach fails
 every condition it exercises, with the cause: a check that reached nothing
 passes nothing.
+
+## A run without writes
+
+Many CDR operators forbid test data in production, and the check above
+leaves its test EHRs behind. Three paths remain, and you can combine them:
+
+- **A staging copy.** Run the full check against a staging instance of the
+  member that runs the same product, version and configuration, and stamps
+  the same kind of `ehr_id`s. Add it to a registry document of its own with
+  its own `system_id`, because the registry refuses two members with one.
+- **A run without writes** against the production CDR:
+
+  ```text
+  ferrofed admission check --endpoint node-c-pub --read-only
+  ferrofed admission check --endpoint node-c-pub --read-only --count 20
+  ```
+
+- **The member's own procedures**, for whatever neither run reaches.
+
+With `--read-only` the check creates nothing. It sends the node one AQL
+query, through the same node client and outbound gate as every other
+request, for the `ehr_id` and `system_id` of up to `--count` EHRs the node
+already holds:
+
+```text
+SELECT e/ehr_id/value, e/system_id/value FROM EHR e
+```
+
+It reads no subject and no clinical content. The node must allow the
+gateway's credential to run that query across EHRs; a node that refuses it
+fails both conditions the run exercises, with the status it answered. The
+report says in its first lines that the run made no write, lists the
+`ehr_id`s it read, and ends with the conditions the run left unproven.
+
+| Condition | What a run without writes does |
+|---|---|
+| `ehr_id` generation | each `ehr_id` read is judged as above, and no two may be equal. A node that returns no EHR is `cannot-check`. |
+| No reuse | `cannot-check`, as on every run |
+| No adoption of foreign `ehr_id`s | `cannot-check`, as on every run |
+| `system_id` uniqueness | each EHR must report the `system_id` the registry records for the node, or one a `[[creating_system]]` entry routes to it. One the registry records for another member fails. One the registry routes nowhere is `cannot-check`: the EHR may have been created on another system, and a read cannot show what the node stamps into new EHRs. |
+| `ehr_id` exchange | `cannot-check`: the run creates no subject, and it reads no subject of an existing EHR, so it has no patient whose `ehr_id` it knows |
+
+§12b.1 asks you to verify the conditions by test. A run without writes
+proves less than a full run: its `ehr_id`s are the ones the node issued in
+the past, and it never exercises the exchange of §5.5. Prove what it leaves
+unproven with a full run against a staging copy, or with a test patient the
+member's environment registers through its own procedure.
 
 ## The conditions
 
