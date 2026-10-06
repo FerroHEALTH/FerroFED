@@ -197,6 +197,8 @@ impl Federation {
         let dependencies = dependencies(settings, &snapshot, seams, &localization)?
             .with_demographics(demographics.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        let documents = documents(settings)?;
+        let access = access_log(settings, &snapshot)?.map(Arc::new);
         let federation = Self {
             id,
             snapshot: Arc::new(snapshot),
@@ -218,8 +220,8 @@ impl Federation {
             signing: settings.signing.clone(),
             signer: Some(signer),
             client_keys: client_keys(settings),
-            documents: documents(settings)?,
-            access: access_log(settings)?.map(Arc::new),
+            documents,
+            access,
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -277,19 +279,37 @@ impl Federation {
     }
 }
 
-/// The access log `settings` describe: the category map, over the first sink
-/// a compiled binding builds; `None` under development with no sink.
+/// The access log `settings` describe: the category map and the retention,
+/// over the first sink a compiled binding builds; `None` under development
+/// with no sink.
 ///
 /// # Errors
 ///
-/// A binding's [`FederationError`] for a sink it cannot build, and
+/// [`FederationError::RetentionEndpointUnknown`] for a retention origin
+/// `snapshot` does not hold, a binding's [`FederationError`] for a sink it cannot build, and
 /// [`FederationError::AccessLogUnavailable`] outside development when no
 /// binding of this build records accesses (Regulation (EU) 2025/327 Annex II
 /// 3.2).
-fn access_log(settings: &Settings) -> Result<Option<AccessLog>, FederationError> {
+fn access_log(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+) -> Result<Option<AccessLog>, FederationError> {
+    let retention = &settings.access_log.retention;
+    if let Some(endpoint) = retention.origins().find(|origin| {
+        !snapshot
+            .endpoints()
+            .any(|endpoint| endpoint.id().as_str() == *origin)
+    }) {
+        return Err(FederationError::RetentionEndpointUnknown {
+            endpoint: endpoint.to_owned(),
+        });
+    }
     for binding in binding::compiled() {
         if let Some(sink) = binding.access_sink(settings)? {
-            return Ok(Some(AccessLog::new(settings.access_log.clone(), sink)));
+            return Ok(Some(
+                AccessLog::new(settings.access_log.map.clone(), sink)
+                    .with_retention(retention.clone()),
+            ));
         }
     }
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2 asks for a record of every access, so a

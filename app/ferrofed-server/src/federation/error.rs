@@ -212,6 +212,13 @@ pub enum FederationError {
         "no access log: every access to patient data is recorded outside the development profile, and no binding of this build records it; build with binding-ihe and set [audit]"
     )]
     AccessLogUnavailable,
+    /// `[access_log.retention.origins]` names an endpoint the registry does
+    /// not hold, so no record would ever be kept for it.
+    #[error("access_log.retention.origins names {endpoint}, which is no endpoint of the registry")]
+    RetentionEndpointUnknown {
+        /// The endpoint id that was given.
+        endpoint: String,
+    },
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]

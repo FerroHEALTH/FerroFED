@@ -26,14 +26,15 @@
 //!
 //! What Annex II 3.2 adds to a BALP record has no element of its own (BALP
 //! defines none for a data category), so it rides in entities of type `4`,
-//! which no slice of a pattern is discriminated by: one for the categories,
-//! one per origin and one per `ehr_id`, each with its `detail` entries named
-//! as [`detail`] lists them (no specification governs the names: our own
-//! design). The professional and the provider a national contact point
-//! relays (Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2) ride
-//! the same way, in one entity `ehds-relayed` that names the contact point
-//! and marks them `asserted`, and a correlation identifier the client sent is
-//! a `detail` of the request id's entity.
+//! which no slice of a pattern is discriminated by: one for the categories
+//! and the record's retention, one per origin and one per `ehr_id`, each
+//! with its `detail` entries named as [`detail`] lists them (no
+//! specification governs the names: our own design). The professional and
+//! the provider a national contact point relays (Implementing Regulation
+//! (EU) 2026/2099 Annex Tables 1 and 2) ride the same way, in one entity
+//! `ehds-relayed` that names the contact point and marks them `asserted`,
+//! and a correlation identifier the client sent is a `detail` of the request
+//! id's entity.
 
 use std::sync::Arc;
 
@@ -112,6 +113,13 @@ pub mod detail {
     pub const PROVIDER_NAME: &str = "provider-name";
     /// The relayed `healthcare_provider_address`.
     pub const PROVIDER_ADDRESS: &str = "provider-address";
+    /// The years the record is kept.
+    pub const RETENTION_YEARS: &str = "ehds-retention-years";
+    /// The first UTC date the record may be deleted on, `YYYY-MM-DD`.
+    pub const RETENTION_ENDS: &str = "ehds-retention-ends";
+    /// What called for the period: `default`, `unclassified`,
+    /// `category:<code>` or `origin:<endpoint>`.
+    pub const RETENTION_GROUND: &str = "ehds-retention-ground";
 }
 
 /// The sink that writes each record as a BALP `AuditEvent` and hands it to
@@ -340,6 +348,12 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if let Some(name) = &request.stored_query {
         details.push(Detail::new(detail::STORED_QUERY, name.clone()));
     }
+    let retention = &record.retention;
+    details.extend([
+        Detail::new(detail::RETENTION_YEARS, retention.years().get().to_string()),
+        Detail::new(detail::RETENTION_ENDS, retention.ends().to_string()),
+        Detail::new(detail::RETENTION_GROUND, retention.ground().code()),
+    ]);
     entities.push(other(None, "ehds-categories", details));
     for origin in &record.origins {
         let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];

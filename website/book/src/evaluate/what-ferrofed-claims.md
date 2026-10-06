@@ -345,9 +345,14 @@ These are the ones to know before you deploy FerroFED; the
   [#17](https://github.com/FerroHEALTH/FerroFED/issues/17).
 - **No EHDS harmonised component is complete.** The gateway records every
   access to patient data as Annex II, point 3.2, asks of the European
-  logging software component (Art 25(1)); that component's review tools
-  (point 3.3) and its retention by origin and category (point 3.4) are
-  planned ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)). The
+  logging software component (Art 25(1)), read at your Audit Record
+  Repository with ITI-81 (point 3.3), each record stating its retention by
+  origin and category (point 3.4). Finding every access to one person's
+  data by that search
+  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)) and access
+  rights by origin and category
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) are
+  planned. The
   European interoperability software component is a library the gateway
   does not serve yet
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)). No EU
@@ -360,8 +365,10 @@ These are the ones to know before you deploy FerroFED; the
   recorded with the verified caller and the patient, and an access whose
   record cannot be stored is refused `503 access-unrecorded`
   ([The access log](../operate/audit.md#the-access-log)). The gateway keeps
-  no copy, so who reads the records and how long they are kept is the
-  repository's. FerroFED ships no category map: until you declare one in
+  no copy, so who reads the records is the repository's, and it keeps each
+  for the period the record states from `[access_log.retention]`, at least
+  three years ([How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
+  FerroFED ships no category map: until you declare one in
   `[access_log]`, the categories of the data an access reached are recorded
   `ehds-unclassified`. The record names the professional the token names,
   and the assurance level when the issuer declares one

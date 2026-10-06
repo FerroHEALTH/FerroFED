@@ -22,6 +22,7 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 
 use crate::classify::Classification;
+use crate::retention::Retention;
 
 /// What the access did to the data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -401,6 +402,8 @@ pub struct AccessRecord {
     pub origins: Vec<Origin>,
     /// What the access asked for.
     pub request: Request,
+    /// How long the record is kept (Art 9(2), Annex II 3.4).
+    pub retention: Retention,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -415,6 +418,7 @@ impl fmt::Debug for AccessRecord {
             .field("delivered", &self.delivered)
             .field("origins", &self.origins)
             .field("request", &self.request)
+            .field("retention", &self.retention)
             .finish()
     }
 }

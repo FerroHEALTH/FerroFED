@@ -17,6 +17,8 @@
 //! - [`map`] and [`classify`]: the deployment's map from template and
 //!   archetype ids to categories, and the classification of one access by
 //!   the model ids of what it reached;
+//! - [`retention`]: how long a record is kept, by its categories and its
+//!   origins, never under the three years of Art 9(2);
 //! - [`sink`]: where records go, and why one could not be stored;
 //! - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`
 //!   through `ihe-iti`, and the sink over an `ihe-iti` audit recorder.
@@ -57,4 +59,5 @@ pub mod category;
 pub mod classify;
 pub mod map;
 pub mod record;
+pub mod retention;
 pub mod sink;
