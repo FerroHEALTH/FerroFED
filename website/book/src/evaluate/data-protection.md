@@ -262,7 +262,7 @@ offers an entity for them:
 | Art 21(2)(d) supply chain security | signed release provenance, a CycloneDX and an SPDX SBOM per binary, image attestations ([The container image](../operate/container.md#the-release-binaries)) |
 | Art 21(2)(e) vulnerability handling and disclosure | private reporting through GitHub security advisories, with an acknowledgement within seven days ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md)) |
 | Art 21(2)(h) cryptography | the transport rules that refuse a credential or a patient identifier over plain `http` outside development, and the trust anchors over `https` ([What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted)); ES256 and ES384 signing keys with rotation |
-| Art 21(2)(i) access control | every caller authenticated by token, SMART on openEHR scopes per route, an operator scope for the operator surface ([Client authentication](../operate/authentication.md)) |
+| Art 21(2)(i) access control | every caller authenticated by token, SMART on openEHR scopes per route, an operator scope for the operator surface and the admin listener's write actions ([Client authentication](../operate/authentication.md)), and a scrape token or mutual TLS for the metrics off loopback ([Metrics](../operate/metrics.md#who-the-admin-listener-serves)) |
 | Art 21(2)(j) multi-factor authentication | none in the gateway: the caller's issuer and the console's OpenID Provider authenticate the person |
 
 Art 23(4) sets the reporting clock: an early warning "within 24 hours of
@@ -280,10 +280,6 @@ incident "not later than three days" after becoming aware of it, "without
 prejudice to incident notification requirements under Directive (EU)
 2022/2555" (Art 44(7)). That is the manufacturer's duty, planned in
 [#672](https://github.com/FerroHEALTH/FerroFED/issues/672).
-
-One gap limits what an entity can show today, and it is filed:
-authentication on the admin listener
-([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)).
 
 ## The medical device question
 

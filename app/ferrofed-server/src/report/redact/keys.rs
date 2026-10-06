@@ -170,6 +170,8 @@ pub const KNOWN_KEYS: &[&str] = &[
     "role",
     "rotation_overlap_s",
     "scope",
+    "scrape_token",
+    "scrape_token_file",
     "send_timeout_ms",
     "sender_device",
     "server",

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The admin listener over `[metrics.tls]`: it serves `GET /metrics` over
-//! TLS, and still records each connection's peer, so a loopback peer keeps
-//! the write actions.
+//! TLS, and still records each connection's peer, so under the development
+//! profile a loopback peer keeps the write actions without a credential.
 
 use std::sync::Arc;
 
-use ferrofed_server::admin;
+use ferrofed_identity::dev::Profile;
+use ferrofed_server::admin::{self, Access};
 use ferrofed_server::listener::TlsListener;
 use ferrofed_server::listener::certificates::Certificates;
 use ferrofed_server::state::AppState;
@@ -26,7 +27,8 @@ async fn the_admin_listener_serves_tls_and_knows_its_loopback_peer() -> TestResu
     let tcp = TcpListener::bind("127.0.0.1:0").await?;
     let address = tcp.local_addr()?;
     let listener = TlsListener::new(tcp, Arc::new(Certificates::load(files)?))?;
-    let app = admin::router(Arc::new(AppState::default()));
+    let access = Access::new(&crate::support::auth(), Profile::Development, None);
+    let app = admin::router(Arc::new(AppState::default()), access);
     tokio::spawn(admin::serve(listener, app));
 
     let trusting = client(set.ca(), None)?;
@@ -40,10 +42,10 @@ async fn the_admin_listener_serves_tls_and_knows_its_loopback_peer() -> TestResu
         ))
         .send()
         .await?;
-    assert_ne!(
-        StatusCode::FORBIDDEN,
+    assert_eq!(
+        StatusCode::NOT_FOUND,
         write.status(),
-        "the loopback peer was recorded over TLS"
+        "the loopback peer was recorded over TLS, and reached the action"
     );
     Ok(())
 }

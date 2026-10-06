@@ -257,6 +257,9 @@ pub struct MetricsSettings {
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<TlsFiles>,
+    /// The bearer token a scrape of `GET /metrics` must carry; `None` leaves
+    /// the scrape open.
+    pub scrape_token: Option<Secret>,
 }
 
 /// The authentication scheme a credentials section resolves to.

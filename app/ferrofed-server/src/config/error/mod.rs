@@ -423,9 +423,19 @@ pub enum Error {
     /// `metrics.listen` names an address other than a loopback one, and
     /// `metrics.allow_remote` does not allow it.
     #[error(
-        "metrics.listen is {address}, which is not a loopback address; the metrics listener has no authentication, so set metrics.allow_remote = true to serve it beyond this host"
+        "metrics.listen is {address}, which is not a loopback address; set metrics.allow_remote = true to serve the admin listener beyond this host"
     )]
     MetricsRemote {
+        /// The address `metrics.listen` names.
+        address: std::net::SocketAddr,
+    },
+    /// `metrics.listen` names an address other than a loopback one outside
+    /// the development profile, and neither a scrape token nor a client CA
+    /// authenticates the scrape there.
+    #[error(
+        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: set metrics.scrape_token_file, or metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
+    )]
+    MetricsUnauthenticated {
         /// The address `metrics.listen` names.
         address: std::net::SocketAddr,
     },

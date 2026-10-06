@@ -455,6 +455,36 @@ impl Gate {
     pub fn admits_any(&self) -> bool {
         !self.issuers.is_empty()
     }
+
+    /// Whether `headers` carry the field a credential travels in, read or
+    /// not: `Authorization`, or the edge's header.
+    #[must_use]
+    pub fn presents_credential(&self, headers: &HeaderMap) -> bool {
+        match &self.mode {
+            AuthMode::Token => headers.contains_key(header::AUTHORIZATION),
+            AuthMode::Edge(name) => headers.contains_key(name),
+        }
+    }
+}
+
+/// Whether `headers` carry `expected` as their one bearer token (RFC 6750
+/// §2.1), compared in constant time: the check of a static token, such as
+/// the PMIR feed token or the admin listener's scrape token.
+#[must_use]
+pub fn bearer_matches(headers: &HeaderMap, expected: &str) -> bool {
+    let mut values = headers.get_all(header::AUTHORIZATION).iter();
+    let (Some(value), None) = (values.next(), values.next()) else {
+        return false;
+    };
+    let Some((scheme, token)) = value.to_str().ok().and_then(|text| text.split_once(' ')) else {
+        return false;
+    };
+    scheme.eq_ignore_ascii_case("bearer")
+        && aws_lc_rs::constant_time::verify_slices_are_equal(
+            token.trim_start_matches(' ').as_bytes(),
+            expected.as_bytes(),
+        )
+        .is_ok()
 }
 
 /// The patient `caller`'s `patient/` grant is confined to: its token's
