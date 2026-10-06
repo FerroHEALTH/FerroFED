@@ -200,22 +200,28 @@ and the command prints the same list. The image digest is not visible from
 inside the process. For a container, add the output of
 `docker image inspect --format '{{index .RepoDigests 0}}' <image>`.
 
-Redaction is deny by default and runs over the parsed configuration, so a
-comment or an inline table cannot pass it. A key stays when it is a field
-name, so the shape is visible. The keys of a table keyed by data
-(`credentials`, `members`, `namespaces`, `communities`) and any key that is
-not a `snake_case` field name become `***1`, `***2` and so on. A value stays
-only when it is one of these:
+Redaction fails closed and runs over the parsed configuration, so a comment
+or an inline table cannot pass it. Each key is judged by its exact spelling,
+so a key in another casing or with another separator counts as unknown. A
+key is shown only when it is a configuration field name the redactor knows,
+outside a table keyed by data (`credentials`, `members`, `namespaces`,
+`communities`, `custodians`, `holders`). Every other key becomes `***1`,
+`***2` and so on. A value stays only under a known key that names no
+credential and no file, and only when it is one of these:
 
-- a number, a boolean or a date;
-- the scheme, host and port of a URL, with its userinfo, path, query and
-  fragment replaced by `***`;
-- a closed setting or a listen address, such as `profile`, `listen`,
-  `base_path`, `format` or `node_selection`.
+- a boolean;
+- a number under a timeout, interval, limit, capacity or size key, such as
+  `request_timeout_ms`;
+- the scheme, host and port of a URL under a URL key, such as `url` or
+  `issuer`, with its userinfo, path, query and fragment replaced by `***`;
+- a closed setting or a listen address that has the expected shape, such as
+  `profile`, `listen`, `base_path`, `format` or `node_selection`.
 
-Every other value is `***`. That covers file paths, which can name a
-person's home directory, namespaces, user names, and every value under
-`[dev]`, whose cross-reference pairs patient identifiers with `ehr_id`s.
+Every other value is `***`. That covers secrets in any casing, file paths
+(which can name a person's home directory), dates, namespaces, user names,
+`ehr_id`s, and every value under `[dev]`, whose cross-reference pairs
+patient identifiers with `ehr_id`s. A key the configuration gains later is
+redacted until the redactor is taught it.
 
 The live files keep only the fields that carry states, counts, kinds, times
 and routing ids:
