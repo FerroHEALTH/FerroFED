@@ -31,10 +31,13 @@
 //! ```
 
 pub mod conform;
+mod entries;
 #[cfg(feature = "openehr")]
 pub mod openehr;
+mod strict;
 
 use fhir_types::codec::DecodeError;
+use fhir_types::codec::EncodeError;
 use fhir_types::codec::Json;
 use fhir_types::codec::Object;
 use fhir_types::codec::Path;
@@ -62,31 +65,52 @@ pub struct ReceivedDocument {
 impl ReceivedDocument {
     /// Reads a document from its FHIR JSON text.
     ///
-    /// The text is decoded against the R4 `Bundle` and the definitions of
-    /// every resource it carries, which refuse an unknown property, a value
-    /// of the wrong type and an invalid primitive
-    /// (<https://hl7.org/fhir/R4/json.html>). The `Bundle` must then be a
-    /// `document` with the rules the R4 `Bundle` states for one: an
-    /// `identifier` with a system and a value (`bdl-9`), a `timestamp`
-    /// (`bdl-10`) and a `Composition` as its first entry (`bdl-11`)
+    /// The text is read once. An object that repeats a name is refused
+    /// first, because two JSON readers may keep different values for it
+    /// (RFC 8259 §4). The text is then decoded against the R4 `Bundle` and
+    /// the definitions of every resource it carries, which refuse an unknown
+    /// property, a value of the wrong type and an invalid primitive
+    /// (<https://hl7.org/fhir/R4/json.html>), and the decoded document must
+    /// encode back to the JSON it was read from, so nothing the model does
+    /// not hold is left in the text. Every later rule, the profile check and
+    /// the mapping read that decoded document and nothing else.
+    ///
+    /// The `Bundle` must then be a `document` with the rules the R4 `Bundle`
+    /// states for one: an `identifier` with a system and a value (`bdl-9`), a
+    /// `timestamp` (`bdl-10`), `fullUrl`s that are given once (`bdl-7`), not
+    /// version specific (`bdl-8`) and agree with their resource, and a
+    /// `Composition` as its first entry (`bdl-11`)
     /// (<https://hl7.org/fhir/R4/bundle.html>). The `Composition.subject`
-    /// must name the one `Patient` entry the document is about.
+    /// must name the one `Patient` entry the document is about, and every
+    /// other `subject` and `patient` reference in the document must name it
+    /// too.
     ///
     /// # Errors
     ///
     /// Returns [`ReceiveError`] naming the first rule the text breaks. No
-    /// variant carries a value of the document.
+    /// refusal's message quotes a value of the document.
     pub fn read(text: &str) -> Result<Self, ReceiveError> {
+        strict::unique_names(text).map_err(|source| {
+            if source.is_data() {
+                ReceiveError::RepeatedName { source }
+            } else {
+                ReceiveError::Json { source }
+            }
+        })?;
         let value: Value =
             serde_json::from_str(text).map_err(|source| ReceiveError::Json { source })?;
-        let Value::Object(tree) = value else {
+        let Value::Object(read) = value else {
             return Err(ReceiveError::NotAnObject);
         };
-        if tree.get("resourceType").and_then(Value::as_str) != Some("Bundle") {
+        if read.get("resourceType").and_then(Value::as_str) != Some("Bundle") {
             return Err(ReceiveError::NotABundle);
         }
-        let bundle = Bundle::from_json(&tree, &mut Path::root("Bundle"))
+        let bundle = Bundle::from_json(&read, &mut Path::root("Bundle"))
             .map_err(|source| ReceiveError::Decode { source })?;
+        let tree = Json::to_json(&bundle).map_err(|source| ReceiveError::Encode { source })?;
+        if tree != read {
+            return Err(ReceiveError::Unfaithful);
+        }
         if bundle.r#type.value.as_deref() != Some(DOCUMENT) {
             return Err(ReceiveError::NotADocument {
                 found: bundle.r#type.value.clone(),
@@ -113,6 +137,8 @@ impl ReceivedDocument {
         {
             return Err(ReceiveError::Undated);
         }
+        entries::known_resources(&tree, "Bundle")?;
+        entries::full_urls(&tree)?;
         let Some(Resource::Composition(composition)) = bundle
             .entry
             .first()
@@ -121,7 +147,15 @@ impl ReceivedDocument {
             return Err(ReceiveError::NoComposition);
         };
         let composition = composition.clone();
-        let patient = subject(&bundle, &composition)?;
+        let index = entries::patient(&tree)?;
+        let Some(Resource::Patient(patient)) = bundle
+            .entry
+            .get(index)
+            .and_then(|entry| entry.resource.as_ref())
+        else {
+            return Err(ReceiveError::SubjectUnresolved);
+        };
+        let patient = patient.clone();
         Ok(Self {
             original: text.to_owned(),
             tree,
@@ -156,41 +190,10 @@ impl ReceivedDocument {
         &self.patient
     }
 
-    /// Returns the document as the JSON tree it was read from.
+    /// Returns the JSON the decoded document encodes as, equal to the JSON
+    /// it was read from.
     pub(crate) const fn tree(&self) -> &Object {
         &self.tree
-    }
-}
-
-/// Returns the `Patient` entry `composition.subject` names.
-///
-/// A reference inside a Bundle resolves against the entries' `fullUrl`s: an
-/// absolute reference equals one, and a relative `Patient/<id>` ends one
-/// on the same server base (<https://hl7.org/fhir/R4/bundle.html#references>).
-// NOTE: Regulation (EU) 2025/327 Art 13(3) registers data under the patient's
-// identification data, so a document whose subject is no Patient entry of its
-// own Bundle cannot be registered (no specification states this refusal: our own design).
-fn subject(bundle: &Bundle, composition: &Composition) -> Result<Box<Patient>, ReceiveError> {
-    let reference = composition
-        .subject
-        .as_ref()
-        .and_then(|subject| subject.reference.as_ref())
-        .and_then(|reference| reference.value.as_deref())
-        .ok_or(ReceiveError::NoSubject)?;
-    let relative = format!("/{reference}");
-    let mut named = bundle.entry.iter().filter(|entry| {
-        entry
-            .full_url
-            .as_ref()
-            .and_then(|url| url.value.as_deref())
-            .is_some_and(|url| url == reference || url.ends_with(&relative))
-    });
-    let (Some(entry), None) = (named.next(), named.next()) else {
-        return Err(ReceiveError::SubjectUnresolved);
-    };
-    match entry.resource {
-        Some(Resource::Patient(ref patient)) => Ok(patient.clone()),
-        _ => Err(ReceiveError::SubjectUnresolved),
     }
 }
 
@@ -201,6 +204,14 @@ pub enum ReceiveError {
     /// The text is not JSON.
     #[error("the document is not JSON")]
     Json {
+        /// The parse failure.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// An object of the document repeats a name, which two JSON readers may
+    /// read as two different documents (RFC 8259 §4).
+    #[error("an object of the document repeats a name")]
+    RepeatedName {
         /// The parse failure.
         #[source]
         source: serde_json::Error,
@@ -218,6 +229,17 @@ pub enum ReceiveError {
         #[source]
         source: DecodeError,
     },
+    /// The decoded Bundle cannot be encoded as JSON again.
+    #[error("the decoded Bundle cannot be encoded as JSON")]
+    Encode {
+        /// The encode failure.
+        #[source]
+        source: EncodeError,
+    },
+    /// The decoded Bundle encodes as JSON other than the text it was read
+    /// from: the text holds something the R4 model does not.
+    #[error("the document reads differently through the R4 model")]
+    Unfaithful,
     /// The Bundle's type is not `document`.
     #[error("the Bundle is of type {found:?}, not a document")]
     NotADocument {
@@ -240,4 +262,49 @@ pub enum ReceiveError {
     /// The subject resolves to no single `Patient` entry of the document.
     #[error("the document's subject is no single Patient entry of the document")]
     SubjectUnresolved,
+    /// A resource of the document is of a type R4 does not define.
+    #[error("{location} is a resource of a type FHIR R4 does not define")]
+    UnknownResource {
+        /// The element path of the resource.
+        location: String,
+    },
+    /// An entry's `fullUrl` is version specific (`bdl-8`).
+    #[error("entry {entry} has a version-specific fullUrl (bdl-8)")]
+    VersionedFullUrl {
+        /// The entry's index.
+        entry: usize,
+    },
+    /// An entry repeats the `fullUrl` and version of an earlier one
+    /// (`bdl-7`).
+    #[error("entry {entry} repeats the fullUrl of an earlier entry (bdl-7)")]
+    DuplicateFullUrl {
+        /// The entry's index.
+        entry: usize,
+    },
+    /// An entry's REST-style `fullUrl` disagrees with its resource's type or
+    /// id.
+    #[error("entry {entry} has a fullUrl that disagrees with its resource's type or id")]
+    FullUrlMismatch {
+        /// The entry's index.
+        entry: usize,
+    },
+    /// An entry other than the subject is a `Patient`.
+    #[error("entry {entry} is a second Patient")]
+    SeveralPatients {
+        /// The entry's index.
+        entry: usize,
+    },
+    /// A resource of the document contains a `Patient`.
+    #[error("{location} contains a Patient")]
+    ContainedPatient {
+        /// The element path of the contained resource.
+        location: String,
+    },
+    /// A `subject` or `patient` reference names anything but the document's
+    /// `Patient` entry.
+    #[error("{location} names a subject other than the document's Patient entry")]
+    SubjectMismatch {
+        /// The element path of the reference.
+        location: String,
+    },
 }

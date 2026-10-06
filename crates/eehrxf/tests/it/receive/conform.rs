@@ -182,10 +182,17 @@ fn a_nested_section_the_profile_removes_is_found() -> Result<(), Box<dyn Error>>
 
 #[test]
 fn a_bundle_entry_without_a_full_url_is_found() -> Result<(), Box<dyn Error>> {
+    // The allergy names its patient by an absolute reference, which resolves
+    // from an entry with no fullUrl; a relative one would not.
     let text = document_with(
         r#""fullUrl": "http://example.org/fhir/AllergyIntolerance/synthetic-allergy","#,
         "",
-    )?;
+    )?
+    .replacen(
+        r#""patient": { "reference": "Patient/synthetic-patient" }"#,
+        r#""patient": { "reference": "http://example.org/fhir/Patient/synthetic-patient" }"#,
+        1,
+    );
     let findings = findings(&text)?;
     assert!(
         has(

@@ -9,9 +9,11 @@
 //! value is clinical.
 
 mod conform;
+mod faithful;
 #[cfg(feature = "openehr")]
 mod openehr;
 mod read;
+mod subjects;
 
 use std::error::Error;
 use std::io::Read;

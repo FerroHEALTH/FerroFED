@@ -26,21 +26,38 @@ information sheet's list of the categories received
 A received document is a FHIR R4 `Bundle` in JSON. The component reads it in
 this order and refuses it at the first rule it breaks:
 
-1. The text is decoded against the R4 definitions of `Bundle` and of every
-   resource it carries. An unknown property, a value of the wrong type or an
-   invalid primitive is refused, with the element path where it was found.
-2. The `Bundle` is a `document`, and meets the R4 rules for one: an
+1. An object that repeats a name is refused before anything reads the
+   text, because two JSON readers may keep different values for it (RFC
+   8259, §4).
+2. The text is decoded against the R4 definitions of `Bundle` and of every
+   resource it carries. An unknown property, a value of the wrong type, a
+   `null` or an empty object or array, and an invalid primitive are refused,
+   with the element path where they were found, and so is a resource of a
+   type R4 does not define, anywhere in the document. The decoded document
+   must encode back to the JSON it was read from. Every later rule, the
+   profile check and the mapping read that one decoded document.
+3. The `Bundle` is a `document`, and meets the R4 rules for one: an
    `identifier` with a system and a value (`bdl-9`), a `timestamp`
-   (`bdl-10`), and a `Composition` as its first entry (`bdl-11`).
-3. The `Composition.subject` names one `Patient` entry of the same `Bundle`,
-   by its `fullUrl` or by a relative `Patient/<id>` on the same server base.
-   A document is registered under the patient's identification data (Art
-   13(3)), so a document that does not say which of its entries is the
-   patient is refused.
+   (`bdl-10`), `fullUrl`s given once (`bdl-7`), none version specific
+   (`bdl-8`), each REST-style one ending with its resource's type and id,
+   and a `Composition` as its first entry (`bdl-11`).
+4. The `Composition.subject` names one `Patient` entry of the same `Bundle`,
+   by its `fullUrl`, or by a relative `Patient/<id>` resolved against the
+   server base of the composition's own `fullUrl`. Every other `subject`
+   and `patient` reference in the document, at any depth, names that same
+   entry by reference. A reference to another patient, to another resource,
+   by identifier alone or to a contained resource is refused, and so is a
+   second `Patient` entry and a contained `Patient`. A document is
+   registered under the identification data of the one person it is about
+   (Art 13(3)), so a document that could be read as about two is refused
+   whole.
 
 The document's text is kept byte for byte. No refusal quotes a value of the
 document, so a patient identifier never reaches an error message or a log
-line through one.
+line through one. Whether the caller may write for that patient, and whether
+the member's `ehr_id` is that patient's, the federation half decides before
+it sends anything
+([#802](https://github.com/FerroHEALTH/FerroFED/issues/802)).
 
 ## The check against the profiles
 
