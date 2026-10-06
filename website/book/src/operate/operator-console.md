@@ -131,6 +131,13 @@ gzip-compressed, as the browser's `Accept-Encoding` chooses; pages and
 server function answers are never compressed, so no compression side
 channel reads what an operator entered.
 
+The console serves plain HTTP and sends no `Strict-Transport-Security`
+header. Terminate TLS at a reverse proxy in front of it and set
+`Strict-Transport-Security` (RFC 6797) there, as the
+[hardening guide](hardening.md#tls) asks: a browser that has seen the header
+then reaches the console over HTTPS alone, so no one on the network path can
+turn the operator's sign-in into a plain HTTP request.
+
 The query console shows its answer on the page that asked, so it runs a
 query only once the console's WebAssembly bundle has loaded: until then the
 "Run the query" button is disabled, and a plain form post that reaches the

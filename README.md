@@ -64,8 +64,13 @@ mCSD directory, the audit of every IHE transaction to an ATNA repository,
 the Dutch consent pre-filter Mitz, the Nuts and FAPI 2.0 grants toward a
 node, and traces exported through OpenTelemetry shipped in v0.0.8. v0.0.9
 added the conformance statement, `ferrofed conformance run` and the operator
-console. v0.0.10, being built, is EHDS readiness: the European
-interoperability and logging components are not built yet
+console. v0.0.10, being built, is EHDS readiness. The gateway now records
+every access to patient data with the verified caller, as Annex II, point
+3.2, asks of the European logging component
+([the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log)),
+and the component's review tools and retention by origin and category are
+planned. The European interoperability component is a library
+(`crates/eehrxf`) the gateway does not serve yet
 ([regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
