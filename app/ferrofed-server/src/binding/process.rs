@@ -11,6 +11,7 @@
 //! specification governs the process model: our own design.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -151,14 +152,40 @@ pub struct Running {
 }
 
 impl Running {
-    /// Stops every process that holds something at a remote service.
+    /// Stops every process that holds something at a remote service, within
+    /// `budget`, the `server.bindings_drain_timeout_ms` the shipped grace
+    /// periods leave room for.
+    pub(crate) async fn drain(self, budget: Duration) -> Drained {
+        within(budget, self.stop()).await
+    }
+
+    /// Stops every process, for as long as each one's own timeouts allow.
     #[cfg_attr(
         not(feature = "binding-ihe"),
         expect(clippy::unused_async, reason = "no compiled binding runs a process")
     )]
-    pub(crate) async fn drain(self) {
+    async fn stop(self) {
         #[cfg(feature = "binding-ihe")]
         self.ihe.drain().await;
+    }
+}
+
+/// How the bindings' drain ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum Drained {
+    /// Every process stopped within the budget.
+    Stopped,
+    /// The budget elapsed first, and the processes still stopping were
+    /// abandoned, so what they hold at a remote service may be left there.
+    Abandoned,
+}
+
+/// Runs `drain` until it ends or `budget` elapses, whichever comes first.
+async fn within(budget: Duration, drain: impl Future<Output = ()>) -> Drained {
+    match tokio::time::timeout(budget, drain).await {
+        Ok(()) => Drained::Stopped,
+        Err(_elapsed) => Drained::Abandoned,
     }
 }
 
@@ -192,5 +219,29 @@ pub fn read_source(
             crate::federation::registry::read_registry(settings),
             Sources::default(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{Drained, within};
+
+    #[tokio::test(start_paused = true)]
+    async fn a_drain_that_ends_within_its_budget_has_stopped() {
+        let drain = tokio::time::sleep(Duration::from_secs(4));
+        assert_eq!(
+            Drained::Stopped,
+            within(Duration::from_secs(5), drain).await
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_drain_still_running_when_its_budget_elapses_is_abandoned() {
+        let started = tokio::time::Instant::now();
+        let drained = within(Duration::from_secs(5), std::future::pending()).await;
+        assert_eq!(Drained::Abandoned, drained);
+        assert_eq!(Duration::from_secs(5), started.elapsed());
     }
 }

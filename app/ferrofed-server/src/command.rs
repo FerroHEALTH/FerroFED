@@ -16,6 +16,7 @@ use clap::Parser;
 use ferrofed_identity::dev::Profile;
 use tokio::net::TcpListener;
 
+use crate::binding::process::Drained;
 use crate::cli::{
     AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs, RunArgs,
 };
@@ -650,7 +651,12 @@ fn serve_command(
                 .await
             }
         };
-        running.drain().await;
+        if running.drain(server.bindings_drain).await == Drained::Abandoned {
+            tracing::warn!(
+                budget_ms = server.bindings_drain.as_millis(),
+                "the bindings did not stop within server.bindings_drain_timeout_ms; what they hold at a remote service may be left there"
+            );
+        }
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         anyhow::Ok(())

@@ -512,6 +512,9 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("server.shutdown_timeout_ms", |boot, fresh| {
         boot.server.shutdown_timeout != fresh.server.shutdown_timeout
     }),
+    ("server.bindings_drain_timeout_ms", |boot, fresh| {
+        boot.server.bindings_drain != fresh.server.bindings_drain
+    }),
     ("server.body_limit_bytes", |boot, fresh| {
         boot.server.body_limit != fresh.server.body_limit
     }),

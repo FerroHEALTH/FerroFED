@@ -97,9 +97,11 @@ capability dropped and `no-new-privileges`. Its healthcheck is the image's
 port binds the loopback interface unless you set `FERROFED_BIND_HOST`, for the
 reason under [The quickstart](#the-quickstart). A registry URL can name a CDR
 on the Docker host itself as `host.docker.internal`. The stop grace period of
-40 seconds outlasts the gateway's 30-second drain
+40 seconds outlasts the gateway's 30-second drain and the bindings' 5-second
+drain
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request));
-raise it with `server.drain_delay_ms` or `server.shutdown_timeout_ms`.
+raise it with `server.drain_delay_ms`, `server.shutdown_timeout_ms` or
+`server.bindings_drain_timeout_ms`.
 
 The restart policy is `unless-stopped`. Docker restarts a gateway that exits
 with an error, doubling its wait before each attempt from 100 ms
@@ -243,11 +245,12 @@ because no client addresses one replica. The StatefulSet:
   log, since the spool is on its claim);
 - sets `server.drain_delay_ms` to 5 seconds in the example configuration, so
   a pod keeps accepting while it leaves the Service's endpoints, and
-  `server.shutdown_timeout_ms` to the 30-second request timeout;
+  `server.shutdown_timeout_ms` to the 30-second request timeout and
+  `server.bindings_drain_timeout_ms` to 5 seconds;
 - gives the pod a `terminationGracePeriodSeconds` of 45, which outlasts the
-  delay plus the drain with 10 seconds of room, so the kubelet never kills a
-  drain in progress. Keep the grace period above the delay plus the drain if
-  you change either
+  delay, the drain and the bindings' drain with 5 seconds of room, so the
+  kubelet never kills a drain in progress. Keep the grace period above the
+  three if you change any of them
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 
 The PodDisruptionBudget keeps one of the two replicas serving through a

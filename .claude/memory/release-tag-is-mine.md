@@ -22,7 +22,7 @@ step of a milestone; a hand-back is unfinished work.
    `docs/release.md` § Before the tag names (the root `Cargo.toml`
    `[workspace.package]` `version`, `CITATION.cff`, the product row of
    `docs/VERSIONS.md`, the image tag defaults of `compose.yaml`,
-   `deploy/compose/compose.yaml` and `deploy/kubernetes/deployment.yaml`, the
+   `deploy/compose/compose.yaml` and `deploy/kubernetes/statefulset.yaml`, the
    landing page, and the `CHANGELOG.md` section, written by
    `scripts/release/changelog.sh --assemble X.Y.Z <date>` from the fragments
    under `changelog.d/`), checked by `scripts/checks/versions.sh`.

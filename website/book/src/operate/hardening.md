@@ -214,7 +214,8 @@ page: our own design.
 - [ ] **Set container limits.** CPU, memory and ephemeral storage, as the
   release `compose.yaml` and the Kubernetes example do.
 - [ ] **Let the drain finish.** Keep the runtime's grace period above
-  `server.drain_delay_ms` plus `server.shutdown_timeout_ms`
+  `server.drain_delay_ms` plus `server.shutdown_timeout_ms` plus
+  `server.bindings_drain_timeout_ms`
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 
 ## Logs, metrics and traces
