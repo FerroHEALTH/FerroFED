@@ -6,16 +6,19 @@
 //! reports the `system_id` the registry records, and the proxy journal shows
 //! that the only subjects sent were fresh synthetic ones, in the `EHR_STATUS`
 //! body and nowhere else, the claims of each conveyed `openEHR-federation-client`
-//! token included (§12b.1, §12b.2, §5.4.1, §13.1; N24, N33, N42a).
+//! token included (§12b.1, §12b.2, §5.4.1, §13.1; N24, N33, N42a). A run
+//! without writes sends the node one query of its existing EHRs and nothing
+//! else.
 //!
 //! FerroEHR is a node here, never the oracle: the test asserts what the
 //! check reports about it, and does not assume which UUID version it mints.
 
 use ferrofed_engine::conveyance;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_server::admission::report::{Condition, Verdict};
+use ferrofed_server::admission::report::{Condition, Mode, Verdict};
 use ferrofed_server::admission::subject::VALUE_PREFIX;
 use ferrofed_testkit::containers::{self, API_PATH};
+use ferrofed_testkit::seed::{self, DemoComposition};
 
 use crate::e2e::{TestResult, federation_resolving};
 use crate::support::searched_claims;
@@ -142,5 +145,63 @@ async fn the_check_reaches_a_ferroehr_node_with_synthetic_subjects_only() -> Tes
             "no synthetic subject in the conveyed claims (§5.4.1, N33): {claims}"
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_run_without_writes_reads_a_ferroehr_node_and_writes_nothing() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let nodes = containers::two_nodes().await?;
+    seed::seed(
+        &nodes.a.api_root(),
+        &crate::e2e::plan(crate::e2e::EHR_A, DemoComposition::FirstHospital),
+    )
+    .await?;
+    nodes.a.proxy.clear_journal();
+    nodes.b.proxy.clear_journal();
+    let dir = tempfile::tempdir()?;
+    let federation = federation_resolving(dir.path(), &nodes.a, &nodes.b, "")?;
+
+    let report = ferrofed_server::admission::read_only::check(
+        &federation,
+        &EndpointId::new("node-a-pub")?,
+        3,
+    )
+    .await?;
+
+    assert_eq!(Mode::ReadOnly, report.mode());
+    assert_eq!(
+        vec![crate::e2e::EHR_A.to_string()],
+        report.read(),
+        "the run reads the one EHR the node holds: {report}"
+    );
+    assert_eq!(
+        Verdict::Pass,
+        report
+            .finding(Condition::SystemIdUniqueness)
+            .ok_or("a finding")?
+            .verdict(),
+        "{report}"
+    );
+    assert!(
+        report.unproven().contains(&Condition::EhrIdExchange),
+        "{report}"
+    );
+    let journal = nodes.a.proxy.journal();
+    let steps: Vec<(&str, &str)> = journal
+        .iter()
+        .map(|capture| (capture.method.as_str(), capture.path.as_str()))
+        .collect();
+    assert_eq!(
+        vec![("POST", format!("{API_PATH}/v1/query/aql").as_str())],
+        steps,
+        "one query and no write reach the node"
+    );
+    assert!(
+        nodes.b.proxy.journal().is_empty(),
+        "no other member is contacted"
+    );
     Ok(())
 }

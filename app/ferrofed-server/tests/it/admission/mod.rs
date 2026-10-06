@@ -18,6 +18,7 @@ mod command;
 mod generation;
 mod onward;
 mod overtaken;
+mod read_only;
 mod round_trip;
 
 use std::collections::{BTreeMap, VecDeque};

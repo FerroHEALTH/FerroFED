@@ -92,7 +92,8 @@ pub enum AdmissionCommand {
         #[arg(long, value_name = "ENDPOINT_ID")]
         endpoint: String,
         /// How many test EHRs to create on the node, at least two so their
-        /// `ehr_id`s can be compared.
+        /// `ehr_id`s can be compared, or with `--read-only` the most existing
+        /// EHRs to read.
         #[arg(
             long,
             value_name = "N",
@@ -100,6 +101,11 @@ pub enum AdmissionCommand {
             value_parser = clap::value_parser!(u8).range(2..=50)
         )]
         count: u8,
+        /// Makes no write to the node: reads the `ehr_id` and `system_id` of
+        /// EHRs it already holds, and names every condition the run leaves
+        /// unproven.
+        #[arg(long)]
+        read_only: bool,
     },
 }
 
@@ -162,7 +168,7 @@ mod tests {
 
     #[test]
     fn every_documented_subcommand_parses() {
-        let cases: [(&[&str], Command); 5] = [
+        let cases: [(&[&str], Command); 6] = [
             (&["ferrofed", "serve"], Command::Serve),
             (&["ferrofed", "healthcheck"], Command::Healthcheck),
             (
@@ -177,6 +183,7 @@ mod tests {
                     command: AdmissionCommand::Check {
                         endpoint: "node-a-pub".to_owned(),
                         count: 3,
+                        read_only: false,
                     },
                 },
             ),
@@ -194,6 +201,24 @@ mod tests {
                     command: AdmissionCommand::Check {
                         endpoint: "node-a-pub".to_owned(),
                         count: 5,
+                        read_only: false,
+                    },
+                },
+            ),
+            (
+                &[
+                    "ferrofed",
+                    "admission",
+                    "check",
+                    "--endpoint",
+                    "node-a-pub",
+                    "--read-only",
+                ],
+                Command::Admission {
+                    command: AdmissionCommand::Check {
+                        endpoint: "node-a-pub".to_owned(),
+                        count: 3,
+                        read_only: true,
                     },
                 },
             ),

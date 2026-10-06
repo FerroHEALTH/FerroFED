@@ -11,6 +11,7 @@
 mod console;
 mod e2e;
 mod journeys;
+mod keycloak_recipe;
 mod mcsd;
 mod pdq;
 mod pix;

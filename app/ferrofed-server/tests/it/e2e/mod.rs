@@ -39,6 +39,10 @@
 //! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
 //! [`admission`].
 //!
+//! The production guide's Keycloak recipe, read from the book page and
+//! applied to a pinned Keycloak, issues a user's and a service's token that
+//! each get a federated answer, in [`keycloak`].
+//!
 //! With the `postgres` feature, the stored-query registry's PostgreSQL store
 //! runs its store suite, and two gateway instances sharing it race one new
 //! version with exactly one stored (§12.7, N44), in `stored_postgres`.
@@ -72,6 +76,7 @@ mod commit;
 mod conformance_run;
 mod crossref;
 mod differential;
+mod keycloak;
 mod pixm;
 mod santempi;
 mod scenario;

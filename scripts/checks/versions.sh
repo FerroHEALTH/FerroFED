@@ -908,7 +908,8 @@ if [[ -f "$harness" ]]; then
     "SanteMPI PIX Manager image|SANTEMPI" \
     "SanteMPI database image|SANTEMPI_POSTGRES" \
     "Reference implementation build image|MAVEN" \
-    "Reference implementation runtime image|TEMURIN_JRE"; do
+    "Reference implementation runtime image|TEMURIN_JRE" \
+    "Keycloak identity provider image|KEYCLOAK"; do
     item="${image%%|*}"
     constant="${image##*|}"
     expected=$((expected + 1))

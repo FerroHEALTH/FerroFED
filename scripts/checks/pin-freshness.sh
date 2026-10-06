@@ -50,6 +50,8 @@ readonly MATRIX=docs/VERSIONS.md
 # and compose files, never a Rust constant.
 readonly TESTKIT_SRC=tools/ferrofed-testkit/src
 readonly REGISTRY_UA=ferrofed-pin-check
+# The most pages of one tag list the read follows before it gives up.
+readonly MAX_TAG_PAGES=200
 
 # One "matrix label<TAB>upstream repository<TAB>branch" record per line: a
 # corpus pinned by commit on a repository that publishes no releases, read
@@ -248,15 +250,37 @@ registry_tags() {
     --data-urlencode "service=$service" --data-urlencode "scope=repository:$path:pull" "$realm" \
     | jq --raw-output --exit-status '.token // .access_token')" || return 1
   headers="$registry_scratch/headers"
-  curl --fail --silent --show-error --user-agent "$REGISTRY_UA" --dump-header "$headers" \
-    --header "Authorization: Bearer $token" "https://$host/v2/$path/tags/list?n=100000" \
-    > "$registry_scratch/tags.json" || return 1
-  # A registry that pages the list past this request would hide the newest
-  # tags, so a second page is a failure, never a shorter list.
-  if grep -qi '^link:' "$headers"; then
-    return 1
-  fi
-  jq --raw-output --exit-status '.tags[]' "$registry_scratch/tags.json"
+  # A registry may page the list whatever size is asked for (Quay stops at
+  # 100), and names the next page in a `Link` header, so every page is read
+  # and the list is never cut short. A page that fails fails the read.
+  local url="https://$host/v2/$path/tags/list?n=100000" pages=0 next
+  : > "$registry_scratch/tags.txt"
+  while [[ -n "$url" ]]; do
+    pages=$((pages + 1))
+    [[ "$pages" -le "$MAX_TAG_PAGES" ]] || return 1
+    curl --fail --silent --show-error --user-agent "$REGISTRY_UA" --dump-header "$headers" \
+      --header "Authorization: Bearer $token" "$url" > "$registry_scratch/tags.json" || return 1
+    jq --raw-output '.tags // [] | .[]' "$registry_scratch/tags.json" >> "$registry_scratch/tags.txt" \
+      || return 1
+    next="$(next_page "$headers")"
+    case "$next" in
+      '') url="" ;;
+      https://*) url="$next" ;;
+      /*) url="https://$host$next" ;;
+      *) return 1 ;;
+    esac
+  done
+  [[ -s "$registry_scratch/tags.txt" ]] || return 1
+  cat "$registry_scratch/tags.txt"
+}
+
+# next_page HEADERS: the target of the `rel="next"` link in the response
+# header file HEADERS (RFC 8288 §3), or nothing on the last page.
+next_page() {
+  tr -d '\r' < "$1" | awk '
+    tolower($1) == "link:" && /rel="?next"?/ && match($0, /<[^>]+>/) {
+      print substr($0, RSTART + 1, RLENGTH - 2); exit
+    }'
 }
 
 # newest_release PINNED [LINE]: the newest tag read on stdin that is a stable
@@ -426,6 +450,11 @@ self_test() {
   got="$(unwatched_rows "$work/matrix.md" | paste -sd ';' -)"
   expect "An unread corpus" "$got" "a corpus row with no reader and no recorded reason"
   rm "$work/matrix.md"
+  printf 'HTTP/2 200\r\nLink: </v2/a/b/tags/list?n=100&last=1.0>; rel="next"\r\n\r\n' > "$work/headers"
+  expect "/v2/a/b/tags/list?n=100&last=1.0" "$(next_page "$work/headers")" "the next page a registry links"
+  printf 'HTTP/2 200\r\ncontent-type: application/json\r\n\r\n' > "$work/headers"
+  expect "" "$(next_page "$work/headers")" "the last page"
+  rm "$work/headers"
   rmdir "$work"
   got="$(unwatched_rows "$MATRIX" | paste -sd ';' -)"
   expect "" "$got" "the corpus rows of $MATRIX with no reader and no recorded reason"
@@ -447,7 +476,7 @@ case "${1:-}" in
 esac
 
 registry_scratch="$(mktemp -d)"
-trap 'rm -f "$registry_scratch/headers" "$registry_scratch/tags.json"; rmdir "$registry_scratch"' EXIT
+trap 'rm -f "$registry_scratch/headers" "$registry_scratch/tags.json" "$registry_scratch/tags.txt"; rmdir "$registry_scratch"' EXIT
 
 # One "matrix label<TAB>upstream repository" record per line. The label is the
 # first cell of the row in docs/VERSIONS.md, backticks and all.

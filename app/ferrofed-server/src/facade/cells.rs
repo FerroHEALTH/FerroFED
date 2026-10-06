@@ -104,6 +104,25 @@ pub fn reinject(
         .collect()
 }
 
+/// Returns cell `index` of `row` when the node sent it as a JSON string, the
+/// form a `String` primitive takes in a `RESULT_SET` row, or `None` for a
+/// missing cell or any other value.
+///
+/// # Examples
+///
+/// ```
+/// use ferrofed_server::facade::cells::text;
+///
+/// let row = vec!["9e4e5f2a-5b8c-4d3e-8f1a-2b3c4d5e6f70".into(), 7.into()];
+/// assert_eq!(Some("9e4e5f2a-5b8c-4d3e-8f1a-2b3c4d5e6f70"), text(&row, 0));
+/// assert_eq!(None, text(&row, 1));
+/// assert_eq!(None, text(&row, 2));
+/// ```
+#[must_use]
+pub fn text(row: &ResultSetRow, index: usize) -> Option<&str> {
+    row.get(index).and_then(Value::as_str)
+}
+
 /// The cell `source` names in `row`, whose ENDPOINT attribute values are
 /// `values`.
 fn cell(
