@@ -89,6 +89,9 @@ pub struct Settings {
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
     #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::AuditSettings,
+    /// The deprecated keys the configuration set, which `config check` and
+    /// the start-up log name.
+    pub deprecated: Vec<crate::config::deprecated::Deprecated>,
 }
 
 /// The gateway's signing keys, resolved.
@@ -385,6 +388,14 @@ impl Settings {
             bindings = bindings.join(","),
             "configuration resolved"
         );
+        for key in &self.deprecated {
+            tracing::warn!(
+                key = key.renamed.from,
+                replacement = key.renamed.to,
+                refused_in = key.renamed.refused_in,
+                "a deprecated configuration key is set"
+            );
+        }
         for binding in crate::binding::compiled() {
             binding.log_summary(self);
         }

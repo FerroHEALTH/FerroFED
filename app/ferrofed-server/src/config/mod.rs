@@ -21,6 +21,7 @@ use crate::binding::development::DevSection;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
 pub mod auth;
+pub mod deprecated;
 pub mod error;
 pub mod grant;
 pub mod limits;
@@ -120,6 +121,10 @@ pub struct Config {
     /// (`[audit]`, #486).
     #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::Audit,
+    /// The deprecated keys the configuration set, already read under their
+    /// new names; never read from the file itself.
+    #[serde(skip)]
+    pub deprecated: Vec<deprecated::Deprecated>,
 }
 
 impl Default for Config {
@@ -148,6 +153,7 @@ impl Default for Config {
             auth: auth::Auth::default(),
             #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::Audit::default(),
+            deprecated: Vec::new(),
         }
     }
 }
