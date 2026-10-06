@@ -11,7 +11,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Pin: tag `Release-1.1.0`, which resolves to commit `355eb63e201c6b805c44c8809c70d63f79d54f92`; the
   `manifest.json` of that commit dates release `1.1.0` `2020-09-29`
   and declares the specifications ehr STABLE, demographic STABLE, common STABLE, data_structures STABLE, data_types STABLE, support STABLE, integration STABLE, ehr_extract STABLE
-- Fetched: 2026-10-05
+- Fetched: 2026-10-06
 - Upstream licence: Creative Commons Attribution-ShareAlike 3.0 Unported, the
   repository's `LICENSE` file, vendored beside this file
 - Layout: the upstream paths, unchanged
@@ -36,4 +36,5 @@ The rendered `.html` pages, the UML class diagrams under
 `docs/UML/diagrams/` and the UML tool's project files under
 `computable/` are left out. The identifier classes (`OBJECT_VERSION_ID`,
 `OBJECT_REF`, `PARTY_REF`) are defined in the openEHR BASE component,
-which the RM chapters cite and this tree does not carry.
+which the RM chapters cite; `docs/specs/openehr-base/` carries its paired
+release (`scripts/vendor/openehr-base.sh`).

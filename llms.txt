@@ -8,8 +8,7 @@
 ## Start here
 
 - [README](https://github.com/FerroHEALTH/FerroFED/blob/main/README.md): what FerroFED is, and the licence.
-- [Working discipline](https://github.com/FerroHEALTH/FerroFED/blob/main/CLAUDE.md): the engineering rules for changing the code, the status, and the repo map.
-- [Vendored specifications](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs): the Federation Tier specification and its reference implementation, each with its provenance.
+- [Vendored specifications](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs): the specifications and other upstream corpora FerroFED is built against, from the Federation Tier specification and its reference implementation to openEHR, IHE and HL7 Europe, each with its provenance.
 - [Documentation](https://ferrofed.eu/docs/): the book, by reader intent: Evaluate, Operate, Integrate, Contribute.
 
 ## The specification

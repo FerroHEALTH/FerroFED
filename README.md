@@ -38,7 +38,7 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.7 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.9 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and

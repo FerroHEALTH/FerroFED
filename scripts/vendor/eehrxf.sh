@@ -8,13 +8,15 @@
 # implementing act is adopted: the Xt-EHR EHDS Logical Information Models and
 # the HL7 Europe FHIR implementation guides (Base and Core, Patient Summary,
 # Medication Prescription and Dispense, Laboratory Report), with the HL7
-# Europe Extensions and the International Patient Summary at the versions
-# those guides depend on. One corpus per package, each under docs/specs/.
+# Europe Extensions, the International Patient Summary and the IHE Pharmacy
+# Medication Prescription and Dispense profile at the versions those guides
+# depend on. One corpus per package, each under docs/specs/.
 #
 # Each package is the FHIR package registry's tarball, pinned by URL and
 # sha256 (scripts/vendor/lib/pinned.sh) and committed whole, so its sha256
 # stays the pin; each corpus row of docs/VERSIONS.md carries its pin-set
-# digest. Every package declares CC0-1.0 in its manifest.
+# digest. Every package declares CC0-1.0 in its manifest, except the IHE
+# Pharmacy package, which declares CC-BY-SA-4.0.
 # scripts/checks/pin-freshness.sh reads each package's registry entry.
 #
 # Usage:
@@ -107,5 +109,18 @@ pinned_corpus hl7-ips "HL7 International Patient Summary" \
   "The International Patient Summary, canonical \`http://hl7.org/fhir/uv/ips\`,
 at the version the HL7 Europe Patient Summary depends on, committed under
 CC0-1.0." "" "$read_by"
+
+pin commit ihe.pharm.mpd.r4-1.0.0-comment-2.tgz "1.0.0-comment-2 (FHIR 4.0.1, 2025-05-27)" \
+  "$registry/ihe.pharm.mpd.r4/1.0.0-comment-2" \
+  05eda0d1871d2980cb13023d18a5a9618c9945c3a85cf721c14c5e989e0d3776 \
+  'CC-BY-SA-4.0: the license of the package manifest and of the ImplementationGuide resource' \
+  "$whole The version hl7.fhir.eu.base 2.0.1, hl7.fhir.eu.eps 1.0.0-ballot and hl7.fhir.eu.mpd 1.0.0 depend on."
+pinned_corpus ihe-pharm-mpd "IHE Pharmacy Medication Prescription and Dispense" \
+  "the IHE Pharmacy Medication Prescription and Dispense profile ihe.pharm.mpd.r4" \
+  "The IHE Pharmacy profile for medication prescription and dispense,
+canonical \`https://profiles.ihe.net/PHARM/MPD\`, in the public-comment
+version the HL7 Europe Base and Core, Patient Summary and Medication
+Prescription and Dispense guides depend on, committed under CC-BY-SA-4.0,
+which permits verbatim redistribution with attribution." "" "$read_by"
 
 say "done"

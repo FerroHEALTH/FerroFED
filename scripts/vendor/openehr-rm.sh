@@ -124,7 +124,8 @@ The rendered \`.html\` pages, the UML class diagrams under
 \`docs/UML/diagrams/\` and the UML tool's project files under
 \`computable/\` are left out. The identifier classes (\`OBJECT_VERSION_ID\`,
 \`OBJECT_REF\`, \`PARTY_REF\`) are defined in the openEHR BASE component,
-which the RM chapters cite and this tree does not carry.
+which the RM chapters cite; \`docs/specs/openehr-base/\` carries its paired
+release (\`scripts/vendor/openehr-base.sh\`).
 PROV
 
 say "$files files, tree digest $digest"
