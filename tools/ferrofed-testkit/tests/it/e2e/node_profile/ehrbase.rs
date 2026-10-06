@@ -18,9 +18,8 @@ use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdic
 use ferrofed_testkit::containers::ehrbase::{
     self, RESTRICTED_ADMIN, RESTRICTED_USER, withheld_path,
 };
-use ferrofed_testkit::containers::{
-    self, EHRBASE, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
-};
+use ferrofed_testkit::containers::images::EHRBASE;
+use ferrofed_testkit::containers::{self, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode};
 use ferrofed_testkit::node_profile;
 use ferrofed_testkit::pix::PixManager;
 use ferrofed_testkit::seed::{

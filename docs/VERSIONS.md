@@ -448,15 +448,15 @@ it.
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM`, `docker/viewer/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.0@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Reference implementation build image | `maven:3.10.0-eclipse-temurin-21@sha256:9b4877723dadf350b452dd97d9a6401e7b56f98fa9dfe420c32ad909989c7e4c` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.0@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | nginx reverse proxy image | `nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94` | read from this row by `scripts/checks/production-guide.sh`, which runs `deploy/nginx/ferrofed.conf` in it |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
@@ -464,7 +464,7 @@ product version below as its tag default, and the guard holds the two equal.
 
 The end-to-end lane starts the same two node images through the testkit
 harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
-`PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
+`PinnedImage` constant in `tools/ferrofed-testkit/src/containers/images.rs`, and the
 guard holds every constant equal to its row here, so the quickstart and the
 test suite always run the same nodes. The weekly
 `scripts/checks/pin-freshness.sh` reports a newer stable tag of any
@@ -507,7 +507,10 @@ Quay pages its tag list, and the freshness read follows every page.
 The differential run (#94) builds the Federation Tier reference
 implementation from the vendored source at its pinned commit, with the Maven
 manifest fetched from that commit and held to the sha256 its `PROVENANCE.md`
-records, in the build image and on the runtime image above. The testkit's
+records, in the build image and on the runtime image above. The build image
+is Maven 3.10.0 on Temurin 21, the newest `-eclipse-temurin-21` tag,
+resolved on 2026-10-06 from Docker Hub by the digest of its image index;
+the reference implementation builds in it. The testkit's
 `REFERENCE_COMMIT` and `POM_SHA256` constants
 (`tools/ferrofed-testkit/src/reference.rs`) repeat the reference
 implementation row and the provenance, and the guard holds them equal.
@@ -586,7 +589,7 @@ same way from the Prometheus release tarball of its version.
 | `kubeconform schema version` | 1.34.0 | `.github/workflows/ci.yml` |
 | `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
-| `promtool` | 3.13.4 | `.github/workflows/ci.yml` |
+| `promtool` | 3.15.0 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
