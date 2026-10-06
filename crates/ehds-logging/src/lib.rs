@@ -41,7 +41,7 @@
 //!
 //! let templates = BTreeMap::from([(
 //!     "Example Lab Report.v1".to_owned(),
-//!     Declared::Codes(vec!["medical-test-result".to_owned()]),
+//!     Declared::Codes(vec!["Laboratory-Reports".to_owned()]),
 //! )]);
 //! let map = CategoryMap::declare(&[], &templates, &BTreeMap::new())?;
 //! let read = RootObject {

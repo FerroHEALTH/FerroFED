@@ -51,7 +51,7 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.44" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.31" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.22" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.11" }
+ehds-logging = { path = "crates/ehds-logging", version = "0.0.12" }
 eehrxf = { path = "crates/eehrxf", version = "0.0.7" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }

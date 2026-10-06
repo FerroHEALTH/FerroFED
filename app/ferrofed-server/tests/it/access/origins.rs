@@ -23,8 +23,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{
-    DISCHARGE, LAB_REPORT, TestResult, accesses, composition, gateway, gateway_with, named,
-    node_with_rows,
+    DISCHARGE, DISCHARGE_CATEGORY, LAB_CATEGORY, LAB_REPORT, TestResult, accesses, composition,
+    gateway, gateway_with, named, node_with_rows,
 };
 use crate::facade::{EHR_B, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::SETTLE;
@@ -212,7 +212,7 @@ async fn a_capped_member_is_no_origin_of_the_answer() -> TestResult {
         "Annex II 3.2(e): member A never sent data to the capped query"
     );
     assert_eq!(
-        vec!["discharge-report"],
+        vec![DISCHARGE_CATEGORY],
         origin_details(record, "node-b-pub", "ehds-category")
     );
     let ehrs: Vec<&str> = named(record, "ehr")
@@ -259,16 +259,16 @@ async fn each_origin_of_a_merged_answer_carries_the_categories_of_its_own_rows()
         return Err(format!("one record, got {records:?}").into());
     };
     assert_eq!(
-        vec!["medical-test-result"],
+        vec![LAB_CATEGORY],
         origin_details(record, "node-a-pub", "ehds-category"),
         "Annex II 3.2(c), (e): node A delivered lab reports"
     );
     assert_eq!(
-        vec!["medical-test-result:returned"],
+        vec![format!("{LAB_CATEGORY}:returned")],
         origin_details(record, "node-a-pub", "ehds-category-basis")
     );
     assert_eq!(
-        vec!["discharge-report"],
+        vec![DISCHARGE_CATEGORY],
         origin_details(record, "node-b-pub", "ehds-category"),
         "node B delivered discharge reports"
     );

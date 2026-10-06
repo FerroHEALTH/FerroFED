@@ -101,15 +101,18 @@ all six priority categories of Art 14(1):
 
 | Art 14(1) | Category | Code in the access record |
 |---|---|---|
-| (a) | patient summaries | `patient-summary` |
-| (b) | electronic prescriptions | `electronic-prescription` |
-| (c) | electronic dispensations | `electronic-dispensation` |
-| (d) | medical imaging studies and related imaging reports | `medical-imaging` |
-| (e) | medical test results, including laboratory and other diagnostic results and related reports | `medical-test-result` |
-| (f) | discharge reports | `discharge-report` |
+| (a) | patient summaries | `Patient-Summaries` |
+| (b) | electronic prescriptions | `Electronic-Prescriptions` |
+| (c) | electronic dispensations | `Electronic-Dispensations` |
+| (d) | medical imaging studies and related imaging reports | `Medical-Imaging` |
+| (e) | medical test results, including laboratory and other diagnostic results and related reports | `Laboratory-Reports` |
+| (f) | discharge reports | `Discharge-Reports` |
 
-The categories a deployment declares under national law are recorded as
-well ([Categories](../operate/audit.md#categories)).
+The codes are those of HL7 Europe's `EEHRxFDocumentPriorityCategoryCS`
+(`hl7.fhir.eu.health-data-api` 1.0.0-ballot), and the record writes each
+with that system. The categories a deployment declares under national law
+are recorded as well, each in the system its Member State defines
+([Categories](../operate/audit.md#categories)).
 
 ## (e) Standards, formats and specifications
 

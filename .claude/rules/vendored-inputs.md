@@ -161,6 +161,16 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/ihe-pharm-mpd/`: `ihe.pharm.mpd.r4` 1.0.0-comment-2, the
     version the HL7 Europe Base and Core, Patient Summary and Medication
     Prescription and Dispense guides depend on (CC-BY-SA-4.0).
+- The packages the access record's categories are read against (#824),
+  through the same script:
+  - `docs/specs/eu-hl7-health-data-api/`: `hl7.fhir.eu.health-data-api`
+    1.0.0-ballot, whose `EEHRxFDocumentPriorityCategoryCS` codes the Art
+    14(1) categories `crates/ehds-logging` writes (CC0-1.0).
+  - `docs/specs/eu-hl7-imaging/`: `hl7.fhir.eu.imaging` 1.0.0-ballot
+    (CC0-1.0).
+  - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 0.1.0-ballot (CC0-1.0).
+  - `docs/specs/ehdsi-mvc/`: `myhealth.eu.fhir.mvc-package` 9.1.0, the
+    MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
 - `docs/specs/openehr-ckm-ips/`: the openEHR International Patient Summary
   template of the openEHR international Clinical Knowledge Manager (CKM cid
   `1013.26.376`, asset version 1): its source (OET), the operational template

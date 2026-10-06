@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::response::Response;
-use ehds_logging::classify::{Basis, Evidence, RootObject};
+use ehds_logging::classify::{Basis, Evidence, RootObject, Unreadable};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
@@ -240,13 +240,13 @@ fn written(operation: &str, headers: &HeaderMap, body: &[u8]) -> Evidence {
         return Evidence::no_category();
     }
     if !matches!(operation, "composition_create" | "composition_update") {
-        return Evidence::unreadable("operation-not-read");
+        return Evidence::unreadable(Unreadable::Operation);
     }
     if !is_json(headers) {
-        return Evidence::unreadable("format-not-read");
+        return Evidence::unreadable(Unreadable::Format);
     }
     composition(body).map_or_else(
-        || Evidence::unreadable("body-not-read"),
+        || Evidence::unreadable(Unreadable::Body),
         |object| Evidence::reached(Basis::Written, vec![object]),
     )
 }
@@ -262,13 +262,13 @@ async fn read(operation: &str, response: Response) -> Option<(Response, Evidence
         "versioned_composition_version_get_by_id" | "versioned_composition_version_get_at_time"
     );
     if !(operation == "composition_get" || versioned) {
-        return Some((response, Evidence::unreadable("operation-not-read")));
+        return Some((response, Evidence::unreadable(Unreadable::Operation)));
     }
     if !response.status().is_success() {
-        return Some((response, Evidence::unreadable("no-object-returned")));
+        return Some((response, Evidence::unreadable(Unreadable::NoObject)));
     }
     if !is_json(response.headers()) {
-        return Some((response, Evidence::unreadable("format-not-read")));
+        return Some((response, Evidence::unreadable(Unreadable::Format)));
     }
     let (parts, body) = response.into_parts();
     // NOTE: no specification governs this: our own design; a routed answer's body is the
@@ -280,7 +280,7 @@ async fn read(operation: &str, response: Response) -> Option<(Response, Evidence
         composition(&bytes)
     };
     let evidence = object.map_or_else(
-        || Evidence::unreadable("body-not-read"),
+        || Evidence::unreadable(Unreadable::Body),
         |object| Evidence::reached(Basis::Returned, vec![object]),
     );
     Some((Response::from_parts(parts, Body::from(bytes)), evidence))

@@ -67,20 +67,28 @@ const REPORT: &str = "openEHR-EHR-COMPOSITION.report.v1";
 /// The archetype the test map gives medical test results.
 const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
 
+/// Art 14(1)(e) as a record writes it: the code HL7 Europe's
+/// `EEHRxFDocumentPriorityCategoryCS` gives it, in that system.
+const LAB_CATEGORY: &str = "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs|Laboratory-Reports";
+
+/// Art 14(1)(f) as a record writes it.
+const DISCHARGE_CATEGORY: &str = "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs|Discharge-Reports";
+
 /// The `[access_log]` tables of the test map, with the retention
-/// `retention`.
+/// `retention`: the templates name their categories by the bare code, the
+/// archetype by system and code.
 fn map_toml(retention: &str) -> String {
     format!(
-        "\n[access_log.templates]\n\"{LAB_REPORT}\" = [\"medical-test-result\"]\n\
-         \"{DISCHARGE}\" = [\"discharge-report\"]\n\"{ADMIN}\" = \"none\"\n\n\
-         [access_log.archetypes]\n\"{LAB_ARCHETYPE}\" = [\"medical-test-result\"]\n{retention}"
+        "\n[access_log.templates]\n\"{LAB_REPORT}\" = [\"Laboratory-Reports\"]\n\
+         \"{DISCHARGE}\" = [\"Discharge-Reports\"]\n\"{ADMIN}\" = \"none\"\n\n\
+         [access_log.archetypes]\n\"{LAB_ARCHETYPE}\" = [\"{LAB_CATEGORY}\"]\n{retention}"
     )
 }
 
 /// The retention of the test gateway: four years for every record, twenty
 /// for a discharge report, twelve for what node B sent.
 const RETENTION: &str = "\n[access_log.retention]\nyears = 4\n\n\
-     [access_log.retention.categories]\n\"discharge-report\" = 20\n\n\
+     [access_log.retention.categories]\n\"Discharge-Reports\" = 20\n\n\
      [access_log.retention.origins]\n\"node-b-pub\" = 12\n";
 
 /// A development gateway over node A at `a` and node B at `b`, the patient

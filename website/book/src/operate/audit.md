@@ -248,10 +248,39 @@ beside `TREAT` (ITI TF-2 3.71.4.2.2.1.1).
 ### Categories
 
 A record names the categories of the data accessed: the six priority
-categories of Art 14(1), by the codes `patient-summary`,
-`electronic-prescription`, `electronic-dispensation`, `medical-imaging`,
-`medical-test-result` and `discharge-report`, and the national categories
-you declare. Neither AQL nor ITS-REST carries a category, so the gateway
+categories of Art 14(1) and the national categories you declare. Each is a
+coded value, a system and a code in it, as a FHIR `Coding` is. The six
+priority categories carry the codes of HL7 Europe's
+`EEHRxFDocumentPriorityCategoryCS`, in the system
+`http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs`
+at version `1.0.0-ballot` (the EU Health Data API, `hl7.fhir.eu.health-data-api`
+1.0.0-ballot), whose displays are the Art 14(1) terms. That code system is
+the only one any EU artefact publishes for the categories, and the HL7
+Europe Imaging Report guide requires its code on every imaging report. No
+adopted act fixes how a log writes a category, so FerroFED writes these
+codes until the common specifications of Art 36(1) say otherwise.
+
+| Art 14(1) | Category | Code |
+|---|---|---|
+| (a) | patient summaries | `Patient-Summaries` |
+| (b) | electronic prescriptions | `Electronic-Prescriptions` |
+| (c) | electronic dispensations | `Electronic-Dispensations` |
+| (d) | medical imaging studies and related imaging reports | `Medical-Imaging` |
+| (e) | medical test results, including laboratory and other diagnostic results and related reports | `Laboratory-Reports` |
+| (f) | discharge reports | `Discharge-Reports` |
+
+The codes are case-sensitive, as the code system declares. In the map and
+the retention table you name a priority category by its bare code, or by
+`<system>|<code>`. A national category (Art 14(1) third subparagraph) is
+the code your Member State's code system defines, in that system: you
+declare it as `<system>|<code>` in `national_categories`, where the system
+is the absolute URI of the national code system (or a URI you control,
+until your Member State publishes one), and you name it the same way
+everywhere else. Its code is held to the FHIR `code` rules only: no
+leading, trailing or repeated whitespace. A record writes every category
+as `<system>|<code>`, the FHIR search token form.
+
+Neither AQL nor ITS-REST carries a category, so the gateway
 reads the openEHR model ids of what an access reached and looks them up in
 the category map you declare in `[access_log]`. FerroFED ships no map. No
 specification governs the map: it is FerroFED's own design.
@@ -276,16 +305,25 @@ specification governs the map: it is FerroFED's own design.
   removes one. An `EHR`, an `EHR_STATUS`, a `DIRECTORY`, tags and revision
   history hold no category.
 - Whatever the map cannot classify exactly is recorded
-  `ehds-unclassified`, with the reason (`unmapped`, `unbound` for a query
-  reading a class bound to no id, `named-nothing`, `format-not-read` for a
-  write in a simplified format, and so on) and the ids as evidence. A key
+  `ehds-unclassified`, with the reason and the ids as evidence. The reasons
+  are a closed set: `unmapped` (an id the map holds no key for), `unbound`
+  (a query reading a class bound to no id), `named-nothing` (no root
+  object and no id), `operation-not-read` (an operation whose data the
+  gateway does not read), `format-not-read` (a body in a format it does
+  not read, such as a simplified format), `body-not-read` (a body that
+  holds no root object it can name) and `no-object-returned`. No
+  category and unclassified are states of the record, never categories:
+  neither is ever written as an `ehds-category`. A key
   matches only exactly: an id that differs by case, a space or a
   specialisation is unmapped. An unclassified access is answered as any
   other; it is never refused for it.
 
-The `ehds-categories` entity's `detail` entries are `ehds-category`,
-`ehds-category-basis` (`<category>:returned`, `written` or `queried`),
-`ehds-no-category`, `ehds-unclassified`, `template-id`, `archetype-id`,
+The `ehds-categories` entity's `detail` entries are `ehds-category`
+(`<system>|<code>`), `ehds-category-basis` (`<system>|<code>:returned`,
+`written`, `queried` or `construction`, the basis after the last `:`),
+`ehds-category-version` (`<system>|<version>`, once per code system whose
+version is known), `ehds-no-category`, `ehds-unclassified`, `template-id`,
+`archetype-id`,
 `version-uid`, `unmapped-id`, `category-map-digest` (the SHA-256 of the
 map's canonical text, so a reader knows which map classified the record),
 `delivered` and `stored-query`. Each origin that contributed what the
@@ -325,7 +363,7 @@ The `ehds-categories` entity carries three `detail` entries:
 |---|---|
 | `ehds-retention-years` | the period, in years |
 | `ehds-retention-ends` | the first date, in UTC, on which the record may be deleted: the date of access plus the period, plus one day, so an access on 29 February keeps its full period |
-| `ehds-retention-ground` | what called for the period: `default`, `unclassified`, `category:<code>` or `origin:<endpoint>` |
+| `ehds-retention-ground` | what called for the period: `default`, `unclassified`, `category:<system>\|<code>` or `origin:<endpoint>` |
 
 Configure your repository to keep each record at least until its
 `ehds-retention-ends`. A repository that cannot read a record's own
@@ -441,24 +479,25 @@ and origin is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797
 
 ```toml
 [access_log]
-# national categories your national law adds (Art 14(1) third subparagraph)
-national_categories = ["nl-example"]
+# national categories your national law adds (Art 14(1) third subparagraph),
+# each <system>|<code>
+national_categories = ["https://example.org/fhir/CodeSystem/national-category|nl-example"]
 # the namespaces the patient behind an ehr_id is named in (Art 9(1))
 patient_namespaces = ["urn:oid:2.999.1"]
 
 [access_log.templates]
-"Example Lab Report.v1" = ["medical-test-result"]
-"Example Discharge.v1" = ["discharge-report"]
+"Example Lab Report.v1" = ["Laboratory-Reports"]
+"Example Discharge.v1" = ["Discharge-Reports"]
 "Example Admin Note.v1" = "none"
 
 [access_log.archetypes]
-"openEHR-EHR-OBSERVATION.laboratory_test_result.v1" = ["medical-test-result"]
+"openEHR-EHR-OBSERVATION.laboratory_test_result.v1" = ["Laboratory-Reports"]
 
 [access_log.retention]
 years = 5                      # every record, at least 3 (Art 9(2)); 3 when unset
 
 [access_log.retention.categories]
-"discharge-report" = 20        # an Art 14(1) code, or a national one declared above
+"Discharge-Reports" = 20       # an Art 14(1) code, or a national <system>|<code> declared above
 
 [access_log.retention.origins]
 "node-a" = 15                  # an endpoint id of the registry
@@ -477,10 +516,17 @@ names no patient, and its record says `not-configured`.
 
 Each key is a template id or an archetype id, written exactly as the
 `archetype_details` of your compositions write it. Each value is a list of
-category codes, at least one, or `"none"`, your statement that the data
-under the key belong to no category. A code that names no category, an
-empty list, and a national code that repeats a priority category's code
-are refused when the configuration loads. A change to `[access_log]` is
+categories, at least one, or `"none"`, your statement that the data under
+the key belong to no category. A category is a priority code
+(`Laboratory-Reports`), the same as `<system>|<code>`, or a declared
+national category as `<system>|<code>`. A category that names no
+category, such as a code in another letter case or a national code without
+its system, an empty list, a national category without a system, with a
+system that is no absolute URI, in the priority categories' system, or
+with a code that is no FHIR `code`, are refused when the configuration
+loads. The lower-case spellings of the development builds before the
+codes were settled (`patient-summary`, `medical-test-result` and the
+rest) are refused; the upgrade notes give the new code of each. A change to `[access_log]` is
 applied by a reload. Without a map every access is recorded unclassified,
 so author one from the templates your members hold
 (`GET {base}/v1/definition/template/adl1.4` at each member).

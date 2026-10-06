@@ -14,9 +14,9 @@ use axum::body::Body;
 use http::{Request, StatusCode, header};
 
 use super::{
-    ADMIN, DISCHARGE, LAB_ARCHETYPE, LAB_REPORT, TestResult, UNMAPPED, accesses, composition,
-    details, gateway, gateway_and_state, gateway_with, named, node_with_rows, profile,
-    recorded_the_query,
+    ADMIN, DISCHARGE, DISCHARGE_CATEGORY, LAB_ARCHETYPE, LAB_CATEGORY, LAB_REPORT, TestResult,
+    UNMAPPED, accesses, composition, details, gateway, gateway_and_state, gateway_with, named,
+    node_with_rows, profile, recorded_the_query,
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
@@ -79,7 +79,7 @@ async fn a_patient_query_names_the_caller_the_patient_the_origins_and_every_cate
     let mut categories = details(record, "ehds-categories", "ehds-category");
     categories.sort();
     assert_eq!(
-        vec!["discharge-report", "medical-test-result"],
+        vec![DISCHARGE_CATEGORY, LAB_CATEGORY],
         categories,
         "Annex II 3.2(c): a query spanning categories records each"
     );
@@ -119,11 +119,11 @@ async fn a_query_with_no_row_is_recorded_with_what_it_queried() -> TestResult {
         return Err(format!("one record of a query with no row, got {records:?}").into());
     };
     assert_eq!(
-        vec!["medical-test-result"],
+        vec![LAB_CATEGORY],
         details(record, "ehds-categories", "ehds-category")
     );
     assert_eq!(
-        vec!["medical-test-result:queried"],
+        vec![format!("{LAB_CATEGORY}:queried")],
         details(record, "ehds-categories", "ehds-category-basis")
     );
     assert_eq!(vec!["0"], details(record, "ehds-categories", "delivered"));
@@ -175,7 +175,7 @@ async fn a_leaf_read_through_an_archetype_predicate_takes_that_archetypes_catego
         return Err(format!("one record, got {records:?}").into());
     };
     assert_eq!(
-        vec!["medical-test-result"],
+        vec![LAB_CATEGORY],
         details(record, "ehds-categories", "ehds-category"),
         "Annex II 3.2(c): the value is lab data, read through its archetype"
     );
@@ -241,7 +241,7 @@ async fn a_stored_query_execution_is_recorded_under_its_name() -> TestResult {
         details(record, "ehds-categories", "stored-query")
     );
     assert_eq!(
-        vec!["medical-test-result"],
+        vec![LAB_CATEGORY],
         details(record, "ehds-categories", "ehds-category")
     );
     Ok(())

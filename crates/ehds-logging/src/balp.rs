@@ -46,6 +46,7 @@
 //! whose `detail` entries name the purposes that marked it, so a reader of
 //! the record need not know which codes the deployment maps.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use ihe_iti::balp::{
@@ -64,10 +65,14 @@ use crate::sink::{AccessSink, SinkError};
 
 /// The names of the `detail` entries a record's added entities carry.
 pub mod detail {
-    /// A category code, once per category.
+    /// A category as `<system>|<code>`, once per category.
     pub const CATEGORY: &str = "ehds-category";
-    /// `<category>:<basis>`, once per basis of each category.
+    /// `<system>|<code>:<basis>`, once per basis of each category, the basis
+    /// after the last `:`.
     pub const BASIS: &str = "ehds-category-basis";
+    /// `<system>|<version>`, once per code system a category is written in
+    /// whose version is known.
+    pub const CATEGORY_VERSION: &str = "ehds-category-version";
     /// `true` when the access reached data of no category.
     pub const NO_CATEGORY: &str = "ehds-no-category";
     /// Why the access is unclassified.
@@ -133,7 +138,7 @@ pub mod detail {
     /// The first UTC date the record may be deleted on, `YYYY-MM-DD`.
     pub const RETENTION_ENDS: &str = "ehds-retention-ends";
     /// What called for the period: `default`, `unclassified`,
-    /// `category:<code>` or `origin:<endpoint>`.
+    /// `category:<system>|<code>` or `origin:<endpoint>`.
     pub const RETENTION_GROUND: &str = "ehds-retention-ground";
     /// That the access is an emergency access (Art 11(5)): `true`.
     pub const EMERGENCY_ACCESS: &str = "ehds-emergency-access";
@@ -523,15 +528,24 @@ fn other(value: Option<String>, name: &str, details: Vec<Detail>) -> Entity {
 /// The `detail` entries of `classified`.
 fn categories(classified: &Classification) -> Vec<Detail> {
     let mut details = Vec::new();
+    let mut versions = BTreeSet::new();
     for (category, bases) in classified.categories() {
-        details.push(Detail::new(detail::CATEGORY, category.code()));
+        details.push(Detail::new(detail::CATEGORY, category.token()));
         for basis in bases {
             details.push(Detail::new(
                 detail::BASIS,
-                format!("{}:{}", category.code(), basis.code()),
+                format!("{}:{}", category.token(), basis.code()),
             ));
         }
+        if let Some(version) = category.version() {
+            versions.insert(format!("{}|{version}", category.system()));
+        }
     }
+    details.extend(
+        versions
+            .into_iter()
+            .map(|version| Detail::new(detail::CATEGORY_VERSION, version)),
+    );
     if classified.is_no_category() {
         details.push(Detail::new(detail::NO_CATEGORY, "true"));
     }

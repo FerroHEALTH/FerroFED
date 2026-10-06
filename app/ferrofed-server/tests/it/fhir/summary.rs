@@ -147,11 +147,11 @@ async fn a_summary_is_recorded_once_with_the_patient_summary_category() -> TestR
     );
     let record = records.first().ok_or("a record")?;
     assert!(
-        record.contains("patient-summary"),
+        record.contains("eehrxf-document-priority-category-cs|Patient-Summaries"),
         "Art 14(1)(a): the category of a summary: {record}"
     );
     assert!(
-        record.contains("patient-summary:construction"),
+        record.contains("eehrxf-document-priority-category-cs|Patient-Summaries:construction"),
         "the request serves the category by construction: {record}"
     );
     for endpoint in ["node-a-pub", "node-b-pub"] {

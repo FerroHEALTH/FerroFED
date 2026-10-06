@@ -74,13 +74,13 @@ pub enum Ground {
 
 impl Ground {
     /// The ground as a record writes it: `default`, `unclassified`,
-    /// `category:<code>` or `origin:<endpoint>`.
+    /// `category:<system>|<code>` or `origin:<endpoint>`.
     #[must_use]
     pub fn code(&self) -> String {
         match self {
             Self::Default => "default".to_owned(),
             Self::Unclassified => "unclassified".to_owned(),
-            Self::Category(category) => format!("category:{}", category.code()),
+            Self::Category(category) => format!("category:{}", category.token()),
             Self::Origin(endpoint) => format!("origin:{endpoint}"),
         }
     }
@@ -162,9 +162,8 @@ impl Default for RetentionPolicy {
 
 impl RetentionPolicy {
     /// The policy that keeps every record `years`, the data of each category
-    /// code of `categories` and from each endpoint of `origins` as long as
-    /// they say, the codes read against the priority categories and the
-    /// national ones `map` declares.
+    /// of `categories` and from each endpoint of `origins` as long as they
+    /// say, each category read as [`CategoryMap::category`] reads it.
     ///
     /// # Errors
     ///

@@ -6,21 +6,21 @@
 //!
 //! ```toml
 //! [access_log]
-//! national_categories = ["nl-example"]
+//! national_categories = ["https://example.org/fhir/CodeSystem/national-category|nl-example"]
 //! patient_namespaces = ["urn:oid:2.999.1"]
 //!
 //! [access_log.templates]
-//! "Example Lab Report.v1" = ["medical-test-result"]
+//! "Example Lab Report.v1" = ["Laboratory-Reports"]
 //! "Example Admin Note.v1" = "none"
 //!
 //! [access_log.archetypes]
-//! "openEHR-EHR-OBSERVATION.laboratory_test_result.v1" = ["medical-test-result"]
+//! "openEHR-EHR-OBSERVATION.laboratory_test_result.v1" = ["Laboratory-Reports"]
 //!
 //! [access_log.retention]
 //! years = 5
 //!
 //! [access_log.retention.categories]
-//! "medical-test-result" = 20
+//! "Laboratory-Reports" = 20
 //!
 //! [access_log.retention.origins]
 //! "node-a" = 15
@@ -31,9 +31,10 @@
 //! ```
 //!
 //! Each template id and archetype id maps to the Art 14(1) categories the
-//! data under it belong to (Regulation (EU) 2025/327), by the codes
-//! `ehds_logging` names, or to a national category the deployment declares,
-//! or to `none`. FerroFED ships no map, so every access is unclassified
+//! data under it belong to (Regulation (EU) 2025/327), by the codes of HL7
+//! Europe's `EEHRxFDocumentPriorityCategoryCS` that `ehds_logging` writes,
+//! bare or as `<system>|<code>`, or to a national category the deployment
+//! declares as `<system>|<code>`, or to `none`. FerroFED ships no map, so every access is unclassified
 //! until the operator writes one. The map's digest, a SHA-256 of its
 //! canonical text, is named in every record classified under it. No
 //! specification governs the table: our own design.
@@ -70,8 +71,8 @@ use crate::config::error::Error;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AccessLog {
-    /// The codes of the categories national law adds (Art 14(1) third
-    /// subparagraph).
+    /// The categories national law adds (Art 14(1) third subparagraph),
+    /// each `<system>|<code>`.
     pub national_categories: Vec<String>,
     /// The categories of the data under each template id.
     pub templates: BTreeMap<String, Declared>,
