@@ -90,7 +90,7 @@ flowchart LR
 | R | a caller denies a request | P2 | the gateway's own request id travels to every node with the signed caller token, and each node audits who asked (N24); the IHE audit records name the caller | [Verifying it at the node](../operate/authentication.md#verifying-it-at-the-node); `app/ferrofed-server/tests/it/conveyance.rs` |
 | I | the patient identifier in a response, an error or a refusal | P1, P2 | errors name the position of the offending part, never the value; a node's error quoted in `meta.federation` has each consumed value masked | `app/ferrofed-server/tests/it/errors.rs`, `facade/query.rs`; `app/ferrofed-engine/tests/it/dispatch.rs` |
 | D | a flood of requests, a large body, a slow request | P1, P2 | a concurrency limit refused before the caller is verified; a per-caller rate; a body limit (`413`) and a request timeout (`408`) | `server.max_concurrent_requests`, `[server.caller_rate]`, `server.body_limit_bytes`, `server.request_timeout_ms`; `app/ferrofed-server/tests/it/overload.rs` |
-| I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP: keep that hop inside one host or pod, or protect it with a mesh | **open:** native TLS on the listener is [#632](https://github.com/FerroHEALTH/FerroFED/issues/632) |
+| I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP by default: keep that hop inside one host or pod, protect it with a mesh, or set `[server.tls]` with a `client_ca_file` that admits the proxy alone | [TLS on the listeners](../operate/configuration.md#tls-on-the-listeners); `app/ferrofed-server/tests/it/listener_tls/` |
 
 The health family, `GET {base}/` and `GET {base}/.well-known/jwks.json` are
 open by design. `GET {base}/health/dependencies` names every member
@@ -172,11 +172,11 @@ front of it.
 The gateway cannot close these on its own. Each needs a decision or a
 control from you, or an issue that is open:
 
-1. **The proxy-to-gateway hop is cleartext.** Bearer tokens and patient
-   identifiers cross it. Keep it on one host or in one pod, or put a mesh
-   with mutual TLS on it, until
-   [#632](https://github.com/FerroHEALTH/FerroFED/issues/632) adds TLS to
-   the listener.
+1. **The proxy-to-gateway hop is cleartext unless you set `[server.tls]`.**
+   Bearer tokens and patient identifiers cross it. Keep it on one host or in
+   one pod, put a mesh with mutual TLS on it, or serve TLS on the listener
+   with a client CA that admits the proxy alone
+   ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners)).
 2. **The admin listener has no authentication.** Anything that can reach it
    from the loopback interface can run a write action
    ([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)).

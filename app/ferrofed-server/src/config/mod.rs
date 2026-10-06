@@ -27,6 +27,7 @@ pub mod limits;
 mod load;
 pub(crate) mod resolve;
 pub(crate) mod secrets;
+pub mod server;
 #[cfg(feature = "binding-ihe")]
 pub mod service_grant;
 pub mod settings;
@@ -66,7 +67,7 @@ pub struct Config {
     /// profile that admits the static cross-reference of `[dev]`.
     pub profile: Profile,
     /// The HTTP surface.
-    pub server: Server,
+    pub server: server::Server,
     /// The console.
     pub telemetry: Telemetry,
     /// The federation's membership.
@@ -108,7 +109,7 @@ pub struct Config {
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
     /// push, both off by default.
-    pub metrics: Metrics,
+    pub metrics: server::Metrics,
     /// The gateway's signing keys (`[signing]`), which sign the client
     /// assertion of every OAuth 2.0 grant to a node and which the gateway
     /// publishes as a JWK Set (§13.1, N25).
@@ -125,7 +126,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             profile: Profile::Production,
-            server: Server::default(),
+            server: server::Server::default(),
             telemetry: Telemetry::default(),
             registry: Registry::default(),
             federation: Federation::default(),
@@ -142,7 +143,7 @@ impl Default for Config {
             #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
-            metrics: Metrics::default(),
+            metrics: server::Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
             #[cfg(feature = "binding-ihe")]
@@ -413,59 +414,6 @@ impl Default for Federation {
     }
 }
 
-/// The HTTP surface.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Server {
-    /// The socket address to bind.
-    pub listen: String,
-    /// The path of the deployment's base URL, `{base}`, which every route
-    /// sits under: `/`, the default, or a path such as `/fed/openehr` with no
-    /// trailing `/`, query or fragment (§4.1, N28). The specification
-    /// reserves no prefix.
-    pub base_path: String,
-    /// How long one request may take before the server answers `408`. With a
-    /// registry configured, it must exceed `federation.overall_timeout_ms`
-    /// by more than [`COMBINING_MARGIN_MS`].
-    pub request_timeout_ms: u64,
-    /// How long the server keeps accepting connections after the stop signal,
-    /// with readiness already `503`, so a load balancer stops routing to the
-    /// process before its listener closes. `0`, the default, closes it at once.
-    pub drain_delay_ms: u64,
-    /// How long the drain may take once the listener has closed. Unset, it is
-    /// `request_timeout_ms`; set, it must be at least that, so the drain
-    /// outlasts every request accepted before the listener closed.
-    pub shutdown_timeout_ms: Option<u64>,
-    /// The largest request body the server reads before answering `413`.
-    pub body_limit_bytes: usize,
-    /// The most requests the server serves at once. One more is answered `503`
-    /// with `Retry-After` and reaches nothing behind the listener; the health
-    /// family is never refused. Zero is refused.
-    pub max_concurrent_requests: u32,
-    /// The seconds a `503` past `max_concurrent_requests` asks the client to
-    /// wait in `Retry-After`; zero is refused.
-    pub overload_retry_after_s: u32,
-    /// The per-caller rate limit (`[server.caller_rate]`), keyed on the caller
-    /// client authentication verified; unset, no caller is rate limited.
-    pub caller_rate: Option<limits::CallerRate>,
-}
-
-impl Default for Server {
-    fn default() -> Self {
-        Self {
-            listen: String::from("127.0.0.1:8080"),
-            base_path: String::from("/"),
-            request_timeout_ms: 30_000,
-            drain_delay_ms: 0,
-            shutdown_timeout_ms: None,
-            body_limit_bytes: 1024 * 1024,
-            max_concurrent_requests: 512,
-            overload_retry_after_s: 1,
-            caller_rate: None,
-        }
-    }
-}
-
 /// The console and the trace export.
 ///
 /// The export is off by default. No specification governs telemetry: our own
@@ -495,25 +443,6 @@ impl Default for Telemetry {
             trace_sample_ratio: 1.0,
         }
     }
-}
-
-/// The metrics surface: one meter provider read by the Prometheus text
-/// exposition on its own listener and, when set, pushed over OTLP.
-///
-/// Both are off by default. No specification governs metrics: our own design.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Metrics {
-    /// The socket address the admin listener binds to serve `GET /metrics`.
-    /// Unset, no listener runs; it never shares `server.listen`.
-    pub listen: Option<String>,
-    /// Whether `listen` may name an address other than a loopback one. A
-    /// remote address is refused unless this is set, because the listener
-    /// has no authentication of its own.
-    pub allow_remote: bool,
-    /// The `http://` URL of an OTLP collector the metrics are pushed to over
-    /// gRPC. Unset, nothing is pushed.
-    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 /// The credentials one endpoint expects.

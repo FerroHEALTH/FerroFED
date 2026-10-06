@@ -245,9 +245,10 @@ pub(crate) fn settings() -> ServerSettings {
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),
-        overload: ferrofed_server::config::Server::default()
+        overload: ferrofed_server::config::server::Server::default()
             .resolve_overload()
             .expect("the default limits should resolve"),
+        tls: None,
     }
 }
 

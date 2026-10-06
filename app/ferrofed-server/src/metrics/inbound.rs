@@ -46,9 +46,12 @@ pub const DURATION_BUCKETS: [f64; 15] = [
     0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 30.0,
 ];
 
-/// The scheme every request arrives over: the listener serves plain HTTP,
-/// and TLS ends in front of it.
-const SCHEME: &str = "http";
+/// The scheme of a listener that serves plain HTTP, TLS ending in front of
+/// it.
+const PLAIN: &str = "http";
+
+/// The scheme of a listener that serves TLS itself (`[server.tls]`).
+const TLS: &str = "https";
 
 /// The inbound request instruments of one meter provider.
 #[derive(Debug, Clone)]
@@ -56,6 +59,7 @@ pub struct Instruments {
     duration: Histogram<f64>,
     active: UpDownCounter<i64>,
     requests: Counter<u64>,
+    scheme: &'static str,
 }
 
 impl Instruments {
@@ -78,7 +82,16 @@ impl Instruments {
                 .u64_counter(REQUESTS)
                 .with_description("Requests the gateway served, by route template and status class")
                 .build(),
+            scheme: PLAIN,
         }
+    }
+
+    /// Returns these instruments for a listener that serves TLS itself when
+    /// `tls` is set, so `url.scheme` reads `https`.
+    #[must_use]
+    pub fn serving_tls(mut self, tls: bool) -> Self {
+        self.scheme = if tls { TLS } else { PLAIN };
+        self
     }
 
     /// Counts a request of `method` as active until the returned guard is
@@ -86,7 +99,7 @@ impl Instruments {
     pub fn started(&self, method: &Method) -> Active {
         let labels = vec![
             KeyValue::new("http.request.method", method_label(method)),
-            KeyValue::new("url.scheme", SCHEME),
+            KeyValue::new("url.scheme", self.scheme),
         ];
         self.active.add(1, &labels);
         Active {
@@ -101,7 +114,7 @@ impl Instruments {
         let method = method_label(method);
         let mut labels = vec![
             KeyValue::new("http.request.method", method),
-            KeyValue::new("url.scheme", SCHEME),
+            KeyValue::new("url.scheme", self.scheme),
             KeyValue::new("http.route", route.to_owned()),
             KeyValue::new("http.response.status_code", i64::from(status.as_u16())),
         ];
@@ -175,7 +188,16 @@ pub fn status_class(status: StatusCode) -> &'static str {
 mod tests {
     use http::{Method, StatusCode};
 
-    use super::{method_label, status_class};
+    use super::{Instruments, method_label, status_class};
+
+    #[test]
+    fn a_listener_that_serves_tls_reports_the_https_scheme() {
+        let meter = opentelemetry::global::meter("inbound-scheme");
+        let plain = Instruments::new(&meter);
+        assert_eq!("http", plain.scheme);
+        assert_eq!("https", plain.clone().serving_tls(true).scheme);
+        assert_eq!("http", plain.serving_tls(false).scheme);
+    }
 
     #[test]
     #[expect(

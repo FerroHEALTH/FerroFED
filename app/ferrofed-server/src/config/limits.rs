@@ -62,7 +62,7 @@ pub struct CallerRateSettings {
     pub burst: NonZeroU32,
 }
 
-impl crate::config::Server {
+impl crate::config::server::Server {
     /// Resolves the overload limits of `[server]`.
     ///
     /// # Errors

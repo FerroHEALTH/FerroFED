@@ -30,6 +30,7 @@ use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};
+use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
 
 /// The settings the run path holds, with every secret already read.
@@ -217,6 +218,9 @@ pub struct ServerSettings {
     /// How many requests the listener serves at once, and how many one
     /// verified caller may send.
     pub overload: Overload,
+    /// The TLS the listener serves, from `[server.tls]`; `None` serves plain
+    /// HTTP.
+    pub tls: Option<TlsFiles>,
 }
 
 /// The console and the trace export, resolved.
@@ -241,6 +245,9 @@ pub struct MetricsSettings {
     pub listen: Option<SocketAddr>,
     /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
+    /// plain HTTP.
+    pub tls: Option<TlsFiles>,
 }
 
 /// The authentication scheme a credentials section resolves to.
