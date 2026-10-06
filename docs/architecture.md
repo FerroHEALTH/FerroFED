@@ -2158,12 +2158,12 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `authorizer`, the FHIR-free request authorizer `nvi` takes and the engine implements (#730) | the clients each function needs, `oauth-server-metadata` under `nuts-auth` | anything in FerroFED |
 | `crates/oauth-server-metadata` | OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, the identical-issuer and same-origin endpoint checks, and the refusal of an answer that repeats a name; no feature | `serde`, `serde_json`, `url` | anything in FerroFED, any national crate |
 | `crates/ehds-logging` | the European logging software component of Regulation (EU) 2025/327 (decision A58): the Annex II 3.2 access record, the Art 14(1) categories, the map that classifies an access, the retention of each record by category and origin (A75), the sink; `balp` writes the record as an IHE BALP `AuditEvent` | `serde`, `jiff`, `secrecy`; `ihe-iti` (`balp`) under `balp` | `eehrxf`, `fhirconnect`, anything in FerroFED |
-| `crates/eehrxf` | the European interoperability software component (decisions A58, A60 to A62): the format-neutral dataset model read from the Xt-EHR *EHDS Logical Information Models* package, one feature per Art 14(1) category (`patient-summary`, `prescription`, `dispensation`, `imaging`, `laboratory`, `discharge`), `fhir-r4`, the FHIR R4 serialisation with no openEHR crate, and `openehr`, which turns on `fhir-r4` and runs FerroBRIDGE's FHIRconnect engine in process over a canonical-JSON composition and its OPT (#730); under `fhir-r4`, `receive` reads and checks a received document, and under `openehr` maps it into one composition that keeps the original (#801) | `serde`, `serde_json`, `flate2`, `tar`; `fhir-types` (`r4`, `resources`) under `fhir-r4`; `fhirconnect`, `openehr-mapping-core` and `openehr-rm` under `openehr` | `ehds-logging`, anything in FerroFED |
+| `crates/eehrxf` | the European interoperability software component (decisions A58, A60 to A62): the format-neutral dataset model read from the Xt-EHR *EHDS Logical Information Models* package, one feature per Art 14(1) category (`patient-summary`, `prescription`, `dispensation`, `imaging`, `laboratory`, `discharge`), `fhir-r4`, the FHIR R4 serialisation with no openEHR crate, whose `document` writes the patient summary as an HL7 Europe Patient Summary document `Bundle` under `patient-summary` (#809), and `openehr`, which turns on `fhir-r4` and runs FerroBRIDGE's FHIRconnect engine in process over a canonical-JSON composition and its OPT (#730); under `fhir-r4`, `receive` reads and checks a received document, and under `openehr` maps it into one composition that keeps the original (#801) | `serde`, `serde_json`, `flate2`, `tar`; `fhir-types` (`r4`, `resources`) under `fhir-r4`; `fhirconnect`, `openehr-mapping-core` and `openehr-rm` under `openehr` | `ehds-logging`, anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait, and the reports of the read-only operator surface (`operator`); a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6 and `PatientRef` (`role`), the adapters that plug `ihe-iti` (`ihe`, feature `ihe`) and `nl-generic-functions` (`nl`, feature `nl`) into the seams, the resolution bindings of a client session (`session`), the one HTTP client and TLS type of the identity services (`fhir`), and the development cross-reference (`dev`) | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
 | `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the calls to one node (`single_node`: forwarding on `Client::forward`, the admission check's EHR calls and the ask-all probe), the budgets, the completeness decision, follow-up routing on `creating_system_id`, the onward grants (`onward::grant`: client credentials, token exchange, FAPI 2.0 and, under feature `nl`, the Nuts grant) beside the token request, keys and sender constraints they share, and the signed caller token (`conveyance`) (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken`, `oauth-server-metadata` | any storage implementation (#40), the server |
-| `app/ferrofed-eehrxf` | the interoperability component's federation half (decision A59): the reserved namespace of the gateway's own stored queries (`reserved`), and the patient summary's section queries (`patient_summary`), one per crosswalk section openEHR content feeds, each an AQL syntax tree printed with `printer::to_aql` (decision A74, #776) | `eehrxf` (`patient-summary`), `ferrofed-registry` (the stored definition), `openehr-query`, `jiff` | `ehds-logging`, any storage implementation, the server |
-| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), the read-only operator surface under `{base}/operator/` behind an issuer's `operator_scope` (#276), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
+| `app/ferrofed-eehrxf` | the interoperability component's federation half (decision A59): the reserved namespace of the gateway's own stored queries (`reserved`), the patient summary's section queries (`patient_summary`), one per crosswalk section openEHR content feeds, each an AQL syntax tree printed with `printer::to_aql` (decision A74, #776), the patient summary document assembled from the members' answers with the deployment's FHIRconnect mappings (`summary`), and the requests, `CapabilityStatement` and `OperationOutcome` of the Annex II 2.1 FHIR face (`face`, #809) | `eehrxf` (`patient-summary`, `openehr`), `fhir-types` (`r4`, `resources`), `fhirconnect`, `ferrofed-registry` (the stored definition), `openehr-query`, `jiff` | `ehds-logging`, any storage implementation, the server |
+| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), the read-only operator surface under `{base}/operator/` behind an issuer's `operator_scope` (#276), the Annex II 2.1 FHIR face on its own `{fhir-base}` (`fhir`, `facade::summary`, #809), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
 | `app/ferrofed-viewer` (binary `ferrofed-viewer`) | the operator console (decision A55): the Leptos pages rendered on the server and hydrated in the browser, the OpenID Connect sign-in with its code exchange, ID Token check and server-side session, the operator views (#276), and the client of the gateway's public surface on `rest-client` | `openehr-federation` (the `OPTIONS {base}/` body), `openehr-its` (`rest-client`), `ferrofed-registry` (the `Secret` its configuration holds a credential in, and the operator reports), `jsonwebtoken`, `leptos`, `axum` | the engine, the identity crate, the server, any storage implementation |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
@@ -2215,7 +2215,6 @@ flowchart LR
     caller["caller"] --> server["app/ferrofed-server (composition root)"]
     server -- "document request" --> glue["app/ferrofed-eehrxf (federation half)"]
     glue --> eehrxf["crates/eehrxf (interoperability component)"]
-    glue -. "with the document (#689)" .-> engine["app/ferrofed-engine"]
     glue --> registry["app/ferrofed-registry"]
     eehrxf --> fhirconnect["fhirconnect (FerroBRIDGE)"]
     eehrxf --> fhir["fhir-types r4"]
@@ -2226,11 +2225,19 @@ flowchart LR
 
 `app/ferrofed-eehrxf` holds the patient summary's stored section queries
 (#776), which the server's stored-query registry holds read-only beside a
-deployment's own definitions; it links the registry's definition types and
-`openehr-query`, and gains its edge to the engine with the document it
-assembles (#689). The architecture test also fails when `eehrxf` reaches it
-or anything else in FerroFED, and when a crate other than the server links
-it.
+deployment's own definitions, and assembles the patient summary document
+from what the members answer to them (#809): it compiles the deployment's
+FHIRconnect mappings, holds each to the crosswalk, maps each composition and
+writes the document through `eehrxf`'s `document`, and reads the FHIR face's
+requests. It links the registry's definition types, `openehr-query`,
+`fhir-types` and `fhirconnect`, and no engine: the server's façade runs the
+section queries (`facade::summary`), resolving the patient once and planning
+every query over that resolution, and hands the rows to the glue. The face
+runs the section queries from the code that defines them, so it does not
+need `[stored_queries]` (no specification governs this: our own design; the
+text is the one the registry lists at its immutable version, N44). The
+architecture test also fails when `eehrxf` reaches it or anything else in
+FerroFED, and when a crate other than the server links it.
 
 **Reading the access log** (decision A75, #660). The gateway keeps no copy
 of an access record: each goes to the deployment's Audit Record Repository
@@ -2273,7 +2280,7 @@ flowchart TD
     server --> logging["ehds-logging (balp)"]
     logging -- balp --> iti
     server --> glue["app/ferrofed-eehrxf"]
-    glue --> eehrxf["eehrxf (patient-summary)"]
+    glue --> eehrxf["eehrxf (patient-summary, openehr)"]
     glue --> registry
     glue --> query
 ```

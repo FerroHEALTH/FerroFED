@@ -80,6 +80,10 @@ pub enum TargetsError {
     /// The plan refused an endpoint.
     #[error("the fan-out plan refused an endpoint")]
     Plan(#[source] PlanError),
+    /// An endpoint the plan dispatches to has no `ehr_id` the resolution
+    /// bound at its member.
+    #[error("an endpoint the plan dispatches to has no resolved ehr_id")]
+    Unbound,
 }
 
 /// Which endpoints the request lets the plan ask (§8, §11.1).
@@ -291,6 +295,45 @@ pub async fn patient(
         denied: consented.denied,
         resolver: crate::health::dependencies::of_resolutions(&resolutions),
     })
+}
+
+/// The plan and the column sources of `query`, another query over the
+/// patient `targets` resolved, over `snapshot`.
+///
+/// One resolution serves every query over the same patient: each endpoint
+/// `targets` dispatches to is asked `query` scoped to the `ehr_id` the
+/// patient resolved to at its member, every other status stays as
+/// `targets` settled it, and the identifiers the resolution consumed stay
+/// withheld from every request (§7.1, §5.4.1, N33).
+///
+/// # Errors
+///
+/// [`TargetsError::Unbound`] for a dispatched endpoint whose member the
+/// resolution bound no `ehr_id` at.
+pub fn retarget(
+    snapshot: &RegistrySnapshot,
+    targets: &Targets,
+    query: &PatientQuery,
+) -> Result<(Plan, Vec<ColumnSource>), TargetsError> {
+    let mut sources = None;
+    let plan = targets.plan.clone().requerying(|endpoint, _| {
+        let ehr_id = snapshot
+            .endpoint(endpoint)
+            .and_then(|declared| {
+                targets
+                    .resolved
+                    .iter()
+                    .find(|(node, _)| node == declared.node())
+            })
+            .map(|(_, ehr_id)| ehr_id)
+            .ok_or(TargetsError::Unbound)?;
+        let node = query.for_node(ehr_id.hier_object_id());
+        sources.get_or_insert_with(|| node.columns().to_vec());
+        Ok(NodeQuery::new(node.aql())
+            .with_scope(ehr_id.hier_object_id())
+            .with_width(super::cells::width(node.columns())))
+    })?;
+    Ok((plan, sources.unwrap_or_default()))
 }
 
 /// The `not-resolved` error of a member the plan does not ask after the

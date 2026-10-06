@@ -46,6 +46,7 @@ mod errors;
 mod facade;
 #[cfg(feature = "binding-ihe")]
 mod feed_audit;
+mod fhir;
 mod follow_up;
 mod healthcheck;
 mod http;

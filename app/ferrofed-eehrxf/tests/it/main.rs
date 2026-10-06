@@ -11,7 +11,13 @@
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
+#![expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the written document is read back as JSON"
+)]
 
 mod crosswalk;
 mod query;
+#[cfg(test)]
+mod summary;
 mod template;

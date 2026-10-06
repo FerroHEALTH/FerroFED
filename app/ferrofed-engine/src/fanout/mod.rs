@@ -315,6 +315,27 @@ impl Plan {
         Ok(self)
     }
 
+    /// This plan with every dispatched endpoint asked the query `requery`
+    /// gives for it in place of its own, every settled status, the withheld
+    /// identifiers and every mode kept.
+    ///
+    /// One resolution then serves several queries over the same patient: the
+    /// endpoints and their statuses are the resolution's, and only the node
+    /// query changes (§7.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error `requery` returns.
+    pub fn requerying<E>(
+        mut self,
+        mut requery: impl FnMut(&EndpointId, &NodeQuery) -> Result<NodeQuery, E>,
+    ) -> Result<Self, E> {
+        for (endpoint, query) in &mut self.dispatch {
+            *query = requery(endpoint, query)?;
+        }
+        Ok(self)
+    }
+
     /// Adds `endpoint` with the status `outcome`, settled with no request.
     ///
     /// # Errors

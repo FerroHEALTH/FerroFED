@@ -217,6 +217,13 @@ impl Section {
         }
     }
 
+    /// Returns the section whose [`Section::slug`] is `slug`, or `None` for
+    /// any other text.
+    #[must_use]
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|section| section.slug() == slug)
+    }
+
     /// Returns the names of the International Patient Summary template's
     /// sections whose archetypes this section selects by.
     ///

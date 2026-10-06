@@ -210,15 +210,23 @@ impl Gate {
                 permission,
                 resource,
             } => {
-                let named = match resource {
-                    Resource::Unnamed => None,
-                    Resource::Path(_) => named,
+                let resources: Vec<Option<String>> = match resource {
+                    Resource::Unnamed => vec![None],
+                    Resource::Path(_) => vec![named.map(str::to_owned)],
+                    Resource::Sections => permission::sections()
+                        .ok_or(Refusal::Scope)?
+                        .into_iter()
+                        .map(Some)
+                        .collect(),
                 };
                 let honoured = grant::Honoured {
                     backend: grant::backend(&trusted.settings.backend_clients, caller.client_id()),
                     patient: trusted.settings.patient.is_some(),
                 };
-                if !grant::granted(caller.scopes(), (family, permission), named, honoured) {
+                let grants = |scopes: &[SmartScope], name: &Option<String>| {
+                    grant::granted(scopes, (family, permission), name.as_deref(), honoured)
+                };
+                if !resources.iter().all(|name| grants(caller.scopes(), name)) {
                     return Err(Refusal::Scope);
                 }
                 // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
@@ -227,12 +235,9 @@ impl Gate {
                     .scopes()
                     .iter()
                     .filter(|scope| {
-                        grant::granted(
-                            std::slice::from_ref(*scope),
-                            (family, permission),
-                            named,
-                            honoured,
-                        )
+                        resources
+                            .iter()
+                            .any(|name| grants(std::slice::from_ref(*scope), name))
                     })
                     .collect();
                 let owned: Vec<SmartScope> =
@@ -648,6 +653,13 @@ impl Guard {
         method: &Method,
         path: &str,
     ) -> Option<(Requirement, Option<String>)> {
+        if let Some(face) = self
+            .state
+            .fhir()
+            .and_then(|fhir| crate::fhir::classify(fhir, path))
+        {
+            return Some((crate::fhir::requirement(face, method), None));
+        }
         let root = path == self.base.as_str() || path == self.base.join("/");
         if root && method == Method::OPTIONS {
             return Some((Requirement::Caller, None));

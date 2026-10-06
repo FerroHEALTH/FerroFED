@@ -84,6 +84,7 @@ pub struct Evidence {
     unrooted: bool,
     no_category: bool,
     unreadable: Option<String>,
+    constructed: BTreeSet<Category>,
 }
 
 /// The ids a request constrains its data to, read from its syntax tree.
@@ -149,6 +150,16 @@ impl Evidence {
         self
     }
 
+    /// This evidence, the request serving `category` by construction, such
+    /// as a request for a patient summary, whatever its data show: the
+    /// classification holds `category` on the basis [`Basis::Construction`]
+    /// beside every category the data show.
+    #[must_use]
+    pub fn constructed(mut self, category: Category) -> Self {
+        self.constructed.insert(category);
+        self
+    }
+
     /// The root objects the access reached.
     #[must_use]
     pub fn objects(&self) -> &[RootObject] {
@@ -167,6 +178,7 @@ impl fmt::Debug for Evidence {
             .field("unrooted", &self.unrooted)
             .field("no_category", &self.no_category)
             .field("unreadable", &self.unreadable.is_some())
+            .field("constructed", &self.constructed)
             .finish()
     }
 }
@@ -330,6 +342,13 @@ impl CategoryMap {
             for object in &evidence.objects {
                 self.object(object, basis, &mut classified);
             }
+        }
+        for category in &evidence.constructed {
+            classified
+                .categories
+                .entry(category.clone())
+                .or_default()
+                .insert(Basis::Construction);
         }
         if evidence.objects.is_empty() || evidence.unrooted {
             self.queried(evidence, &mut classified);

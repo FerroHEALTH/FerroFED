@@ -80,7 +80,9 @@ impl Config {
     /// a `signing.jwks_uri` that names another route under it
     /// ([`Error::PublicUrlDisagrees`]), and an entry of
     /// `server.trusted_proxies` that is no address or CIDR block
-    /// ([`Error::TrustedProxy`]).
+    /// ([`Error::TrustedProxy`]). `[fhir]` is refused as
+    /// [`Fhir::resolve`](crate::config::fhir::Fhir::resolve) refuses it
+    /// ([`Error::Fhir`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -114,6 +116,7 @@ impl Config {
         stored_query_fan_out(&federation, stored_queries.as_ref())?;
         let mut settings = Settings {
             profile: self.profile,
+            fhir: self.resolve_fhir(&base_path, public_url.as_ref())?,
             server: ServerSettings {
                 listen,
                 base_path,

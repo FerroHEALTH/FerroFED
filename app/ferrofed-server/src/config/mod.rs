@@ -23,6 +23,7 @@ use crate::telemetry::{DEFAULT_FILTER, Format};
 pub mod auth;
 pub mod deprecated;
 pub mod error;
+pub mod fhir;
 pub mod grant;
 pub mod limits;
 mod load;
@@ -109,6 +110,9 @@ pub struct Config {
     pub pdqm: Option<crate::binding::ihe::pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
+    /// The FHIR R4 face of the European exchange format (`[fhir]`,
+    /// Regulation (EU) 2025/327 Annex II 2.1), off unless the table is set.
+    pub fhir: Option<fhir::Fhir>,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
     /// push, both off by default.
     pub metrics: server::Metrics,
@@ -152,6 +156,7 @@ impl Default for Config {
             #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
+            fhir: None,
             metrics: server::Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),

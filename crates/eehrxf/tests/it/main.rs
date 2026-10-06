@@ -14,6 +14,9 @@ mod crosswalk;
 #[cfg(test)]
 mod dataset;
 #[cfg(test)]
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+mod document;
+#[cfg(test)]
 #[cfg(feature = "openehr")]
 mod mapping;
 #[cfg(test)]

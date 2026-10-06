@@ -128,6 +128,16 @@ pub fn text(row: &ResultSetRow, index: usize) -> Option<&str> {
     row.get(index).and_then(Value::as_str)
 }
 
+/// The cell of `row` at `index` written as JSON text, an RM object as the
+/// canonical JSON the node sent, or `None` when the row is shorter or the
+/// cell is `null`.
+#[must_use]
+pub fn json(row: &ResultSetRow, index: usize) -> Option<String> {
+    row.get(index)
+        .filter(|cell| !cell.is_null())
+        .map(Value::to_string)
+}
+
 /// The cell `source` names in `row`, whose ENDPOINT attribute values are
 /// `values`.
 fn cell(
