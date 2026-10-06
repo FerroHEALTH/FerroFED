@@ -1229,8 +1229,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
-name = "ehds-logging"
+name = "eehrxf"
 version = "0.0.1"
+dependencies = [
+ "fhir-types",
+ "fhirconnect",
+ "flate2",
+ "openehr-mapping-core",
+ "proptest",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ehds-logging"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "ihe-iti",
@@ -1379,7 +1394,7 @@ dependencies = [
  "ferrofed-testkit",
  "http",
  "jiff",
- "jsonschema",
+ "jsonschema 0.58.3",
  "jsonwebtoken",
  "mime",
  "nl-generic-functions",
@@ -1465,7 +1480,7 @@ dependencies = [
  "http",
  "ihe-iti",
  "jiff",
- "jsonschema",
+ "jsonschema 0.58.3",
  "jsonwebtoken",
  "nl-generic-functions",
  "oauth-server-metadata",
@@ -1598,14 +1613,42 @@ dependencies = [
 
 [[package]]
 name = "fhir-types"
-version = "0.1.107"
+version = "0.1.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "134ed7a0099088de336764be13e465370384b91bdf6e75eb93712b2869305214"
+checksum = "2bc1e4a182aa528f101bd303ca2bc611b517458237a617fab5306824239f0590"
 dependencies = [
  "quick-xml",
  "regex",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fhirconnect"
+version = "0.1.108"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9e61aed21b322c073223d2c91f615089a0eecb8a252c7db22bb36fba50b0b00"
+dependencies = [
+ "fhir-types",
+ "jsonschema 0.57.0",
+ "openehr-base",
+ "openehr-its",
+ "openehr-mapping-core",
+ "openehr-rm",
+ "openehr-sdt",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -2325,7 +2368,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.27"
+version = "0.0.28"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -2541,6 +2584,34 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71160ed5f6dbe36a2d6be79f4ca03ee09a99d2866f340faed49458913449aefa"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "data-encoding",
+ "email_address",
+ "fancy-regex",
+ "fraction",
+ "getrandom 0.3.4",
+ "itoa",
+ "jsonschema-regex 0.57.0",
+ "jsonschema-value 0.57.0",
+ "num-cmp",
+ "num-traits",
+ "percent-encoding",
+ "referencing 0.57.0",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "unicode-general-category",
+ "uuid-simd",
+]
+
+[[package]]
+name = "jsonschema"
 version = "0.58.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "905edfa6eee835291d6efe33f733f7fcb40c2a24be93b78b74df95e56aef8611"
@@ -2553,12 +2624,12 @@ dependencies = [
  "fraction",
  "getrandom 0.3.4",
  "itoa",
- "jsonschema-regex",
- "jsonschema-value",
+ "jsonschema-regex 0.58.3",
+ "jsonschema-value 0.58.3",
  "num-cmp",
  "num-traits",
  "percent-encoding",
- "referencing",
+ "referencing 0.58.3",
  "regex",
  "serde",
  "serde_json",
@@ -2569,11 +2640,36 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48d2120d8466ffcdc1b3be4b88ff0e9191bf5b6b09b1b1af1eef9aff8f465ea3"
+dependencies = [
+ "regex-syntax",
+]
+
+[[package]]
+name = "jsonschema-regex"
 version = "0.58.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "023cf6b6c38655c1e9cedf72b9c534fd361bd35d20ac06e074f2c93b7dd0836c"
 dependencies = [
  "regex-syntax",
+]
+
+[[package]]
+name = "jsonschema-value"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fbfa40a42415369d940b3848f3ce08099f1f1ac04d73e8580f4d652617c4f44"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "fraction",
+ "getrandom 0.3.4",
+ "num-cmp",
+ "num-traits",
+ "serde_json",
+ "zmij",
 ]
 
 [[package]]
@@ -3065,14 +3161,14 @@ checksum = "60993920e071b0c9b66f14e2b32740a4e27ffc82854dcd72035887f336a09a28"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.19"
+version = "0.0.20"
 dependencies = [
  "base64 0.23.1",
  "ferrofed-testkit",
  "fhir-types",
  "http",
  "jiff",
- "jsonschema",
+ "jsonschema 0.58.3",
  "jsonwebtoken",
  "oauth-server-metadata",
  "quick-xml",
@@ -3303,7 +3399,7 @@ name = "openehr-federation"
 version = "0.0.43"
 dependencies = [
  "ferrofed-testkit",
- "jsonschema",
+ "jsonschema 0.58.3",
  "openehr-base",
  "openehr-its",
  "openehr-query",
@@ -3333,6 +3429,7 @@ dependencies = [
  "openehr-lang",
  "openehr-rm",
  "openehr-term",
+ "quick-xml",
  "reqwest",
  "secrecy",
  "serde",
@@ -3355,6 +3452,22 @@ dependencies = [
  "logos",
  "openehr-base",
  "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "openehr-mapping-core"
+version = "0.1.108"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76988efd93a8bc8588b9eed96a75329867c7ab2cf3e52ce1a18a24b6f0d874ea"
+dependencies = [
+ "openehr-am",
+ "openehr-its",
+ "openehr-rm",
+ "openehr-sdt",
+ "serde",
+ "serde-saphyr",
  "serde_json",
  "thiserror 2.0.21",
 ]
@@ -3392,6 +3505,21 @@ name = "openehr-sdt"
 version = "0.0.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7c3539431663349a22611e85a524f0d638f017c7b869882d075d56f4ba07d81"
+dependencies = [
+ "fancy-regex",
+ "indexmap 2.14.2",
+ "openehr-am",
+ "openehr-base",
+ "openehr-its",
+ "openehr-lang",
+ "openehr-rm",
+ "openehr-term",
+ "quick-xml",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "openehr-term"
@@ -3876,6 +4004,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
 dependencies = [
  "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -4175,6 +4304,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
+]
+
+[[package]]
+name = "referencing"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b06f6798be4fed305e74df8b1fb90cf59c6b8cc17aa3febeb1830c0c6b627b3e"
+dependencies = [
+ "ahash",
+ "fluent-uri",
+ "getrandom 0.3.4",
+ "hashbrown 0.17.1",
+ "itoa",
+ "micromap",
+ "parking_lot",
+ "percent-encoding",
+ "serde_json",
 ]
 
 [[package]]
@@ -5127,6 +5273,16 @@ dependencies = [
  "throw_error",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
 ]
 
 [[package]]
