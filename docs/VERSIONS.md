@@ -438,7 +438,7 @@ it.
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| Reference implementation build image | `maven:3.10.0-eclipse-temurin-21@sha256:9b4877723dadf350b452dd97d9a6401e7b56f98fa9dfe420c32ad909989c7e4c` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.0@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | nginx reverse proxy image | `nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94` | read from this row by `scripts/checks/production-guide.sh`, which runs `deploy/nginx/ferrofed.conf` in it |
@@ -570,7 +570,7 @@ same way from the Prometheus release tarball of its version.
 | `kubeconform schema version` | 1.34.0 | `.github/workflows/ci.yml` |
 | `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
-| `promtool` | 3.13.4 | `.github/workflows/ci.yml` |
+| `promtool` | 3.15.0 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
