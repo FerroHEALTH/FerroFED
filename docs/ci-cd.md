@@ -305,7 +305,7 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | the Kubernetes release and the `yannh/kubernetes-json-schema` commit kubeconform validates against | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change to both |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows, and `pin-freshness.yml`, weekly, against the newest stable tag in each image's registry; a bump is a deliberate change to both |
-| the EU corpus, `docs/specs/eu-ehds/`, against the acts adopted under Regulation (EU) 2025/327 | `pin-freshness.yml`, weekly: `scripts/checks/ehds-acts.sh` reads EUR-Lex and the Have your say register |
+| the EU corpora, `docs/specs/eu-ehds/` and `docs/specs/eu-cra/`, against the acts adopted under, amending or correcting Regulation (EU) 2025/327 and Regulation (EU) 2024/2847 | `pin-freshness.yml`, weekly: `scripts/checks/ehds-acts.sh` reads EUR-Lex and the Have your say register |
 | the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
 | the fuzz seeds generated from the vendored corpora (`fuzz/seeds/*/gen-*`) | `scripts/fuzz/seeds.sh --check`, the first job of `fuzz.yml` |
 | `fuzz/Cargo.lock` against the workspace crates the fuzz targets depend on | the `fuzz lockfile` job of `ci.yml`, on every pull request (`cargo metadata --locked`) |
@@ -342,16 +342,17 @@ the Java 21 runtime of the reference implementation, is compared within that
 line, and the newest tag of any line is printed beside it. Both
 `--self-test` modes run in the `versions` job of `ci.yml`, offline.
 
-The second job, `EHDS acts`, runs `scripts/checks/ehds-acts.sh`. It reads
-every act whose legal basis is Regulation (EU) 2025/327 from the
-Publications Office's Cellar, the repository EUR-Lex serves, with the
-article of the Regulation each one implements, and the Commission's Have
-your say initiatives on the Regulation with the stage of the three whose
+The second job, `EHDS and CRA acts`, runs `scripts/checks/ehds-acts.sh`. It
+reads from the Publications Office's Cellar, the repository EUR-Lex serves,
+every act based on or supplementing, amending or correcting Regulation (EU)
+2025/327 or Regulation (EU) 2024/2847, the Cyber Resilience Act, with the
+article each one implements. It also reads the Commission's Have your say
+initiatives on Regulation (EU) 2025/327 with the stage of the three whose
 act the harmonised components wait for (Art 15(1), Art 36(1), Art 40(4)).
-An act neither `scripts/vendor/eu.sh` pins nor the script records as not
-applicable opens one issue for its CELEX number, and an initiative that is
-new or has moved opens one issue for the register. A source that does not
-answer fails the job.
+An act, amendment or corrigendum that `scripts/vendor/eu.sh` does not pin
+and the script does not record as not vendored opens one issue for its
+CELEX number, and an initiative that is new or has moved opens one issue
+for the register. A source that does not answer fails the job.
 
 ## The analyzers are advisory
 

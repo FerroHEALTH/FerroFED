@@ -11,12 +11,12 @@
 )]
 
 use axum::body::Body;
-use ferrofed_server::metrics::Metrics;
 use http::{Request, StatusCode, header};
 
 use super::{
     ADMIN, DISCHARGE, LAB_ARCHETYPE, LAB_REPORT, TestResult, UNMAPPED, accesses, composition,
-    details, gateway, gateway_with, named, node_with_rows, profile,
+    details, gateway, gateway_and_state, gateway_with, named, node_with_rows, profile,
+    recorded_the_query,
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
@@ -348,7 +348,13 @@ async fn no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node() -> T
     );
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), (&node_a.uri(), &node_b.uri()), &repository, "")?;
+    let (app, state) = gateway_and_state(
+        dir.path(),
+        (&node_a.uri(), &node_b.uri()),
+        &repository,
+        ("", ""),
+        &settings_with_room(),
+    )?;
     let logs = crate::support::Logs::default();
     let capture = ferrofed_server::telemetry::subscriber(
         ferrofed_server::telemetry::Rendering::Json,
@@ -364,7 +370,8 @@ async fn no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node() -> T
     assert_eq!(1, accesses(&records)?.len());
     let claims = crate::support::claims();
     let log = logs.text();
-    let exposition = Metrics::default().render()?;
+    let exposition = state.metrics().render()?;
+    recorded_the_query(&exposition, "node-a-pub")?;
     for value in [
         PATIENT,
         LAB_REPORT,

@@ -19,6 +19,12 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   (`patient-summary`, `prescription`, `dispensation`, `imaging`,
   `laboratory`, `discharge`), each naming the logical model and the
   obligations profile of its dataset.
+- `crosswalk`: per category, the rows from the Xt-EHR element paths to the
+  eHealth Network element ids and to the elements and slices of the HL7
+  Europe profile, with the producer obligation and the profiles a
+  FHIRconnect context may map to in order to feed each. `Crosswalk::check`
+  holds the rows to the packages they name. The patient summary carries one
+  (`crosswalk::patient_summary`, feature `patient-summary`).
 - `fhir-r4`: the FHIR R4 serialisation of the exchange format. It compiles
   the R4 resources and no openEHR crate.
 - `mapping` (feature `openehr`, which turns on `fhir-r4`): FHIRconnect 1.0.0

@@ -93,10 +93,11 @@ Thirteen workflows:
   `scripts/gh/fields.sh new` (its default token may not set the issue type
   and fields, and the issue then lands with its label alone,
   `issue-workflow.md` §Type, priority and labels), and fails only when a
-  release could not be read. Its `EHDS acts` job reads EUR-Lex and the
-  Commission's Have your say register for the acts Regulation (EU) 2025/327
-  still waits on (`scripts/checks/ehds-acts.sh`), and opens one issue per
-  newly adopted act.
+  release could not be read. Its `EHDS and CRA acts` job reads EUR-Lex for
+  the acts, amendments and corrigenda of Regulation (EU) 2025/327 and of
+  Regulation (EU) 2024/2847, and the Commission's Have your say register for
+  the acts Regulation (EU) 2025/327 still waits on
+  (`scripts/checks/ehds-acts.sh`), and opens one issue per new act.
 - `.github/workflows/publish-crates.yml`: the crates.io lane behind the
   workspace `publish` switch. It runs on every `v*` tag (and on a manual
   dispatch, a dry run unless `publish` is set), reads the publishable set from

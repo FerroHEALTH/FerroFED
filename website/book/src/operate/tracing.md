@@ -37,7 +37,9 @@ on a restart only: a [reload](registry.md#reloading-the-registry) that
 changes it logs `telemetry.otlp_endpoint` as needing a restart.
 
 `telemetry.filter` decides what the console logs and nothing else, so a
-quieter log never thins a trace.
+quieter log never thins a trace. It never quiets the security log: the
+gateway adds `ferrofed::security=info` after your filter, so every line
+under that target at `info` or above is written whatever the filter says.
 
 ## Sampling
 

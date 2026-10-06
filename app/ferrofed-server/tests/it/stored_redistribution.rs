@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::body::Body;
@@ -26,8 +27,9 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
+use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
-use http::{Method, Request, StatusCode};
+use http::{Method, Request, StatusCode, header};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::generated::definition::StoredQuery;
 use wiremock::matchers::{method, path};
@@ -38,7 +40,7 @@ use crate::stored_fan_out::{
     COMMENT, ENDPOINT, NAME, Reported, VERSION, definition, get, node_path, put, state, statuses,
     storing, three,
 };
-use crate::support::{asked, call, error_body, exchange, field, mount, operator_bearer};
+use crate::support::{Logs, asked, call, error_body, exchange, field, mount, operator_bearer};
 use crate::template_fan_out::schema::validate_federation;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -85,7 +87,7 @@ fn distribute(
     body: &str,
 ) -> Result<Request<Body>, Box<dyn Error>> {
     let mut request = Request::post(format!("/admin/stored-queries/{NAME}/{version}/distribute"))
-        .header(http::header::AUTHORIZATION, operator_bearer()?);
+        .header(header::AUTHORIZATION, operator_bearer()?);
     if let Some(target) = target {
         request = request.header(ENDPOINT, target);
     }
@@ -463,5 +465,115 @@ fn the_admin_listener_is_refused_off_loopback_without_allow_remote() -> TestResu
     )?
     .resolve()?;
     assert_eq!(Some("192.0.2.10:9464".parse()?), settings.metrics.listen);
+    Ok(())
+}
+
+/// A node that answers its first definition `PUT` at once and every later
+/// one after five seconds.
+async fn slow_after_the_first() -> Server {
+    let server = Server::start().await;
+    Mock::given(method("PUT"))
+        .and(path(node_path()))
+        .respond_with(ResponseTemplate::new(200))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(node_path()))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(5)))
+        .mount(&server)
+        .await;
+    server
+}
+
+/// Runs `request` through `operator`, logging at `trace`, until it answers
+/// or `stop` completes and drops it; returns whether it answered and the
+/// captured log.
+async fn logged(
+    operator: Router,
+    request: Request<Body>,
+    stop: impl Future<Output = ()>,
+) -> Result<(bool, String), Box<dyn Error>> {
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "trace", false, logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
+    let answered = tokio::select! {
+        answer = exchange(operator, request) => answer.is_ok(),
+        () = stop => false,
+    };
+    drop(guard);
+    Ok((answered, logs.text()))
+}
+
+/// Completes once `server` has received `count` requests.
+async fn received(server: &Server, count: usize) {
+    while !asked(server)
+        .await
+        .is_ok_and(|requests| requests.len() >= count)
+    {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// The operator credential `request` carries.
+fn credential(request: &Request<Body>) -> Result<String, Box<dyn Error>> {
+    Ok(field(request.headers(), header::AUTHORIZATION.as_str())
+        .ok_or("an operator credential")?
+        .to_owned())
+}
+
+/// Asserts that `text` carries none of `credential`, the stored query or
+/// the patient.
+fn nothing_sensitive(text: &str, credential: &str) {
+    let token = credential.trim_start_matches("Bearer ");
+    for hidden in [token, "Bearer", COMMENT, "SELECT", PATIENT] {
+        assert!(!text.contains(hidden), "the log carries {hidden}: {text}");
+    }
+}
+
+#[tokio::test]
+async fn a_distribution_logs_its_operator_and_nothing_sensitive() -> TestResult {
+    let (a, b, c) = (storing(200).await, storing(200).await, failing_once().await);
+    let dir = tempfile::tempdir()?;
+    let (app, operator) = both(dir.path(), [&a, &b, &c], OFFERED)?;
+    let (status, text) = call(app, put(&definition(), Some("*"))?).await?;
+    assert_eq!(StatusCode::MULTI_STATUS, status, "node C missed it: {text}");
+    let request = distribute(VERSION, Some("node-c-pub"), "")?;
+    let credential = credential(&request)?;
+    let (answered, text) = logged(operator, request, std::future::pending()).await?;
+    assert!(answered, "{text}");
+    assert!(text.contains("admin-write-admitted"), "{text}");
+    assert!(text.contains("\"outcome\":\"200\""), "{text}");
+    nothing_sensitive(&text, &credential);
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_action_dropped_before_it_answers_is_recorded_before_and_as_abandoned() -> TestResult {
+    let (a, b, c) = (
+        storing(200).await,
+        storing(200).await,
+        slow_after_the_first().await,
+    );
+    let dir = tempfile::tempdir()?;
+    let (app, operator) = both(dir.path(), [&a, &b, &c], OFFERED)?;
+    let (status, text) = call(app, put(&definition(), Some("*"))?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let request = distribute(VERSION, Some("node-c-pub"), "")?;
+    let credential = credential(&request)?;
+    let (answered, text) = logged(operator, request, received(&c, 2)).await?;
+    assert!(
+        !answered,
+        "the action was dropped before it answered: {text}"
+    );
+    assert_eq!(2, asked(&c).await?.len(), "the action reached node C");
+    let opened = text
+        .find("admin-write-admitted")
+        .ok_or("the action was recorded before it ran")?;
+    let closed = text
+        .find("\"outcome\":\"abandoned\"")
+        .ok_or("the dropped action was recorded as abandoned")?;
+    assert!(opened < closed, "{text}");
+    nothing_sensitive(&text, &credential);
     Ok(())
 }

@@ -97,11 +97,24 @@ fn gateway_under(
 /// added.
 fn gateway_with(
     dir: &Path,
+    nodes: (&str, &str),
+    repository: &FeedRepository,
+    keys: (&str, &str),
+    server: &ServerSettings,
+) -> Result<Router, Box<dyn Error>> {
+    let (router, _) = gateway_and_state(dir, nodes, repository, keys, server)?;
+    Ok(router)
+}
+
+/// The gateway of [`gateway_with`], with the state it serves from: the
+/// metrics a request records go to that state's registry.
+fn gateway_and_state(
+    dir: &Path,
     (a, b): (&str, &str),
     repository: &FeedRepository,
     (extra, federation): (&str, &str),
     server: &ServerSettings,
-) -> Result<Router, Box<dyn Error>> {
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
@@ -117,8 +130,23 @@ fn gateway_with(
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
-    let state = AppState::build(&settings)?;
-    Ok(ferrofed_server::router(Arc::new(state), server))
+    let state = Arc::new(AppState::build(&settings)?);
+    Ok((ferrofed_server::router(Arc::clone(&state), server), state))
+}
+
+/// Fails unless `exposition`, rendered from the registry a federated query
+/// recorded into, holds the node request series of the endpoint `endpoint`,
+/// so a check that no value reaches a metric reads what the request wrote.
+fn recorded_the_query(exposition: &str, endpoint: &str) -> Result<(), Box<dyn Error>> {
+    let series = exposition
+        .lines()
+        .filter(|line| line.starts_with("ferrofed_node_requests"))
+        .any(|line| line.contains(&format!("endpoint=\"{endpoint}\"")));
+    if series {
+        Ok(())
+    } else {
+        Err(format!("no node request series of {endpoint} in {exposition}").into())
+    }
 }
 
 /// A canonical `COMPOSITION` of `template`, the version `uid`.
