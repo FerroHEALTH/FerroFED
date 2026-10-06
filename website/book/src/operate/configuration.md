@@ -72,9 +72,11 @@ is deprecated in this release.
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first
-log line: the wordmark, the version, the releases the gateway serves, and the
-deployment facts to check first. Run on a terminal, the development
-configuration of [the quickstart](container.md#the-quickstart) prints this:
+log line: the wordmark, the version, the maintainer, the manufacturer with
+its contact and postal address, the releases the gateway serves, the end of
+its support period, and the deployment facts to check first. Built from
+source and run on a terminal with the development configuration of
+[the quickstart](container.md#the-quickstart), it prints this:
 
 ```text
  _____                   _____ _____ ____
@@ -83,13 +85,16 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
 |  _|  __/ |  | | | (_) |  _| | |___| |_| |
 |_|  \___|_|  |_|  \___/|_|   |_____|____/
 
-  openEHR federation gateway · v0.0.8
+  openEHR federation gateway · v0.0.9
   Maintained by Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
+  Manufactured by Cadasto B.V. · info@cadasto.com
+  Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands
 
   Federation Tier  0.9.0
   ITS-REST         1.1.0
   AQL              1.1.0
   openehr-*        0.0.84
+  Support          none, this build is no release
 
   Base path        /
   Listen           0.0.0.0:8080
@@ -105,9 +110,8 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   patient data.
 ```
 
-From v0.0.10, a `Support` line under the releases names the last day of the
-release's support period, as `until YYYY-MM-DD`, five years from its release
-date ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
+The `Support` line of a release from v0.0.10 on names the last day of its
+support period, as `until YYYY-MM-DD`, five years from its release date ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 The release build compiles the date in, and the gateway never reads it from
 the network. A build from source and a pre-release have no support period,
 and the line says so. Once the date has passed, the line reads
