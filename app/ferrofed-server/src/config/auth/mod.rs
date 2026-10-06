@@ -29,6 +29,7 @@ use url::Url;
 
 use crate::config::auth::assurance::{Assurance, AssuranceClaims};
 use crate::config::error::Error;
+use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
 use crate::config::transport;
 
@@ -427,7 +428,10 @@ impl Auth {
     /// [`Error::Zero`] for a zero duration, [`Error::Url`] and
     /// [`Error::UrlCredentials`] for a URL that does not parse or carries
     /// credentials, and the secret errors of a `_file`.
-    pub fn resolve(&self) -> Result<AuthSettings, Error> {
+    ///
+    /// An unset audience is `public`, the public base URL as written, when
+    /// that is set.
+    pub fn resolve(&self, public: Option<&PublicUrl>) -> Result<AuthSettings, Error> {
         if self.clock_skew_s > MAX_CLOCK_SKEW_S {
             return Err(fault("auth.clock_skew_s", AuthFault::SkewTooLarge));
         }
@@ -461,7 +465,8 @@ impl Auth {
         let audience = self
             .audience
             .clone()
-            .filter(|audience| !audience.is_empty());
+            .filter(|audience| !audience.is_empty())
+            .or_else(|| public.map(|public| public.as_str().to_owned()));
         if audience.is_none() && !issuers.is_empty() {
             return Err(Error::Missing {
                 key: String::from("auth.audience"),

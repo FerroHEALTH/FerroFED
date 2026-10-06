@@ -7,13 +7,18 @@
 //! metrics surface, and `[server.tls]` and `[metrics.tls]` their TLS. No
 //! specification governs the configuration: our own design.
 
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use ferrofed_registry::secret::{Secret, SecretUrl};
+use ipnet::IpNet;
 use serde::Deserialize;
 
+use crate::base_path::BasePath;
+use crate::client_address::{ForwardedHeader, Forwarding};
 use crate::config::error::Error;
 use crate::config::limits;
+use crate::config::public_url::PublicUrl;
 use crate::listener::certificates::{Certificates, TlsFiles};
 
 /// The HTTP surface.
@@ -27,6 +32,21 @@ pub struct Server {
     /// trailing `/`, query or fragment (§4.1, N28). The specification
     /// reserves no prefix.
     pub base_path: String,
+    /// The absolute URL clients reach `{base}` at, such as
+    /// `https://gateway.example.org/fed`, whose path is `base_path`. Set,
+    /// `auth.audience`, `signing.jwks_uri` and `pmir.callback_url` default
+    /// from it, and a `signing.jwks_uri` or `pmir.callback_url` that names
+    /// another route than the gateway serves under it is refused
+    /// ([`public_url`](crate::config::public_url)). Unset, each is written
+    /// out.
+    pub public_url: Option<String>,
+    /// The reverse proxies whose forwarded client address the gateway
+    /// takes, each an IP address or a CIDR block. Empty, the default, the
+    /// address a request came from is its peer's, whatever it forwards.
+    pub trusted_proxies: Vec<String>,
+    /// The header a trusted proxy names the client in: `forwarded`, the
+    /// default (RFC 7239), or `x-forwarded-for`.
+    pub forwarded_header: ForwardedHeader,
     /// How long one request may take before the server answers `408`. With a
     /// registry configured, it must exceed `federation.overall_timeout_ms`
     /// by more than [`COMBINING_MARGIN_MS`](crate::config::COMBINING_MARGIN_MS).
@@ -61,6 +81,9 @@ impl Default for Server {
         Self {
             listen: String::from("127.0.0.1:8080"),
             base_path: String::from("/"),
+            public_url: None,
+            trusted_proxies: Vec::new(),
+            forwarded_header: ForwardedHeader::default(),
             request_timeout_ms: 30_000,
             drain_delay_ms: 0,
             shutdown_timeout_ms: None,
@@ -70,6 +93,55 @@ impl Default for Server {
             caller_rate: None,
             tls: None,
         }
+    }
+}
+
+impl Server {
+    /// Resolves `server.base_path` and `server.public_url`, whose path must be
+    /// that base path.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::BasePath`] for a base path no request path can sit under, and
+    /// the errors of [`PublicUrl::resolve`].
+    pub fn resolve_base(&self) -> Result<(BasePath, Option<PublicUrl>), Error> {
+        let base_path = self
+            .base_path
+            .parse::<BasePath>()
+            .map_err(|source| Error::BasePath {
+                key: String::from("server.base_path"),
+                source,
+            })?;
+        let public_url = self
+            .public_url
+            .as_deref()
+            .map(|text| PublicUrl::resolve(text, &base_path))
+            .transpose()?;
+        Ok((base_path, public_url))
+    }
+
+    /// Resolves `server.trusted_proxies` and `server.forwarded_header`: each
+    /// proxy an IP address, read as a block of one, or a CIDR block.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::TrustedProxy`] naming the entry that is neither.
+    pub fn resolve_forwarding(&self) -> Result<Forwarding, Error> {
+        let proxies = self
+            .trusted_proxies
+            .iter()
+            .enumerate()
+            .map(|(index, written)| {
+                let text = written.trim();
+                text.parse::<IpNet>()
+                    .or_else(|_| text.parse::<IpAddr>().map(IpNet::from))
+                    .map_err(|source| Error::TrustedProxy {
+                        key: format!("server.trusted_proxies[{index}]"),
+                        source,
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Forwarding::new(proxies, self.forwarded_header))
     }
 }
 

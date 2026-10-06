@@ -18,7 +18,6 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 
-use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing, secret};
@@ -76,6 +75,12 @@ impl Config {
     /// ([`Error::Missing`]), a file that does not read or a key that does not
     /// match its certificate ([`Error::ListenerTls`]), and a healthcheck
     /// identity it never presents ([`Error::HealthcheckIdentityUnused`]).
+    /// `server.public_url` is refused as
+    /// [`PublicUrl::resolve`](crate::config::public_url::PublicUrl::resolve) refuses it,
+    /// a `signing.jwks_uri` that names another route under it
+    /// ([`Error::PublicUrlDisagrees`]), and an entry of
+    /// `server.trusted_proxies` that is no address or CIDR block
+    /// ([`Error::TrustedProxy`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -85,14 +90,8 @@ impl Config {
                 key: String::from("server.listen"),
                 source,
             })?;
-        let base_path = self
-            .server
-            .base_path
-            .parse::<BasePath>()
-            .map_err(|source| Error::BasePath {
-                key: String::from("server.base_path"),
-                source,
-            })?;
+        let (base_path, public_url) = self.server.resolve_base()?;
+        let forwarding = self.server.resolve_forwarding()?;
         let request_timeout =
             positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
         let shutdown_timeout = self.resolve_drain(request_timeout)?;
@@ -118,7 +117,11 @@ impl Config {
                 credentials.insert(id, scheme);
             }
         }
-        let signing = self.signing.as_ref().map(resolve_signing).transpose()?;
+        let signing = self
+            .signing
+            .as_ref()
+            .map(|signing| resolve_signing(signing, public_url.as_ref()))
+            .transpose()?;
         signed_grants(signing.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
@@ -143,7 +146,9 @@ impl Config {
                 drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
                 body_limit: self.server.body_limit_bytes,
-                auth: self.auth.resolve()?,
+                auth: self.auth.resolve(public_url.as_ref())?,
+                public_url,
+                forwarding,
                 overload: self.server.resolve_overload()?,
                 tls: resolve_tls(self.server.tls.as_ref(), SERVER_TLS)?,
             },

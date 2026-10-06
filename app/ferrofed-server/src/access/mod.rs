@@ -34,7 +34,7 @@ use std::fmt;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use axum::extract::{ConnectInfo, Request, State};
+use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
@@ -52,8 +52,8 @@ use secrecy::SecretString;
 
 use crate::auth::caller::Caller;
 use crate::base_path::BasePath;
+use crate::client_address::ClientAddress;
 use crate::error::{self, Code};
-use crate::listener::Peer;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -352,8 +352,8 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     let caller = request.extensions().get::<Caller>().cloned();
     let address = request
         .extensions()
-        .get::<ConnectInfo<Peer>>()
-        .map(|ConnectInfo(Peer(peer))| peer.ip());
+        .get::<ClientAddress>()
+        .map(|ClientAddress(address)| *address);
     let logged = request
         .extensions()
         .get::<OutboundId>()

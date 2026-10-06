@@ -63,6 +63,20 @@ record `on_behalf` as `caller` or `gateway`, and never the caller's `sub`,
 node is told of the caller by the signed conveyance alone
 ([Onward credentials](onward-credentials.md)), never by an audit record.
 
+## The address a request came from
+
+[The access log](#the-access-log) records the address each request came from,
+so it says from where a caller reached patient data. The gateway takes that
+address from the connection, so behind a reverse proxy it is the proxy's,
+`127.0.0.1` for a proxy on the same host. The client's address reaches the
+gateway only in the `Forwarded` or `X-Forwarded-For` header the proxy
+writes, and any client can write those headers too, so the gateway reads
+them only from a proxy listed in `server.trusted_proxies` (RFC 7239 §8.1).
+With the proxy listed, a request is named by the client the proxy names;
+with none listed, the default, every request is named by its peer, and a
+forwarded header changes nothing
+([Behind a reverse proxy](public-address.md#behind-a-reverse-proxy)).
+
 ## The access log
 
 Every access to patient data the gateway intermediates is recorded, with

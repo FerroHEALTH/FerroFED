@@ -44,7 +44,8 @@ use crate::support::{error_body, send_as_is};
 const PROFESSIONAL_MAPPER: &str = "professional";
 
 /// The gateway over node A and node B, resolving the patient through the
-/// development cross-reference and trusting `idp` with the page's `[auth]`
+/// development cross-reference, under the page's public base URL and its
+/// path, which `auth.audience` follows, and trusting `idp` with the page's `[auth]`
 /// table, its issuer and key set location moved to the Keycloak the test
 /// started.
 fn gateway(
@@ -56,8 +57,11 @@ fn gateway(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry_document(&nodes.a, &nodes.b, ""))?;
     let document = toml::Value::String(document.display().to_string());
+    // NOTE: no specification governs this: our own design; the JWK Set's URL follows
+    // `server.public_url` here, as the production guide leaves it unset.
+    let key_file = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "{}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "{}\n\n[server]\nbase_path = \"/fed\"\npublic_url = \"https://gateway.example.org/fed\"\n\n[signing]\nkey_file = {key_file}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         dev_resolver(),
         recipe.auth_against(idp.origin())
     );
@@ -70,6 +74,7 @@ fn gateway(
 /// Sends the patient query with `token` and reads the answer.
 async fn ask(app: Router, token: &str) -> Result<(StatusCode, HeaderMap, String), Box<dyn Error>> {
     let mut request = query(&patient_query())?;
+    *request.uri_mut() = format!("/fed{}", request.uri()).parse()?;
     request
         .headers_mut()
         .insert(AUTHORIZATION, format!("Bearer {token}").parse()?);

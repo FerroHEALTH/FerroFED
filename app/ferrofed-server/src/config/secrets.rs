@@ -23,9 +23,11 @@ use secrecy::zeroize::Zeroizing;
 use crate::binding::Binding;
 use crate::config::error::{BasicFault, Error};
 use crate::config::grant;
+use crate::config::public_url::PublicUrl;
 use crate::config::settings::{Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault, TlsSettings};
 use crate::config::{Credentials, GrantKind, OAuth2, Signing, SigningAlgorithm};
+use crate::jwks::JWKS_PATH;
 
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.
@@ -384,8 +386,13 @@ fn resolve_grant(
 /// key, the next key on the curve of the algorithm it is meant for, the
 /// assertion lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
 /// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
-/// absolute `http` or `https` URL (§13.1, N25).
-pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Error> {
+/// absolute `http` or `https` URL (§13.1, N25). With `public` set,
+/// `jwks_uri` defaults to the route the gateway serves the JWK Set at under
+/// it, and must name that route when set.
+pub(crate) fn resolve_signing(
+    signing: &Signing,
+    public: Option<&PublicUrl>,
+) -> Result<SigningSettings, Error> {
     let max = MAX_ASSERTION_LIFETIME.as_secs();
     if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
         return Err(Error::AssertionLifetime {
@@ -406,7 +413,7 @@ pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Erro
             cache_s: signing.node_jwks_cache_s,
         });
     }
-    let jwks_uri = jwks_uri(signing.jwks_uri.as_deref())?;
+    let jwks_uri = jwks_uri(signing.jwks_uri.as_deref(), public)?;
     let key_file = signing.key_file.as_deref().ok_or_else(|| Error::Missing {
         key: String::from("signing.key_file"),
     })?;
@@ -450,19 +457,28 @@ pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Erro
     })
 }
 
-/// Returns `signing.jwks_uri`, required and an absolute `http` or `https`
-/// URL with no userinfo, since every node reads it (§13.1).
-fn jwks_uri(text: Option<&str>) -> Result<Uri, Error> {
-    let key = || String::from("signing.jwks_uri");
-    let text = text.ok_or_else(|| Error::Missing { key: key() })?;
-    let parsed = url::Url::parse(text).map_err(|source| Error::Url { key: key(), source })?;
+/// Returns `signing.jwks_uri`, an absolute `http` or `https` URL with no
+/// userinfo, since every node reads it (§13.1): as written, or the JWK Set
+/// route under `public` when unset, and refused when it names another.
+fn jwks_uri(text: Option<&str>, public: Option<&PublicUrl>) -> Result<Uri, Error> {
+    const KEY: &str = "signing.jwks_uri";
+    let key = || String::from(KEY);
+    let text = match (text, public) {
+        (Some(text), _) => text.to_owned(),
+        (None, Some(public)) => public.route(KEY, JWKS_PATH)?.to_string(),
+        (None, None) => return Err(Error::Missing { key: key() }),
+    };
+    let parsed = url::Url::parse(&text).map_err(|source| Error::Url { key: key(), source })?;
     if !matches!(parsed.scheme(), "http" | "https")
         || !parsed.username().is_empty()
         || parsed.password().is_some()
     {
         return Err(Error::HttpUrl { key: key() });
     }
-    Uri::new(text).map_err(|_refused| Error::HttpUrl { key: key() })
+    if let Some(public) = public {
+        public.agrees(KEY, &parsed, JWKS_PATH)?;
+    }
+    Uri::new(&text).map_err(|_refused| Error::HttpUrl { key: key() })
 }
 
 /// Reads the next signing key from `path`, refused when its curve signs

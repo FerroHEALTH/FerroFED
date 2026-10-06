@@ -20,8 +20,9 @@
 #      that port to a named source alone;
 #   6. runs `ferrofed config check` over that configuration, with a synthetic
 #      file for each `_file` secret it names and a synthetic ES384 key for each
-#      `key_file`, the mount paths and the audit spool rewritten to a
-#      temporary directory;
+#      `key_file`, the mount paths rewritten to a temporary directory and the
+#      audit spool left where the example puts it, since config check writes
+#      nothing;
 #   7. runs it again without the [signing] table, and again without the
 #      [metrics] scrape token while the admin listener is off loopback, each
 #      of which it must refuse by name; and
@@ -180,12 +181,10 @@ while IFS= read -r key; do
     -out "$work/secrets/$key" 2> /dev/null ||
     bad "a synthetic signing key could not be generated for $key"
 done < <(sed -nE 's|^key_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\1|p' "$work/ferrofed.toml")
-# The audit spools live on the audit-spool volume claim, which config check
-# creates its spool directories under.
-mkdir "$work/spool"
+# The audit spools keep their paths: config check writes nothing and reads
+# each spool directory where it stands.
 sed -i.orig -e "s|/run/secrets/ferrofed/|$work/secrets/|g" \
-  -e "s|/etc/ferrofed/|$work/|g" \
-  -e "s|/var/lib/ferrofed/|$work/spool/|g" "$work/ferrofed.toml"
+  -e "s|/etc/ferrofed/|$work/|g" "$work/ferrofed.toml"
 
 # check FILE: config check over FILE, as the image runs it.
 check() {

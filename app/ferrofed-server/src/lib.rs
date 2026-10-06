@@ -62,6 +62,7 @@ pub mod base_path;
 pub mod binding;
 pub mod body;
 pub mod cli;
+pub mod client_address;
 pub mod command;
 pub mod config;
 pub mod conformance;
@@ -178,7 +179,9 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// caller, before its answer leaves ([`access`]); a request refused by
 /// either limit writes no record. The request log
 /// records each request in the inbound request metrics of `state`
-/// ([`metrics::inbound`]).
+/// ([`metrics::inbound`]). Before any of them, each request served over a
+/// connection is named by the address it came from, its peer or the client
+/// a trusted proxy names ([`client_address`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
@@ -248,6 +251,10 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             admission,
             overload::admit,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(server.forwarding.clone()),
+            client_address::attach,
         ));
     layered(
         guarded,

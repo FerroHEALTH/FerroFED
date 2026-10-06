@@ -48,11 +48,11 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.44" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.30" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.21" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.31" }
+nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.22" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.4" }
-eehrxf = { path = "crates/eehrxf", version = "0.0.4" }
+ehds-logging = { path = "crates/ehds-logging", version = "0.0.5" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.5" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -135,6 +135,10 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The trusted reverse proxies of the listener (#722): the addresses and CIDR
+# blocks a forwarded client address is taken from. Verified against crates.io
+# on 2026-10-06.
+ipnet = "2.12.2"
 # The one time library (clippy.toml): the `saved` instant of a stored query
 # (#77).
 jiff = { version = "0.2.37", default-features = false, features = ["std"] }

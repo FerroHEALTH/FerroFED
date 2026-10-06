@@ -359,6 +359,43 @@ pub enum Error {
         /// The key that holds it.
         key: String,
     },
+    /// An entry of `server.trusted_proxies` is neither an IP address nor a
+    /// CIDR block.
+    #[error("{key} is neither an IP address nor a CIDR block such as 10.0.0.0/8")]
+    TrustedProxy {
+        /// The entry's key.
+        key: String,
+        /// Why it does not parse as an address.
+        #[source]
+        source: std::net::AddrParseError,
+    },
+    /// `server.public_url` is no `http` or `https` URL, or carries a user
+    /// name, a password, a query or a fragment.
+    #[error(
+        "server.public_url must be an http or https URL with no user name, password, query or fragment"
+    )]
+    PublicUrlForm,
+    /// The path of `server.public_url` is not `server.base_path`.
+    #[error(
+        "server.public_url names the path {path} and server.base_path is {base}; the public URL ends in the base path"
+    )]
+    PublicUrlPath {
+        /// The path the public URL names, with no trailing `/`.
+        path: String,
+        /// The base path.
+        base: String,
+    },
+    /// A key that repeats the public base URL names another route than the
+    /// one the gateway serves under it.
+    #[error(
+        "{key} is not the route the gateway serves under server.public_url, {served}; remove {key} to take that value, or correct it"
+    )]
+    PublicUrlDisagrees {
+        /// The key that repeats the public URL.
+        key: String,
+        /// The URL it should name.
+        served: String,
+    },
     /// An OAuth 2.0 grant cannot be built from its section.
     #[error("{section} is not a usable OAuth 2.0 client-credentials grant")]
     Grant {

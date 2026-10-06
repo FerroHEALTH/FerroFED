@@ -32,9 +32,18 @@ ferrofed report --config /etc/ferrofed/ferrofed.toml
 names, and without that every default stands. `config check` reads and
 resolves the configuration exactly as `serve` would, secrets included, loads
 a read-only stored-query directory, prints one line and exits, so a deployment
-pipeline can test a file without binding a socket. It opens no store file and
-connects to no database. `ferrofed report` writes the archive a complaint or a
-serious-incident report attaches, described on the
+pipeline can test a file without binding a socket. It opens no store file,
+connects to no database and writes nothing to disk, so it runs on a
+read-only root filesystem without the gateway's durable volume. An audit
+spool directory is checked where it stands and never created: one that
+exists must give its owner write access and its group and other users none,
+and hold no file the gateway did not write; one that does not exist needs a
+parent directory that does, whose mode lets a user write in it. Only the
+modes are read, so whether the gateway's own user may write there, and on a
+filesystem mounted writable, is left to `serve`, which creates the directory
+and refuses to start, naming its key, when it cannot. `ferrofed report`
+writes the archive a complaint or a serious-incident report attaches,
+described on the
 [Complaints and incidents](../evaluate/post-market.md#the-report-archive) page.
 `ferrofed admission check --endpoint <id>` checks
 one member against the admission conditions ([Admitting a node](admission.md)).
@@ -164,6 +173,9 @@ refuses that binding's sections as unknown keys.
 [server]
 listen = "127.0.0.1:8080"     # the socket address to bind
 base_path = "/"               # the path of the base URL every route sits under; see The base path
+# public_url = "https://gateway.example.org"   # the base URL clients reach; see The public address
+trusted_proxies = []          # the proxies whose forwarded client address is taken; see The public address
+forwarded_header = "forwarded"   # or "x-forwarded-for": the header those proxies name the client in
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
@@ -463,6 +475,8 @@ fragment, and has no empty, `.` or `..` segment, or the gateway refuses to
 start and names `server.base_path`. Tell clients the full base URL, scheme,
 host and this path, through the registry or service discovery; nodes never
 see it, because the gateway asks each node at the node's own base URL.
+Write that full URL once in `server.public_url`, and the keys that repeat
+it follow from it ([The public address](public-address.md)).
 
 ## The HTTP surface
 

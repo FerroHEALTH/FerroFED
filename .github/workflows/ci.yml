@@ -526,8 +526,12 @@ jobs:
           set -euo pipefail
           bash scripts/checks/site-links.sh --self-test
           bash scripts/checks/site-links.sh
-          bash scripts/checks/curl-examples.sh --self-test
-          bash scripts/checks/curl-examples.sh
+      # Every curl example of the pages sends the body it shows: never a bare
+      # number, and a here-document only through -d @-.
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/doc-curl.sh --self-test
+          bash scripts/checks/doc-curl.sh
 
   # The tracker helpers that carry a self-test. Their real branches run only
   # against the live tracker: the fallback of fields.sh needs a token that

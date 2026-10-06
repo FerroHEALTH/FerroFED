@@ -242,6 +242,8 @@ pub(crate) fn settings() -> ServerSettings {
     ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
         base_path: ferrofed_server::base_path::BasePath::default(),
+        public_url: None,
+        forwarding: ferrofed_server::client_address::Forwarding::default(),
         request_timeout: Duration::from_secs(5),
         drain_delay: Duration::ZERO,
         shutdown_timeout: Duration::from_secs(5),

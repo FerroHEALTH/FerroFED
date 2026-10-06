@@ -88,6 +88,8 @@ openehr-sdt.workspace = true
 jsonwebtoken.workspace = true
 # The per-caller rate limit of the listener (#631).
 governor.workspace = true
+# The trusted reverse proxies a forwarded client address is taken from (#722).
+ipnet.workspace = true
 # The metered cross-reference resolver implements the identity crate's
 # async resolver seam (#629).
 async-trait.workspace = true

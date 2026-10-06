@@ -26,8 +26,10 @@ use openehr_federation::object::Uri;
 use crate::base_path::BasePath;
 use crate::binding::development::DevSection;
 use crate::binding::seam::OnwardGrant;
+use crate::client_address::Forwarding;
 use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
+use crate::config::public_url::PublicUrl;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::listener::certificates::TlsFiles;
@@ -211,6 +213,10 @@ pub struct ServerSettings {
     pub listen: SocketAddr,
     /// The path every route sits under (§4.1, N28).
     pub base_path: BasePath,
+    /// The absolute URL clients reach `{base}` at, when configured.
+    pub public_url: Option<PublicUrl>,
+    /// The reverse proxies a forwarded client address is taken from.
+    pub forwarding: Forwarding,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
     /// How long the listener keeps accepting after the stop signal, with

@@ -154,12 +154,10 @@ elif [[ -n "$rendered" ]]; then
     mounts+=(--volume "$mount")
   done < <(jq -r '.services.ferrofed.volumes[] | select(.type == "bind") | "\(.source):\(.target):ro"' <<< "$rendered")
   # check: runs config check as the image does, read-only and unprivileged,
-  # with a writable /var/lib/ferrofed in place of the audit-spool volume,
-  # which config check creates its spool directories under.
+  # with no audit-spool volume, since config check writes nothing.
   check() {
     docker run --rm --read-only --user 65532:65532 --cap-drop ALL \
       --security-opt no-new-privileges:true --network none \
-      --tmpfs /var/lib/ferrofed:uid=65532,gid=65532,mode=0700 \
       --env FERROFED_CONFIG="$config" \
       --volume "$(cd "$(dirname "$binary")" && pwd)/$(basename "$binary"):/usr/local/bin/ferrofed:ro" \
       ${mounts[@]+"${mounts[@]}"} --entrypoint /usr/local/bin/ferrofed "$base" config check

@@ -41,6 +41,7 @@ use url::Url;
 
 use crate::ITS_REST_PREFIX;
 use crate::config::error::Error;
+use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
@@ -69,7 +70,8 @@ pub struct Pmir {
     pub trust_roots_file: Option<PathBuf>,
     /// The absolute URL the Registry sends the feed to: the gateway's public
     /// address followed by `{base}` and `path`, the `channel.endpoint` of the
-    /// subscription.
+    /// subscription. Empty, it is `path` under `server.public_url`, which
+    /// must then be set.
     pub callback_url: String,
     /// The path under `{base}` the gateway serves the feed at.
     pub path: String,
@@ -92,6 +94,9 @@ pub struct Pmir {
     /// the default, or `unsubscribe`.
     pub on_drain: OnDrain,
 }
+
+/// The key of the URL the Registry sends the feed to.
+const CALLBACK_URL: &str = "pmir.callback_url";
 
 /// What a draining gateway does with its subscription at the Registry.
 ///
@@ -232,12 +237,15 @@ pub fn sites(
 /// Resolves `[pmir]`: a registry to keep in step, a Registry and a callback
 /// URL with no user name or password, each `https` outside development, a
 /// feed token that fits a bearer header, a path of its own, and positive
-/// timings.
+/// timings. With `public`, the public base URL, set, an unset `callback_url`
+/// is the feed route under it, and a set one must name that route.
 ///
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `callback_url` or no feed
 /// token; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
-/// or is no `http(s)` URL without credentials; [`Error::Cleartext`] for one
+/// or is no `http(s)` URL without credentials; [`Error::PublicUrlDisagrees`]
+/// for a `callback_url` that names another route than the feed's under
+/// `public`; [`Error::Cleartext`] for one
 /// that is not `https` outside the development profile;
 /// [`Error::Authorization`] for a feed token that is no RFC 6750 `b64token`;
 /// [`Error::FeedPath`]; [`Error::GrantNotHere`] for OAuth 2.0 credentials;
@@ -245,6 +253,7 @@ pub fn sites(
 pub(crate) fn resolve(
     config: &Config,
     context: &ServiceContext<'_>,
+    public: Option<&PublicUrl>,
 ) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
@@ -262,18 +271,24 @@ pub(crate) fn resolve(
         });
     }
     http_url("pmir.url", pmir.url.expose())?;
-    if pmir.callback_url.is_empty() {
-        return Err(Error::Missing {
-            key: String::from("pmir.callback_url"),
-        });
-    }
-    let callback_url = http_url("pmir.callback_url", &pmir.callback_url)?;
+    let path = feed_path(&pmir.path)?;
+    let callback_url = match (pmir.callback_url.is_empty(), public) {
+        (false, _) => http_url(CALLBACK_URL, &pmir.callback_url)?,
+        (true, Some(public)) => public.route(CALLBACK_URL, &path)?,
+        (true, None) => {
+            return Err(Error::Missing {
+                key: String::from(CALLBACK_URL),
+            });
+        }
+    };
     if callback_url.fragment().is_some() {
         return Err(Error::HttpUrl {
-            key: String::from("pmir.callback_url"),
+            key: String::from(CALLBACK_URL),
         });
     }
-    let path = feed_path(&pmir.path)?;
+    if let Some(public) = public {
+        public.agrees(CALLBACK_URL, &callback_url, &path)?;
+    }
     let feed_token = secret(
         "pmir.feed_token",
         pmir.feed_token.as_ref(),
