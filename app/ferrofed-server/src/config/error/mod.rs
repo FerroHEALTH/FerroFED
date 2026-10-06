@@ -3,17 +3,18 @@
 
 //! The refusals of a configuration the server does not start on.
 
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 use ferrofed_registry::error::IdError;
 use openehr_its::rest::client::InvalidCredentials;
 
 use crate::config::ENV_PREFIX;
+use crate::config::error::basic::BasicFault;
 use crate::config::error::parse::{ParseFault, Stage};
 use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, TrustAnchorError};
 
+pub mod basic;
 pub mod parse;
 
 /// A configuration the server refuses to start on.
@@ -727,26 +728,6 @@ impl Error {
                 Self::Parse { fault }
             }
             other => other,
-        }
-    }
-}
-
-/// What RFC 7617 §2 forbids in a basic user-id or password.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum BasicFault {
-    /// A control character (`CTL` of RFC 5234 Appendix B.1), forbidden in
-    /// both the user-id and the password.
-    ControlCharacter,
-    /// A colon, forbidden in the user-id.
-    Colon,
-}
-
-impl fmt::Display for BasicFault {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ControlCharacter => f.write_str("a control character"),
-            Self::Colon => f.write_str("a colon"),
         }
     }
 }

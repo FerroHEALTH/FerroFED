@@ -13,6 +13,8 @@
 //! carrier, so no claim name has a default: no specification governs this:
 //! our own design.
 
+use std::collections::BTreeSet;
+
 use http::HeaderName;
 use serde::Deserialize;
 
@@ -46,6 +48,28 @@ pub struct ContactPointClaims {
     /// joined with the contact point's own log; absent by default, and then
     /// none is read.
     pub correlation_header: Option<String>,
+    /// The ISO 3166-1 alpha-2 codes, beside the Member States
+    /// ([`MEMBER_STATES`]), a `country_code` this contact point relays may
+    /// name: a third country whose contact point the Commission connected
+    /// to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)); none by default.
+    pub additional_countries: Vec<String>,
+}
+
+/// The ISO 3166-1 alpha-2 codes of the EU Member States, in code order.
+///
+/// They are the countries a `country_code` names (Implementing Regulation
+/// (EU) 2026/2099 Annex Table 1, "representing the Member State that issued
+/// the health professional identification data").
+pub const MEMBER_STATES: [&str; 27] = [
+    "AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IT",
+    "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
+];
+
+/// Whether `code` has the form of an ISO 3166-1 alpha-2 code: two
+/// upper-case ASCII letters.
+#[must_use]
+pub fn is_alpha_2(code: &str) -> bool {
+    code.len() == 2 && code.bytes().all(|byte| byte.is_ascii_uppercase())
 }
 
 /// The headers that carry a credential, which a correlation header may not
@@ -59,6 +83,17 @@ pub struct ContactPoint {
     pub claims: ContactPointClaims,
     /// The correlation header, when one is declared.
     pub correlation_header: Option<HeaderName>,
+    /// The codes beside [`MEMBER_STATES`] a `country_code` may name.
+    pub additional_countries: BTreeSet<String>,
+}
+
+impl ContactPoint {
+    /// Whether a `country_code` this contact point relays may name `code`:
+    /// a Member State, or a country the deployment adds for it.
+    #[must_use]
+    pub fn admits_country(&self, code: &str) -> bool {
+        MEMBER_STATES.contains(&code) || self.additional_countries.contains(code)
+    }
 }
 
 impl ContactPointClaims {
@@ -68,8 +103,11 @@ impl ContactPointClaims {
     /// # Errors
     ///
     /// Returns [`Error::Missing`] for a claim name not set, and
-    /// [`Error::Auth`] with [`AuthFault::HeaderName`] for a correlation
-    /// header that is no field name.
+    /// [`Error::Auth`] with [`AuthFault::HeaderName`] or
+    /// [`AuthFault::CorrelationCredential`] for a correlation header that is
+    /// no field name or carries a credential, and with
+    /// [`AuthFault::CountryCode`] for an additional country that is no
+    /// alpha-2 code or is already a Member State.
     pub fn resolve(&self, key: &str) -> Result<ContactPoint, Error> {
         for (name, claim) in [
             ("family_name", &self.family_name),
@@ -106,9 +144,48 @@ impl ContactPointClaims {
                 Ok(name)
             })
             .transpose()?;
+        let mut additional_countries = BTreeSet::new();
+        for code in &self.additional_countries {
+            if !is_alpha_2(code) || MEMBER_STATES.contains(&code.as_str()) {
+                return Err(fault(
+                    &format!("{key}.additional_countries"),
+                    AuthFault::CountryCode,
+                ));
+            }
+            additional_countries.insert(code.clone());
+        }
         Ok(ContactPoint {
             claims: self.clone(),
             correlation_header,
+            additional_countries,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MEMBER_STATES, is_alpha_2};
+
+    #[test]
+    fn only_two_upper_case_letters_have_the_alpha_2_form() {
+        for code in ["NL", "XA", "BE"] {
+            assert!(is_alpha_2(code), "{code}");
+        }
+        for code in ["", "N", "nl", "NLD", "N1", "ÑL"] {
+            assert!(!is_alpha_2(code), "{code}");
+        }
+    }
+
+    #[test]
+    fn the_member_states_are_27_alpha_2_codes_in_order_once_each() {
+        assert_eq!(27, MEMBER_STATES.len());
+        assert!(MEMBER_STATES.iter().all(|code| is_alpha_2(code)));
+        assert!(
+            MEMBER_STATES.windows(2).all(|pair| pair[0] < pair[1]),
+            "sorted, with no code twice"
+        );
+        for not_a_member in ["GB", "NO", "IS", "LI", "CH", "EL", "EU"] {
+            assert!(!MEMBER_STATES.contains(&not_a_member), "{not_a_member}");
+        }
     }
 }

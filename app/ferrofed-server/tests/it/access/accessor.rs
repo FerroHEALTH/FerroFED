@@ -25,10 +25,11 @@ use http::StatusCode;
 use serde_json::Value;
 
 use super::{
-    LAB_REPORT, TestResult, accesses, composition, gateway_and_state, node_with_rows,
+    LAB_REPORT, TestResult, accesses, composition, details, gateway_and_state, node_with_rows,
     recorded_the_query,
 };
 use crate::auth::{bearing, minted, query};
+use crate::contact_point;
 use crate::facade::{EHR_A, EHR_B, PATIENT, settings_with_room};
 use crate::feed_audit::SETTLE;
 use crate::support::{self, Logs, call};
@@ -50,10 +51,6 @@ const IDENTIFIER: &str = "urn:oid:2.999.7.1|hp-0742";
 
 /// The synthetic `client_id` of a national contact point's connector.
 const CONNECTOR: &str = "Qz7-national-connector";
-
-/// A synthetic foreign healthcare provider (IHE IUA
-/// `subject_organization_id`).
-const FOREIGN_PROVIDER: &str = "urn:oid:2.999.9.1";
 
 /// The suite's `[auth]`, its issuer reading `acr` at the levels above and
 /// requiring `minimum`, and declaring its client tokens as acting for a
@@ -254,33 +251,47 @@ async fn a_declared_client_is_recorded_acting_for_the_professional() -> TestResu
     Ok(())
 }
 
-/// Annex II 3.2(a), (b): a national contact point's connector, a client
+/// Annex II 3.2(a), (b), Implementing Regulation (EU) 2026/2099 Art 7: the
+/// connector of an issuer declared a national contact point, a client
 /// acting for a foreign professional, is recorded with the foreign provider
-/// as the provider, the foreign professional as the natural person, and
-/// the connector as the client that relayed the request.
+/// as the provider, the foreign professional as the natural person, the
+/// connector as the client that relayed the request, and the Annex
+/// attributes marked as the contact point's assertion.
 #[tokio::test]
 async fn a_contact_point_caller_names_the_foreign_professional_and_provider() -> TestResult {
-    let mut claims = professional(HIGH);
+    let mut claims = contact_point::relaying();
     CONNECTOR.clone_into(&mut claims.client_id);
     CONNECTOR.clone_into(&mut claims.sub);
+    claims.other.insert(String::from("acr"), HIGH.to_owned());
     if let Some(extensions) = claims.extensions.as_mut() {
-        extensions.ihe_iua.subject_organization_id = Some(FOREIGN_PROVIDER.to_owned());
+        extensions.ihe_iua.subject_name = Some(NAME.to_owned());
     }
-    let record = recorded(assured(AssuranceLevel::High, true), &claims)
-        .await?
-        .record;
+    let mut auth = assured(AssuranceLevel::High, false);
+    let declared = contact_point::declared()?;
+    for (issuer, contact) in auth.issuers.iter_mut().zip(declared.issuers) {
+        issuer.national_contact_point = contact.national_contact_point;
+    }
+    let record = recorded(auth, &claims).await?.record;
     let person = person(&record)?;
     assert_eq!(acting(person), Some("client"));
     assert_eq!(person["who"]["display"], NAME, "3.2(b)");
-    assert_eq!(identifiers(person), [IDENTIFIER], "3.2(b)");
+    assert_eq!(identifiers(person), [contact_point::HP_ID], "3.2(b)");
     assert_eq!(levels(person), ["high"]);
     let others = others(&record);
-    assert!(others.contains(&FOREIGN_PROVIDER), "3.2(a): {others:?}");
+    assert!(
+        others.contains(&contact_point::HCP_ID),
+        "3.2(a): {others:?}"
+    );
     assert!(
         others.contains(&CONNECTOR),
         "the relaying client: {others:?}"
     );
-    only_in_the_person(&record, &[NAME, IDENTIFIER, "ihe-assuranceLevel"]);
+    assert_eq!(details(&record, "ehds-relayed", "asserted"), ["true"]);
+    assert_eq!(
+        details(&record, "ehds-relayed", "contact-point"),
+        [support::ISSUER]
+    );
+    only_in_the_person(&record, &[NAME, "ihe-assuranceLevel"]);
     Ok(())
 }
 
