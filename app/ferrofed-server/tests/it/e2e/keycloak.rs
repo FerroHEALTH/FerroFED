@@ -8,7 +8,11 @@
 //! answer over the two FerroEHR nodes (§13.1, N25; RFC 9068).
 //!
 //! A user signed in to the clinical application and the reporting service's
-//! client-credentials grant each get a `200`. With the client's
+//! client-credentials grant, its token naming the professional it acts for
+//! and both stating the realm's `acr`, each get a `200`. Without the
+//! professional mapper, the service's token names no natural person and is
+//! refused `401 natural-person-required` (Regulation (EU) 2025/327 Annex II
+//! 3.1). With the client's
 //! `access.token.header.type.rfc9068` attribute off, the same user's token
 //! is refused `401` for its type (RFC 9068 §4). Keycloak is an issuer here,
 //! never the oracle: a Keycloak release that changes what the recipe
@@ -33,7 +37,11 @@ use crate::e2e::{
     Answer, TestResult, assert_no_patient_identifier_on_the_wire, dev_resolver, patient_query,
     query, registry_document,
 };
-use crate::support::send_as_is;
+use crate::support::{error_body, send_as_is};
+
+/// The name of the recipe's mapper that names the professional the
+/// reporting service acts for, in `professional.json` on the page.
+const PROFESSIONAL_MAPPER: &str = "professional";
 
 /// The gateway over node A and node B, resolving the patient through the
 /// development cross-reference, at the page's public base URL, which
@@ -107,6 +115,17 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service
         assert_eq!(2, answer.rows.len(), "{caller}: one row per member: {text}");
     }
     assert_no_patient_identifier_on_the_wire(&nodes);
+
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.1: a `system/` token names no natural
+    // person, so without the professional mapper the service reaches no patient data.
+    idp.remove_mapper(REPORTING_SERVICE, PROFESSIONAL_MAPPER)
+        .await?;
+    let nameless = idp
+        .client_credentials_token(REPORTING_SERVICE, &secrets.reporting_service)
+        .await?;
+    let (status, _, text) = ask(app.clone(), &nameless).await?;
+    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
+    assert_eq!("natural-person-required", error_body(&text)?.code, "{text}");
 
     idp.type_tokens(CLINICAL_APP, false).await?;
     let untyped = idp.user_token(&secrets.clinical_app).await?;

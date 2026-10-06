@@ -12,6 +12,7 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
+mod assurance;
 mod cited;
 mod config;
 mod edge;
@@ -20,6 +21,7 @@ mod kept_token;
 mod keys;
 mod other_patient;
 mod patient;
+mod professional;
 mod purpose;
 mod scope;
 mod token;

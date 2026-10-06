@@ -20,6 +20,10 @@
 //! The caller then needs what the operation requires ([`permission`]): a
 //! SMART on openEHR resource scope read with `openehr-sdt`, and a purpose of
 //! use unless the deployment declared it optional (§13.4). A request that
+//! reaches patient data also needs a natural person behind the token, or a
+//! client its issuer declares as acting for the professional the token
+//! names, and the authentication assurance its issuer's entry requires
+//! (Regulation (EU) 2025/327 Annex II 3.1). A request that
 //! fails is answered `401`, `403` or `503` and reaches nothing behind the
 //! gate; one that passes carries its [`Caller`] in its extensions. The
 //! caller's credential is never forwarded to a node: the node dispatch sends
@@ -46,6 +50,7 @@ use std::time::Duration;
 use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
+use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
@@ -219,19 +224,25 @@ impl Gate {
                         )
                     })
                     .collect();
-                let confined = grant::confined(
-                    &covering
-                        .iter()
-                        .map(|scope| (*scope).clone())
-                        .collect::<Vec<_>>(),
-                );
+                let owned: Vec<SmartScope> =
+                    covering.iter().map(|scope| (*scope).clone()).collect();
+                let confined = grant::confined(&owned);
+                let backend = grant::backend_only(&owned);
                 let covering = SmartScope::format_all(covering);
                 caller = caller.with_covering(covering);
+                // NOTE: SMART on openEHR master08 §Resource Scopes: a `system/` scope is
+                // granted "to backend applications acting without a user context".
+                if backend {
+                    caller = caller.with_acting(Acting::Client);
+                }
                 if confined {
                     let context = patient_context(&caller, trusted)?;
                     caller = caller.with_patient(context);
                 }
             }
+        }
+        if requirement.reaches_patient_data() {
+            professional(&caller, &trusted.settings)?;
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
         // the purpose, so a request that reaches past the gate carries one.
@@ -350,9 +361,16 @@ impl Gate {
         };
         let launch_ehr_id = token.claims.launch_ehr_id();
         let requester = token.claims.requester(trusted.settings.requester.as_ref());
-        let caller = Caller::new(token.claims.stated(), verified_by)
+        let professional = token.claims.professional();
+        let assurance = assurance_of(&trusted.settings, |claim| token.claims.text(claim));
+        let stated = token.claims.stated();
+        let acting = acting(&stated.subject, &stated.client_id);
+        let caller = Caller::new(stated, verified_by)
             .with_launch_ehr_id(launch_ehr_id)
-            .with_requester(requester);
+            .with_requester(requester)
+            .with_professional(professional)
+            .with_assurance(assurance)
+            .with_acting(acting);
         Ok((caller, trusted))
     }
 
@@ -409,6 +427,7 @@ impl Gate {
         let (Some(subject), Some(client_id)) = (answer.sub, answer.client_id) else {
             return Err(Refusal::Malformed);
         };
+        let acting = acting(&subject, &client_id);
         let stated = Stated {
             issuer: trusted.settings.issuer.clone(),
             subject,
@@ -422,9 +441,13 @@ impl Gate {
             .requester
             .as_ref()
             .and_then(|named| answer.others.requester(named));
+        let assurance = assurance_of(&trusted.settings, |claim| answer.others.text(claim));
         Ok(Caller::new(stated, VerifiedBy::Introspection)
             .with_launch_ehr_id(answer.ehr_id)
-            .with_requester(requester))
+            .with_requester(requester)
+            .with_professional(answer.declared.professional())
+            .with_assurance(assurance)
+            .with_acting(acting))
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.
@@ -456,6 +479,63 @@ fn patient_context(caller: &Caller, trusted: &Trusted) -> Result<PatientContext,
         binding.ehr_id_system.clone(),
         ehr_id,
     ))
+}
+
+/// Holds `caller`, admitted to patient data, to who acts and how they
+/// authenticated, as `issuer`'s entry requires.
+///
+/// Regulation (EU) 2025/327 Annex II 3.1 asks for "reliable mechanisms for
+/// the identification and authentication of health professionals", and
+/// Implementing Regulation (EU) 2026/2099 Art 6(3) sets the assurance level
+/// of that authentication for a cross-border exchange. Which claim values
+/// stand for which level, and the least level, are the deployment's per
+/// issuer: no specification governs this: our own design.
+///
+/// # Errors
+///
+/// Returns [`Refusal::NaturalPerson`] when a client acts and the issuer does
+/// not declare its client tokens as acting for the professional they name,
+/// or the token names none, and [`Refusal::Assurance`] when the issuer
+/// requires a level and the token states none at or above it.
+fn professional(caller: &Caller, issuer: &IssuerSettings) -> Result<(), Refusal> {
+    if caller.acting() == Acting::Client
+        && !(issuer.client_tokens_act_for_professional && caller.names_professional())
+    {
+        return Err(Refusal::NaturalPerson);
+    }
+    if let Some(assurance) = &issuer.assurance
+        && caller
+            .assurance()
+            .is_none_or(|level| level < assurance.minimum)
+    {
+        return Err(Refusal::Assurance);
+    }
+    Ok(())
+}
+
+/// The assurance level `stated`, the value of the claim `issuer`'s entry
+/// names, stands for, when the entry declares a mapping and the value is in
+/// it.
+fn assurance_of(
+    issuer: &IssuerSettings,
+    stated: impl Fn(&str) -> Option<String>,
+) -> Option<AssuranceLevel> {
+    let assurance = issuer.assurance.as_ref()?;
+    // NOTE: no specification governs this: our own design; a value the entry declares at
+    // no level states no level, which no minimum admits.
+    stated(&assurance.claim).and_then(|value| assurance.level_of(&value))
+}
+
+/// Who acts behind a token whose `sub` is `subject` and whose `client_id`
+/// is `client_id`.
+fn acting(subject: &str, client_id: &str) -> Acting {
+    // NOTE: IHE IUA ITI TF-2 3.71.4.2.2.1: `sub` is the "unique identifier of the
+    // user" if known, "the client_id otherwise".
+    if subject == client_id {
+        Acting::Client
+    } else {
+        Acting::Person
+    }
 }
 
 /// The `iss` of a token not yet verified.

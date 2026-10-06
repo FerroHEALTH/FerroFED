@@ -37,8 +37,8 @@ length of one request and is never written to disk or to a log.
 What it does keep is routing state, audit records and operational telemetry.
 Several of these hold personal data: an `ehr_id` is a pseudonymous key to one
 patient's record at one node, the caller's identity names a health
-professional, and the IHE audit records name the patient. Every row of the
-inventory below names what it carries.
+professional, the IHE audit records name the patient, and the access records
+name both. Every row of the inventory below names what it carries.
 
 ## Processing inventory
 
@@ -54,7 +54,8 @@ inventory below names what it carries.
 | Per-caller rate buckets | the caller's issuer and `client_id` | process memory, per replica | until the bucket refills; at most 10 000 callers | none read outside the process | `[server.caller_rate]` |
 | IHE audit spools | the patient identifier inside each ITI-83, ITI-78, ITI-119 and ITI-55 record; the identities a PMIR message names; the caller's `iss`, `sub`, `client_id` and purposes of use on a record made for a caller | a directory on disk, one per replica | until the Audit Record Repository accepts the record; a quarantined record until you remove it | directory `0700`, files `0600`, refused at start when open to other users; bounded by `spool_max_bytes` (64 MiB) and `spool_max_events` (100 000); encryption at rest is the volume's ([The audit trail](../operate/audit.md)) | `[audit.repository]`, `[xcpd.audit_repository]` |
 | The ATNA Audit Record Repository | the same records | your repository | your repository's retention | ITI-20 over TLS: the FHIR Feed over `https`, syslog over TLS | the repository's own |
-| The `log` audit destination | the profile, the action, the outcome, the other party, counts of entities, and `on_behalf` as `caller` or `gateway` | the log | your log pipeline's retention | no patient identifier, no request content, and no `sub`, `client_id` or issuer of the caller | `[audit] destination = "log"`, `[xcpd] audit = "log"` |
+| The access records | for each federated query, stored-query execution, routed read and routed write that reached a node: the caller's `iss`, `sub`, `client_id`, organisation, professional identification and purposes of use; the patient identifier and namespace the request named, and each `ehr_id` reached with its endpoint; the request as the client sent it, which may name the patient; the request id and the address the request came from; each endpoint asked with its node, `system_id`, outcome and row count; the categories of the data | the `[audit]` spool, then the Audit Record Repository | as the IHE audit records above | stored before the answer leaves, and an access whose record cannot be stored is answered `503 access-unrecorded` with none of the data; the spool and transport protections above; no part reaches a node, the log, a span or a metric label ([The access log](../operate/audit.md#the-access-log)) | `[audit]`, `[audit.repository]`, `[access_log]` |
+| The `log` audit destination | the profile, the action, the outcome, the server of a request the gateway sent, counts of entities, and `on_behalf` as `caller` or `gateway` | the log | your log pipeline's retention | no patient identifier, no request content, no `sub`, `client_id` or issuer of the caller, and no client of a request the gateway received; refused outside development for a gateway with a registry, because it cannot hold the access records | `[audit] destination = "log"`, `[xcpd] audit = "log"` |
 | The request log and every other log line | the method, route template, status, latency and request id; a security event's reason; in the edge mode, keyed HMAC references to the subject and client that change at every start | stdout, then your log pipeline | your log pipeline's retention | no request body, AQL text, header value, request path or patient identifier ([What the log records](../operate/configuration.md#what-the-log-records)) | `[telemetry] filter`, `format` |
 | Metrics | none: every label value comes from a closed set or the registry | the admin listener, the OTLP push | your metrics store's retention | [Metrics](../operate/metrics.md) | `[metrics]` |
 | Trace spans | none: route templates, registry ids, operations, statuses and counts; the trace id is the gateway's own, never the client's | your OpenTelemetry collector | your collector's retention | [Tracing](../operate/tracing.md) | `[telemetry] otlp_endpoint`, `trace_sample_ratio` |
@@ -71,20 +72,40 @@ gateway shows each as `***` wherever it renders the configuration, and the
 The gateway sends nothing to its manufacturer. Every outbound connection goes
 to a URL your configuration names.
 
-### What is not recorded yet
+### The record of each access
 
-The gateway does not yet keep its own record of who accessed which EHR at
-which node. The request log names no caller, by design, and the IHE audit
-records cover the identity transactions, not the clinical reads and writes.
-Today that accountability sits at the member nodes: every request carries the
-verified caller in the `openEHR-federation-client` token and the gateway's
-request id, and each node audits who asked (§13.1, N24;
+The gateway records every access to patient data it intermediates: each
+federated query and stored-query execution that a member was sent, and each
+routed read and write a node acted on, the operator console's queries
+included. Each record names the verified caller, the patient and every
+`ehr_id` reached, each endpoint asked and the categories of the data. The
+gateway stores it in the `[audit]` spool before the answer leaves, and
+answers an access whose record cannot be stored with `503
+access-unrecorded` and none of the data
+([The access log](../operate/audit.md#the-access-log)). The record follows
+Annex II, point 3.2, of the EHDS Regulation, and the library that builds it
+is `crates/ehds-logging`.
+
+What the record does not cover:
+
+- A definition request, such as a template or a stored-query definition,
+  reaches no patient data and is not recorded.
+- Under the development profile, an unset `[audit] destination` records
+  nothing, and `log` writes counts that name no one. Outside development, a
+  gateway with a registry refuses every destination but `repository`.
+- A build without the IHE binding records no access, and refuses a registry
+  outside development.
+- FerroFED offers no interface of its own to review the records (Annex II,
+  point 3.3), and keeps them for no period by origin and category (point
+  3.4). Both are planned
+  ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)); until then
+  your Audit Record Repository decides who reads the records and how long
+  it keeps them.
+
+Each member node still audits who asked: every request carries the verified
+caller in the `openEHR-federation-client` token and the gateway's request
+id (§13.1, N24;
 [Verifying it at the node](../operate/authentication.md#verifying-it-at-the-node)).
-A record of every federated query, routed read and routed write, naming the
-verified caller, is being built
-([#623](https://github.com/FerroHEALTH/FerroFED/issues/623)), and the
-European logging software component of the EHDS Regulation builds on it
-([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
 
 ## Retention
 
@@ -96,7 +117,7 @@ hands to another system is kept as long as that system keeps it.
 | A resolution binding | 15 minutes after the last resolution that returned it | `federation.binding_ttl_ms`, `binding_capacity` | a restart forgets it |
 | An `ehr_id` index entry | until 100 000 newer entries push it out | `federation.ehr_index_capacity` | a restart forgets it |
 | An operator console session | 30 minutes idle, 12 hours at most | `session.idle_timeout_s`, `absolute_timeout_s` | the access token's own lifetime |
-| An IHE audit record in the spool | until the repository accepts it | `spool_max_bytes`, `spool_max_events` | a quarantined record waits for you to remove it |
+| An IHE audit record or an access record in the spool | until the repository accepts it | `spool_max_bytes`, `spool_max_events` | a quarantined record waits for you to remove it |
 | An audit record at the repository | none from the gateway | none | the repository's retention policy |
 | Log lines, metrics, spans | none from the gateway | none | your log, metrics and trace stores |
 | Stored-query definitions | kept | none | they hold no personal data |
@@ -106,10 +127,11 @@ identification of data subjects for no longer than is necessary". Set the
 retention of the audit repository and of the log pipeline in your records of
 processing. The EHDS Regulation asks that information on each access to a
 person's data through the health professional access service "be available
-for at least three years from each date of access" (Art 9(2)); that duty
-belongs to the access service, and the logging component
-([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)) is planned to
-supply its records.
+for at least three years from each date of access" (Art 9(2)). That duty
+belongs to the access service. The gateway's access records are kept as long
+as your Audit Record Repository keeps them, so its retention policy decides
+whether they meet that period; retention by origin and category is planned
+([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
 
 ## Roles
 
@@ -163,7 +185,7 @@ its own release and consent decision (§13.2, N26, N27).
 | Each member CDR's operator | holds the clinical record and decides what it releases to the gateway |
 | The PIX Manager, PDQm Supplier, XCPD gateways, NVI and Mitz | receive the patient identifier, and Mitz the professional's identity, to answer the gateway |
 | The caller's issuer | issues the token that names the professional |
-| The Audit Record Repository | stores the IHE audit records |
+| The Audit Record Repository | stores the IHE audit records and the access records, which name the patient and the professional |
 | The log, metrics and trace stores | receive the operational telemetry above |
 
 Each is a recipient in the sense of GDPR Art 30(1)(d) and has a role of its
@@ -194,10 +216,10 @@ assessment needs; the deployment adds its own:
   turns them into a checklist.
 - **The risks to bring into the assessment.** The patient identifier leaving
   for the identity services; the caller's identity reaching every member
-  asked; the audit spool on disk; a wrong link at the identity service
-  routing a request to another patient's EHR; and the missing per-access
-  record until [#623](https://github.com/FerroHEALTH/FerroFED/issues/623)
-  lands.
+  asked; the audit spool on disk, which holds the access records until the
+  repository accepts them; the access records at the repository, which name
+  the patient and the professional for every access; and a wrong link at
+  the identity service routing a request to another patient's EHR.
 
 ## A template for the record of processing
 
@@ -259,9 +281,8 @@ prejudice to incident notification requirements under Directive (EU)
 2022/2555" (Art 44(7)). That is the manufacturer's duty, planned in
 [#672](https://github.com/FerroHEALTH/FerroFED/issues/672).
 
-Two gaps limit what an entity can show today, and both are filed: the
-per-access record ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623))
-and authentication on the admin listener
+One gap limits what an entity can show today, and it is filed:
+authentication on the admin listener
 ([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)).
 
 ## The medical device question

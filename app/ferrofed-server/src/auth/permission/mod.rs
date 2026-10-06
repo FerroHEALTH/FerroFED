@@ -77,6 +77,26 @@ pub enum Requirement {
     },
 }
 
+impl Requirement {
+    /// Whether an operation with this requirement reaches patient data at a
+    /// node: an EHR's content, held to the `composition-` family, a query
+    /// execution, an `aql-` search, and the DEMOGRAPHIC API. A definition,
+    /// the self-description and the operator surface reach none.
+    #[must_use]
+    pub const fn reaches_patient_data(self) -> bool {
+        match self {
+            Self::Demographic => true,
+            Self::Scope {
+                family, permission, ..
+            } => matches!(
+                (family, permission),
+                (ResourceFamily::Composition, _) | (ResourceFamily::Aql, Permission::Search)
+            ),
+            Self::Caller | Self::Refused | Self::Operator => false,
+        }
+    }
+}
+
 /// Which resource of its family a request addresses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

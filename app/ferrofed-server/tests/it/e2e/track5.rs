@@ -86,9 +86,9 @@ async fn order_by_and_limit_return_the_global_top_rows_deterministically() -> Te
 
     let top = track5::compositions(
         &fixture,
-        "c/uid/value AS uid",
-        "ORDER BY c/uid/value ASC LIMIT 1",
-    );
+        "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c \
+         ORDER BY c/uid/value ASC LIMIT 1",
+    )?;
     for slow in [&nodes.a, &nodes.b] {
         slow.proxy
             .set_fault(Fault::Delay(Duration::from_millis(1_500)));

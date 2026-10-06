@@ -10,7 +10,8 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use ferrofed_engine::conveyance::{
-    Caller, Conveyance, Principal, Purpose, Signer, TYPE, Verification,
+    Acting, AssuranceLevel, Caller, Conveyance, Principal, Professional, Purpose, Signer, TYPE,
+    Verification,
 };
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
@@ -33,6 +34,13 @@ pub(crate) const ORGANISATION: &str = "urn:oid:2.999.7";
 
 /// The synthetic caller's scopes as granted.
 pub(crate) const SCOPE: &str = "user/aql-*.s user/composition-*.cru";
+
+/// The synthetic professional's name (IHE IUA `subject_name`).
+pub(crate) const PROFESSIONAL_NAME: &str = "Example Clinician";
+
+/// The synthetic professional's identifier (IHE IUA
+/// `national_provider_identifier`).
+pub(crate) const PROFESSIONAL_ID: &str = "urn:oid:2.999.7.1|hp-0042";
 
 /// The HL7 v3 `ActReason` code system the purpose of use is coded in.
 pub(crate) const ACT_REASON: &str = "http://terminology.hl7.org/CodeSystem/v3-ActReason";
@@ -69,6 +77,12 @@ pub(crate) fn caller() -> Caller {
         }],
         scope: SCOPE.to_owned(),
         verified_by: Verification::Signature,
+        professional: Professional {
+            name: Some(PROFESSIONAL_NAME.to_owned()),
+            identifier: Some(PROFESSIONAL_ID.to_owned()),
+        },
+        acting: Acting::Person,
+        assurance_level: Some(AssuranceLevel::Substantial),
     }
 }
 
@@ -109,6 +123,10 @@ pub(crate) struct Read {
     #[serde(default)]
     pub(crate) purpose_of_use: Vec<ReadPurpose>,
     pub(crate) scope: Option<String>,
+    pub(crate) subject_name: Option<String>,
+    pub(crate) national_provider_identifier: Option<String>,
+    pub(crate) acting: Option<String>,
+    pub(crate) assurance_level: Option<String>,
 }
 
 /// Verifies `token` as a node does: its `typ`, its algorithm against the

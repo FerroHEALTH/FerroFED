@@ -30,7 +30,7 @@ use crate::conformance::{Failure, ensure, ensure_eq};
 pub async fn row_uids<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result<Vec<String>, Failure> {
     let (_, answer) = answered(
         gateway,
-        post_aql(&patient_compositions(fixture), &[])?,
+        post_aql(&patient_compositions(fixture)?, &[])?,
         "the patient query",
     )
     .await?;

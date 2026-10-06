@@ -228,6 +228,15 @@ pub enum Code {
     /// The access the request made could not be recorded in the access log,
     /// so its answer is withheld (Regulation (EU) 2025/327 Annex II 3.2).
     AccessUnrecorded,
+    /// The request reaches patient data, and the access token names no
+    /// natural person: a client acts, and its issuer does not declare its
+    /// client tokens as acting for the professional they name (Regulation
+    /// (EU) 2025/327 Annex II 3.1; RFC 9470 §3).
+    NaturalPersonRequired,
+    /// The request reaches patient data, and the access token states no
+    /// authentication assurance at the least level its issuer's entry
+    /// requires (Regulation (EU) 2025/327 Annex II 3.1; RFC 9470 §3).
+    AuthenticationAssuranceInsufficient,
 }
 
 /// The code of a refused query: the refusal's stable kind

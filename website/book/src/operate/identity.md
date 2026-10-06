@@ -332,7 +332,10 @@ every domain, address and secret is an example.
    `1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1.0`, and set
    `SDB_OPENID_INSECURE_CLIENT_AUTH: "true"` so an application can obtain a
    token with no device credential. SanteMPI denies the client-credentials
-   grant otherwise.
+   grant otherwise. Grant the two policies by hand: SanteDB 2.x loads its
+   OAuth flow policies from `000-OAuthPolicies.dataset` after its
+   initialisation script has granted the built-in applications every
+   policy that existed then, so no application holds them out of the box.
 3. Register the identity domains: the patient namespace, open to every
    source, and one per member, with `url` set to the member's domain URI
    and the member's feed application as its assigning application, so that

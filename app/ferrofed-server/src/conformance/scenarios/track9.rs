@@ -20,9 +20,13 @@ use std::collections::BTreeMap;
 use http::{Method, StatusCode};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::options::OptionsRoot;
+use openehr_query::ast::Primitive;
+use openehr_query::bind::Parameters;
+use openehr_query::federation::DirectiveKind;
 use secrecy::ExposeSecret;
 use serde::Serialize;
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::{Gateway, Reply, answered, ask, checked, get, post_aql, request};
 use crate::conformance::fixture::{Fixture, Member};
 use crate::conformance::scenarios::{directed_at, undirected};
@@ -32,17 +36,37 @@ use crate::conformance::{Failure, ensure, ensure_eq};
 pub const DEMOGRAPHIC_UNSUPPORTED: &str = "unsupported: 501";
 
 /// The query of the EHR `ehr_id` in the `WHERE` form of N29.
-#[must_use]
-pub fn where_form(ehr_id: &str) -> String {
-    format!(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{ehr_id}'"
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn where_form(ehr_id: &str) -> Result<String, Failure> {
+    of_ehr(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = $ehr_id",
+        ehr_id,
     )
 }
 
 /// The same query in the `FROM EHR` form of N29.
-#[must_use]
-pub fn from_form(ehr_id: &str) -> String {
-    format!("SELECT c/uid/value FROM EHR e[ehr_id/value='{ehr_id}'] CONTAINS COMPOSITION c")
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn from_form(ehr_id: &str) -> Result<String, Failure> {
+    of_ehr(
+        "SELECT c/uid/value FROM EHR e[ehr_id/value=$ehr_id] CONTAINS COMPOSITION c",
+        ehr_id,
+    )
+}
+
+/// The query `template` with `ehr_id` bound to its `$ehr_id`, as the
+/// literal a client writes.
+fn of_ehr(template: &str, ehr_id: &str) -> Result<String, Failure> {
+    let mut parameters = Parameters::new();
+    parameters.insert("ehr_id", Primitive::String(ehr_id.to_owned()));
+    Ok(ClientQuery::parse(template)?.bound(&parameters)?.to_aql())
 }
 
 /// Returns the gateway's self-description, `OPTIONS {base}/`, held to
@@ -82,13 +106,13 @@ pub async fn plain_client<G: Gateway>(
     options(gateway).await?;
     let (_, where_rows) = answered(
         gateway,
-        post_aql(&where_form(ehr_id), &[])?,
+        post_aql(&where_form(ehr_id)?, &[])?,
         "N29: the WHERE form",
     )
     .await?;
     let (_, from_rows) = answered(
         gateway,
-        post_aql(&from_form(ehr_id), &[])?,
+        post_aql(&from_form(ehr_id)?, &[])?,
         "N29: the FROM EHR form",
     )
     .await?;
@@ -247,16 +271,36 @@ pub async fn definition_unnamed<G: Gateway>(
     )
 }
 
-/// The patient's compositions over `from`, the identifier bound through
-/// `$patient` so the definition the registry holds carries none (§5.4.1).
-#[must_use]
-pub fn parameterised(fixture: &Fixture, from: &str) -> String {
-    format!(
-        "SELECT c/uid/value AS uid FROM {from} CONTAINS COMPOSITION c \
-         WHERE e/ehr_status/subject/external_ref/id/value = $patient \
-         AND e/ehr_status/subject/external_ref/namespace = '{}'",
-        fixture.patient.namespace()
-    )
+/// The patient's compositions, directed at `endpoint` when one is given, the
+/// identifier bound through `$patient` so the definition the registry holds
+/// carries none (§5.4.1).
+///
+/// The namespace is the definition's own literal.
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn parameterised(fixture: &Fixture, endpoint: Option<&str>) -> Result<String, Failure> {
+    let mut namespace = Parameters::new();
+    namespace.insert(
+        "patient_namespace",
+        Primitive::String(fixture.patient.namespace().to_owned()),
+    );
+    let query = ClientQuery::parse(
+        "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = $patient",
+    )?
+    .and_where(
+        "SELECT e/ehr_id/value FROM EHR e \
+         WHERE e/ehr_status/subject/external_ref/namespace = $patient_namespace",
+        &namespace,
+    )?;
+    Ok(match endpoint {
+        Some(endpoint) => query.directed(DirectiveKind::Endpoint, None, &[endpoint]),
+        None => query,
+    }
+    .to_aql())
 }
 
 /// Returns `PUT {base}/v1/definition/query/{name}/{version}` with `aql`.
@@ -310,11 +354,7 @@ pub async fn store_and_run<G: Gateway>(
     fixture: &Fixture,
     (name, version): (&str, &str),
 ) -> Result<(), Failure> {
-    let stored = ask(
-        gateway,
-        put(name, version, &parameterised(fixture, "EHR e"))?,
-    )
-    .await?;
+    let stored = ask(gateway, put(name, version, &parameterised(fixture, None)?)?).await?;
     stored.expect(StatusCode::OK, "CP-40: the definition is stored")?;
     let ran = ask(gateway, invoke(fixture, name)?).await?;
     ran.expect(StatusCode::OK, "CP-40: invoked by name")?;
@@ -343,15 +383,12 @@ pub async fn second_put_refused<G: Gateway>(
     fixture: &Fixture,
     (name, version): (&str, &str),
 ) -> Result<(), Failure> {
-    ask(
-        gateway,
-        put(name, version, &parameterised(fixture, "EHR e"))?,
-    )
-    .await?
-    .expect(
-        StatusCode::CONFLICT,
-        "CP-40: a second PUT to the same name and version is refused",
-    )
+    ask(gateway, put(name, version, &parameterised(fixture, None)?)?)
+        .await?
+        .expect(
+            StatusCode::CONFLICT,
+            "CP-40: a second PUT to the same name and version is refused",
+        )
 }
 
 /// Holds that a definition directed at `endpoint`, stored as `name` at
@@ -367,8 +404,11 @@ pub async fn directed_store_and_run<G: Gateway>(
     (name, version): (&str, &str),
     endpoint: &str,
 ) -> Result<(), Failure> {
-    let from = format!("ENDPOINT [\"{endpoint}\"] CONTAINS EHR e");
-    let stored = ask(gateway, put(name, version, &parameterised(fixture, &from))?).await?;
+    let stored = ask(
+        gateway,
+        put(name, version, &parameterised(fixture, Some(endpoint))?)?,
+    )
+    .await?;
     stored.expect(StatusCode::OK, "CP-40: a directed definition is storable")?;
     let ran = ask(gateway, invoke(fixture, name)?).await?;
     ran.expect(

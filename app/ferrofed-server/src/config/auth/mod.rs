@@ -12,6 +12,8 @@
 //! every guarded request is refused. The configuration keys are our own
 //! design; no specification governs them.
 
+pub mod assurance;
+
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
@@ -25,6 +27,7 @@ use jsonwebtoken::jwk::JwkSet;
 use serde::Deserialize;
 use url::Url;
 
+use crate::config::auth::assurance::{Assurance, AssuranceClaims};
 use crate::config::error::Error;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
@@ -154,6 +157,15 @@ pub struct TrustedIssuer {
     /// about; absent by default, and then no caller of this issuer names a
     /// requester.
     pub requester: Option<RequesterClaims>,
+    /// The claim and the values that carry the authentication assurance of
+    /// this issuer's tokens, and the least level a patient-data request
+    /// needs (`[auth.issuer.assurance]`); absent by default, and then no
+    /// level is read or required.
+    pub assurance: Option<AssuranceClaims>,
+    /// Whether this issuer's client tokens, which name no natural person,
+    /// act for the professional they name; `false` by default, and then such
+    /// a token reaches no patient data.
+    pub client_tokens_act_for_professional: bool,
 }
 
 /// `[auth.issuer.requester]`: the names of the token claims that carry the
@@ -240,6 +252,26 @@ impl Default for AuthSettings {
     }
 }
 
+impl AuthSettings {
+    /// What `config check` notes about the issuers: each one that declares
+    /// no `[auth.issuer.assurance]`, so no assurance level is read from its
+    /// tokens or required of them (Regulation (EU) 2025/327 Annex II 3.1).
+    #[must_use]
+    pub fn notes(&self) -> Vec<String> {
+        self.issuers
+            .iter()
+            .enumerate()
+            .filter(|(_, issuer)| issuer.assurance.is_none())
+            .map(|(index, issuer)| {
+                format!(
+                    "auth.issuer[{index}] ({}) declares no [auth.issuer.assurance]: the gateway reads no authentication assurance from its tokens and requires none for patient data",
+                    issuer.issuer
+                )
+            })
+            .collect()
+    }
+}
+
 /// Where a caller's credential travels, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -270,6 +302,13 @@ pub struct IssuerSettings {
     /// The claims that name who asks for the data, when this issuer's tokens
     /// carry them.
     pub requester: Option<RequesterClaims>,
+    /// How this issuer's tokens state their authentication assurance, and
+    /// the least level a patient-data request needs, when the deployment
+    /// declares it.
+    pub assurance: Option<Assurance>,
+    /// Whether this issuer's client tokens act for the professional they
+    /// name.
+    pub client_tokens_act_for_professional: bool,
 }
 
 /// An issuer's patient tokens bound to one member, resolved.
@@ -341,6 +380,11 @@ pub enum AuthFault {
     EdgeWithoutMode,
     /// The operator scope is not one scope token.
     OperatorScope,
+    /// An assurance value is empty, or is declared at two levels.
+    AssuranceValue,
+    /// No value is declared at the minimum level or above it, so no token
+    /// could reach patient data.
+    AssuranceUnreachable,
 }
 
 impl fmt::Display for AuthFault {
@@ -364,6 +408,10 @@ impl fmt::Display for AuthFault {
             }
             Self::EdgeWithoutMode => "is set, but mode is not \"edge\"",
             Self::OperatorScope => "is not one scope token (RFC 6749 §3.3)",
+            Self::AssuranceValue => "is empty, or is declared at two levels",
+            Self::AssuranceUnreachable => {
+                "declares no value at the minimum level or above it, so no token could reach patient data"
+            }
         })
     }
 }
@@ -553,6 +601,11 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
             AuthFault::OperatorScope,
         ));
     }
+    let assurance = written
+        .assurance
+        .as_ref()
+        .map(|assurance| assurance.resolve(&format!("{key}.assurance")))
+        .transpose()?;
     Ok(IssuerSettings {
         issuer: written.issuer.clone(),
         verification,
@@ -561,6 +614,8 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         operator_scope: written.operator_scope.clone(),
         patient,
         requester: written.requester.clone(),
+        assurance,
+        client_tokens_act_for_professional: written.client_tokens_act_for_professional,
     })
 }
 

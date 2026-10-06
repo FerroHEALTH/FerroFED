@@ -80,6 +80,13 @@ page: our own design.
   `system/aql-*`, `demographic_clients` for the DEMOGRAPHIC API, and an
   `operator_scope` only on the issuer your operators sign in at
   ([Client authentication](authentication.md)).
+- [ ] **Require an assurance level per issuer.** Set
+  `[auth.issuer.assurance]` on every issuer whose tokens reach patient data,
+  with the values it writes for each level and the least level you accept;
+  `config check` names each issuer without one. Declare
+  `client_tokens_act_for_professional` only for an issuer whose client
+  tokens name the professional they act for
+  ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 - [ ] **Keep `auth.purpose_of_use.required = true`**, its default, unless
   your §13.4 decisions say why not
   ([Purpose of use](authentication.md#purpose-of-use)).
@@ -148,6 +155,14 @@ page: our own design.
 
 ## The audit spool
 
+- [ ] **Send the records to your Audit Record Repository.** A gateway with
+  a registry records every access to patient data with the caller, so
+  outside `profile = "development"` it needs `[audit] destination =
+  "repository"` with an `[audit.repository]` table: `config check`, `serve`
+  and a reload refuse an unset destination, `off` and `log`, naming
+  `audit.destination`. The `log` destination names no caller and no patient,
+  so it cannot hold the access records (B6,
+  [The access log](audit.md#the-access-log)).
 - [ ] **Give each replica a spool of its own on durable storage.** Two
   gateways must never drain one directory, and a lost spool loses records
   that name patients for good. Use a named volume under Docker and a
@@ -160,7 +175,8 @@ page: our own design.
   `0700` with files `0600` and refuses to start when it is open to others.
 - [ ] **Watch the backlog.** Alert on `FerroFEDAuditSpoolBacklog` and
   `FerroFEDAuditRefused`; a full spool fails the transactions it cannot
-  record. Remove a quarantined record only after you have read why the
+  record, and the gateway then answers every access to patient data `503
+  access-unrecorded`. Remove a quarantined record only after you have read why the
   repository refused it ([The audit trail](audit.md)).
 
 ## Identity services
