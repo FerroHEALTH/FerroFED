@@ -36,7 +36,8 @@ use crate::e2e::{
 use crate::support::send_as_is;
 
 /// The gateway over node A and node B, resolving the patient through the
-/// development cross-reference and trusting `idp` with the page's `[auth]`
+/// development cross-reference, at the page's public base URL, which
+/// `auth.audience` follows, and trusting `idp` with the page's `[auth]`
 /// table, its issuer and key set location moved to the Keycloak the test
 /// started.
 fn gateway(
@@ -49,7 +50,7 @@ fn gateway(
     std::fs::write(&document, registry_document(&nodes.a, &nodes.b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "{}\n\n[server]\npublic_url = \"https://gateway.example.org/fed\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         dev_resolver(),
         recipe.auth_against(idp.origin())
     );
