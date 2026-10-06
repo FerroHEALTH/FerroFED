@@ -185,7 +185,11 @@ walks through each step.
 `ferrofed config check --config ferrofed.toml` reports whether it would start
 on that file. The
 [configuration chapter](https://ferrofed.eu/docs/operate/configuration.html)
-covers every key, the registry and the identity service.
+covers every key, the registry and the identity service. The
+[production guide](https://ferrofed.eu/docs/operate/production.html) walks a
+deployment from nothing to a first federated query over two CDRs: the
+registry, an identity provider, the PIX Manager, the audit repository, a
+reverse proxy and the checks before the first query.
 
 ## Documentation
 

@@ -31,6 +31,7 @@
 
 # Operate
 
+- [A production deployment](operate/production.md)
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)
 - [Upgrading](operate/upgrading.md)
