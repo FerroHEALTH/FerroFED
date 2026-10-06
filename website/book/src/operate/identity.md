@@ -488,7 +488,7 @@ withholds both from every request to a node, and no log line, metric label
 or error carries either (§5.4.1, N33). Each exchange is audited through
 [`[audit]`](audit.md), which is required outside development. The step's
 state shows as `demographics` on
-[`GET {base}/health/dependencies`](health.md), and each call is counted in
+[`GET {base}/operator/dependencies`](health.md#the-dependency-report), and each call is counted in
 `ferrofed_demographics_requests_total` ([Metrics](metrics.md)).
 
 ## The development cross-reference: `[dev]`
@@ -524,7 +524,7 @@ and the query is a `424`. A query that names no patient needs no resolution
 and runs as written.
 
 Both sections take effect on a
-[reload](registry.md#reloading-the-registry). `GET {base}/health/dependencies`
+[reload](registry.md#reloading-the-registry). `GET {base}/operator/dependencies`
 reports the resolver's last observed state
 ([Health probes](health.md)).
 
@@ -610,7 +610,7 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
 
 `url` and `callback_url` carry patient identities, so both are `https`
 outside `profile = "development"`, and neither may carry a user name or a
-password. `GET /health/dependencies` reports the Registry as
+password. `GET {base}/operator/dependencies` reports the Registry as
 `identity_registry`: `up` while the gateway holds a subscription in
 `requested` or `active`; `failing` after a refusal, an answer that breaks
 ITI-94, or a create it cannot manage; and `down` when the Registry did not

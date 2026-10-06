@@ -516,7 +516,7 @@ dispatched (N8).
   not localized (§8); a localizer that fails closed answers `424
   localization-unavailable` with no member asked. The specification is
   silent on whether a by-subject read is a query; the question is a draft on
-  #212. The localizer shows on `GET /health/dependencies` under the members'
+  #212. The localizer shows on `GET {base}/operator/dependencies` under the members'
   rule and is counted by outcome (#410).
 - **The XCPD audit.** ITI TF-2 §3.55.5.1 has the Initiating Gateway record
   an audit message for every exchange, and ITI TF-1 Table 27.1.3-1 groups it
@@ -579,7 +579,7 @@ dispatched (N8).
   The step needs a cross-reference (`[pixm]` or `[dev]`), is refused for a
   namespace `[pixm.namespaces]` maps, and a registry reload rebuilds it from
   `[pdqm]`, as it rebuilds the resolver. It shows as `demographics` on `GET
-  /health/dependencies` and is counted by outcome. No specification
+  /operator/dependencies` and is counted by outcome. No specification
   governs the outage mapping: our own design.
 - **The resolver** (decision A17). A resolver that cannot answer is not a
   patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
@@ -602,7 +602,7 @@ dispatched (N8).
   checked", and `excluded` would leave `complete` true on an answer that asked
   nobody. No specification governs the policy: our own design. The outage is
   carried in `meta.federation.consent.error` beside §14.1's
-  `localization.error`, on `/health/dependencies` as `consent` (a decision or
+  `localization.error`, on `{base}/operator/dependencies` as `consent` (a decision or
   an answer below `500` is up, a `5xx` failing, no answer down, the members'
   rule) and in `ferrofed.consent.prefilter.requests` by outcome (#400). A
   pre-filter that denied some candidates and could not answer for others
@@ -709,7 +709,7 @@ it off:
   each denial, the node request metrics count a node's refusal as
   `consent-denied` on every path, a refusal on a routed path is logged, and an
   outage of the consent service stays in `meta.federation.consent.error` and
-  on `/health/dependencies`, since it says nothing about a patient. `OPTIONS
+  on `{base}/operator/dependencies`, since it says nothing about a patient. `OPTIONS
   {base}/` declares the choice as `federation.consent.disclose`.
 
 The specification's side, a declared non-disclosure mode in place of N27a's
@@ -1528,7 +1528,7 @@ next refresh asks from the same instant. Each read and refresh draws on one
 and entries (30 seconds, 200, 64 MiB and 50,000 by default); running past one
 is refused and counted the same way, and a partial answer never becomes the
 registry. A directory that cannot be reached keeps the registry, and every
-outcome shows as `directory` on `/health/dependencies`. At
+outcome shows as `directory` on `{base}/operator/dependencies`. At
 boot a directory that cannot be read, or holds no valid registry, stops the
 start, as a document that does not load does. A `SIGHUP` rebuilds the
 federation over the registry in place and never asks the directory, and a
@@ -1623,7 +1623,7 @@ same reading of the node's answer, timed by the probe's own latency), and
 value is drawn from a closed enum (`kind`, `outcome`, `result`) or is a
 registry endpoint id (`endpoint`), never request text (§5.4.1, N33), and a
 test sends the patient identifier in a query, a path and a header and finds
-it nowhere in the exposition. `GET {base}/health/dependencies` (#303) stays
+it nowhere in the exposition. `GET {base}/operator/dependencies` (#303) stays
 the last observed state; the metrics count over time beside it. No trace is
 exported: span attributes need a hygiene review of their own first.
 
@@ -2691,6 +2691,7 @@ R4 is #23, #25 and #27).
 | A80 | Emergency access to restricted data [#659] | the caller asserts an emergency access through the purpose of use of its verified token, never inferred from the query, the data or a node's answer; the deployment names the asserting purposes in `[[access_log.emergency_purpose]]`, each a code and its system matched exactly, and FerroFED names none (`config check` notes it); a record whose token declares one carries the entity `ehds-emergency-access` (type `4`, a `description` in words, `detail` `ehds-emergency-access` `true` and one `ehds-emergency-purpose` per marking purpose), the purposes staying in `agent:user` `purposeOfUse`; the mark changes no dispatch, no answer and no pre-filter question: every purpose is conveyed as before and the node decides; a refused access is marked too; one `warn` log line under the request id names no value; whether restricted data were released is not recorded by the gateway; the notification of Art 9(1) is the access service's | Regulation (EU) 2025/327 Art 11(5) grants access "by way of derogation" and asks that "such cases shall be logged in a clear and understandable format", Art 8 keeps a restriction invisible to providers, Art 9(1) puts automatic notifications with the access service; Federation Tier §13.4 forbids leaving the purpose to inference, and N26 and N27 keep release at the node; BALP 1.1.4 records every purpose in `agent:user` `purposeOfUse` and defines no element for a break-the-glass mark; HL7 v3 `ActReason` defines `BTG` ("may include override of subject of care consent directive") and `ETREAT`, and IHE IUA 3.71.4.2.2.1.1 shows `BTG` in `purpose_of_use`; which codes assert Art 11(5) and the entity's names: no specification governs them, our own design | decided on #659 (2026-10-06) |
 | A81 | How the access record writes a category [#824] | each category is a coded value, a system, the system's version where known, and a code, as a FHIR R4 `Coding` is; the six Art 14(1) categories carry the codes of HL7 Europe's `EEHRxFDocumentPriorityCategoryCS` (`http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs`, version `1.0.0-ballot`, `hl7.fhir.eu.health-data-api` 1.0.0-ballot, vendored): `Patient-Summaries`, `Electronic-Prescriptions`, `Electronic-Dispensations`, `Medical-Imaging`, `Laboratory-Reports`, `Discharge-Reports`, compared case-sensitively; a national category is the Member State's code in the absolute URI of its code system (or one the deployment controls until the state publishes one), held only to the FHIR R4 `code` rules, never in the priority system; a flat string carrier (a BALP `detail` value, a configuration value) writes `<system>\|<code>`, the FHIR search token form, and the record names each code system's version once in `ehds-category-version`; a configuration may name a priority category by its bare code; `none` and unclassified stay states of the record, never categories, and the reasons an access is unclassified are a closed set; the spellings before this decision are refused, with the migration in the upgrade notes | Regulation (EU) 2025/327 Annex II 3.2(c) asks for "the categories of data accessed" and fixes no code, and no adopted or drafted act does (the Art 36(1) and Art 15(1) acts are unpublished); `EEHRxFDocumentPriorityCategoryCS` is the one code system any EU artefact publishes for the categories, its displays the Art 14(1) terms and its definitions the Annex I text, `caseSensitive` true, and `hl7.fhir.eu.imaging` 1.0.0-ballot requires its `Medical-Imaging` on `Composition.category` and `DiagnosticReport.category`; neither the MyHealth@EU service names nor the LOINC document types of `myhealth.eu.fhir.mvc-package` 9.1.0 map one to one onto Art 14(1); the code system is a draft whose canonical URL HL7 Europe may still move, so the record carries the system and version, as FHIR R4 `Coding.system` asks ("Need to be unambiguous about the source of the definition of the symbol"); Art 14(1) third subparagraph leaves national categories to up to 27 national laws, so a bare national code could not tell two states apart; IHE BALP 1.1.4 `AuditEvent.entity.detail.value[x]` is a string, so a Coding is written in the FHIR R4 search token form; the version detail, the configuration's bare codes and the closed set of reasons: no specification governs them, our own design | decided on #824 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 | A82 | The patient summary header [#663] | the header of every summary is what the identity binding's demographics service holds of the patient (`Demographics::header`, PDQm ITI-78 or ITI-119 by the identifier as the client sent it, in the system `[pdqm.namespaces]` maps its namespace to, in the master domain, or in the sent system when it is an absolute URI), asked at the gateway before any member and never dispatched: names, birth date, administrative gender, addresses, telecoms, each copied as the Supplier gives it; an element it does not hold is left out, a missing birth date carries `data-absent-reason` `unknown`; the country of affiliation, the preferred professional, the contact person and the insurance (A.1.1.6, A.1.2.2, A.1.2.3, A.1.3) are not written; `[fhir]` needs `[pdqm]` at configuration load; a patient the service does not know answers as one no member holds (`404`), several matches are `422` `multiple-matches` and none is picked, a patient with no family name, given name or text is `422` `required`, an unanswered or unaudited exchange `502` or `504`, and none of them asks a member; the header's `Debug` shows no value | eHN PS Release 3.4 A.1.1 to A.1.3 and Art 10(5); Federation Tier §2.3, N32 keep demographics outside the federation and §5.4.1, N33 keep every identifier off the nodes; HL7 Europe EPS 1.0.0-ballot `patient-eu-eps` makes `name` `1..*` and `birthDate` `1..1`, and its own `ips-pat-1` (error) requires `family`, `given` or `text` on every name while `eu-pat-1` of `patient-eu-core` admits a `data-absent-reason` alone, so a name stated absent fails the profile the document claims (upstream report T195 on #212); PDQm 3.2.0 §2:3.78.4.1.3 and §2:3.119.4.1.3; Federation Tier §11.3 and A53 answer an unknown and a restricted patient alike; the statuses and the order of the steps: no specification governs them, our own design | decided on #663 (2026-10-06, by the orchestrator under the owner's standing delegation) |
+| A83 | Where the dependency report is served [#751] | `GET {base}/operator/dependencies` on the client listener, on the read-only operator surface behind the issuer's `operator_scope`, beside the incidents, the routing table and the stored queries; `{base}/health/dependencies` is no longer served and answers `404`; the health family keeps `{base}/health` and `{base}/health/readiness`, open and naming no member; the report is no probe, so the overload limit holds it like any other request; the operator console reads it with the operator's own token, and `ferrofed report` with `--operator-token-file`; an upgrade note tells monitoring to move and carry an operator token | the report names every member endpoint and which are down, which is operator information an anonymous reader should not learn (threat model B1); the console already reads the operator surface with the operator's token and is a pure HTTP client of the client listener, while the admin listener is loopback by default and off unless `[metrics] listen` is set, so a report there would leave the console's members view without health; the health page already calls the route monitoring, never a probe, so neither liveness nor readiness needs it open; no specification governs health probes: our own design | decided on #751 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 
 ## 16. Regulatory status
 

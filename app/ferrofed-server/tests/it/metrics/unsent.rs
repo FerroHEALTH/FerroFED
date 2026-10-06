@@ -4,7 +4,7 @@
 //! A request the overall budget overtook before it left the gateway: the
 //! node was never asked, so the request is neither counted nor timed in the
 //! node request metrics and leaves the member's state on `GET
-//! /health/dependencies` as it was, for a request routed to one node, the
+//! /operator/dependencies` as it was, for a request routed to one node, the
 //! ask-all probe and a fan-out template upload (§11.5, §12.5.1, §12.6). No
 //! specification governs the metrics or the dependency report: our own design.
 #![allow(

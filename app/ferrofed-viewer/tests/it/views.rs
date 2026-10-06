@@ -95,7 +95,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
         delay,
         &gateway,
         "GET",
-        "/health/dependencies",
+        "/operator/dependencies",
         format!(r#"{{"endpoints":{{{endpoints}}},"resolver":"failing"}}"#),
     )
     .await;

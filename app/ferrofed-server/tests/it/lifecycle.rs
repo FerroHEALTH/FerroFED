@@ -3,7 +3,7 @@
 
 //! Readiness over the life of the process and the dependency report: `503`
 //! until boot completes and from the moment the stop signal arrives, `200`
-//! with every member down, and `GET /health/dependencies` naming each
+//! with every member down, and `GET /operator/dependencies` naming each
 //! endpoint with the state the gateway last observed of it. No specification
 //! governs health probes: our own design.
 #![allow(
@@ -101,16 +101,12 @@ async fn readiness(state: &Arc<AppState>) -> Result<(StatusCode, Readiness), Box
     Ok((status, serde_json::from_str(&text)?))
 }
 
-/// Asks `GET /health/dependencies` and returns the status, the parsed
+/// Asks `GET /operator/dependencies` and returns the status, the parsed
 /// document and the raw text.
 async fn dependencies(
     state: &Arc<AppState>,
 ) -> Result<(StatusCode, Dependencies, String), Box<dyn Error>> {
-    let (status, text) = call(
-        app(state),
-        Request::get("/health/dependencies").body(Body::empty())?,
-    )
-    .await?;
+    let (status, text) = call(app(state), crate::support::dependencies_request()?).await?;
     Ok((status, serde_json::from_str(&text)?, text))
 }
 

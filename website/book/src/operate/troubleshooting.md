@@ -44,7 +44,7 @@ by a test.
   `endpoint` and `outcome`, `ferrofed_security_events_total` by `event` and
   `reason`, `ferrofed_overload_refusals_total` by `limit`, the resolver,
   localizer, audit spool and reload series ([Metrics](metrics.md#the-metrics)).
-- **The dependencies.** `GET {base}/health/dependencies` names the state the
+- **The dependencies.** `GET {base}/operator/dependencies` names the state the
   gateway last saw of each member endpoint and each identity service: `up`,
   `failing`, `down` or `unknown` ([Health probes](health.md#the-routes)).
 
@@ -63,7 +63,7 @@ service could not answer for (§11.4, N37).
 such as `the node answered 500 Internal Server Error: …`. A member with
 `not-resolved` and an `error` is one the resolver failed for; the resolver
 counts it as `ferrofed_resolver_requests_total{outcome="unavailable"}`, and
-`GET {base}/health/dependencies` reports `resolver` `failing` or `down`. The
+`GET {base}/operator/dependencies` reports `resolver` `failing` or `down`. The
 failing node counts under `ferrofed_node_requests_total{outcome="node-error"}`.
 
 **Fix.** Fix the node the `error` names, or the cross-reference service
@@ -207,7 +207,7 @@ again ([Failing closed](audit.md#failing-closed)).
 ### The audit spool grows
 
 **Symptom.** `ferrofed_audit_spool_events` and `ferrofed_audit_spool_bytes`
-rise, and `GET {base}/health/dependencies` reports `audit_repository` or
+rise, and `GET {base}/operator/dependencies` reports `audit_repository` or
 `audit_feed` `degraded`.
 
 **Cause.** The audit repository is not taking the records, so they wait in

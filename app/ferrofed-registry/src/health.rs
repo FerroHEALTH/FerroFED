@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The body of `GET /health/dependencies`, which the gateway writes and the
+//! The body of `GET {base}/operator/dependencies`, which the gateway writes and the
 //! operator console reads.
 //!
 //! The report names each member endpoint by id and every other dependency by
@@ -46,7 +46,7 @@ impl Observed {
     }
 }
 
-/// What one indication of `GET /health/dependencies` says: a state, or the
+/// What one indication of `GET {base}/operator/dependencies` says: a state, or the
 /// class of a fault.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -69,7 +69,7 @@ impl Indication {
     }
 }
 
-/// The body of `GET /health/dependencies`: endpoint ids, dependency keys and
+/// The body of `GET {base}/operator/dependencies`: endpoint ids, dependency keys and
 /// their states, and nothing else.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DependencyReport {

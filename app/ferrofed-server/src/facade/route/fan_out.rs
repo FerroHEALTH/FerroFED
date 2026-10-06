@@ -26,7 +26,7 @@
 //! provenance headers name the members that accepted (§7a.3, N31).
 //!
 //! What each member showed of itself is recorded on `GET
-//! /health/dependencies` as a routed request records it, and each request
+//! /operator/dependencies` as a routed request records it, and each request
 //! that left the gateway in the node request metrics ([`observed`]).
 //!
 //! The per-member machinery, [`each`], [`settled`], [`contact`], [`observed`],
@@ -321,7 +321,7 @@ pub(crate) fn contact<R>(asked: &Asked<R>, read: impl FnOnce(&R) -> Contact) -> 
 
 /// Records the request to `endpoint` that showed `contact` and ended as
 /// `outcome` in the per-member record: the member's state on `GET
-/// /health/dependencies`, and the request in the node request metrics,
+/// /operator/dependencies`, and the request in the node request metrics,
 /// neither when the request never left the gateway.
 pub(crate) fn observed(
     federation: &Federation,

@@ -13,8 +13,8 @@ listener of their own, and the gateway can also push them to an
 OpenTelemetry collector over OTLP. Both surfaces read the same provider, so
 a metric never exists on one and not the other. Both are off by default.
 
-`GET {base}/health/dependencies` stays as it is: it reports the last state
-the gateway observed of each member, and the metrics count every request
+The dependency report, `GET {base}/operator/dependencies`, stays as it is:
+it reports the last state the gateway observed of each member, and the metrics count every request
 over time.
 
 ## Turning it on

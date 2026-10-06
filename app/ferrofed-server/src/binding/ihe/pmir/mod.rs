@@ -190,13 +190,13 @@ impl IdentityFeed {
     }
 
     /// The last state observed of the Registry, which
-    /// `GET /health/dependencies` reports as `identity_registry`.
+    /// `GET {base}/operator/dependencies` reports as `identity_registry`.
     #[must_use]
     pub fn observed(&self) -> Observed {
         self.watch().observed
     }
 
-    /// Why the Registry is not up, which `GET /health/dependencies` reports
+    /// Why the Registry is not up, which `GET {base}/operator/dependencies` reports
     /// as `identity_registry_fault`; `None` while it is up or not yet asked.
     #[must_use]
     pub fn fault(&self) -> Option<RegistryFault> {

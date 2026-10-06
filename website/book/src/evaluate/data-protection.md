@@ -271,7 +271,7 @@ becoming aware of the significant incident", an incident notification within
 notification. The gateway reports nothing to a CSIRT or a competent
 authority. It supplies the evidence the entity reports from: the alerts, the
 security and integrity log lines, and the dependency states of
-`GET {base}/health/dependencies`. A personal data breach has its own clock
+`GET {base}/operator/dependencies`. A personal data breach has its own clock
 under GDPR Art 33: the controller notifies "where feasible, not later than
 72 hours", and a processor notifies the controller "without undue delay".
 

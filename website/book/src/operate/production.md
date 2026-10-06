@@ -630,13 +630,14 @@ and ask for its readiness on the host:
 ```sh
 docker compose up --wait
 curl http://127.0.0.1:8080/fed/health/readiness
-curl http://127.0.0.1:8080/fed/health/dependencies
+curl -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  http://127.0.0.1:8080/fed/operator/dependencies
 ```
 
 Readiness is `200` once the gateway serves; no member and no identity
 service gates it. The dependency report shows the last state the gateway
-observed of each member, the resolver and the audit repository
-([Health probes](health.md)).
+observed of each member, the resolver and the audit repository to a token
+with the operator scope ([The dependency report](health.md#the-dependency-report)).
 
 Admit each member before it serves (§12b.1, N42a). The admission check
 creates synthetic EHRs at the member and checks each condition a test can

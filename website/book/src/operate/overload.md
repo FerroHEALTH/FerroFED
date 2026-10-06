@@ -39,9 +39,10 @@ others is answered `503` with the code `overloaded` and a `Retry-After` of
 `overload_retry_after_s` seconds (RFC 9110 §15.6.4, §10.2.3). The gateway
 refuses it before it reads anything else of it: the caller is not verified,
 and no resolver, localizer or member is asked. The health family,
-`{base}/health`, `{base}/health/readiness` and `{base}/health/dependencies`,
-is never refused, so an orchestrator's liveness probe does not restart a
-gateway for being busy.
+`{base}/health` and `{base}/health/readiness`, is never refused, so an
+orchestrator's liveness probe does not restart a gateway for being busy.
+The dependency report, `{base}/operator/dependencies`, is no probe and is
+held to the limit like every other request.
 
 Each replica counts its own requests. Size the limit from what the members
 can take: with `n` members asked by each query, `max_concurrent_requests`

@@ -60,7 +60,7 @@ const MAX_DOUBLINGS: u32 = 5;
 /// bounds how long a drain waits for the check in flight.
 const EXCHANGES_PER_CHECK: u32 = 4;
 
-/// Why the Registry is not up, as `GET /health/dependencies` names it.
+/// Why the Registry is not up, as `GET {base}/operator/dependencies` names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]

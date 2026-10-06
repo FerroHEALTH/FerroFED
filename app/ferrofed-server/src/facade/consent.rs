@@ -12,7 +12,7 @@
 //! itself (N26, N27, §14.3). A pre-filter that cannot answer leaves every
 //! candidate to its node ([`ON_UNAVAILABLE`]), and the outage is made visible
 //! three ways: in the answer's `meta.federation.consent.error` where the route
-//! has one, as the pre-filter's state on `GET /health/dependencies`, and in the
+//! has one, as the pre-filter's state on `GET {base}/operator/dependencies`, and in the
 //! pre-filter call metrics. No specification names a carrier for the outage;
 //! the `meta.federation` member mirrors the localizer's of §14.1, as our own
 //! design.

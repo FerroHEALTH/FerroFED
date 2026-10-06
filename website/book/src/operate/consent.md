@@ -36,7 +36,7 @@ itself (§13.2.1, N27a). This `pass-to-node` policy is FerroFED's own design.
 The outage is never silent: the answer to a query carries it as
 `meta.federation.consent.error`, mirroring `localization.error` of §14.1
 ([The client contract](../integrate/client-contract.md)), the pre-filter's
-state on `GET {base}/health/dependencies` turns `down` or `failing`
+state on `GET {base}/operator/dependencies` turns `down` or `failing`
 ([Health probes](health.md)), and each call is counted in
 `ferrofed_consent_prefilter_requests_total` ([Metrics](metrics.md)). A call
 the pre-filter could not put to its service at all, for the patient's

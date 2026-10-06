@@ -250,7 +250,7 @@ async fn options_root_is_behind_the_gate() -> TestResult {
 #[tokio::test]
 async fn the_health_family_and_the_root_need_no_token() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
-    for path in ["/", "/health", "/health/dependencies"] {
+    for path in ["/", "/health"] {
         let (status, _, text) = sent(&gateway.app, Request::get(path).body(Body::empty())?).await?;
         assert_eq!(StatusCode::OK, status, "{path}: {text}");
     }

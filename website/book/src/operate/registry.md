@@ -216,7 +216,7 @@ A refresh that changed something goes through the same checks as a reload:
 - When the directory cannot be reached, or refuses the request with an
   HTTP error, the running registry stays and the gateway logs a warning.
 
-`GET {base}/health/dependencies` reports the directory as `directory`: `up`
+`GET {base}/operator/dependencies` reports the directory as `directory`: `up`
 after an answer the gateway accepted, `degraded` after an answer whose change
 it refused, `failing` after an HTTP error, a malformed answer or one past a
 cap, and `down` when it did not answer before the deadline or could not be
@@ -245,7 +245,7 @@ member the directory adds without a custodian URA (or a community) mapped to
 it makes the change refused as `localization`: the gateway keeps the previous
 registry, logs the refusal and counts it in `ferrofed_registry_reloads_total`
 ([Metrics](metrics.md)), and asks again from the same instant at the next
-refresh. `GET /health/dependencies` shows the directory `degraded` with
+refresh. `GET {base}/operator/dependencies` shows the directory `degraded` with
 `directory_fault = "configuration-mismatch"` until the change is accepted. Map
 the member first, then publish it.
 

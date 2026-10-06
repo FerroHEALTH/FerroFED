@@ -226,7 +226,7 @@ impl AppState {
         }
     }
 
-    /// Returns the report `GET /health/dependencies` answers with: the last
+    /// Returns the report `GET {base}/operator/dependencies` answers with: the last
     /// observed state of each member endpoint, of the resolver, of the
     /// consent pre-filter, of the localizer, and what each binding's
     /// processes indicate, such as a care services directory with why it is
