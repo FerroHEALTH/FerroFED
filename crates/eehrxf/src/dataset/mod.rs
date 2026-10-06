@@ -23,6 +23,7 @@ use std::io;
 use std::io::Read;
 
 use crate::category::Root;
+use crate::dataset::constraint::Invariant;
 use crate::dataset::constraint::Pattern;
 use crate::dataset::constraint::Slicing;
 
@@ -164,6 +165,7 @@ pub struct Element {
     short: Option<String>,
     pattern: Option<Pattern>,
     slicing: Option<Slicing>,
+    invariants: Vec<Invariant>,
 }
 
 impl Element {
@@ -212,6 +214,12 @@ impl Element {
     #[must_use]
     pub const fn slicing(&self) -> Option<&Slicing> {
         self.slicing.as_ref()
+    }
+
+    /// Returns the element's invariants, in snapshot order.
+    #[must_use]
+    pub fn invariants(&self) -> &[Invariant] {
+        &self.invariants
     }
 }
 

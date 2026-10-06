@@ -122,6 +122,14 @@ pub(crate) fn eps_example(file: &str) -> Result<String, Box<dyn Error>> {
     Err(format!("the EPS package carries no {wanted}").into())
 }
 
+/// Returns the synthetic document with `entry`, one `Bundle.entry` object,
+/// added as its last entry.
+pub(crate) fn document_with_entry(entry: &str) -> Result<String, String> {
+    let end = DOCUMENT.rfind("\n  ]\n}").ok_or("the end of the entries")?;
+    let head = DOCUMENT.get(..end).ok_or("the entries")?;
+    Ok(format!("{head},\n    {entry}\n  ]\n}}"))
+}
+
 /// Returns the synthetic document with `from` replaced by `to`, failing
 /// when `from` is not in it exactly once.
 pub(crate) fn document_with(from: &str, to: &str) -> Result<String, String> {

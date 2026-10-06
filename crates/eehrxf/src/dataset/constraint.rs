@@ -199,3 +199,34 @@ impl SlicingRules {
         }
     }
 }
+
+/// One invariant of an element: an `ElementDefinition.constraint`
+/// (<https://hl7.org/fhir/R4/elementdefinition-definitions.html#ElementDefinition.constraint>).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Invariant {
+    pub(super) key: String,
+    pub(super) error: bool,
+    pub(super) expression: Option<String>,
+}
+
+impl Invariant {
+    /// Returns the invariant's key, such as `bdl-9`.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// Returns whether breaking the invariant is an error, its severity
+    /// `error`, rather than a warning.
+    #[must_use]
+    pub const fn is_error(&self) -> bool {
+        self.error
+    }
+
+    /// Returns the `FHIRPath` expression of the invariant, when it carries
+    /// one.
+    #[must_use]
+    pub fn expression(&self) -> Option<&str> {
+        self.expression.as_deref()
+    }
+}

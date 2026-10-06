@@ -5,13 +5,17 @@
   type R4 does not define and a document that does not encode back to what
   was read, holds it to the R4 document rules (`bdl-7` to `bdl-11`, and
   `fullUrl`s that agree with their resource), and resolves its subject to
-  its one `Patient` entry, which every `subject` and `patient` reference in
-  the document must name; a second or contained `Patient` is refused. The
+  its one `Patient` entry. Every reference, found by its R4 type at any
+  depth, is held to that patient: a `subject`, `patient`, `beneficiary` or
+  `for` must name it, and a reference that could name another patient, a
+  `type` that disagrees with its target, a second or contained `Patient` and
+  an element the R4 table does not describe are refused. The
   text is kept byte for byte. `ReceivedDocument::check` holds the decoded
   document to a `Bundle` and a `Composition` profile read from the vendored
   package: cardinalities, `fixed[x]` and `pattern[x]` values, and `value`,
-  `pattern`, `exists` and `type` slices, with every constraint it cannot
-  evaluate listed. Under `openehr`, `Mapping::to_openehr` maps the document
+  `pattern`, `exists` and `type` slices, an entry of a type no slice names,
+  and the invariants that require a reference on listed entry types, with
+  every constraint it cannot evaluate listed. Under `openehr`, `Mapping::to_openehr` maps the document
   into one canonical composition through FHIRconnect and keeps the document
   in the composition's `FEEDER_AUDIT.original_content` as a `DV_PARSABLE`.
   `dataset::Element` now carries its `fixed[x]` or `pattern[x]` value and

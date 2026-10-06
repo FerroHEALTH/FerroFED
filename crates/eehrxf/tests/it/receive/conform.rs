@@ -25,6 +25,7 @@ use super::COMPOSITION_PROFILE;
 use super::DOCUMENT;
 use super::PATIENT_IDENTIFIER;
 use super::document_with;
+use super::document_with_entry;
 use super::eps_example;
 use crate::support::MANIFEST;
 use crate::support::archive;
@@ -326,5 +327,58 @@ fn the_published_eps_examples_are_read_and_conform() -> Result<(), Box<dyn Error
             "{file}: the entry profiles are listed as not evaluated"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn an_entry_of_a_type_no_slice_of_the_bundle_profile_names_is_found() -> Result<(), Box<dyn Error>>
+{
+    let text = document_with_entry(
+        r#"{ "fullUrl": "http://example.org/fhir/Coverage/synthetic-coverage", "resource": { "resourceType": "Coverage", "id": "synthetic-coverage", "status": "active", "beneficiary": { "reference": "Patient/synthetic-patient" }, "payor": [{ "display": "Synthetic payer" }] } }"#,
+    )?;
+    let findings = findings(&text)?;
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding.element == "Bundle.entry"
+                && finding.location == "Bundle.entry[3]"
+                && finding.kind == FindingKind::TypeNotAllowed),
+        "{findings:?}"
+    );
+    Ok(())
+}
+
+// eps-bundle-subject-ref: "each SHALL have subject.reference populated".
+#[test]
+fn an_observation_without_a_subject_is_found() -> Result<(), Box<dyn Error>> {
+    let text = document_with_entry(
+        r#"{ "fullUrl": "http://example.org/fhir/Observation/synthetic-observation", "resource": { "resourceType": "Observation", "id": "synthetic-observation", "status": "final", "code": { "text": "Synthetic observation" } } }"#,
+    )?;
+    let findings = findings(&text)?;
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding.location == "Bundle.entry[3].resource"
+                && finding.kind
+                    == FindingKind::Invariant {
+                        key: String::from("eps-bundle-subject-ref")
+                    }),
+        "{findings:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_invariant_of_another_form_is_listed_as_not_evaluated() -> Result<(), Box<dyn Error>> {
+    let (bundle, composition) = profiles()?;
+    let conformance = ReceivedDocument::read(DOCUMENT)?.check(&bundle, &composition)?;
+    let listed = |key: &str| {
+        conformance.unevaluated().iter().any(|unevaluated| {
+            matches!(unevaluated.reason, Unread::Invariant(ref listed) if listed == key)
+        })
+    };
+    assert!(listed("eps-bundle-resource-code"), "{conformance:?}");
+    assert!(!listed("eps-bundle-subject-ref"), "{conformance:?}");
+    assert!(!listed("bdl-9"), "{conformance:?}");
     Ok(())
 }

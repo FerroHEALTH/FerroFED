@@ -43,11 +43,17 @@ this order and refuses it at the first rule it breaks:
    and a `Composition` as its first entry (`bdl-11`).
 4. The `Composition.subject` names one `Patient` entry of the same `Bundle`,
    by its `fullUrl`, or by a relative `Patient/<id>` resolved against the
-   server base of the composition's own `fullUrl`. Every other `subject`
-   and `patient` reference in the document, at any depth, names that same
-   entry by reference. A reference to another patient, to another resource,
-   by identifier alone or to a contained resource is refused, and so is a
-   second `Patient` entry and a contained `Patient`. A document is
+   server base of the composition's own `fullUrl`. Every reference in the
+   document is found by its R4 type, at any depth: in backbone elements,
+   contained resources and extensions. A `subject`, `patient`,
+   `beneficiary` or `for` must name that same entry by reference. Any other
+   reference may name it, an entry of another type, a contained resource
+   by `#id`, or a resource outside the document whose path names a type
+   other than `Patient`; one that could name another patient (a path or a
+   `type` that says `Patient`, or a URN no entry carries) is refused, and so
+   is a `type` that disagrees with the reference's target. A second
+   `Patient` entry and a contained `Patient` are refused, and so is an
+   element the R4 element table does not describe. A document is
    registered under the identification data of the one person it is about
    (Art 13(3)), so a document that could be read as about two is refused
    whole.
@@ -74,6 +80,13 @@ holds:
   `exists` and `type` discriminators. Each slice is held to its own
   cardinality, and a `closed` slicing refuses an occurrence no slice admits.
   The five sections the EPS composition requires are slices of this kind.
+  An entry of a resource type no slice of the `Bundle` profile names is
+  refused, although the profile's slicing is open, so no entry passes
+  unread;
+- the invariants of one form: every entry of the listed types carries a
+  reference at one element, as the EPS `eps-bundle-subject-ref` and
+  `eps-bundle-patient-ref` require. Every other invariant is listed as not
+  evaluated.
 
 Every finding is reported with the profile, the element id and the place in
 the document, such as `Composition.section[2]`. None is dropped.
@@ -89,7 +102,7 @@ result:
 - a `fixed[x]` or `pattern[x]` form it does not read, by its key.
 
 A slice such a discriminator tells apart is still held to its lower bound
-over the occurrences the other discriminators admit. Invariants, terminology
+over the occurrences the other discriminators admit. Other invariants, terminology
 bindings and the profiles of the other entries are not checked yet
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The two
 example documents the EPS package publishes pass the check.

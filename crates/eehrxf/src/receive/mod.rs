@@ -34,6 +34,7 @@ pub mod conform;
 mod entries;
 #[cfg(feature = "openehr")]
 pub mod openehr;
+mod references;
 mod strict;
 
 use fhir_types::codec::DecodeError;
@@ -300,11 +301,38 @@ pub enum ReceiveError {
         /// The element path of the contained resource.
         location: String,
     },
-    /// A `subject` or `patient` reference names anything but the document's
-    /// `Patient` entry.
+    /// A subject element (`subject`, `patient`, `beneficiary`, `for`) names
+    /// anything but the document's `Patient` entry by reference.
     #[error("{location} names a subject other than the document's Patient entry")]
     SubjectMismatch {
         /// The element path of the reference.
+        location: String,
+    },
+    /// A reference names, or could name, a patient other than the document's
+    /// `Patient` entry: it resolves to no entry, and its path or `type` says
+    /// `Patient` or nothing says what it names.
+    #[error("{location} could name a patient other than the document's Patient entry")]
+    PatientReference {
+        /// The element path of the reference.
+        location: String,
+    },
+    /// A reference's `type` disagrees with the resource it resolves to.
+    #[error("{location} declares a type its target does not have")]
+    ReferenceType {
+        /// The element path of the reference.
+        location: String,
+    },
+    /// A local `#id` reference names no resource contained in its resource.
+    #[error("{location} names no contained resource")]
+    LocalUnresolved {
+        /// The element path of the reference.
+        location: String,
+    },
+    /// An element the R4 element table does not describe, which no rule can
+    /// read.
+    #[error("{location} is an element the R4 element table does not describe")]
+    Unreadable {
+        /// The element path.
         location: String,
     },
 }

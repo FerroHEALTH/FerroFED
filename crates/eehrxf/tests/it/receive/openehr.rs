@@ -25,6 +25,7 @@ use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 
 use super::DOCUMENT;
 use super::document_with;
+use super::eps_example;
 
 /// The fixtures beside this suite.
 fn fixture(name: &str) -> PathBuf {
@@ -144,5 +145,24 @@ fn a_document_with_two_resources_of_the_mapped_type_is_refused() -> Result<(), B
         ),
         "{source:?}"
     );
+    Ok(())
+}
+
+// R4 resolves a reference inside a Bundle against the entries' fullUrls
+// (<https://hl7.org/fhir/R4/bundle.html#references>), so a Patient entry whose
+// fullUrl is the urn:uuid every reference names is one subject, not two.
+#[test]
+#[ignore = "fhirconnect refuses urn:uuid subjects; FerroBRIDGE issue to follow"]
+fn a_published_document_with_urn_full_urls_is_not_refused_as_several_subjects()
+-> Result<(), Box<dyn Error>> {
+    let text = eps_example("Bundle-EPSExampleBundle01NoProblemsMedicationAllergies.json")?;
+    let document = ReceivedDocument::read(&text)?;
+    let mapped = mapping()?.to_openehr(&document, &settings());
+    if let Err(ReceiveMappingError::Run { ref source }) = mapped {
+        assert!(
+            !matches!(**source, OperationError::SeveralSubjects { .. }),
+            "{source:?}"
+        );
+    }
     Ok(())
 }

@@ -14,22 +14,23 @@ use fhir_types::codec::Value;
 use fhir_types::r4::schema::SCHEMAS;
 
 use crate::receive::ReceiveError;
+use crate::receive::references;
 
 /// One entry of the document: its `fullUrl` and its resource.
-struct Entry<'d> {
-    full_url: Option<&'d str>,
-    resource: Option<&'d Object>,
+pub(super) struct Entry<'d> {
+    pub(super) full_url: Option<&'d str>,
+    pub(super) resource: Option<&'d Object>,
 }
 
 impl Entry<'_> {
     /// Returns the type of the entry's resource.
-    fn resource_type(&self) -> Option<&str> {
+    pub(super) fn resource_type(&self) -> Option<&str> {
         self.resource?.get("resourceType")?.as_str()
     }
 }
 
 /// Returns the entries of `tree`, the encoded document, in order.
-fn entries(tree: &Object) -> Vec<Entry<'_>> {
+pub(super) fn entries(tree: &Object) -> Vec<Entry<'_>> {
     tree.get("entry")
         .and_then(Value::as_array)
         .unwrap_or_default()
@@ -120,7 +121,7 @@ pub(super) fn full_urls(tree: &Object) -> Result<(), ReceiveError> {
 /// for one that does not look like a REST-style server URL.
 // NOTE: a fullUrl that is a URN or another absolute URL is legitimately not
 // RESTful and carries no type or id to agree with (R4 `Bundle.entry.fullUrl`).
-fn restful(url: &str) -> Option<(&str, &str)> {
+pub(super) fn restful(url: &str) -> Option<(&str, &str)> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return None;
     }
@@ -138,7 +139,7 @@ fn restful(url: &str) -> Option<(&str, &str)> {
 /// holds it, and from any other entry to nothing
 /// (<https://hl7.org/fhir/R4/bundle.html#references>). A local `#id` names a
 /// contained resource, never an entry.
-fn resolve(entries: &[Entry<'_>], from: Option<&str>, reference: &str) -> Option<usize> {
+pub(super) fn resolve(entries: &[Entry<'_>], from: Option<&str>, reference: &str) -> Option<usize> {
     let target = if reference.contains(':') {
         reference.to_owned()
     } else if reference.starts_with('#') {
@@ -162,18 +163,16 @@ fn resolve(entries: &[Entry<'_>], from: Option<&str>, reference: &str) -> Option
 /// Returns the index of the `Patient` entry the document is about, after
 /// holding every subject in the document to it.
 ///
-/// The `Composition.subject` names the patient. Every other `subject` and
-/// `patient` reference of every entry, at any depth, must name the same
-/// entry by its `reference`; a reference by identifier or display alone, a
-/// local `#id` and a reference to any other resource are refused. No other
-/// entry and no contained resource may be a `Patient`.
+/// The `Composition.subject` names the patient. No other entry and no
+/// contained resource may be a `Patient`, and every reference of every
+/// entry is held to the patient (`references`).
 ///
 /// # Errors
 ///
 /// Returns [`ReceiveError::NoSubject`] when the `Composition` names no
 /// subject, [`ReceiveError::SubjectUnresolved`] when it names no single
-/// `Patient` entry, [`ReceiveError::SeveralPatients`],
-/// [`ReceiveError::ContainedPatient`] and [`ReceiveError::SubjectMismatch`].
+/// `Patient` entry, [`ReceiveError::SeveralPatients`], and the refusals of
+/// the reference walk.
 // NOTE: Regulation (EU) 2025/327 Art 13(3) registers data under the identification
 // data of the one person concerned, so a document that names a second subject cannot
 // be registered whole (no specification states this refusal: our own design).
@@ -204,51 +203,8 @@ pub(super) fn patient(tree: &Object) -> Result<usize, ReceiveError> {
     for (index, entry) in entries.iter().enumerate() {
         if let Some(resource) = entry.resource {
             let location = format!("Bundle.entry[{index}].resource");
-            subjects(&entries, entry.full_url, patient, resource, &location)?;
+            references::hold(&entries, index, patient, resource, &location)?;
         }
     }
     Ok(patient)
-}
-
-/// Holds every `subject` and `patient` reference below `node` to the entry
-/// `patient`, and refuses a contained `Patient`.
-fn subjects(
-    entries: &[Entry<'_>],
-    from: Option<&str>,
-    patient: usize,
-    node: &Object,
-    location: &str,
-) -> Result<(), ReceiveError> {
-    for (key, value) in node {
-        let at = format!("{location}.{key}");
-        let items: Vec<(String, &Value)> = match value {
-            Value::Array(items) => items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| (format!("{at}[{index}]"), item))
-                .collect(),
-            other => vec![(at, other)],
-        };
-        for (place, item) in items {
-            let Some(object) = item.as_object() else {
-                continue;
-            };
-            if key == "contained"
-                && object.get("resourceType").and_then(Value::as_str) == Some("Patient")
-            {
-                return Err(ReceiveError::ContainedPatient { location: place });
-            }
-            if key == "subject" || key == "patient" {
-                let named = object
-                    .get("reference")
-                    .and_then(Value::as_str)
-                    .and_then(|reference| resolve(entries, from, reference));
-                if named != Some(patient) {
-                    return Err(ReceiveError::SubjectMismatch { location: place });
-                }
-            }
-            subjects(entries, from, patient, object, &place)?;
-        }
-    }
-    Ok(())
 }

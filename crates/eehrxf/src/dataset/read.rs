@@ -37,6 +37,7 @@ use super::ResourceProfile;
 use super::constraint::CodingPattern;
 use super::constraint::Discriminator;
 use super::constraint::DiscriminatorKind;
+use super::constraint::Invariant;
 use super::constraint::Pattern;
 use super::constraint::Slicing;
 use super::constraint::SlicingRules;
@@ -91,8 +92,18 @@ struct ElementDefinition {
     short: Option<String>,
     extension: Vec<Extension>,
     slicing: Option<SlicingDefinition>,
+    constraint: Vec<ConstraintDefinition>,
     #[serde(skip)]
     pattern: Option<Pattern>,
+}
+
+/// One `ElementDefinition.constraint`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ConstraintDefinition {
+    key: String,
+    severity: String,
+    expression: Option<String>,
 }
 
 /// One `ElementDefinition.slicing`.
@@ -358,9 +369,19 @@ fn element(url: &str, raw: ElementDefinition) -> Result<Element, DatasetError> {
             })
         })
         .transpose()?;
+    let invariants = raw
+        .constraint
+        .iter()
+        .map(|constraint| Invariant {
+            key: constraint.key.clone(),
+            error: constraint.severity == "error",
+            expression: constraint.expression.clone(),
+        })
+        .collect();
     Ok(Element {
         pattern: raw.pattern,
         slicing,
+        invariants,
         path: ElementPath(id),
         cardinality: Cardinality { min, max },
         profiles: raw

@@ -19,6 +19,7 @@ use eehrxf::receive::ReceivedDocument;
 use super::DOCUMENT;
 use super::PATIENT_IDENTIFIER;
 use super::document_with;
+use super::document_with_entry;
 
 /// Reads `text`, expecting a refusal that quotes no patient identifier.
 fn refused(text: &str) -> Result<ReceiveError, Box<dyn Error>> {
@@ -213,6 +214,206 @@ fn a_full_url_that_names_another_resource_type_is_refused() -> Result<(), Box<dy
     let error = refused(&text)?;
     assert!(
         matches!(error, ReceiveError::FullUrlMismatch { entry: 2 }),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+/// Reads the document with `entry` added, expecting a refusal at
+/// `location`, `subject` for a subject element.
+fn refused_at(entry: &str, location: &str, subject: bool) -> Result<(), Box<dyn Error>> {
+    let error = refused(&document_with_entry(entry)?)?;
+    let at = match error {
+        ReceiveError::SubjectMismatch { ref location } if subject => location,
+        ReceiveError::PatientReference { ref location } if !subject => location,
+        ref other => return Err(format!("{other:?}").into()),
+    };
+    assert_eq!(at, location);
+    Ok(())
+}
+
+#[test]
+fn a_beneficiary_that_names_another_patient_is_refused() -> Result<(), Box<dyn Error>> {
+    refused_at(
+        r#"{ "fullUrl": "http://example.org/fhir/Coverage/synthetic-coverage", "resource": { "resourceType": "Coverage", "id": "synthetic-coverage", "status": "active", "beneficiary": { "reference": "Patient/synthetic-elsewhere" }, "payor": [{ "display": "Synthetic payer" }] } }"#,
+        "Bundle.entry[3].resource.beneficiary",
+        true,
+    )
+}
+
+#[test]
+fn a_task_for_another_patient_is_refused() -> Result<(), Box<dyn Error>> {
+    refused_at(
+        r#"{ "fullUrl": "http://example.org/fhir/Task/synthetic-task", "resource": { "resourceType": "Task", "id": "synthetic-task", "status": "draft", "intent": "order", "for": { "reference": "Patient/synthetic-elsewhere" } } }"#,
+        "Bundle.entry[3].resource.for",
+        true,
+    )
+}
+
+#[test]
+fn a_subject_by_an_absolute_reference_to_another_server_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        ALLERGY_PATIENT,
+        r#""patient": { "reference": "https://elsewhere.example.org/fhir/Patient/synthetic-patient" }"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::SubjectMismatch { ref location } if location == "Bundle.entry[2].resource.patient"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_subject_by_a_urn_no_entry_carries_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        ALLERGY_PATIENT,
+        r#""patient": { "reference": "urn:uuid:0c3e1d20-0000-4000-8000-000000000999" }"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::SubjectMismatch { .. }),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn another_patient_inside_a_backbone_element_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""title": "Synthetic patient summary","#,
+        r#""title": "Synthetic patient summary",
+        "attester": [{ "mode": "personal", "party": { "reference": "Patient/synthetic-elsewhere" } }],"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.attester[0].party"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn another_patient_inside_a_section_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""entry": [{ "reference": "AllergyIntolerance/synthetic-allergy" }]"#,
+        r#""entry": [{ "reference": "AllergyIntolerance/synthetic-allergy" }, { "reference": "Patient/synthetic-elsewhere" }]"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.section[1].entry[1]"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn another_patient_in_an_extension_of_a_primitive_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""status": "final","#,
+        r#""status": "final",
+        "_status": { "extension": [{ "url": "http://example.org/fhir/StructureDefinition/synthetic", "valueReference": { "reference": "Patient/synthetic-elsewhere" } }] },"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource._status.extension[0].valueReference"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_reference_typed_patient_by_identifier_alone_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r#""author": [{ "type": "Patient", "identifier": { "system": "urn:oid:2.999.1.665", "value": "synthetic-0666" } }],"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::PatientReference { ref location } if location == "Bundle.entry[0].resource.author[0]"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_reference_whose_target_is_unknown_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r#""author": [{ "reference": "urn:uuid:0c3e1d20-0000-4000-8000-000000000999" }],"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::PatientReference { .. }),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_reference_whose_type_disagrees_with_its_target_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r#""author": [{ "reference": "Patient/synthetic-patient", "type": "Practitioner" }],"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::ReferenceType { ref location } if location == "Bundle.entry[0].resource.author[0]"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_local_reference_to_no_contained_resource_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r##""author": [{ "reference": "#nowhere" }],"##,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::LocalUnresolved { .. }),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_author_elsewhere_and_a_contained_author_are_admitted() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r##""contained": [{ "resourceType": "Practitioner", "id": "author" }],
+        "author": [{ "reference": "#author" }, { "reference": "Practitioner/synthetic-elsewhere" }, { "reference": "https://elsewhere.example.org/fhir/Organization/synthetic" }],"##,
+    )?;
+    ReceivedDocument::read(&text)?;
+    Ok(())
+}
+
+#[test]
+fn a_patient_entry_beyond_the_subject_is_refused_whatever_names_it() -> Result<(), Box<dyn Error>> {
+    let error = refused(&document_with_entry(
+        r#"{ "fullUrl": "urn:uuid:0c3e1d20-0000-4000-8000-000000000668", "resource": { "resourceType": "Patient", "id": "synthetic-unnamed" } }"#,
+    )?)?;
+    assert!(
+        matches!(error, ReceiveError::SeveralPatients { entry: 3 }),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_document_with_no_patient_entry_is_refused() -> Result<(), Box<dyn Error>> {
+    let start = DOCUMENT
+        .find("    {\n      \"fullUrl\": \"http://example.org/fhir/Patient/")
+        .ok_or("the Patient entry")?;
+    let end = DOCUMENT
+        .find("    {\n      \"fullUrl\": \"http://example.org/fhir/AllergyIntolerance/")
+        .ok_or("the AllergyIntolerance entry")?;
+    let patient = DOCUMENT.get(start..end).ok_or("the Patient text")?;
+    let text = DOCUMENT.replacen(patient, "", 1);
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::SubjectUnresolved),
         "{error:?}"
     );
     Ok(())
