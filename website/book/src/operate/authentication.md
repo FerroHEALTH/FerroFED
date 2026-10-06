@@ -16,8 +16,11 @@ every deployment, and the template for yours, are on
 [The §13.4 deployment decisions](deployment-decisions.md).
 
 The health family (`GET {base}/health`, `/health/readiness`,
-`/health/dependencies`) and `GET {base}/` stay open: they describe the
-process and the product, never a patient or a member. A path outside the
+`/health/dependencies`) and `GET {base}/` stay open. They name no patient,
+but `GET {base}/health/dependencies` names every member endpoint by its id,
+with the state the gateway last observed of it, and `GET {base}/` names the
+product version. Restrict both at the proxy if your network should not learn
+them ([Hardening](hardening.md#network-placement)). A path outside the
 base, or under it but outside `{base}/v1/` and the routes above, is a `404`.
 
 ## The token

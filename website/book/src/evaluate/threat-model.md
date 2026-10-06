@@ -30,7 +30,7 @@ design.
 | The caller's identity and token | the token admits its holder at the gateway; the identity is what each node audits and decides on |
 | The onward credentials and the signing key | they make the gateway's requests acceptable to every node; the signing key vouches for every caller |
 | Routing state | the resolution bindings, the `ehr_id` index and the `creating_system_id` routes decide which node a follow-up reaches; a wrong route sends a request to another patient's record |
-| The audit records | the IHE audit trail names patients and callers, and is evidence after the fact |
+| The audit records | the IHE audit trail and the access records name patients and callers, and are evidence after the fact |
 | The configuration and the registry | they decide whom the gateway trusts and where it sends data |
 | Availability | one federated query becomes a request to every member, so the gateway's load is every CDR's load |
 
@@ -88,7 +88,7 @@ flowchart LR
 | E | the ADMIN API, or the operator surface without the operator scope | P2 | the ADMIN API is refused to every caller; the operator routes need the issuer's `operator_scope` as one whole scope token | `auth.issuer[].operator_scope`; `app/ferrofed-server/tests/it/operator.rs` |
 | T | an AQL query that smuggles the patient identifier, a second patient, or text around the subject | P2 | the query is parsed and the node query is printed from the rewritten syntax tree; a subject the rewrite cannot consume exactly is `400` before any dispatch (§5.4.3) | [Where the patient identifier stops](../how-it-works/identifier-hygiene.md); `app/ferrofed-server/tests/it/hygiene.rs` |
 | T | an undeclared header or query parameter, or a declared value of the wrong kind, forwarded to a node | P2 | a routed request carries only what its ITS-REST operation declares; `Accept`, `Content-Type` and `Prefer` are composed by the gateway; a value of the wrong kind is `400` with nothing sent | [Declared values](../operate/configuration.md#declared-values); `app/ferrofed-server/tests/it/declared.rs` |
-| R | a caller denies a request | P2 | the gateway's own request id travels to every node with the signed caller token, and each node audits who asked (N24); the IHE audit records name the caller | [Verifying it at the node](../operate/authentication.md#verifying-it-at-the-node); `app/ferrofed-server/tests/it/conveyance.rs` |
+| R | a caller denies a request | P2 | the gateway records each query, read and write that reached a node with the verified caller and its request id, before the answer leaves; the request id travels to every node with the signed caller token, and each node audits who asked (N24) | [The access log](../operate/audit.md#the-access-log), [Verifying it at the node](../operate/authentication.md#verifying-it-at-the-node); `app/ferrofed-server/tests/it/access/`, `conveyance.rs` |
 | I | the patient identifier in a response, an error or a refusal | P1, P2 | errors name the position of the offending part, never the value; a node's error quoted in `meta.federation` has each consumed value masked | `app/ferrofed-server/tests/it/errors.rs`, `facade/query.rs`; `app/ferrofed-engine/tests/it/dispatch.rs` |
 | D | a flood of requests, a large body, a slow request | P1, P2 | a concurrency limit refused before the caller is verified; a per-caller rate; a body limit (`413`) and a request timeout (`408`) | `server.max_concurrent_requests`, `[server.caller_rate]`, `server.body_limit_bytes`, `server.request_timeout_ms`; `app/ferrofed-server/tests/it/overload.rs` |
 | I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP by default: keep that hop inside one host or pod, protect it with a mesh, or set `[server.tls]` with a `client_ca_file` that admits the proxy alone | [TLS on the listeners](../operate/configuration.md#tls-on-the-listeners); `app/ferrofed-server/tests/it/listener_tls/` |
@@ -151,7 +151,7 @@ front of it.
 | I | the audit spool read on disk | P9 | the spool is `0700` with files `0600`, and the gateway refuses to start when it is open to other users | `app/ferrofed-server/tests/it/audit_repository.rs`; **carried by the deployment:** an encrypted volume |
 | T, R | audit records lost with a spool | P9 | records are delivered in order from disk; a lost spool loses them for good, and `audit_feed` or `audit_repository` reads `degraded` while records wait | [Losing a spool](../operate/container.md#losing-a-spool); **carried by the deployment:** durable storage per replica |
 | I | metrics or spans pushed in cleartext | P3 | OTLP is plain gRPC: run the collector beside the gateway; a credential in the URL is refused outside development | **open:** [#644](https://github.com/FerroHEALTH/FerroFED/issues/644) |
-| R | no record of which caller read which EHR | P2 | the node audits the conveyed caller (N24) | **open:** [#623](https://github.com/FerroHEALTH/FerroFED/issues/623), then [#521](https://github.com/FerroHEALTH/FerroFED/issues/521) |
+| R | no record of which caller read which EHR | P2 | every federated query, stored-query execution, routed read and routed write that reached a node is recorded with the verified caller, the patient, each `ehr_id` and each endpoint asked; the record is stored before the answer leaves, and an access whose record cannot be stored is `503 access-unrecorded` with none of the data; outside development a gateway with a registry refuses every `[audit] destination` but `repository`; the node audits the conveyed caller too (N24) | [The access log](../operate/audit.md#the-access-log); `[audit]`, `[access_log]`; `app/ferrofed-server/tests/it/access/`, `feed_audit/config.rs` |
 
 ## B7: the callers' issuers
 
@@ -182,9 +182,12 @@ control from you, or an issue that is open:
 2. **The admin listener has no authentication.** Anything that can reach it
    from the loopback interface can run a write action
    ([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)).
-3. **No per-access record at the gateway yet.** Accountability for each
-   query, read and write rests on the nodes' own audit until
-   [#623](https://github.com/FerroHEALTH/FerroFED/issues/623) lands.
+3. **The access records live at your Audit Record Repository.** The
+   gateway stores each record in the spool before it answers, and refuses
+   an access it cannot record, but who may read the records and how long
+   they are kept is the repository's. FerroFED's own review interface and
+   retention by origin and category are planned
+   ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
 4. **Bearer replay.** An onward token or a caller token stolen at a node can
    be replayed at that node until it expires (§13.4). DPoP or mutual TLS
    narrows it for onward tokens; the caller token lives 60 seconds.
