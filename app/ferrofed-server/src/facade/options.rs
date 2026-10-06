@@ -22,7 +22,9 @@
 //! (N27a, §13.2.1) and whether an answer names a member it excludes.
 //! The manufacturer is named at the top level, beside `federation` and
 //! `endpoints`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR
-//! system.
+//! system. Beside it, `supported_until` names the last day of the
+//! release's support period, or is `null` for a build with none (Regulation
+//! (EU) 2024/2847 Art 13(19)).
 
 use std::sync::Arc;
 
@@ -51,6 +53,7 @@ use crate::federation::Federation;
 use crate::localization::LocalizationPolicy;
 use crate::request_id;
 use crate::state::AppState;
+use crate::support;
 
 /// The `Allow` value of `{base}/`, which answers `GET` (and so `HEAD`) and
 /// `OPTIONS`.
@@ -89,6 +92,13 @@ pub const CONSENT: &str = "consent";
 // NOTE: §7a.2 and options-root.schema.json leave the top level open
 // (`additionalProperties: true`): our own design, the member names the manufacturer.
 pub const MANUFACTURER: &str = "manufacturer";
+
+/// The top-level member that names the last day of the running release's
+/// support period, beside the manufacturer, or `null` for a build with none
+/// (Regulation (EU) 2024/2847 Art 13(19)).
+// NOTE: Regulation (EU) 2024/2847 Art 13(19) has the end date specified by digital
+// means, and options-root.schema.json leaves the top level open for it.
+pub const SUPPORTED_UNTIL: &str = "supported_until";
 
 /// Why the self-description cannot be built from the running federation.
 #[derive(Debug, thiserror::Error)]
@@ -192,6 +202,10 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
     };
     let mut extra = Extra::new();
     extra.insert_serialized(MANUFACTURER, &manufacturer::MANUFACTURER)?;
+    extra.insert_serialized(
+        SUPPORTED_UNTIL,
+        &support::SUPPORTED_UNTIL.map(|end| end.to_string()),
+    )?;
     Ok(OptionsRoot {
         federation: gateway,
         endpoints: members(federation.snapshot())?,

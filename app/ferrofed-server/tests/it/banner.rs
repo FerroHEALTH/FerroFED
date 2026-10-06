@@ -21,6 +21,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::federation::{error::FederationError, registry::read_registry};
 use ferrofed_server::state::{AppState, StateError};
+use ferrofed_server::support::Support;
 use ferrofed_server::telemetry::Format;
 
 use crate::facade::{NAMESPACE, PATIENT, registry};
@@ -45,6 +46,7 @@ fn deployment() -> Result<Deployment, Box<dyn Error>> {
         development: false,
         cleartext: Vec::new(),
         audit_spool_in_memory: false,
+        support: Support::NoPeriod,
     })
 }
 
@@ -187,6 +189,69 @@ fn a_production_deployment_prints_no_notice() -> TestResult {
         assert!(!banner.contains("DEVELOPMENT"), "{banner}");
         assert!(!banner.contains('\x1b'), "{banner}");
     }
+    Ok(())
+}
+
+/// The last day of a release's support period, judged against a fixed clock.
+const SUPPORT_END: jiff::civil::Date = jiff::civil::date(2031, 10, 5);
+
+/// Regulation (EU) 2024/2847 Art 13(19): the end date is stated, and on its
+/// last day the release is still supported.
+#[test]
+fn on_the_last_day_of_support_the_banner_names_the_end_date() -> TestResult {
+    let supported = deployment()?.with_support(Support::at(Some(SUPPORT_END), SUPPORT_END));
+    let banner = render("9.9.9", &supported, false);
+    assert_eq!(Some("until 2031-10-05"), value_of(&banner, "Support"));
+    assert!(!banner.contains("UNSUPPORTED"), "{banner}");
+    Ok(())
+}
+
+/// Regulation (EU) 2024/2847 Art 13(19): once the end date has passed, the
+/// banner displays a notification, in red on a terminal with colour.
+#[test]
+fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestResult {
+    let ended = deployment()?.with_support(Support::at(
+        Some(SUPPORT_END),
+        jiff::civil::date(2031, 10, 6),
+    ));
+    let plain = render("9.9.9", &ended, false);
+    assert_eq!(Some("ended on 2031-10-05"), value_of(&plain, "Support"));
+    let words = plain.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        words.contains(
+            "UNSUPPORTED: FerroFED v9.9.9 is past its support period, which ended on 2031-10-05: \
+             it receives no security fixes, so move to the latest release."
+        ),
+        "{plain}"
+    );
+    for line in plain.lines() {
+        assert!(line.chars().count() <= 80, "{line:?}");
+    }
+    let coloured = render("9.9.9", &ended, true);
+    let notice: Vec<&str> = coloured.lines().filter(|l| l.contains('\x1b')).collect();
+    assert!(!notice.is_empty(), "{coloured}");
+    for line in notice {
+        assert!(
+            line.starts_with("\x1b[1;31m") && line.ends_with("\x1b[0m"),
+            "every notice line is red: {line:?}"
+        );
+    }
+    let stripped = coloured.replace("\x1b[1;31m", "").replace("\x1b[0m", "");
+    assert_eq!(plain, stripped, "colour changes no word");
+    Ok(())
+}
+
+/// A development build and a pre-release are built with no release date, so
+/// the banner says the build has no support period, on any day.
+#[test]
+fn a_build_without_a_release_date_says_it_has_no_support_period() -> TestResult {
+    let unreleased = deployment()?.with_support(Support::at(None, jiff::civil::date(2099, 1, 1)));
+    let banner = render("9.9.9", &unreleased, false);
+    assert_eq!(
+        Some("none, this build is no release"),
+        value_of(&banner, "Support")
+    );
+    assert!(!banner.contains("UNSUPPORTED"), "{banner}");
     Ok(())
 }
 

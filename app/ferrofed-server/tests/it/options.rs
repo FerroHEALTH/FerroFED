@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::{MANUFACTURER, MAX_WINDOW};
+use ferrofed_server::facade::options::{MANUFACTURER, MAX_WINDOW, SUPPORTED_UNTIL};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
@@ -192,9 +192,9 @@ async fn no_targeting_mechanism_no_carrier_and_no_async_member_is_declared() -> 
     let body = described("").await?;
     let top: Vec<&str> = body.extra.iter().map(|(name, _)| name).collect();
     assert_eq!(
-        vec![MANUFACTURER],
+        vec![MANUFACTURER, SUPPORTED_UNTIL],
         top,
-        "federation, endpoints and the manufacturer at the top"
+        "federation, endpoints, the manufacturer and the end of support at the top"
     );
     assert!(
         body.federation.extra.is_empty(),
@@ -462,6 +462,24 @@ async fn the_manufacturer_is_named_beside_federation_and_endpoints() -> TestResu
         text.contains(r#""postal_address":"Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands""#),
         "{text}"
     );
+    Ok(())
+}
+
+/// Regulation (EU) 2024/2847 Art 13(19): the end of the support period is
+/// specified by digital means, the date the build carries, or `null` for a
+/// build with none.
+#[tokio::test]
+async fn the_end_of_support_is_named_beside_the_manufacturer() -> TestResult {
+    let body = described("").await?;
+    let named = body
+        .extra
+        .get(SUPPORTED_UNTIL)
+        .map(|raw| raw.get().to_owned());
+    let expected = match ferrofed_server::support::SUPPORTED_UNTIL {
+        Some(end) => format!("\"{end}\""),
+        None => "null".to_owned(),
+    };
+    assert_eq!(Some(expected), named);
     Ok(())
 }
 
