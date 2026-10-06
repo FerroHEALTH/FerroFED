@@ -175,6 +175,20 @@ slow one.
    no entry. Commit `CHANGELOG.md` and the removals together. What sits under
    the version heading is what the release notes say, so read it as the
    release notes before you tag, and edit the wording there if it needs it.
+
+   **The support period.** For a release without a pre-release suffix, the
+   same command states the support period, which Regulation (EU) 2024/2847
+   Art 13(8) and (19) and Annex II point 7 ask for. The section opens with
+   "Supported until YYYY-MM-DD", the release date plus five years, the
+   minimum Art 13(8) sets; it adds the row `| vX.Y.Z | <date> | <end> |`
+   above the support table's marker in `SECURITY.md`; and it prints the end
+   date. Commit `SECURITY.md` with `CHANGELOG.md`. It refuses, with nothing
+   written, a `SECURITY.md` with no support table and a version the table
+   already lists. The date given to `--assemble` is the release date both
+   files carry, so give it the day the tag will be pushed. A pre-release
+   gets no support period. Five years is the number `SUPPORT_YEARS` in
+   `scripts/release/changelog.sh`; a longer period the owner sets changes
+   it, the text of `SECURITY.md` and this paragraph together.
    Its "Upgrade notes" must say everything an operator changes to upgrade:
    CI's `release compose` job already refuses a change whose build refuses
    the last release's example configuration with no upgrade note pending

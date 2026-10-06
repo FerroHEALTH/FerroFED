@@ -7,14 +7,18 @@ This page says how to complain about FerroFED, what its manufacturer records,
 and what it does when a released version turns out not to conform or is
 involved in a serious incident. It describes the manufacturer's procedures
 under Regulation (EU) 2025/327 on the European Health Data Space (the EHDS
-Regulation), Art 30(1)(i) to (o), Art 30(5) and Art 44. The
+Regulation), Art 30(1)(i) to (o), Art 30(5) and Art 44, and the reports of
+an actively exploited vulnerability or a severe incident under Regulation
+(EU) 2024/2847, the Cyber Resilience Act (CRA), Art 14. The
 [regulatory status](regulatory-status.md) page sets out why those articles
 reach FerroFED and from which date. The maintainers' working checklist for
 the same procedures is
 [`docs/post-market.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-market.md).
 
 Every quotation is from the Official Journal text, vendored at
-[`docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml).
+[`docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml)
+and
+[`docs/specs/eu-cra/reg-eu-2024-2847-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-cra/reg-eu-2024-2847-en.xhtml).
 This page is not legal advice.
 
 ## The manufacturer
@@ -46,7 +50,9 @@ channel by what the report contains:
   privately through
   [GitHub private vulnerability reporting](https://github.com/FerroHEALTH/FerroFED/security/advisories/new),
   as [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md)
-  says.
+  says. Include any evidence that it is being exploited, which starts the
+  24-hour clock of
+  [Actively exploited vulnerabilities](#actively-exploited-vulnerabilities-and-severe-incidents).
 - **Anything that may have harmed a person, or could:** write to
   [info@cadasto.com](mailto:info@cadasto.com) with "FerroFED incident" in the
   subject, so it is handled as a possible serious incident from the first
@@ -163,6 +169,93 @@ them for that deployment.
 protection, the market surveillance authority informs the data protection
 supervisory authorities (Art 44(6)). A deployment's own duties under data
 protection law are its own.
+
+## Actively exploited vulnerabilities and severe incidents
+
+CRA Art 14 applies from 11 September 2026 (CRA Art 71(2)), and Art 69(3)
+extends it to "all products with digital elements that fall within the
+scope of this Regulation that have been placed on the market before 11
+December 2027". Cadasto B.V. places each tagged FerroFED release on the
+market as its manufacturer, so the duty covers every release.
+
+### What is reported
+
+- **An actively exploited vulnerability:** "a vulnerability for which there
+  is reliable evidence that a malicious actor has exploited it in a system
+  without permission of the system owner" (CRA Art 3(42)), contained in
+  FerroFED (Art 14(1)).
+- **A severe incident having an impact on the security of FerroFED:** an
+  incident that "negatively affects or is capable of negatively affecting
+  the ability of a product with digital elements to protect the
+  availability, authenticity, integrity or confidentiality of sensitive or
+  important data or functions", or that "has led or is capable of leading to
+  the introduction or execution of malicious code" in FerroFED or in a
+  user's network and information systems (Art 14(3), (5)).
+
+A patient identifier reaching a node through an attack, or a credential
+taken from a running gateway, are examples the manufacturer handles under
+this heading.
+
+### Where it goes
+
+Each notification goes through the single reporting platform, which ENISA
+establishes and runs (Art 16(1)), at "the electronic notification end-point
+of the CSIRT designated as coordinator of the Member State where the
+manufacturers have their main establishment in the Union", and is
+"simultaneously accessible to ENISA" (Art 14(7)). Art 14(7) places the main
+establishment where "the decisions related to the cybersecurity of its
+products with digital elements are predominantly taken". For Cadasto B.V.
+that is the Netherlands, so the notifications go to the Dutch CSIRT
+designated as coordinator. That CSIRT passes each notification on to the
+CSIRTs of the other Member States the manufacturer names (Art 16(2)).
+
+### The three reports
+
+The clock starts when the manufacturer becomes aware of the vulnerability or
+the incident.
+
+| Report | Due | Content |
+|---|---|---|
+| Early warning | "without undue delay and in any event within 24 hours" (Art 14(2)(a), (4)(a)) | the Member States where the manufacturer knows FerroFED has been made available; for an incident, also whether it is suspected of being caused by unlawful or malicious acts |
+| Notification | "without undue delay and in any event within 72 hours" (Art 14(2)(b), (4)(b)) | general information about the release concerned, the nature of the exploit and the vulnerability, or an initial assessment of the incident; the corrective or mitigating measures taken and those users can take; how sensitive the manufacturer considers the information |
+| Final report, vulnerability | "no later than 14 days after a corrective or mitigating measure is available" (Art 14(2)(c)) | the vulnerability with its severity and impact; where available, the malicious actor; the security update or other corrective measures made available |
+| Final report, incident | "within one month after the submission of the incident notification" (Art 14(4)(c)) | the incident with its severity and impact; the type of threat or root cause; the mitigation measures applied and ongoing |
+
+A later report is left out "unless the relevant information has already been
+provided" in an earlier one. The CSIRT may ask for an intermediate report on
+status updates (Art 14(6)), and the manufacturer answers it.
+
+### Telling the users
+
+Art 14(8): after becoming aware, "the manufacturer shall inform the impacted
+users of the product with digital elements, and where appropriate all
+users, of that vulnerability or incident and, where necessary, of any risk
+mitigation and corrective measures that the users can deploy", "where
+appropriate in a structured, machine-readable format". FerroFED's channel is
+a [GitHub security advisory](https://github.com/FerroHEALTH/FerroFED/security/advisories)
+on the repository, naming the releases affected, the mitigation a deployment
+can apply now and the release that fixes it. Cadasto B.V. also writes
+directly to every user it knows from a contract. A deployment that pulls
+FerroFED anonymously learns of it through the advisory, so watch the
+repository's security advisories. If the manufacturer does not inform users
+in time, the CSIRT may do so itself (Art 14(8)).
+
+### Beside the serious-incident report
+
+The CRA notifications and the EHDS serious-incident report (Art 44(7), above)
+are two separate duties with different recipients and clocks:
+
+| | CRA Art 14 | EHDS Art 44(7) |
+|---|---|---|
+| Event | an actively exploited vulnerability, or a severe incident having an impact on security | a serious incident, Art 2(2)(r): a malfunction that leads, or might lead, to death or serious harm to health, serious prejudice to a person's rights, or serious disruption of critical health infrastructure |
+| To | the Dutch CSIRT designated as coordinator, through the single reporting platform, and ENISA | the market surveillance authorities of the Member States concerned |
+| By | 24 hours, 72 hours, then the final report | three days after awareness |
+
+One event can meet both definitions. A vulnerability exploited to read
+patient data through the gateway is a severe incident under the CRA and may
+be a serious incident under the EHDS. Neither Regulation says that one report
+stands in for the other, so the manufacturer makes both, each on its own
+clock, and keeps them consistent. NIS 2 stays separate from both, as above.
 
 ## The report archive
 
