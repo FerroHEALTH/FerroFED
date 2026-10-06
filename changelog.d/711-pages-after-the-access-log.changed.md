@@ -8,5 +8,8 @@
   longer says the open health routes name no member:
   `GET {base}/health/dependencies` names every member endpoint id and its
   state. The operator console page says to set `Strict-Transport-Security`
-  at the proxy. The README and `llms.txt` no longer say the European logging
-  component is not built.
+  at the proxy. The README, `llms.txt`, the claims page's limitations and the
+  regulatory status page no longer say the European logging component is not
+  built or that access to patient data is not audited; the limitations now
+  say the access records are kept by your Audit Record Repository and are
+  recorded unclassified until you declare a category map.

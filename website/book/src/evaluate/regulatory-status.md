@@ -236,18 +236,25 @@ data, is the deployment's to answer.
 
 ## What is built and what is planned
 
-None of the harmonised software components is built yet. Two built features
-relate to the essential requirements, and neither has been assessed against
+Neither harmonised software component is complete yet. Three built features
+relate to the essential requirements, and none has been assessed against
 them:
 
 - Every caller is authenticated at the gateway
   ([client authentication](../operate/authentication.md)). Annex II, point
   3.1, asks for "reliable mechanisms for the identification and
   authentication of health professionals".
-- Every IHE transaction the gateway makes or receives is audited to an ATNA
-  Audit Record Repository ([the audit trail](../operate/audit.md)). That
-  record is not the European logging component, whose content Annex II,
-  point 3.2, and the implementing acts set.
+- Every access to patient data the gateway intermediates is recorded with
+  the verified caller, the patient, each endpoint asked and the categories
+  of the data, in the record Annex II, point 3.2, sets for the European
+  logging component ([the access log](../operate/audit.md#the-access-log)).
+  The library that builds it is `crates/ehds-logging`. The component's
+  review tools (point 3.3) and retention by origin and category (point 3.4)
+  are planned ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
+- The European interoperability component has a library, `crates/eehrxf`:
+  the EHDS dataset model, read from the Xt-EHR logical models, and the
+  mapping of an openEHR composition to a FHIR R4 `Bundle` through the
+  mapping files you supply. The gateway does not serve it yet.
 
 Three of the manufacturer's obligations have a first answer:
 

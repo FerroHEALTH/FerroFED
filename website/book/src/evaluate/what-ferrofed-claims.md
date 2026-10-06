@@ -334,18 +334,27 @@ These are the ones to know before you deploy FerroFED; the
   of the Federation Tier with AQL. Requirement and conformance-point numbers
   can move at the 1.0 release, and the re-pin is
   [#17](https://github.com/FerroHEALTH/FerroFED/issues/17).
-- **No EHDS harmonised component yet.** The European interoperability
-  software component and the European logging software component (Art 25(1))
-  are not built, no EU declaration of conformity has been drawn up, and no
-  release carries the CE marking
+- **No EHDS harmonised component is complete.** The gateway records every
+  access to patient data as Annex II, point 3.2, asks of the European
+  logging software component (Art 25(1)); that component's review tools
+  (point 3.3) and its retention by origin and category (point 3.4) are
+  planned ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)). The
+  European interoperability software component is a library the gateway
+  does not serve yet
+  ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)). No EU
+  declaration of conformity has been drawn up, and no release carries the
+  CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
-- **Access to patient data is not audited yet.** Only the IHE transactions
-  the gateway makes or receives are audited
-  ([The audit trail](../operate/audit.md)). A federated query, a routed read
-  or write, and a query from the operator console leave no access record
-  naming the patient; that record is
-  [#623](https://github.com/FerroHEALTH/FerroFED/issues/623) and
-  [#521](https://github.com/FerroHEALTH/FerroFED/issues/521).
+- **The access records are kept by your Audit Record Repository.** Every
+  federated query, stored-query execution, routed read and routed write
+  that reaches a node, a query from the operator console included, is
+  recorded with the verified caller and the patient, and an access whose
+  record cannot be stored is refused `503 access-unrecorded`
+  ([The access log](../operate/audit.md#the-access-log)). The gateway keeps
+  no copy, so who reads the records and how long they are kept is the
+  repository's. FerroFED ships no category map: until you declare one in
+  `[access_log]`, the categories of the data an access reached are recorded
+  `ehds-unclassified`.
 - **The caller may be an application.** Client authentication verifies an
   access token from an issuer you trust. Whether that token names the health
   professional, and at which assurance level, depends on the issuer; FerroFED
