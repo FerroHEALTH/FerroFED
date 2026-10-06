@@ -84,6 +84,22 @@ self_test() {
     fi
   }
 
+  # expect_merging NAME WANT BRANCH: the guard over the worktree of BRANCH in
+  # the middle of merging main, before the merge is committed, exits WANT.
+  expect_merging() {
+    local name=$1 want=$2 branch=$3
+    stub_git checkout -q --detach "$branch"
+    stub_git merge -q --no-commit --no-ff main > /dev/null 2>&1
+    status=0
+    (cd "$work" && bash scripts/checks/crate-version-guard.sh main WORKTREE) > "$work/out" 2>&1 || status=$?
+    stub_git merge --abort
+    if [[ "$status" -ne "$want" ]]; then
+      echo "crate-version-guard: self-test failed: $name exited $status, wanted $want." >&2
+      cat "$work/out" >&2
+      exit 1
+    fi
+  }
+
   stub_git init -q -b main
   printf '[workspace]\nmembers = ["crates/x", "crates/y"]\n\n[workspace.dependencies]\nserde = "1"\n' > "$work/Cargo.toml"
   crate x 0.0.1
@@ -125,6 +141,19 @@ self_test() {
     exit 1
   fi
   expect "a branch behind main that bumped what it changed" 0 bumped
+
+  expect_merging "a branch merging a main that bumped a crate it never touched" 0 untouched
+  expect_merging "a branch merging main after it changed packaged content without a bump" 1 unbumped
+  if ! grep -q 'packaged content of x changed but its version is still 0.0.1' "$work/out"; then
+    echo "crate-version-guard: self-test failed: the unbumped merge failed without naming x." >&2
+    cat "$work/out" >&2
+    exit 1
+  fi
+  if grep -q 'of y changed' "$work/out"; then
+    echo "crate-version-guard: self-test failed: the merge read main's own bump of y as the branch's." >&2
+    exit 1
+  fi
+  expect_merging "a branch merging main after it bumped what it changed" 0 bumped
   echo "crate-version-guard: self-test passed."
 }
 
@@ -150,10 +179,15 @@ head="${2:-HEAD}"
 readonly WORKTREE=WORKTREE
 
 # The commit the change forked from the base at; the worktree forks where its
-# HEAD does.
-tip="$head"
-[[ "$head" != "$WORKTREE" ]] || tip=HEAD
-if ! fork="$(git merge-base "$base" "$tip")"; then
+# HEAD does. A worktree in the middle of a merge holds HEAD and MERGE_HEAD
+# joined, so its fork is the base's merge base with both, and what the merge
+# brings from the base is never read as the branch's own change.
+tips=("$head")
+[[ "$head" != "$WORKTREE" ]] || tips=(HEAD)
+if [[ "$head" = "$WORKTREE" ]] && git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+  tips=(HEAD MERGE_HEAD)
+fi
+if ! fork="$(git merge-base "$base" "${tips[@]}")"; then
   echo "crate-version-guard: $base and $head have no merge base; check out the full history (fetch-depth: 0)." >&2
   exit 2
 fi
