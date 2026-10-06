@@ -27,6 +27,7 @@ has run on every change since the workspace landed.
 |---|---|---|
 | `ci.yml` | push to `main`, pull request, merge group, dispatch | the two tiers below and the `conclusion` check |
 | `contribution-licence.yml` | pull request opened, edited, reopened or synchronized | `contribution-licence-guard`: the pull request body accepts the contribution terms |
+| `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
 | `codeql.yml` | push and pull request touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
@@ -39,7 +40,7 @@ has run on every change since the workspace landed.
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
-Dependabot (`.github/dependabot.yml`) is the fourteenth piece and is described
+Dependabot (`.github/dependabot.yml`) is the fifteenth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`
@@ -228,7 +229,8 @@ It reads the changed paths from the merge base of the pull request's base
 and head, so a pull request that is behind a `main` that bumped some other
 crate passes, and it still requires a changed member to move off the version
 `main` holds now. It exits cleanly while no `crates/*` member exists, and the `no-crate-bump`
-label is its escape for a diff that provably does not change packaged bytes.
+label is its escape for a diff that provably does not change packaged bytes,
+read from the API when the job runs.
 Nothing is published yet, behind the workspace `publish` switch
 (`.claude/rules/crates-publishing.md`); the guard keeps each crate's line
 honest until the switch flips.
@@ -240,8 +242,10 @@ fragments still land. Like `crate-version-guard`, it reads the change from the
 merge base, so a fragment that reached `main` after the branch forked does not
 count. The `no-changelog` label is its escape for a change with no
 user-visible effect, and a pull request a bot opened is skipped, as
-`contribution-licence-guard` skips it. Adding or removing a label starts a new
-run, so a label takes effect without a new push. The release cut turns
+`contribution-licence-guard` skips it. Both guards read their label from the
+API when they run, and adding or removing either label re-runs its guard
+through `label-guards.yml`, so a label takes effect without a new push. The
+release cut turns
 the fragments into the version's section (`docs/release.md`).
 
 `hashFiles()` cannot do the detection. It is evaluated before checkout, when
@@ -265,6 +269,15 @@ were skipped, and reads `join(needs.*.result, ' ')` through `env:`. It fails
 when any result is `failure` or `cancelled`, and passes when every result is
 `success` or `skipped`. A job added to `ci.yml` must join the `conclusion`
 job's `needs` list in the same change, or its result is not counted.
+
+A run cancelled as a whole fails `conclusion` too: under `always()` the job
+keeps running through the cancellation
+([workflow cancellation reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation))
+and finds its needed jobs `cancelled`. Nothing inside the workflow tells a
+run a newer commit superseded from one cancelled for another reason, so the
+check fails closed on every cancellation. A superseded run's failure sits on
+the commit it replaced, never on the head of the pull request, because only
+a new commit cancels a pull-request run (§Triggers and concurrency).
 
 Reading the results through `env:` rather than splicing them into `run:` is
 the same template-injection rule every workflow follows
@@ -414,10 +427,36 @@ that makes it stale refreshes it in the same pull request (#143).
 ## Triggers and concurrency
 
 `ci.yml` runs on `push` to `main`, `pull_request` against `main`,
-`merge_group` and `workflow_dispatch`. `cancel-in-progress` is true for pull
-requests only: a push to `main` and a merge-group run each verify a commit
-that must keep its own result, while a superseded pull-request run verifies a
-commit nobody will merge.
+`merge_group` and `workflow_dispatch`. A pull request's runs share the
+concurrency group `ci-<ref>` with `cancel-in-progress`, so a new commit
+cancels the run of the commit it replaces, a commit nobody will merge. Every
+other run gets a group of its own, `ci-run-<run id>`, so nothing cancels a
+push to `main`, a merge-group run or a dispatch, in progress or pending: each
+verifies a commit that keeps its own result, and every merge group gets a
+real `conclusion`.
+
+A pull request triggers `ci.yml` when it is opened, reopened or gets a new
+commit, never on `labeled` or `unlabeled`. A pull request opened with a label
+used to start two runs on one commit a second apart, and a concurrency group
+orders runs by the time each started waiting, not the time each was created
+([concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)).
+The run cancelled could be the newer one, and a pull request is held to the
+`conclusion` of the most recently created run on its head commit (observed:
+GitHub's documentation does not say which of two same-named checks counts).
+Its failed `conclusion` then blocked a pull request whose other run had
+passed (#788).
+
+The two guards that have a label escape read the pull request's labels from
+the API when they run. `label-guards.yml` runs when `no-changelog` or
+`no-crate-bump` is added or removed: it waits for the CI run on the head
+commit to finish and, when the guard's result no longer matches the labels
+(a failure with its escape now set, or a pass with it now removed), re-runs
+that job. Re-running a job re-runs its dependent jobs
+([re-run a job from a workflow run](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run)),
+so `conclusion` reports again in the same run. That workflow decides nothing
+a merge depends on: the guard reads the labels itself, and `conclusion`
+fails until a re-run passes. A pull request from a fork gets a read-only
+token there, so a maintainer re-runs the guard by hand.
 
 ## Owner settings
 
