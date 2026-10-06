@@ -14,12 +14,12 @@
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_server::metrics::Metrics;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::pmir::{PatientIdentityRegistry, merge_message};
 use http::{Request, StatusCode, header};
 
 use super::{SETTLE, audit_tables, names_no_caller, transactions};
+use crate::metrics::holds_series;
 use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, TOKEN, gateway, text};
 use crate::support::send_as_is;
 
@@ -123,7 +123,12 @@ async fn a_received_message_is_recorded_naming_its_patient_toward_the_repository
     );
     let log = logs.text();
     assert!(!log.contains(SUBSUMED), "no patient in the log: {log}");
-    let exposition = Metrics::default().render()?;
+    let exposition = gateway.state.metrics().render()?;
+    holds_series(
+        &exposition,
+        "ferrofed_http_requests",
+        &[("http_route", PATH)],
+    )?;
     assert!(!exposition.contains(SUBSUMED), "no patient in a metric");
     Ok(())
 }

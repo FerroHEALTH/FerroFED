@@ -15,9 +15,10 @@
 
 use std::error::Error;
 use std::path::Path;
+use std::sync::Arc;
 
 use axum::Router;
-use ferrofed_server::metrics::Metrics;
+use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
@@ -29,10 +30,10 @@ use super::{
     spooled, transactions,
 };
 use crate::facade::{
-    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, gateway_within, node_answering,
+    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, gateway_within_state, node_answering,
     patient_query, post, received, registry, statuses,
 };
-use crate::metrics::{count, parse};
+use crate::metrics::{count, holds_series, parse};
 use crate::support::call;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -77,11 +78,22 @@ async fn manager() -> Server {
 /// `[audit.repository]` keys `extra`, within [`BUDGET_MS`].
 fn audited_gateway(
     dir: &Path,
-    [a, b, pix]: [&str; 3],
+    urls: [&str; 3],
     repository: &FeedRepository,
     extra: &str,
 ) -> Result<Router, Box<dyn Error>> {
-    gateway_within(
+    let (router, _) = audited_gateway_state(dir, urls, repository, extra)?;
+    Ok(router)
+}
+
+/// The gateway of [`audited_gateway`], with the state it serves from.
+fn audited_gateway_state(
+    dir: &Path,
+    [a, b, pix]: [&str; 3],
+    repository: &FeedRepository,
+    extra: &str,
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    gateway_within_state(
         dir,
         &registry(a, b, ""),
         "profile = \"development\"",
@@ -111,7 +123,7 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
     let pix = manager().await;
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
-    let app = audited_gateway(
+    let (app, state) = audited_gateway_state(
         dir.path(),
         [&a.uri(), &b.uri(), &pix.uri()],
         &repository,
@@ -147,12 +159,17 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
         "the access record"
     );
     assert_eq!(Some("up"), await_feed_state(&app, "up").await?.as_deref());
-    let exposition = Metrics::default().render()?;
+    let exposition = state.metrics().render()?;
     let samples = parse(&exposition)?;
     assert_eq!(
         Some("2".to_owned()),
         count(&samples, "ferrofed_audit_delivered_total", &[])
     );
+    holds_series(
+        &exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", "node-a-pub")],
+    )?;
     assert!(!exposition.contains(PATIENT), "no identifier in a metric");
     let log = logs.text();
     assert!(!log.contains(PATIENT), "no identifier in the log: {log}");
@@ -401,7 +418,7 @@ async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestRe
     let pix = manager().await;
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
-    let app = audited_gateway(
+    let (app, state) = audited_gateway_state(
         dir.path(),
         [&a.uri(), &b.uri(), &pix.uri()],
         &repository,
@@ -425,7 +442,12 @@ async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestRe
         "the caller reaches the repository"
     );
     let log = logs.text();
-    let exposition = Metrics::default().render()?;
+    let exposition = state.metrics().render()?;
+    holds_series(
+        &exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", "node-a-pub")],
+    )?;
     for value in [&claims.sub, &claims.client_id] {
         assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
         assert!(

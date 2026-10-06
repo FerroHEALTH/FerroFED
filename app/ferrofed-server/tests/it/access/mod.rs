@@ -38,6 +38,7 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, crossref, registry, settings_with_room};
 use crate::feed_audit::audit_tables;
+use crate::metrics::holds_series;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -133,19 +134,15 @@ fn gateway_and_state(
     Ok((ferrofed_server::router(Arc::clone(&state), server), state))
 }
 
-/// Fails unless `exposition`, rendered from the registry a federated query
-/// recorded into, holds the node request series of the endpoint `endpoint`,
-/// so a check that no value reaches a metric reads what the request wrote.
+/// Fails unless `exposition` holds the node request series of the endpoint
+/// `endpoint`, so a check that no value reaches a metric reads the registry
+/// the federated query recorded into.
 fn recorded_the_query(exposition: &str, endpoint: &str) -> Result<(), Box<dyn Error>> {
-    let series = exposition
-        .lines()
-        .filter(|line| line.starts_with("ferrofed_node_requests"))
-        .any(|line| line.contains(&format!("endpoint=\"{endpoint}\"")));
-    if series {
-        Ok(())
-    } else {
-        Err(format!("no node request series of {endpoint} in {exposition}").into())
-    }
+    holds_series(
+        exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", endpoint)],
+    )
 }
 
 /// A canonical `COMPOSITION` of `template`, the version `uid`.

@@ -44,7 +44,7 @@ use crate::facade::{
     settings_with_room,
 };
 use crate::feed_audit::SETTLE;
-use crate::metrics::{count, parse};
+use crate::metrics::{count, holds_series, parse};
 use crate::support::call;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -199,7 +199,7 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
     let repository = AuditRepository::start().await?;
     let dir = tempfile::tempdir()?;
     let keys = reaching(dir.path(), &repository, "")?;
-    let (app, _state) = gateway(&config(
+    let (app, state) = gateway(&config(
         dir.path(),
         "development",
         [&a, &b, &c],
@@ -254,7 +254,7 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
             .map(serde_json::value::RawValue::get)
     );
 
-    let exposition = Metrics::default().render()?;
+    let exposition = state.metrics().render()?;
     let samples = parse(&exposition)?;
     assert_eq!(
         Some("1".to_owned()),
@@ -264,6 +264,11 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
         Some("0".to_owned()),
         count(&samples, "ferrofed_audit_spool_events", &[])
     );
+    holds_series(
+        &exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", "node-a-pub")],
+    )?;
     assert!(!exposition.contains(PATIENT));
     let log = logs.text();
     assert!(!log.contains(PATIENT), "no identifier in the log: {log}");
@@ -279,7 +284,7 @@ async fn each_discovery_names_the_verified_caller_as_its_human_requestor_toward_
     let repository = AuditRepository::start().await?;
     let dir = tempfile::tempdir()?;
     let keys = reaching(dir.path(), &repository, "")?;
-    let (app, _state) = gateway(&config(
+    let (app, state) = gateway(&config(
         dir.path(),
         "development",
         [&a, &b, &c],
@@ -315,7 +320,12 @@ async fn each_discovery_names_the_verified_caller_as_its_human_requestor_toward_
         "the caller alone is the requestor (DICOM PS3.15 A.5.2)"
     );
     let log = logs.text();
-    let exposition = Metrics::default().render()?;
+    let exposition = state.metrics().render()?;
+    holds_series(
+        &exposition,
+        "ferrofed_node_requests",
+        &[("endpoint", "node-a-pub")],
+    )?;
     for value in [&claims.sub, &claims.client_id] {
         assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
         assert!(

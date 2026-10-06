@@ -176,6 +176,28 @@ pub(crate) fn count(samples: &[Sample], name: &str, labels: &[(&str, &str)]) -> 
     value(samples, name, labels).map(|value| value.to_string())
 }
 
+/// Fails unless `exposition` holds a sample of the family `family` whose
+/// labels include every pair of `labels`: proof that a check reading
+/// `exposition` reads the registry the request under test recorded into.
+#[cfg(feature = "binding-ihe")]
+pub(crate) fn holds_series(
+    exposition: &str,
+    family: &str,
+    labels: &[(&str, &str)],
+) -> Result<(), Box<dyn Error>> {
+    let found = parse(exposition)?.iter().any(|sample| {
+        sample.name.starts_with(family)
+            && labels
+                .iter()
+                .all(|(key, value)| sample.labels.get(*key).map(String::as_str) == Some(*value))
+    });
+    if found {
+        Ok(())
+    } else {
+        Err(format!("no {family} sample with {labels:?} in {exposition}").into())
+    }
+}
+
 /// A gateway with its own metrics, built through the real configuration
 /// path from `top` and `tables` over the registry document `registry`.
 pub(crate) struct Metered {

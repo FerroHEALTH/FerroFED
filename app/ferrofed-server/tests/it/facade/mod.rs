@@ -166,15 +166,28 @@ pub(crate) fn gateway(
     gateway_within(dir, registry, top, tables, (PER_NODE_TIMEOUT_MS, 3_000))
 }
 
-/// The gateway of [`gateway`], with a per-node timeout of `per_node_ms` and
-/// an overall budget of `overall_ms`.
+/// The gateway of [`gateway`], with the per-node timeout and the overall
+/// budget of `budget`, in milliseconds.
 pub(crate) fn gateway_within(
     dir: &Path,
     registry: &str,
     top: &str,
     tables: &str,
-    (per_node_ms, overall_ms): (u64, u64),
+    budget: (u64, u64),
 ) -> Result<Router, Box<dyn Error>> {
+    let (router, _) = gateway_within_state(dir, registry, top, tables, budget)?;
+    Ok(router)
+}
+
+/// The gateway of [`gateway_within`], with the state it serves from: the
+/// metrics a request records go to that state's registry.
+pub(crate) fn gateway_within_state(
+    dir: &Path,
+    registry: &str,
+    top: &str,
+    tables: &str,
+    (per_node_ms, overall_ms): (u64, u64),
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
@@ -184,9 +197,10 @@ pub(crate) fn gateway_within(
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
-    Ok(ferrofed_server::router(
-        Arc::new(AppState::with_federation(federation)),
-        &settings_with_room(),
+    let state = Arc::new(AppState::with_federation(federation));
+    Ok((
+        ferrofed_server::router(Arc::clone(&state), &settings_with_room()),
+        state,
     ))
 }
 
