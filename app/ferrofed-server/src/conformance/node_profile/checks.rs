@@ -237,7 +237,8 @@ pub async fn subject_not_required(interface: &Interface) -> Result<Finding, Chec
         seen.push((
             Verdict::NotObservable,
             format!(
-                "a read of the subjectless EHR reached no answer: {}",
+                "a read of the subjectless EHR {}: {}",
+                error.outcome(),
                 crate::chain(&error)
             ),
         ));
@@ -347,9 +348,12 @@ fn error_observed(status: StatusCode, what: &str, due: StatusCode) -> Observatio
 /// assists CP-18).
 ///
 /// An EHR its policy withholds from one principal is refused to that
-/// principal on the read and on both `ehr_id`-scoped query forms, the forms a
-/// gateway dispatches (§7, N7), while it is served to the principal the
-/// policy admits.
+/// principal on the read and on both `ehr_id`-scoped query forms, while it
+/// is served to the principal the policy admits. The check binds the
+/// `ehr_id` as a query parameter, while the gateway's own dispatch prints it
+/// into the AQL text as a literal (§7, N7): the check reads the node's
+/// decision on the parameter form, and FerroFED's dispatch sends the
+/// literal form.
 ///
 /// The operator arranges the refusal with the node's own access controls.
 ///

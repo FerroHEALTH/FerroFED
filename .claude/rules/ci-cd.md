@@ -26,7 +26,8 @@ Thirteen workflows:
   promtool and holds both to the metrics the gateway exports, the
   comment-style guard, the file-length guard, the
   versions guard, the favicon guard, the copyright-holder guard, the IHE
-  citation guard over the vendored IHE texts, the bash 3.2 guard, the
+  citation guard over the vendored IHE texts, the AQL splice guard
+  (`scripts/checks/aql-splice.sh`), the bash 3.2 guard, the
   script mode guard, the openEHR class guard over the vendored RM and BASE
   class tables, the site
   link guard over the assembled site, the conformance-matrix guard with the
