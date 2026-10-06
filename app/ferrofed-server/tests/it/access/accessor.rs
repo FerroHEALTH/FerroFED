@@ -19,13 +19,15 @@ use std::error::Error;
 use ferrofed_engine::conveyance::AssuranceLevel;
 use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::config::auth::assurance::Assurance;
-use ferrofed_server::metrics::Metrics;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::issuer::Claims;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::{LAB_REPORT, TestResult, accesses, composition, gateway_under, node_with_rows};
+use super::{
+    LAB_REPORT, TestResult, accesses, composition, gateway_and_state, node_with_rows,
+    recorded_the_query,
+};
 use crate::auth::{bearing, minted, query};
 use crate::facade::{EHR_A, EHR_B, PATIENT, settings_with_room};
 use crate::feed_audit::SETTLE;
@@ -90,21 +92,28 @@ fn as_client(mut claims: Claims) -> Claims {
     claims
 }
 
+/// What one access left behind: its record, the log lines it wrote, and the
+/// metrics exposition of the state that served it.
+struct Recorded {
+    record: Value,
+    log: String,
+    exposition: String,
+}
+
 /// Sends the suite's patient query with a token over `claims` to a gateway
-/// authenticating with `auth`, and returns the one access record, with the
-/// log lines the request wrote.
-async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<(Value, String), Box<dyn Error>> {
+/// authenticating with `auth`, and returns what the access left behind.
+async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<Recorded, Box<dyn Error>> {
     let node_a = node_with_rows(&[composition(LAB_REPORT, UID_A)]).await;
     let node_b = node_with_rows(&[]).await;
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let mut server = settings_with_room();
     server.auth = auth;
-    let app = gateway_under(
+    let (app, state) = gateway_and_state(
         dir.path(),
         (&node_a.uri(), &node_b.uri()),
         &repository,
-        "",
+        ("", ""),
         &server,
     )?;
     let logs = Logs::default();
@@ -122,7 +131,11 @@ async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<(Value, String)
     let [record] = records.as_slice() else {
         return Err(format!("one record of the access, got {records:?}").into());
     };
-    Ok((record.clone(), logs.text()))
+    Ok(Recorded {
+        record: record.clone(),
+        log: logs.text(),
+        exposition: state.metrics().render()?,
+    })
 }
 
 /// Whether `agent` is the BALP `agent:user`, typed `IRCP`.
@@ -206,7 +219,9 @@ fn only_in_the_person(record: &Value, values: &[&str]) {
 #[tokio::test]
 async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> TestResult {
     let claims = professional(SUBSTANTIAL);
-    let (record, _) = recorded(assured(AssuranceLevel::Substantial, false), &claims).await?;
+    let record = recorded(assured(AssuranceLevel::Substantial, false), &claims)
+        .await?
+        .record;
     let person = person(&record)?;
     assert_eq!(person["who"]["identifier"]["value"], claims.sub.as_str());
     assert_eq!(person["who"]["display"], NAME, "IUA subject_name");
@@ -223,7 +238,9 @@ async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> 
 #[tokio::test]
 async fn a_declared_client_is_recorded_acting_for_the_professional() -> TestResult {
     let claims = as_client(professional(HIGH));
-    let (record, _) = recorded(assured(AssuranceLevel::Substantial, true), &claims).await?;
+    let record = recorded(assured(AssuranceLevel::Substantial, true), &claims)
+        .await?
+        .record;
     let person = person(&record)?;
     assert_eq!(acting(person), Some("client"));
     assert_eq!(person["who"]["display"], NAME);
@@ -249,7 +266,9 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
     if let Some(extensions) = claims.extensions.as_mut() {
         extensions.ihe_iua.subject_organization_id = Some(FOREIGN_PROVIDER.to_owned());
     }
-    let (record, _) = recorded(assured(AssuranceLevel::High, true), &claims).await?;
+    let record = recorded(assured(AssuranceLevel::High, true), &claims)
+        .await?
+        .record;
     let person = person(&record)?;
     assert_eq!(acting(person), Some("client"));
     assert_eq!(person["who"]["display"], NAME, "3.2(b)");
@@ -269,7 +288,7 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
 /// the record carries none, whatever the token states.
 #[tokio::test]
 async fn no_level_is_recorded_when_the_issuer_declares_none() -> TestResult {
-    let (record, _) = recorded(support::auth(), &professional(HIGH)).await?;
+    let record = recorded(support::auth(), &professional(HIGH)).await?.record;
     let person = person(&record)?;
     assert!(levels(person).is_empty(), "never inferred: {person}");
     assert_eq!(acting(person), Some("person"));
@@ -284,7 +303,9 @@ async fn a_token_naming_no_professional_records_none() -> TestResult {
     claims
         .other
         .insert(String::from("acr"), SUBSTANTIAL.to_owned());
-    let (record, _) = recorded(assured(AssuranceLevel::Substantial, false), &claims).await?;
+    let record = recorded(assured(AssuranceLevel::Substantial, false), &claims)
+        .await?
+        .record;
     let person = person(&record)?;
     assert!(identifiers(person).is_empty(), "{person}");
     assert!(person["who"].get("display").is_none(), "{person}");
@@ -296,8 +317,10 @@ async fn a_token_naming_no_professional_records_none() -> TestResult {
 #[tokio::test]
 async fn the_professional_and_the_patient_reach_no_log_or_metric() -> TestResult {
     let claims = professional(SUBSTANTIAL);
-    let (_, log) = recorded(assured(AssuranceLevel::Substantial, false), &claims).await?;
-    let exposition = Metrics::default().render()?;
+    let Recorded {
+        log, exposition, ..
+    } = recorded(assured(AssuranceLevel::Substantial, false), &claims).await?;
+    recorded_the_query(&exposition, "node-a-pub")?;
     for value in [NAME, IDENTIFIER, PATIENT, EHR_A, EHR_B] {
         assert!(!log.contains(value), "N33: {value} in the log: {log}");
         assert!(!exposition.contains(value), "{value} in a metric");
