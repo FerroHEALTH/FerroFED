@@ -445,6 +445,17 @@ struct BothKnown;
 
 #[async_trait::async_trait]
 impl ferrofed_identity::role::resolver::Resolver for BothKnown {
+    async fn identify(
+        &self,
+        _member: &ferrofed_registry::id::NodeId,
+        _ehr_id: &ferrofed_registry::id::EhrId,
+        _namespaces: &[ferrofed_identity::role::patient::IdentifierNamespace],
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
+        _deadline: std::time::Instant,
+    ) -> ferrofed_identity::role::resolver::Identification {
+        ferrofed_identity::role::resolver::Identification::Unsupported
+    }
+
     async fn resolve(
         &self,
         _patient: &ferrofed_identity::role::patient::PatientRef,

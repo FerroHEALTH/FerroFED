@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier};
+use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::patient_summary::{ISSUER, PATIENT, Section};
 use ferrofed_eehrxf::summary::{Answer, Held, Organisation, Origin, SectionAnswers};
 use ferrofed_engine::fanout::reader::RowReader;
@@ -580,6 +580,7 @@ fn subject(
                 Some(EhrAt {
                     endpoint: sent.as_str().to_owned(),
                     ehr_id: ehr_id.as_str().to_owned(),
+                    patient: PatientLookup::RequestNamed,
                 })
             })
             .collect(),

@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier};
+use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_engine::fanout::reader::RowReader;
 use ferrofed_engine::fanout::{FederatedAnswer, Plan};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -249,6 +249,7 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
                     Some(EhrAt {
                         endpoint: sent.as_str().to_owned(),
                         ehr_id: ehr_id.as_str().to_owned(),
+                        patient: PatientLookup::RequestNamed,
                     })
                 })
                 .collect(),
@@ -265,6 +266,9 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
                 .map(|ehr_id| EhrAt {
                     endpoint: answered.routed.unwrap_or_default().to_owned(),
                     ehr_id: ehr_id.to_owned(),
+                    // NOTE: no specification governs this: our own design; the record gate names
+                    // the patient, and an ehr_id it never reaches stays marked unavailable.
+                    patient: PatientLookup::Unavailable,
                 })
                 .into_iter()
                 .collect(),

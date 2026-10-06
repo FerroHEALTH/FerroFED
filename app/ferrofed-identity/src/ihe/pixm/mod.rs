@@ -46,7 +46,9 @@ use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-use crate::role::resolver::{Resolution, Resolver, ResolverError};
+use crate::role::resolver::{Identification, Resolution, Resolver, ResolverError};
+
+mod identify;
 
 /// One PIX Manager as the configuration names it.
 #[derive(Debug)]
@@ -150,6 +152,12 @@ pub enum PixmResolveError {
     /// interpret.
     #[error("the PIX Manager answered in a form this resolver does not interpret")]
     UnexpectedAnswer,
+    /// No PIX Manager serves the member, so no domain holds its `ehr_id`s.
+    #[error("no PIX Manager serves member {0}")]
+    UnservedMember(NodeId),
+    /// The `ehr_id` forms no ITI-83 source identifier in the member's domain.
+    #[error("the ehr_id forms no source identifier in the member's PIX domain")]
+    Source(#[source] InvalidInput),
 }
 
 /// One PIX Manager and the members it resolves.
@@ -579,6 +587,27 @@ impl Resolver for PixmResolver {
             .into_iter()
             .map(|(member, lookup)| (member, lookup.into_resolution()))
             .collect()
+    }
+
+    /// Names the patient `member` holds under `ehr_id`: one ITI-83 whose
+    /// source identifier is the `ehr_id` in the member's domain and whose
+    /// target systems are the assigning authorities `namespaces` stand for
+    /// (PIXm 3.1.0 §2:3.83.4.1.2), recorded as every other ITI-83 is.
+    ///
+    /// A namespace that maps to no assigning authority, a member no Manager
+    /// serves and every failed exchange leave the patient
+    /// [`Identification::Unavailable`]; the identifier never reaches an
+    /// error.
+    async fn identify(
+        &self,
+        member: &NodeId,
+        ehr_id: &EhrId,
+        namespaces: &[IdentifierNamespace],
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> Identification {
+        self.identified((member, ehr_id), namespaces, on_behalf, deadline)
+            .await
     }
 }
 

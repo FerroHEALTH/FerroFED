@@ -347,12 +347,10 @@ These are the ones to know before you deploy FerroFED; the
   access to patient data as Annex II, point 3.2, asks of the European
   logging software component (Art 25(1)), read at your Audit Record
   Repository with ITI-81 (point 3.3), each record stating its retention by
-  origin and category (point 3.4). Finding every access to one person's
-  data by that search
-  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)) and access
-  rights by origin and category
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) are
-  planned. The
+  origin and category (point 3.4). A query over many patients' data names
+  no patient in its record, so a search by the person's identifier does
+  not find it, and access rights by origin and category are planned
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)). The
   European interoperability software component is a library the gateway
   does not serve yet
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)). No EU

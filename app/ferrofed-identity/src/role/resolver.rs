@@ -12,7 +12,7 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use thiserror::Error;
 
 use crate::role::behalf::OnBehalfOf;
-use crate::role::patient::PatientRef;
+use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// Why a resolver could not answer for a member.
 ///
@@ -44,6 +44,22 @@ pub enum Resolution {
     Unavailable(ResolverError),
 }
 
+/// What the identity service says of the patient a member holds under one
+/// `ehr_id`: the reverse of a [`Resolution`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum Identification {
+    /// The service holds these identifiers for the patient, each in a
+    /// namespace asked.
+    Named(Vec<PatientRef>),
+    /// The service holds no identifier for the patient in a namespace asked.
+    Unknown,
+    /// The service could not answer.
+    Unavailable(ResolverError),
+    /// This resolver cannot name a patient by an `ehr_id`.
+    Unsupported,
+}
+
 /// Resolves a patient to each member's local `ehr_id`.
 ///
 /// Exactly one resolver is active, chosen in configuration. It never returns
@@ -61,4 +77,20 @@ pub trait Resolver: Send + Sync {
         on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution>;
+
+    /// Names the patient `member` holds under `ehr_id`, by an identifier in
+    /// each of `namespaces` the service holds one in, on behalf of
+    /// `on_behalf` before `deadline`.
+    ///
+    /// A resolver that cannot answer this way answers
+    /// [`Identification::Unsupported`]; one that wraps another passes the
+    /// question on.
+    async fn identify(
+        &self,
+        member: &NodeId,
+        ehr_id: &EhrId,
+        namespaces: &[IdentifierNamespace],
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> Identification;
 }

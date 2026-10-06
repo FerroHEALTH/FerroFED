@@ -152,6 +152,11 @@ years = 3                      # Art 9(2): at least three years from each access
   `[access_log.retention]` any longer period your national law sets for a
   category or an origin, and keep each record at your repository until its
   `ehds-retention-ends` ([How long a record is kept](audit.md#how-long-a-record-is-kept)).
+- **The patient namespaces.** Art 9(1) gives the person information on
+  "any access". Name in `[access_log] patient_namespaces` the namespaces
+  your Member State's access service searches the log by, so the record of
+  a request addressed by `ehr_id` names the patient
+  ([The patient behind an `ehr_id`](audit.md#the-patient-behind-an-ehr_id)).
 - **The receiving members.** Annex II, points 2.2 and 2.3, ask that an EHR
   system "be able to receive" data in the European exchange format. This
   release has no receive path, so there is no receiving member to configure;
@@ -263,10 +268,10 @@ deployment in the EU must plan for are:
   gateway has no review route of its own: the records are read there with
   ITI-81, and the repository sets who may read them and keeps each for the
   period it states (Annex II, points 3.3 and 3.4;
-  [Reading the log](audit.md#reading-the-log)). A search by the person's
-  identifier does not yet find a routed request addressed by `ehr_id`
-  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)), and the
-  records carry no label for access rights by origin and category
+  [Reading the log](audit.md#reading-the-log)). A query over many
+  patients' data names no patient in its record, so a search by the
+  person's identifier does not find it, and the records carry no label for
+  access rights by origin and category
   ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
 - **The professional's identification and assurance level are not yet in
   the access record**

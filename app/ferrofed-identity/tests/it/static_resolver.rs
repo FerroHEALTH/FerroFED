@@ -14,7 +14,7 @@ use ferrofed_identity::dev::{DevCrossRefError, Profile, StaticResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::role::resolver::{Resolution, Resolver};
+use ferrofed_identity::role::resolver::{Identification, Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
 
 use crate::support::{Config, PATIENT_VALUE, config, ready, registry};
@@ -251,4 +251,54 @@ fn as_a_localizer_it_finds_no_records_for_a_patient_with_no_row() -> TestResult 
         Localization::NoRecords => Ok(()),
         other => Err(format!("no member holds the patient's data: {other:?}").into()),
     }
+}
+
+/// The namespaces the access log asks the patient of an `ehr_id` in.
+fn asked(namespaces: &[&str]) -> Result<Vec<IdentifierNamespace>, Box<dyn Error>> {
+    namespaces
+        .iter()
+        .map(|namespace| Ok(IdentifierNamespace::new(*namespace)?))
+        .collect()
+}
+
+/// Regulation (EU) 2025/327 Art 9(1): the patient a row maps to the `ehr_id`
+/// at the member is named, in the namespace asked.
+#[test]
+fn it_names_the_patient_a_row_maps_to_the_ehr_id() -> TestResult {
+    let resolver = enabled(&[("node-a", EHR_A)])?;
+    let answer = ready(resolver.identify(
+        &"node-a".parse()?,
+        &EhrId::new(EHR_A)?,
+        &asked(&["2.999.1"])?,
+        &OnBehalfOf::Gateway,
+        Instant::now(),
+    ));
+    match answer {
+        Identification::Named(named) => {
+            assert_eq!(1, named.len());
+            assert_eq!("2.999.1", named[0].namespace().as_str());
+            assert!(!format!("{named:?}").contains(PATIENT_VALUE));
+            Ok(())
+        }
+        other => Err(format!("the patient is named: {other:?}").into()),
+    }
+}
+
+#[test]
+fn it_names_no_patient_for_another_member_or_namespace() -> TestResult {
+    let resolver = enabled(&[("node-a", EHR_A)])?;
+    for (member, namespace) in [("node-b", "2.999.1"), ("node-a", "2.999.2")] {
+        let answer = ready(resolver.identify(
+            &member.parse()?,
+            &EhrId::new(EHR_A)?,
+            &asked(&[namespace])?,
+            &OnBehalfOf::Gateway,
+            Instant::now(),
+        ));
+        assert!(
+            matches!(answer, Identification::Unknown),
+            "{member} {namespace}: {answer:?}"
+        );
+    }
+    Ok(())
 }
