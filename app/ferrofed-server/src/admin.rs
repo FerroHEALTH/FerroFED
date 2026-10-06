@@ -37,7 +37,7 @@ use axum::routing::post;
 use axum::serve::{Listener, ListenerExt};
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::Secret;
-use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
+use http::{HeaderMap, HeaderValue, StatusCode, header};
 
 use crate::auth::Gate;
 use crate::auth::caller::Caller;
@@ -130,15 +130,6 @@ pub enum Operator {
 }
 
 impl Operator {
-    /// How the operator was admitted, as the action record names it.
-    #[must_use]
-    pub const fn admitted_by(&self) -> &'static str {
-        match self {
-            Self::Verified(_) => "token",
-            Self::DevelopmentLoopback => "development-loopback",
-        }
-    }
-
     /// The issuer that vouched for the operator, when one did.
     #[must_use]
     pub fn issuer(&self) -> Option<&str> {
@@ -293,7 +284,8 @@ where
 /// with the operator scope passes ([`Access::admit_operator`]).
 ///
 /// Every other request is answered with its [`AdminRefusal`] before the
-/// action reads anything. An admitted action is recorded once it has run.
+/// action reads anything. An admitted action is recorded before it runs,
+/// and its outcome once it has answered or was abandoned.
 pub async fn operator_only(
     State(access): State<Arc<Access>>,
     peer: Result<ConnectInfo<SocketAddr>, ExtensionRejection>,
@@ -305,53 +297,90 @@ pub async fn operator_only(
     let peer = peer.ok().map(|ConnectInfo(peer)| peer);
     match access.admit_operator(peer, request.headers()).await {
         Ok(operator) => {
-            let method = request.method().clone();
-            let action = request
+            let template = request
                 .extensions()
                 .get::<MatchedPath>()
-                .map(|matched| matched.as_str().to_owned());
-            let request_id = request_id::of(request.headers()).map(str::to_owned);
+                .map_or("unmatched", MatchedPath::as_str);
+            let action = format!("{} {template}", request.method());
+            let mut running = Running::begin(operator, action);
             let response = next.run(request).await;
-            record(
-                &operator,
-                (&method, action.as_deref()),
-                response.status(),
-                request_id.as_deref(),
-            );
+            running.answered(response.status());
             response
         }
         Err(refusal) => refuse(refusal, request.headers()),
     }
 }
 
-/// Counts and logs a write action `operator` ran, `method` on the route
-/// template `action`, with the `status` it was answered and the time.
+/// An admitted write action, recorded under `ferrofed::security` before it
+/// has any effect, whose outcome is recorded when it is dropped.
 ///
-/// The record names the operator by its issuer and subject, so the action
-/// stays attributable after a restart, and never carries a credential.
-fn record(
-    operator: &Operator,
-    (method, action): (&Method, Option<&str>),
-    status: StatusCode,
-    request_id: Option<&str>,
-) {
-    Event::AdminWriteAdmitted.record();
-    // NOTE: no specification governs this: our own design; an operator is the
-    // deployment's own staff, named so its action is attributable, never a patient.
-    tracing::info!(
-        target: crate::facade::security::TARGET,
-        event = Event::AdminWriteAdmitted.as_str(),
-        admitted_by = operator.admitted_by(),
-        issuer = operator.issuer(),
-        subject = operator.subject(),
-        method = method.as_str(),
-        action,
-        status = status.as_u16(),
-        at = %jiff::Timestamp::now(),
-        request_id,
-        "an operator ran a write action on the admin listener"
-    );
+/// Each record carries the operator's issuer and subject, the method and
+/// route template of the action, the outcome on the closing record, and the
+/// time, and nothing else: no credential, header, path value or body. An
+/// action dropped before it answered, its client gone or its handler
+/// panicking, closes with the outcome `abandoned`. The subject is the one
+/// the issuer put in the token, which may name a person; it is kept as
+/// issued, because a per-process keyed hash could not attribute an action
+/// once the process restarts.
+#[derive(Debug)]
+struct Running {
+    /// The operator who runs the action.
+    operator: Operator,
+    /// The method and the route template.
+    action: String,
+    /// The status the action was answered, once it was.
+    status: Option<StatusCode>,
 }
+
+impl Running {
+    /// Counts and records `operator` beginning `action`.
+    fn begin(operator: Operator, action: String) -> Self {
+        Event::AdminWriteAdmitted.record();
+        // NOTE: no specification governs this: our own design; tracing returns no error,
+        // so the record cannot refuse the action, and the security target is never filtered.
+        tracing::info!(
+            target: crate::facade::security::TARGET,
+            event = Event::AdminWriteAdmitted.as_str(),
+            issuer = operator.issuer(),
+            subject = operator.subject(),
+            action = action.as_str(),
+            at = %jiff::Timestamp::now(),
+            "an operator began a write action on the admin listener"
+        );
+        Self {
+            operator,
+            action,
+            status: None,
+        }
+    }
+
+    /// Notes the `status` the action was answered.
+    fn answered(&mut self, status: StatusCode) {
+        self.status = Some(status);
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let outcome = self.status.map_or_else(
+            || String::from("abandoned"),
+            |status| status.as_u16().to_string(),
+        );
+        tracing::info!(
+            target: crate::facade::security::TARGET,
+            event = FINISHED,
+            issuer = self.operator.issuer(),
+            subject = self.operator.subject(),
+            action = self.action.as_str(),
+            outcome,
+            at = %jiff::Timestamp::now(),
+            "an operator's write action on the admin listener ended"
+        );
+    }
+}
+
+/// The `event` of the record that closes an admitted write action.
+pub const FINISHED: &str = "admin-write-finished";
 
 /// The middleware in front of `GET /metrics`: a scrape passes unless a
 /// scrape token is set and the scrape does not carry it

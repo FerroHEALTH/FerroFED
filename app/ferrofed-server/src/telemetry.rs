@@ -41,6 +41,10 @@ use tracing_subscriber::util::SubscriberInitExt;
 /// lines.
 pub const DEFAULT_FILTER: &str = "info,hyper=warn,tower=warn,h2=warn";
 
+/// The directive every filter is extended with, after its own: the security
+/// log at `info` and above, which no `[telemetry] filter` quiets.
+pub const SECURITY_DIRECTIVE: &str = "ferrofed::security=info";
+
 /// The rendering a deployment asks for.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
@@ -287,7 +291,8 @@ where
 /// `writer`, and exporting spans through `tracer` when one is given.
 ///
 /// `filter` decides what the console writes and nothing else, so a quieter
-/// log never thins a trace.
+/// log never thins a trace, and it is extended with [`SECURITY_DIRECTIVE`],
+/// so the security log is written whatever it says.
 ///
 /// # Errors
 /// Returns [`Error::Filter`] when `filter` does not parse.
@@ -301,7 +306,14 @@ pub fn traced<W>(
 where
     W: for<'w> MakeWriter<'w> + Send + Sync + 'static,
 {
-    let filter = EnvFilter::try_new(filter).map_err(|source| Error::Filter { source })?;
+    // NOTE: no specification governs this: our own design; a directive added last
+    // replaces any for the same target, so the security log survives every filter.
+    let security = SECURITY_DIRECTIVE
+        .parse()
+        .map_err(|source| Error::Filter { source })?;
+    let filter = EnvFilter::try_new(filter)
+        .map_err(|source| Error::Filter { source })?
+        .add_directive(security);
     let console: Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync> = match rendering {
         Rendering::Json => Box::new(
             tracing_subscriber::fmt::layer()

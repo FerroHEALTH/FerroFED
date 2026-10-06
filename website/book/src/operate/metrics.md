@@ -52,16 +52,25 @@ alone, never a write action. Every refusal is counted under
 `scrape-refused`, and logged under the target `ferrofed::security` with
 its reason, never the credential.
 
-Every write action that runs is recorded too: one line under
-`ferrofed::security` with `event` `admin-write-admitted`, counted under the
-same name. It names the operator by the `issuer` and `subject` of its
-token, so the action stays attributable after a restart, with
-`admitted_by` (`token`, or `development-loopback` for a loopback peer the
-development profile admitted without one, which names no issuer or
-subject), the `method`, the route template as `action`, the `status` it
-was answered, the time as `at` (RFC 3339) and the `request_id`. The line
-never carries the token or a value from the path. Keep these lines as long
-as you keep your other security records.
+Every admitted write action is recorded under `ferrofed::security` in two
+lines. The first, `event` `admin-write-admitted`, is written before the
+action has any effect and is counted under the same name. The second,
+`event` `admin-write-finished`, is written when the action ends, with its
+`outcome`: the status it was answered, or `abandoned` when it never
+answered because its client went away or its handler failed. Each line
+carries the operator's `issuer` and `subject`, the method and route
+template as `action`, and the time as `at` (RFC 3339), and nothing else:
+no token, header, path value, body or stored query. A loopback peer the
+development profile admitted without a credential names no issuer or
+subject. Neither the issuer nor the subject is ever a metric label.
+
+The subject is the one the issuer put in the operator's token, and it may
+name a person. The gateway keeps it as issued, because a keyed hash under
+a key that changes at every start could not attribute an action after a
+restart. Keep these lines as long as you keep your other security records,
+and restrict who reads them. No `[telemetry] filter` quiets the
+`ferrofed::security` target below `info`, so the records are written
+whatever the filter says.
 
 `scrape_token`, or `scrape_token_file` with the token in a file read at
 start, sets the scrape token; give one or the other. Prometheus sends it
