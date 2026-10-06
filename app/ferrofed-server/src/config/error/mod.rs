@@ -720,6 +720,9 @@ pub enum Error {
     /// `[access_log] patient_namespaces` names an empty namespace.
     #[error("[access_log] patient_namespaces names an empty namespace")]
     AccessLogNamespace(#[source] ferrofed_identity::role::patient::PatientRefError),
+    /// `[federation.consent] emergency = "pass-to-node"` with no emergency purpose declared.
+    #[error("[federation.consent] pass-to-node needs an [[access_log.emergency_purpose]]")]
+    EmergencyWithoutPurpose,
 }
 
 impl Error {

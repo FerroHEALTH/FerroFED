@@ -82,15 +82,20 @@ impl EmergencyPurposes {
             .collect();
         (!marking.is_empty()).then(|| Emergency {
             purposes: marking.into_iter().cloned().collect(),
+            consent_set_aside: BTreeSet::new(),
         })
     }
 }
 
-/// The mark of an emergency access: the purposes of use the accessor
-/// declared that the deployment declares as asserting one (Art 11(5)).
+/// The mark of an emergency access (Art 11(5)).
+///
+/// It names the purposes of use the accessor declared that the deployment
+/// declares as asserting one, and the members whose consent pre-filter
+/// denial the recording system set aside for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Emergency {
     purposes: Vec<Purpose>,
+    consent_set_aside: BTreeSet<String>,
 }
 
 impl Emergency {
@@ -98,6 +103,24 @@ impl Emergency {
     #[must_use]
     pub fn purposes(&self) -> &[Purpose] {
         &self.purposes
+    }
+
+    /// This mark, naming `members`, each a member a consent pre-filter in
+    /// front of the systems that hold the data denied, whose denial the
+    /// recording system set aside for the emergency and asked all the same.
+    ///
+    /// The member, never the recording system, decided whether to release
+    /// anything; the mark says it was asked, not that it released data.
+    #[must_use]
+    pub fn with_consent_set_aside(mut self, members: impl IntoIterator<Item = String>) -> Self {
+        self.consent_set_aside.extend(members);
+        self
+    }
+
+    /// The members whose consent pre-filter denial was set aside, in order.
+    #[must_use]
+    pub fn consent_set_aside(&self) -> &BTreeSet<String> {
+        &self.consent_set_aside
     }
 }
 

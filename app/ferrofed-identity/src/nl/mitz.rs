@@ -347,6 +347,8 @@ impl ConsentPrefilter for MitzPrefilter {
                 // category asked; a permit for any leaves the node to decide (N27).
                 Ok((members, Ok(answer))) if answer.denies_all() => denied.extend(members),
                 Ok((_, Ok(_))) => {}
+                // NOTE: Mitz 3.8.2 §3.2.4.6 has the holder's own system treat Indeterminate as a
+                // Deny; here it is no decision, so the member is asked and its own check decides (N27).
                 Ok((_, Err(error))) => {
                     failure.get_or_insert(consent_error(error));
                 }

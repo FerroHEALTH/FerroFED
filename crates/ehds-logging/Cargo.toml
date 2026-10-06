@@ -6,7 +6,7 @@ description = "The European logging software component of an EHR system under Re
 # The name is held on crates.io by the 0.0.0 placeholder published on
 # 2026-10-06, and the line here starts above it (no specification governs
 # this: our own design).
-version = "0.0.12"
+version = "0.0.13"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

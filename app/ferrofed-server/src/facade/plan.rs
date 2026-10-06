@@ -62,6 +62,9 @@ pub struct Targets {
     /// The members the Step-1 consent pre-filter denied, whose cached
     /// `ehr_id`s the session drops (N27a).
     pub denied: BTreeSet<NodeId>,
+    /// The members whose pre-filter denial was set aside for an emergency
+    /// purpose, each asked as any other, which the access record names.
+    pub set_aside: BTreeSet<NodeId>,
     /// What the resolver showed of itself, when it was asked: up when it
     /// answered for every member, down when it could not answer for one.
     pub resolver: Option<Observed>,
@@ -200,7 +203,7 @@ pub async fn patient(
     federation: &Federation,
     selection: Selection<'_>,
     (query, requester, on_behalf): (&PatientQuery, Option<&Requester>, &OnBehalfOf),
-    (deadline, disclosed): (Instant, bool),
+    (deadline, disclosed, set_aside): (Instant, bool, bool),
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
     let mut membership = membership(federation.snapshot(), selection);
@@ -229,7 +232,13 @@ pub async fn patient(
         .collect();
     let consented = match (&patient, &unidentified) {
         (Some(patient), None) => {
-            consent::prefilter(federation, (patient, requester), &candidates, deadline).await
+            consent::prefilter(
+                federation,
+                (patient, requester),
+                &candidates,
+                (deadline, set_aside),
+            )
+            .await
         }
         _ => consent::Prefiltered::default(),
     };
@@ -293,6 +302,7 @@ pub async fn patient(
         resolution_failed,
         resolved: bound,
         denied: consented.denied,
+        set_aside: consented.set_aside,
         resolver: crate::health::dependencies::of_resolutions(&resolutions),
     })
 }
@@ -573,6 +583,7 @@ pub fn unscoped(
         resolution_failed: false,
         resolved: Vec::new(),
         denied: BTreeSet::new(),
+        set_aside: BTreeSet::new(),
         resolver: None,
     })
 }

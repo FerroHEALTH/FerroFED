@@ -97,6 +97,9 @@ pub(crate) struct Gathered {
     pub(crate) sent: BTreeSet<EndpointId>,
     /// The ids the section queries constrain their data to.
     pub(crate) queried: Queried,
+    /// The members whose consent pre-filter denial was set aside for an
+    /// emergency purpose.
+    pub(crate) set_aside: BTreeSet<NodeId>,
 }
 
 /// Why the section queries give no summary.
@@ -110,9 +113,11 @@ pub(crate) enum Unsummarised {
     /// own that names no value.
     #[error("the section queries could not be run: {0}")]
     Internal(&'static str),
-    /// No member holds the patient, or none may say so (§11.3).
+    /// No member holds the patient, or none may say so (§11.3), with what
+    /// was gathered when a consent denial was set aside, which its access
+    /// record names.
     #[error("no member holds a patient summary for this identifier")]
-    NotFound,
+    NotFound(Option<Box<Gathered>>),
     /// Under all-or-nothing, a member did not answer a section query
     /// (§11.3, §11.4); the answer names each such member.
     #[error("the summary is incomplete: {}", named(silent))]
@@ -170,7 +175,11 @@ pub(crate) async fn gather(
         &federation,
         (first, plan::Selection::Undirected),
         (arrived.requester, arrived.on_behalf),
-        (deadline, disclosed),
+        (
+            deadline,
+            disclosed,
+            federation.sets_aside_consent_for(arrived.conveyance),
+        ),
     )
     .await?;
     answer::confinement::held_within(&federation, arrived.conveyance, (first, &targets), &logged)?;
@@ -212,7 +221,8 @@ pub(crate) async fn gather(
             status = settled;
         }
     }
-    let gathered = collected(&federation, &targets.resolved, &answers, &analyses)?;
+    let mut gathered = collected(&federation, &targets.resolved, &answers, &analyses)?;
+    gathered.set_aside = targets.set_aside;
     if status != StatusCode::OK {
         let silent = gathered
             .reached
@@ -232,7 +242,8 @@ pub(crate) async fn gather(
         });
     }
     if gathered.reached.is_empty() {
-        return Err(Unsummarised::NotFound);
+        let set_aside = (!gathered.set_aside.is_empty()).then(|| Box::new(gathered));
+        return Err(Unsummarised::NotFound(set_aside));
     }
     Ok(gathered)
 }
@@ -389,6 +400,7 @@ fn collected(
         resolved: resolved.to_vec(),
         sent,
         queried: queried(analyses),
+        set_aside: BTreeSet::new(),
     };
     for (section, answer, sources, rows) in answers {
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();
@@ -509,7 +521,7 @@ pub(crate) fn accessed(
     delivered: &BTreeSet<(usize, String)>,
 ) -> Option<Accessed> {
     let log = federation.access_log()?;
-    if gathered.sent.is_empty() {
+    if gathered.sent.is_empty() && gathered.set_aside.is_empty() {
         return None;
     }
     let evidence = |objects: Vec<RootObject>| {
@@ -553,6 +565,11 @@ pub(crate) fn accessed(
         evidence: evidence(objects),
         delivered: Some(delivered.len()),
         origins,
+        consent_set_aside: gathered
+            .set_aside
+            .iter()
+            .map(|member| member.as_str().to_owned())
+            .collect(),
     })
 }
 

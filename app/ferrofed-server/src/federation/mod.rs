@@ -23,7 +23,8 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_engine::conveyance::{Conveyance, Signer};
+use ehds_logging::record::Purpose;
+use ferrofed_engine::conveyance::{Conveyance, Principal, Signer};
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::consent::ConsentPrefilter;
@@ -43,6 +44,7 @@ use openehr_federation::id::FederationId;
 
 use crate::access::AccessLog;
 use crate::binding::seam::PublicDocument;
+use crate::config::EmergencyConsent;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
@@ -60,6 +62,7 @@ pub struct Federation {
     localization: LocalizationPolicy,
     consent: Option<Arc<dyn ConsentPrefilter>>,
     consent_disclosure: ConsentDisclosure,
+    consent_emergency: EmergencyConsent,
     observed: Arc<Observed>,
     context: Context,
     budget: Budget,
@@ -193,6 +196,49 @@ impl Federation {
     #[must_use]
     pub fn discloses_consent_to(&self, conveyance: &Conveyance) -> bool {
         self.deployment_discloses_consent() && conveyance.relayed().is_none()
+    }
+
+    /// This federation, applying the consent pre-filter's exclusion to a
+    /// request whose verified token declares an emergency purpose as
+    /// `emergency` says ([`Federation::sets_aside_consent_for`]).
+    #[must_use]
+    pub fn with_consent_emergency(mut self, emergency: EmergencyConsent) -> Self {
+        self.consent_emergency = emergency;
+        self
+    }
+
+    /// What the consent pre-filter does for a request whose verified token
+    /// declares an emergency purpose, as `OPTIONS {base}/` declares it.
+    #[must_use]
+    pub fn consent_emergency(&self) -> EmergencyConsent {
+        self.consent_emergency
+    }
+
+    /// Whether the consent pre-filter's denials are set aside for the request
+    /// `conveyance` is on behalf of: only under `emergency = "pass-to-node"`,
+    /// and only when its verified token declares a purpose the access log
+    /// names an emergency purpose (Regulation (EU) 2025/327 Art 11(5)).
+    ///
+    /// The pre-filter is still asked, every candidate is asked, and each
+    /// node decides (N26, N27); the gateway never infers the purpose (§13.4).
+    #[must_use]
+    pub fn sets_aside_consent_for(&self, conveyance: &Conveyance) -> bool {
+        let Principal::Caller(caller) = conveyance.principal() else {
+            return false;
+        };
+        let declared: Vec<Purpose> = caller
+            .purposes
+            .iter()
+            .map(|purpose| Purpose {
+                system: purpose.system.clone(),
+                code: purpose.code.clone(),
+            })
+            .collect();
+        self.consent_emergency == EmergencyConsent::PassToNode
+            && self
+                .access
+                .as_ref()
+                .is_some_and(|log| log.emergency().mark(&declared).is_some())
     }
 
     /// The gateway's signing keys and where they are published, when
@@ -481,6 +527,7 @@ impl std::fmt::Debug for Federation {
                 &self.consent.as_ref().map(|consent| consent.mode()),
             )
             .field("consent_disclosure", &self.consent_disclosure)
+            .field("consent_emergency", &self.consent_emergency)
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)

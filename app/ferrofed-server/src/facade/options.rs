@@ -229,8 +229,10 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
 
 /// The `consent` member of `federation`, present only where a Step-1 consent
 /// pre-filter is configured: the pre-filter's mode, what a query does when it
-/// cannot answer (N27a, §13.2.1), and as `disclose` whether an answer names a
-/// member it excludes as `consent-denied`.
+/// cannot answer (N27a, §13.2.1), as `disclose` whether an answer names a
+/// member it excludes as `consent-denied`, and as `emergency` whether its
+/// exclusion applies to a request whose token declares an emergency purpose
+/// (`apply`) or every member is asked and its node decides (`pass-to-node`).
 ///
 /// A deployment with no pre-filter declares nothing, and N27 is its sole gate.
 /// `disclose: false` tells a client that this deployment reports an excluded
@@ -244,6 +246,7 @@ fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
         prefilter: &'static str,
         on_unavailable: &'static str,
         disclose: bool,
+        emergency: &'static str,
     }
     let mut extra = Extra::new();
     if let Some(prefilter) = federation.consent_prefilter() {
@@ -251,6 +254,7 @@ fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
             prefilter: prefilter.mode(),
             on_unavailable: ON_UNAVAILABLE,
             disclose: federation.deployment_discloses_consent(),
+            emergency: federation.consent_emergency().as_str(),
         };
         extra.insert_serialized(CONSENT, &declared)?;
     }

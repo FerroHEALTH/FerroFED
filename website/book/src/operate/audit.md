@@ -191,6 +191,7 @@ A record whose token declares one of them carries one more entity:
 | `description` | a sentence that states the mark in words, citing Art 11(5) |
 | `detail` `ehds-emergency-access` | `true` |
 | `detail` `ehds-emergency-purpose` | each declared purpose that marked it, `system\|code` |
+| `detail` `ehds-consent-set-aside` | under `[federation.consent] emergency = "pass-to-node"`, each member the consent pre-filter denied that was asked all the same, by its node id |
 
 The purposes stay where BALP puts every purpose of use, in the
 `agent:user` `purposeOfUse`, so the record keeps its BALP pattern. The
@@ -202,7 +203,7 @@ What the mark does and does not say:
 - It records what the caller asserted. The gateway reads it from the
   verified token's purposes alone, matching the code and its system
   exactly, and never infers it from the query, the data or a node's answer.
-- It changes nothing else. The purpose reaches every node in the
+- It changes no request to a node. The purpose reaches every node in the
   `openEHR-federation-client` token as any purpose does
   ([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)),
   and the node decides whether to release restricted data (Federation Tier
@@ -213,9 +214,15 @@ What the mark does and does not say:
   restrictions stay with the node, and Art 8 keeps the fact of a
   restriction from healthcare providers, so the gateway cannot tell. The
   node that released restricted data records that in its own log.
-- The optional consent pre-filter is asked as configured, whatever the
-  caller's purpose ([Consent](consent.md)); a member it drops as
-  `consent-denied` is not asked, under an emergency purpose too.
+- The optional consent pre-filter is asked as configured, never with the
+  caller's purpose: Mitz is asked with the `TREAT` or `COC` that
+  `[nl_gf.mitz] purpose` configures ([Consent](consent.md)). By default a
+  member it drops as `consent-denied` is not asked, under an emergency
+  purpose too. Under `[federation.consent] emergency = "pass-to-node"`
+  every member it denies is asked all the same and its node decides, and
+  the entity carries one `ehds-consent-set-aside` `detail` per such member,
+  naming its node ([An emergency request](consent.md#consent)). The answer
+  never shows it.
 
 For each marked access the gateway writes one `warn` line, "the access was
 declared an emergency access by its purpose of use", under its request id

@@ -16,7 +16,7 @@
 //! too, and one no request left the gateway for is not. No specification
 //! governs the facts: our own design.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
@@ -65,18 +65,23 @@ pub(super) struct Answered<'a> {
     pub(super) rows: &'a [ResultSetRow],
     /// The status the client is answered with.
     pub(super) status: StatusCode,
+    /// The members whose consent pre-filter denial was set aside for an
+    /// emergency purpose.
+    pub(super) set_aside: &'a BTreeSet<NodeId>,
 }
 
 /// The facts of `answered`, recorded in `log`, over `snapshot`, or `None`
 /// when no request left the gateway, so no data was reached: every member
 /// was ruled out, not resolved, refused by the consent pre-filter, or waited
-/// out its deadline for a slot of its in-flight cap.
+/// out its deadline for a slot of its in-flight cap. A query that set a
+/// consent pre-filter denial aside for an emergency purpose is recorded
+/// whatever it reached (Regulation (EU) 2025/327 Art 11(5)).
 pub(super) fn query(
     log: &Arc<AccessLog>,
     snapshot: &RegistrySnapshot,
     answered: &Answered<'_>,
 ) -> Option<Accessed> {
-    if answered.sent.is_empty() && answered.rows.is_empty() {
+    if answered.sent.is_empty() && answered.rows.is_empty() && answered.set_aside.is_empty() {
         return None;
     }
     let analysis = answered.analysis;
@@ -146,6 +151,11 @@ pub(super) fn query(
         evidence,
         delivered: Some(answered.rows.len()),
         origins,
+        consent_set_aside: answered
+            .set_aside
+            .iter()
+            .map(|member| member.as_str().to_owned())
+            .collect(),
     })
 }
 

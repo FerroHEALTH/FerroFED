@@ -31,7 +31,7 @@ use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::config::{Config, Credentials, Localization};
+use crate::config::{Config, Credentials, EmergencyConsent, Localization};
 use crate::federation::error::FederationError;
 use crate::localization::LocalizationError;
 
@@ -237,5 +237,21 @@ impl Binding for Nl {
             mitz_prefilter = nl_gf.is_some_and(|nl_gf| nl_gf.mitz.is_some()),
             "binding configured"
         );
+    }
+
+    fn notes(&self, settings: &Settings) -> Vec<String> {
+        let mitz = settings
+            .nl_gf
+            .as_ref()
+            .is_some_and(|nl_gf| nl_gf.mitz.is_some());
+        // NOTE: Wabvpz Art 15a has no emergency exception and Mitz 3.8.2 §3.2.4.2 admits only
+        // TREAT and COC, so passing an emergency on is the operator's legal question to answer.
+        if mitz && settings.federation.consent_emergency == EmergencyConsent::PassToNode {
+            vec![String::from(
+                "[federation.consent] emergency = \"pass-to-node\" with [nl_gf.mitz]: Wabvpz Art 15a has no emergency exception and Mitz 3.8.2 has no emergency consultation situation, so a member Mitz denies is asked under a legal basis of your own, which the node applies",
+            )]
+        } else {
+            Vec::new()
+        }
     }
 }

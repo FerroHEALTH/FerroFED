@@ -31,20 +31,25 @@ pub(in crate::facade) fn remember(
     session: Option<&SessionKey>,
     targets: &plan::Targets,
 ) {
-    let resolved = &targets.resolved;
+    // NOTE: Regulation (EU) 2025/327 Art 11(5), N27a: a denial set aside holds for this request
+    // alone, so its member's `ehr_id` is neither held for the session nor taught to the index.
+    let resolved: Vec<_> = targets
+        .resolved
+        .iter()
+        .filter(|(node, _)| !targets.set_aside.contains(node))
+        .collect();
     if let Some(session) = session {
         // NOTE: N27a; a consent denial drops every `ehr_id` the session cached for a denied
         // member before the new bindings are held (no specification governs this: our own design).
-        federation
-            .bindings()
-            .forget_denied(session, &targets.denied);
+        let forgotten = targets.denied.union(&targets.set_aside).cloned().collect();
+        federation.bindings().forget_denied(session, &forgotten);
         federation.bindings().record(
             session,
             Instant::now(),
             resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
         );
     }
-    for (node, ehr_id) in resolved {
+    for (node, ehr_id) in &resolved {
         owner::learn(federation.index(), ehr_id, node);
     }
     if let Some(observed) = targets.resolver {
@@ -87,7 +92,7 @@ pub(in crate::facade) async fn targeted<'q>(
     federation: &Federation,
     (analysis, selection): (&'q Analysis, plan::Selection<'_>),
     (requester, on_behalf): (Option<&Requester>, &OnBehalfOf),
-    (deadline, disclosed): (Instant, bool),
+    (deadline, disclosed, set_aside): (Instant, bool, bool),
 ) -> Result<(plan::Targets, Option<&'q Subject>), Failure> {
     Ok(match analysis {
         Analysis::Patient(query) => (
@@ -95,7 +100,7 @@ pub(in crate::facade) async fn targeted<'q>(
                 federation,
                 selection,
                 (query, requester, on_behalf),
-                (deadline, disclosed),
+                (deadline, disclosed, set_aside),
             )
             .await
             .map_err(Failure::Plan)?,

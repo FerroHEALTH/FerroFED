@@ -308,11 +308,47 @@ pub struct ConsentReporting {
     /// (EU) 2025/327 Art 8, and `OPTIONS {base}/` declares it as
     /// `consent.disclose` (§7a.2).
     pub disclose: bool,
+    /// Whether the pre-filter's exclusion applies to a request whose
+    /// verified token declares an `[[access_log.emergency_purpose]]`
+    /// (Regulation (EU) 2025/327 Art 11(5)): `"apply"`, the default, or
+    /// `"pass-to-node"`; `OPTIONS {base}/` declares it as
+    /// `consent.emergency` (§7a.2).
+    pub emergency: EmergencyConsent,
 }
 
 impl Default for ConsentReporting {
     fn default() -> Self {
-        Self { disclose: true }
+        Self {
+            disclose: true,
+            emergency: EmergencyConsent::Apply,
+        }
+    }
+}
+
+/// What the Step-1 consent pre-filter does for a request whose verified
+/// token declares an emergency purpose of use, `[federation.consent]
+/// emergency` (N27a, Regulation (EU) 2025/327 Art 11(5)).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EmergencyConsent {
+    /// The pre-filter applies as to any request: a member it denies is not
+    /// asked.
+    #[default]
+    Apply,
+    /// The pre-filter is still asked, and a member it denies is asked all
+    /// the same, its node deciding (N26, N27); the access record names
+    /// every member whose denial was set aside.
+    PassToNode,
+}
+
+impl EmergencyConsent {
+    /// The value as the configuration and `OPTIONS {base}/` write it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Apply => "apply",
+            Self::PassToNode => "pass-to-node",
+        }
     }
 }
 
