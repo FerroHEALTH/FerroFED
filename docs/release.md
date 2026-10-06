@@ -191,7 +191,23 @@ slow one.
    [claims review](https://ferrofed.eu/docs/evaluate/claims-review.html) gets
    a row for the release, in the version-bump pull request. Its method is on
    that page.
-5. **The version bump lands as its own pull request** and merges like any
+5. **The information sheet, the instructions for use and the clinical
+   safety risk file describe the release.** In the version-bump pull
+   request, the
+   [information sheet](https://ferrofed.eu/docs/evaluate/information-sheet.html)
+   (`website/book/src/evaluate/information-sheet.md`) names the release's
+   date and adds it to its release table, and its standards table matches
+   what the release supports; `scripts/checks/versions.sh` fails while its
+   product version, a pin or the date differs from `docs/VERSIONS.md` and
+   `CHANGELOG.md`. The
+   [instructions for use](https://ferrofed.eu/docs/operate/instructions-for-use.html)
+   list every maintenance step and limitation the release adds. When the
+   release changes `crates/ehds-logging`, `crates/eehrxf`, the access log of
+   `app/ferrofed-server/src/access/`, a mapping pin or the query path they
+   ride, the
+   [clinical safety risk file](https://ferrofed.eu/docs/evaluate/clinical-safety.html)
+   is reviewed and its review table gets a row.
+6. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).

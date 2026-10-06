@@ -158,8 +158,9 @@ specification requires (N37), and it keeps a clinician from reading part of a
 record as the whole of it, which Annex II, point 1.1, asks of an EHR system
 ("does not put at risk patient safety"). Access is not withheld: the partial
 answer is one header away, and both answers name what is missing. Two
-settings can turn the default into a burden, and the instructions for use
-([#670](https://github.com/FerroHEALTH/FerroFED/issues/670)) say so:
+settings can turn the default into a burden, and the
+[instructions for use](../operate/instructions-for-use.md#configuration-for-a-deployment-in-the-eu)
+say so:
 
 - `[federation] best_effort = false` withdraws the partial answer, so one
   silent member blocks every answer. Keep the default, `true`.
@@ -184,8 +185,8 @@ from the others. Every limit is configurable, the time budget is declared in
 `OPTIONS {base}/`, the per-caller rate is off by default and the same for
 every caller, and a refused request gets a status and a `Retry-After` that
 say when to try again. A deployment that sets the limits below what its
-members need can delay access; the instructions for use give the sizing
-(#670).
+members need can delay access; the instructions for use give the
+[sizing](../operate/instructions-for-use.md#sizing).
 
 ### The consent pre-filter
 

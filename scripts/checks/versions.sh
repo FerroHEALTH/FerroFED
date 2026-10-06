@@ -57,9 +57,13 @@
 #  11. landing release     every "vX.Y.Z released" and "vX.Y.Z is the current
 #                          release" on website/landing/index.html names the
 #                          newest `## [x.y.z]` release of CHANGELOG.md.
-#  12. book pins           every row of the pin table on the book page
-#                          website/book/src/evaluate/versions.md restates
-#                          the docs/VERSIONS.md rows its Item cell names.
+#  12. book pins           every row of the pin table on the book pages
+#                          website/book/src/evaluate/versions.md and
+#                          website/book/src/evaluate/information-sheet.md
+#                          restates the docs/VERSIONS.md rows its Item cell
+#                          names, and the information sheet's "FerroFED
+#                          X.Y.Z, released on YYYY-MM-DD" names the product
+#                          version and its CHANGELOG.md release date.
 #  13. metrics crates      the opentelemetry group moves as one, and each of
 #                          its rows, the prometheus row, the
 #                          tracing-opentelemetry row and the tonic row
@@ -85,9 +89,9 @@
 #   scripts/checks/versions.sh --root <dir>
 #       Checks the checkout at <dir>, such as a git worktree, with this script.
 #   scripts/checks/versions.sh --self-test
-#       Drives the specification-constant, landing-release, README-status and
-#       book-pin checks against fixtures: an agreeing input passes and each
-#       drift fails.
+#       Drives the specification-constant, landing-release, README-status,
+#       book-pin and release-date checks against fixtures: an agreeing input
+#       passes and each drift fails.
 #   Any other argument prints this usage and exits 2.
 #
 # Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
@@ -319,6 +323,36 @@ readme_status() {
     fi
   done <<< "$found"
   [[ "$stale" -eq 0 ]] && note "OK: $readme names a release no older than $product, $count times"
+  return 0
+}
+
+# release_date PAGE LOG PRODUCT: PAGE says "FerroFED PRODUCT, released on
+# DATE" exactly once, across line breaks, with DATE the one the
+# `## [PRODUCT] - DATE` heading of LOG gives.
+release_date() {
+  local page=$1 log=$2 product=$3 want found
+  want="$(awk -v v="$product" '
+    index($0, "## [" v "] - ") == 1 { print substr($0, length("## [" v "] - ") + 1); exit }
+  ' "$log")"
+  if [[ -z "$want" ]]; then
+    bad "$log has no ## [$product] release heading for $page to date"
+    return 0
+  fi
+  found="$(tr '\n' ' ' < "$page" | tr -s ' ' |
+    grep -oE 'FerroFED [0-9]+\.[0-9]+\.[0-9]+[^ ,]*, released on [0-9]{4}-[0-9]{2}-[0-9]{2}' || true)"
+  if [[ -z "$found" ]]; then
+    bad "$page names no \"FerroFED $product, released on $want\""
+    return 0
+  fi
+  if [[ "$(wc -l <<< "$found" | tr -d ' ')" -ne 1 ]]; then
+    bad "$page names its release more than once: $(tr '\n' ';' <<< "$found")"
+    return 0
+  fi
+  if [[ "$found" != "FerroFED $product, released on $want" ]]; then
+    bad "$page says \"$found\"; $log and the product version say FerroFED $product, released on $want"
+    return 0
+  fi
+  note "OK: $page names FerroFED $product, released on $want"
   return 0
 }
 
@@ -559,6 +593,19 @@ PAGES
   expect "a book row that pins nothing" 1 book_pins "$work/pins-nothing.md" "$work/pins.md"
   expect "a book page with no pin table" 1 book_pins "$work/no-table.md" "$work/pins.md"
 
+  printf '%s\n' '## [Unreleased]' '' '## [0.0.9] - 2026-10-05' '' '## [0.0.8] - 2026-10-04' > "$work/dated.md"
+  printf '%s\n' 'This sheet describes FerroFED 0.0.9,' 'released on 2026-10-05.' > "$work/sheet.md"
+  printf '%s\n' 'This sheet describes FerroFED 0.0.8, released on 2026-10-04.' > "$work/sheet-old.md"
+  printf '%s\n' 'This sheet describes FerroFED 0.0.9, released on 2026-10-04.' > "$work/sheet-date.md"
+  printf '%s\n' 'This sheet describes FerroFED.' > "$work/sheet-silent.md"
+  printf '%s\n' 'FerroFED 0.0.9, released on 2026-10-05.' 'FerroFED 0.0.9, released on 2026-10-05.' > "$work/sheet-twice.md"
+  expect "a sheet naming the product version and its date across a line break" 0 release_date "$work/sheet.md" "$work/dated.md" 0.0.9
+  expect "a sheet naming the release before" 1 release_date "$work/sheet-old.md" "$work/dated.md" 0.0.9
+  expect "a sheet with the wrong date" 1 release_date "$work/sheet-date.md" "$work/dated.md" 0.0.9
+  expect "a sheet that names no release" 1 release_date "$work/sheet-silent.md" "$work/dated.md" 0.0.9
+  expect "a sheet that names its release twice" 1 release_date "$work/sheet-twice.md" "$work/dated.md" 0.0.9
+  expect "a product version the changelog has no heading for" 1 release_date "$work/sheet.md" "$work/dated.md" 0.0.10
+
   rm -r "$work"
   echo "versions: self-test OK."
 }
@@ -763,6 +810,19 @@ if [[ -f "$book_page" ]]; then
   book_pins "$book_page" "$matrix"
 else
   note "no $book_page yet, skipped"
+fi
+
+sheet=website/book/src/evaluate/information-sheet.md
+echo "== information sheet ($sheet <-> $matrix, CHANGELOG.md)"
+if [[ -f "$sheet" ]]; then
+  book_pins "$sheet" "$matrix"
+  if [[ -f CHANGELOG.md ]] && [[ -n "$want_product" ]]; then
+    release_date "$sheet" CHANGELOG.md "$want_product"
+  else
+    note "no CHANGELOG.md or no product version yet, release date skipped"
+  fi
+else
+  note "no $sheet yet, skipped"
 fi
 
 echo "== CI tool pins (.github/workflows/ci.yml <-> $matrix)"
