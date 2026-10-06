@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The read-only operator surface on the client listener, under
-//! `{base}/operator/`: the integrity incidents, the `creating_system_id`
-//! routing table, and the stored-query registry.
+//! `{base}/operator/`.
 //!
-//! Every route is admitted by client authentication only for a caller whose
+//! It serves the integrity incidents, the `creating_system_id` routing
+//! table, the stored-query registry, and the last observed state of each
+//! dependency. Every route is admitted by client authentication only for a caller whose
 //! token carries the operator scope its issuer's entry names
 //! ([`Requirement::Operator`](crate::auth::permission::Requirement::Operator)).
-//! It answers routing ids, counts and stored definitions only, the bodies of
-//! [`ferrofed_registry::operator`] and the ITS-REST `StoredQuery`, never a
-//! patient identifier (§5.4.1, N33), and none of it is part of the ITS-REST
-//! surface. The two listings answer one page at a time, `offset` and
+//! It answers routing ids, states, counts and stored definitions only, the
+//! bodies of [`ferrofed_registry::operator`], [`ferrofed_registry::health`]
+//! and the ITS-REST `StoredQuery`, never a patient identifier (§5.4.1, N33),
+//! and none of it is part of the ITS-REST surface. The two listings answer one page at a time, `offset` and
 //! `limit` in the query, at most [`MAX_PAGE`] items. No specification
 //! governs the operator surface: our own design.
 
@@ -42,6 +43,11 @@ pub const CREATING_SYSTEMS: &str = "/operator/creating-systems";
 /// The path of the stored-query registry, below `{base}`.
 pub const STORED_QUERIES: &str = "/operator/stored-queries";
 
+/// The path of the dependency report, below `{base}`.
+// NOTE: no specification governs this: our own design; the report names every member
+// and which are down, so it is the operator's, behind the operator scope.
+pub const DEPENDENCIES: &str = "/operator/dependencies";
+
 /// Whether `path` is the operator surface, or below it, under `base`.
 #[must_use]
 pub fn addresses(base: &BasePath, path: &str) -> bool {
@@ -58,6 +64,15 @@ pub fn routes(surface: axum::Router<Arc<AppState>>) -> axum::Router<Arc<AppState
         .route(INCIDENTS, axum::routing::get(incidents))
         .route(CREATING_SYSTEMS, axum::routing::get(creating_systems))
         .route(STORED_QUERIES, axum::routing::get(stored_queries))
+        .route(DEPENDENCIES, axum::routing::get(dependencies))
+}
+
+/// `GET {base}/operator/dependencies`: the last observed state of each
+/// member endpoint and service, always `200` ([`AppState::dependencies`]).
+async fn dependencies(
+    State(state): State<Arc<AppState>>,
+) -> Json<ferrofed_registry::health::DependencyReport> {
+    Json(state.dependencies())
 }
 
 /// `GET {base}/operator/incidents`: every kind's count since the process

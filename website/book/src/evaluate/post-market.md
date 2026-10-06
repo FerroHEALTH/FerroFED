@@ -282,7 +282,7 @@ overwrites a file. Every file sits under `ferrofed-report/`:
 | `release.json` | the release tag, the tarball and image of this version, the workflows that signed their attestations, and the `gh attestation verify` commands that check them |
 | `configuration.toml` | the effective configuration (the file with every `FERROFED__` override applied), redacted |
 | `health/readiness.json` | `GET {base}/health/readiness`, as the gateway answered it |
-| `health/dependencies.json` | `GET {base}/health/dependencies` |
+| `health/dependencies.json` | `GET {base}/operator/dependencies`: the last observed state of every dependency, read with the operator token |
 | `incidents.json` | `GET {base}/operator/incidents`: every integrity incident kind's count and the most recent of each, read with the operator token |
 | `metrics.txt` | `GET /metrics` from the admin listener, when `metrics.listen` is set |
 

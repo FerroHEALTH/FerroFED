@@ -283,3 +283,45 @@ async fn a_page_beyond_the_bound_or_of_nothing_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+/// An operator reads the last observed state of each member endpoint.
+#[tokio::test]
+async fn an_operator_reads_the_dependency_report() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (status, text) = answer(
+        gateway(dir.path())?,
+        get("/operator/dependencies", &operator_bearer()?)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let report: ferrofed_registry::health::DependencyReport = serde_json::from_str(&text)?;
+    assert!(
+        report
+            .endpoints
+            .keys()
+            .any(|id| id.as_str() == "node-a-pub"),
+        "{text}"
+    );
+    Ok(())
+}
+
+/// The dependency report names every member and which are down, so a
+/// request without a token, a caller without the operator scope and the
+/// health family get none of it.
+#[tokio::test]
+async fn no_dependency_report_reaches_a_caller_who_is_no_operator() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path())?;
+    let unauthenticated = Request::get("/operator/dependencies").body(Body::empty())?;
+    let (status, text) = answer(app.clone(), unauthenticated).await?;
+    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
+    assert!(!text.contains("node-a-pub"), "{text}");
+    let (status, text) = answer(app.clone(), get("/operator/dependencies", &bearer()?)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    assert!(!text.contains("node-a-pub"), "{text}");
+    let open = Request::get("/health/dependencies").body(Body::empty())?;
+    let (status, text) = answer(app, open).await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
+    assert!(!text.contains("node-a-pub"), "{text}");
+    Ok(())
+}

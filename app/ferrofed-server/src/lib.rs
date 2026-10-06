@@ -159,9 +159,7 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// `GET {base}/health` answers `200` while the process is up,
 /// `GET {base}/health/readiness` answers `200` while the process serves
 /// and every registered indicator is up and `503` with the phase and each
-/// indicator's state otherwise, and `GET {base}/health/dependencies`
-/// answers `200` with the last observed state of each member endpoint and of
-/// the resolver ([`health::dependencies`]). `GET {base}/.well-known/jwks.json`
+/// indicator's state otherwise. `GET {base}/.well-known/jwks.json`
 /// answers the gateway's public signing keys with no client authentication
 /// ([`jwks`]), and `404` when none are configured. A binding's public
 /// document, such as a Nuts holder's DID document, is answered at the path
@@ -169,8 +167,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
 /// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
 /// from its query string ([`facade::query_aql_get`]). `GET
-/// {base}/operator/incidents`, `/operator/creating-systems` and
-/// `/operator/stored-queries` answer the read-only operator surface to a
+/// {base}/operator/incidents`, `/operator/creating-systems`,
+/// `/operator/stored-queries` and `/operator/dependencies`, the last
+/// observed state of each member endpoint and service
+/// ([`health::dependencies`]), answer the read-only operator surface to a
 /// caller with the operator scope ([`operator`]). With `[fhir]` set,
 /// `{fhir-base}/metadata` and `{fhir-base}/Patient/$summary` answer the FHIR
 /// face ([`fhir`]), and every error under `{fhir-base}` is an
@@ -194,7 +194,6 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
-        .route("/health/dependencies", get(dependencies))
         // NOTE: RFC 7517 §5, §13.1 jwks-discovery: public keys are public material,
         // so the JWK Set stays outside every client authentication layer.
         .route(jwks::JWKS_PATH, get(jwks::jwks))
@@ -359,14 +358,6 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
     let report = state.health().evaluate().await;
     let readiness = health::Readiness::new(state.lifecycle().phase(), report);
     (readiness.status(), Json(readiness)).into_response()
-}
-
-/// `GET /health/dependencies`: the last observed state of each dependency,
-/// always `200` ([`AppState::dependencies`]).
-async fn dependencies(
-    State(state): State<Arc<AppState>>,
-) -> Json<ferrofed_registry::health::DependencyReport> {
-    Json(state.dependencies())
 }
 
 /// Serves `app` on an already-bound listener until the process receives

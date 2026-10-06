@@ -165,19 +165,19 @@ async fn holding() -> RespondingGateway {
     .await
 }
 
-/// The state `GET /health/dependencies` reports of the audit repository.
+/// The state `GET /operator/dependencies` reports of the audit repository.
 async fn repository_state(app: &Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         audit_repository: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.audit_repository)
 }
 
-/// Waits up to [`SETTLE`] until `GET /health/dependencies` reports the
+/// Waits up to [`SETTLE`] until `GET /operator/dependencies` reports the
 /// audit repository `expected`, and returns the last state it reported.
 async fn await_state(app: &Router, expected: &str) -> Result<Option<String>, Box<dyn Error>> {
     let until = Instant::now() + SETTLE;

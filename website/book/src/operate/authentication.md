@@ -15,13 +15,16 @@ each node is told about the caller. FerroFED's answers to the five questions §1
 every deployment, and the template for yours, are on
 [The §13.4 deployment decisions](deployment-decisions.md).
 
-The health family (`GET {base}/health`, `/health/readiness`,
-`/health/dependencies`) and `GET {base}/` stay open. They name no patient,
-but `GET {base}/health/dependencies` names every member endpoint by its id,
-with the state the gateway last observed of it, and `GET {base}/` names the
-product version. Restrict both at the proxy if your network should not learn
-them ([Hardening](hardening.md#network-placement)). A path outside the
-base, or under it but outside `{base}/v1/` and the routes above, is a `404`.
+The health family (`GET {base}/health`, `/health/readiness`) and
+`GET {base}/` stay open. They name no patient and no member, and
+`GET {base}/` names the product version. Restrict the root at the proxy if
+your network should not learn the version
+([Hardening](hardening.md#network-placement)). The dependency report,
+`GET {base}/operator/dependencies`, names every member endpoint by its id
+with the state the gateway last observed of it, so it sits on the
+[operator surface](#the-operator-surface), behind the operator scope. A
+path outside the base, or under it but outside `{base}/v1/` and the routes
+above, is a `404`.
 
 ## The token
 
@@ -142,7 +145,7 @@ addresses, only `*` or `**` covers it.
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
-| `GET {base}/operator/incidents`, `/operator/creating-systems` and `/operator/stored-queries` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
+| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries` and `/operator/dependencies` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
 | A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
@@ -261,14 +264,16 @@ its tokens, and only when your cross-reference service holds that member's
 
 ## The operator surface
 
-Three read-only routes on the client listener give the
-[operator console](operator-console.md) what no other surface carries:
+Four read-only routes on the client listener give the
+[operator console](operator-console.md) and your monitoring what no other
+surface carries:
 
 | Route | Answers |
 |---|---|
 | `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 25 of each kind |
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
+| `GET {base}/operator/dependencies` | the state the gateway last observed of each member endpoint and service ([Health probes](health.md#the-dependency-report)) |
 
 The incident report is `{"counts": {...}, "recent": [...]}`: `counts` names
 every incident kind with how many the gateway emitted since it started, and

@@ -29,8 +29,9 @@ page: our own design.
 - [ ] **Decide which open routes the network may reach.** The gateway
   answers without a token on the health family, `GET {base}/` and
   `GET {base}/.well-known/jwks.json`, and the PMIR feed route checks its own
-  token. `GET {base}/health/dependencies` names every member endpoint and
-  its state, and `GET {base}/` the version. At the proxy, keep the health
+  token. `GET {base}/` names the version; the dependency report, which
+  names every member endpoint and its state, needs the operator scope
+  (`GET {base}/operator/dependencies`). At the proxy, keep the health
   routes to your orchestrator and monitoring, the JWK Set reachable from
   every node's authorization server, and the feed route reachable from the
   PMIR Registry (B1, B3).

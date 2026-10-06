@@ -18,7 +18,7 @@
 //! its deadline and its caps on pages, bytes and entries; one that runs past
 //! them, or whose answer breaks ITI-91, is refused and counted the same way.
 //! A directory that cannot be reached leaves the running registry in place;
-//! every outcome shows on `/health/dependencies` as `directory`, and a
+//! every outcome shows on `{base}/operator/dependencies` as `directory`, and a
 //! change the gateway refused shows the directory `degraded`, with the class
 //! of the refusal as `directory_fault`, until a later refresh is accepted. A
 //! query never waits on the directory. No specification governs the refresh
@@ -139,14 +139,14 @@ impl DirectoryRegistry {
     }
 
     /// The last state observed of the directory, which
-    /// `/health/dependencies` reports.
+    /// `{base}/operator/dependencies` reports.
     #[must_use]
     pub fn observed(&self) -> Observed {
         self.seen().state
     }
 
     /// Why the directory's last answer was not accepted, which
-    /// `/health/dependencies` reports as `directory_fault`; `None` unless the
+    /// `{base}/operator/dependencies` reports as `directory_fault`; `None` unless the
     /// change it answered with was refused, or it refused the credentials.
     #[must_use]
     pub fn fault(&self) -> Option<DirectoryFault> {

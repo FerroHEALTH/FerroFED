@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The PMIR identity feed of `[pmir]`: the ITI-94 subscription kept at a
-//! harness Patient Identity Registry and shown on `/health/dependencies`, the
+//! harness Patient Identity Registry and shown on `/operator/dependencies`, the
 //! ITI-93 route that applies a merge to the resolution bindings only when it
 //! is authenticated and well formed, the hygiene of the identifiers it
 //! carries, and the configuration it refuses (track 8 of §16.3, Annex A.4;

@@ -9,7 +9,7 @@
 //! that cannot answer leaves every candidate to its node (N27). An outage is
 //! carried in `meta.federation.consent.error`, mirroring the localizer's
 //! member of §14.1 as our own design, never changing `complete` or the
-//! status, and it shows on `GET /health/dependencies` under the rule the
+//! status, and it shows on `GET /operator/dependencies` under the rule the
 //! members follow and in the pre-filter call metrics.
 #![allow(
     clippy::panic_in_result_fn,
@@ -196,13 +196,13 @@ struct ConsentReport {
     error: String,
 }
 
-/// The state `GET /health/dependencies` reports of the consent pre-filter.
+/// The state `GET /operator/dependencies` reports of the consent pre-filter.
 async fn consent_state(app: &Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         consent: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.consent)

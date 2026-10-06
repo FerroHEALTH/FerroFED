@@ -474,9 +474,9 @@ fn the_health_routes_log_the_same_line_as_every_route_and_no_endpoint()
         "info",
         vec![
             Request::get("/health/readiness").body(Body::empty())?,
-            Request::get("/health/dependencies").body(Body::empty())?,
+            support::dependencies_request()?,
             post(body(&patient_query())?)?,
-            Request::get("/health/dependencies").body(Body::empty())?,
+            support::dependencies_request()?,
         ],
     )?;
     let mut routes = Vec::new();
@@ -494,9 +494,9 @@ fn the_health_routes_log_the_same_line_as_every_route_and_no_endpoint()
     assert_eq!(
         vec![
             "/health/readiness",
-            "/health/dependencies",
+            "/operator/dependencies",
             "/v1/query/aql",
-            "/health/dependencies"
+            "/operator/dependencies"
         ],
         routes,
         "{text}"

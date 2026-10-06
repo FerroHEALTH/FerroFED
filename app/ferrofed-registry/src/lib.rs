@@ -54,7 +54,7 @@
 //! [`EhrIndex`](ehr_index::EhrIndex) learns which member holds an `ehr_id`,
 //! the third step of path `ehr_id` routing (§12.5.1). [`operator`] holds
 //! the reports the gateway's read-only operator surface answers with, and
-//! [`health`] the body of the gateway's `GET /health/dependencies`.
+//! [`health`] the body of the gateway's `GET {base}/operator/dependencies`.
 //!
 //! Every credential FerroFED is configured with, and every URL that may carry
 //! one in its userinfo, is held in a [`Secret`](secret::Secret) or a

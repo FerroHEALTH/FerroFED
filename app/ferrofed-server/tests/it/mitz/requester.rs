@@ -8,9 +8,8 @@
 use std::error::Error;
 
 use axum::Router;
-use axum::body::Body;
 use ferrofed_testkit::mitz::Mitz;
-use http::{Request, StatusCode};
+use http::StatusCode;
 use serde::Deserialize;
 
 use super::{
@@ -104,13 +103,13 @@ async fn a_token_without_the_requester_claims_is_counted_not_asked_for_the_calle
     Ok(())
 }
 
-/// The state `GET /health/dependencies` reports of the consent pre-filter.
+/// The state `GET /operator/dependencies` reports of the consent pre-filter.
 async fn consent_state(app: Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         consent: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.consent)

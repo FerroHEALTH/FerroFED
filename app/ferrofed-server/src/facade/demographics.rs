@@ -13,7 +13,7 @@
 //! identity is refused, never settled by picking one. A service that does not
 //! answer is a failure of the step that feeds localization, so an undirected
 //! route applies the localization failure policy to it (§14.1, N4). Each call
-//! is recorded as the service's state on `GET /health/dependencies` and in
+//! is recorded as the service's state on `GET {base}/operator/dependencies` and in
 //! the demographics call metrics. No identifier reaches a log line, a metric
 //! label or an error text.
 

@@ -102,7 +102,7 @@ impl Processes {
         }
     }
 
-    /// Returns what each process indicates on `GET /health/dependencies`.
+    /// Returns what each process indicates on `GET {base}/operator/dependencies`.
     pub(crate) fn indicate(&self) -> Vec<(&'static str, Indication)> {
         #[cfg(feature = "binding-ihe")]
         {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The ITI-94 subscription against the harness Patient Identity Registry:
-//! created as the request profile asks, shown on `/health/dependencies` as
+//! created as the request profile asks, shown on `/operator/dependencies` as
 //! `identity_registry` whether the Registry holds it, refuses it or cannot be
 //! reached, created again when the Registry loses it, deleted on request, and
 //! the feed it brings applied end to end (PMIR §2:3.94.4, §2:3.93.4).
@@ -15,12 +15,11 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::Body;
 use ferrofed_registry::health::Observed;
 use ferrofed_server::binding::ihe::pmir::IdentityFeed;
 use ferrofed_server::binding::ihe::pmir::subscription::{RegistryFault, backoff};
 use ferrofed_testkit::pmir::{LocationMode, PatientIdentityRegistry, merge_message};
-use http::{Request, StatusCode};
+use http::StatusCode;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
@@ -44,13 +43,13 @@ fn feed(gateway: &Gateway) -> Result<&Arc<IdentityFeed>, Box<dyn Error>> {
     Ok(gateway.state.identity_feed().ok_or("[pmir] is set")?)
 }
 
-/// What `GET /health/dependencies` reports of the Registry.
+/// What `GET /operator/dependencies` reports of the Registry.
 async fn reported(gateway: &Gateway) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         identity_registry: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let response = send_as_is(gateway.app.clone(), request).await?;
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     Ok(serde_json::from_slice::<Report>(&bytes)?.identity_registry)
@@ -256,13 +255,13 @@ async fn an_unsubscribing_drain_with_a_create_in_flight_leaves_no_subscription()
     Ok(())
 }
 
-/// What `GET /health/dependencies` reports of the Registry's fault.
+/// What `GET /operator/dependencies` reports of the Registry's fault.
 async fn reported_fault(gateway: &Gateway) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         identity_registry_fault: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let response = send_as_is(gateway.app.clone(), request).await?;
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     Ok(serde_json::from_slice::<Report>(&bytes)?.identity_registry_fault)

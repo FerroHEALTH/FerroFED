@@ -3,10 +3,12 @@
 
 # Health probes
 
-The gateway answers three health routes under its
+The gateway answers two health routes under its
 [base path](configuration.md#the-base-path), and the binary carries a
 `healthcheck` command for a runtime that cannot send an HTTP request itself.
-No specification governs health probes: our own design.
+An operator reads the state of every member and service from the
+[dependency report](#the-dependency-report). No specification governs
+health probes: our own design.
 
 ## The routes
 
@@ -14,7 +16,8 @@ No specification governs health probes: our own design.
 |---|---|---|
 | `GET {base}/health` | `200` while the process serves; it checks nothing else | liveness |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
-| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter, of the localizer, of the demographics step, of the mCSD directory, of the audit repository and of the PMIR Patient Identity Registry | monitoring, never a probe |
+
+Both answer without a token and name no member.
 
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the
@@ -26,8 +29,22 @@ requests before the gateway stops taking them
 
 No member node and no identity source gates readiness. A node outage is
 reported per query in `meta.federation` (§11), and a gateway that went unready
-with one node would turn one CDR outage into a total outage. Their state is on
-`GET {base}/health/dependencies` instead:
+with one node would turn one CDR outage into a total outage. Their state is
+in the dependency report instead.
+
+## The dependency report
+
+`GET {base}/operator/dependencies` answers `200` with the state the gateway
+last observed of each member endpoint, of the resolver, of the consent
+pre-filter, of the localizer, of the demographics step, of the mCSD
+directory, of the audit repository and of the PMIR Patient Identity
+Registry. Use it for monitoring, never as a probe. It names every member
+and which of them are down, so it sits on the
+[operator surface](authentication.md#the-operator-surface): only a caller
+whose token carries its issuer's `operator_scope` reads it, a request
+without a token is a `401`, and one without the scope is a `403`. Give your
+monitoring a token with the operator scope, as the operator console has
+one. A report reads:
 
 ```json
 {

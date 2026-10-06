@@ -94,9 +94,11 @@ flowchart LR
 | I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP by default: keep that hop inside one host or pod, protect it with a mesh, or set `[server.tls]` with a `client_ca_file` that admits the proxy alone | [TLS on the listeners](../operate/configuration.md#tls-on-the-listeners); `app/ferrofed-server/tests/it/listener_tls/` |
 
 The health family, `GET {base}/` and `GET {base}/.well-known/jwks.json` are
-open by design. `GET {base}/health/dependencies` names every member
-endpoint id and its last observed state, and `GET {base}/` names the product
-version; restrict both at the proxy if your network should not learn them.
+open by design, and none of them names a member. `GET {base}/` names the
+product version; restrict it at the proxy if your network should not learn
+it. The dependency report, which names every member endpoint id and its last
+observed state, is served only to an operator, at
+`GET {base}/operator/dependencies` behind the operator scope.
 
 ## B2: gateway to member node
 

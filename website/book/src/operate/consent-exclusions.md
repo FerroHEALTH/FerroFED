@@ -52,7 +52,7 @@ that lookup. Then:
 - **The operator still sees every exclusion:**
   `ferrofed_consent_prefilter_requests_total{outcome="denied"}` counts each
   call that excluded a member, and an outage of the consent service stays in
-  `meta.federation.consent.error` and on `GET {base}/health/dependencies`,
+  `meta.federation.consent.error` and on `GET {base}/operator/dependencies`,
   since it says nothing about a patient.
 
 A node's own consent refusal, a `403` whose ITS-REST `Error` carries a code
