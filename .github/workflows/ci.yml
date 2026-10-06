@@ -571,7 +571,8 @@ jobs:
   # them: our own design). Every fragment's name and content is checked on
   # every event, so a malformed one never reaches the release cut that
   # assembles them. The self-tests prove the check, the assembly and the
-  # pull-request guard below over stub repositories.
+  # pull-request guard below over stub repositories, and the withdrawal of a
+  # release, which writes an upgrade fragment, over a stub registry (#706).
   changelog:
     name: changelog
     runs-on: ubuntu-latest
@@ -587,6 +588,7 @@ jobs:
           bash scripts/release/changelog.sh --self-test
           bash scripts/checks/changelog-guard.sh --self-test
           bash scripts/checks/upgrade-notes.sh --self-test
+          bash scripts/release/withdraw.sh --self-test
           bash scripts/release/changelog.sh --check
 
   # The manifest guard (#454), the one tier-1 job with a toolchain: every

@@ -83,9 +83,14 @@ jobs:
         with:
           tool: cargo-auditable@0.7.5
 
+      # The binary records the commit and the target it was built for, which
+      # `ferrofed report` writes into the bundle a serious-incident report
+      # attaches (#705).
       - name: Build the server
         env:
           TARGET: ${{ inputs.target }}
+          FERROFED_BUILD_COMMIT: ${{ github.sha }}
+          FERROFED_BUILD_TARGET: ${{ inputs.target }}
         run: cargo auditable build --release --locked -p ferrofed-server --target "$TARGET"
 
       - name: Package the binary with its licence, notice and readme

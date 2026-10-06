@@ -56,9 +56,11 @@ channel by what the report contains:
   [GitHub issue](https://github.com/FerroHEALTH/FerroFED/issues/new/choose)
   when the report can be public.
 
-Name the FerroFED version you run (`ferrofed --version` prints it), how it is
-deployed, and what happened. Never send patient data: describe the case, or
-build a synthetic one.
+Attach the archive `ferrofed report` writes (see
+[The report archive](#the-report-archive)), and say how FerroFED is deployed
+and what happened. Where the archive cannot be made, name the version you run
+(`ferrofed --version` prints it). Never send patient data: describe the case,
+or build a synthetic one.
 
 Each distributor, importer and authorised representative of FerroFED is told
 of these channels and of the registers below (Art 30(1)(n), (o)).
@@ -96,6 +98,11 @@ necessary corrective action", or recalls or withdraws the version (Art
    published release is never changed or deleted, so a non-conforming version
    is named in the register, in the security advisory where there is one,
    and in the release notes of the version that corrects it.
+   A withdrawn version is also listed as unsupported in
+   [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#withdrawn-versions),
+   and its `<major>.<minor>` and `latest` image tags move to the correcting
+   release. Its own version tag and image digest stay, so a deployment pinned
+   to either keeps running it until the deployment moves.
 3. The national authorities of each Member State where the version was made
    available or put into service are told of the non-conformity, the
    corrective action "including the timetable for implementation", and the
@@ -156,6 +163,82 @@ them for that deployment.
 protection, the market surveillance authority informs the data protection
 supervisory authorities (Art 44(6)). A deployment's own duties under data
 protection law are its own.
+
+## The report archive
+
+A serious-incident report is due within three days of awareness (Art
+44(7)), and an authority that acts on one passes on "the data necessary for
+the identification of the EHR system concerned" (Art 44(5)). Run
+`ferrofed report` on the host the gateway runs on, with the same
+configuration, to collect that data in one step:
+
+```sh
+ferrofed report --config /etc/ferrofed/ferrofed.toml \
+  --operator-token-file /run/secrets/ferrofed/operator-token \
+  --out ferrofed-report.tar
+```
+
+The command writes an uncompressed tar archive. Without `--out`, it is
+`ferrofed-report-<UTC time>.tar` in the working directory. The command never
+overwrites a file. Every file sits under `ferrofed-report/`:
+
+| File | What it holds |
+|---|---|
+| `manifest.json` | `format` (`ferrofed-report`), `format_version` (`1`), the time it was made, the product, version and manufacturer, an `entries` list with each file's purpose, its source, its size and its SHA-256, and a `missing` list with each part that could not be read and why |
+| `build.json` | the version, the commit and target triple the release build recorded, the platform, whether it is a release build, the Cargo features (the bindings), and the pinned specification and `openehr-*` releases the startup banner prints |
+| `release.json` | the release tag, the tarball and image of this version, the workflows that signed their attestations, and the `gh attestation verify` commands that check them |
+| `configuration.toml` | the effective configuration (the file with every `FERROFED__` override applied), redacted |
+| `health/readiness.json` | `GET {base}/health/readiness`, as the gateway answered it |
+| `health/dependencies.json` | `GET {base}/health/dependencies` |
+| `incidents.json` | `GET {base}/operator/incidents`: every integrity incident kind's count and the most recent of each, read with the operator token |
+| `metrics.txt` | `GET /metrics` from the admin listener, when `metrics.listen` is set |
+
+The live files come from the gateway running on this host. When it is
+stopped, or a part needs something the deployment did not give (the operator
+token, an admin listener), the part is listed under `missing` with the reason,
+and the command prints the same list. The image digest is not visible from
+inside the process. For a container, add the output of
+`docker image inspect --format '{{index .RepoDigests 0}}' <image>`.
+
+Redaction fails closed and runs over the parsed configuration, so a comment
+or an inline table cannot pass it. Each key is judged by its exact spelling,
+so a key in another casing or with another separator counts as unknown. A
+key is shown only when it is a configuration field name the redactor knows,
+outside a table keyed by data (`credentials`, `members`, `namespaces`,
+`communities`, `custodians`, `holders`). Every other key becomes `***1`,
+`***2` and so on. A value stays only under a known key that names no
+credential and no file, and only when it is one of these:
+
+- a boolean;
+- a number under a timeout, interval, limit, capacity or size key, such as
+  `request_timeout_ms`;
+- the scheme, host and port of a URL under a URL key, such as `url` or
+  `issuer`, with its userinfo, path, query and fragment replaced by `***`;
+- a closed setting or a listen address that has the expected shape, such as
+  `profile`, `listen`, `base_path`, `format` or `node_selection`.
+
+Every other value is `***`. That covers secrets in any casing, file paths
+(which can name a person's home directory), dates, namespaces, user names,
+`ehr_id`s, and every value under `[dev]`, whose cross-reference pairs
+patient identifiers with `ehr_id`s. A key the configuration gains later is
+redacted until the redactor is taught it.
+
+The live files keep only the fields that carry states, counts, kinds, times
+and routing ids:
+
+- Readiness keeps each indicator's state without its detail text.
+- The incidents keep their kind, time, detection and the endpoints and
+  nodes involved, without the description, the `ehr_id` or the
+  `creating_system_id`.
+- The metrics keep the value of a label only when the gateway itself sets
+  that label.
+- A part that cannot be read is named in `missing` without quoting what was
+  answered.
+
+The archive therefore carries no patient identifier, `ehr_id`, clinical
+payload, credential, personal name, header value or URL userinfo. Read it
+before you send it all the same. A secret or a patient identifier found in
+an archive is a vulnerability: report it as one.
 
 ## Cooperation with the authorities
 

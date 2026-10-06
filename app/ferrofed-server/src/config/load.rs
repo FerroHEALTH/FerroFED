@@ -22,6 +22,19 @@ impl Config {
     /// Returns [`Error::Read`] when a named file cannot be read and every
     /// other [`Error`] the merge and the parse produce.
     pub fn load(path: Option<&Path>) -> Result<Self, Error> {
+        Self::load_with_tree(path).map(|(config, _tree)| config)
+    }
+
+    /// Reads the configuration as [`load`](Self::load) does, and returns it
+    /// with the merged tree it was read from: the file, every environment
+    /// override and every deprecated key renamed.
+    ///
+    /// `ferrofed report` writes the tree, redacted, as the effective
+    /// configuration.
+    ///
+    /// # Errors
+    /// Every error [`load`](Self::load) returns.
+    pub fn load_with_tree(path: Option<&Path>) -> Result<(Self, toml::Table), Error> {
         let named = path
             .map(Path::to_path_buf)
             .or_else(|| std::env::var_os(CONFIG_PATH_ENV).map(PathBuf::from));
@@ -38,7 +51,7 @@ impl Config {
         let environment: BTreeMap<String, String> = std::env::vars()
             .filter(|(name, _)| name.starts_with(ENV_PREFIX))
             .collect();
-        let loaded = Self::from_sources(text.as_deref(), &environment);
+        let loaded = Self::merged(text.as_deref(), &environment);
         match &named {
             Some(path) => loaded.map_err(|error| error.in_file(path)),
             None => loaded,
@@ -61,6 +74,15 @@ impl Config {
         text: Option<&str>,
         environment: &BTreeMap<String, String>,
     ) -> Result<Self, Error> {
+        Self::merged(text, environment).map(|(config, _tree)| config)
+    }
+
+    /// Reads `text` and `environment` as [`from_sources`](Self::from_sources)
+    /// does, and returns the configuration with the merged tree it parsed.
+    fn merged(
+        text: Option<&str>,
+        environment: &BTreeMap<String, String>,
+    ) -> Result<(Self, toml::Table), Error> {
         let mut table = match text {
             None => toml::Table::new(),
             Some(text) => {
@@ -80,7 +102,7 @@ impl Config {
                 .unwrap_or(fault)
         })?;
         config.deprecated = deprecated;
-        Ok(config)
+        Ok((config, table))
     }
 
     /// Reads the file alone again when the merged tree is refused, so a fault
