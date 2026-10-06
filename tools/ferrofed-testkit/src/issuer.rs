@@ -310,6 +310,9 @@ impl Extensions {
                 subject_organization_id: Some(String::from("urn:oid:2.999.7")),
                 subject_name: None,
                 national_provider_identifier: None,
+                subject_organization: None,
+                subject_role: Vec::new(),
+                person_id: None,
                 purpose_of_use: vec![Coding {
                     system: ACT_REASON.to_owned(),
                     code: String::from("TREAT"),
@@ -332,6 +335,16 @@ pub struct IheIua {
     /// their national authority.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub national_provider_identifier: Option<String>,
+    /// `subject_organization`, the name of the user's organisation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject_organization: Option<String>,
+    /// `subject_role`, an array of FHIR `Coding`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subject_role: Vec<Coding>,
+    /// `person_id`, a patient identifier, for a test that proves the
+    /// gateway never reads it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub person_id: Option<String>,
     /// `purpose_of_use`, an array of FHIR `Coding`.
     pub purpose_of_use: Vec<Coding>,
 }

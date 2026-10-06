@@ -40,9 +40,11 @@ use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
-    AccessRecord, Accessor, Action, DataSubject, Origin, Outcome, Professional, Purpose,
+    AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
+    RelayedProfessional, RelayedProvider,
 };
 use ehds_logging::sink::AccessSink;
+use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
 use http::{Method, StatusCode};
@@ -184,6 +186,7 @@ impl Accessed {
                 query: self.query.clone(),
                 stored_query: self.stored_query.clone(),
                 client_address: address,
+                correlation: caller.correlation().map(str::to_owned),
             },
         }
     }
@@ -236,9 +239,14 @@ fn outcome(status: StatusCode) -> Outcome {
 /// names, the provider it acts for, who acts, the professional and the
 /// assurance level as authentication verified them, and its purposes of use
 /// (Annex II 3.1, 3.2(a), (b)).
+///
+/// For a caller a national contact point vouched for, the client is the
+/// contact point's connector, and the record also names the professional
+/// and the provider of another Member State it relays, with their
+/// country and issuing authorities, marked as asserted by the contact point
+/// (Implementing Regulation (EU) 2026/2099 Art 7, Annex Tables 1 and 2).
 fn accessor(caller: &Caller) -> Accessor {
     let requester = caller.requester();
-    // TODO(#734): the 2026/2099 Annex attributes a contact point asserts, marked as asserted.
     Accessor {
         issuer: caller.issuer().to_owned(),
         subject: caller.subject().to_owned(),
@@ -272,6 +280,37 @@ fn accessor(caller: &Caller) -> Accessor {
                 code: purpose.code.clone(),
             })
             .collect(),
+        relayed: caller.relayed().map(relayed),
+    }
+}
+
+/// What a contact point relays, as the access record names it.
+fn relayed(relayed: &Relayed) -> ehds_logging::record::Relayed {
+    let professional = &relayed.professional;
+    let provider = &relayed.provider;
+    ehds_logging::record::Relayed {
+        contact_point: relayed.contact_point.clone(),
+        country_code: relayed.country_code.clone(),
+        professional: RelayedProfessional {
+            family_name: professional.family_name.clone(),
+            given_name: professional.given_name.clone(),
+            identifier: professional.hp_identifier.clone(),
+            issuing_authority: professional.issuing_authority_name.clone(),
+            roles: professional
+                .hp_professional_role
+                .iter()
+                .map(|role| Coded {
+                    system: role.system.clone(),
+                    code: role.code.clone(),
+                })
+                .collect(),
+        },
+        provider: RelayedProvider {
+            identifier: provider.identifier.clone(),
+            issuing_authority: provider.issuing_authority_name.clone(),
+            name: provider.name.clone(),
+            address: provider.address.clone(),
+        },
     }
 }
 

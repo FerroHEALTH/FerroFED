@@ -20,6 +20,7 @@ mod limits;
 mod origins;
 mod professional;
 mod query;
+mod relayed;
 mod routed;
 
 use std::collections::BTreeMap;

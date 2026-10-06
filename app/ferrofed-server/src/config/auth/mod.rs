@@ -13,6 +13,7 @@
 //! design; no specification governs them.
 
 pub mod assurance;
+pub mod contact_point;
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -28,6 +29,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::config::auth::assurance::{Assurance, AssuranceClaims};
+use crate::config::auth::contact_point::{ContactPoint, ContactPointClaims};
 use crate::config::error::Error;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
@@ -166,6 +168,11 @@ pub struct TrustedIssuer {
     /// act for the professional they name; `false` by default, and then such
     /// a token reaches no patient data.
     pub client_tokens_act_for_professional: bool,
+    /// The declaration of this issuer as a national contact point for
+    /// digital health, with the claims of its tokens that carry the
+    /// Implementing Regulation (EU) 2026/2099 Annex attributes
+    /// (`[auth.issuer.national_contact_point]`); absent by default.
+    pub national_contact_point: Option<ContactPointClaims>,
 }
 
 /// `[auth.issuer.requester]`: the names of the token claims that carry the
@@ -185,6 +192,29 @@ pub struct RequesterClaims {
     pub organisation: String,
     /// The claim carrying the organisation's care provider type.
     pub organisation_type: String,
+}
+
+impl RequesterClaims {
+    /// Checks that this table at `key` names all four claims.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Missing`] for a claim name not set.
+    fn check(&self, key: &str) -> Result<(), Error> {
+        for (name, claim) in [
+            ("professional", &self.professional),
+            ("role", &self.role),
+            ("organisation", &self.organisation),
+            ("organisation_type", &self.organisation_type),
+        ] {
+            if claim.is_empty() {
+                return Err(Error::Missing {
+                    key: format!("{key}.{name}"),
+                });
+            }
+        }
+        Ok(())
+    }
 }
 
 /// `[auth.issuer.patient]`: the one member endpoint whose platform issues
@@ -309,6 +339,11 @@ pub struct IssuerSettings {
     /// Whether this issuer's client tokens act for the professional they
     /// name.
     pub client_tokens_act_for_professional: bool,
+    /// This issuer as a national contact point, when the deployment declares
+    /// it one: its requests are served with consent exclusions withheld,
+    /// and its tokens relay the professional and the provider of another
+    /// Member State.
+    pub national_contact_point: Option<ContactPoint>,
 }
 
 /// An issuer's patient tokens bound to one member, resolved.
@@ -385,6 +420,9 @@ pub enum AuthFault {
     /// No value is declared at the minimum level or above it, so no token
     /// could reach patient data.
     AssuranceUnreachable,
+    /// The correlation header names a header that carries a credential,
+    /// which the access record would then hold.
+    CorrelationCredential,
 }
 
 impl fmt::Display for AuthFault {
@@ -411,6 +449,9 @@ impl fmt::Display for AuthFault {
             Self::AssuranceValue => "is empty, or is declared at two levels",
             Self::AssuranceUnreachable => {
                 "declares no value at the minimum level or above it, so no token could reach patient data"
+            }
+            Self::CorrelationCredential => {
+                "names a header that carries a credential, which the access record would then hold"
             }
         })
     }
@@ -575,18 +616,7 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
         .transpose()?;
     if let Some(requester) = &written.requester {
-        for (name, claim) in [
-            ("professional", &requester.professional),
-            ("role", &requester.role),
-            ("organisation", &requester.organisation),
-            ("organisation_type", &requester.organisation_type),
-        ] {
-            if claim.is_empty() {
-                return Err(Error::Missing {
-                    key: format!("{key}.requester.{name}"),
-                });
-            }
-        }
+        requester.check(&format!("{key}.requester"))?;
     }
     // NOTE: RFC 6749 §3.3: a scope token is one or more %x21 / %x23-5B / %x5D-7E,
     // so the operator scope is matched as one whole token of the `scope` claim.
@@ -606,6 +636,11 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         .as_ref()
         .map(|assurance| assurance.resolve(&format!("{key}.assurance")))
         .transpose()?;
+    let national_contact_point = written
+        .national_contact_point
+        .as_ref()
+        .map(|claims| claims.resolve(&format!("{key}.national_contact_point")))
+        .transpose()?;
     Ok(IssuerSettings {
         issuer: written.issuer.clone(),
         verification,
@@ -616,6 +651,7 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         requester: written.requester.clone(),
         assurance,
         client_tokens_act_for_professional: written.client_tokens_act_for_professional,
+        national_contact_point,
     })
 }
 

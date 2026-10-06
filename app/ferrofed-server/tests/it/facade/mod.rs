@@ -34,7 +34,8 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{MINTED_REQUEST_ID, is_minted_form, searched_claims, settings};
+use crate::support::conveyed::searched_claims;
+use crate::support::{MINTED_REQUEST_ID, is_minted_form, settings};
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
 pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";

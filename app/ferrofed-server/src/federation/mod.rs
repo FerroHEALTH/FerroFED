@@ -23,7 +23,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_engine::conveyance::Signer;
+use ferrofed_engine::conveyance::{Conveyance, Signer};
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::consent::ConsentPrefilter;
@@ -158,7 +158,7 @@ impl Federation {
     }
 
     /// This federation, reporting a member the consent pre-filter excludes
-    /// under `disclosure` ([`Federation::discloses_consent`]).
+    /// under `disclosure` ([`Federation::deployment_discloses_consent`]).
     #[must_use]
     pub fn with_consent_disclosure(mut self, disclosure: ConsentDisclosure) -> Self {
         self.consent_disclosure = disclosure;
@@ -174,9 +174,25 @@ impl Federation {
     /// subject answers as for a subject with no EHR there, and
     /// `OPTIONS {base}/` declares the choice as `consent.disclose` (§7a.2).
     /// The pre-filter metrics and the log count every exclusion either way.
+    ///
+    /// This is the deployment's setting, which `OPTIONS {base}/` declares;
+    /// a request is served under [`Federation::discloses_consent_to`].
     #[must_use]
-    pub fn discloses_consent(&self) -> bool {
+    pub fn deployment_discloses_consent(&self) -> bool {
         self.consent_disclosure.is_disclosed()
+    }
+
+    /// Whether the answer to the request `conveyance` is on behalf of names
+    /// a consent exclusion: as the deployment sets it, and never for a
+    /// request a national contact point relays.
+    ///
+    /// A contact point relays a healthcare provider of another Member State,
+    /// to whom the fact of a restriction "shall not be visible" either
+    /// (Regulation (EU) 2025/327 Art 8, Art 11(5)), so its requests are
+    /// served with `disclose = false` whatever the deployment's setting.
+    #[must_use]
+    pub fn discloses_consent_to(&self, conveyance: &Conveyance) -> bool {
+        self.deployment_discloses_consent() && conveyance.relayed().is_none()
     }
 
     /// The gateway's signing keys and where they are published, when

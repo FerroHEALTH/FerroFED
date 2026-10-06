@@ -165,12 +165,12 @@ pub(crate) async fn serve(
         budget.overall(),
     )
     .await;
-    let unbound = (patient, &consented.denied, on_behalf);
+    let unbound = (patient, &consented.denied, (on_behalf, &arrived.conveyance));
     let resolved = resolve(federation, candidates, unbound, budget.overall()).await;
     let holders = resolved.holders.clone();
-    let settled = resolved
-        .settled()
-        .map_err(|unserved| unserved.disclosed_as(federation.discloses_consent()));
+    let settled = resolved.settled().map_err(|unserved| {
+        unserved.disclosed_as(federation.discloses_consent_to(&arrived.conveyance))
+    });
     // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and the gateway
     // records nothing of another subject, no session binding and no index entry.
     if confined::is_confined(&arrived.conveyance)
@@ -210,10 +210,11 @@ pub(crate) async fn serve(
         Ok(request) => route::send(federation, endpoint, request, &options, &logged).await,
         Err(refused) => Err(Failure::Forward(refused)),
     };
+    let at = (federation, &arrived.conveyance);
     match forwarded {
         // NOTE: Regulation (EU) 2025/327 Art 8: a withheld refusal answers as no holder would, so
         // it names no acting endpoint (no specification governs this: our own design).
-        Ok(forwarded) => route::withheld(federation, endpoint, &forwarded, (request_id, &logged))
+        Ok(forwarded) => route::withheld(at, endpoint, &forwarded, (request_id, &logged))
             .unwrap_or_else(|| {
                 route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
                 provenance.stamp(route::answered(forwarded))
@@ -274,7 +275,7 @@ async fn admitted(
     if let Some(refused) = other_patient(federation, who, named, (request_id, logged)).await {
         return Err(Box::new(refused));
     }
-    identified(federation, (patient, on_behalf), directed, deadline)
+    identified(federation, (patient, who), directed, deadline)
         .await
         .map_err(|unserved| Box::new(unserved.respond(request_id, logged)))
 }
@@ -292,7 +293,7 @@ async fn admitted(
 /// localizer's is (§14.1, N4); a `directed` read is never localized.
 async fn identified(
     federation: &Federation,
-    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
+    (patient, (conveyance, on_behalf)): (&PatientRef, (&Conveyance, &OnBehalfOf)),
     directed: bool,
     deadline: Instant,
 ) -> Result<Option<PatientRef>, Unserved> {
@@ -300,7 +301,8 @@ async fn identified(
         Identified::AsNamed => Ok(None),
         Identified::Master(master) => Ok(Some(master)),
         Identified::NoMatch(_) => {
-            Err(Unserved::Nowhere.disclosed_as(federation.discloses_consent()))
+            let disclosed = federation.discloses_consent_to(conveyance);
+            Err(Unserved::Nowhere.disclosed_as(disclosed))
         }
         Identified::Ambiguous(error) => Err(Unserved::Unidentified {
             reason: error,

@@ -26,7 +26,8 @@ use http::{Request, StatusCode, header};
 
 use crate::e2e::scenario::{fixture, in_process};
 use crate::e2e::{EHR_A, PATIENT, TestResult, composition_carrying, gateway};
-use crate::support::{CLIENT_TOKEN, searched_claims};
+use crate::support::CLIENT_TOKEN;
+use crate::support::conveyed::searched_claims;
 
 /// A request of `verb` to `uri` naming node A in the endpoint header.
 fn routed_to_a(verb: http::Method, uri: &str, body: Body) -> Result<Request<Body>, http::Error> {

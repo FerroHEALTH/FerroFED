@@ -17,10 +17,14 @@
 //! grant, "acting without a user context" (master08 §Resource Scopes). With
 //! it come the professional's identification the token states
 //! ([`Professional`]) and the assurance level its authentication reached
-//! (Regulation (EU) 2025/327 Annex II 3.1).
+//! (Regulation (EU) 2025/327 Annex II 3.1). A caller a national contact point
+//! vouched for also holds the professional and the provider of another
+//! Member State it relays, as it asserts them ([`Relayed`]), and the
+//! correlation identifier its connector sent.
 
 use std::fmt;
 
+use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
@@ -81,6 +85,16 @@ pub struct Caller {
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
+    /// Whether the issuer that vouched for the caller is declared a national
+    /// contact point.
+    contact_point: bool,
+    /// The professional and the provider the contact point relays, when its
+    /// token carries every Implementing Regulation (EU) 2026/2099 Annex
+    /// attribute.
+    relayed: Option<Box<Relayed>>,
+    /// The correlation identifier the contact point's connector sent, when
+    /// its issuer declares the header and the request carries it.
+    correlation: Option<String>,
 }
 
 impl fmt::Debug for Caller {
@@ -98,6 +112,8 @@ impl fmt::Debug for Caller {
             .field("confined", &self.patient.is_some())
             .field("assurance", &self.assurance)
             .field("acting", &self.acting)
+            .field("contact_point", &self.contact_point)
+            .field("relayed", &self.relayed)
             .finish_non_exhaustive()
     }
 }
@@ -245,7 +261,50 @@ impl Caller {
             professional: Professional::default(),
             assurance: None,
             acting: Acting::Person,
+            contact_point: false,
+            relayed: None,
+            correlation: None,
         }
+    }
+
+    /// Returns this caller, vouched for by an issuer declared a national
+    /// contact point, its token relaying `relayed` when it carries every
+    /// Annex attribute.
+    #[must_use]
+    pub fn relayed_by_contact_point(mut self, relayed: Option<Box<Relayed>>) -> Self {
+        self.contact_point = true;
+        self.relayed = relayed;
+        self
+    }
+
+    /// Returns whether the issuer that vouched for the caller is declared a
+    /// national contact point, whose requests are served with consent
+    /// exclusions withheld.
+    #[must_use]
+    pub fn is_contact_point(&self) -> bool {
+        self.contact_point
+    }
+
+    /// Returns the professional and the provider a contact point relays, as
+    /// it asserts them, when its token carries every Annex attribute.
+    #[must_use]
+    pub fn relayed(&self) -> Option<&Relayed> {
+        self.relayed.as_deref()
+    }
+
+    /// Returns this caller, its request carrying the correlation identifier
+    /// `correlation`.
+    #[must_use]
+    pub fn with_correlation(mut self, correlation: Option<String>) -> Self {
+        self.correlation = correlation;
+        self
+    }
+
+    /// Returns the correlation identifier the contact point's connector sent,
+    /// when it sent one.
+    #[must_use]
+    pub fn correlation(&self) -> Option<&str> {
+        self.correlation.as_deref()
     }
 
     /// Returns this caller, its token stating `professional`.

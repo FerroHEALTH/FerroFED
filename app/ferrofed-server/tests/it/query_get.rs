@@ -29,7 +29,8 @@ use crate::facade::{
     received, registry, statuses, wire,
 };
 use crate::request_log::logged;
-use crate::support::{call, error_body, request_lines, stable_claims};
+use crate::support::conveyed::stable_claims;
+use crate::support::{call, error_body, request_lines};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

@@ -168,9 +168,10 @@ struct Membership {
 /// candidate it does not deny is not cleared by that, and neither is one
 /// localization named: its node checks consent itself (N26, N27, §14.3).
 ///
-/// A deployment that does not disclose consent exclusions
-/// ([`Federation::discloses_consent`]) still never sends a denied candidate a
-/// request, but resolves it with the others and reports it as a member the
+/// A request served without disclosing consent exclusions, `disclosed`
+/// `false` ([`Federation::discloses_consent_to`]), still never sends a
+/// denied candidate a request, but resolves it with the others and reports
+/// it as a member the
 /// cross-reference does not know the patient at: `not-resolved`, with the
 /// one error text such a member carries there, or the resolver's own failure
 /// where it could not answer. That status clears `complete` and fails
@@ -195,7 +196,7 @@ pub async fn patient(
     federation: &Federation,
     selection: Selection<'_>,
     (query, requester, on_behalf): (&PatientQuery, Option<&Requester>, &OnBehalfOf),
-    deadline: Instant,
+    (deadline, disclosed): (Instant, bool),
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
     let mut membership = membership(federation.snapshot(), selection);
@@ -228,7 +229,6 @@ pub async fn patient(
         }
         _ => consent::Prefiltered::default(),
     };
-    let disclosed = federation.discloses_consent();
     plan = settle_denied(plan, &mut membership.asked, &consented, disclosed)?;
     if disclosed {
         candidates.retain(|member| !consented.denied.contains(member));
