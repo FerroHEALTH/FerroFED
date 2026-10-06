@@ -592,7 +592,9 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>, disclosed: bool) -> Settled {
             Answer::Absent => continue,
             Answer::ConsentRefused if !disclosed => continue,
             Answer::ConsentRefused => Silence::Erred(StatusCode::FORBIDDEN),
-            Answer::Erred(status) => Silence::Erred(status),
+            Answer::Erred(status) | Answer::Failed(ForwardError::Oversized { status, .. }) => {
+                Silence::Erred(status)
+            }
             Answer::Abandoned
             | Answer::Failed(
                 ForwardError::TimeOut { .. }

@@ -14,6 +14,7 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
+use super::oversized::Oversized;
 use super::reported::{self, chain, excerpt_of};
 use super::{Contact, DispatchError, DispatchOptions, NodeReply, dpop};
 use crate::hygiene::Withheld;
@@ -86,11 +87,30 @@ pub(super) fn answered(
 /// `options` withholds.
 ///
 /// A `403` whose body carries one of `refusal_codes`, the endpoint's
-/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). A
+/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). An
+/// answer the engine stopped reading at the gateway's bound is `node-error`
+/// with the node's status ([`Oversized`], §11.1). A
 /// deadline or a missing proof the client says came after a request of the
 /// call left ([`dpop::sent_before`]) is read as that request's, never as
 /// one never sent.
 pub(super) fn failed(
+    (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
+    error: ClientError,
+    latency_ms: u64,
+    options: &DispatchOptions,
+) -> Result<NodeReply, DispatchError> {
+    match Oversized::of_client_error(&error) {
+        Some(over) => Ok(node_error(
+            (latency_ms, over.status()),
+            text(over.to_string()),
+        )),
+        None => unread((endpoint, refusal_codes), error, latency_ms, options),
+    }
+}
+
+/// The reply, or the gateway-side error, for a call that reached no
+/// documented answer and no answer past the bound, as [`failed`] reads it.
+fn unread(
     (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
     error: ClientError,
     latency_ms: u64,

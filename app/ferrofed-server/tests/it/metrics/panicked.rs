@@ -23,15 +23,14 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::federation::Federation;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::{
-    Credentials, CredentialsError, CredentialsProvider, ReqwestTransport,
-};
+use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
 use wiremock::matchers::any;
 use wiremock::{Mock, ResponseTemplate};
 
@@ -72,7 +71,7 @@ async fn a_fan_out_task_that_panics_fails_the_upload_and_blames_no_member() -> T
     let a = member().await;
     let b = member().await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let panicking: SharedCredentials = Arc::new(Panicking);
     let credentials = BTreeMap::from([(EndpointId::new("node-b-pub")?, panicking)]);
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)?;

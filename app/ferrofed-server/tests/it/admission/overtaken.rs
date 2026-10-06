@@ -16,12 +16,12 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::admission::report::{Condition, Verdict};
 use ferrofed_server::federation::Federation;
+use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::ReqwestTransport;
 use wiremock::matchers::any;
 use wiremock::{Mock, ResponseTemplate};
 
@@ -38,7 +38,7 @@ async fn a_check_the_budget_overtook_names_a_call_never_sent_and_records_nothing
         .mount(&a)
         .await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), unreachable::BASE, ""))?;
-    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     // One nanosecond per node: every call's deadline has passed before the
     // client checks it, so none leaves the gateway.
