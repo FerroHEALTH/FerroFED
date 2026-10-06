@@ -32,6 +32,7 @@ use super::OBLIGATION_EXTENSION;
 use super::Obligation;
 use super::ObligationProfile;
 use super::PackageId;
+use super::ResourceProfile;
 
 /// The `package.json` members the model keeps.
 #[derive(Debug, Deserialize)]
@@ -45,6 +46,7 @@ struct Manifest {
 #[serde(default, rename_all = "camelCase")]
 struct Head {
     resource_type: Option<String>,
+    url: Option<String>,
 }
 
 /// The `StructureDefinition` members the model reads.
@@ -53,6 +55,7 @@ struct Head {
 struct StructureDefinition {
     url: String,
     name: String,
+    version: Option<String>,
     kind: Option<String>,
     derivation: Option<String>,
     base_definition: Option<String>,
@@ -82,9 +85,10 @@ struct ElementDefinition {
 
 /// One `ElementDefinition.type`.
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 struct TypeRef {
     code: String,
+    target_profile: Vec<String>,
 }
 
 /// One extension, with the two value types an obligation carries.
@@ -100,9 +104,55 @@ struct Extension {
 
 /// Reads `archive` into a dataset model.
 pub(super) fn package(archive: impl Read) -> Result<DatasetModel, DatasetError> {
+    let (package, mut definitions) = definitions(archive, |_| true)?;
+    definitions.retain(|definition| definition.kind.as_deref() == Some("logical"));
+    assemble(package, definitions)
+}
+
+/// Reads the one `StructureDefinition` of `archive` at the canonical `url`.
+pub(super) fn resource_profile(
+    archive: impl Read,
+    url: &str,
+) -> Result<ResourceProfile, DatasetError> {
+    let (package, definitions) = definitions(archive, |head| head.url.as_deref() == Some(url))?;
+    let mut definitions = definitions.into_iter();
+    let definition = match (definitions.next(), definitions.next()) {
+        (Some(definition), None) => definition,
+        (Some(_), Some(_)) => {
+            return Err(DatasetError::DuplicateUrl {
+                url: url.to_owned(),
+            });
+        }
+        (None, _) => {
+            return Err(DatasetError::MissingProfile {
+                url: url.to_owned(),
+            });
+        }
+    };
+    let snapshot = definition
+        .snapshot
+        .ok_or_else(|| DatasetError::MissingSnapshot {
+            url: definition.url.clone(),
+        })?;
+    let elements = elements(&definition.url, snapshot.element, |_| Ok(()))?;
+    Ok(ResourceProfile {
+        package,
+        url: definition.url,
+        name: definition.name,
+        version: definition.version,
+        elements,
+    })
+}
+
+/// Reads the manifest of `archive` and every `StructureDefinition` whose
+/// head `keep` admits, in archive order.
+fn definitions(
+    archive: impl Read,
+    mut keep: impl FnMut(&Head) -> bool,
+) -> Result<(PackageId, Vec<StructureDefinition>), DatasetError> {
     let mut tarball = tar::Archive::new(GzDecoder::new(archive));
     let mut manifest = None;
-    let mut logical = Vec::new();
+    let mut definitions = Vec::new();
     for entry in tarball.entries().map_err(unreadable)? {
         let mut entry = entry.map_err(unreadable)?;
         if !entry.header().entry_type().is_file() {
@@ -119,23 +169,20 @@ pub(super) fn package(archive: impl Read) -> Result<DatasetModel, DatasetError> 
             manifest = Some(parse::<Manifest>(&archived, &bytes)?);
             continue;
         }
-        if parse::<Head>(&archived, &bytes)?.resource_type.as_deref() != Some("StructureDefinition")
-        {
+        let head = parse::<Head>(&archived, &bytes)?;
+        if head.resource_type.as_deref() != Some("StructureDefinition") || !keep(&head) {
             continue;
         }
-        let definition = parse::<StructureDefinition>(&archived, &bytes)?;
-        if definition.kind.as_deref() == Some("logical") {
-            logical.push(definition);
-        }
+        definitions.push(parse::<StructureDefinition>(&archived, &bytes)?);
     }
     let manifest = manifest.ok_or(DatasetError::MissingManifest)?;
-    assemble(
+    Ok((
         PackageId {
             name: manifest.name,
             version: manifest.version,
         },
-        logical,
-    )
+        definitions,
+    ))
 }
 
 /// Builds the model from every logical definition, in any order.
@@ -236,6 +283,11 @@ fn element(url: &str, raw: ElementDefinition) -> Result<Element, DatasetError> {
     Ok(Element {
         path: ElementPath(id),
         cardinality: Cardinality { min, max },
+        profiles: raw
+            .types
+            .iter()
+            .flat_map(|reference| reference.target_profile.iter().cloned())
+            .collect(),
         types: raw
             .types
             .into_iter()

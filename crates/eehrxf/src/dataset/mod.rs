@@ -157,6 +157,7 @@ pub struct Element {
     path: ElementPath,
     cardinality: Cardinality,
     types: Vec<String>,
+    profiles: Vec<String>,
     short: Option<String>,
 }
 
@@ -179,6 +180,14 @@ impl Element {
     #[must_use]
     pub fn types(&self) -> &[String] {
         &self.types
+    }
+
+    /// Returns the canonical URLs of the profiles the element's types are
+    /// constrained to, in package order, each as written, a `|version`
+    /// suffix included: the `targetProfile` of a reference type.
+    #[must_use]
+    pub fn target_profiles(&self) -> &[String] {
+        &self.profiles
     }
 
     /// Returns the element's short label, when it carries one.
@@ -455,6 +464,75 @@ impl DatasetModel {
     }
 }
 
+/// One resource profile of a FHIR package, read for its snapshot: the
+/// element ids, slices included, a crosswalk names in the exchange format.
+///
+/// The HL7 Europe guides constrain a FHIR resource (`Composition`) with a
+/// `StructureDefinition` of kind `resource` and derivation `constraint`,
+/// whose snapshot names every slice by element id
+/// (`Composition.section:sectionAllergies.entry:allergyOrIntolerance`) and
+/// the profiles each reference may target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceProfile {
+    package: PackageId,
+    url: String,
+    name: String,
+    version: Option<String>,
+    elements: Elements,
+}
+
+impl ResourceProfile {
+    /// Reads the profile at the canonical `url` from a FHIR package archive,
+    /// the gzip-compressed tarball a FHIR package registry serves.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DatasetError`] when the archive cannot be read, carries no
+    /// manifest, holds a JSON file that does not parse, holds no
+    /// `StructureDefinition` at `url` ([`DatasetError::MissingProfile`]) or
+    /// two of them, or holds one with no snapshot, an element with no
+    /// cardinality, or an element id given twice.
+    pub fn read(archive: impl Read, url: &str) -> Result<Self, DatasetError> {
+        read::resource_profile(archive, url)
+    }
+
+    /// Returns the package the profile was read from.
+    #[must_use]
+    pub const fn package(&self) -> &PackageId {
+        &self.package
+    }
+
+    /// Returns the canonical URL of the profile.
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Returns the profile's computable name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the profile's business version, when it carries one.
+    #[must_use]
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
+
+    /// Returns every element of the profile's snapshot, in package order.
+    #[must_use]
+    pub fn elements(&self) -> &[Element] {
+        &self.elements.list
+    }
+
+    /// Returns the element of the snapshot whose id is `id`, when it has one.
+    #[must_use]
+    pub fn element(&self, id: &str) -> Option<&Element> {
+        self.elements.get(id)
+    }
+}
+
 /// Why a package does not give a dataset model.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -547,6 +625,13 @@ pub enum DatasetError {
         url: String,
         /// The element id.
         path: String,
+    },
+    /// The package holds no `StructureDefinition` at the canonical URL asked
+    /// for.
+    #[error("the package holds no StructureDefinition {url}")]
+    MissingProfile {
+        /// The URL.
+        url: String,
     },
     /// The package lacks the model or the profile a category names.
     #[error("the package holds no model {model} with the profile {obligations} over it")]

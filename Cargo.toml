@@ -52,7 +52,7 @@ ihe-iti = { path = "crates/ihe-iti", version = "0.0.30" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.21" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 ehds-logging = { path = "crates/ehds-logging", version = "0.0.4" }
-eehrxf = { path = "crates/eehrxf", version = "0.0.2" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.4" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }

@@ -16,6 +16,10 @@
 //!   element;
 //! - [`category`]: the priority categories this build carries, one Cargo
 //!   feature each, and the logical model and obligations profile of each;
+//! - [`crosswalk`]: per category, the crosswalk from the Xt-EHR element
+//!   paths to the eHealth Network element ids and to the elements and slices
+//!   of the HL7 Europe profile, with the FHIRconnect contexts admitted to
+//!   feed each, checked against the packages it names;
 //! - `mapping` (feature `openehr`, which turns on `fhir-r4`): a FHIRconnect
 //!   1.0.0 mapping, compiled once against an operational template and run in
 //!   process over a canonical-JSON composition, answering FHIR R4 resources
@@ -45,6 +49,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod category;
+pub mod crosswalk;
 pub mod dataset;
 #[cfg(feature = "openehr")]
 pub mod mapping;
