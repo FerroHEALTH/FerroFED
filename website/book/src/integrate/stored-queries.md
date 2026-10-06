@@ -50,6 +50,10 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - The answer is `200` with `Location` naming the stored version, as a
   reference relative to the request URL, because the gateway does not know
   the base URL its clients use (§4.1).
+- The namespace `eu.ferrofed.eehrxf`, and every namespace nested under it,
+  in any letter case, holds the gateway's own queries
+  ([the gateway's own queries](#the-gateways-own-queries)). A `PUT` there is
+  a `409` (`stored-query-reserved`) at any version, and nothing is stored.
 - A deployment may run the registry read-only, its definitions published by
   its operator. Every `PUT` there is a `405` (`stored-query-read-only`) with
   `Allow: GET, OPTIONS`, and `OPTIONS` on the path lists no `PUT`; reading
@@ -107,6 +111,44 @@ definitions](templates-and-demographics.md#templates-and-definitions)). Without 
 `POST {base}/v1/query/{name}` answer `501`.
 
 See how it works: [definitions and stored queries](../how-it-works/definitions.md).
+
+## The gateway's own queries
+
+Wherever the registry is offered, it also holds the gateway's own stored
+queries, read-only, under the namespace `eu.ferrofed.eehrxf` at the one
+version `1.0.0`. ITS-REST names a stored query `[{namespace}::]{query-name}`,
+the namespace "in a form of a reverse domain name", so the gateway's sits
+under the reverse of `ferrofed.eu`. Today they are the patient summary's
+section queries, one per section openEHR content feeds:
+`eu.ferrofed.eehrxf::patient-summary-{section}`, where `{section}` is
+`allergies-and-intolerances`, `problems`, `medication-summary`,
+`medical-devices-and-implants`, `procedures`, `immunisations`,
+`social-history`, `pregnancy-history`, `advance-directives`,
+`observation-results` or `care-plans`.
+
+- List them with `GET {base}/v1/definition/query/eu.ferrofed.eehrxf::` and
+  read one as any other; `saved` is the day its version was fixed.
+- Run one by name, binding the patient and the namespace that issued the
+  identifier:
+
+  ```http
+  POST {base}/v1/query/eu.ferrofed.eehrxf::patient-summary-problems
+  Content-Type: application/json
+
+  {"query_parameters": {"patient": "12345", "namespace": "urn:oid:2.999.1"}}
+  ```
+
+  Each row is one composition that contains one of the section's archetypes:
+  the composition, its uid and its template id, from every member, with
+  each member's status in `meta.federation`. No node receives the identifier.
+- No `PUT` stores into the namespace, and a version there never changes
+  (§12.7, N44). A store that holds a definition there, from a restore, a
+  manual insert or a definition file, refuses the start, and
+  `ferrofed config check` refuses such a definition file, naming the
+  definition and never its text.
+
+Which archetypes select each section, and the sections no query feeds, are
+listed in the [clinical safety risk file](../evaluate/clinical-safety.md#the-section-queries).
 
 ## Distributing a stored query
 

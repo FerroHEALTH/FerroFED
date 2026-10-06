@@ -18,7 +18,9 @@
 //! and `ehds-logging`, reach neither each other nor the application, only the
 //! server links both, and the engine compiles neither, nor any FHIR model
 //! (#684, #730). `eehrxf`'s FHIR R4 serialisation compiles no openEHR crate
-//! without its `openehr` mapping feature (#730).
+//! without its `openehr` mapping feature (#730). The component's federation
+//! half, `ferrofed-eehrxf`, reaches the component, the component reaches
+//! nothing of FerroFED, and only the server links the half (#776).
 //!
 //! The checks read the graph with `cargo tree`, so they hold from the
 //! placeholder modules on and turn red the day a dependency edge would break
@@ -500,6 +502,47 @@ fn the_fhir_serialisation_alone_compiles_no_openehr() -> Result<(), Box<dyn Erro
     assert!(
         breaches.is_empty(),
         "{INTEROPERABILITY} with {SERIALISATION} alone compiles openEHR, which only its mapping feature may: {breaches:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_interoperability_glue_sits_between_the_server_and_the_component()
+-> Result<(), Box<dyn Error>> {
+    let mut checked = members("crates")?;
+    checked.extend(members("app")?);
+    checked.extend(members("tools")?);
+    assert!(
+        checked.contains(INTEROPERABILITY_GLUE),
+        "the crate map lost {INTEROPERABILITY_GLUE}: {checked:?}"
+    );
+    let glue = closure(INTEROPERABILITY_GLUE)?;
+    assert!(
+        glue.contains(INTEROPERABILITY_GLUE) && glue.contains(INTEROPERABILITY),
+        "cargo tree for {INTEROPERABILITY_GLUE} did not list it or the component, so its output was not read"
+    );
+    let component = closure(INTEROPERABILITY)?;
+    let mut breaches: Vec<String> = checked
+        .iter()
+        .filter(|name| name.as_str() != INTEROPERABILITY && component.contains(name.as_str()))
+        .filter(|name| !STANDALONE.contains(&name.as_str()))
+        .map(|name| format!("{INTEROPERABILITY} reaches {name}"))
+        .collect();
+    for member in &checked {
+        if member == APPLICATION || member == INTEROPERABILITY_GLUE {
+            continue;
+        }
+        if closure(member)?.contains(INTEROPERABILITY_GLUE) {
+            breaches.push(format!("{member} reaches {INTEROPERABILITY_GLUE}"));
+        }
+    }
+    assert!(
+        breaches.is_empty(),
+        "the component links FerroFED, or a crate other than the server links its federation half (Art 2(2)(n)): {breaches:?}"
     );
     Ok(())
 }

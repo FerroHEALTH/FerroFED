@@ -15,8 +15,10 @@
 //! insert or an older version, so [`open`] wraps every backend in
 //! [`Admitted`]: every definition a backend reads passes the admission a
 //! `PUT` passes ([`admit`]), and a read holding one that fails it is
-//! refused, so that definition is never served or run. No specification
-//! governs the storage: our own design.
+//! refused, so that definition is never served or run. Under that check,
+//! [`reserved::Reserved`] adds the gateway's own read-only definitions to
+//! every read and refuses a store that holds one in their namespace. No
+//! specification governs the storage: our own design.
 
 use std::fmt;
 use std::ops::Range;
@@ -34,6 +36,7 @@ pub mod embedded;
 pub mod files;
 #[cfg(feature = "postgres")]
 pub mod postgres;
+pub mod reserved;
 pub mod schema;
 
 /// Why the registry refuses a definition's text.
@@ -149,8 +152,11 @@ impl fmt::Debug for Admitted {
     }
 }
 
-/// Opens the store `store` names, every definition it reads admitted under
-/// `context` as a `PUT` would admit it ([`Admitted`]).
+/// Opens the store `store` names, admitting what it reads under `context`.
+///
+/// The gateway's own read-only definitions sit beside it
+/// ([`reserved::Reserved`]), and every definition it reads is admitted as a
+/// `PUT` would admit it ([`Admitted`]).
 ///
 /// # Errors
 ///
@@ -172,5 +178,35 @@ pub fn open(store: &Store, context: &Context) -> Result<Box<dyn DefinitionStore>
             )));
         }
     };
-    Ok(Box::new(Admitted::new(opened, context.clone())))
+    let reserved = reserved::Reserved::new(opened)?;
+    Ok(Box::new(Admitted::new(Box::new(reserved), context.clone())))
+}
+
+#[cfg(test)]
+mod tests {
+    use ferrofed_eehrxf::patient_summary::Section;
+    use openehr_federation::aql::definition::SubjectOrigin;
+    use openehr_federation::aql::{Context, Targeting};
+
+    use super::admit;
+
+    // NOTE: §12.7, §5.4.1, N33; each section query passes the admission a PUT
+    // passes, names its patient by a parameter, and is held as it is printed.
+    #[test]
+    fn every_section_query_passes_the_stored_query_admission() {
+        for context in [
+            Context::new(Targeting::AskAll),
+            Context::new(Targeting::AskAll).with_default_namespace("urn:oid:2.999.1"),
+        ] {
+            for section in Section::ALL {
+                let admitted = admit(&section.aql(), &context).unwrap();
+                assert_eq!(
+                    Some(SubjectOrigin::Parameter),
+                    admitted.subject(),
+                    "{section:?}"
+                );
+                assert_eq!(section.aql(), admitted.aql(), "{section:?}");
+            }
+        }
+    }
 }

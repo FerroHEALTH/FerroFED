@@ -220,6 +220,20 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 International Patient Summary | package `hl7.fhir.uv.ips` 2.0.0, pin-set digest `b26ce0cf1012b4a97f3678efa9ece6198b4b353f85ec0090a1de057643b31c5a`, tarball sha256 `b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979`, the version `hl7.fhir.eu.eps` 1.0.0-ballot depends on | `scripts/vendor/eehrxf.sh`, `docs/specs/hl7-ips/PROVENANCE.md` |
 | IHE Pharmacy Medication Prescription and Dispense | package `ihe.pharm.mpd.r4` 1.0.0-comment-2, pin-set digest `12effdefce443cb7b61ff9b7f39a4431b54d9267becdeef7d3505770ddc8398e`, tarball sha256 `05eda0d1871d2980cb13023d18a5a9618c9945c3a85cf721c14c5e989e0d3776`, the version `hl7.fhir.eu.base` 2.0.1, `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.mpd` 1.0.0 depend on | `scripts/vendor/eehrxf.sh`, `docs/specs/ihe-pharm-mpd/PROVENANCE.md` |
 
+### openEHR clinical models (#776)
+
+The openEHR International Patient Summary template of the openEHR
+international Clinical Knowledge Manager, whose sections name the archetypes
+the patient summary's stored section queries select compositions by. CKM
+publishes no git commit or release feed for a template, so each artefact is
+pinned by its REST URL and sha256 through `scripts/vendor/lib/pinned.sh` in
+`scripts/vendor/openehr-ckm.sh` and committed verbatim (CC BY-SA, the licence
+the openEHR Foundation gives the clinical models CKM hosts).
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| openEHR CKM International Patient Summary template | template `937fca6c-ec24-4c0f-8986-623843b6ebca`, CKM cid `1013.26.376` asset version 1 (DRAFT), pin-set digest `ac31d1254c60a728686eb84e9dd78084de8b05ea9082342c7ed5404b7843f736`, OET sha256 `e293bc003fc787e95318be0e18f32ae7ca8903ef8475ed7644b86258a59e5a34` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-ips/PROVENANCE.md` |
+
 ## openEHR model crates (crates.io)
 
 The openEHR surface comes from the published `openehr-*` crates, consumed by

@@ -232,7 +232,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `ihe-iti`; `nl/`, behind feature `nl`, the NVI localizer and the Mitz
   pre-filter over `nl-generic-functions`; and at the top `session`, the
   resolution bindings per verified caller, `fhir`, the one IHE FHIR client
-  and TLS type, and `dev`, the development cross-reference) and
+  and TLS type, and `dev`, the development cross-reference),
+  `ferrofed-eehrxf` (the interoperability component's federation half:
+  the patient summary's stored section queries, read-only under the
+  reserved namespace `eu.ferrofed.eehrxf`, which the server's registry
+  holds beside a deployment's own, #776) and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, the calls
   to one node in `single_node`, the onward grants in `onward::grant`
   (client credentials, token exchange, FAPI 2.0, and the Nuts grant under

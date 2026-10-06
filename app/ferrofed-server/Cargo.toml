@@ -59,6 +59,10 @@ ehds-logging.workspace = true
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
 # the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
 ferrofed-engine.workspace = true
+# The interoperability component's federation half (#776): the patient
+# summary's stored section queries, held read-only under the reserved
+# namespace beside the deployment's own definitions.
+ferrofed-eehrxf.workspace = true
 ferrofed-identity.workspace = true
 ferrofed-registry.workspace = true
 # The ITI-20 audit repository of the XCPD localizer (#418): its syslog

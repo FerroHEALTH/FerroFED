@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-eehrxf"
+description = "The federation half of the European interoperability software component: the stored queries that select each patient summary section's compositions from the members"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+# FerroFED's own glue lives under app/ and is never published
+# (no specification governs this: our own design).
+publish = false
+
+[dependencies]
+# The patient summary crosswalk, whose sections the stored queries feed; the
+# component itself links nothing of FerroFED.
+eehrxf = { workspace = true, features = ["patient-summary"] }
+# The qualified name, version and held form of a stored definition (§12.7,
+# N44).
+ferrofed-registry.workspace = true
+# The `saved` instant of a reserved definition.
+jiff.workspace = true
+# Every query is built as an AQL syntax tree and printed with
+# printer::to_aql, never spliced.
+openehr-query.workspace = true
+
+[lints]
+workspace = true

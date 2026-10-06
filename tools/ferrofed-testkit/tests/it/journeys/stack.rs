@@ -38,9 +38,16 @@ const REGISTERED: u64 = 99;
 /// member's own `system_id`, one more than a page of the integrity view.
 pub(crate) const ROUTES: u64 = REGISTERED + 2;
 
-/// How many stored queries the gateway holds: one more than a page of the
-/// stored-query view.
+/// How many stored queries the deployment's definition files hold.
 pub(crate) const STORED: u64 = 101;
+
+/// How many stored-query versions the gateway holds: the deployment's and
+/// its own read-only section queries, more than a page of the stored-query
+/// view.
+pub(crate) fn held() -> Result<u64, Box<dyn Error>> {
+    let own = u64::try_from(ferrofed_eehrxf::patient_summary::Section::ALL.len())?;
+    Ok(STORED + own)
+}
 
 /// The synthetic patient the query journeys name, visibly synthetic, under
 /// the example OID arc.

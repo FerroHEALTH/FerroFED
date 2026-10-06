@@ -19,7 +19,7 @@ use crate::journeys::browser::{Browser, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
-use crate::journeys::stack::{ROUTES, STORED, Stack};
+use crate::journeys::stack::{ROUTES, Stack, held};
 
 /// The most rows a page of a view shows.
 const PAGE: u64 = 100;
@@ -125,7 +125,7 @@ async fn each_view_renders_and_pages_through_the_hydrated_console() -> Result<()
 
         browser.follow("Stored queries").await?;
         browser.titled(&titled("Stored queries")).await?;
-        pages(browser, &stack, ("/stored-queries", HELD, STORED)).await?;
+        pages(browser, &stack, ("/stored-queries", HELD, held()?)).await?;
 
         browser.follow("Self-description").await?;
         browser.titled(&titled("Self-description")).await?;
@@ -162,9 +162,9 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
             .goto(&stack.url(&format!("/stored-queries?offset={PAGE}")))
             .await?;
         browser.titled(&titled("Stored queries")).await?;
-        page(browser, HELD, PAGE, STORED).await?;
+        page(browser, HELD, PAGE, held()?).await?;
         browser.follow("Previous page").await?;
-        page(browser, HELD, 0, STORED).await?;
+        page(browser, HELD, 0, held()?).await?;
         browser.console_clean("the stored-query view").await?;
 
         browser.goto(&stack.url("/federation")).await?;

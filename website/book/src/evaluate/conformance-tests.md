@@ -532,7 +532,7 @@ with no marked test is not listed.
 
 ## CP-40
 
-45 tests.
+49 tests.
 
 - `app/ferrofed-server/tests/it/definition.rs`: `the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_node`
 - `app/ferrofed-server/tests/it/e2e/stored_postgres.rs` (e2e): `a_row_naming_its_patient_by_a_literal_is_never_served_or_run`, `a_version_one_instance_stored_is_run_by_name_at_the_other`, `two_gateways_racing_one_new_version_store_exactly_one`
@@ -543,6 +543,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/stored/files.rs`: `a_definition_file_is_read_listed_and_run_by_name`, `a_held_version_put_naming_members_at_a_read_only_registry_is_a_405`, `a_put_at_a_read_only_registry_is_a_405_naming_the_read_methods`, `the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothing`
 - `app/ferrofed-server/tests/it/stored/held.rs`: `a_held_definition_naming_its_patient_by_a_literal_refuses_the_start`, `a_literal_a_shared_store_gains_after_the_start_is_never_served`
 - `app/ferrofed-server/tests/it/stored/invocation.rs`: `a_failing_member_fails_the_stored_query_and_the_envelope_still_names_it`, `a_stored_query_invoked_by_name_fans_out_and_names_the_gateways_definition`, `no_version_runs_the_latest_and_a_prefix_runs_the_highest_it_matches`, `query_parameters_bind_into_the_stored_query_as_if_submitted_inline`
+- `app/ferrofed-server/tests/it/stored/reserved.rs`: `a_put_into_the_reserved_namespace_is_refused_and_the_held_text_stands`, `a_store_holding_a_definition_in_the_reserved_namespace_refuses_the_start`, `each_section_query_runs_by_name_and_no_patient_identifier_reaches_a_node`, `the_section_queries_are_listed_and_read_at_their_immutable_version`
 - `app/ferrofed-server/tests/it/stored/storage.rs`: `a_definition_naming_the_patient_by_a_literal_is_refused_at_put`, `a_definition_the_rewrite_refuses_whatever_is_bound_is_refused_at_put`, `a_second_put_of_a_held_name_and_version_is_refused_and_the_text_stands`, `a_stored_definition_reads_back_as_an_its_rest_stored_query_and_lists`, `a_stored_version_survives_a_restart_and_stays_immutable`, `the_store_holds_no_identifier_after_a_definition_is_stored_and_invoked`
 - `app/ferrofed-server/tests/it/stored_fan_out.rs`: `a_targeted_definition_is_refused_for_distribution_and_stays_executable`, `an_invocation_runs_the_registry_aql_even_where_a_nodes_copy_differs`, `config_check_refuses_definition_fan_out_without_the_registry`, `options_declares_definition_fan_out_only_where_offered_beside_the_registry`, `the_drift_report_names_matching_differing_and_missing_members`, `with_every_member_failing_the_registry_still_holds_the_definition`, `with_one_member_failing_the_distribution_is_partial_and_the_registry_holds_it`, `with_the_setting_off_a_get_naming_members_is_refused_and_reads_nothing`, `with_the_setting_off_a_put_naming_members_is_refused_and_stores_nothing`
 - `app/ferrofed-server/tests/it/stored_redistribution.rs`: `a_redistribution_every_member_rejects_is_a_424_and_the_registry_is_unchanged`, `a_redistribution_one_member_rejects_is_partial_and_the_registry_is_unchanged`, `a_second_put_of_a_held_version_is_refused_in_every_form`, `the_admin_action_exists_only_on_the_admin_listener`, `the_admin_action_reaches_a_member_admitted_after_the_distribution`, `the_admin_action_refuses_a_held_targeted_definition`, `the_admin_action_refuses_what_it_cannot_distribute_and_sends_nothing`, `the_admin_action_sends_the_held_version_to_the_member_that_missed_it`, `the_admin_listener_is_refused_off_loopback_without_allow_remote`, `without_distribution_offered_the_admin_action_is_refused`
@@ -607,7 +608,7 @@ with no marked test is not listed.
 
 ## Track 10
 
-20 tests.
+21 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
 - `app/ferrofed-server/tests/it/access/accessor.rs`: `the_professional_and_the_patient_reach_no_log_or_metric`
@@ -616,6 +617,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/probed_ehr_id.rs`: `a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe`, `a_read_whose_ehr_id_is_no_uuid_and_that_nothing_routes_is_refused_and_probes_nobody`, `an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed`
+- `app/ferrofed-server/tests/it/stored/reserved.rs`: `each_section_query_runs_by_name_and_no_patient_identifier_reaches_a_node`
 - `app/ferrofed-server/tests/it/traces/traceparent.rs`: `an_identifier_hidden_in_the_clients_trace_id_reaches_no_node_and_no_span`
 - `app/ferrofed-server/tests/it/track10/mock.rs`: `a_committed_dv_identifier_arrives_at_the_node_byte_identical`, `a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_nor_the_log`, `the_identifier_in_a_party_identified_predicate_reaches_no_node`, `the_identifier_in_a_projection_reaches_no_node`, `the_identifier_in_an_external_ref_predicate_reaches_no_node`, `the_identifier_in_the_ehr_id_slot_is_never_probed_at_a_node`, `the_identifier_in_the_query_string_or_a_header_reaches_no_node`, `the_identifier_on_the_single_node_route_reaches_no_node`
 
