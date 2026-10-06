@@ -260,7 +260,7 @@ them:
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
   mapping files you supply. The gateway does not serve it yet.
 
-Three of the manufacturer's obligations have a first answer:
+Five of the manufacturer's obligations have a first answer:
 
 - The running system names its manufacturer, with the postal address and the
   single point of contact (Art 30(1)(g)): `GET {base}/`, `OPTIONS {base}/`,
@@ -272,6 +272,14 @@ Three of the manufacturer's obligations have a first answer:
 - Every public text is reviewed against Art 28 at each release, and the
   completeness default, the budgets and the consent pre-filter are assessed
   against Annex II, point 2.5 ([Claims review](claims-review.md)).
+- The [information sheet](information-sheet.md) gives every item of Art
+  38(2), held to the pin matrix by a guard, and the
+  [instructions for use](../operate/instructions-for-use.md) cover
+  installation, the configuration of a deployment in the EU, maintenance
+  and the limitations (Art 30(1)(d), Art 32(2)(d), Annex III, point 1(j)).
+- The [clinical safety risk file](clinical-safety.md) names each hazard of
+  the two harmonised components with its control and the test that holds
+  it, for Annex II, point 1.1.
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519), in the v0.0.10

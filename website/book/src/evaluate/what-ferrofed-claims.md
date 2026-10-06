@@ -354,7 +354,9 @@ These are the ones to know before you deploy FerroFED; the
   no copy, so who reads the records and how long they are kept is the
   repository's. FerroFED ships no category map: until you declare one in
   `[access_log]`, the categories of the data an access reached are recorded
-  `ehds-unclassified`.
+  `ehds-unclassified`. The record does not yet name the professional's
+  identification or assurance level
+  ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).
 - **The caller may be an application.** Client authentication verifies an
   access token from an issuer you trust. Whether that token names the health
   professional, and at which assurance level, depends on the issuer; FerroFED
