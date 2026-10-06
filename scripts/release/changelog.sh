@@ -26,7 +26,11 @@
 #       the fragments, section by section, Upgrade notes first and then the Keep a
 #       Changelog order; moves
 #       the [Unreleased] link reference on and adds the version's; then
-#       `git rm`s the fragments. Exit 1 on any defect, with nothing written.
+#       `git rm`s the fragments. A release without a pre-release suffix also
+#       gets its support period: the section opens with the end date, five
+#       years from <date>, and SECURITY.md gets the version's row in its
+#       support table (Regulation (EU) 2024/2847 Art 13(8), (19)); the end
+#       date is printed. Exit 1 on any defect, with nothing written.
 #   changelog.sh --self-test
 #       Proves both modes over a stub repository.
 #
@@ -41,6 +45,11 @@ export LC_ALL=C
 readonly SECTIONS=(upgrade added changed deprecated removed fixed security)
 readonly FRAGMENT_DIR=changelog.d
 readonly NAME_RE='^[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.(upgrade|added|changed|deprecated|removed|fixed|security)\.md$'
+# The support period of a release, in years from its release date: the minimum
+# of Regulation (EU) 2024/2847 Art 13(8), third subparagraph. A longer period
+# changes this number, SECURITY.md and docs/release.md together.
+readonly SUPPORT_YEARS=5
+readonly SUPPORT_MARKER='<!-- support periods: rows above this line -->'
 
 die() {
   echo "changelog: $*" >&2
@@ -60,6 +69,20 @@ title() {
     return
   fi
   printf '%s%s' "$(tr '[:lower:]' '[:upper:]' <<<"${section:0:1}")" "${section:1}"
+}
+
+# support_end DATE: the last day of the support period of a release made on
+# DATE (YYYY-MM-DD), the same month and day SUPPORT_YEARS later. 29 February
+# becomes 1 March, so the period is never shorter than SUPPORT_YEARS years (no
+# specification governs the day: our own design).
+support_end() {
+  local date="$1" year
+  year=$((10#${date:0:4} + SUPPORT_YEARS))
+  if [[ "${date:5:5}" == 02-29 ]]; then
+    printf '%04d-03-01' "$year"
+    return
+  fi
+  printf '%04d-%s' "$year" "${date:5:5}"
 }
 
 # content_defect FILE: prints why FILE is no list item, or nothing when it is.
@@ -135,6 +158,18 @@ assemble() {
   base="$(sed -nE 's|^\[Unreleased\]: (.*)/compare/([^/]+)\.\.\.HEAD$|\1|p' CHANGELOG.md)"
   [[ -n "$prev" && -n "$base" ]] || die "CHANGELOG.md has no '[Unreleased]: <repository>/compare/<tag>...HEAD' link reference"
 
+  # A release placed on the market gets its support period; a pre-release
+  # rehearses the lane and gets none.
+  local support_end_date=""
+  if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    [[ -f SECURITY.md ]] || die "SECURITY.md is missing, so v$version has no support table to be listed in"
+    grep -q -F -x "$SUPPORT_MARKER" SECURITY.md || die "SECURITY.md has no support table ending in the line '$SUPPORT_MARKER'"
+    if grep -q -F "| v$version |" SECURITY.md; then
+      die "SECURITY.md already lists the support period of v$version"
+    fi
+    support_end_date="$(support_end "$date")"
+  fi
+
   work="$(mktemp -d)"
   # Global, so the EXIT trap still sees it after the function returns.
   assemble_work="$work"
@@ -182,6 +217,10 @@ assemble() {
   {
     sed -n "1,${start}p" CHANGELOG.md
     printf '\n## [%s] - %s\n' "$version" "$date"
+    if [[ -n "$support_end_date" ]]; then
+      printf '\nSupported until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
+        "$support_end_date" "$SUPPORT_YEARS" "$base"
+    fi
     for section in "${SECTIONS[@]}"; do
       [[ -s "$work/new.$section" ]] || continue
       printf '\n### %s\n\n' "$(title "$section")"
@@ -200,11 +239,24 @@ assemble() {
     fi
   } > "$out"
 
+  if [[ -n "$support_end_date" ]]; then
+    awk -v row="| v$version | $date | $support_end_date |" -v marker="$SUPPORT_MARKER" \
+      '$0 == marker { print row } { print }' SECURITY.md > "$work/SECURITY.md"
+  fi
+
   cat "$out" > CHANGELOG.md
+  if [[ -n "$support_end_date" ]]; then
+    cat "$work/SECURITY.md" > SECURITY.md
+  fi
   if [[ "${#fragments[@]}" -gt 0 ]]; then
     git rm -q -- ${fragments[@]+"${fragments[@]}"}
   fi
   echo "changelog: [$version] - $date assembled from ${#fragments[@]} fragment(s) and the [Unreleased] entries; review CHANGELOG.md and commit."
+  if [[ -n "$support_end_date" ]]; then
+    echo "changelog: v$version is supported until $support_end_date ($SUPPORT_YEARS years from $date); its row is added to SECURITY.md."
+  else
+    echo "changelog: $version is a pre-release, so it gets no support period."
+  fi
 }
 
 # trim FILE: FILE without its leading and trailing blank lines.
@@ -329,14 +381,33 @@ EOF
   fragment 7-y.changed.md '- Fragment 7-y.' '' ''
   fragment 5-x.security.md '- Fragment 5-x.'
   fragment 9-u.upgrade.md '- Upgrade fragment 9-u.'
+  printf '%s\n' '# Security' '' '| Release | Released | Supported until |' '| --- | --- | --- |' \
+    '| v0.0.1 | 2026-10-01 | 2031-10-01 |' "$SUPPORT_MARKER" '' '## Withdrawn' > "$work/SECURITY.md"
+  cp "$work/SECURITY.md" "$work/security.before"
   stub_git add -A
   stub_git commit -q -m "the stub"
+
+  # The end date: five years on, and 29 February never shortens the period.
+  [[ "$(support_end 2026-10-10)" == 2031-10-10 ]] || flunk "the end date of 2026-10-10 is $(support_end 2026-10-10)."
+  [[ "$(support_end 2028-02-29)" == 2033-03-01 ]] || flunk "the end date of 2028-02-29 is $(support_end 2028-02-29)."
+  [[ "$(support_end 2027-01-09)" == 2032-01-09 ]] || flunk "the end date of 2027-01-09 is $(support_end 2027-01-09)."
 
   expect "a version that is no version" 1 --assemble 0.0 2026-10-10
   expect "a date that is no date" 1 --assemble 0.0.2 10-10-2026
   expect "a missing argument" 2 --assemble 0.0.2
   expect "an existing version" 1 --assemble 0.0.1 2026-10-10
+  cp "$work/CHANGELOG.md" "$work/before"
+  grep -v -F -x "$SUPPORT_MARKER" "$work/security.before" > "$work/SECURITY.md"
+  expect "a SECURITY.md with no support table" 1 --assemble 0.0.2 2026-10-10
+  grep -q 'no support table' "$work/out" || flunk "the missing support table was not named."
+  cmp -s "$work/before" "$work/CHANGELOG.md" || flunk "a cut refused for its support table wrote CHANGELOG.md."
+  awk -v marker="$SUPPORT_MARKER" '$0 == marker { print "| v0.0.2 | 2026-10-09 | 2031-10-09 |" } { print }' \
+    "$work/security.before" > "$work/SECURITY.md"
+  expect "a version SECURITY.md already lists" 1 --assemble 0.0.2 2026-10-10
+  grep -q 'already lists' "$work/out" || flunk "the listed version was not named."
+  cp "$work/security.before" "$work/SECURITY.md"
   expect "the cut" 0 --assemble 0.0.2 2026-10-10
+  grep -q 'supported until 2031-10-10' "$work/out" || flunk "the cut did not print the end of the support period."
 
   cat > "$work/want" <<'EOF'
 # Changelog
@@ -344,6 +415,8 @@ EOF
 ## [Unreleased]
 
 ## [0.0.2] - 2026-10-10
+
+Supported until 2031-10-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](https://example.org/r/blob/main/SECURITY.md#supported-versions) says.
 
 ### Upgrade notes
 
@@ -386,6 +459,9 @@ EOF
     flunk "a fragment is still tracked after the cut."
   fi
   [[ -f "$work/$FRAGMENT_DIR/README.md" ]] || flunk "the cut removed the README."
+  awk -v marker="$SUPPORT_MARKER" '$0 == marker { print "| v0.0.2 | 2026-10-10 | 2031-10-10 |" } { print }' \
+    "$work/security.before" > "$work/want"
+  diff -u "$work/want" "$work/SECURITY.md" > "$work/out" || flunk "the cut did not add the support row to SECURITY.md."
   expect "a check after the cut" 0 --check
 
   # A second cut with nothing to release, and an [Unreleased] the cut cannot
@@ -393,6 +469,19 @@ EOF
   stub_git commit -q -a -m "the cut"
   expect "a release with no entry" 1 --assemble 0.0.3 2026-10-11
   grep -q 'would be empty' "$work/out" || flunk "the empty release was not named."
+
+  # A pre-release rehearses the lane: no support line, no SECURITY.md row.
+  cp "$work/SECURITY.md" "$work/security.before"
+  fragment 13-rc.added.md '- Fragment 13-rc.'
+  stub_git add -A
+  stub_git commit -q -m "a fragment for the rehearsal"
+  expect "a pre-release cut" 0 --assemble 0.0.3-rc.1 2026-10-11
+  grep -q 'gets no support period' "$work/out" || flunk "the pre-release cut did not say it has no support period."
+  if awk '/^## \[0\.0\.3-rc\.1\]/ { on = 1; next } /^## \[/ { on = 0 } on && /^Supported until/ { found = 1 } END { exit !found }' "$work/CHANGELOG.md"; then
+    flunk "the pre-release section carries a support period."
+  fi
+  cmp -s "$work/security.before" "$work/SECURITY.md" || flunk "the pre-release cut wrote SECURITY.md."
+  stub_git commit -q -a -m "the rehearsal"
   printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '### Improved' '' '- An entry.' '' \
     '[Unreleased]: https://example.org/r/compare/v0.0.2...HEAD' > "$work/CHANGELOG.md"
   cp "$work/CHANGELOG.md" "$work/before"

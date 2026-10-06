@@ -6,11 +6,24 @@
 The working checklist the manufacturer of FerroFED, Cadasto B.V., follows
 for a complaint, a non-conforming version and a serious incident, under
 Regulation (EU) 2025/327 Art 30(1)(i) to (o), Art 30(5), Art 43(5), Art 44
-and Art 45(1). The public account, with the quotations, is the book's
+and Art 45(1), and for an actively exploited vulnerability or a severe
+incident under Regulation (EU) 2024/2847 (the CRA) Art 14. The public
+account, with the quotations, is the book's
 [Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
-page; this page is what a maintainer does, step by step. The Regulation fixes
-the duties and the three-day limit; the steps that carry them out are our own
+page; this page is what a maintainer does, step by step. The Regulations fix
+the duties and the time limits; the steps that carry them out are our own
 design.
+
+## Who does what
+
+- **The owner** acts for Cadasto B.V. as FerroFED's manufacturer. The owner
+  decides whether an event is reportable, submits every notification to the
+  authorities, approves every advisory and user notice, and is the contact
+  the CSIRT and the market surveillance authorities deal with.
+- **The maintainers** triage reports, draft the notifications, the
+  advisories and the fix, and tell the owner at once of anything that may
+  be an actively exploited vulnerability, a severe incident or a
+  serious incident.
 
 The single point of contact is `info@cadasto.com` (Art 30(1)(g)). It is
 named in the running system from `app/ferrofed-registry/src/manufacturer.rs`,
@@ -107,6 +120,56 @@ days after" that (Art 44(7)).
    44(3)), within data protection rules.
 5. Carry on as for a non-conforming version from step 2, across every copy
    placed on the market in the Union (Art 44(4)).
+6. **CRA, separately.** Check the same day whether the event is also an
+   actively exploited vulnerability or a severe incident under the CRA (the
+   next section). Both sets of reports are made, each on its own clock.
+
+## An actively exploited vulnerability or a severe incident (CRA Art 14)
+
+CRA Art 14 applies from 11 September 2026 (Art 71(2)) to every release,
+those placed on the market before 11 December 2027 included (Art 69(3)).
+The clock starts when the manufacturer becomes aware. Every notification
+goes through the single reporting platform (Art 16(1)), at the end-point of
+the CSIRT the Netherlands designated as coordinator, the Member State of
+Cadasto B.V.'s main establishment, and is simultaneously accessible to
+ENISA (Art 14(1), (3), (7)).
+
+1. **Hour 0, on awareness.** Write down the date and hour. Decide whether
+   it is an actively exploited vulnerability, with "reliable evidence that a
+   malicious actor has exploited it in a system without permission of the
+   system owner" (Art 3(42)), or a severe incident having an impact on the
+   security of FerroFED (Art 14(5)). The owner decides. Open a draft GitHub
+   security advisory, which holds the record from here on.
+2. **Within 24 hours: the early warning** (Art 14(2)(a), (4)(a)). Name the
+   Member States where Cadasto B.V. knows FerroFED has been made available,
+   from its contracts. For an incident, say whether it is suspected of being
+   caused by unlawful or malicious acts.
+3. **Within 72 hours: the notification** (Art 14(2)(b), (4)(b)). The
+   releases concerned, the nature of the exploit and the vulnerability, or
+   an initial assessment of the incident; the corrective or mitigating
+   measures taken and those users can take; and how sensitive the
+   information is. Ask for the dissemination to be delayed only on the
+   grounds Art 16(2) allows.
+4. **Tell the users** (Art 14(8)). Publish the advisory once users can act
+   on it: the releases affected, the mitigation a deployment can apply now,
+   and the fixed release once there is one. For an actively exploited
+   vulnerability the advisory does not wait for the fix when a mitigation
+   exists. Write directly to every user known from a contract. Record the
+   date and the route.
+5. **Fix forward.** File the fix as a `Bug` at priority `Urgent` in the
+   current milestone and ship it as a patch release, as for a non-conforming
+   version.
+6. **Intermediate reports.** Answer any request of the CSIRT for a status
+   update (Art 14(6)).
+7. **The final report** (Art 14(2)(c), (4)(c)). For a vulnerability, no
+   later than 14 days after the corrective or mitigating measure is
+   available: the description, severity and impact, the malicious actor
+   where known, and the update. For an incident, within one month after
+   the notification of step 3: the description, severity and impact, the
+   type of threat or root cause, and the mitigation applied and ongoing.
+8. **EHDS and NIS 2.** Check the same day whether the event is also a
+   serious incident (the section above) and whether a NIS 2 notification is
+   due. Neither is covered by the CRA notifications.
 
 ## A request from an authority
 
