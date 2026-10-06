@@ -8,18 +8,24 @@
 //! select, by `POST` and by the ITS-REST `GET` form (§16.3 track 1; N1, N2,
 //! N17, N18; CP-1, CP-35).
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::{Federated, Gateway, answered, get, percent_encoded, post_aql};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::{as_count, undirected};
 use crate::conformance::{Failure, ensure, ensure_eq};
 
 /// The plain patient query a client sends, its one column aliased.
-#[must_use]
-pub fn plain_query(fixture: &Fixture) -> String {
-    format!(
-        "SELECT c/uid/value AS composition_uid FROM EHR e CONTAINS COMPOSITION c WHERE {}",
-        fixture.patient.predicate()
-    )
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn plain_query(fixture: &Fixture) -> Result<String, Failure> {
+    Ok(ClientQuery::parse(
+        "SELECT c/uid/value AS composition_uid FROM EHR e CONTAINS COMPOSITION c",
+    )?
+    .of_patient(&fixture.patient)?
+    .to_aql())
 }
 
 /// Holds that the plain patient query answers one single-CDR-shaped result.
@@ -35,7 +41,7 @@ pub async fn single_cdr_shaped<G: Gateway>(
     gateway: &G,
     fixture: &Fixture,
 ) -> Result<Federated, Failure> {
-    let aql = plain_query(fixture);
+    let aql = plain_query(fixture)?;
     let (posted, answer) =
         answered(gateway, post_aql(&aql, &[])?, "CP-1: the patient query").await?;
     ensure_eq(

@@ -24,7 +24,7 @@ use crate::conformance::scenarios::patient_compositions;
 ///
 /// Returns [`Failure`] naming the expectation that did not hold.
 pub async fn unauthenticated<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result<(), Failure> {
-    let anonymous = post_aql(&patient_compositions(fixture), &[])?;
+    let anonymous = post_aql(&patient_compositions(fixture)?, &[])?;
     ask_anonymous(gateway, anonymous).await?.expect(
         StatusCode::UNAUTHORIZED,
         "CP-17: the client authenticates to the gateway",

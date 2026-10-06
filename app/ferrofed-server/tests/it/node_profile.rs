@@ -26,6 +26,7 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::seed::{self, PatientId};
 use openehr_its::json::to_canonical_json;
 use openehr_its::rest::client::Credentials;
+use openehr_its::rest::generated::query::AdhocQueryExecute;
 use uuid::Uuid;
 use wiremock::matchers::{basic_auth, body_string_contains, method, path, path_regex};
 use wiremock::{Mock, ResponseTemplate};
@@ -548,6 +549,77 @@ async fn the_subjectless_check_names_the_ehr_it_created() -> TestResult {
 
     let finding = checks::subject_not_required(&interface(&server)?).await?;
     assert_eq!(&[EHR], finding.created(), "{finding:?}");
+    Ok(())
+}
+
+/// Holds that every query in `requests` names [`EHR`] as the value of its
+/// `ehr_id` parameter alone, never in the AQL text (AQL §Parameters;
+/// ITS-REST Query API `query_parameters`), and returns their AQL.
+fn ehr_id_as_a_parameter_alone(
+    requests: &[wiremock::Request],
+) -> Result<Vec<String>, Box<dyn Error>> {
+    let ehr_id = EHR.to_string();
+    let mut queries = Vec::new();
+    for request in requests
+        .iter()
+        .filter(|request| request.url.path() == "/v1/query/aql")
+    {
+        let body: AdhocQueryExecute = serde_json::from_slice(&request.body)?;
+        assert!(
+            !body.q.contains(&ehr_id),
+            "no ehr_id in the AQL: {}",
+            body.q
+        );
+        assert!(
+            body.q.contains("$ehr_id"),
+            "the AQL takes $ehr_id: {}",
+            body.q
+        );
+        let parameters = body.query_parameters.unwrap_or_default();
+        assert_eq!(
+            vec!["ehr_id"],
+            parameters.keys().collect::<Vec<_>>(),
+            "the ehr_id is the one parameter: {}",
+            body.q
+        );
+        assert_eq!(
+            Some(ehr_id.as_str()),
+            parameters.get("ehr_id").and_then(|value| value.as_str()),
+            "the parameter's value is the ehr_id"
+        );
+        queries.push(body.q);
+    }
+    Ok(queries)
+}
+
+#[tokio::test]
+async fn the_invocation_queries_carry_the_ehr_id_as_a_parameter_value_alone() -> TestResult {
+    let server = Server::start().await;
+    reads(&server).await;
+    queries(&server, 1, 2).await;
+
+    checks::invocable_on_ehr_id(&interface(&server)?, EHR).await?;
+    let requests = server.received_requests().await.unwrap_or_default();
+    let queries = ehr_id_as_a_parameter_alone(&requests)?;
+    assert_eq!(2, queries.len(), "both scoped queries: {queries:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_refusal_queries_carry_the_ehr_id_as_a_parameter_value_alone() -> TestResult {
+    let server = Server::start().await;
+    arranged(&server, 403, 403, 0).await;
+    let arrangement = Arrangement::new(EHR, refused());
+
+    checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let requests = server.received_requests().await.unwrap_or_default();
+    let forms = ehr_id_as_a_parameter_alone(&requests)?;
+    assert_eq!(4, forms.len(), "both forms, as each principal: {forms:?}");
+    assert!(
+        forms.iter().any(|q| q.contains(WHERE_FORM))
+            && forms.iter().any(|q| q.contains(PREDICATE_FORM)),
+        "the WHERE form and the EHR predicate form: {forms:?}"
+    );
     Ok(())
 }
 

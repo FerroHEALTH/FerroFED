@@ -223,16 +223,27 @@ Keycloak 26.2 added a client setting that types its access tokens `at+jwt`.
 The recipe below was run on 2026-10-06 against Keycloak 26.8.0: the gateway
 admitted a user's token and a client-credentials token made this way, and
 answered a federated query for each. With the `at+jwt` setting off, it
-refused the same user's token as "not typed at+jwt".
+refused the same user's token as "not typed at+jwt", and without the
+professional mapper it refused the client-credentials token as naming no
+natural person.
 
 Run it with Keycloak's admin CLI, `kcadm.sh`, against your Keycloak's
 public address. It creates a realm, one client scope per SMART on openEHR
 scope, a clinical application that signs users in, and a reporting service
-that uses the client-credentials grant:
+that uses the client-credentials grant. The realm's `acr.loa.map` names the
+levels of Keycloak's authentication flows, so its tokens carry `acr` as
+`urn:example:loa:substantial` for level 1 and `urn:example:loa:high` for
+level 2, the values the gateway's `[auth.issuer.assurance]` reads below.
+Keycloak 26.8.0 wrote level 1 into a token after a password sign-in and
+into a client-credentials token. A real realm reaches each level only by a
+flow whose means meets it, which Regulation (EU) No 910/2014 Art 8(2)
+defines and your identity provider's assessment establishes; the password
+sign-in here does not:
 
 ```sh
 kcadm.sh config credentials --server https://idp.example.org --realm master --user admin
-kcadm.sh create realms -s realm=ferrofed -s enabled=true
+kcadm.sh create realms -s realm=ferrofed -s enabled=true \
+  -s 'attributes."acr.loa.map"="{\"urn:example:loa:substantial\":1,\"urn:example:loa:high\":2}"'
 for scope in 'user/aql-*.s' 'user/composition-*.r' 'system/aql-*.s'; do
   kcadm.sh create client-scopes -r ferrofed -s "name=$scope" -s protocol=openid-connect \
     -s 'attributes."include.in.token.scope"=true' \
@@ -249,7 +260,9 @@ kcadm.sh create clients -r ferrofed -s clientId=example-reporting-service \
 
 Each client then gets its scopes as default client scopes, loses the
 `profile` and `email` scopes, whose personal data the gateway never reads,
-and gets three protocol mappers:
+and gets its protocol mappers: the audience and the purpose of use for
+both, `client_id` for the clinical application, and the professional the
+reporting service acts for:
 
 ```sh
 id_of() { kcadm.sh get clients -r ferrofed -q "clientId=$1" --fields id --format csv --noquotes; }
@@ -271,6 +284,7 @@ for client in "$app" "$svc"; do
   kcadm.sh create "clients/$client/protocol-mappers/models" -r ferrofed -f purpose-of-use.json
 done
 kcadm.sh create "clients/$app/protocol-mappers/models" -r ferrofed -f client-id.json
+kcadm.sh create "clients/$svc/protocol-mappers/models" -r ferrofed -f professional.json
 ```
 
 `audience.json` puts the gateway's audience in `aud`:
@@ -332,9 +346,33 @@ token and not into the user's:
 }
 ```
 
+`professional.json` names the professional the reporting service acts for,
+in the IHE IUA extension. A `system/` scope acts without a user, so the
+gateway admits the service to patient data only for a professional its
+token names. The value is a synthetic identifier; yours is the identifier
+the professional's national authority issued:
+
+```json
+{
+  "name": "professional",
+  "protocol": "openid-connect",
+  "protocolMapper": "oidc-hardcoded-claim-mapper",
+  "config": {
+    "claim.name": "extensions.ihe_iua.national_provider_identifier",
+    "claim.value": "urn:oid:2.999.7.1.42",
+    "jsonType.label": "String",
+    "access.token.claim": "true",
+    "id.token.claim": "false",
+    "userinfo.token.claim": "false",
+    "introspection.token.claim": "true"
+  }
+}
+```
+
 A user who signs in to `example-clinical-app` then gets a token whose
 `scope` reads `user/composition-*.r user/aql-*.s`, and the reporting
-service a token with `system/aql-*.s`. Keycloak's realm issuer is
+service a token with `system/aql-*.s` that names its professional, both
+with `acr` `urn:example:loa:substantial`. Keycloak's realm issuer is
 `https://idp.example.org/realms/ferrofed`; copy `issuer` and `jwks_uri`
 from `https://idp.example.org/realms/ferrofed/.well-known/openid-configuration`,
 since the gateway compares `iss` exactly:
@@ -349,10 +387,23 @@ clock_skew_s = 60
 issuer = "https://idp.example.org/realms/ferrofed"
 jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
 backend_clients = ["example-reporting-service"]
+client_tokens_act_for_professional = true
+
+[auth.issuer.assurance]
+claim = "acr"
+minimum = "substantial"
+substantial = ["urn:example:loa:substantial"]
+high = ["urn:example:loa:high"]
 ```
 
-`system/aql-*` counts only for a client listed in `backend_clients`. An
-operator who uses the [operator console](operator-console.md) needs the
+`system/aql-*` counts only for a client listed in `backend_clients`.
+`client_tokens_act_for_professional` admits the reporting service to
+patient data for the professional `professional.json` names; a client token
+of this issuer that names none is refused `401 natural-person-required`.
+`[auth.issuer.assurance]` reads the realm's `acr` and refuses a token below
+`substantial` with `401 authentication-assurance-insufficient`
+([Professionals and assurance](authentication.md#professionals-and-assurance)).
+An operator who uses the [operator console](operator-console.md) needs the
 issuer's `operator_scope` as well
 ([The operator surface](authentication.md#the-operator-surface)).
 

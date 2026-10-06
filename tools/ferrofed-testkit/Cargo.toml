@@ -73,6 +73,9 @@ wiremock.workspace = true
 # its CDR products over a node client (#93, #573).
 ferrofed-registry.workspace = true
 ferrofed-server.workspace = true
+# The ITS-REST query body the node profile's captured queries are read as
+# (#739).
+openehr-its = { workspace = true, features = ["rest"] }
 # The operator console, driven against a running gateway over stub nodes, as
 # an operator's browser reaches both (#276).
 ferrofed-viewer.workspace = true

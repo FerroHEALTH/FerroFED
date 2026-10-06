@@ -1055,6 +1055,33 @@ rules are FerroFED's own design, decided with #80 after a security review:
   resources (`EHR`, `EHR_STATUS`, `DIRECTORY`, `CONTRIBUTION`) have no family
   either and are held to `composition-*` with the operation's permission.
 
+**Professionals and assurance** (#661). Regulation (EU) 2025/327 Annex II 3.1
+asks an EHR system for "reliable mechanisms for the identification and
+authentication of health professionals", and Implementing Regulation (EU)
+2026/2099 Art 6(3) sets assurance level "substantial", and "high" from 26
+March 2032, for a cross-border exchange. A request that reaches patient data
+(`auth::permission::Requirement::reaches_patient_data`: an EHR's content, an
+`aql-` search, the DEMOGRAPHIC API) is held to two rules at the gate,
+after its scopes and before its purpose of use. A token names no natural
+person when its `sub` is its `client_id` (IUA ITI TF-2 3.71.4.2.2.1) or only
+`system/` scopes cover the operation (`master08-scopes.adoc`: "acting
+without a user context"); it is refused `401 natural-person-required` unless
+its issuer sets `client_tokens_act_for_professional` and the token names the
+professional (the IUA `national_provider_identifier` or the
+`[auth.issuer.requester]` professional). Per issuer,
+`[auth.issuer.assurance]` names the claim (`acr` by default, RFC 9068
+§2.2.1), the values at each Regulation (EU) No 910/2014 Art 8(2) level and
+the least level; a token without a value at that level or above is
+`401 authentication-assurance-insufficient`, with the RFC 9470 §3
+`insufficient_user_authentication` challenge. An issuer without the table
+requires no level and `config check` notes it. A national contact point's
+level is read as it asserts it (2026/2099 Art 6(2) gives the check to the
+requesting Member State's entity). The conveyance carries `acting`,
+`assurance_level` and the IUA `subject_name` and
+`national_provider_identifier`, which the outbound gate reads with every
+other caller claim. Which claims carry the level and the refusal are our
+own design; no specification governs them.
+
 **The edge mode** (#80). A deployment that authenticates at a proxy sets
 `auth.mode = "edge"`: the proxy signs an RFC 9068 assertion for the gateway
 in a configured header, verified against the edge's key set exactly as a

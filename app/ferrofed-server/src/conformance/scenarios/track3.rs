@@ -16,35 +16,42 @@
 
 use http::StatusCode;
 use openehr_federation::headers::ENDPOINT;
+use openehr_query::federation::DirectiveKind;
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::{Federated, Gateway, answered, ask, post_aql};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::{Expected, directed_at, held_by, statuses, undirected};
 use crate::conformance::{Failure, ensure, ensure_eq};
 
-/// The patient's compositions from the members `directive` selects.
-#[must_use]
-pub fn directed(fixture: &Fixture, directive: &str) -> String {
-    format!(
-        "SELECT c/uid/value AS uid FROM {directive} CONTAINS EHR e CONTAINS COMPOSITION c WHERE {}",
-        fixture.patient.predicate()
-    )
+/// Each composition's uid, aliased, before the query names the patient or
+/// the members.
+const UIDS: &str = "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c";
+
+/// The patient's compositions from the members `FROM kind [ids]` selects
+/// (§8.1).
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn directed(fixture: &Fixture, kind: DirectiveKind, ids: &[&str]) -> Result<String, Failure> {
+    Ok(ClientQuery::parse(UIDS)?
+        .of_patient(&fixture.patient)?
+        .directed(kind, None, ids)
+        .to_aql())
 }
 
 /// The undirected form of [`directed`].
-#[must_use]
-pub fn undirected_query(fixture: &Fixture) -> String {
-    format!(
-        "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c WHERE {}",
-        fixture.patient.predicate()
-    )
-}
-
-/// The `ENDPOINT` selector naming `endpoints` (§8.1).
-#[must_use]
-pub fn endpoint_selector(endpoints: &[&str]) -> String {
-    let named: Vec<String> = endpoints.iter().map(|id| format!("\"{id}\"")).collect();
-    format!("ENDPOINT [{}]", named.join(", "))
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn undirected_query(fixture: &Fixture) -> Result<String, Failure> {
+    Ok(ClientQuery::parse(UIDS)?
+        .of_patient(&fixture.patient)?
+        .to_aql())
 }
 
 /// Holds that `FROM ENDPOINT [endpoint]` asks that member alone, reports
@@ -59,7 +66,7 @@ pub async fn directive_endpoint<G: Gateway>(
     fixture: &Fixture,
     endpoint: &str,
 ) -> Result<Federated, Failure> {
-    let aql = directed(fixture, &endpoint_selector(&[endpoint]));
+    let aql = directed(fixture, DirectiveKind::Endpoint, &[endpoint])?;
     let (_, answer) = answered(gateway, post_aql(&aql, &[])?, "CP-6: FROM ENDPOINT").await?;
     directed_at(
         &answer,
@@ -96,13 +103,13 @@ pub async fn endpoint_attributes<G: Gateway>(
     fixture: &Fixture,
     named: &[&str],
 ) -> Result<Federated, Failure> {
-    let listed: Vec<String> = named.iter().map(|id| format!("\"{id}\"")).collect();
-    let aql = format!(
+    let aql = ClientQuery::parse(
         "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id \
-         FROM ENDPOINT p [{}] CONTAINS EHR e CONTAINS COMPOSITION c WHERE {}",
-        listed.join(", "),
-        fixture.patient.predicate()
-    );
+         FROM EHR e CONTAINS COMPOSITION c",
+    )?
+    .of_patient(&fixture.patient)?
+    .directed(DirectiveKind::Endpoint, Some("p"), named)
+    .to_aql();
     let (_, answer) = answered(
         gateway,
         post_aql(&aql, &[])?,
@@ -164,7 +171,7 @@ pub async fn directive_organisation<G: Gateway>(
     fixture: &Fixture,
     organisation: &str,
 ) -> Result<Federated, Failure> {
-    let aql = directed(fixture, &format!("ORGANISATION [\"{organisation}\"]"));
+    let aql = directed(fixture, DirectiveKind::Organisation, &[organisation])?;
     let (_, answer) = answered(gateway, post_aql(&aql, &[])?, "CP-6: FROM ORGANISATION").await?;
     statuses(
         &answer,
@@ -195,7 +202,7 @@ pub async fn named_unresolved<G: Gateway>(
     holding: &str,
     unresolved: &str,
 ) -> Result<Federated, Failure> {
-    let aql = directed(fixture, &endpoint_selector(&[holding, unresolved]));
+    let aql = directed(fixture, DirectiveKind::Endpoint, &[holding, unresolved])?;
     let (_, answer) = answered(
         gateway,
         post_aql(&aql, &[])?,
@@ -235,7 +242,7 @@ pub async fn header_selects<G: Gateway>(
     fixture: &Fixture,
     endpoint: &str,
 ) -> Result<(), Failure> {
-    let by_directive = directed(fixture, &endpoint_selector(&[endpoint]));
+    let by_directive = directed(fixture, DirectiveKind::Endpoint, &[endpoint])?;
     let (_, by_directive) = answered(
         gateway,
         post_aql(&by_directive, &[])?,
@@ -244,7 +251,7 @@ pub async fn header_selects<G: Gateway>(
     .await?;
     let (_, by_header) = answered(
         gateway,
-        post_aql(&undirected_query(fixture), &[(ENDPOINT, endpoint)])?,
+        post_aql(&undirected_query(fixture)?, &[(ENDPOINT, endpoint)])?,
         "CP-28: the endpoint header",
     )
     .await?;
@@ -278,7 +285,7 @@ pub async fn conflict_refused<G: Gateway>(
     directed_to: &str,
     header: &str,
 ) -> Result<(), Failure> {
-    let aql = directed(fixture, &endpoint_selector(&[directed_to]));
+    let aql = directed(fixture, DirectiveKind::Endpoint, &[directed_to])?;
     let conflicting = ask(gateway, post_aql(&aql, &[(ENDPOINT, header)])?).await?;
     conflicting.expect(
         StatusCode::BAD_REQUEST,
@@ -303,7 +310,7 @@ pub async fn parameter_targets_nothing<G: Gateway>(
     endpoint: &str,
 ) -> Result<(), Failure> {
     let mut request = post_aql(
-        &crate::conformance::scenarios::patient_compositions(fixture),
+        &crate::conformance::scenarios::patient_compositions(fixture)?,
         &[],
     )?;
     let uri = format!("/v1/query/aql?endpoint={endpoint}");

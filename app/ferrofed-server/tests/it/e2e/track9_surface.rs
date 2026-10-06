@@ -172,7 +172,7 @@ async fn a_definition_fan_out_reports_a_one_node_rejection_as_partial() -> TestR
         .proxy
         .set_fault(Fault::Status(StatusCode::INTERNAL_SERVER_ERROR));
 
-    let undirected = track9::parameterised(&fixture, "EHR e");
+    let undirected = track9::parameterised(&fixture, None)?;
     let fanned = exchange(&app, put_naming(NAME, &undirected, "*")?).await?;
     assert_eq!(
         StatusCode::MULTI_STATUS,
@@ -205,7 +205,7 @@ async fn a_definition_fan_out_reports_a_one_node_rejection_as_partial() -> TestR
 
     clear(&nodes);
     nodes.b.proxy.clear_fault();
-    let directed = track9::parameterised(&fixture, r#"ENDPOINT ["node-a-pub"] CONTAINS EHR e"#);
+    let directed = track9::parameterised(&fixture, Some("node-a-pub"))?;
     let refused = exchange(&app, put_naming(DIRECTED, &directed, "*")?).await?;
     assert_eq!(
         StatusCode::BAD_REQUEST,

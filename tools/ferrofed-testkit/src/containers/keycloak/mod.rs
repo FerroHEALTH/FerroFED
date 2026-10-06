@@ -306,6 +306,26 @@ impl Keycloak {
         exec(runner, "typing a client's tokens", script(&line)).await
     }
 
+    /// Removes the protocol mapper named `mapper` from `client`, so the
+    /// client's next token carries no claim of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeycloakError::Script`] when `kcadm.sh` finds no such
+    /// mapper or refuses the removal, and [`KeycloakError::Answer`] when no
+    /// recipe was applied.
+    pub async fn remove_mapper(&self, client: &str, mapper: &str) -> Result<(), KeycloakError> {
+        let runner = self.runner.as_ref().ok_or(KeycloakError::Answer {
+            step: "removing a client's mapper",
+            status: StatusCode::PRECONDITION_REQUIRED,
+            detail: "no recipe was applied".to_owned(),
+        })?;
+        let line = format!(
+            "id=\"$(kcadm.sh get clients -r {REALM} -q clientId={client} --fields id --format csv --noquotes)\"\nmapper=\"$(kcadm.sh get \"clients/$id/protocol-mappers/models\" -r {REALM} --fields id,name --format csv --noquotes | awk -F, -v n={mapper} '$2 == n {{ print $1 }}')\"\ntest -n \"$mapper\"\nkcadm.sh delete \"clients/$id/protocol-mappers/models/$mapper\" -r {REALM}\n"
+        );
+        exec(runner, "removing a client's mapper", script(&line)).await
+    }
+
     /// Returns an access token of `client` by the client-credentials grant
     /// (RFC 6749 §4.4).
     ///

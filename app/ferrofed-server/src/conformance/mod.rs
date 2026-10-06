@@ -22,6 +22,7 @@
 //! `not-run` with its reason, never `pass`. No specification governs the
 //! form of the run: our own design.
 
+pub mod aql;
 pub mod catalogue;
 pub mod client;
 pub mod execute;
@@ -33,6 +34,7 @@ pub mod safety;
 pub mod scenarios;
 pub mod seed;
 
+use crate::conformance::aql::AqlError;
 use crate::conformance::client::GatewayError;
 
 /// A scenario check that did not hold, or could not be made.
@@ -60,6 +62,9 @@ pub enum Failure {
         #[source]
         source: serde_json::Error,
     },
+    /// A query of the scenario could not be built from its template.
+    #[error("a query of the scenario could not be built")]
+    Query(#[from] AqlError),
 }
 
 /// Returns `Ok` when `holds`, and the [`Failure::Check`] `what` describes

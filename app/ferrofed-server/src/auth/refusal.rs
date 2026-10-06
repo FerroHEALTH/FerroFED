@@ -58,11 +58,20 @@ pub enum Refusal {
     /// The token's grant is a patient grant, which reaches its patient's
     /// own EHR alone, and the request addresses the DEMOGRAPHIC API.
     PatientDemographic,
+    /// The request reaches patient data, and the token names no natural
+    /// person: its client acts, and the issuer's entry does not declare its
+    /// client tokens as acting for the professional they name, or the token
+    /// names none.
+    NaturalPerson,
+    /// The request reaches patient data, and the token states no
+    /// authentication assurance at or above the least level its issuer's
+    /// entry requires.
+    Assurance,
 }
 
 impl Refusal {
     /// Every refusal, in declaration order.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Missing,
         Self::Malformed,
         Self::Algorithm,
@@ -81,6 +90,8 @@ impl Refusal {
         Self::PurposeOfUse,
         Self::PatientContext,
         Self::PatientDemographic,
+        Self::NaturalPerson,
+        Self::Assurance,
     ];
 
     /// The reason the security log and the challenge name.
@@ -105,6 +116,8 @@ impl Refusal {
             Self::PurposeOfUse => "purpose-of-use",
             Self::PatientContext => "patient-context",
             Self::PatientDemographic => "patient-demographic",
+            Self::NaturalPerson => "natural-person",
+            Self::Assurance => "assurance",
         }
     }
 
@@ -134,6 +147,12 @@ impl Refusal {
             Self::PatientDemographic => {
                 "a patient/ grant reaches its patient's own EHR alone, never the DEMOGRAPHIC API"
             }
+            Self::NaturalPerson => {
+                "the access token names no natural person, and patient data is released to a person or for a professional the token names"
+            }
+            Self::Assurance => {
+                "the access token states no authentication assurance at the level patient data requires"
+            }
         }
     }
 
@@ -147,6 +166,8 @@ impl Refusal {
             Self::PurposeOfUse => Code::PurposeOfUseRequired,
             Self::PatientContext => Code::PatientContextMissing,
             Self::PatientDemographic => Code::PatientConfinement,
+            Self::NaturalPerson => Code::NaturalPersonRequired,
+            Self::Assurance => Code::AuthenticationAssuranceInsufficient,
             Self::Missing
             | Self::Malformed
             | Self::Algorithm
@@ -176,6 +197,12 @@ impl Refusal {
             | Self::PatientContext
             | Self::PatientDemographic => Some(format!(
                 "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
+                self.description()
+            )),
+            // NOTE: RFC 9470 §3: a token whose authentication does not meet the resource's
+            // requirements is a 401 with the error `insufficient_user_authentication`.
+            Self::NaturalPerson | Self::Assurance => Some(format!(
+                "Bearer realm=\"{REALM}\", error=\"insufficient_user_authentication\", error_description=\"{}\"",
                 self.description()
             )),
             _ => Some(format!(
@@ -218,6 +245,8 @@ mod tests {
             Refusal::PurposeOfUse => 15,
             Refusal::PatientContext => 16,
             Refusal::PatientDemographic => 17,
+            Refusal::NaturalPerson => 18,
+            Refusal::Assurance => 19,
         }
     }
 

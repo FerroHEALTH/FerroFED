@@ -28,7 +28,7 @@ use crate::e2e::{EHR_A, EHR_B, TestResult, assert_no_patient_identifier_on_the_w
 
 /// The plain patient query a client sends, its one column aliased.
 fn plain_query() -> Result<String, Box<dyn Error>> {
-    Ok(track1::plain_query(&fixture(Some(1), Some(1))?))
+    Ok(track1::plain_query(&fixture(Some(1), Some(1))?)?)
 }
 
 // conformance: CP-1 CP-2 CP-35 track-1

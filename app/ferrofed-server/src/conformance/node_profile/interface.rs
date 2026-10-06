@@ -26,7 +26,11 @@ use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_registry::id::EndpointId;
 use http::header::{ACCEPT, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, Method, StatusCode};
-use openehr_its::rest::generated::query::AdhocQueryExecute;
+use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryParameters};
+use openehr_query::ast::Primitive;
+use openehr_query::bind::{BindError, Parameters, bind};
+use openehr_query::parser::{ParseError, parse_str};
+use openehr_query::printer::to_aql;
 use uuid::Uuid;
 
 use crate::conveyed::{self, Unconveyed};
@@ -120,6 +124,13 @@ pub enum CheckError {
     /// The query body could not be written.
     #[error("the query body could not be written")]
     Body(#[source] serde_json::Error),
+    /// A check's query template is no AQL the parser reads.
+    #[error("a check's query template is no AQL")]
+    Template(#[source] ParseError),
+    /// A check's query template does not take the `ehr_id` as its one
+    /// parameter, `$ehr_id`.
+    #[error("a check's query template does not take the ehr_id as $ehr_id alone")]
+    Parameter(#[source] BindError),
     /// A request reached no answer of the node's.
     #[error("{step} reached no answer of endpoint {endpoint}")]
     Unanswered {
@@ -131,6 +142,53 @@ pub enum CheckError {
         #[source]
         source: ForwardError,
     },
+}
+
+/// The name of the parameter that carries the `ehr_id` of a scoped query.
+const EHR_ID: &str = "ehr_id";
+
+/// One AQL query a check sends, with the parameter values that travel beside
+/// it.
+#[derive(Debug, Clone)]
+pub(super) struct NodeQuery {
+    /// The query text.
+    aql: String,
+    /// The ITS-REST `query_parameters`, when the query takes any.
+    parameters: Option<QueryParameters>,
+}
+
+impl NodeQuery {
+    /// Creates the query `template` scoped to `ehr_id`: the template, parsed
+    /// and printed with its `$ehr_id` parameter, and the `ehr_id` as that
+    /// parameter's value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CheckError::Template`] when `template` is no AQL, and
+    /// [`CheckError::Parameter`] when it takes a parameter other than
+    /// `$ehr_id`, or none.
+    // NOTE: AQL §Parameters and ITS-REST Query API `query_parameters`: the ehr_id travels beside
+    // the query as a parameter value, so no value is ever spliced into the AQL text.
+    pub(super) fn scoped(template: &str, ehr_id: Uuid) -> Result<Self, CheckError> {
+        let query = parse_str(template).map_err(CheckError::Template)?;
+        let value = ehr_id.to_string();
+        let mut parameters = Parameters::new();
+        parameters.insert(EHR_ID, Primitive::String(value.clone()));
+        bind(&mut query.clone(), &parameters).map_err(CheckError::Parameter)?;
+        Ok(Self {
+            aql: to_aql(&query),
+            parameters: Some(QueryParameters::from([(EHR_ID.to_owned(), value.into())])),
+        })
+    }
+
+    /// Creates the query `text` as written, for a check whose subject is a
+    /// query no AQL grammar parses, so it takes no parameter.
+    pub(super) fn unparsable(text: &'static str) -> Self {
+        Self {
+            aql: text.to_owned(),
+            parameters: None,
+        }
+    }
 }
 
 /// What the node answered one request.
@@ -237,18 +295,19 @@ impl Interface {
             .await
     }
 
-    /// Sends `aql` as `POST /query/aql`, as `principal` or the endpoint's
-    /// onward credentials.
+    /// Sends `query` as `POST /query/aql`, its parameters as the body's
+    /// `query_parameters`, as `principal` or the endpoint's onward
+    /// credentials.
     pub(super) async fn query(
         &self,
-        aql: &str,
+        query: &NodeQuery,
         principal: Option<&Principal>,
     ) -> Result<Answer, CheckError> {
         let body = AdhocQueryExecute {
-            q: aql.to_owned(),
+            q: query.aql.clone(),
             offset: None,
             fetch: None,
-            query_parameters: None,
+            query_parameters: query.parameters.clone(),
             additional_properties: BTreeMap::new(),
         };
         let mut headers = HeaderMap::new();
@@ -323,5 +382,57 @@ impl Interface {
                 source,
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::super::checks::{COMPOSITION_QUERY, EHR_PREDICATE_QUERY, EHR_QUERY};
+    use super::{CheckError, NodeQuery};
+
+    const EHR: Uuid = Uuid::from_u128(0x9393_9393_9393_4393_8393_9393_9393_9393);
+
+    #[test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    fn a_scoped_query_carries_the_ehr_id_as_its_parameter_alone() -> Result<(), CheckError> {
+        for template in [EHR_QUERY, EHR_PREDICATE_QUERY, COMPOSITION_QUERY] {
+            let query = NodeQuery::scoped(template, EHR)?;
+            assert!(query.aql.contains("$ehr_id"), "{}", query.aql);
+            assert!(!query.aql.contains(&EHR.to_string()), "{}", query.aql);
+            let parameters = query.parameters.unwrap_or_default();
+            assert_eq!(vec!["ehr_id"], parameters.keys().collect::<Vec<_>>());
+            assert_eq!(
+                Some(EHR.to_string().as_str()),
+                parameters.get("ehr_id").and_then(|value| value.as_str())
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_template_that_does_not_take_the_ehr_id_as_ehr_id_is_refused() {
+        for template in [
+            "SELECT e/ehr_id/value FROM EHR e",
+            "SELECT e/ehr_id/value FROM EHR e WHERE e/ehr_id/value = $id",
+            "SELECT e/ehr_id/value FROM EHR e \
+             WHERE e/ehr_id/value = $ehr_id AND e/system_id/value = $system",
+        ] {
+            assert!(
+                matches!(
+                    NodeQuery::scoped(template, EHR),
+                    Err(CheckError::Parameter(_))
+                ),
+                "{template}"
+            );
+        }
+        assert!(matches!(
+            NodeQuery::scoped("SELECT FROM EHR e WHERE", EHR),
+            Err(CheckError::Template(_))
+        ));
     }
 }

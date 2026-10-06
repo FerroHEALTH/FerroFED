@@ -42,6 +42,7 @@ use ferrofed_testkit::seed::{
 use ferrofed_testkit::{oauth, unreachable};
 use openehr_its::json::from_canonical_json;
 use openehr_its::rest::client::Credentials;
+use openehr_its::rest::generated::query::AdhocQueryExecute;
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use uuid::Uuid;
 
@@ -166,6 +167,29 @@ async fn ferroehr_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
             capture.path
         );
     }
+    let mut queries = 0_usize;
+    for capture in journal
+        .iter()
+        .filter(|capture| capture.path.ends_with("/query/aql"))
+    {
+        let body: AdhocQueryExecute = serde_json::from_slice(&capture.body)?;
+        assert!(
+            !body.q.contains(&EHR.to_string()),
+            "the ehr_id reaches the node as a parameter value, never in the AQL: {}",
+            body.q
+        );
+        assert_eq!(
+            Some(EHR.to_string().as_str()),
+            body.query_parameters
+                .as_ref()
+                .and_then(|parameters| parameters.get("ehr_id"))
+                .and_then(|value| value.as_str()),
+            "the ehr_id is the value of the query's $ehr_id: {}",
+            body.q
+        );
+        queries = queries.saturating_add(1);
+    }
+    assert_eq!(2, queries, "both scoped queries");
     record(finding, "invocable-on-ehr-id")
 }
 

@@ -468,6 +468,26 @@ jobs:
           bash scripts/checks/e2e-placement.sh --self-test
           bash scripts/checks/e2e-placement.sh
 
+  # The AQL splice guard: no Rust source outside the tests builds AQL text
+  # with format!, concat!, push_str or +; a query is a template parsed by
+  # openehr-query, its values bound or sent as query parameters, and printed
+  # by printer::to_aql. Its self-test proves each refused form and each near
+  # miss.
+  aql-splice:
+    name: aql-splice
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/aql-splice.sh --self-test
+          bash scripts/checks/aql-splice.sh
+
   # The site link guard: the site assembled as the Docs workflow publishes it,
   # the landing page at the root and the book under /docs/, with every internal
   # link and anchor resolved offline, and README.md against the tree. It sits
@@ -1195,6 +1215,7 @@ jobs:
       - conformance-matrix
       - obligations
       - e2e-placement
+      - aql-splice
       - site-links
       - tracker-helpers
       - crate-version-guard-self-test

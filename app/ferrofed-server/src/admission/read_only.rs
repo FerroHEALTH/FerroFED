@@ -31,6 +31,8 @@ use ferrofed_registry::creating_system::CreatingSystemRoute;
 use ferrofed_registry::id::{EndpointId, SystemId};
 use ferrofed_registry::snapshot::{Node, RegistrySnapshot};
 use openehr_its::rest::generated::query::ResultSetRow;
+use openehr_query::parser::parse_str;
+use openehr_query::printer::to_aql;
 
 use super::report::{Condition, Finding, Report, Verdict};
 use super::{AdmissionError, finding, no_foreign_adoption, no_reuse, uuid_form};
@@ -61,8 +63,9 @@ struct Existing {
 ///
 /// Returns [`AdmissionError::UnknownEndpoint`] when the registry does not
 /// hold `endpoint`, [`AdmissionError::Clock`] when no deadline can be set,
-/// and [`AdmissionError::Unconveyed`] when the federation holds no signer.
-/// Every failure of the node is a finding.
+/// [`AdmissionError::Unconveyed`] when the federation holds no signer, and
+/// [`AdmissionError::Template`] when [`EXISTING_EHRS`] is no AQL. Every
+/// failure of the node is a finding.
 pub async fn check(
     federation: &Federation,
     endpoint: &EndpointId,
@@ -78,7 +81,8 @@ pub async fn check(
         .ok_or(AdmissionError::Clock)?;
     let conveyance = conveyed::gateway(federation).map_err(AdmissionError::Unconveyed)?;
     let options = DispatchOptions::new(deadline, conveyance).with_request_id(OutboundId::mint());
-    let query = NodeQuery::new(EXISTING_EHRS)
+    let aql = parse_str(EXISTING_EHRS).map_err(AdmissionError::Template)?;
+    let query = NodeQuery::new(to_aql(&aql))
         .with_width(WIDTH)
         .with_fetch(u32::from(count));
 
