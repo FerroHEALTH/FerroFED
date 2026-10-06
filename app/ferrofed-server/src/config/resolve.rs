@@ -168,6 +168,7 @@ impl Config {
             signing,
             #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::AuditSettings::default(),
+            deprecated: self.deprecated.clone(),
         };
         for binding in crate::binding::compiled() {
             binding.resolve(self, &mut settings)?;

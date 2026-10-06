@@ -162,14 +162,20 @@ slow one.
 
    in the version-bump branch. It writes a `## [X.Y.Z] - YYYY-MM-DD` section
    under a fresh empty `[Unreleased]`, holding the `[Unreleased]` entries and
-   then the fragments, section by section in the Keep a Changelog order and by
-   file name within a section; it moves the `[Unreleased]` link reference on
+   then the fragments, section by section, "Upgrade notes" first and then the
+   Keep a Changelog order, and by file name within a section; it moves the `[Unreleased]` link reference on
    and adds the version's; and it `git rm`s the fragments. It refuses, with
-   nothing written, a malformed fragment, a section heading Keep a Changelog
-   does not define, a version that already has a section, and a release with
+   nothing written, a malformed fragment, a section heading that is neither
+   "Upgrade notes" nor one Keep a Changelog defines, a version that already has a section, and a release with
    no entry. Commit `CHANGELOG.md` and the removals together. What sits under
    the version heading is what the release notes say, so read it as the
    release notes before you tag, and edit the wording there if it needs it.
+   Its "Upgrade notes" must say everything an operator changes to upgrade:
+   CI's `release compose` job already refuses a change whose build refuses
+   the last release's example configuration with no upgrade note pending
+   (`scripts/checks/upgrade-notes.sh`), and the book's Upgrading page
+   (`website/book/src/operate/upgrading.md`) takes the release's notes in the
+   same pull request.
    The landing page's release note and status panel
    (`website/landing/index.html`) name the same version in the same pull
    request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull

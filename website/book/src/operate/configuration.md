@@ -49,6 +49,13 @@ user or password holding a control character such as a newline (RFC 7617
 §2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
+A key a release renamed is still read under its old name for at least one
+release. `config check` prints a `warning:` line for it, naming the key that
+replaces it and the release that will refuse it, and `serve` logs the same
+at start; setting both the old and the new key is refused
+([the compatibility policy](upgrading.md#the-compatibility-policy)). No key
+is deprecated in this release.
+
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first
