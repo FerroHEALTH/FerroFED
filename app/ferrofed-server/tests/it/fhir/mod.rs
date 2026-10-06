@@ -18,6 +18,7 @@
 )]
 
 mod config;
+mod header;
 mod refusals;
 mod summary;
 
@@ -32,6 +33,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdq::PdqSupplier;
 use http::Request;
 use serde_json::Value;
 use wiremock::matchers::{body_string_contains, method, path};
@@ -56,16 +58,44 @@ const UID_B: &str = "7c4e1d20-0000-4000-8000-0000000000b1::cdr-b.example.org::1"
 /// The archetype only the allergies section query names.
 const ALLERGIES: &str = "openEHR-EHR-EVALUATION.adverse_reaction_risk.v1";
 
+/// The synthetic family name the harness PDQm Supplier holds the patient
+/// under.
+const FAMILY: &str = "SENTINEL-FAMILY-5t2v";
+
+/// The synthetic given name the harness PDQm Supplier holds the patient
+/// under.
+const GIVEN: &str = "SENTINEL-GIVEN-8m1c";
+
+/// The synthetic birth date the harness PDQm Supplier holds.
+const BIRTH_DATE: &str = "1970-01-01";
+
+/// A PDQm Supplier base no test reaches, for a configuration that is only
+/// read.
+const UNREACHED_SUPPLIER: &str = "http://127.0.0.1:9/fhir/";
+
+/// A harness PDQm Supplier that holds the test patient under its
+/// identifier, with a synthetic name and birth date.
+async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
+    let supplier = PdqSupplier::start().await?;
+    let id = supplier.add(&[(NAMESPACE, PATIENT)], true)?;
+    supplier.describe(&id, (FAMILY, GIVEN), Some(BIRTH_DATE))?;
+    Ok(supplier)
+}
+
 /// The `[fhir]` tables of the face, its allergies fed by the testkit's
-/// fixture mapping.
-fn fhir_tables() -> String {
+/// fixture mapping, and the `[pdqm]` table of the Supplier at `pdq` the
+/// summary header is asked of, whose master domain is the test patient's
+/// namespace.
+fn fhir_tables(pdq: &str) -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string());
     let [model, context] = eps::mapping_files();
     format!(
         "\n[fhir]\nbase = \"{FHIR}\"\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n\
          identifier_system = \"urn:oid:2.999.9\"\nidentifier_value = \"operator-1\"\n\n\
          [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
-         files = [{}, {}]\ncontext = \"{}\"\n",
+         files = [{}, {}]\ncontext = \"{}\"\n\n\
+         [pdqm]\nurl = \"{pdq}\"\ntransaction = \"iti-78\"\nmaster = \"{NAMESPACE}\"\n\
+         timeout_ms = 1000\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n",
         path(&eps::opt()),
         path(&model),
         path(&context),
@@ -73,12 +103,13 @@ fn fhir_tables() -> String {
     )
 }
 
-/// A development gateway over node A at `a` and node B at `b`, the patient
-/// known at the members `rows` name, serving the face, with the top-level
-/// `[federation]` keys `federation` and the tables `tables` added.
+/// A development gateway over node A at `a` and node B at `b`, the summary
+/// header asked of the PDQm Supplier at `pdq`, the patient known at the
+/// members `rows` name, serving the face, with the top-level `[federation]`
+/// keys `federation` and the tables `tables` added.
 fn gateway_over(
     dir: &Path,
-    (a, b): (&str, &str),
+    (a, b, pdq): (&str, &str, &str),
     rows: &[(&str, &str)],
     (federation, tables): (&str, &str),
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
@@ -91,7 +122,7 @@ fn gateway_over(
          node_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
          {federation}\n{}{}{tables}",
         crossref(rows),
-        fhir_tables()
+        fhir_tables(pdq)
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -103,10 +134,14 @@ fn gateway_over(
 }
 
 /// The gateway of [`gateway_over`] over node A and node B, the patient
-/// known at both.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
+/// known at both, the header asked of `pdq`.
+fn gateway(
+    dir: &Path,
+    (a, b): (&Server, &Server),
+    pdq: &PdqSupplier,
+) -> Result<Router, Box<dyn Error>> {
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
-    Ok(gateway_over(dir, (&a.uri(), &b.uri()), &rows, ("", ""))?.0)
+    Ok(gateway_over(dir, (&a.uri(), &b.uri(), &pdq.base_url()), &rows, ("", ""))?.0)
 }
 
 /// A node answering the allergies section query with one composition of

@@ -24,6 +24,7 @@ use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
 use ferrofed_engine::single_node::probe::{Answer, Probed};
 use ferrofed_identity::role::consent::ConsentDecision;
 use ferrofed_identity::role::demographics::{DemographicsError, Identification};
+use ferrofed_identity::role::header::HeaderAnswer;
 use ferrofed_identity::role::localizer::{Localization, LocalizerError};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
@@ -329,15 +330,35 @@ impl NodeRequests {
     /// `identification`, in a series of its own: the service is no member,
     /// so it has no `endpoint` and no §11.1 outcome, timed over `elapsed`.
     pub fn identified(&self, identification: &Identification, elapsed: Duration) {
-        let Some(instruments) = &self.instruments else {
-            return;
-        };
         let outcome = match identification {
             Identification::Identified(_) => "identified",
             Identification::NoMatch => "no-match",
             Identification::Ambiguous(_) => "ambiguous",
             Identification::Unavailable(DemographicsError::AuditFailed(_)) => "audit-failed",
             _ => "unavailable",
+        };
+        self.demographics_call(outcome, elapsed);
+    }
+
+    /// Counts one call to the demographics service for a summary header
+    /// that ended in `answer`, in the series of [`Self::identified`], the
+    /// patient found counted as `identified`, timed over `elapsed`.
+    pub fn headed(&self, answer: &HeaderAnswer, elapsed: Duration) {
+        let outcome = match answer {
+            HeaderAnswer::Found(_) => "identified",
+            HeaderAnswer::NoMatch => "no-match",
+            HeaderAnswer::Ambiguous(_) => "ambiguous",
+            HeaderAnswer::Unavailable(DemographicsError::AuditFailed(_)) => "audit-failed",
+            _ => "unavailable",
+        };
+        self.demographics_call(outcome, elapsed);
+    }
+
+    /// Counts one call to the demographics service that ended in `outcome`,
+    /// timed over `elapsed`.
+    fn demographics_call(&self, outcome: &'static str, elapsed: Duration) {
+        let Some(instruments) = &self.instruments else {
+            return;
         };
         instruments
             .demographics

@@ -21,6 +21,7 @@ use std::time::Instant;
 
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::demographics::{DemographicsError, Identification};
+use ferrofed_identity::role::header::{HeaderAnswer, PatientHeader};
 use ferrofed_identity::role::patient::PatientRef;
 use tracing::Instrument as _;
 
@@ -50,6 +51,84 @@ pub(crate) enum Identified {
         /// policy widens.
         audit_failed: bool,
     },
+}
+
+/// Why the demographics binding gives no summary header.
+#[derive(Debug)]
+pub(crate) enum Unheaded {
+    /// No demographics binding is set, or it is not asked about identifiers
+    /// of the patient's namespace.
+    NoBinding,
+    /// The binding knows no patient for the identifier.
+    NoMatch,
+    /// The binding's answer names no one patient.
+    Ambiguous(String),
+    /// The patient the binding holds has no name.
+    Unnamed,
+    /// The binding could not answer: this failure, and whether it ran out of
+    /// time.
+    Unavailable {
+        /// The failure, which names no value.
+        failure: String,
+        /// Whether the deadline passed.
+        timed_out: bool,
+    },
+}
+
+/// Asks the federation's demographics binding for the summary header of
+/// `patient` on behalf of `on_behalf` before `deadline`, within the step's
+/// own budget, and records what the service showed of itself.
+///
+/// Only a header that names the patient is answered; everything else is the
+/// [`Unheaded`] that says why.
+pub(crate) async fn header(
+    federation: &Federation,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
+    deadline: Instant,
+) -> Result<PatientHeader, Unheaded> {
+    let Some(step) = federation.demographics() else {
+        return Err(Unheaded::NoBinding);
+    };
+    let until = Instant::now()
+        .checked_add(step.timeout())
+        .map_or(deadline, |at| at.min(deadline));
+    let started = Instant::now();
+    let answer = tokio::time::timeout_at(
+        tokio::time::Instant::from_std(until),
+        step.step().header(patient, on_behalf, inside(until)),
+    )
+    .instrument(tracing::info_span!("header"))
+    .await
+    .unwrap_or(HeaderAnswer::Unavailable(
+        DemographicsError::DeadlineExceeded,
+    ));
+    if matches!(answer, HeaderAnswer::NotHandled) {
+        return Err(Unheaded::NoBinding);
+    }
+    federation
+        .dependencies()
+        .demographics(dependencies::of_header(&answer));
+    federation.requests().headed(&answer, started.elapsed());
+    match answer {
+        HeaderAnswer::Found(header) if header.named() => Ok(*header),
+        HeaderAnswer::Found(_) => Err(Unheaded::Unnamed),
+        HeaderAnswer::Ambiguous(ambiguity) => {
+            tracing::warn!(reason = %ambiguity, "the demographics service named no one patient for the summary header");
+            Err(Unheaded::Ambiguous(ambiguity.to_string()))
+        }
+        HeaderAnswer::Unavailable(error) => {
+            tracing::warn!(error = %crate::chain(&error), "the demographics service did not answer for the summary header");
+            Err(Unheaded::Unavailable {
+                timed_out: matches!(error, DemographicsError::DeadlineExceeded),
+                failure: format!(
+                    "the demographics service could not answer: {}",
+                    crate::chain(&error)
+                ),
+            })
+        }
+        HeaderAnswer::NoMatch => Err(Unheaded::NoMatch),
+        _ => Err(Unheaded::NoBinding),
+    }
 }
 
 /// Takes `patient` to the federation's demographics step on behalf of

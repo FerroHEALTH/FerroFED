@@ -294,6 +294,14 @@ pub fn check(document: &str) -> Result<Vec<String>, Box<dyn Error>> {
                 format!("Patient.{member} below {min}"),
             );
         }
+        for name in patient.at("name").as_array().into_iter().flatten() {
+            need(
+                ["family", "given", "text"]
+                    .iter()
+                    .any(|part| !name.at(part).is_null()),
+                "ips-pat-1: a Patient.name with no family, given or text".to_owned(),
+            );
+        }
     }
     if let Some(composition) = compositions.first() {
         composition_findings(composition, &composition_profile, &urls, &mut need);

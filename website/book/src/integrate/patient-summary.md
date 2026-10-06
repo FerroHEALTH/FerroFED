@@ -66,21 +66,25 @@ The summary is built from the gateway's own section queries, the eleven
 stored queries under `eu.ferrofed.eehrxf`
 ([the gateway's own queries](stored-queries.md#the-gateways-own-queries)):
 
-1. Every section query is read as the façade reads a stored query, the
+1. The header is asked of the demographics binding, the PDQm Supplier of
+   `[pdqm]`, by the identifier you sent, before any member is asked. The
+   members federate no demographics (Federation Tier §2.3, N32), and nothing
+   of the header reaches a node.
+2. Every section query is read as the façade reads a stored query, the
    patient bound through `$patient` and `$namespace` alone.
-2. The patient is localized, checked against the consent pre-filter and
+3. The patient is localized, checked against the consent pre-filter and
    resolved once, at every member (§5.2, §14). Each section query is then
    planned over that one resolution, so the identity services are asked once
    per summary.
-3. Every section query goes to every member that holds the patient, scoped
+4. Every section query goes to every member that holds the patient, scoped
    to that member's own `ehr_id`, through the same rewrite and outbound
    identifier-hygiene gate as any query. No patient identifier reaches a
    node (§5.4.1, N33). The queries run together under one budget (§11.5).
-4. Each composition a section query selected is mapped by every FHIRconnect
+5. Each composition a section query selected is mapped by every FHIRconnect
    mapping the deployment supplies for that section and the composition's
    template. A composition no mapping covers is counted in the section's
    narrative, never dropped in silence.
-5. The document is written: the composition, the patient, the gateway's
+6. The document is written: the composition, the patient, the gateway's
    `Device` and the operator's `Organization` as its authors, each member
    whose data a section holds as an author of that section, one `Provenance`
    per mapped composition naming the composition and the member, and every
@@ -106,10 +110,15 @@ every entry is named under the absolute URL of `{fhir-base}`.
   otherwise.
 - Each member's data are listed as mapped, beside every other member's,
   never merged with them.
-- The `Patient` carries the identifier you asked by. Its name and birth date
-  are absent, with a `data-absent-reason` of `unknown`, until the header is
-  filled from the identity binding
-  ([#663](https://github.com/FerroHEALTH/FerroFED/issues/663)).
+- The `Patient` carries the identifier you asked by, and the header the
+  demographics binding holds (eHN PS A.1.1, A.1.2): the names, the birth
+  date, the administrative gender, the addresses and the phone numbers and
+  email addresses, each as the PDQm Supplier gives it. An element the
+  Supplier does not hold is left out, never filled in; the birth date, which
+  the EPS `Patient` requires, then carries a `data-absent-reason` of
+  `unknown`. The country of affiliation, the preferred professional, the
+  contact person and the insurance (A.1.1.6, A.1.2.2, A.1.2.3, A.1.3) are
+  not in the header.
 
 The tests hold every document the face writes to a structural check against
 the vendored `bundle-eu-eps`, `composition-eu-eps` and `patient-eu-eps`
@@ -129,7 +138,20 @@ that answered. Every section then names the members that did not, and none
 of them is `nilknown`.
 
 A patient no member holds is a `404`, and so is a patient whose members may
-not disclose a restriction: the two answer alike.
+not disclose a restriction, or one the demographics binding does not know:
+they answer alike.
+
+The header is asked before any member, and a summary whose header cannot be
+written asks no member:
+
+| The demographics binding | The answer |
+|---|---|
+| knows no patient for the identifier | `404` `not-found` |
+| matches several patients | `422` `multiple-matches`, none of them picked |
+| holds the patient with no family name, given name or text | `422` `required`: the EPS `Patient` requires a name (`ips-pat-1`) |
+| is not asked about identifiers of the system you sent | `422` `not-supported` |
+| does not answer within its budget | `504` `timeout` |
+| fails, or its exchange cannot be audited | `502` `exception` |
 
 ## Authentication and the access log
 
@@ -196,6 +218,11 @@ files = [
 context = "example_allergy.context"          # the context mapping's metadata.name
 ```
 
+- `[fhir]` needs a demographics binding, `[pdqm]`, because every summary
+  names its patient and the members federate no demographics: configuration
+  load refuses the face without one. The Supplier is asked by the identifier
+  in the system `[pdqm.namespaces]` maps its namespace to, in the master
+  domain, or in the system you sent when that is an absolute URI.
 - `[fhir]` needs a registry and `server.public_url`, and refuses a base on a
   path the gateway serves under `{base}`, or one that overlaps the PMIR feed
   route (`pmir.path`).

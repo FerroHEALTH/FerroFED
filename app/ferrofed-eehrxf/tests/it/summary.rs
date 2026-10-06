@@ -12,9 +12,10 @@ use std::path::PathBuf;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_eehrxf::summary::{
-    Answer, Assembled, Author, Held, NOT_EXHAUSTIVE, Organisation, Origin, Request, SectionAnswers,
-    assemble,
+    Answer, Assembled, AssemblyError, Author, DATA_ABSENT_REASON, Held, NOT_EXHAUSTIVE,
+    Organisation, Origin, Request, SectionAnswers, assemble,
 };
+use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use ferrofed_testkit::eps;
 
 /// The FHIR base the test documents name their entries under.
@@ -82,8 +83,42 @@ fn answers(allergies: &[Held], b: &Answer) -> Vec<SectionAnswers> {
         .collect()
 }
 
+/// A synthetic header, as an identity binding would hold it.
+fn header() -> PatientHeader {
+    PatientHeader {
+        names: vec![PersonName {
+            purpose: Some(String::from("official")),
+            family: Some(String::from("SYNTHETIC-FAMILY")),
+            given: vec![String::from("SYNTHETIC-GIVEN")],
+            ..PersonName::default()
+        }],
+        birth_date: Some(String::from("1970-01-01")),
+        gender: Some(String::from("unknown")),
+        addresses: vec![PostalAddress {
+            lines: vec![String::from("1 Synthetic Street")],
+            city: Some(String::from("Synthetic City")),
+            country: Some(String::from("NL")),
+            ..PostalAddress::default()
+        }],
+        telecoms: vec![Telecom {
+            system: Some(String::from("email")),
+            value: Some(String::from("patient@example.org")),
+            purpose: Some(String::from("home")),
+        }],
+    }
+}
+
 /// The document the two members' `sections` make.
 fn document(sections: &[SectionAnswers]) -> Result<Assembled, Box<dyn Error>> {
+    document_headed(sections, header())
+}
+
+/// The document the two members' `sections` make, about the patient
+/// `header` describes.
+fn document_headed(
+    sections: &[SectionAnswers],
+    header: PatientHeader,
+) -> Result<Assembled, Box<dyn Error>> {
     let mappings = Mappings::compile(&[allergies()?])?;
     let request = Request {
         base: BASE.to_owned(),
@@ -92,6 +127,7 @@ fn document(sections: &[SectionAnswers]) -> Result<Assembled, Box<dyn Error>> {
         timestamp: String::from("2026-10-06T10:00:00Z"),
         system: String::from("urn:oid:2.999.1"),
         value: String::from("synthetic-subject-689"),
+        header,
     };
     let author = Author {
         product: String::from("FerroFED"),
@@ -289,5 +325,110 @@ fn a_context_the_files_do_not_declare_is_refused() -> Result<(), Box<dyn Error>>
         Mappings::compile(&[absent]),
         Err(MappingsError::Compile { .. })
     ));
+    Ok(())
+}
+
+/// The `Patient` entry of `bundle`.
+fn patient(bundle: &serde_json::Value) -> Option<&serde_json::Value> {
+    bundle["entry"]
+        .as_array()?
+        .iter()
+        .map(|entry| &entry["resource"])
+        .find(|resource| resource["resourceType"] == "Patient")
+}
+
+#[test]
+fn the_header_is_the_one_the_identity_binding_holds() -> Result<(), Box<dyn Error>> {
+    let assembled = document(&answers(&[], &Answer::Answered(Vec::new())))?;
+    let text = serde_json::to_string(&assembled.bundle)?;
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    let bundle: serde_json::Value = serde_json::from_str(&text)?;
+    let patient = patient(&bundle).ok_or("a Patient")?;
+    assert_eq!(
+        patient["name"],
+        serde_json::json!([{
+            "use": "official",
+            "family": "SYNTHETIC-FAMILY",
+            "given": ["SYNTHETIC-GIVEN"]
+        }]),
+        "eHN PS A.1.1.2, A.1.1.3"
+    );
+    assert_eq!(patient["birthDate"], "1970-01-01", "eHN PS A.1.1.4");
+    assert_eq!(patient["gender"], "unknown", "eHN PS A.1.1.5");
+    assert_eq!(
+        patient["address"],
+        serde_json::json!([{
+            "line": ["1 Synthetic Street"],
+            "city": "Synthetic City",
+            "country": "NL"
+        }]),
+        "eHN PS A.1.2.1"
+    );
+    assert_eq!(
+        patient["telecom"],
+        serde_json::json!([{
+            "system": "email",
+            "value": "patient@example.org",
+            "use": "home"
+        }]),
+        "eHN PS A.1.2.1.8"
+    );
+    assert_eq!(
+        patient["identifier"][0]["value"], "synthetic-subject-689",
+        "the identifier the summary was asked by"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_element_the_binding_does_not_hold_is_absent_never_invented() -> Result<(), Box<dyn Error>> {
+    let named = PatientHeader {
+        names: vec![PersonName {
+            text: Some(String::from("SYNTHETIC NAME")),
+            ..PersonName::default()
+        }],
+        ..PatientHeader::default()
+    };
+    let assembled = document_headed(&answers(&[], &Answer::Answered(Vec::new())), named)?;
+    let text = serde_json::to_string(&assembled.bundle)?;
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    let bundle: serde_json::Value = serde_json::from_str(&text)?;
+    let patient = patient(&bundle).ok_or("a Patient")?;
+    assert!(
+        patient["birthDate"].is_null(),
+        "no birth date is written: {patient}"
+    );
+    assert_eq!(
+        patient["_birthDate"]["extension"],
+        serde_json::json!([{ "url": DATA_ABSENT_REASON, "valueCode": "unknown" }]),
+        "eHN PS Art 10(5): the required birth date is stated unknown"
+    );
+    for absent in ["gender", "address", "telecom"] {
+        assert!(patient[absent].is_null(), "{absent} is left out: {patient}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_header_with_no_name_writes_no_document() -> Result<(), Box<dyn Error>> {
+    let unnamed = PatientHeader {
+        names: vec![PersonName {
+            purpose: Some(String::from("official")),
+            ..PersonName::default()
+        }],
+        birth_date: Some(String::from("1970-01-01")),
+        ..PatientHeader::default()
+    };
+    let refused = document_headed(&answers(&[], &Answer::Answered(Vec::new())), unnamed);
+    let error = refused.err().ok_or("a document with no name was written")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<AssemblyError>(),
+            Some(AssemblyError::Unnamed)
+        ),
+        "EPS ips-pat-1: {error}"
+    );
     Ok(())
 }

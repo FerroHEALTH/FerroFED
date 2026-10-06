@@ -15,7 +15,7 @@ use ferrofed_server::config::error::Error;
 use ferrofed_server::config::fhir::FhirError;
 use ferrofed_testkit::eps;
 
-use super::{FHIR, PUBLIC, TestResult, fhir_tables};
+use super::{FHIR, PUBLIC, TestResult, UNREACHED_SUPPLIER, fhir_tables};
 
 /// The root of the workspace, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -50,14 +50,28 @@ fn public() -> String {
 #[test]
 fn the_face_resolves_with_its_base_its_operator_and_its_mapping() -> TestResult {
     let dir = tempfile::tempdir()?;
-    resolved(dir.path(), &public(), &fhir_tables())?;
+    resolved(dir.path(), &public(), &fhir_tables(UNREACHED_SUPPLIER))?;
+    Ok(())
+}
+
+#[test]
+fn a_face_with_no_demographics_binding_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let tables = fhir_tables(UNREACHED_SUPPLIER);
+    let without = tables.split("\n[pdqm]").next().ok_or("the [fhir] tables")?;
+    assert!(!without.contains("[pdqm"), "{without}");
+    let refused = resolved(dir.path(), &public(), without);
+    assert!(
+        matches!(refused, Err(Error::Fhir(FhirError::NoDemographics))),
+        "EPS ips-pat-1: the header names the patient, and only the binding can: {refused:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn a_face_with_no_public_url_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let refused = resolved(dir.path(), "", &fhir_tables());
+    let refused = resolved(dir.path(), "", &fhir_tables(UNREACHED_SUPPLIER));
     assert!(
         matches!(
             refused,
@@ -74,8 +88,8 @@ fn a_face_with_no_public_url_is_refused() -> TestResult {
 fn a_face_on_a_path_of_the_its_rest_face_is_refused() -> TestResult {
     for base in ["/", "/v1", "/v1/fhir", "/health", "/operator"] {
         let dir = tempfile::tempdir()?;
-        let tables =
-            fhir_tables().replace(&format!("base = \"{FHIR}\""), &format!("base = \"{base}\""));
+        let tables = fhir_tables(UNREACHED_SUPPLIER)
+            .replace(&format!("base = \"{FHIR}\""), &format!("base = \"{base}\""));
         let refused = resolved(dir.path(), &public(), &tables);
         assert!(
             matches!(refused, Err(Error::Fhir(FhirError::Overlaps { .. }))),
@@ -88,7 +102,7 @@ fn a_face_on_a_path_of_the_its_rest_face_is_refused() -> TestResult {
 #[test]
 fn a_face_with_no_operator_or_no_mapping_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = fhir_tables().replace("name = \"Synthetic Operator\"\n", "");
+    let tables = fhir_tables(UNREACHED_SUPPLIER).replace("name = \"Synthetic Operator\"\n", "");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(
@@ -117,7 +131,7 @@ fn a_face_with_no_operator_or_no_mapping_is_refused() -> TestResult {
 #[test]
 fn a_mapping_that_names_no_section_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = fhir_tables().replace("allergies-and-intolerances", "alerts");
+    let tables = fhir_tables(UNREACHED_SUPPLIER).replace("allergies-and-intolerances", "alerts");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(
@@ -132,7 +146,7 @@ fn a_mapping_that_names_no_section_is_refused() -> TestResult {
 #[test]
 fn a_mapping_to_a_profile_its_section_does_not_take_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = fhir_tables().replace("allergies-and-intolerances", "problems");
+    let tables = fhir_tables(UNREACHED_SUPPLIER).replace("allergies-and-intolerances", "problems");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(
@@ -146,7 +160,7 @@ fn a_mapping_to_a_profile_its_section_does_not_take_is_refused() -> TestResult {
     let example =
         Path::new(ROOT).join("crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.context.yml");
     let [_, context] = eps::mapping_files();
-    let tables = fhir_tables()
+    let tables = fhir_tables(UNREACHED_SUPPLIER)
         .replace(
             &context.display().to_string(),
             &example.display().to_string(),
@@ -168,7 +182,7 @@ fn a_mapping_to_a_profile_its_section_does_not_take_is_refused() -> TestResult {
 #[test]
 fn a_mapping_that_does_not_compile_or_read_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = fhir_tables().replace(eps::CONTEXT, "ferrofed_absent.context");
+    let tables = fhir_tables(UNREACHED_SUPPLIER).replace(eps::CONTEXT, "ferrofed_absent.context");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(
@@ -179,7 +193,8 @@ fn a_mapping_that_does_not_compile_or_read_is_refused() -> TestResult {
         ),
         "{refused:?}"
     );
-    let tables = fhir_tables().replace(&eps::opt().display().to_string(), "/absent/template.opt");
+    let tables = fhir_tables(UNREACHED_SUPPLIER)
+        .replace(&eps::opt().display().to_string(), "/absent/template.opt");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(
@@ -196,7 +211,7 @@ fn a_face_with_no_registry_is_refused() -> TestResult {
     let text = format!(
         "profile = \"development\"\n\n[server]\n{}\n{}",
         public(),
-        fhir_tables()
+        fhir_tables(UNREACHED_SUPPLIER)
     );
     let refused =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve();
@@ -220,7 +235,7 @@ fn pmir(path: &str) -> String {
 fn a_pmir_feed_route_on_the_face_is_refused_naming_both_keys() -> TestResult {
     for path in ["/fhir", "/fhir/feed", "/FHIR/Patient/feed"] {
         let dir = tempfile::tempdir()?;
-        let tables = format!("{}{}", fhir_tables(), pmir(path));
+        let tables = format!("{}{}", fhir_tables(UNREACHED_SUPPLIER), pmir(path));
         let refused = resolved(dir.path(), &public(), &tables);
         assert!(
             matches!(
@@ -239,7 +254,8 @@ fn a_pmir_feed_route_on_the_face_is_refused_naming_both_keys() -> TestResult {
         );
     }
     let dir = tempfile::tempdir()?;
-    let tables = fhir_tables().replace(&format!("base = \"{FHIR}\""), "base = \"/pmir/eu\"");
+    let tables = fhir_tables(UNREACHED_SUPPLIER)
+        .replace(&format!("base = \"{FHIR}\""), "base = \"/pmir/eu\"");
     let refused = resolved(dir.path(), &public(), &format!("{tables}{}", pmir("/pmir")));
     assert!(
         matches!(
@@ -256,7 +272,7 @@ fn a_pmir_feed_route_on_the_face_is_refused_naming_both_keys() -> TestResult {
 fn a_pmir_feed_route_beside_the_face_is_admitted() -> TestResult {
     for path in ["/pmir/feed", "/fhirfeed", "/fhir-feed"] {
         let dir = tempfile::tempdir()?;
-        let tables = format!("{}{}", fhir_tables(), pmir(path));
+        let tables = format!("{}{}", fhir_tables(UNREACHED_SUPPLIER), pmir(path));
         resolved(dir.path(), &public(), &tables)?;
     }
     Ok(())

@@ -114,6 +114,11 @@ pub enum FhirError {
     /// The gateway federates nothing, so the face would serve nothing.
     #[error("[fhir] serves the patient summary from the members, and no [registry] is set")]
     NoRegistry,
+    /// No demographics binding is set, so no summary could name its patient.
+    #[error(
+        "[fhir] writes the patient summary header from the demographics binding, and no [pdqm] is set"
+    )]
+    NoDemographics,
     /// One of the operator's identifier keys is set without the other.
     #[error("fhir.operator.identifier_system and fhir.operator.identifier_value are set together")]
     HalfIdentifier,
@@ -158,16 +163,27 @@ impl Config {
         server_base: &BasePath,
         public: Option<&PublicUrl>,
     ) -> Result<Option<FhirSettings>, FhirError> {
+        #[cfg(feature = "binding-ihe")]
+        let demographics = self.pdqm.is_some();
+        #[cfg(not(feature = "binding-ihe"))]
+        let demographics = false;
         self.fhir
             .as_ref()
-            .map(|fhir| fhir.resolve(server_base, public, self.registry.configured()))
+            .map(|fhir| {
+                fhir.resolve(
+                    server_base,
+                    public,
+                    (self.registry.configured(), demographics),
+                )
+            })
             .transpose()
     }
 }
 
 impl Fhir {
     /// Resolves the table, the gateway served under `server_base` at
-    /// `public`, and federating when `federates`.
+    /// `public`, federating when `federates`, and with a demographics
+    /// binding to fill the summary header from when `demographics`.
     ///
     /// # Errors
     ///
@@ -176,7 +192,7 @@ impl Fhir {
         &self,
         server_base: &BasePath,
         public: Option<&PublicUrl>,
-        federates: bool,
+        (federates, demographics): (bool, bool),
     ) -> Result<FhirSettings, FhirError> {
         let written = self
             .base
@@ -230,6 +246,12 @@ impl Fhir {
                 context: entry.context.clone(),
             });
         }
+        let mappings = Arc::new(Mappings::compile(&sources)?);
+        // NOTE: HL7 Europe EPS 1.0.0-ballot `patient-eu-eps` ips-pat-1 requires a name, and
+        // the members federate none (Federation Tier §2.3, N32), so the binding gives it.
+        if !demographics {
+            return Err(FhirError::NoDemographics);
+        }
         Ok(FhirSettings {
             base,
             absolute: absolute.as_str().trim_end_matches('/').to_owned(),
@@ -238,7 +260,7 @@ impl Fhir {
                 name: Some(name),
                 identifiers,
             },
-            mappings: Arc::new(Mappings::compile(&sources)?),
+            mappings,
             written: self.clone(),
         })
     }

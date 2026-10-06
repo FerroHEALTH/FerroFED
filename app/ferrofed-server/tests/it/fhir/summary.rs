@@ -14,7 +14,7 @@ use serde_json::Value;
 
 use super::{
     FHIR, PUBLIC, TestResult, UID_A, UID_B, gateway, gateway_over, node_holding, resources,
-    section, summary,
+    section, summary, supplier,
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, node_failing, received, wire};
 use crate::support::{call, exchange, field};
@@ -31,7 +31,8 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await?;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(app, summary("")?).await?;
     let text = String::from_utf8(body)?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -113,7 +114,13 @@ async fn the_face_needs_no_stored_query_registry() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
-    let (app, state) = gateway_over(dir.path(), (&a.uri(), &b.uri()), &rows, ("", ""))?;
+    let pdq = supplier().await?;
+    let (app, state) = gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
+        &rows,
+        ("", ""),
+    )?;
     assert!(state.definitions().is_none(), "no [stored_queries] is set");
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -131,11 +138,18 @@ async fn a_summary_is_recorded_once_with_the_patient_summary_category() -> TestR
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
     let tables = audit_tables(&repository, "");
-    let (app, _) = gateway_over(dir.path(), (&a.uri(), &b.uri()), &rows, ("", &tables))?;
+    let pdq = supplier().await?;
+    let (app, _) = gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
+        &rows,
+        ("", &tables),
+    )?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
+    // NOTE: PDQm §2:3.78.5.1; the header's ITI-78 exchange is audited beside the access record.
     let records: Vec<String> = repository
-        .wait_for(1, SETTLE)
+        .wait_for(2, SETTLE)
         .await
         .into_iter()
         .filter(|record| record.contains("ehds-categories"))
@@ -165,7 +179,8 @@ async fn a_silent_member_fails_the_summary_and_is_named() -> TestResult {
     let a = node_holding(UID_A).await;
     let b = node_failing(500).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await?;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(app, summary("")?).await?;
     let text = String::from_utf8(body)?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
@@ -195,9 +210,10 @@ async fn under_partial_a_silent_member_is_named_in_every_section() -> TestResult
     let b = node_failing(500).await;
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
+    let pdq = supplier().await?;
     let (app, _) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri()),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
         &rows,
         ("best_effort = true\n", ""),
     )?;
@@ -233,7 +249,13 @@ async fn a_patient_no_member_holds_is_not_found_and_nothing_is_sent() -> TestRes
     let elsewhere = format!(
         "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-1\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
-    let (app, _) = gateway_over(dir.path(), (&a.uri(), &b.uri()), &[], ("", &elsewhere))?;
+    let pdq = supplier().await?;
+    let (app, _) = gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
+        &[],
+        ("", &elsewhere),
+    )?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     let outcome: Value = serde_json::from_str(&text)?;
@@ -249,11 +271,23 @@ async fn a_patient_no_member_holds_is_not_found_and_nothing_is_sent() -> TestRes
 async fn with_no_cross_reference_the_summary_fails_closed_and_nothing_is_sent() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let (app, _) = gateway_over(dir.path(), (&a.uri(), &b.uri()), &[], ("", ""))?;
-    let (status, text) = call(app, summary("")?).await?;
-    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
-    assert!(text.contains("could not be resolved"), "{text}");
+    let pdq = supplier().await?;
+    // NOTE: the face needs the demographics binding for its header, which resolves through
+    // the cross-reference, so a face with no cross-reference fails closed at start.
+    let refused = gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
+        &[],
+        ("", ""),
+    )
+    .err()
+    .ok_or("a face with no cross-reference started")?;
+    assert!(
+        format!("{refused:?}").contains("PdqmWithoutResolver"),
+        "{refused:?}"
+    );
     assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
+    assert_eq!(0, pdq.searches(), "nothing is asked of the Supplier either");
     Ok(())
 }
 
@@ -261,7 +295,8 @@ async fn with_no_cross_reference_the_summary_fails_closed_and_nothing_is_sent() 
 async fn the_face_answers_its_capability_statement() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await?;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(
         app,
         Request::get(format!("{FHIR}/metadata")).body(Body::empty())?,
@@ -285,7 +320,8 @@ async fn the_face_answers_its_capability_statement() -> TestResult {
 async fn an_its_rest_path_under_the_base_still_answers_as_it_did() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await?;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(
         app,
         Request::get("/v1/demographic/party/1").body(Body::empty())?,

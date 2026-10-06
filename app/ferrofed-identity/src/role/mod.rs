@@ -11,6 +11,7 @@
 pub mod behalf;
 pub mod consent;
 pub mod demographics;
+pub mod header;
 pub mod localizer;
 pub mod patient;
 pub mod resolver;
