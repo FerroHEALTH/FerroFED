@@ -9,7 +9,8 @@
 //! the answer. What only node-side capture or an injected fault can show
 //! stays with the end-to-end suite, which calls these same checks and then
 //! reads its capturing proxies. The query text a check sends is the
-//! client's own, written as a Connectathon participant writes it.
+//! client's own, written as a Connectathon participant writes it, and built
+//! from a fixed template through `openehr-query` ([`ClientQuery`]).
 
 pub mod track1;
 pub mod track11;
@@ -21,6 +22,7 @@ pub mod track6;
 pub mod track7;
 pub mod track9;
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::Federated;
 use crate::conformance::fixture::Fixture;
 use crate::conformance::{Failure, ensure};
@@ -157,11 +159,18 @@ pub fn as_count(count: usize) -> Result<u64, Failure> {
     u64::try_from(count).map_err(|error| Failure::Check(format!("the count {count}: {error}")))
 }
 
+/// Each composition's uid, the plain query a client writes before it names
+/// the patient.
+pub const COMPOSITION_UIDS: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
+
 /// The plain patient query of a client: each composition's uid.
-#[must_use]
-pub fn patient_compositions(fixture: &Fixture) -> String {
-    format!(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {}",
-        fixture.patient.predicate()
-    )
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn patient_compositions(fixture: &Fixture) -> Result<String, Failure> {
+    Ok(ClientQuery::parse(COMPOSITION_UIDS)?
+        .of_patient(&fixture.patient)?
+        .to_aql())
 }

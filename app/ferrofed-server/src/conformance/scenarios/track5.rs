@@ -15,19 +15,31 @@
 //! both.
 
 use http::StatusCode;
+use openehr_query::federation::DirectiveKind;
 
+use crate::conformance::aql::ClientQuery;
 use crate::conformance::client::{Counted, Gateway, Reply, answered, ask, post_aql};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::{as_count, held_by};
 use crate::conformance::{Failure, ensure, ensure_eq};
 
-/// The patient's compositions, projecting `select`, followed by `tail`.
-#[must_use]
-pub fn compositions(fixture: &Fixture, select: &str, tail: &str) -> String {
-    format!(
-        "SELECT {select} FROM EHR e CONTAINS COMPOSITION c WHERE {} {tail}",
-        fixture.patient.predicate()
-    )
+/// The composition uids, aliased, before the query names the patient.
+const UIDS: &str = "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c";
+
+/// The `COUNT` of the compositions, before the query names the patient.
+const COUNT: &str = "SELECT COUNT(c/uid/value) AS n FROM EHR e CONTAINS COMPOSITION c";
+
+/// The patient's compositions as `template`, a query over `EHR e CONTAINS
+/// COMPOSITION c` that does not name the patient, with the patient's
+/// condition joined to it.
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when `template` is no AQL.
+pub fn compositions(fixture: &Fixture, template: &str) -> Result<String, Failure> {
+    Ok(ClientQuery::parse(template)?
+        .of_patient(&fixture.patient)?
+        .to_aql())
 }
 
 /// Holds that a projection every member answers alike passes one row per
@@ -41,7 +53,10 @@ pub async fn duplicates_and_distinct<G: Gateway>(
     gateway: &G,
     fixture: &Fixture,
 ) -> Result<(), Failure> {
-    let plain = compositions(fixture, "c/name/value AS name", "");
+    let plain = compositions(
+        fixture,
+        "SELECT c/name/value AS name FROM EHR e CONTAINS COMPOSITION c",
+    )?;
     let (_, plain) = answered(
         gateway,
         post_aql(&plain, &[])?,
@@ -61,7 +76,10 @@ pub async fn duplicates_and_distinct<G: Gateway>(
         plain.rows.iter().all(|row| Some(row) == first.as_ref()),
         || "CP-9: the default passes the duplicate through".to_owned(),
     )?;
-    let distinct = compositions(fixture, "DISTINCT c/name/value AS name", "");
+    let distinct = compositions(
+        fixture,
+        "SELECT DISTINCT c/name/value AS name FROM EHR e CONTAINS COMPOSITION c",
+    )?;
     let (_, distinct) = answered(
         gateway,
         post_aql(&distinct, &[])?,
@@ -86,19 +104,33 @@ pub async fn order_and_limit<G: Gateway>(
     gateway: &G,
     fixture: &Fixture,
 ) -> Result<Vec<Vec<String>>, Failure> {
-    let uid = "c/uid/value AS uid";
-    let union = compositions(fixture, uid, "");
+    let union = compositions(fixture, UIDS)?;
     let (_, union) = answered(gateway, post_aql(&union, &[])?, "the union").await?;
     let union = union.sorted_rows();
     ensure(union.len() > 1, || {
         "CP-32: needs rows from more than one member".to_owned()
     })?;
-    for (tail, expected) in [
-        ("ORDER BY c/uid/value ASC LIMIT 1", union.first()),
-        ("ORDER BY c/uid/value DESC LIMIT 1", union.last()),
-        ("ORDER BY c/uid/value ASC LIMIT 1 OFFSET 1", union.get(1)),
+    for (tail, template, expected) in [
+        (
+            "ORDER BY c/uid/value ASC LIMIT 1",
+            "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c \
+             ORDER BY c/uid/value ASC LIMIT 1",
+            union.first(),
+        ),
+        (
+            "ORDER BY c/uid/value DESC LIMIT 1",
+            "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c \
+             ORDER BY c/uid/value DESC LIMIT 1",
+            union.last(),
+        ),
+        (
+            "ORDER BY c/uid/value ASC LIMIT 1 OFFSET 1",
+            "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c \
+             ORDER BY c/uid/value ASC LIMIT 1 OFFSET 1",
+            union.get(1),
+        ),
     ] {
-        let aql = compositions(fixture, uid, tail);
+        let aql = compositions(fixture, template)?;
         let (_, page) = answered(gateway, post_aql(&aql, &[])?, tail).await?;
         ensure_eq(
             &expected.cloned().into_iter().collect::<Vec<_>>(),
@@ -110,9 +142,13 @@ pub async fn order_and_limit<G: Gateway>(
 }
 
 /// The undirected `COUNT` of the patient's compositions.
-#[must_use]
-pub fn count(fixture: &Fixture) -> String {
-    compositions(fixture, "COUNT(c/uid/value) AS n", "")
+///
+/// # Errors
+///
+/// Returns [`Failure::Query`] when the query cannot be built from its
+/// template, which a fixed template never gives cause for.
+pub fn count(fixture: &Fixture) -> Result<String, Failure> {
+    compositions(fixture, COUNT)
 }
 
 /// Returns the count rows of a `200` answer.
@@ -138,7 +174,7 @@ pub async fn aggregate_recombined<G: Gateway>(
     gateway: &G,
     fixture: &Fixture,
 ) -> Result<(), Failure> {
-    let reply = ask(gateway, post_aql(&count(fixture), &[])?).await?;
+    let reply = ask(gateway, post_aql(&count(fixture)?, &[])?).await?;
     reply.expect(StatusCode::OK, "CP-10: a declared undirected aggregate")?;
     let total = as_count(fixture.compositions())?;
     ensure_eq(
@@ -155,7 +191,7 @@ pub async fn aggregate_recombined<G: Gateway>(
 ///
 /// Returns [`Failure`] naming the first expectation that did not hold.
 pub async fn aggregate_refused<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result<(), Failure> {
-    let refused = ask(gateway, post_aql(&count(fixture), &[])?).await?;
+    let refused = ask(gateway, post_aql(&count(fixture)?, &[])?).await?;
     refused.expect(
         StatusCode::BAD_REQUEST,
         "CP-10: an undirected aggregate that is not cross-node-correct",
@@ -178,11 +214,10 @@ pub async fn aggregate_directed<G: Gateway>(
     fixture: &Fixture,
     endpoint: &str,
 ) -> Result<(), Failure> {
-    let aql = format!(
-        "SELECT COUNT(c/uid/value) AS n FROM ENDPOINT [\"{endpoint}\"] CONTAINS EHR e \
-         CONTAINS COMPOSITION c WHERE {}",
-        fixture.patient.predicate()
-    );
+    let aql = ClientQuery::parse(COUNT)?
+        .of_patient(&fixture.patient)?
+        .directed(DirectiveKind::Endpoint, None, &[endpoint])
+        .to_aql();
     let single = ask(gateway, post_aql(&aql, &[])?).await?;
     single.expect(StatusCode::OK, "CP-10: a directed single-node aggregate")?;
     let held = as_count(held_by(fixture, endpoint)?)?;
