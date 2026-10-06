@@ -385,7 +385,10 @@ format to export the log in (Annex II 2.6): each record is written as
 only the records "which the requester is authorized to view"
 (§3.81.4.1.3), so the access rights of each reader are set there, and it
 records every search as an `Audit Log Used` event of its own
-(§3.81.5.1). Neither ITI-81 nor the gateway gives a person's own
+(§3.81.5.1). FerroFED's tests run each search in the table above, and
+the refusal of one with no `date`, against the records the gateway writes
+to its harness repository, which answers ITI-81 and records each search
+as that event. Neither ITI-81 nor the gateway gives a person's own
 application a route to the log: the person reads it through the access
 service their Member State provides (Art 9(2)).
 

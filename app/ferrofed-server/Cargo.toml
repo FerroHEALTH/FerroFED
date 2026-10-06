@@ -140,6 +140,9 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# The query an Audit Log Used record carries, base64, read back by the
+# ITI-81 search test (#818).
+base64.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 # The JWK Set the gateway publishes, read as the onward tests verify it (#81).

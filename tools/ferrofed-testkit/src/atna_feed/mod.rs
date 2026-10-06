@@ -8,6 +8,10 @@
 //! TF-2 §3.20.4.2), and keeps every record it accepted, for a test to
 //! inspect (#486).
 //!
+//! It also answers ITI-81 Retrieve ATNA Audit Event, `GET [base]/AuditEvent`
+//! (§3.81), over the records it accepted, and keeps the `Audit Log Used`
+//! event each search records ([`FeedRepository::log_used`]).
+//!
 //! It answers `201` and keeps the record while it is
 //! [up](FeedRepository::set_up), and `503`, which a sender retries, while it
 //! is down. Once [silent](FeedRepository::go_silent), it takes each request
@@ -24,6 +28,8 @@ use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
 use crate::mock::Server;
 
+mod search;
+
 /// The FHIR base the harness serves under.
 const BASE: &str = "/arr/";
 
@@ -38,6 +44,7 @@ struct Held {
     asked: AtomicUsize,
     refused: AtomicUsize,
     records: Mutex<Vec<String>>,
+    used: Mutex<Vec<String>>,
 }
 
 /// A running harness FHIR Feed repository.
@@ -78,6 +85,15 @@ impl FeedRepository {
         Mock::given(method("POST"))
             .and(path(format!("{BASE}AuditEvent")))
             .respond_with(Answer(Arc::clone(&held)))
+            .mount(&server)
+            .await;
+        let base = format!("{}{BASE}", server.uri());
+        Mock::given(method("GET"))
+            .and(path(format!("{BASE}AuditEvent")))
+            .respond_with(search::Search {
+                held: Arc::clone(&held),
+                base,
+            })
             .mount(&server)
             .await;
         Self { server, held }
@@ -147,5 +163,17 @@ impl FeedRepository {
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    /// Every `Audit Log Used` event the repository recorded for an ITI-81
+    /// search of its log, in the order of the searches, as FHIR JSON text
+    /// (`RESTful` ATNA §3.81.5.1).
+    #[must_use]
+    pub fn log_used(&self) -> Vec<String> {
+        self.held
+            .used
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 }

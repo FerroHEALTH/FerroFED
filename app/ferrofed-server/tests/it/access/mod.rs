@@ -26,6 +26,7 @@ mod query;
 mod relayed;
 mod retention;
 mod routed;
+mod search;
 
 use std::collections::BTreeMap;
 use std::error::Error;
