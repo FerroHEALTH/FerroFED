@@ -44,7 +44,7 @@ use crate::role::behalf::OnBehalfOf;
 use crate::role::consent::{ConsentDecision, ConsentPrefilter, Requester};
 use crate::role::localizer::{Localization, Localizer};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-use crate::role::resolver::{Resolution, Resolver};
+use crate::role::resolver::{Identification, Resolution, Resolver};
 
 /// The deployment profile a server configuration declares.
 ///
@@ -246,6 +246,35 @@ impl Resolver for StaticResolver {
                 (member.clone(), resolution)
             })
             .collect()
+    }
+
+    /// Names the patient of each row that maps an identifier in one of
+    /// `namespaces` to `ehr_id` at `member`.
+    async fn identify(
+        &self,
+        member: &NodeId,
+        ehr_id: &EhrId,
+        namespaces: &[IdentifierNamespace],
+        _on_behalf: &OnBehalfOf,
+        _deadline: Instant,
+    ) -> Identification {
+        let named: Vec<PatientRef> = self
+            .rows
+            .iter()
+            .filter(|row| {
+                row.member == *member
+                    && row.ehr_id == *ehr_id
+                    && namespaces.contains(&row.namespace)
+            })
+            // NOTE: no specification governs this: our own design; a row with an empty
+            // value is refused at load, so no row is skipped here.
+            .filter_map(|row| PatientRef::new(row.namespace.clone(), row.value.clone()).ok())
+            .collect();
+        if named.is_empty() {
+            Identification::Unknown
+        } else {
+            Identification::Named(named)
+        }
     }
 }
 

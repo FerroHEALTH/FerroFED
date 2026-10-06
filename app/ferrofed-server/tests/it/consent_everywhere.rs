@@ -107,6 +107,17 @@ struct KnownAt(&'static [(&'static str, &'static str)]);
 
 #[async_trait]
 impl Resolver for KnownAt {
+    async fn identify(
+        &self,
+        _member: &NodeId,
+        _ehr_id: &EhrId,
+        _namespaces: &[ferrofed_identity::role::patient::IdentifierNamespace],
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
+        _deadline: Instant,
+    ) -> ferrofed_identity::role::resolver::Identification {
+        ferrofed_identity::role::resolver::Identification::Unsupported
+    }
+
     async fn resolve(
         &self,
         _patient: &PatientRef,

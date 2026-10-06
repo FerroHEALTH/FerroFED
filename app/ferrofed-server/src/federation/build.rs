@@ -308,7 +308,8 @@ fn access_log(
         if let Some(sink) = binding.access_sink(settings)? {
             return Ok(Some(
                 AccessLog::new(settings.access_log.map.clone(), sink)
-                    .with_retention(retention.clone()),
+                    .with_retention(retention.clone())
+                    .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
             ));
         }
     }

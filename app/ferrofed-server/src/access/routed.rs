@@ -22,7 +22,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier};
+use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
 use openehr_base::prelude::UidBasedId;
@@ -163,6 +163,13 @@ impl Routed {
             },
         };
         let mut response = response;
+        let lookup = if self.patient.is_some() {
+            PatientLookup::RequestNamed
+        } else {
+            // NOTE: no specification governs this: our own design; the record gate names
+            // the patient, and an ehr_id it never reaches stays marked unavailable.
+            PatientLookup::Unavailable
+        };
         let subject = DataSubject {
             patient: self.patient,
             ehrs: self
@@ -171,6 +178,7 @@ impl Routed {
                 .map(|ehr_id| EhrAt {
                     endpoint: endpoint.clone(),
                     ehr_id: ehr_id.as_str().to_owned(),
+                    patient: lookup.clone(),
                 })
                 .collect(),
         };

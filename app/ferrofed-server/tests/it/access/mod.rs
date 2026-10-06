@@ -19,6 +19,7 @@ mod address;
 mod gate;
 mod limits;
 mod origins;
+mod patient;
 mod professional;
 mod query;
 mod relayed;
@@ -140,6 +141,25 @@ fn settings(
     (extra, federation): (&str, &str),
     retention: &str,
 ) -> Result<Settings, Box<dyn Error>> {
+    let identity = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
+    settings_resolving(
+        dir,
+        (a, b),
+        repository,
+        (extra, federation),
+        (retention, &identity),
+    )
+}
+
+/// The settings of [`settings`], resolving the patient through the identity
+/// binding `identity` writes in place of the development cross-reference.
+fn settings_resolving(
+    dir: &Path,
+    (a, b): (&str, &str),
+    repository: &FeedRepository,
+    (extra, federation): (&str, &str),
+    (retention, identity): (&str, &str),
+) -> Result<Settings, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
@@ -148,8 +168,7 @@ fn settings(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
          per_node_timeout_ms = 4000\noverall_timeout_ms = 6000\n{federation}\n\
-         [stored_queries]\npath = {store}\n{}{}{}",
-        crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
+         [stored_queries]\npath = {store}\n{identity}{}{}",
         audit_tables(repository, extra),
         map_toml(retention)
     );

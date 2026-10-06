@@ -378,11 +378,12 @@ them:
   reviewed at the Audit Record Repository with ITI-81, the connection of
   external software point 3.3 admits, and each states how long it is kept
   by its origins and categories, never under three years (point 3.4, Art
-  9(2); [Reading the log](../operate/audit.md#reading-the-log)). Finding
-  every access to one person's data by that search
-  ([#796](https://github.com/FerroHEALTH/FerroFED/issues/796)) and access
-  rights by origin and category
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) are planned.
+  9(2); [Reading the log](../operate/audit.md#reading-the-log)). A request
+  addressed by `ehr_id` names the patient the identity binding holds under
+  it, so a search by the person's identifier finds it (Art 9(1)); a query
+  over many patients' data names none. Access rights by origin and
+  category are planned
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
