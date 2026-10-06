@@ -64,7 +64,7 @@ statement of the text.
 | Operator points | 3, scored against the federation operator |
 | Test tracks | 10 of 11 scored by a test, 1 deferred, 0 planned |
 | Requirements | 46: 46 reached by a point, 0 by a track only, 0 by neither |
-| Marked tests | 939, carrying 1207 point and track markers |
+| Marked tests | 940, carrying 1208 point and track markers |
 
 ## The nodes
 

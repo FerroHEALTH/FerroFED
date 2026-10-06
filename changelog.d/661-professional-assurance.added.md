@@ -6,10 +6,10 @@
   and the least level a query, an EHR request or a DEMOGRAPHIC request
   needs. A token below it, without the claim, or with a value listed at no
   level is answered `401 authentication-assurance-insufficient` with the
-  RFC 9470 §3 challenge `insufficient_user_authentication`, and no node is
-  asked. The level is read from the token or the introspection answer, and
-  `config check` notes each issuer that declares none. Each node is told who
-  acts (`acting`), the level reached (`assurance_level`) and the
-  professional's IHE IUA `subject_name` and `national_provider_identifier`
-  in the caller's `openEHR-federation-client` token, and in nothing else the
-  gateway sends.
+  RFC 9470 §3 challenge `insufficient_user_authentication`; no node is
+  asked and no access record is written. The level is read from the token
+  or the introspection answer, and `config check` notes each issuer that
+  declares none. Each node is told who acts (`acting`), the level reached
+  (`assurance_level`) and the professional's IHE IUA `subject_name` and
+  `national_provider_identifier` in the caller's
+  `openEHR-federation-client` token, and in nothing else the gateway sends.

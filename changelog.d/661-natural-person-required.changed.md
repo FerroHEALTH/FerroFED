@@ -6,4 +6,5 @@
   `client_tokens_act_for_professional = true` and the token names the
   professional, in the IUA `national_provider_identifier` or the
   `[auth.issuer.requester]` professional claim. Definitions, `OPTIONS` and
-  the operator surface are unchanged.
+  the operator surface are unchanged. A refused request asks no node and
+  writes no access record.
