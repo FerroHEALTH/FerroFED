@@ -206,3 +206,58 @@ fn a_face_with_no_registry_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+/// The `[pmir]` table of a feed served at `path` under `{base}`.
+#[cfg(feature = "binding-ihe")]
+fn pmir(path: &str) -> String {
+    format!(
+        "\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\nfeed_token = \"Qz7feedtoken\"\npath = \"{path}\"\n"
+    )
+}
+
+#[cfg(feature = "binding-ihe")]
+#[test]
+fn a_pmir_feed_route_on_the_face_is_refused_naming_both_keys() -> TestResult {
+    for path in ["/fhir", "/fhir/feed", "/FHIR/Patient/feed"] {
+        let dir = tempfile::tempdir()?;
+        let tables = format!("{}{}", fhir_tables(), pmir(path));
+        let refused = resolved(dir.path(), &public(), &tables);
+        assert!(
+            matches!(
+                refused,
+                Err(Error::Fhir(FhirError::Clash { key: "pmir.path" }))
+            ),
+            "{path}: {refused:?}"
+        );
+        let shown = refused
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(
+            shown.contains("fhir.base") && shown.contains("pmir.path"),
+            "{shown}"
+        );
+    }
+    let dir = tempfile::tempdir()?;
+    let tables = fhir_tables().replace(&format!("base = \"{FHIR}\""), "base = \"/pmir/eu\"");
+    let refused = resolved(dir.path(), &public(), &format!("{tables}{}", pmir("/pmir")));
+    assert!(
+        matches!(
+            refused,
+            Err(Error::Fhir(FhirError::Clash { key: "pmir.path" }))
+        ),
+        "the face under the feed: {refused:?}"
+    );
+    Ok(())
+}
+
+#[cfg(feature = "binding-ihe")]
+#[test]
+fn a_pmir_feed_route_beside_the_face_is_admitted() -> TestResult {
+    for path in ["/pmir/feed", "/fhirfeed", "/fhir-feed"] {
+        let dir = tempfile::tempdir()?;
+        let tables = format!("{}{}", fhir_tables(), pmir(path));
+        resolved(dir.path(), &public(), &tables)?;
+    }
+    Ok(())
+}

@@ -138,6 +138,12 @@ pub enum FhirError {
     /// not take.
     #[error("a [[fhir.mapping]] is refused")]
     Mapping(#[from] MappingsError),
+    /// A route a binding serves lies on the face's base, or the base on it.
+    #[error("fhir.base and {key} name overlapping routes; give each a path of its own")]
+    Clash {
+        /// The key of the binding's route, such as `pmir.path`.
+        key: &'static str,
+    },
 }
 
 impl Config {
@@ -236,6 +242,28 @@ impl Fhir {
             written: self.clone(),
         })
     }
+}
+
+/// Refuses `route`, the absolute path a binding serves under the key `key`,
+/// when it is `fhir`'s base, lies under it, or holds it, ASCII case ignored,
+/// so the face and the binding never share a path.
+///
+/// # Errors
+///
+/// [`FhirError::Clash`] naming `key`.
+pub fn apart(fhir: &FhirSettings, route: &str, key: &'static str) -> Result<(), FhirError> {
+    let base = fhir.base.as_str().to_ascii_lowercase();
+    let route = route.to_ascii_lowercase();
+    let holds = |outer: &str, inner: &str| {
+        inner == outer
+            || inner
+                .strip_prefix(outer)
+                .is_some_and(|rest| rest.starts_with('/'))
+    };
+    if holds(&base, &route) || holds(&route, &base) {
+        return Err(FhirError::Clash { key });
+    }
+    Ok(())
 }
 
 /// Whether `base` is the ITS-REST face's `server_base`, lies under it, or,

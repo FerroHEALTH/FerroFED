@@ -197,7 +197,8 @@ context = "example_allergy.context"          # the context mapping's metadata.na
 ```
 
 - `[fhir]` needs a registry and `server.public_url`, and refuses a base on a
-  path the gateway serves under `{base}`.
+  path the gateway serves under `{base}`, or one that overlaps the PMIR feed
+  route (`pmir.path`).
 - Each `[[fhir.mapping]]` is one FHIRconnect 1.0.0 context mapping, compiled
   when the configuration is read. It must map to a profile the crosswalk
   admits for an entry of its section, for example `allergyIntolerance-eu-core`
