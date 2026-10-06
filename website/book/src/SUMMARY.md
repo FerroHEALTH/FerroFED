@@ -28,6 +28,7 @@
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
   - [Information sheet](evaluate/information-sheet.md)
+  - [Receiving a document](evaluate/receiving-documents.md)
   - [Clinical safety risk file](evaluate/clinical-safety.md)
   - [Complaints and incidents](evaluate/post-market.md)
 - [Data protection](evaluate/data-protection.md)

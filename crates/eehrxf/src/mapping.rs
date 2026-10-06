@@ -105,6 +105,11 @@ impl Mapping {
         self.programs.is_empty()
     }
 
+    /// Returns the compiled programs, for the receive direction.
+    pub(crate) const fn programs(&self) -> &ProgramSet {
+        &self.programs
+    }
+
     /// Runs the mapping over one canonical-JSON composition.
     ///
     /// The composition names its template at `archetype_details.template_id`,

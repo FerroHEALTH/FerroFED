@@ -21,6 +21,9 @@ mod profile;
 #[cfg(test)]
 mod property;
 #[cfg(test)]
+#[cfg(feature = "fhir-r4")]
+mod receive;
+#[cfg(test)]
 mod refusals;
 #[cfg(test)]
 mod support;

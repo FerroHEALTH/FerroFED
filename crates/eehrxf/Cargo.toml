@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "eehrxf"
-description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, mapped from openEHR by FHIRconnect"
-# The name is not reserved on crates.io yet, and it must be claimed before the
-# `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.5"
+description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, provided from and received into openEHR through FHIRconnect"
+# The name is held on crates.io by a 0.0.0 placeholder published on 2026-10-06,
+# and the crate's line here starts above it (no specification governs this: our
+# own design).
+version = "0.0.6"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -48,12 +49,14 @@ fhir-r4 = [
   "fhir-types/r4",
   "fhir-types/resources",
 ]
-# The mapping from openEHR compositions to the FHIR R4 exchange format, run in
-# process by the FHIRconnect 1.0.0 engine, which writes R4 alone.
+# The mapping between openEHR compositions and the FHIR R4 exchange format, run
+# in process by the FHIRconnect 1.0.0 engine, which reads and writes R4 alone,
+# with the RM model a received document is kept in.
 openehr = [
   "fhir-r4",
   "dep:fhirconnect",
   "dep:openehr-mapping-core",
+  "dep:openehr-rm",
 ]
 
 [dependencies]
@@ -61,6 +64,7 @@ fhir-types = { workspace = true, optional = true }
 fhirconnect = { workspace = true, optional = true }
 flate2.workspace = true
 openehr-mapping-core = { workspace = true, optional = true }
+openehr-rm = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 tar.workspace = true

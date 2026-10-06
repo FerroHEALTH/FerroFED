@@ -32,6 +32,17 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   run in process, through FerroBRIDGE's `fhirconnect` engine, over a
   canonical-JSON composition. The answer is a FHIR R4 `Bundle` of the mapped
   resources with one `Provenance` covering them.
+- `receive` (feature `fhir-r4`): a document received in the exchange format
+  (Annex II 2.2 and 2.3). `ReceivedDocument::read` decodes it against FHIR R4,
+  holds it to the document rules of the R4 `Bundle` (`bdl-9`, `bdl-10`,
+  `bdl-11`), resolves its subject to its `Patient` entry and keeps its text
+  byte for byte. `ReceivedDocument::check` walks a `Bundle` and a
+  `Composition` profile read from the vendored package over it:
+  cardinalities, `fixed[x]` and `pattern[x]` values, and slices, with every
+  constraint it cannot evaluate listed. With `openehr`,
+  `Mapping::to_openehr` maps the document into one canonical composition
+  through FHIRconnect and keeps the document in the composition's
+  `FEEDER_AUDIT.original_content`.
 
 The crate authors no mapping language and no profile mapping: the mapping
 files are its input. It depends on no logging component and on no
