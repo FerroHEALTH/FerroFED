@@ -317,8 +317,8 @@ from the same set. 0.1.108 is the release the FHIRconnect engine builds on
 
 ## FHIRconnect engine (crates.io)
 
-The European interoperability component (`crates/eehrxf`, feature `fhir-r4`,
-#684) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
+The European interoperability component (`crates/eehrxf`, feature `openehr`,
+#684, #730) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
 `fhirconnect`, with the template index and the mapping-file loader of
 `openehr-mapping-core` (decision A61). Both are pinned exactly in the root
 `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, and both build

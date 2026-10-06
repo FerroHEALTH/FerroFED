@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The exchange format in FHIR R4, mapped from openEHR by FHIRconnect.
+//! The exchange format in FHIR R4, mapped from openEHR by FHIRconnect
+//! (feature `openehr`).
 //!
 //! FHIRconnect 1.0.0 maps an openEHR composition to FHIR resources through a
 //! context mapping per (profile, template) and the model mappings it starts

@@ -11,7 +11,7 @@ mod category;
 #[cfg(test)]
 mod dataset;
 #[cfg(test)]
-#[cfg(feature = "fhir-r4")]
+#[cfg(feature = "openehr")]
 mod mapping;
 #[cfg(test)]
 mod property;

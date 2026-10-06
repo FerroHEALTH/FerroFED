@@ -33,8 +33,10 @@ aws-lc-rs.workspace = true
 base64.workspace = true
 ferrofed-registry.workspace = true
 # The access token request of the Nuts grant, Annex B §B.4 (#88), and the
-# authorizer the Nuts grant gives the NVI client (#539), under nl.
-nl-generic-functions = { workspace = true, optional = true, features = ["nuts-auth", "nvi"] }
+# authorizer trait the Nuts grant implements for a Generic Functions client
+# (#539), under nl. Neither feature compiles a FHIR model, so the engine
+# builds none (#730).
+nl-generic-functions = { workspace = true, optional = true, features = ["authorizer", "nuts-auth"] }
 # The authorization server metadata checks (RFC 8414) the OAuth 2.0 issuer
 # audience and the FAPI 2.0 grant hold their server to (#497, #551).
 oauth-server-metadata.workspace = true
@@ -88,6 +90,8 @@ uuid.workspace = true
 [dev-dependencies]
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
+# The NVI client the Nuts grant's authorizer is tested in (#539).
+nl-generic-functions = { workspace = true, features = ["nuts-auth", "nvi"] }
 # The HTTP client the Nuts grant's tests hand its client (#88).
 reqwest.workspace = true
 serde_json.workspace = true

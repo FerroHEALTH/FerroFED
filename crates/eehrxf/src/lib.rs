@@ -16,10 +16,13 @@
 //!   element;
 //! - [`category`]: the priority categories this build carries, one Cargo
 //!   feature each, and the logical model and obligations profile of each;
-//! - `mapping` (feature `fhir-r4`): a FHIRconnect 1.0.0 mapping, compiled
-//!   once against an operational template and run in process over a
-//!   canonical-JSON composition, answering FHIR R4 resources with their
-//!   `Provenance`.
+//! - `mapping` (feature `openehr`, which turns on `fhir-r4`): a FHIRconnect
+//!   1.0.0 mapping, compiled once against an operational template and run in
+//!   process over a canonical-JSON composition, answering FHIR R4 resources
+//!   with their `Provenance`.
+//!
+//! The feature `fhir-r4` is the FHIR R4 serialisation and compiles no
+//! openEHR crate; only `openehr` brings in the openEHR side the mapping reads.
 //!
 //! The crate depends on no logging component and on nothing of the system
 //! that serves the documents, so the interoperability component stays
@@ -43,5 +46,5 @@
 
 pub mod category;
 pub mod dataset;
-#[cfg(feature = "fhir-r4")]
+#[cfg(feature = "openehr")]
 pub mod mapping;

@@ -62,8 +62,8 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use nl_generic_functions::authorizer::Authorizer;
 use nl_generic_functions::identification::is_bsn_system;
-use nl_generic_functions::nvi::authorizer::Authorizer;
 use serde::Deserialize;
 
 use super::nuts::{self, NutsOnward};
