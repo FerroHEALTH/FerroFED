@@ -301,8 +301,19 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
     }
     let surface = &settings.metrics;
     if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
+        let scrape = if surface.scrape_token.is_some() {
+            "a scrape that carries metrics.scrape_token"
+        } else if surface
+            .tls
+            .as_ref()
+            .is_some_and(|tls| tls.client_ca.is_some())
+        {
+            "a client whose certificate metrics.tls.client_ca_file admits"
+        } else {
+            "every peer"
+        };
         println!(
-            "ferrofed: note: metrics.listen {address} is not a loopback address: a remote peer reads GET {} alone, and the admin write actions ({}) answer 403 to every peer that is not loopback",
+            "ferrofed: note: metrics.listen {address} is not a loopback address: GET {} answers {scrape}, and the admin write actions ({}) answer a caller whose token carries an [[auth.issuer]] operator_scope",
             metrics::PATH,
             admin::DISTRIBUTE
         );
@@ -566,7 +577,7 @@ fn serve_command(
     config: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
-    let admin = admin::listener(&settings.metrics, state);
+    let admin = admin::listener(&settings, state);
     let outcome = runtime.block_on(async {
         use anyhow::Context;
 

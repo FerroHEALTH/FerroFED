@@ -10,7 +10,7 @@ use http::{HeaderValue, header};
 use crate::error::{self, Code};
 
 /// The `realm` of every `WWW-Authenticate` challenge (RFC 6750 §3).
-const REALM: &str = "ferrofed";
+pub(crate) const REALM: &str = "ferrofed";
 
 /// Why a request was refused at the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

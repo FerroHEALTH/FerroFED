@@ -11,6 +11,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
+use ferrofed_identity::dev::Profile;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
@@ -19,7 +20,7 @@ use openehr_federation::id::FederationId;
 
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
-use crate::config::secrets::{resolve_node_credentials, resolve_signing};
+use crate::config::secrets::{resolve_node_credentials, resolve_signing, secret};
 use crate::config::server::{METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
@@ -54,7 +55,9 @@ impl Config {
     /// distributed with no registry, or no `PUT`, to distribute from. The
     /// metrics surface refuses a remote listener without `metrics.allow_remote`
     /// ([`Error::MetricsRemote`]), a listener on `server.listen`
-    /// ([`Error::MetricsShared`]), and the metrics push and the trace export
+    /// ([`Error::MetricsShared`]), a remote listener outside the development
+    /// profile whose scrape neither a scrape token nor a client CA
+    /// authenticates ([`Error::MetricsUnauthenticated`]), and the metrics push and the trace export
     /// each refuse a collector that is no `http://` URL
     /// ([`Error::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`Error::Scope`]),
@@ -122,7 +125,7 @@ impl Config {
         signed_grants(signing.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
-        let metrics = resolve_metrics(&self.metrics, listen)?;
+        let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
         // of the registry and is never offered without it.
         if federation.fan_out_stored_queries {
@@ -342,8 +345,13 @@ fn signed_grants(
 
 /// Resolves `[metrics]`: the listener on a loopback address unless
 /// `allow_remote` is set and never on `server`, the gateway's own address,
+/// its scrape authenticated off loopback outside the development profile,
 /// and the OTLP collector an `http://` URL.
-fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSettings, Error> {
+fn resolve_metrics(
+    metrics: &Metrics,
+    server: SocketAddr,
+    profile: Profile,
+) -> Result<MetricsSettings, Error> {
     let listen = metrics
         .listen
         .as_deref()
@@ -356,20 +364,35 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
                 })
         })
         .transpose()?;
+    let tls = resolve_tls(metrics.tls.as_ref(), METRICS_TLS)?;
+    let scrape_token = secret(
+        "metrics.scrape_token",
+        metrics.scrape_token.as_ref(),
+        metrics.scrape_token_file.as_deref(),
+    )?;
     if let Some(address) = listen {
-        // NOTE: no specification governs this: our own design; the listener has
-        // no authentication, so it stays on the host unless the operator says.
+        // NOTE: no specification governs this: our own design; the listener stays
+        // on the host unless the operator says, and off it the scrape is authenticated.
         if !address.ip().is_loopback() && !metrics.allow_remote {
             return Err(Error::MetricsRemote { address });
         }
         if address == server {
             return Err(Error::MetricsShared { address });
         }
+        let mutual = tls.as_ref().is_some_and(|tls| tls.client_ca.is_some());
+        if !address.ip().is_loopback()
+            && profile == Profile::Production
+            && scrape_token.is_none()
+            && !mutual
+        {
+            return Err(Error::MetricsUnauthenticated { address });
+        }
     }
     Ok(MetricsSettings {
         listen,
         otlp_endpoint: otlp_collector("metrics.otlp_endpoint", metrics.otlp_endpoint.as_ref())?,
-        tls: resolve_tls(metrics.tls.as_ref(), METRICS_TLS)?,
+        tls,
+        scrape_token,
     })
 }
 

@@ -13,6 +13,7 @@
     reason = "the test seam: the records are read as JSON values"
 )]
 
+mod accessor;
 mod address;
 mod gate;
 mod limits;

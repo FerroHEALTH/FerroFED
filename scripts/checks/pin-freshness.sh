@@ -134,7 +134,7 @@ W3C Bitstring Status List 1.0	vc-bitstring-status-list	-"
 readonly UNWATCHED_SCRIPTS="\
 openid.sh	the OpenID Foundation publishes no release feed; FAPI 2.0 and OpenID4VCI 1.0 are pinned at their Final text, and OpenID4VP draft 18 is the draft Nuts RFC021 cites
 mitz.sh	VZVZ publishes no release feed for the Mitz architecture documents
-eu.sh	scripts/checks/ehds-acts.sh, the second job of the weekly run, reads EUR-Lex and the Commission's register for the acts this corpus vendors
+eu.sh	scripts/checks/ehds-acts.sh, the second job of the weekly run, reads EUR-Lex and the Commission's register for the acts the EHDS corpus vendors; the Cyber Resilience Act corpus is read as published when it was pinned, and the script fails when an upstream byte moves
 ihe-iti-tf.sh	the IHE ITI-20 Record Audit Event row reads the same ITI Technical Framework revision, and the script fails when an upstream byte of a Volume 1 or Volume 2 page moves
 de.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
 at.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves

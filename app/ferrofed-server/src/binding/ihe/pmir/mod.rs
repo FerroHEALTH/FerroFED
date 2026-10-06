@@ -32,7 +32,6 @@ use std::time::Duration;
 use ferrofed_identity::ihe::pmir::{self, PmirConfigError};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
-use http::header::AUTHORIZATION;
 use std::sync::Arc;
 
 use ihe_iti::balp::{AuditError, AuditRecorder};
@@ -222,19 +221,6 @@ impl IdentityFeed {
     /// Whether `headers` carry the feed token as their one bearer token,
     /// compared in constant time (RFC 6750 §2.1).
     fn authenticated(&self, headers: &HeaderMap) -> bool {
-        let mut values = headers.get_all(AUTHORIZATION).iter();
-        let (Some(value), None) = (values.next(), values.next()) else {
-            return false;
-        };
-        let Some((scheme, token)) = value.to_str().ok().and_then(|text| text.split_once(' '))
-        else {
-            return false;
-        };
-        scheme.eq_ignore_ascii_case("bearer")
-            && aws_lc_rs::constant_time::verify_slices_are_equal(
-                token.trim_start_matches(' ').as_bytes(),
-                self.token.expose().as_bytes(),
-            )
-            .is_ok()
+        crate::auth::bearer_matches(headers, self.token.expose())
     }
 }

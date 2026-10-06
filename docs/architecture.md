@@ -1602,10 +1602,14 @@ collector, a periodic OTLP push over gRPC, so an instrument cannot exist on
 one surface and not the other. The pull reader is served as the Prometheus
 text exposition at `GET /metrics` on an admin listener of its own,
 `[metrics] listen`, off when unset and never the gateway's client listener,
-so no client reaches it and it needs no gateway authentication; the
+so no client of the federation reaches it; the
 configuration refuses a non-loopback address unless `[metrics]
 allow_remote = true`, an address equal to `server.listen`, and a collector
-that is no `http://` URL. The instruments fill from what the gateway already
+that is no `http://` URL. The scrape is open until `[metrics]
+scrape_token_file` sets a bearer token it must carry, compared in constant
+time; outside the development profile a non-loopback listener is refused
+unless that token or `[metrics.tls] client_ca_file` authenticates the
+scrape (#635). The instruments fill from what the gateway already
 observes and send nothing of their own: `ferrofed.integrity.incidents{kind}`
 reads the per-kind counts `Incident::emit` keeps, `ferrofed.node.requests
 {endpoint, outcome}` and `ferrofed.node.request.duration{endpoint}` read the
@@ -1637,8 +1641,11 @@ registry does not hold, `400` for a request naming no member, a body, a
 deployment without `federation.fan_out_stored_queries`, or an
 endpoint-targeted definition, and `405` with an empty `Allow` at a read-only
 registry (RFC 9110 §10.2.1), whose operator publishes the definitions. With
-`[metrics] listen` unset the action does not exist, and the listener's
-loopback rule with `allow_remote` holds it as it holds the metrics.
+`[metrics] listen` unset the action does not exist. Every write action on
+the admin listener is admitted by the client authentication gate of
+`[auth]`, reused as it stands, only for a token carrying its issuer's
+`operator_scope`, from any peer; the development profile also admits a
+loopback peer that sends no credential (#635).
 
 **Stored queries** (§12.7, N44, #77) are the one state that needs a store.
 A client registers a federated stored query with
@@ -2554,7 +2561,8 @@ Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
 A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489,
-A53 on 2026-10-05 (#493), A54 on #551, and A55 on #275. The bracket names the report and its
+A53 on 2026-10-05 (#493), A54 on #551, and A55 on #275; A73 was decided by
+the owner on 2026-10-06 (#654). The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -2632,6 +2640,7 @@ R4 is #23, #25 and #27).
 | A70 | Restriction and categories for a contact-point request [#657, amending A53] | every request from a national-contact-point issuer is served with `disclose = false`, whatever the deployment's `[federation.consent] disclose`; the per-issuer setting can only tighten; FerroFED applies no Member State of treatment's category rule and leaves release to the node, which receives the foreign professional in the conveyance (#662) | Art 8 third paragraph ("shall not be visible to healthcare providers") and Art 11(5) apply to a foreign provider; Art 11(4) makes the category rules "those of the Member State of treatment", which the contact point of that state applies; N26 and N27 keep release at the node | decided on #657 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 | A71 | The access record of a contact-point request [#657] | the Annex II 3.2 record (A57, A59) names the foreign healthcare provider under (a) and the foreign professional under (b), with their country and issuing authority, and the contact point as the relaying client; a correlation identifier the connector sends is recorded so the record can be joined with the contact point's exchange log; the record feeds the log access interface (#660) and the #659 emergency mark; FerroFED keeps no eHDSI audit format | Annex II 3.2(a) to (e); Art 9(1) and (2) give the patient the provider, time and data of each access; 2026/2083 Art 15(1)(f)(ii) puts the exchange log on the contact point; no read text asks the national side for an audit format (silence S4); the correlation header is our own design | decided on #657 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 | A72 | The NCP-level serialisation [#657, amending A62] | FerroFED answers the national connector in the EHR-system-level exchange format of A62 (FHIR R4) and emits no eHDSI CDA pivot or national CDA; transformation to the NCP-level profile, transcoding and translation stay with the contact point; an `eehrxf` `cda` feature is added only when the Art 15(1) act makes CDA the EHR-system-level format or the eHDSI requirements catalogue, once read, places CDA production on the national infrastructure | recital 26 allows "different profiles" at the level of EHR systems and of contact points; eHN PS §5.3 makes the CDA IG "the normative artefact" for exchange "between two countries"; 2026/2083 Art 3(4) and (5) give mapping and translation to the Member State with a central terminology service; the eHDSI CDA IG is not vendored; no read text says which party produces the pivot (silence S3) | decided on #657 (2026-10-06, by the orchestrator under the owner's standing delegation) |
+| A73 | The Cyber Resilience Act and a source-available release [#654] | every tagged release (source tag, binary tarballs, gateway and console images of one version) is one product with digital elements Cadasto B.V. places on the market as manufacturer; no FOSS or steward claim; `main` documented as development code not supplied for use; CRA Art 14 reporting put in effect now; from 11 December 2027 one technical documentation set, one EU declaration of conformity and one CE marking for the CRA and the EHDS, assessed through the EHDS Chapter III procedure; a support period of at least five years with its end date published; EHDS Art 35 and CRA Art 23 met by a 10-year register of every economic operator supplied under a contract, the public release not gated, registration-gated downloads held as the fallback; counsel's answers before the first release placed from 11 December 2027, and on the commercial-activity, manufacturer and Art 14 points now | CRA Art 3(22) and recital 15 ("an intention to monetise") with a licence that sells production use; BUSL-1.1 does not give "all rights" to use, so it is not FOSS under Art 3(48), and Art 3(14), Art 24 and Art 32(5) do not apply; Art 71(2) and Art 69(3) apply Art 14 from 11 September 2026 to products placed before 11 December 2027; EHDS Art 104 inserts CRA Art 32(5a) and replaces Art 13(4) and 31(3); CRA Art 28(3) and EHDS Art 39(2) each require a single declaration; EHDS Art 35 has no "where available", unlike CRA Art 23(1)(b), and 2019/1020 Art 3(13) counts whoever puts a system into service as an economic operator; section 16 | decided by the owner on #654 (2026-10-06) |
 
 ## 16. Regulatory status
 
@@ -2702,6 +2711,50 @@ system's conformity or intended purpose its manufacturer. Who carries the
 manufacturer's obligations for a given deployment is for that deployment's
 counsel to confirm, and the book page names the points; the classification
 does not wait for that review, which can only narrow it.
+
+**The Cyber Resilience Act (decision A73, decided by the owner on 2026-10-06).**
+Regulation (EU) 2024/2847 and the market surveillance acts are vendored in
+`docs/specs/eu-cra/` (#654), and the research with its citations is on #654.
+The CRA applies to products with digital elements "made available on the
+market" (Art 2(1)), which Art 3(22) defines as supply "in the course of a
+commercial activity, whether in return for payment or free of charge";
+recital 15 names "an intention to monetise" as a mark of that activity, and
+FerroFED's licence sells production use. BUSL-1.1 does not provide "all
+rights to make it freely accessible, usable, modifiable and
+redistributable" (Art 3(48)), so FerroFED is not free and open-source
+software within the CRA and the open-source software steward regime (Art
+3(14), Art 24) is not open to it. EHDS Art 2(1)(d) takes "placing on the
+market", "manufacturer" and "economic operator" from Regulation (EU)
+2019/1020 Art 3(2), (8) and (13), whose Art 3(1) has the same "commercial
+activity" test. The decision:
+
+- Every tagged release (the source tag, the binary tarballs, the gateway
+  image and the console image of one version) is one product that Cadasto
+  B.V. places on the market as its manufacturer (CRA Art 3(13)); `main` is
+  documented as development code that is not supplied for use.
+- CRA Art 14 reporting is put into effect now: Art 71(2) applies it from 11
+  September 2026, and Art 69(3) to products placed on the market before 11
+  December 2027, the v0.0.x releases among them.
+- From 11 December 2027 (Art 71(2)) each release meets Annex I, carries a
+  support period of at least five years with its end date (Art 13(8),
+  (19)), and has one technical documentation set, one EU declaration of
+  conformity and one CE marking for the CRA and the EHDS. EHDS Art 104
+  inserts CRA Art 32(5a), so the CRA's essential requirements are assessed
+  through the EHDS Chapter III procedure, and replaces CRA Art 31(3), so one
+  file serves both acts; CRA Art 28(3) and EHDS Art 39(2) each require the
+  single declaration. EHDS recital 112 keeps hosted and in-house systems out
+  of the CRA, while EHDS Art 26(2) keeps them in the EHDS.
+- EHDS Art 35 has economic operators identify every economic operator they
+  supplied, for 10 years, with no "where available" qualifier (CRA Art
+  23(1)(b) has one). It is met by a register of every operator supplied
+  under a contract; the public release is not gated and is stated to be
+  supplied for non-production use and for non-commercial production use
+  under the licence. Registration-gated downloads are the fallback if
+  counsel holds that an anonymous production user is an economic operator,
+  for example one that puts FerroFED into service under Art 26(2).
+- Counsel answers the points listed on #654 before the first release placed
+  on the market from 11 December 2027, and the commercial-activity,
+  manufacturer and Art 14 points now.
 
 **Cross-border.** Art 11(2) and Art 23 route cross-border access through
 each Member State's national contact point and MyHealth@EU, in the European

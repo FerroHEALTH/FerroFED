@@ -27,12 +27,15 @@
 - [Pinned versions](evaluate/versions.md)
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
+  - [Information sheet](evaluate/information-sheet.md)
+  - [Clinical safety risk file](evaluate/clinical-safety.md)
   - [Complaints and incidents](evaluate/post-market.md)
 - [Data protection](evaluate/data-protection.md)
 - [Threat model](evaluate/threat-model.md)
 
 # Operate
 
+- [Instructions for use](operate/instructions-for-use.md)
 - [A production deployment](operate/production.md)
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)

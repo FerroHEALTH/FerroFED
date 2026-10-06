@@ -703,13 +703,18 @@ not be resolved ([Errors and status codes](../integrate/errors.md)).
 ## 11. Operations
 
 Turn on the admin listener, and scrape `GET /metrics` there. It stays on
-loopback unless you allow otherwise, and never sits under the base path
-([Metrics](metrics.md)):
+loopback unless you allow otherwise, and never sits under the base path.
+Off loopback, the scrape needs a token, which your Prometheus sends with
+`authorization.credentials_file`, and a write action such as the
+stored-query distribution needs an access token with your issuer's
+`operator_scope` ([Metrics](metrics.md#who-the-admin-listener-serves)):
 
 ```toml
 # ferrofed.toml
 [metrics]
 listen = "127.0.0.1:9464"
+# off loopback: listen = "0.0.0.0:9464", allow_remote = true, and
+# scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"
 ```
 
 - **Alerts.** Load the shipped dashboard and alert rules, and add an alert

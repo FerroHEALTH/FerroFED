@@ -195,13 +195,17 @@ the version through the ITS-REST surface: every second `PUT` of a held
 version is a `409` (§12.7). The specification gives drift repair no
 request, so the gateway offers it to its operator alone, on the
 [admin listener](../operate/metrics.md) beside the metrics. Where
-`[metrics] listen` is unset, the action does not exist, and it answers a
-loopback peer alone: from any other address it is `403`
-(`operation-refused`), whatever `metrics.allow_remote` says. Run the drift check
-above to find the members, then name them in the same targeting headers:
+`[metrics] listen` is unset, the action does not exist. It answers a
+caller whose access token carries the `operator_scope` of its issuer, from
+any address; without a token it is `401` (`unauthenticated`), and without
+the scope `403` (`scope-insufficient`)
+([Who the admin listener serves](../operate/metrics.md#who-the-admin-listener-serves)).
+Run the drift check above to find the members, then name them in the same
+targeting headers:
 
 ```http
 POST /admin/stored-queries/org.example::compositions/1.0.0/distribute
+Authorization: Bearer <an access token with the operator scope>
 openEHR-federation-endpoint: node-c-pub
 ```
 

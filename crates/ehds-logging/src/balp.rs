@@ -15,6 +15,15 @@
 //! as an agent of its own, the request id is `entity:transaction`, and the
 //! query `entity:query`.
 //!
+//! The person's agent, `agent:user`, alone carries what Annex II 3.2(b) asks
+//! about the natural person: the professional's name as `who.display` and
+//! their identifier as an `ihe-otherId` extension typed `NPI`, as BALP
+//! 1.1.4 §3:5.7.5.4 maps the IHE IUA `subject_name` and
+//! `national_provider_identifier`; the assurance level of the
+//! authentication, when one was established, as an `ihe-assuranceLevel`
+//! extension coded `low`, `substantial` or `high` (Regulation (EU) No
+//! 910/2014 Art 8(2)); and who acts, `person` or `client`, as its `role`.
+//!
 //! What Annex II 3.2 adds to a BALP record has no element of its own (BALP
 //! defines none for a data category), so it rides in entities of type `4`,
 //! which no slice of a pattern is discriminated by: one for the categories,
@@ -29,7 +38,7 @@ use ihe_iti::balp::{
     Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Peer, READ,
     REQUEST_ID, REST, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, UPDATE, What,
 };
-use ihe_iti::user::{OnBehalfOf, PurposeOfUse, User};
+use ihe_iti::user::{Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::SecretString;
 use url::Url;
 
@@ -128,7 +137,13 @@ pub fn exchange(record: &AccessRecord, gateway: &Url) -> Exchange {
             .collect(),
     )
     .with_organisation(accessor.provider.clone())
-    .with_alt_id(accessor.professional.clone());
+    .with_alt_id(accessor.alt_id.clone())
+    .with_name(accessor.professional.name.clone())
+    .with_provider_identifier(accessor.professional.identifier.clone())
+    // NOTE: no specification governs these codes: our own design; BALP 1.1.4 leaves the
+    // assuranceLevel vocabulary open, and names no element for who acts.
+    .with_assurance(accessor.assurance.map(|level| code(level.code())))
+    .with_roles(vec![code(accessor.acting.code())]);
     let client = Peer {
         who: accessor.client_id.clone(),
         network: record.request.client_address.map_or_else(
@@ -150,6 +165,14 @@ pub fn exchange(record: &AccessRecord, gateway: &Url) -> Exchange {
         },
         on_behalf: OnBehalfOf::User(user),
         entities: entities(record),
+    }
+}
+
+/// A code no system defines.
+fn code(code: &str) -> Code {
+    Code {
+        system: None,
+        code: code.to_owned(),
     }
 }
 

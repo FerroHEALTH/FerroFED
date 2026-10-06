@@ -54,14 +54,17 @@ pub enum Event {
     PatientConfinement,
     /// The patient of a confined grant could not be resolved.
     PatientContextUnavailable,
-    /// A write action on the admin listener came from a peer that is not
-    /// loopback.
+    /// A write action on the admin listener was refused at its
+    /// authentication.
     AdminWriteRefused,
+    /// A scrape of the admin listener's `GET /metrics` carried no scrape
+    /// token, or another one.
+    ScrapeRefused,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -76,6 +79,7 @@ impl Event {
         Self::PatientConfinement,
         Self::PatientContextUnavailable,
         Self::AdminWriteRefused,
+        Self::ScrapeRefused,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -96,6 +100,7 @@ impl Event {
             Self::PatientConfinement => "patient-confinement",
             Self::PatientContextUnavailable => "patient-context-unavailable",
             Self::AdminWriteRefused => "admin-write-refused",
+            Self::ScrapeRefused => "scrape-refused",
         }
     }
 

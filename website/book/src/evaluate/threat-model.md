@@ -139,9 +139,9 @@ front of it.
 
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
-| E | a remote peer runs a write action, such as the stored-query distribution | P7 | write actions answer a loopback peer alone, whatever `allow_remote` says; the listener is off unless `[metrics] listen` is set, on loopback unless `allow_remote = true`, and never under the base path | `[metrics]`; `app/ferrofed-server/tests/it/admin_peer.rs` |
-| I | anyone who reaches the port reads the metrics | P7 | no label carries a request value; the Kubernetes example opens the port to Prometheus alone | `app/ferrofed-server/tests/it/metrics/hygiene.rs`; `deploy/kubernetes/networkpolicy.yaml` |
-| S | a local process on the host or in the pod runs a write action | P7, P9 | none: the listener has no authentication of its own | **open:** [#635](https://github.com/FerroHEALTH/FerroFED/issues/635) |
+| E | a remote peer runs a write action, such as the stored-query distribution | P7 | every write action needs a token that client authentication verifies and that carries its issuer's `operator_scope`; the listener is off unless `[metrics] listen` is set, on loopback unless `allow_remote = true`, and never under the base path | `[metrics]`, `auth.issuer[].operator_scope`; `app/ferrofed-server/tests/it/admin_peer.rs` |
+| S | a local process on the host or in the pod runs a write action | P7, P9 | the same token is needed from a loopback peer; only `profile = "development"` admits a loopback peer without one | `profile`; `app/ferrofed-server/tests/it/admin_peer.rs` |
+| I | anyone who reaches the port reads the metrics | P7 | no label carries a request value; off loopback the gateway refuses to start outside development unless a scrape token or a client CA authenticates the scrape; the Kubernetes example opens the port to Prometheus alone | `[metrics] scrape_token_file`, `[metrics.tls] client_ca_file`; `app/ferrofed-server/tests/it/metrics/hygiene.rs`, `config/admin.rs`; `deploy/kubernetes/networkpolicy.yaml` |
 
 ## B6: audit and telemetry sinks
 
@@ -179,9 +179,11 @@ control from you, or an issue that is open:
    one pod, put a mesh with mutual TLS on it, or serve TLS on the listener
    with a client CA that admits the proxy alone
    ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners)).
-2. **The admin listener has no authentication.** Anything that can reach it
-   from the loopback interface can run a write action
-   ([#635](https://github.com/FerroHEALTH/FerroFED/issues/635)).
+2. **The development profile opens the admin listener's write actions on
+   loopback.** Under `profile = "development"` any process that reaches the
+   listener's loopback address runs a write action without a credential.
+   Never serve real requests in that profile
+   ([Metrics](../operate/metrics.md#who-the-admin-listener-serves)).
 3. **The access records live at your Audit Record Repository.** The
    gateway stores each record in the spool before it answers, and refuses
    an access it cannot record, but who may read the records and how long

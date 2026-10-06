@@ -104,7 +104,7 @@ the caller.
 | Annex II 3.2 | Where the `AuditEvent` carries it |
 |---|---|
 | (a) the provider or other individuals who accessed the data | an agent whose `who` is an `Organization` by its identifier: the requester's organisation where the issuer states one ([Consent](consent.md)), the IHE IUA `subject_organization_id` otherwise; and the Application agent (DICOM `110150`) with the token's `client_id` |
-| (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, `altId` the professional identification the issuer states, and every purpose of use |
+| (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, the professional the token names, the assurance level of the authentication, who acts, `altId` the professional identification the requester claims state, and every purpose of use: see [The person behind an access](#the-person-behind-an-access) |
 | (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories) |
 | (d) the time and date | `recorded` |
 | (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (`active`, `node-error`, `time-out`, and so on, or the node's HTTP status for a routed request) and the rows it sent |
@@ -115,6 +115,33 @@ record names it), and one entity named `ehr` per `ehr_id` the access
 reached, with its endpoint. It carries the request as `entity:query`, the
 gateway's request id as `entity:transaction` (the id the request log names
 too), the address the request came from, and the outcome.
+
+### The person behind an access
+
+The `agent:user` carries what client authentication verified about the
+natural person (Annex II 3.1, 3.2(b); [Professionals and
+assurance](authentication.md#professionals-and-assurance)),
+and no other part of the record carries it:
+
+| From the verified token | In the `agent:user` |
+|---|---|
+| the IHE IUA `subject_name` | `who.display`, as BALP 1.1.4 §3:5.7.5.4 maps it |
+| the IHE IUA `national_provider_identifier` | an `ihe-otherId` extension, its `valueIdentifier` typed `NPI` (HL7 v2 table 0203), as BALP 1.1.4 §3:5.7.5.4 maps it |
+| the assurance level, `low`, `substantial` or `high` (Regulation (EU) No 910/2014 Art 8(2)) | an `ihe-assuranceLevel` extension, its `valueCodeableConcept` coded with the level's name |
+| who acts: `person` when the token's `sub` names a natural person, `client` when a client application acts for the professional the token names | a `role` coded `person` or `client` |
+
+The assurance level is recorded only when the issuer's
+`[auth.issuer.assurance]` table declares the claim and the token states a
+value it maps; the gateway never infers one, so a record of an issuer that
+declares no mapping carries no level. A client is admitted to patient data
+only when its issuer declares that its client tokens act for the
+professional they name, and the record then names that professional in the
+`agent:user` and the client in the Application agent. A national contact
+point's connector arrives that way: the foreign provider is the provider
+agent, the foreign professional the `agent:user`, and the connector the
+Application agent. BALP fixes no vocabulary for the assurance level and
+names no element for who acts, so both codes, written with no `system`,
+are FerroFED's own design.
 
 ### Categories
 
@@ -224,7 +251,7 @@ so author one from the templates your members hold
 |---|---|---|
 | 3.2 | a record "on every access event or group of events" | one record per federated query, stored-query execution, routed read and routed write that reached a node, the console's included; stored before the answer leaves |
 | 3.2(a) | the healthcare provider or other individuals who accessed the data | the provider agent and the Application agent of each record |
-| 3.2(b) | the specific natural person or persons who accessed the data | the `agent:user`, from the token the gateway verified |
+| 3.2(b) | the specific natural person or persons who accessed the data | the `agent:user`, from the token the gateway verified: the professional's name and identifier, the assurance level when one was established, and whether a person or a client acted |
 | 3.2(c) | the categories of data accessed | the `ehds-categories` entity, classified by your `[access_log]` map, `unclassified` with its evidence where the map cannot tell |
 | 3.2(d) | the time and date of access | `recorded` |
 | 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint the query was sent to, with its node, its outcome and its categories |

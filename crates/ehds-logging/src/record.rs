@@ -61,9 +61,82 @@ pub struct Purpose {
     pub code: String,
 }
 
+/// Who acts behind the token an access was authenticated by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Acting {
+    /// The natural person the token's `sub` names.
+    Person,
+    /// A client application, which the recording system admits to personal
+    /// data only for the professional the token names.
+    Client,
+}
+
+impl Acting {
+    /// The code a record writes the acting mode as: `person` or `client`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Person => "person",
+            Self::Client => "client",
+        }
+    }
+}
+
+/// An assurance level of an electronic identification means, as Regulation
+/// (EU) No 910/2014 Art 8(2) names them, lowest first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AssuranceLevel {
+    /// Level low, Art 8(2)(a).
+    Low,
+    /// Level substantial, Art 8(2)(b).
+    Substantial,
+    /// Level high, Art 8(2)(c).
+    High,
+}
+
+impl AssuranceLevel {
+    /// The code a record writes the level as: `low`, `substantial` or
+    /// `high`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Substantial => "substantial",
+            Self::High => "high",
+        }
+    }
+}
+
+/// The professional's identification, as the token the access was
+/// authenticated by states it.
+///
+/// `Debug` shows which members are present and none of their values.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Professional {
+    /// The professional's name.
+    pub name: Option<String>,
+    /// The identifier their national authority issued them as a health
+    /// professional.
+    pub identifier: Option<String>,
+}
+
+impl fmt::Debug for Professional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Professional")
+            .field("name", &self.name.is_some())
+            .field("identifier", &self.identifier.is_some())
+            .finish()
+    }
+}
+
 /// Who accessed the data (Annex II 3.2(a), (b)): the person, as the token
 /// the access was authenticated by names them, the client they used, and
 /// the provider they act for.
+///
+/// Each value is the token's, as the recording system verified it: the
+/// record infers none, so the assurance level is absent unless the
+/// authentication established one.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Accessor {
     /// The issuer that vouched for the person (`iss`).
@@ -76,9 +149,18 @@ pub struct Accessor {
     pub audience: Option<String>,
     /// The healthcare provider or other organisation the person acts for.
     pub provider: Option<String>,
-    /// The person's professional identification, when the token states one
-    /// beside its `sub`.
-    pub professional: Option<String>,
+    /// Who acts behind the token: the person, or a client application.
+    pub acting: Acting,
+    /// The assurance level the authentication reached, when the recording
+    /// system established one from the token.
+    pub assurance: Option<AssuranceLevel>,
+    /// The professional the token names (3.2(b)), who acts in person or
+    /// whom a client acts for.
+    pub professional: Professional,
+    /// Another identification of the person the token states beside its
+    /// `sub`, such as a professional number a claim of the deployment's
+    /// naming carries.
+    pub alt_id: Option<String>,
     /// Every purpose of use the token declares.
     pub purposes: Vec<Purpose>,
 }
@@ -87,7 +169,10 @@ impl fmt::Debug for Accessor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Accessor")
             .field("provider", &self.provider.is_some())
-            .field("professional", &self.professional.is_some())
+            .field("acting", &self.acting)
+            .field("assurance", &self.assurance)
+            .field("professional", &self.professional)
+            .field("alt_id", &self.alt_id.is_some())
             .field("purposes", &self.purposes)
             .finish_non_exhaustive()
     }

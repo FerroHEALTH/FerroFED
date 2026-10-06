@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.0.3"
+version = "0.0.5"
 dependencies = [
  "async-trait",
  "ihe-iti",
@@ -2370,7 +2370,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.29"
+version = "0.0.31"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

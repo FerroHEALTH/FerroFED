@@ -64,7 +64,7 @@ statement of the text.
 | Operator points | 3, scored against the federation operator |
 | Test tracks | 10 of 11 scored by a test, 1 deferred, 0 planned |
 | Requirements | 46: 46 reached by a point, 0 by a track only, 0 by neither |
-| Marked tests | 940, carrying 1208 point and track markers |
+| Marked tests | 941, carrying 1209 point and track markers |
 
 ## The nodes
 
@@ -131,7 +131,7 @@ statement of the text.
 | [7](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-7) | Auth conveyance + consent-deny | CP-16, CP-17, CP-18, CP-19, CP-36, CP-39 | covered | [6 tests](conformance-tests.md#track-7) |
 | [8](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-8) | PMIR merge/split (ITI-93/94) _(provisional)_ | - | deferred | [deferred](#track-8) |
 | [9](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-9) | REST surface & self-description | CP-21, CP-22, CP-23, CP-24, CP-25, CP-34, CP-40 | covered | [7 tests](conformance-tests.md#track-9) |
-| [10](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-10) | Identifier leakage (adversarial) | CP-38, CP-26, CP-27 | covered | [18 tests](conformance-tests.md#track-10) |
+| [10](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-10) | Identifier leakage (adversarial) | CP-38, CP-26, CP-27 | covered | [19 tests](conformance-tests.md#track-10) |
 | [11](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-11) | Integrity: `ehr_id` collision & admission conditions | CP-33, CP-33a | covered | [4 tests](conformance-tests.md#track-11) |
 
 ## Deferrals

@@ -39,8 +39,11 @@ use axum::middleware::Next;
 use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
 use ehds_logging::map::CategoryMap;
-use ehds_logging::record::{AccessRecord, Accessor, Action, DataSubject, Origin, Outcome, Purpose};
+use ehds_logging::record::{
+    AccessRecord, Accessor, Action, DataSubject, Origin, Outcome, Professional, Purpose,
+};
 use ehds_logging::sink::AccessSink;
+use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
 use http::{Method, StatusCode};
 use openehr_federation::headers;
@@ -230,10 +233,12 @@ fn outcome(status: StatusCode) -> Outcome {
 }
 
 /// The accessor `caller` is: the person and the client the verified token
-/// names, the provider it acts for, and its purposes of use (Annex II
-/// 3.2(a), (b)).
+/// names, the provider it acts for, who acts, the professional and the
+/// assurance level as authentication verified them, and its purposes of use
+/// (Annex II 3.1, 3.2(a), (b)).
 fn accessor(caller: &Caller) -> Accessor {
     let requester = caller.requester();
+    // TODO(#734): the 2026/2099 Annex attributes a contact point asserts, marked as asserted.
     Accessor {
         issuer: caller.issuer().to_owned(),
         subject: caller.subject().to_owned(),
@@ -242,7 +247,23 @@ fn accessor(caller: &Caller) -> Accessor {
         provider: requester
             .map(|requester| requester.organisation().to_owned())
             .or_else(|| caller.organisation().map(str::to_owned)),
-        professional: requester.map(|requester| requester.professional().to_owned()),
+        // NOTE: Annex II 3.2(b), no specification governs the mapping: our own design; only
+        // a caller authentication verified as a natural person is recorded as one.
+        acting: if caller.acting() == Acting::Person {
+            ehds_logging::record::Acting::Person
+        } else {
+            ehds_logging::record::Acting::Client
+        },
+        assurance: caller.assurance().map(|level| match level {
+            AssuranceLevel::Low => ehds_logging::record::AssuranceLevel::Low,
+            AssuranceLevel::Substantial => ehds_logging::record::AssuranceLevel::Substantial,
+            AssuranceLevel::High => ehds_logging::record::AssuranceLevel::High,
+        }),
+        professional: Professional {
+            name: caller.professional().name.clone(),
+            identifier: caller.professional().identifier.clone(),
+        },
+        alt_id: requester.map(|requester| requester.professional().to_owned()),
         purposes: caller
             .purposes()
             .iter()

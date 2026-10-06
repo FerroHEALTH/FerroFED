@@ -582,6 +582,9 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("metrics.otlp_endpoint", |boot, fresh| {
         boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
     }),
+    ("metrics.scrape_token", |boot, fresh| {
+        boot.metrics.scrape_token != fresh.metrics.scrape_token
+    }),
 ];
 
 /// The keys a reload does not apply whose value in `fresh` differs from the

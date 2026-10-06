@@ -23,7 +23,9 @@
 #      `key_file`, the mount paths rewritten to a temporary directory and the
 #      audit spool left where the example puts it, since config check writes
 #      nothing;
-#   7. runs it again without the [signing] table, which it must refuse; and
+#   7. runs it again without the [signing] table, and again without the
+#      [metrics] scrape token while the admin listener is off loopback, each
+#      of which it must refuse by name; and
 #   8. checks that a configuration with a registry sends its access records
 #      to an Audit Record Repository, never to the log target, which names
 #      no caller and no patient (Regulation (EU) 2025/327 Annex II 3.2), and
@@ -209,6 +211,23 @@ elif ! grep -q 'signing' <<< "$out"; then
   bad "ferrofed config check refuses the example without [signing] without naming it: $out"
 else
   echo "OK: the example without [signing] is refused by name"
+fi
+
+# The admin listener is off loopback, so the example without its scrape
+# token is refused, naming the key that authenticates the scrape.
+awk '
+  /^\[/ { inside = ($0 == "[metrics]") }
+  inside && $1 == "scrape_token_file" { next }
+  { print }
+' "$work/ferrofed.toml" > "$work/unscraped.toml"
+if cmp -s "$work/ferrofed.toml" "$work/unscraped.toml"; then
+  bad "configmap.yaml sets no [metrics] scrape_token_file for its admin listener off loopback"
+elif out="$(check "$work/unscraped.toml" 2>&1)"; then
+  bad "ferrofed config check accepts the Kubernetes example without metrics.scrape_token_file"
+elif ! grep -q 'metrics.scrape_token_file' <<< "$out"; then
+  bad "ferrofed config check refuses the example without its scrape token without naming it: $out"
+else
+  echo "OK: the example without its scrape token is refused by name"
 fi
 
 echo "== the access log names the caller and the patient"
