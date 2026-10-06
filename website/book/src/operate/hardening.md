@@ -12,12 +12,15 @@ page: our own design.
 ## Network placement
 
 - [ ] **Put a reverse proxy in front of the gateway, on the same host or in
-  the same pod.** The listener speaks plain HTTP, so the hop from the proxy
-  to the gateway carries bearer tokens and patient identifiers in the clear
-  (B1). Keep `server.listen` on a loopback address, its default
-  `127.0.0.1:8080`, when the proxy runs beside it; in a container, bind the
-  address the proxy reaches and nothing wider. Native TLS on the listener is
-  [#632](https://github.com/FerroHEALTH/FerroFED/issues/632).
+  the same pod, or serve TLS on the listener.** By default the listener speaks
+  plain HTTP, so the hop from the proxy to the gateway carries bearer tokens
+  and patient identifiers in the clear (B1). Keep `server.listen` on a
+  loopback address, its default `127.0.0.1:8080`, when the proxy runs beside
+  it; in a container, bind the address the proxy reaches and nothing wider.
+  Where the hop crosses a shared network, set `[server.tls]` with a
+  `client_ca_file` that admits the proxy alone, and `[metrics.tls]` for the
+  admin listener
+  ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
 - [ ] **Publish container ports on one address.** A port published on
   `0.0.0.0` is reachable from the network even when the host firewall says
   otherwise ([The quickstart](container.md#the-quickstart));

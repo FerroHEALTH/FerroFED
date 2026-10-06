@@ -494,8 +494,12 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),
-    ("server.tls", |boot, fresh| boot.server.tls != fresh.server.tls),
-    ("metrics.tls", |boot, fresh| boot.metrics.tls != fresh.metrics.tls),
+    ("server.tls", |boot, fresh| {
+        boot.server.tls != fresh.server.tls
+    }),
+    ("metrics.tls", |boot, fresh| {
+        boot.metrics.tls != fresh.metrics.tls
+    }),
     ("server.base_path", |boot, fresh| {
         boot.server.base_path != fresh.server.base_path
     }),
