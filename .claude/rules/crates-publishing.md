@@ -56,11 +56,11 @@ an owner decision recorded per crate when the switch flips, never assumed.
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
   before the crate has content (`openehr-federation`, `ihe-iti` and
   `nl-generic-functions`, published on 2026-10-01), and the crate's line in
-  the workspace starts at 0.0.1, above the placeholder. The names
-  `oauth-server-metadata` (#551), `ehds-logging` (#623) and `eehrxf` (#684)
-  are not reserved on crates.io yet: the owner decided not to claim them
-  while publishing is off, and each must be claimed before the `publish`
-  switch is turned on.
+  the workspace starts at 0.0.1, above the placeholder. `eehrxf` (#684)
+  was claimed the same way on 2026-10-06. The names
+  `oauth-server-metadata` (#551) and `ehds-logging` (#623) are not reserved
+  on crates.io yet: the owner decided not to claim them while publishing is
+  off, and each must be claimed before the `publish` switch is turned on.
 
 ## The bump rule
 
@@ -125,11 +125,11 @@ reaches the registry.
 
 ## Owner steps when the switch is flipped
 
-Three of the six names exist on crates.io (the 0.0.0 placeholders of
-2026-10-01), so every later version of those can go through Trusted
-Publishing with no first upload by a personal token. `oauth-server-metadata`,
-`ehds-logging` and `eehrxf` need their placeholders claimed the same way
-before the switch flips. Two steps, done once:
+Four of the six names exist on crates.io (the 0.0.0 placeholders of
+2026-10-01, and `eehrxf`'s of 2026-10-06), so every later version of those
+can go through Trusted Publishing with no first upload by a personal token.
+`oauth-server-metadata` and `ehds-logging` need their placeholders claimed
+the same way before the switch flips. Two steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and
    a deployment policy that admits `main` and `v*` tags.
