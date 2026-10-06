@@ -255,11 +255,6 @@ deployment in the EU must plan for are:
   by category.** The records go to your Audit Record Repository, which
   reviews and keeps them (Annex II, points 3.3 and 3.4;
   [#660](https://github.com/FerroHEALTH/FerroFED/issues/660)).
-- **The access record can over-state its origins.** A member the per-member
-  cap held back can be named as an origin, with the patient's `ehr_id`
-  there, although nothing was sent
-  ([#731](https://github.com/FerroHEALTH/FerroFED/issues/731),
-  [#756](https://github.com/FerroHEALTH/FerroFED/issues/756)).
 - **The professional's identification and assurance level are not yet in
   the access record**
   ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).

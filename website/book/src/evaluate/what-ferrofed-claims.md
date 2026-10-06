@@ -354,16 +354,9 @@ These are the ones to know before you deploy FerroFED; the
   no copy, so who reads the records and how long they are kept is the
   repository's. FerroFED ships no category map: until you declare one in
   `[access_log]`, the categories of the data an access reached are recorded
-  `ehds-unclassified`.
-- **An access record can over-state its origins.** A member the per-member
-  cap held back can be named as an origin, with the patient's `ehr_id`
-  there, although nothing was sent to it
-  ([#731](https://github.com/FerroHEALTH/FerroFED/issues/731),
-  [#756](https://github.com/FerroHEALTH/FerroFED/issues/756)). The record
-  does not yet name the professional's identification or assurance level
-  ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)). The
-  [clinical safety risk file](clinical-safety.md#the-logging-component)
-  rates both.
+  `ehds-unclassified`. The record does not yet name the professional's
+  identification or assurance level
+  ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).
 - **The caller may be an application.** Client authentication verifies an
   access token from an issuer you trust. Whether that token names the health
   professional, and at which assurance level, depends on the issuer; FerroFED
