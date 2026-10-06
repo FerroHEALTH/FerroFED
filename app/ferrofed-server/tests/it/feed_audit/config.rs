@@ -4,7 +4,8 @@
 //! The `[audit]` table a gateway refuses to start with. Each FHIR profile
 //! has its actors record their transactions (PIXm §2:3.83.5.1, mCSD
 //! §2:3.90.5.1, PMIR §2:3.93.5.1), so outside development a PIXm, mCSD or
-//! PMIR binding needs a declared destination and `off` is refused; the
+//! PMIR binding needs a declared destination and `off` is refused, a
+//! registry refuses `log` (Regulation (EU) 2025/327 Annex II 3.2), and the
 //! repository is `https` and its spool on disk, since every record names the
 //! patient. No specification governs the table: our own design.
 #![allow(
@@ -160,6 +161,58 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
     assert!(
         message.contains("audit.repository.spool_write_timeout_ms"),
         "{message}"
+    );
+    Ok(())
+}
+
+/// The `[audit]` table that sends every record to the log target.
+const LOG: &str = "[audit]\ndestination = \"log\"\n";
+
+#[test]
+fn log_is_refused_for_a_registry_outside_development_naming_the_key() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    match resolve(&text(dir.path(), "production", LOG)?)? {
+        Err(ConfigError::AccessAuditLog { key }) => {
+            assert_eq!("audit.destination", key);
+            Ok(())
+        }
+        other => Err(format!(
+            "the access log of a registry names the caller and the patient (Annex II 3.2): {other:?}"
+        )
+        .into()),
+    }
+}
+
+#[test]
+fn log_is_accepted_under_development_and_without_a_registry() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let settings =
+        resolve(&text(dir.path(), "development", LOG)?)?.map_err(|error| error.to_string())?;
+    assert_eq!(AuditDestination::Log, settings.audit.destination);
+    let unregistered = format!(
+        "profile = \"production\"\n\n{LOG}\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n"
+    );
+    let settings = resolve(&unregistered)?.map_err(|error| error.to_string())?;
+    assert_eq!(
+        AuditDestination::Log,
+        settings.audit.destination,
+        "a gateway with no registry records no access"
+    );
+    Ok(())
+}
+
+#[test]
+fn config_check_prints_the_refusal_of_log_for_a_registry() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let output = crate::run::binary(&["config", "check"], &text(dir.path(), "production", LOG)?)?;
+    assert_eq!(
+        Some(i32::from(ferrofed_server::EXIT_CONFIG)),
+        output.status.code()
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("audit.destination") && stderr.contains("\"repository\""),
+        "the refusal names the key and the destination it needs: {stderr}"
     );
     Ok(())
 }

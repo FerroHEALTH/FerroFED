@@ -498,19 +498,29 @@ pub(crate) fn signing_key_file() -> &'static str {
 }
 
 /// `text` with the [`signing_toml`] table appended when it configures a
-/// registry and no `[signing]` of its own, and with the [`audit_toml`]
-/// tables when it configures a registry and no `[audit]` of its own
-/// (Regulation (EU) 2025/327 Annex II 3.2).
+/// registry and no `[signing]` of its own, and with an `[audit]` table when
+/// it configures a registry and no `[audit]` of its own (Regulation (EU)
+/// 2025/327 Annex II 3.2): [`DEVELOPMENT_AUDIT_TOML`] under the development
+/// profile, and the [`audit_toml`] tables under any other.
 pub(crate) fn signed(text: &str) -> String {
     let mut text = text.to_owned();
     if text.contains("[registry") && !text.contains("[signing]") {
         text.push_str(&signing_toml());
     }
     if text.contains("[registry") && !text.contains("[audit") {
-        text.push_str(&audit_toml());
+        if text.contains("profile = \"development\"") {
+            text.push_str(DEVELOPMENT_AUDIT_TOML);
+        } else {
+            text.push_str(&audit_toml());
+        }
     }
     text
 }
+
+/// The `[audit]` table a development test gateway that federates carries
+/// unless it names its own: the records go to the log target, which the
+/// development profile alone accepts for the access log.
+pub(crate) const DEVELOPMENT_AUDIT_TOML: &str = "\n[audit]\ndestination = \"log\"\n";
 
 /// `text` with the [`signing_toml`] table appended when it configures a
 /// registry and no `[signing]` of its own, and no `[audit]` added: for a
