@@ -55,6 +55,7 @@ fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            professional_issuing_authority: None,
             national_contact_point: None,
         }],
         ..AuthSettings::default()

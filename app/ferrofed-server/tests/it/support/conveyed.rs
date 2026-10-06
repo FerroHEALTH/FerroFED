@@ -49,6 +49,13 @@ pub(crate) struct Conveyed {
     /// `national_provider_identifier`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) national_provider_identifier: Option<String>,
+    /// The agency that issued that identifier (Implementing Regulation (EU)
+    /// 2026/2099 Annex Table 1 `issuing_authority_name`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) national_provider_identifier_authority: Option<String>,
+    /// The professional's roles, IHE IUA `subject_role`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) subject_role: Vec<ConveyedPurpose>,
     /// `person` or `client`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) acting: Option<String>,
@@ -166,6 +173,8 @@ fn a_search_reads_no_minted_claim_and_every_caller_claim() -> Result<(), Box<dyn
         ehr_id: None,
         subject_name: None,
         national_provider_identifier: None,
+        national_provider_identifier_authority: None,
+        subject_role: Vec::new(),
         acting: None,
         assurance_level: None,
         national_contact_point: None,

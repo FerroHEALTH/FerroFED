@@ -42,8 +42,9 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{
-    self, ACT_REASON, CONTACT_POINT, GATEWAY, ORGANISATION, PROFESSIONAL_ID, PROFESSIONAL_NAME,
-    ReadPurpose, SCOPE, SUBJECT, UPSTREAM,
+    self, ACT_REASON, CONTACT_POINT, GATEWAY, ORGANISATION, PRACTITIONER_ROLE,
+    PROFESSIONAL_AUTHORITY, PROFESSIONAL_ID, PROFESSIONAL_NAME, ReadPurpose, SCOPE, SUBJECT,
+    UPSTREAM,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -180,6 +181,21 @@ fn names_the_caller(read: &conveyed::Read) {
             read.national_provider_identifier.as_deref()
         ),
         "the professional's identification, as IHE IUA names it"
+    );
+    assert_eq!(
+        (
+            Some(PROFESSIONAL_AUTHORITY),
+            [ReadPurpose {
+                system: Some(PRACTITIONER_ROLE.to_owned()),
+                code: "doctor".to_owned(),
+            }]
+            .as_slice()
+        ),
+        (
+            read.national_provider_identifier_authority.as_deref(),
+            read.subject_role.as_slice()
+        ),
+        "the identifier's issuing authority and the professional's role (2025/327 Art 13(4))"
     );
     assert_eq!(Some("person"), read.acting.as_deref(), "a person acts");
     assert_eq!(
@@ -404,6 +420,8 @@ async fn the_admission_checks_ehr_create_and_read_convey_the_gateway() -> TestRe
             ),
             "the gateway names no professional and no assurance of its own"
         );
+        assert_eq!(None, read.national_provider_identifier_authority);
+        assert!(read.subject_role.is_empty());
     }
     Ok(())
 }
@@ -523,6 +541,17 @@ fn smuggling() -> Vec<Caller> {
         carrying(|caller| caller.scope = format!("user/aql-{PATIENT}.s")),
         carrying(|caller| caller.professional.name = Some(PATIENT.to_owned())),
         carrying(|caller| caller.professional.identifier = Some(format!("urn:x:{PATIENT}"))),
+        carrying(|caller| caller.professional.issuing_authority = Some(PATIENT.to_owned())),
+        carrying(|caller| {
+            if let Some(role) = caller.professional.roles.first_mut() {
+                PATIENT.clone_into(&mut role.code);
+            }
+        }),
+        carrying(|caller| {
+            if let Some(role) = caller.professional.roles.first_mut() {
+                role.system = Some(format!("urn:x:{PATIENT}"));
+            }
+        }),
         carrying(|caller| {
             if let Some(purpose) = caller.purposes.first_mut() {
                 PATIENT.clone_into(&mut purpose.code);

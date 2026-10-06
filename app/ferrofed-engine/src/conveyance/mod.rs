@@ -28,6 +28,8 @@
 //! | `purpose_of_use` | the caller's purposes of use, each a `system` and `code` (IHE IUA, HL7 v3 `PurposeOfUse`) |
 //! | `subject_name` | the professional's name, when the caller's token states one (IHE IUA) |
 //! | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states one (IHE IUA) |
+//! | `national_provider_identifier_authority` | the name of the agency that issued that identifier, the `issuing_authority_name` of Implementing Regulation (EU) 2026/2099 Annex Table 1, when the caller's issuer names the claim that carries it |
+//! | `subject_role` | the professional's roles, each a `system` and `code`, when the caller's token states them (IHE IUA) |
 //! | `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application |
 //! | `assurance_level` | `low`, `substantial` or `high`, the level of the caller's authentication (Regulation (EU) No 910/2014 Art 8(2)), when its issuer declares how its tokens state one |
 //! | `scope` | the caller's scopes as granted, or the `patient/` scopes that cover the operation under a [`Confinement`] |
@@ -54,7 +56,7 @@ use jsonwebtoken::Header;
 use serde::{Deserialize, Serialize};
 
 use crate::conveyance::confinement::Confinement;
-use crate::conveyance::relayed::Relayed;
+use crate::conveyance::relayed::{Relayed, Role};
 use crate::onward::grant::exchange::SubjectToken;
 use crate::onward::keys::KeyRing;
 
@@ -127,8 +129,9 @@ pub struct Caller {
     pub scope: String,
     /// How the gateway verified the caller.
     pub verified_by: Verification,
-    /// The professional's identification the caller's token states.
-    pub professional: Professional,
+    /// The professional's identification the caller's token states, boxed
+    /// so a [`Principal`] stays small.
+    pub professional: Box<Professional>,
     /// Who acts behind the caller's token.
     pub acting: Acting,
     /// The assurance level of the caller's authentication, when its issuer
@@ -140,7 +143,13 @@ pub struct Caller {
 }
 
 /// The professional's identification a caller's token states, as IHE IUA
-/// names it (ITI TF-2 3.71.4.2.2.1.1).
+/// names it (ITI TF-2 3.71.4.2.2.1.1), with the agency that issued the
+/// identifier.
+///
+/// They are the professional's attributes of Implementing Regulation (EU)
+/// 2026/2099 Annex Table 1 a token of the caller's own issuer can state, so
+/// a node can identify the professional of every registration or update
+/// (Regulation (EU) 2025/327 Art 13(4)).
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Professional {
     /// `subject_name`, the professional's name.
@@ -148,6 +157,11 @@ pub struct Professional {
     /// `national_provider_identifier`, the identifier the professional's
     /// national authority issued.
     pub identifier: Option<String>,
+    /// The name of the agency that issued `identifier`: the Annex Table 1
+    /// `issuing_authority_name`, which IUA defines no claim for.
+    pub issuing_authority: Option<String>,
+    /// `subject_role`, the professional's roles.
+    pub roles: Vec<Role>,
 }
 
 impl fmt::Debug for Professional {
@@ -155,6 +169,8 @@ impl fmt::Debug for Professional {
         f.debug_struct("Professional")
             .field("name", &self.name.is_some())
             .field("identifier", &self.identifier.is_some())
+            .field("issuing_authority", &self.issuing_authority.is_some())
+            .field("roles", &self.roles.len())
             .finish()
     }
 }
@@ -337,6 +353,10 @@ struct Claims<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     national_provider_identifier: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    national_provider_identifier_authority: Option<&'a str>,
+    #[serde(skip_serializing_if = "<[Role]>::is_empty")]
+    subject_role: &'a [Role],
+    #[serde(skip_serializing_if = "Option::is_none")]
     acting: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     assurance_level: Option<&'static str>,
@@ -491,6 +511,8 @@ impl Conveyance {
             ehr_id: None,
             subject_name: None,
             national_provider_identifier: None,
+            national_provider_identifier_authority: None,
+            subject_role: &[],
             acting: None,
             assurance_level: None,
             national_contact_point: None,
@@ -507,6 +529,11 @@ impl Conveyance {
             claims.ehr_id = ehr_id.map(EhrId::as_str);
             claims.subject_name = caller.professional.name.as_deref();
             claims.national_provider_identifier = caller.professional.identifier.as_deref();
+            // NOTE: 2026/2099 Annex Table 1, 2025/327 Art 13(4); IUA names no claim for the
+            // identifier's issuing authority, so its name is our own design.
+            claims.national_provider_identifier_authority =
+                caller.professional.issuing_authority.as_deref();
+            claims.subject_role = &caller.professional.roles;
             claims.acting = Some(caller.acting.as_str());
             claims.assurance_level = caller.assurance_level.map(AssuranceLevel::as_str);
             claims.national_contact_point = caller.relayed.as_deref().map(Relayed::claim);
@@ -536,6 +563,11 @@ impl Conveyance {
         carried.extend(caller.organisation.as_deref());
         carried.extend(caller.professional.name.as_deref());
         carried.extend(caller.professional.identifier.as_deref());
+        carried.extend(caller.professional.issuing_authority.as_deref());
+        for role in &caller.professional.roles {
+            carried.extend(role.system.as_deref());
+            carried.push(&role.code);
+        }
         for purpose in &caller.purposes {
             carried.extend(purpose.system.as_deref());
             carried.push(&purpose.code);
@@ -561,8 +593,12 @@ pub(crate) mod tests {
         Purpose, Signer, Verification,
     };
     use crate::conveyance::confinement::Confinement;
+    use crate::conveyance::relayed::Role;
     use crate::onward::SystemClock;
     use crate::onward::keys::{KeyRing, SigningKey};
+
+    /// The code system of the synthetic caller's role.
+    const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
 
     /// The keys of every unit test's conveyance, generated once.
     static KEYS: LazyLock<Arc<KeyRing>> = LazyLock::new(|| {
@@ -585,10 +621,15 @@ pub(crate) mod tests {
             }],
             scope: "user/aql-*.s".to_owned(),
             verified_by: Verification::Edge,
-            professional: Professional {
+            professional: Box::new(Professional {
                 name: Some("Example Clinician".to_owned()),
                 identifier: Some("hp-0042".to_owned()),
-            },
+                issuing_authority: Some("Example Registration Agency".to_owned()),
+                roles: vec![Role {
+                    system: Some(PRACTITIONER_ROLE.to_owned()),
+                    code: "doctor".to_owned(),
+                }],
+            }),
             acting: Acting::Person,
             assurance_level: Some(AssuranceLevel::High),
             relayed: None,
@@ -618,6 +659,9 @@ pub(crate) mod tests {
             "user/aql-*.s",
             "Example Clinician",
             "hp-0042",
+            "Example Registration Agency",
+            PRACTITIONER_ROLE,
+            "doctor",
         ] {
             assert!(carried.contains(&claim), "{claim} in {carried:?}");
         }
@@ -711,11 +755,69 @@ pub(crate) mod tests {
         );
     }
 
+    // NOTE: 2025/327 Art 13(4), 2026/2099 Annex Table 1: the node can name who registered.
+    #[test]
+    fn a_local_caller_conveys_the_professionals_identifier_authority_and_roles() {
+        #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+        struct ReadRole {
+            system: Option<String>,
+            code: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct Identified {
+            national_provider_identifier: String,
+            national_provider_identifier_authority: String,
+            subject_role: Vec<ReadRole>,
+            subject_organization_id: String,
+        }
+        let token = conveyance()
+            .signed_for(&EndpointId::new("node-a-pub").expect("an id"))
+            .expect("a signed token");
+        let claims: Identified =
+            jsonwebtoken::dangerous::insecure_decode_claims(&token).expect("the claims read");
+        assert_eq!(
+            ("hp-0042", "Example Registration Agency", "urn:oid:2.999.7"),
+            (
+                claims.national_provider_identifier.as_str(),
+                claims.national_provider_identifier_authority.as_str(),
+                claims.subject_organization_id.as_str()
+            )
+        );
+        assert_eq!(
+            vec![ReadRole {
+                system: Some(PRACTITIONER_ROLE.to_owned()),
+                code: "doctor".to_owned(),
+            }],
+            claims.subject_role
+        );
+    }
+
+    #[test]
+    fn a_professional_without_roles_or_authority_conveys_neither_claim() {
+        #[derive(serde::Deserialize)]
+        struct Unstated {
+            national_provider_identifier_authority: Option<String>,
+            subject_role: Option<serde::de::IgnoredAny>,
+            national_provider_identifier: Option<String>,
+        }
+        let mut caller = caller();
+        caller.professional = Box::default();
+        let token = Conveyance::new(signer(), Principal::Caller(caller))
+            .signed_for(&EndpointId::new("node-a-pub").expect("an id"))
+            .expect("a signed token");
+        let claims: Unstated =
+            jsonwebtoken::dangerous::insecure_decode_claims(&token).expect("the claims read");
+        assert!(claims.national_provider_identifier_authority.is_none());
+        assert!(claims.subject_role.is_none());
+        assert!(claims.national_provider_identifier.is_none());
+    }
+
     #[test]
     fn a_conveyance_shows_no_caller_value_in_debug() {
         let shown = format!("{:?}", conveyance());
         assert!(!shown.contains("clinician-0042"), "{shown}");
         assert!(!shown.contains("Example Clinician"), "{shown}");
+        assert!(!shown.contains("Example Registration Agency"), "{shown}");
         assert!(shown.contains("Edge"), "{shown}");
     }
 }

@@ -1077,8 +1077,11 @@ the least level; a token without a value at that level or above is
 requires no level and `config check` notes it. A national contact point's
 level is read as it asserts it (2026/2099 Art 6(2) gives the check to the
 requesting Member State's entity). The conveyance carries `acting`,
-`assurance_level` and the IUA `subject_name` and
-`national_provider_identifier`, which the outbound gate reads with every
+`assurance_level`, the IUA `subject_name`, `national_provider_identifier`
+and `subject_role`, and the identifier's issuing authority from the claim
+the issuer's `professional_issuing_authority` names, as
+`national_provider_identifier_authority` (#662, 2025/327 Art 13(4),
+2026/2099 Annex Table 1), which the outbound gate reads with every
 other caller claim. Which claims carry the level and the refusal are our
 own design; no specification governs them.
 

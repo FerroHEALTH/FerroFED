@@ -195,7 +195,7 @@ with no marked test is not listed.
 
 ## CP-16
 
-27 tests.
+28 tests.
 
 - `app/ferrofed-engine/tests/it/conveyance.rs`: `a_conveyance_header_from_the_client_never_reaches_the_node`, `a_node_the_gateway_has_a_grant_at_knows_it_by_its_client_id`, `a_probe_conveys_the_caller_to_every_member`, `a_query_conveys_the_caller_in_a_token_the_published_key_verifies`, `a_relayed_caller_conveys_every_annex_attribute_marked_as_asserted`, `a_routed_read_and_a_routed_write_convey_the_caller`, `a_stored_query_definition_conveys_the_caller`, `each_node_is_the_audience_of_its_own_token`, `the_admission_checks_ehr_create_and_read_convey_the_gateway`
 - `app/ferrofed-engine/tests/it/exchange.rs`: `the_node_receives_a_token_exchanged_for_the_verified_caller`
@@ -204,7 +204,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/auth/patient.rs`: `a_member_other_than_the_token_s_own_is_told_its_own_ehr_id`, `each_node_is_told_its_own_ehr_id_and_the_covering_patient_scope`
 - `app/ferrofed-server/tests/it/auth/professional.rs`: `the_node_is_told_who_acts_and_the_level_reached`
 - `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `each_node_is_told_every_annex_attribute_marked_as_asserted`
-- `app/ferrofed-server/tests/it/conveyance.rs`: `a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key`, `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`, `a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node`, `a_registry_from_either_source_without_a_signing_key_does_not_load`, `a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller`, `an_edge_asserted_caller_is_conveyed_as_edge_asserted`, `the_ask_all_probe_conveys_the_caller_to_every_member`
+- `app/ferrofed-server/tests/it/conveyance.rs`: `a_local_caller_conveys_the_professional_and_the_provider_to_each_node`, `a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key`, `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`, `a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node`, `a_registry_from_either_source_without_a_signing_key_does_not_load`, `a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller`, `an_edge_asserted_caller_is_conveyed_as_edge_asserted`, `the_ask_all_probe_conveys_the_caller_to_every_member`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `each_node_is_reached_with_its_onward_token_and_told_the_caller`
 - `app/ferrofed-server/tests/it/onward_exchange.rs`: `the_callers_token_reaches_no_log_span_metric_or_conveyed_claim`
 
@@ -322,7 +322,7 @@ with no marked test is not listed.
 
 ## CP-26
 
-136 tests.
+137 tests.
 
 - `app/ferrofed-engine/src/declared/headers.rs`: `a_utf_8_charset_passes_and_is_dropped`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable`, `an_unlisted_content_type_is_unsupported`, `any_media_type_reaches_the_node_as_the_first_listed`, `prefer_reaches_the_node_as_its_listed_preferences_only`
 - `app/ferrofed-engine/src/declared/mod.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_date_time_is_refused_by_position_never_by_value`, `a_well_formed_date_time_is_held`
@@ -343,7 +343,7 @@ with no marked test is not listed.
 - `app/ferrofed-identity/tests/it/nvi_localizer.rs`: `a_bsn_system_never_stands_for_the_pseudonym`
 - `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/contribution_write.rs`: `a_contribution_its_path_node_controls_reaches_it_once_byte_identical`, `a_simplified_contribution_its_path_node_controls_reaches_it_once_byte_identical`
-- `app/ferrofed-server/tests/it/conveyance.rs`: `a_caller_claim_carrying_the_patient_stops_the_query_before_any_node`
+- `app/ferrofed-server/tests/it/conveyance.rs`: `a_caller_claim_carrying_the_patient_stops_the_query_before_any_node`, `a_professional_claim_carrying_the_patient_stops_the_query_before_any_node`
 - `app/ferrofed-server/tests/it/declared.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_path_uid_is_refused_by_position_and_no_node_is_asked`, `a_malformed_version_at_time_is_refused_and_no_node_is_asked`, `a_well_formed_version_at_time_reaches_the_node_byte_identical`, `an_accept_that_admits_nothing_listed_is_a_406_that_asks_no_node`, `an_unlisted_content_type_is_a_415_that_asks_no_node`, `the_listed_values_of_a_commit_reach_the_node_and_no_client_text`
 - `app/ferrofed-server/tests/it/definition.rs`: `a_definition_request_carries_only_what_its_operation_declares`, `a_malformed_declared_value_is_refused_before_the_missing_target`
 - `app/ferrofed-server/tests/it/directive.rs`: `no_node_receives_the_directive_and_each_receives_the_undirected_node_query`, `the_organisation_selector_asks_every_endpoint_the_organisation_manages`

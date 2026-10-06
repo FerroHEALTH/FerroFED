@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::RequesterClaims;
+use ferrofed_server::config::auth::requester::RequesterClaims;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use http::StatusCode;

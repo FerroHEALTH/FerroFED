@@ -30,7 +30,7 @@ use ferrofed_server::config::auth::{
 };
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::issuer::{ACT_REASON, Claims, EVERY_SCOPE, Issuer};
+use ferrofed_testkit::issuer::{ACT_REASON, Claims, Coding, EVERY_SCOPE, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth;
 use http::{HeaderMap, HeaderName, Request, StatusCode, header};
@@ -328,6 +328,146 @@ async fn a_caller_claim_carrying_the_patient_stops_the_query_before_any_node() -
     Ok(())
 }
 
+/// The claim the test issuer states the agency that issued the
+/// professional's identifier in.
+const AUTHORITY_CLAIM: &str = "hp_issuing_authority";
+
+/// The synthetic agency that issued the professional's identifier.
+const AUTHORITY: &str = "Example Registration Agency";
+
+/// A synthetic professional identifier (IHE IUA
+/// `national_provider_identifier`).
+const HP_ID: &str = "urn:oid:2.999.7.1|hp-0042";
+
+/// The code system of the synthetic professional's role.
+const ROLE_SYSTEM: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
+
+/// The suite's `[auth]`, its issuer naming [`AUTHORITY_CLAIM`] as the claim
+/// that carries the professional identifier's issuing authority.
+fn naming_the_issuing_authority() -> AuthSettings {
+    let mut auth = crate::support::auth();
+    for issuer in &mut auth.issuers {
+        issuer.professional_issuing_authority = Some(AUTHORITY_CLAIM.to_owned());
+    }
+    auth
+}
+
+/// `claims` naming the professional by [`HP_ID`], the authority that issued
+/// it and one role.
+fn identifying(claims: &mut Claims) {
+    if let Some(extensions) = claims.extensions.as_mut() {
+        extensions.ihe_iua.national_provider_identifier = Some(HP_ID.to_owned());
+        extensions.ihe_iua.subject_role = vec![Coding {
+            system: ROLE_SYSTEM.to_owned(),
+            code: "doctor".to_owned(),
+        }];
+    }
+    claims
+        .other
+        .insert(AUTHORITY_CLAIM.to_owned(), AUTHORITY.to_owned());
+}
+
+/// Regulation (EU) 2025/327 Art 13(4), Implementing Regulation (EU)
+/// 2026/2099 Annex Table 1; §13.1, N24: each node is told the professional's
+/// identifier, the agency that issued it and their roles, and the provider's
+/// identifier, so it can name who registered what.
+// conformance: CP-16
+#[tokio::test]
+async fn a_local_caller_conveys_the_professional_and_the_provider_to_each_node() -> TestResult {
+    let gateway = Gateway::with(naming_the_issuing_authority()).await?;
+    let keys = published(&gateway.app).await?;
+    let request = bearing(query()?, &minted(&claims_with(identifying))?)?;
+    let (status, text) = call(gateway.app.clone(), request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    for (server, audience) in [(&gateway.a, "node-a-pub"), (&gateway.b, "node-b-pub")] {
+        let reads = verified_at(server, &keys, audience).await?;
+        let [read] = reads.as_slice() else {
+            return Err(format!("one query at {audience}").into());
+        };
+        assert_eq!(
+            (Some(HP_ID), Some(AUTHORITY), Some(ORGANISATION)),
+            (
+                read.national_provider_identifier.as_deref(),
+                read.national_provider_identifier_authority.as_deref(),
+                read.subject_organization_id.as_deref()
+            ),
+            "{audience}"
+        );
+        assert_eq!(
+            vec![ConveyedPurpose {
+                system: Some(ROLE_SYSTEM.to_owned()),
+                code: "doctor".to_owned(),
+            }],
+            read.subject_role,
+            "{audience}"
+        );
+        assert_eq!(None, read.national_contact_point, "a local caller");
+    }
+    Ok(())
+}
+
+/// An issuer that names no claim for the issuing authority has none read or
+/// conveyed, whatever its tokens carry.
+#[tokio::test]
+async fn an_issuer_naming_no_authority_claim_conveys_none() -> TestResult {
+    let gateway = Gateway::trusting_the_test_issuer().await?;
+    let keys = published(&gateway.app).await?;
+    let request = bearing(query()?, &minted(&claims_with(identifying))?)?;
+    let (status, text) = call(gateway.app.clone(), request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let reads = verified_at(&gateway.a, &keys, "node-a-pub").await?;
+    let [read] = reads.as_slice() else {
+        return Err("one query at node A".into());
+    };
+    assert_eq!(None, read.national_provider_identifier_authority);
+    assert_eq!(Some(HP_ID), read.national_provider_identifier.as_deref());
+    assert!(!wire(&gateway.a).await?.contains(AUTHORITY));
+    Ok(())
+}
+
+/// §5.4.1, N33: a role or an issuing authority carrying the patient
+/// identifier stops the query before any node, as every caller claim does.
+// conformance: CP-26
+#[tokio::test]
+async fn a_professional_claim_carrying_the_patient_stops_the_query_before_any_node() -> TestResult {
+    let smuggling = [
+        claims_with(|claims| {
+            identifying(claims);
+            claims
+                .other
+                .insert(AUTHORITY_CLAIM.to_owned(), format!("Register {PATIENT}"));
+        }),
+        claims_with(|claims| {
+            identifying(claims);
+            if let Some(extensions) = claims.extensions.as_mut() {
+                for role in &mut extensions.ihe_iua.subject_role {
+                    PATIENT.clone_into(&mut role.code);
+                }
+            }
+        }),
+        claims_with(|claims| {
+            identifying(claims);
+            if let Some(extensions) = claims.extensions.as_mut() {
+                for role in &mut extensions.ihe_iua.subject_role {
+                    role.system = format!("urn:x:{PATIENT}");
+                }
+            }
+        }),
+    ];
+    for claims in smuggling {
+        let gateway = Gateway::with(naming_the_issuing_authority()).await?;
+        let request = bearing(query()?, &minted(&claims)?)?;
+        let (status, text) = call(gateway.app.clone(), request).await?;
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status, "{text}");
+        assert!(
+            !text.contains(PATIENT),
+            "the answer never quotes it: {text}"
+        );
+        gateway.nobody_asked().await?;
+    }
+    Ok(())
+}
+
 /// The edge's header and issuer of [`an_edge_asserted_caller_is_conveyed_as_edge_asserted`].
 const EDGE_HEADER: &str = "ferrofed-edge-assertion";
 const EDGE: &str = "https://edge.example.test";
@@ -349,6 +489,7 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
             requester: None,
             assurance: None,
             client_tokens_act_for_professional: false,
+            professional_issuing_authority: None,
             national_contact_point: None,
         }],
         ..AuthSettings::default()

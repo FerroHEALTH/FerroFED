@@ -378,7 +378,9 @@ impl Gate {
         };
         let launch_ehr_id = token.claims.launch_ehr_id();
         let requester = token.claims.requester(trusted.settings.requester.as_ref());
-        let professional = token.claims.professional();
+        let professional = token
+            .claims
+            .professional(trusted.settings.professional_issuing_authority.as_deref());
         let assurance = assurance_of(&trusted.settings, |claim| token.claims.text(claim));
         let relayed = contact_point::read(&trusted.settings, token.claims.annex(), |claim| {
             token.claims.text(claim)
@@ -462,13 +464,15 @@ impl Gate {
             .as_ref()
             .and_then(|named| answer.others.requester(named));
         let assurance = assurance_of(&trusted.settings, |claim| answer.others.text(claim));
+        let issuing_authority = trusted.settings.professional_issuing_authority.as_deref();
+        let authority = issuing_authority.and_then(|claim| answer.others.text(claim));
         let relayed = contact_point::read(&trusted.settings, answer.declared.annex(), |claim| {
             answer.others.text(claim)
         });
         let caller = Caller::new(stated, VerifiedBy::Introspection)
             .with_launch_ehr_id(answer.ehr_id)
             .with_requester(requester)
-            .with_professional(answer.declared.professional())
+            .with_professional(answer.declared.professional(authority))
             .with_assurance(assurance)
             .with_acting(acting);
         Ok(contact_point::vouched(caller, relayed))
