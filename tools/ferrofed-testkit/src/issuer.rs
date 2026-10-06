@@ -308,6 +308,8 @@ impl Extensions {
         Self {
             ihe_iua: IheIua {
                 subject_organization_id: Some(String::from("urn:oid:2.999.7")),
+                subject_name: None,
+                national_provider_identifier: None,
                 purpose_of_use: vec![Coding {
                     system: ACT_REASON.to_owned(),
                     code: String::from("TREAT"),
@@ -323,6 +325,13 @@ pub struct IheIua {
     /// `subject_organization_id`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subject_organization_id: Option<String>,
+    /// `subject_name`, the user's name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject_name: Option<String>,
+    /// `national_provider_identifier`, the professional's identifier from
+    /// their national authority.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub national_provider_identifier: Option<String>,
     /// `purpose_of_use`, an array of FHIR `Coding`.
     pub purpose_of_use: Vec<Coding>,
 }

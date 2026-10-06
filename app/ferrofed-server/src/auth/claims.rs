@@ -13,7 +13,11 @@
 //! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
 //! (master04 §Capabilities). The string claims an issuer's
 //! `[auth.issuer.requester]` names are read as the requester the consent
-//! pre-filter asks about (§13.4). Every other claim is passed over, and the
+//! pre-filter asks about (§13.4). The IUA `subject_name` and
+//! `national_provider_identifier` are read as the professional's
+//! identification, and the string claim an issuer's
+//! `[auth.issuer.assurance]` names as the authentication assurance, by
+//! default `acr` (RFC 9068 §2.2.1). Every other claim is passed over, and the
 //! IUA `person_id`, a patient identifier, is never read (§5.4.1, N33).
 //!
 //! IUA is cited from the Revision 2.5 Trial Implementation supplement
@@ -26,7 +30,7 @@ use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
-use crate::auth::caller::{PurposeOfUse, Stated};
+use crate::auth::caller::{Professional, PurposeOfUse, Stated};
 use crate::config::auth::RequesterClaims;
 
 /// The claims of an RFC 9068 access token, as read after its signature, its
@@ -70,6 +74,17 @@ impl AccessToken {
     /// Returns the token's `ehrId` claim, when it carries one.
     pub(super) fn launch_ehr_id(&self) -> Option<String> {
         self.ehr_id.clone()
+    }
+
+    /// Returns the string claim `name`, the claim an issuer's
+    /// `[auth.issuer.assurance]` names, when the token carries it.
+    pub(super) fn text(&self, name: &str) -> Option<String> {
+        self.others.text(name)
+    }
+
+    /// Returns the professional's identification the token states.
+    pub(super) fn professional(&self) -> Professional {
+        self.declared.professional()
     }
 
     /// Returns the requester the claims `named` name, when the token carries
@@ -148,7 +163,7 @@ enum Claim {
 impl Others {
     /// The string claim `name`, when the token carries one that is not
     /// empty.
-    fn text(&self, name: &str) -> Option<String> {
+    pub(super) fn text(&self, name: &str) -> Option<String> {
         match self.0.get(name)? {
             Claim::Text(text) if !text.is_empty() => Some(text.clone()),
             Claim::Text(_) | Claim::Other(_) => None,
@@ -219,6 +234,13 @@ struct IheIua {
     /// `subject_organization_id`, a URI naming the caller's organisation.
     #[serde(default)]
     subject_organization_id: Option<String>,
+    /// `subject_name`, the user's name.
+    #[serde(default)]
+    subject_name: Option<String>,
+    /// `national_provider_identifier`, the identifier the professional's
+    /// national authority issued.
+    #[serde(default)]
+    national_provider_identifier: Option<String>,
     /// `purpose_of_use`, an array of FHIR `Coding`.
     #[serde(default)]
     purpose_of_use: Option<Vec<Coding>>,
@@ -249,6 +271,17 @@ impl Declared {
         self.iua()
             .and_then(|iua| iua.subject_organization_id.clone())
             .filter(|organisation| !organisation.is_empty())
+    }
+
+    /// The professional's identification the IUA extension states, each
+    /// member when it is set and not empty.
+    pub(super) fn professional(&self) -> Professional {
+        let iua = self.iua();
+        let text = |value: Option<&String>| value.filter(|value| !value.is_empty()).cloned();
+        Professional {
+            identifier: text(iua.and_then(|iua| iua.national_provider_identifier.as_ref())),
+            name: text(iua.and_then(|iua| iua.subject_name.as_ref())),
+        }
     }
 
     /// Every purpose of use declared, IUA first, sorted and without

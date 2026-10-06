@@ -75,6 +75,9 @@ async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> Te
         issuer
             .backend_clients
             .insert(String::from("synthetic-backend"));
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.1: a backend client reaches patient
+        // data only for the professional its token names, as its issuer declares.
+        issuer.client_tokens_act_for_professional = true;
     }
     let gateway = Gateway::with(auth).await?;
     let token = granting("system/aql-*.s")?;
@@ -82,6 +85,9 @@ async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> Te
     let mut backend = claims();
     backend.scope = Some(String::from("system/aql-*.s"));
     backend.client_id = String::from("synthetic-backend");
+    if let Some(extensions) = backend.extensions.as_mut() {
+        extensions.ihe_iua.national_provider_identifier = Some(String::from("hp-0042"));
+    }
     assert_admitted(&gateway, bearing(query()?, &minted(&backend)?)?).await
 }
 

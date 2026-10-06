@@ -79,7 +79,7 @@ where
         } => match AppState::check(&settings).and_then(|cleartext| {
             state::admits_callers(&settings, settings.federates()).map(|()| cleartext)
         }) {
-            Ok(cleartext) => config_checked(&cleartext, &settings.metrics, &settings.deprecated),
+            Ok(cleartext) => config_checked(&cleartext, &settings),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -201,22 +201,22 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     code
 }
 
-/// Reports a resolved configuration, its `cleartext` credentials, what a
-/// remote admin listener of `surface` serves and every `deprecated` key it
-/// sets, and exits.
+/// Reports the resolved configuration `settings`, its `cleartext`
+/// credentials, what a remote admin listener serves, every deprecated key
+/// it sets and every issuer that declares no assurance, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
 )]
-fn config_checked(
-    cleartext: &[config::transport::ProtectedSite],
-    surface: &config::settings::MetricsSettings,
-    deprecated: &[config::deprecated::Deprecated],
-) -> ExitCode {
+fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Settings) -> ExitCode {
     config::transport::print_warnings(cleartext);
-    for key in deprecated {
+    for key in &settings.deprecated {
         println!("ferrofed: warning: {key}");
     }
+    for note in settings.server.auth.notes() {
+        println!("ferrofed: note: {note}");
+    }
+    let surface = &settings.metrics;
     if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
         println!(
             "ferrofed: note: metrics.listen {address} is not a loopback address: a remote peer reads GET {} alone, and the admin write actions ({}) answer 403 to every peer that is not loopback",

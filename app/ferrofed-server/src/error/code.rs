@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 54] = [
+    pub const GATEWAY: [Self; 56] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -66,6 +66,8 @@ impl Code {
         Self::SubjectUnavailable,
         Self::Overloaded,
         Self::RateLimited,
+        Self::NaturalPersonRequired,
+        Self::AuthenticationAssuranceInsufficient,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -136,6 +138,8 @@ impl Code {
             Self::SubjectUnavailable => "subject-unavailable",
             Self::Overloaded => "overloaded",
             Self::RateLimited => "rate-limited",
+            Self::NaturalPersonRequired => "natural-person-required",
+            Self::AuthenticationAssuranceInsufficient => "authentication-assurance-insufficient",
         }
     }
 
@@ -187,7 +191,9 @@ impl Code {
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
-            Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::Unauthenticated
+            | Self::NaturalPersonRequired
+            | Self::AuthenticationAssuranceInsufficient => StatusCode::UNAUTHORIZED,
             Self::ConsentDenied
             | Self::ScopeInsufficient
             | Self::PurposeOfUseRequired
@@ -331,6 +337,12 @@ impl Code {
             Self::RateLimited => {
                 "this caller sent more requests than the gateway admits from one caller; retry after the time Retry-After names"
             }
+            Self::NaturalPersonRequired => {
+                "the access token names no natural person, and patient data is released to a person or for a professional the token names"
+            }
+            Self::AuthenticationAssuranceInsufficient => {
+                "the access token states no authentication assurance at the level patient data requires"
+            }
         }
     }
 }
@@ -403,6 +415,8 @@ mod tests {
             Code::SubjectUnavailable => Some(51),
             Code::Overloaded => Some(52),
             Code::RateLimited => Some(53),
+            Code::NaturalPersonRequired => Some(54),
+            Code::AuthenticationAssuranceInsufficient => Some(55),
         }
     }
 
@@ -510,6 +524,11 @@ mod tests {
             (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
             (Code::Overloaded, StatusCode::SERVICE_UNAVAILABLE),
             (Code::RateLimited, StatusCode::TOO_MANY_REQUESTS),
+            (Code::NaturalPersonRequired, StatusCode::UNAUTHORIZED),
+            (
+                Code::AuthenticationAssuranceInsufficient,
+                StatusCode::UNAUTHORIZED,
+            ),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

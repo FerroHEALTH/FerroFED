@@ -10,9 +10,18 @@
 //! (§5.4.1, N33). The one patient context it may hold is the SMART on openEHR
 //! `ehrId`, an `ehr_id` at the platform that issued the token, which N33
 //! lets locate a node; it confines a `patient/` grant ([`PatientContext`]).
+//!
+//! It also holds who acts ([`Acting`]): the natural person the token names,
+//! or a client application, which IHE IUA marks by a `sub` that is the
+//! `client_id` (ITI TF-2 3.71.4.2.2.1) and SMART on openEHR by a `system/`
+//! grant, "acting without a user context" (master08 §Resource Scopes). With
+//! it come the professional's identification the token states
+//! ([`Professional`]) and the assurance level its authentication reached
+//! (Regulation (EU) 2025/327 Annex II 3.1).
 
 use std::fmt;
 
+use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
@@ -64,6 +73,14 @@ pub struct Caller {
     /// `[auth.issuer.requester]` names state it, when the token carries them
     /// all (§13.4).
     requester: Option<Requester>,
+    /// The professional's identification the token states.
+    professional: Professional,
+    /// The assurance level the caller's authentication reached, as its
+    /// issuer's `[auth.issuer.assurance]` reads the token, when the issuer
+    /// declares one and the token carries a value it declares.
+    assurance: Option<AssuranceLevel>,
+    /// Who acts: the person the token names, or a client application.
+    acting: Acting,
 }
 
 impl fmt::Debug for Caller {
@@ -79,6 +96,8 @@ impl fmt::Debug for Caller {
             .field("token", &self.token)
             .field("covering", &self.covering)
             .field("confined", &self.patient.is_some())
+            .field("assurance", &self.assurance)
+            .field("acting", &self.acting)
             .finish_non_exhaustive()
     }
 }
@@ -129,6 +148,28 @@ impl PatientContext {
     #[must_use]
     pub fn ehr_id(&self) -> &EhrId {
         &self.ehr_id
+    }
+}
+
+/// The professional's identification a token states, read from the IHE IUA
+/// extension (ITI TF-2 3.71.4.2.2.1.1).
+///
+/// `Debug` shows which members are present and none of their values.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Professional {
+    /// `national_provider_identifier`: "A unique identifier issued to health
+    /// care providers by their national authority".
+    pub identifier: Option<String>,
+    /// `subject_name`: "The user's name as String".
+    pub name: Option<String>,
+}
+
+impl fmt::Debug for Professional {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Professional")
+            .field("identifier", &self.identifier.is_some())
+            .field("name", &self.name.is_some())
+            .finish()
     }
 }
 
@@ -201,7 +242,59 @@ impl Caller {
             launch_ehr_id: None,
             patient: None,
             requester: None,
+            professional: Professional::default(),
+            assurance: None,
+            acting: Acting::Person,
         }
+    }
+
+    /// Returns this caller, its token stating `professional`.
+    #[must_use]
+    pub fn with_professional(mut self, professional: Professional) -> Self {
+        self.professional = professional;
+        self
+    }
+
+    /// Returns the professional's identification the token states.
+    #[must_use]
+    pub fn professional(&self) -> &Professional {
+        &self.professional
+    }
+
+    /// Returns this caller, its authentication having reached `assurance`.
+    #[must_use]
+    pub fn with_assurance(mut self, assurance: Option<AssuranceLevel>) -> Self {
+        self.assurance = assurance;
+        self
+    }
+
+    /// Returns the assurance level the caller's authentication reached, when
+    /// the issuer declares how its tokens state one and the token states a
+    /// value it declares.
+    #[must_use]
+    pub fn assurance(&self) -> Option<AssuranceLevel> {
+        self.assurance
+    }
+
+    /// Returns this caller, `acting` behind its token.
+    #[must_use]
+    pub fn with_acting(mut self, acting: Acting) -> Self {
+        self.acting = acting;
+        self
+    }
+
+    /// Returns who acts behind the caller's token.
+    #[must_use]
+    pub fn acting(&self) -> Acting {
+        self.acting
+    }
+
+    /// Returns whether the token names the professional a client acts for:
+    /// an IUA `national_provider_identifier`, or the professional of the
+    /// requester its issuer's `[auth.issuer.requester]` reads.
+    #[must_use]
+    pub fn names_professional(&self) -> bool {
+        self.professional.identifier.is_some() || self.requester.is_some()
     }
 
     /// Returns this caller, admitted under `audience`, the audience their

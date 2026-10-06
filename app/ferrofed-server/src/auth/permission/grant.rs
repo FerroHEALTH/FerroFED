@@ -69,6 +69,19 @@ pub fn confined(covering: &[SmartScope]) -> bool {
         })
 }
 
+/// Whether every one of `covering`, the scopes that cover an operation, is
+/// a `system/` grant.
+///
+/// SMART on openEHR grants a `system/` scope "to backend applications acting
+/// without a user context" (master08 §Resource Scopes).
+#[must_use]
+pub fn backend_only(covering: &[SmartScope]) -> bool {
+    !covering.is_empty()
+        && covering.iter().all(|scope| {
+            matches!(scope, SmartScope::Resource(resource) if resource.compartment == Compartment::System)
+        })
+}
+
 /// Whether `granted`, a token's whole grant, is a patient grant: it holds a
 /// resource scope, and every resource scope it holds is a `patient/` one.
 ///

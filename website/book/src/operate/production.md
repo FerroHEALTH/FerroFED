@@ -351,7 +351,16 @@ jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/cert
 backend_clients = ["example-reporting-service"]
 ```
 
-`system/aql-*` counts only for a client listed in `backend_clients`. An
+`system/aql-*` counts only for a client listed in `backend_clients`. A
+`system/` scope acts without a user, so the reporting service's token
+reaches patient data only once you declare
+`client_tokens_act_for_professional = true` for the issuer and the token
+names the professional the service acts for; until then the gateway answers
+it `401 natural-person-required`. Declare as well, in
+`[auth.issuer.assurance]`, the `acr` values your realm writes for each
+assurance level and the least level patient data needs
+([Professionals and assurance](authentication.md#professionals-and-assurance)).
+An
 operator who uses the [operator console](operator-console.md) needs the
 issuer's `operator_scope` as well
 ([The operator surface](authentication.md#the-operator-surface)).
