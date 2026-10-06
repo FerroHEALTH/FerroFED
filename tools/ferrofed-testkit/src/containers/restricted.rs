@@ -10,7 +10,9 @@ use testcontainers::runners::AsyncRunner;
 
 use super::database::database_server;
 use super::images::FERROEHR;
-use super::{FERROEHR_PRODUCT, HarnessError, HarnessUser, NODE_A_DATABASE, Node, ferroehr_request, ready};
+use super::{
+    FERROEHR_PRODUCT, HarnessError, HarnessUser, NODE_A_DATABASE, Node, ferroehr_request, ready,
+};
 
 /// The administrator of a restricted node, whose role reaches every EHR.
 pub const RESTRICTED_ADMIN: HarnessUser = HarnessUser {
