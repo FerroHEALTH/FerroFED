@@ -288,8 +288,9 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
 
 /// Reports the resolved configuration `settings`, its `cleartext`
 /// credentials, what a remote admin listener serves, every deprecated key
-/// it sets, every issuer that declares no assurance and a release past its
-/// support period, and exits.
+/// it sets, every issuer that declares no assurance, an access log that
+/// declares no emergency purpose and a release past its support period, and
+/// exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
@@ -304,7 +305,13 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
     for key in &settings.deprecated {
         println!("ferrofed: warning: {key}");
     }
-    for note in settings.server.auth.notes() {
+    for note in settings
+        .server
+        .auth
+        .notes()
+        .into_iter()
+        .chain(settings.access_log.notes())
+    {
         println!("ferrofed: note: {note}");
     }
     let surface = &settings.metrics;

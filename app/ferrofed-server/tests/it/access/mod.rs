@@ -16,6 +16,7 @@
 
 mod accessor;
 mod address;
+mod emergency;
 mod gate;
 mod limits;
 mod origins;

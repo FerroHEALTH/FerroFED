@@ -371,6 +371,11 @@ These are the ones to know before you deploy FerroFED; the
   `ehds-unclassified`. The record names the professional the token names,
   and the assurance level when the issuer declares one
   ([The person behind an access](../operate/audit.md#the-person-behind-an-access)).
+  An access whose token declares a purpose of use you name in
+  `[[access_log.emergency_purpose]]` is marked an emergency access (Art
+  11(5)); FerroFED names none, and the mark records what the caller
+  asserted, never whether restricted data were released, which the node
+  decides ([Emergency access](../operate/audit.md#emergency-access)).
 - **The assurance level is yours to set.** Patient data needs a natural
   person behind the token, or a client application you declare to act for
   the professional its token names; any other token is refused

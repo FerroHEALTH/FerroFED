@@ -19,6 +19,9 @@
 //!   the model ids of what it reached;
 //! - [`retention`]: how long a record is kept, by its categories and its
 //!   origins, never under the three years of Art 9(2);
+//! - [`emergency`]: the purposes of use a deployment declares as asserting
+//!   an access in the vital interests of the data subject (Art 11(5)), and
+//!   the mark of a record whose accessor declared one;
 //! - [`sink`]: where records go, and why one could not be stored;
 //! - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`
 //!   through `ihe-iti`, and the sink over an `ihe-iti` audit recorder.
@@ -57,6 +60,7 @@
 pub mod balp;
 pub mod category;
 pub mod classify;
+pub mod emergency;
 pub mod map;
 pub mod record;
 pub mod retention;

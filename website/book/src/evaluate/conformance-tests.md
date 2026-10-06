@@ -210,7 +210,7 @@ with no marked test is not listed.
 
 ## CP-17
 
-151 tests.
+152 tests.
 
 - `app/ferrofed-engine/src/dispatch/dpop.rs`: `a_proof_that_fails_on_the_first_send_is_a_node_error_with_nothing_sent`, `a_proof_that_fails_on_the_nonce_resend_is_a_node_error_of_a_node_that_was_asked`
 - `app/ferrofed-engine/tests/it/audience.rs`: `the_issuer_audience_names_the_issuer`, `the_token_endpoint_is_the_default_audience`
@@ -226,6 +226,7 @@ with no marked test is not listed.
 - `app/ferrofed-engine/tests/it/nuts.rs`: `a_refused_nuts_grant_fails_the_node`, `the_nuts_token_reaches_the_node_dpop_bound`
 - `app/ferrofed-engine/tests/it/onward.rs`: `a_401_drops_the_token_and_the_next_request_obtains_a_new_one`, `a_refused_token_request_is_a_node_error_and_nothing_reaches_the_node`, `a_rotation_publishes_both_keys_for_the_overlap_window`, `a_token_endpoint_description_never_reaches_the_answer`, `a_token_is_cached_until_thirty_seconds_before_it_expires`, `an_unreachable_token_endpoint_is_a_node_error_and_nothing_reaches_the_node`, `the_assertion_carries_the_rfc_7523_claims`, `the_assertion_verifies_against_the_published_jwks_and_the_token_reaches_the_node`, `the_token_request_carries_the_canonical_scope`, `the_token_request_carries_the_rfc_7523_parameters`
 - `app/ferrofed-engine/tests/it/signing.rs`: `an_es256_signing_key_signs_the_client_assertion_es256`
+- `app/ferrofed-server/tests/it/access/emergency.rs`: `the_emergency_purpose_is_conveyed_to_the_node`
 - `app/ferrofed-server/tests/it/admission/onward.rs`: `the_admission_check_authenticates_with_the_onward_grant`
 - `app/ferrofed-server/tests/it/auth/edge.rs`: `a_bearer_token_alone_is_401_at_the_edge`, `an_assertion_of_another_issuer_is_401`, `an_assertion_of_the_edge_admits_and_is_recorded`
 - `app/ferrofed-server/tests/it/auth/introspection.rs`: `an_active_token_for_another_audience_is_401`, `an_active_token_for_this_gateway_is_admitted`, `an_answer_past_its_expiry_is_401`, `an_endpoint_answering_an_error_is_503`, `an_inactive_token_is_401`, `an_unreachable_endpoint_is_503`
@@ -610,10 +611,11 @@ with no marked test is not listed.
 
 ## Track 10
 
-22 tests.
+23 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
 - `app/ferrofed-server/tests/it/access/accessor.rs`: `the_professional_and_the_patient_reach_no_log_or_metric`
+- `app/ferrofed-server/tests/it/access/emergency.rs`: `the_mark_carries_no_patient_identifier_to_a_log_or_a_node`
 - `app/ferrofed-server/tests/it/access/query.rs`: `no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`

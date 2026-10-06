@@ -171,6 +171,80 @@ record can be joined with the contact point's own exchange log. No log line
 carries any of them. The entity and detail names are FerroFED's own design;
 no text the gateway reads asks the national side for an audit format.
 
+### Emergency access
+
+Regulation (EU) 2025/327 lets a healthcare provider or health professional
+be granted access to data a person restricted, "where necessary in order to
+protect the vital interests of the data subject", and asks that "such cases
+shall be logged in a clear and understandable format and shall be easily
+accessible for the data subject" (Art 11(5); Art 8 grants the restriction).
+
+The caller asserts an emergency access through the purpose of use its
+token declares ([Purpose of use](authentication.md#purpose-of-use)), and
+you name the codes that assert one in `[[access_log.emergency_purpose]]`.
+A record whose token declares one of them carries one more entity:
+
+| Element | Value |
+|---|---|
+| `type` | `4` (other), as the other entities FerroFED adds |
+| `name` | `ehds-emergency-access` |
+| `description` | a sentence that states the mark in words, citing Art 11(5) |
+| `detail` `ehds-emergency-access` | `true` |
+| `detail` `ehds-emergency-purpose` | each declared purpose that marked it, `system\|code` |
+
+The purposes stay where BALP puts every purpose of use, in the
+`agent:user` `purposeOfUse`, so the record keeps its BALP pattern. The
+entity lets a person's access service show the mark without knowing which
+codes your deployment maps.
+
+What the mark does and does not say:
+
+- It records what the caller asserted. The gateway reads it from the
+  verified token's purposes alone, matching the code and its system
+  exactly, and never infers it from the query, the data or a node's answer.
+- It changes nothing else. The purpose reaches every node in the
+  `openEHR-federation-client` token as any purpose does
+  ([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)),
+  and the node decides whether to release restricted data (Federation Tier
+  §13, N26). The gateway sends the same request it would send without the
+  mark, asks no node again, and answers a node's refusal as it would
+  without the mark. A refused or failed emergency access is marked too.
+- It does not say that restricted data were reached. Consent and
+  restrictions stay with the node, and Art 8 keeps the fact of a
+  restriction from healthcare providers, so the gateway cannot tell. The
+  node that released restricted data records that in its own log.
+- The optional consent pre-filter is asked as configured, whatever the
+  caller's purpose ([Consent](consent.md)); a member it drops as
+  `consent-denied` is not asked, under an emergency purpose too.
+
+For each marked access the gateway writes one `warn` line, "the access was
+declared an emergency access by its purpose of use", under its request id
+and with no other value, so your security monitoring can watch for it.
+The person learns of the access through the access service of your Member
+State, which reads the record with ITI-81 ([Reading the
+log](#reading-the-log)). Art 9(1) gives the person information "including
+through automatic notifications" on any access, "including access provided
+in accordance with Article 11(5)"; that notification is the access
+service's, which can search the repository for records naming the person
+and the `ehds-emergency-access` entity. The gateway sends no notification
+of its own.
+
+FerroFED names no emergency purpose by default, so no access is marked
+until you declare the codes your issuers use, and `config check` notes a
+configuration that declares none. The HL7 v3 `ActReason` code system
+(<https://terminology.hl7.org/CodeSystem-v3-ActReason.html>) defines two
+candidates:
+
+| Code | Display | Definition, in part |
+|---|---|---|
+| `BTG` | break the glass | policy override operations for "immediately needed health care for an emergent condition", which "may include override of subject of care consent directive restricting access" |
+| `ETREAT` | Emergency Treatment | operations "for provision of immediately needed health care for an emergent condition" |
+
+`BTG` names the override Art 11(5) describes. `ETREAT` is broader, and you
+map it only when your national rules treat every emergency treatment as an
+access in the vital interests. The IHE IUA example token declares `BTG`
+beside `TREAT` (ITI TF-2 3.71.4.2.2.1.1).
+
 ### Categories
 
 A record names the categories of the data accessed: the six priority
@@ -385,6 +459,10 @@ years = 5                      # every record, at least 3 (Art 9(2)); 3 when uns
 
 [access_log.retention.origins]
 "node-a" = 15                  # an endpoint id of the registry
+
+[[access_log.emergency_purpose]]
+system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
+code = "BTG"                   # break the glass marks an emergency access (Art 11(5))
 ```
 
 `patient_namespaces` lists the namespaces your Member State's access
@@ -410,6 +488,11 @@ origin that is no endpoint of the registry are refused when the
 configuration loads, naming the key. A change is applied by a reload and
 reaches the records written after it.
 
+Each `[[access_log.emergency_purpose]]` needs a `code`, and takes a
+`system`. Without a `system` it matches only a purpose a token declares
+with no system. An empty code or system and an unknown key are refused when
+the configuration loads ([Emergency access](#emergency-access)).
+
 ### The Annex II 3.2 checklist
 
 | Item | Requirement | How FerroFED meets it |
@@ -420,6 +503,7 @@ reaches the records written after it.
 | 3.2(c) | the categories of data accessed | the `ehds-categories` entity, classified by your `[access_log]` map, `unclassified` with its evidence where the map cannot tell |
 | 3.2(d) | the time and date of access | `recorded` |
 | 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint the query was sent to, with its node, its outcome and its categories |
+| Art 11(5) | an access to restricted data in the vital interests "logged in a clear and understandable format" | the `ehds-emergency-access` entity of a record whose token declares a purpose you name: see [Emergency access](#emergency-access) |
 | 3.3 | tools to review and analyse the log data, or the connection of external software | the records go to your ATNA Audit Record Repository and are read there with ITI-81 by any Audit Consumer, your Member State's access service included: see [Reading the log](#reading-the-log) |
 | 3.4 | retention periods and access rights by origin and category | each record states the period its categories and origins call for, never under three years (Art 9(2)): see [How long a record is kept](#how-long-a-record-is-kept); access rights are set at your repository, and labelling the records for them is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) |
 

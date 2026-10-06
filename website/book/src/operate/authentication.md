@@ -323,6 +323,31 @@ organisation the caller acts for is read from
 `extensions.ihe_iua.subject_organization_id`. The IUA `person_id` claim, a
 patient identifier, is never read.
 
+### Emergency purposes
+
+A caller asserts an access in the vital interests of the patient, which
+Regulation (EU) 2025/327 Art 11(5) lets reach data the patient restricted,
+by declaring an emergency purpose of use in its token. The gateway never
+infers one. It conveys every declared purpose to each node unchanged, and
+the node decides what to release (§13, N26); the gateway sends the same
+request it would send without it and never overrides a node's refusal.
+
+You name the purposes that mark an access as an emergency access in the
+access log, `[[access_log.emergency_purpose]]`, each a `code` and its
+`system`, matched exactly ([Emergency access](audit.md#emergency-access)).
+The HL7 v3 `ActReason` codes a deployment maps are `BTG`, "break the
+glass", whose definition "may include override of subject of care consent
+directive restricting access", and, where your national rules call for it,
+`ETREAT`, "Emergency Treatment"
+(<https://terminology.hl7.org/CodeSystem-v3-ActReason.html>). Ask your
+issuers which they put in `purpose_of_use`, and declare those:
+
+```toml
+[[access_log.emergency_purpose]]
+system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
+code = "BTG"
+```
+
 ## Professionals and assurance
 
 Regulation (EU) 2025/327 asks an EHR system "designed to be used by health
