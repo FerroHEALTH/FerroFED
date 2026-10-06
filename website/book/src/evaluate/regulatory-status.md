@@ -391,8 +391,12 @@ them:
   the original document ([Receiving a document](receiving-documents.md)).
   The gateway holds the stored queries that select each patient summary
   section's compositions
-  ([the section queries](#the-patient-summarys-section-queries)), and does
-  not serve the document yet.
+  ([the section queries](#the-patient-summarys-section-queries)), and serves
+  the patient summary built from them on a FHIR R4 face of its own, the
+  interface of Annex II, point 2.1
+  ([The patient summary over FHIR](../integrate/patient-summary.md)). The
+  document list on that face is planned
+  ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
 Five of the manufacturer's obligations have a first answer:
 
@@ -504,8 +508,10 @@ Vital signs, which the EPS composition carries in a section of its own, feed
 the Xt-EHR observation results. Running a query by name and the reserved
 namespace are described under
 [the gateway's own queries](../integrate/stored-queries.md#the-gateways-own-queries).
-The document assembled from their answers is planned
-([#689](https://github.com/FerroHEALTH/FerroFED/issues/689)).
+The FHIR face of Annex II 2.1 assembles the patient summary from their
+answers ([The patient summary over FHIR](../integrate/patient-summary.md),
+[#809](https://github.com/FerroHEALTH/FerroFED/issues/809)); the document
+list is planned ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
 ## Not legal advice
 

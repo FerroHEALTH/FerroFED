@@ -12,7 +12,13 @@
 //!   queries, which no `PUT` stores into and no store may hold;
 //! - [`patient_summary`]: one stored query per patient summary section,
 //!   selecting the whole compositions that feed it, each with its template
-//!   id, from every member (Federation Tier §12.7, N44).
+//!   id, from every member (Federation Tier §12.7, N44);
+//! - [`summary`]: the patient summary document assembled from what the
+//!   members answer to the section queries, each composition mapped by the
+//!   FHIRconnect mappings the deployment supplies;
+//! - [`face`]: the FHIR R4 face that serves it (Regulation (EU) 2025/327
+//!   Annex II 2.1): the summary request, the `CapabilityStatement` and the
+//!   `OperationOutcome`.
 //!
 //! Each query names its patient through `$patient` and `$namespace` alone,
 //! so it passes the stored-query admission and the rewrite scopes it to each
@@ -31,5 +37,7 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+pub mod face;
 pub mod patient_summary;
 pub mod reserved;
+pub mod summary;

@@ -24,6 +24,10 @@ bytes.workspace = true
 # `resources` for `Patient`, which a test device may compile and the shipped
 # IHE binding does not need yet (Annex A).
 fhir-types = { workspace = true, features = ["r4", "resources"] }
+# The vendored HL7 Europe Patient Summary package the document check reads
+# its profiles from (#689).
+flate2.workspace = true
+tar.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["server", "http1"] }

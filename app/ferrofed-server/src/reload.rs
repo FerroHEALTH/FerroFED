@@ -445,6 +445,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         telemetry: boot.telemetry.clone(),
         federation: boot.federation.clone(),
         stored_queries: boot.stored_queries.clone(),
+        fhir: boot.fhir.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
         ..fresh
@@ -579,6 +580,10 @@ const RESTART_KEYS: &[RestartKey] = &[
         boot.federation.demographic_endpoint != fresh.federation.demographic_endpoint
     }),
     ("stored_queries", stored_queries_changed),
+    ("fhir", |boot, fresh| {
+        boot.fhir.as_ref().map(|fhir| &fhir.written)
+            != fresh.fhir.as_ref().map(|fhir| &fhir.written)
+    }),
     ("metrics.listen", |boot, fresh| {
         boot.metrics.listen != fresh.metrics.listen
     }),

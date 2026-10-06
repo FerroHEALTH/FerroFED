@@ -22,7 +22,10 @@
 //! ([`facade::stored`], §12.7). A DEMOGRAPHIC request goes to the one
 //! endpoint the deployment declared for it when it names that endpoint, and
 //! answers `501` where none is declared (§7a.1, §12.6, N32); every other
-//! path under `{base}/v1/` answers `501` until its issue lands.
+//! path under `{base}/v1/` answers `501` until its issue lands. Beside
+//! `{base}`, on a base of its own, the FHIR R4 face serves the patient summary
+//! in the European exchange format ([`fhir`]; Regulation (EU) 2025/327 Annex
+//! II 2.1).
 //!
 //! [`binding`] holds the regional and national bindings, each one module
 //! behind one Cargo feature (`binding-ihe`, `binding-nl`) and the always-built
@@ -71,6 +74,7 @@ pub mod documents;
 pub mod error;
 pub mod facade;
 pub mod federation;
+pub mod fhir;
 pub mod health;
 pub mod healthcheck;
 pub mod jwks;
@@ -167,7 +171,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// from its query string ([`facade::query_aql_get`]). `GET
 /// {base}/operator/incidents`, `/operator/creating-systems` and
 /// `/operator/stored-queries` answer the read-only operator surface to a
-/// caller with the operator scope ([`operator`]). Every other path under
+/// caller with the operator scope ([`operator`]). With `[fhir]` set,
+/// `{fhir-base}/metadata` and `{fhir-base}/Patient/$summary` answer the FHIR
+/// face ([`fhir`]), and every error under `{fhir-base}` is an
+/// `OperationOutcome` ([`fhir::outcomes`]). Every other path under
 /// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
 /// or outside the base, answers `404`. Under a base other than `/`, the base
 /// itself and the base with a trailing `/` are both `{base}/`.
@@ -212,12 +219,19 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
             .nest(base, surface)
             .fallback(outside_the_base)
     };
+    // NOTE: Regulation (EU) 2025/327 Annex II 2.1, Federation Tier N28: the FHIR face sits on a
+    // base of its own beside `{base}`, so no ITS-REST path changes.
+    let routes = match state.fhir() {
+        Some(fhir) => routes.nest(fhir.base.as_str(), fhir::routes()),
+        None => routes,
+    };
     let guard = Arc::new(auth::Guard::new(
         auth::Gate::new(&server.auth),
         server.base_path.clone(),
         Arc::clone(&state),
     ));
     let metrics = Arc::clone(state.metrics());
+    let fhir_state = Arc::clone(&state);
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
     // and the caller rate, so a record names the verified caller and a refusal writes none.
     let contact_points = Arc::new(facade::options::ContactPoints::of(&server.auth));
@@ -258,6 +272,10 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             Arc::new(server.forwarding.clone()),
             client_address::attach,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            fhir_state,
+            fhir::outcomes,
         ));
     layered(
         guarded,

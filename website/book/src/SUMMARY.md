@@ -70,6 +70,7 @@
   - [Follow-ups](integrate/follow-ups.md)
   - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
   - [Stored queries](integrate/stored-queries.md)
+- [The patient summary over FHIR](integrate/patient-summary.md)
 - [Errors and status codes](integrate/errors.md)
 
 # Contribute

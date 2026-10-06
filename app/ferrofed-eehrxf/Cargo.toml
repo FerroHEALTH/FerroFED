@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-eehrxf"
-description = "The federation half of the European interoperability software component: the stored queries that select each patient summary section's compositions from the members"
+description = "The federation half of the European interoperability software component: the stored queries that select each patient summary section's compositions from the members, and the patient summary document assembled from what they answer"
 version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
@@ -16,9 +16,14 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-# The patient summary crosswalk, whose sections the stored queries feed; the
+# The patient summary crosswalk, whose sections the stored queries feed, the
+# document, and the FHIRconnect mapping each composition runs through; the
 # component itself links nothing of FerroFED.
-eehrxf = { workspace = true, features = ["patient-summary"] }
+eehrxf = { workspace = true, features = ["patient-summary", "openehr"] }
+# The R4 resources the document and the face write.
+fhir-types = { workspace = true, features = ["r4", "resources"] }
+# The call context and run settings of a mapping run.
+fhirconnect.workspace = true
 # The qualified name, version and held form of a stored definition (§12.7,
 # N44).
 ferrofed-registry.workspace = true
@@ -27,6 +32,18 @@ jiff.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.
 openehr-query.workspace = true
+# A FHIR Parameters body.
+serde_json.workspace = true
+thiserror.workspace = true
+# The query string of a summary request.
+url.workspace = true
+
+[dev-dependencies]
+# The patient summary fixtures and the check of a document against the
+# vendored HL7 Europe Patient Summary profiles.
+ferrofed-testkit.workspace = true
+# The written document, read back in the tests.
+serde_json.workspace = true
 
 [lints]
 workspace = true

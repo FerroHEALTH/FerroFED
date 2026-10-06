@@ -49,7 +49,7 @@ pub(super) async fn dispatched(
 /// Records what a fan-out showed of each member it dispatched to: its last
 /// state for the health surface, read from the node's own answer, and its
 /// request for the metrics surface, read from its §11.1 record.
-fn observed(federation: &Federation, answer: &FederatedAnswer) {
+pub(in crate::facade) fn observed(federation: &Federation, answer: &FederatedAnswer) {
     let records = answer.federation().endpoints();
     for (endpoint, contact) in answer.contacts() {
         federation.dependencies().contacted(endpoint, contact);
@@ -65,7 +65,7 @@ fn observed(federation: &Federation, answer: &FederatedAnswer) {
 
 /// The status of a fan-out that answered `status`, its resolution failed
 /// at a member when `resolution_failed`, under `completion`.
-pub(super) fn settled(
+pub(in crate::facade) fn settled(
     status: StatusCode,
     resolution_failed: bool,
     completion: Completion,
@@ -81,7 +81,7 @@ pub(super) fn settled(
 
 /// Runs the fan-out of `plan` inside the `fan_out` span, which names how many
 /// endpoints were asked and the status of the answer.
-async fn fanned_out(
+pub(in crate::facade) async fn fanned_out(
     federation: &Federation,
     plan: Plan,
     budget: Budget,

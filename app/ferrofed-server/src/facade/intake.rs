@@ -56,6 +56,16 @@ pub fn parameters(supplied: Option<&QueryParameters>) -> Result<Parameters, Inta
     Ok(parameters)
 }
 
+/// The `query_parameters` that bind each name of `pairs` to its string,
+/// as a client's request would carry them.
+#[must_use]
+pub fn strings<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> QueryParameters {
+    pairs
+        .into_iter()
+        .map(|(name, value)| (name.to_owned(), Value::String(value.to_owned())))
+        .collect()
+}
+
 /// The literal `value` stands for.
 fn literal(name: &str, value: &Value) -> Result<Primitive, IntakeError> {
     match value {
