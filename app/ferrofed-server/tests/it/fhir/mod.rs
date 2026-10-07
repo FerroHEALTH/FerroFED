@@ -19,6 +19,7 @@
 
 mod config;
 mod header;
+mod receive;
 mod refusals;
 mod summary;
 
@@ -87,15 +88,21 @@ async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
 /// summary header is asked of, whose master domain is the test patient's
 /// namespace.
 fn fhir_tables(pdq: &str) -> String {
+    fhir_tables_with(pdq, "", "")
+}
+
+/// The `[fhir]` tables of [`fhir_tables`], with the keys `keys` added to
+/// `[fhir]` and the tables `tables` after them.
+fn fhir_tables_with(pdq: &str, keys: &str, tables: &str) -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string());
     let [model, context] = eps::mapping_files();
     format!(
-        "\n[fhir]\nbase = \"{FHIR}\"\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n\
+        "\n[fhir]\nbase = \"{FHIR}\"\n{keys}\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n\
          identifier_system = \"urn:oid:2.999.9\"\nidentifier_value = \"operator-1\"\n\n\
          [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
          files = [{}, {}]\ncontext = \"{}\"\n\n\
          [pdqm]\nurl = \"{pdq}\"\ntransaction = \"iti-78\"\nmaster = \"{NAMESPACE}\"\n\
-         timeout_ms = 1000\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n",
+         timeout_ms = 1000\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{tables}",
         path(&eps::opt()),
         path(&model),
         path(&context),

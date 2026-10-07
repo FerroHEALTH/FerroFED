@@ -158,6 +158,7 @@ impl Federation {
             .as_ref()
             .map(|seam| -> Arc<dyn Resolver> { Arc::clone(&seam.resolver) });
         patient_bound(settings, &snapshot, resolver.is_some())?;
+        receiving(settings, &snapshot, resolver.is_some())?;
         let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
         if selection == NodeSelection::Localized {
             binding::single(&offers, Role::Localizer)?;
@@ -434,6 +435,40 @@ fn patient_bound(
         }
         if !resolving {
             return Err(FederationError::PatientWithoutResolver { key });
+        }
+    }
+    Ok(())
+}
+
+/// Holds the member of every `[[fhir.receive]]` of `settings` to the
+/// registry `snapshot`, and to a configured resolver when `resolving`.
+///
+/// # Errors
+///
+/// Returns [`FederationError::ReceivingMemberUnknown`] for a category whose
+/// member is no node of the registry, and
+/// [`FederationError::ReceivingWithoutResolver`] when a category is received
+/// and no resolver is configured.
+fn receiving(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+    resolving: bool,
+) -> Result<(), FederationError> {
+    let Some(fhir) = &settings.fhir else {
+        return Ok(());
+    };
+    if !resolving && !fhir.receivers.is_empty() {
+        return Err(FederationError::ReceivingWithoutResolver);
+    }
+    for (category, member) in fhir.receivers.members() {
+        // NOTE: Federation Tier §2.3, N23: a new object targets one explicitly chosen node,
+        // so the node a category is written to must be a member the registry holds.
+        let known = NodeId::new(member).is_ok_and(|node| snapshot.node(&node).is_some());
+        if !known {
+            return Err(FederationError::ReceivingMemberUnknown {
+                category: category.code(),
+                member: member.to_owned(),
+            });
         }
     }
     Ok(())

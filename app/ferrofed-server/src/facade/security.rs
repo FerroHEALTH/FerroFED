@@ -82,6 +82,33 @@ pub(super) fn fan_out(error: &FanOutError, request_id: &str) {
     }
 }
 
+/// The outbound gate stopped a request the gateway composed for
+/// `endpoint`, because `part` would have carried a patient identifier.
+pub(super) fn gate_stopped(endpoint: &EndpointId, part: &Part, request_id: &str) {
+    Event::OutboundGateStopped.record();
+    tracing::warn!(
+        target: TARGET,
+        event = "outbound-gate-stopped",
+        endpoint = %endpoint,
+        part = %part,
+        request_id,
+        "a request to a node would have carried a patient identifier and was not sent"
+    );
+}
+
+/// The patient identifiers of a received document were consumed as
+/// resolution input, and no node request carries them in its path, query
+/// string or headers (§5.4.3).
+pub(super) fn document_subject_consumed(request_id: &str) {
+    Event::SubjectParametersConsumed.record();
+    tracing::info!(
+        target: TARGET,
+        event = "document-subject-consumed",
+        request_id,
+        "the patient identifiers of a received document were consumed as resolution input"
+    );
+}
+
 /// A request was refused for a query parameter its ITS-REST operation does
 /// not admit at the gateway, named by its position and never by its name or
 /// value (§5.4.3).

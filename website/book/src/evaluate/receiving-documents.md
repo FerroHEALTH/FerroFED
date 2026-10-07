@@ -12,13 +12,12 @@ own, so a received document goes to one member: the one the deployment
 declares for the document's category, as the Federation Tier sends every new
 object to one explicitly chosen node (§2.3, N23).
 
-The receive path comes in three parts, and the first is built: the
-interoperability component, `crates/eehrxf`, reads a received document,
-checks it against its profiles and maps it into openEHR. The gateway does
-not serve it yet. Writing the composition to the declared member is planned
-([#802](https://github.com/FerroHEALTH/FerroFED/issues/802)), and so is the
-interaction a client sends the document with, its access record and the
-information sheet's list of the categories received
+The interoperability component, `crates/eehrxf`, reads a received document,
+checks it against its profiles and maps it into openEHR. The gateway takes
+the document at `POST {fhir-base}/Bundle` and writes the composition to the
+declared member, with an access record of each receipt
+([The patient summary over FHIR](../integrate/patient-summary.md#receiving-a-document)).
+The information sheet's list of the categories received is planned
 ([#803](https://github.com/FerroHEALTH/FerroFED/issues/803)).
 
 ## What the component accepts
@@ -72,8 +71,7 @@ The document's text is kept byte for byte. No refusal quotes a value of the
 document, so a patient identifier never reaches an error message or a log
 line through one. Whether the caller may write for that patient, and whether
 the member's `ehr_id` is that patient's, the federation half decides before
-it sends anything
-([#802](https://github.com/FerroHEALTH/FerroFED/issues/802)).
+it sends anything (see below).
 
 ## The check against the profiles
 
@@ -139,16 +137,25 @@ mapping does not carry into structured content is therefore still in the
 record, and what the run declared lost comes back beside the composition as
 an `OperationOutcome`.
 
-The federation half, planned in
-[#802](https://github.com/FerroHEALTH/FerroFED/issues/802), takes the
-composition and the document's patient: it resolves the patient to the
-declared member's own `ehr_id` and sends the composition there as an ITS-REST
-`composition_create`, with no patient identifier in the request path, query
-string or headers (§5.4.1, N33).
+## Written to the declared member
+
+The federation half takes the composition and the document's patient. It
+resolves the patient from every identifier of the document's `Patient` in a
+namespace `fhir.receive_namespaces` names, at the declared member alone, and
+every one must name the same `ehr_id` there: identifiers that name two
+patients, or a patient the member holds no EHR for, are refused before
+anything is sent. A caller whose grant is confined to one patient writes
+only into that patient's EHR. The composition then goes to the member as an
+ITS-REST `composition_create`, with no patient identifier in the request
+path, query string or headers (§5.4.1, N33); the body keeps the received
+document, which is the clinical content the client sent. A member that
+refuses the composition or does not answer is an error that names it, never
+a success.
 
 ## Hazards
 
 The [clinical safety risk file](clinical-safety.md) lists the receive path
-as I-10 (a document filed under the wrong member or patient) and I-11 (a
-document stored with content lost). Both stay open until the gateway writes
-a received document and validates it in full.
+as I-10 (a document filed under the wrong member or patient), whose
+controls are built, and I-11 (a document stored with content lost), which
+stays open until the gateway validates a received document in full
+([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)).

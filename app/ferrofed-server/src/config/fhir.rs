@@ -11,7 +11,12 @@
 //! table names. Each `[[fhir.mapping]]` is one FHIRconnect context mapping
 //! that feeds one patient summary section, compiled when the configuration
 //! is read, so a mapping that does not compile, or maps to a profile the
-//! section does not take, refuses the start and `config check`. The section
+//! section does not take, refuses the start and `config check`. Each
+//! `[[fhir.receive]]` names the member that stores the documents of one
+//! Art 14(1) category, with the package whose profiles a document of it is
+//! checked against and the mapping that turns it into a composition, and
+//! `receive_namespaces` the identifier systems its patient is resolved in;
+//! a member the registry does not hold refuses the start. The section
 //! queries the face runs are the gateway's own, compiled into it, so the
 //! face does not need `[stored_queries]`. No specification governs the
 //! configuration: our own design.
@@ -20,8 +25,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
 use serde::Deserialize;
 
 use crate::base_path::{BasePath, BasePathError};
@@ -43,6 +50,36 @@ pub struct Fhir {
     pub operator: Operator,
     /// The FHIRconnect context mappings, each feeding one section.
     pub mapping: Vec<MappingEntry>,
+    /// The identifier systems a received document's patient is resolved
+    /// in.
+    pub receive_namespaces: Vec<String>,
+    /// The categories the face receives documents of, one member each.
+    pub receive: Vec<ReceiveEntry>,
+}
+
+/// One `[[fhir.receive]]` entry: the member that stores the documents of
+/// one , and how a document of it is checked and mapped.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ReceiveEntry {
+    /// The category, by its HL7 Europe priority category code, such as
+    /// `Patient-Summaries`.
+    pub category: String,
+    /// The node id of the member that stores the category's documents.
+    pub member: String,
+    /// The HL7 Europe package, a `.tgz`, whose profiles a document of the
+    /// category is checked against.
+    pub package: PathBuf,
+    /// The OPT 1.4 operational template the composition is of.
+    pub template: PathBuf,
+    /// The model and context mapping files.
+    pub files: Vec<PathBuf>,
+    /// The `metadata.name` of the context mapping.
+    pub context: String,
+    /// The language each composition is written in, an ISO 639-1 code.
+    pub language: String,
+    /// The territory each composition is written in, an ISO 3166-1 code.
+    pub territory: String,
 }
 
 /// The `[fhir.operator]` table.
@@ -83,6 +120,10 @@ pub struct FhirSettings {
     pub operator: Organisation,
     /// The compiled mappings.
     pub mappings: Arc<Mappings>,
+    /// The categories received, each with its member, profiles and mapping.
+    pub receivers: Arc<Receivers>,
+    /// The identifier systems a received document's patient is resolved in.
+    pub receive_namespaces: Vec<IdentifierNamespace>,
     /// The table as written, which a reload compares.
     pub written: Fhir,
 }
@@ -143,6 +184,31 @@ pub enum FhirError {
     /// not take.
     #[error("a [[fhir.mapping]] is refused")]
     Mapping(#[from] MappingsError),
+    /// A receive entry's template cannot be read.
+    #[error("fhir.receive[{position}].template {} cannot be read", path.display())]
+    ReceiveTemplate {
+        /// The position of the entry.
+        position: usize,
+        /// The path.
+        path: PathBuf,
+        /// Why.
+        #[source]
+        source: std::io::Error,
+    },
+    /// A receive entry names no language or no territory.
+    #[error("fhir.receive[{position}] names no {key}")]
+    ReceiveDefault {
+        /// The position of the entry.
+        position: usize,
+        /// The key.
+        key: &'static str,
+    },
+    /// A received namespace is empty.
+    #[error("fhir.receive_namespaces holds an empty namespace")]
+    ReceiveNamespace(#[source] PatientRefError),
+    /// A received category cannot be checked or mapped.
+    #[error("a [[fhir.receive]] is refused")]
+    Receivers(#[from] ReceiversError),
     /// A route a binding serves lies on the face's base, or the base on it.
     #[error("fhir.base and {key} name overlapping routes; give each a path of its own")]
     Clash {
@@ -261,8 +327,68 @@ impl Fhir {
                 identifiers,
             },
             mappings,
+            receivers: Arc::new(self.receivers()?),
+            receive_namespaces: self.namespaces()?,
             written: self.clone(),
         })
+    }
+
+    /// Compiles the `[[fhir.receive]]` entries.
+    ///
+    /// # Errors
+    ///
+    /// The [`FhirError`] of the first entry that is refused.
+    fn receivers(&self) -> Result<Receivers, FhirError> {
+        let mut sources = Vec::with_capacity(self.receive.len());
+        for (position, entry) in self.receive.iter().enumerate() {
+            let opt = std::fs::read_to_string(&entry.template).map_err(|source| {
+                FhirError::ReceiveTemplate {
+                    position,
+                    path: entry.template.clone(),
+                    source,
+                }
+            })?;
+            for (key, value) in [
+                ("language", &entry.language),
+                ("territory", &entry.territory),
+            ] {
+                if value.is_empty() {
+                    return Err(FhirError::ReceiveDefault { position, key });
+                }
+            }
+            sources.push(ferrofed_eehrxf::receive::Source {
+                category: entry.category.clone(),
+                member: entry.member.clone(),
+                package: entry.package.clone(),
+                opt,
+                files: entry.files.clone(),
+                context: entry.context.clone(),
+                language: entry.language.clone(),
+                territory: entry.territory.clone(),
+            });
+        }
+        Ok(Receivers::compile(&sources)?)
+    }
+
+    /// The identifier systems a received document's patient is resolved in,
+    /// which a face that receives any category names.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::Missing`] when a category is received and no system is
+    /// named, and [`FhirError::ReceiveNamespace`] for an empty one.
+    fn namespaces(&self) -> Result<Vec<IdentifierNamespace>, FhirError> {
+        if !self.receive.is_empty() && self.receive_namespaces.is_empty() {
+            return Err(FhirError::Missing {
+                key: "fhir.receive_namespaces",
+            });
+        }
+        self.receive_namespaces
+            .iter()
+            .map(|namespace| {
+                IdentifierNamespace::new(namespace.clone()).map_err(FhirError::ReceiveNamespace)
+            })
+            .collect()
     }
 }
 

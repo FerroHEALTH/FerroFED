@@ -11,6 +11,8 @@
 //! the R4 document rules, with its subject resolved to the `Patient` entry
 //! and its original text kept byte for byte.
 //!
+//! - [`category`]: the priority category the document's `Composition.type`
+//!   names, and the profiles a document of it is checked against;
 //! - [`conform`]: the document checked against the profiles of its category,
 //!   read from the vendored package;
 //! - `openehr` (feature `openehr`): the document mapped into one openEHR
@@ -30,6 +32,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod category;
 pub mod conform;
 mod entries;
 #[cfg(feature = "openehr")]

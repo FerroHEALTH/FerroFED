@@ -39,12 +39,25 @@ use crate::receive::ReceivedDocument;
 pub const FHIR_JSON: &str = "application/fhir+json";
 
 /// The openEHR composition a received document maps to.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ReceivedComposition {
+    model: Composition,
     composition: String,
     template_id: String,
     outcome: Option<OperationOutcome>,
 }
+
+// NOTE: no specification governs this: our own design; the canonical JSON is written from
+// the model, so two compositions are equal when their canonical JSON is.
+impl PartialEq for ReceivedComposition {
+    fn eq(&self, other: &Self) -> bool {
+        self.composition == other.composition
+            && self.template_id == other.template_id
+            && self.outcome == other.outcome
+    }
+}
+
+impl Eq for ReceivedComposition {}
 
 impl ReceivedComposition {
     /// Returns the composition in canonical JSON, the body of an ITS-REST
@@ -52,6 +65,13 @@ impl ReceivedComposition {
     #[must_use]
     pub fn composition(&self) -> &str {
         &self.composition
+    }
+
+    /// Returns the composition as the RM model holds it, the typed body the
+    /// `openehr-its` client sends to `composition_create`.
+    #[must_use]
+    pub const fn model(&self) -> &Composition {
+        &self.model
     }
 
     /// Returns the template the composition is of.
@@ -135,10 +155,11 @@ impl Mapping {
             value: document.original().to_owned(),
             formalism: FHIR_JSON.to_owned(),
         }));
-        let composition = serde_json::to_string(&composition)
+        let canonical = serde_json::to_string(&composition)
             .map_err(|source| ReceiveMappingError::Encode { source })?;
         Ok(ReceivedComposition {
-            composition,
+            model: composition,
+            composition: canonical,
             template_id,
             outcome: response.outcome().cloned(),
         })
