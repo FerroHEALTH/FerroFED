@@ -505,13 +505,16 @@ fn refused(
         }
         // NOTE: Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: an unknown patient and
         // one no member may disclose answer alike, so the outcome names neither.
-        Unsummarised::NotFound => {
+        Unsummarised::NotFound(gathered) => {
             let mut response = outcome(
                 StatusCode::NOT_FOUND,
                 "not-found",
                 "no member holds a patient summary for this identifier",
             );
-            attach(&mut response, None);
+            let accessed = gathered.and_then(|gathered| {
+                gathered::accessed(federation, &gathered, patient, &BTreeSet::new())
+            });
+            attach(&mut response, accessed);
             response
         }
         Unsummarised::Incomplete {

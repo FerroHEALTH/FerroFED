@@ -31,7 +31,7 @@ use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
 use crate::config::stored_queries::Store;
-use crate::config::{NodeSelection, RegistryFormat};
+use crate::config::{EmergencyConsent, NodeSelection, RegistryFormat};
 use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
 
@@ -160,6 +160,10 @@ pub struct FederationSettings {
     /// excludes as `consent-denied` (N27a), as `consent.disclose` declares
     /// it where a pre-filter is configured (§7a.2).
     pub consent_disclosure: ConsentDisclosure,
+    /// Whether the pre-filter's exclusion applies to a request whose
+    /// verified token declares an emergency purpose, as `consent.emergency`
+    /// declares it where a pre-filter is configured (§7a.2).
+    pub consent_emergency: EmergencyConsent,
     /// The most requests the gateway sends to one member endpoint at once
     /// (§11.5, N38).
     pub max_in_flight_per_node: NonZeroU32,
@@ -386,6 +390,7 @@ impl Settings {
             fan_out_template_upload = self.federation.fan_out_template_upload,
             fan_out_stored_queries = self.federation.fan_out_stored_queries,
             consent_disclose = self.federation.consent_disclosure.is_disclosed(),
+            consent_emergency = self.federation.consent_emergency.as_str(),
             stored_query_backend = self
                 .stored_queries
                 .as_ref()

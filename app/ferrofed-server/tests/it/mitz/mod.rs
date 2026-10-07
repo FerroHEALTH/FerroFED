@@ -47,7 +47,7 @@ const PREFILTER_CALLS: &str = "ferrofed_consent_prefilter_requests_total";
 
 /// The URA of node A's and node B's care provider.
 const URA_A: &str = "ura-test-0001";
-const URA_B: &str = "ura-test-0002";
+pub(crate) const URA_B: &str = "ura-test-0002";
 
 /// The names of the token claims the test issuer's
 /// `[auth.issuer.requester]` maps; configured, since no bound specification
@@ -58,25 +58,25 @@ const ORGANISATION_CLAIM: &str = "test_ura";
 const ORGANISATION_TYPE_CLAIM: &str = "test_organisation_type";
 
 /// The default caller: a synthetic professional number and role.
-const CALLER: (&str, &str) = ("professional0001", "01.015");
+pub(crate) const CALLER: (&str, &str) = ("professional0001", "01.015");
 
 /// The `[nl_gf.mitz]` table asking the Mitz at `endpoint`, with `holders`
 /// as its holders table body.
-fn mitz_table(endpoint: &str, holders: &str) -> String {
+pub(crate) fn mitz_table(endpoint: &str, holders: &str) -> String {
     format!(
         "\n[nl_gf.mitz]\nurl = \"{endpoint}\"\nnamespaces = [\"{NAMESPACE}\"]\npurpose = \"TREAT\"\ndata_categories = [\"GGC002\"]\ntimeout_ms = 1000\n\n[nl_gf.mitz.holders]\n{holders}"
     )
 }
 
 /// The holders of node A and node B, each with its URA.
-fn holders() -> String {
+pub(crate) fn holders() -> String {
     format!(
         "\"node-a\" = {{ type = \"V6\", ura = \"{URA_A}\" }}\n\"node-b\" = {{ type = \"V6\", ura = \"{URA_B}\" }}\n"
     )
 }
 
 /// The requester claims the test issuer's tokens carry.
-fn requester_claims() -> RequesterClaims {
+pub(crate) fn requester_claims() -> RequesterClaims {
     RequesterClaims {
         professional: PROFESSIONAL_CLAIM.to_owned(),
         role: ROLE_CLAIM.to_owned(),
@@ -117,19 +117,28 @@ fn metered_over(
     Ok((ferrofed_server::router(Arc::clone(&state), &server), state))
 }
 
+/// `claims`, naming the professional and role `(professional, role)` of a
+/// synthetic organisation in [`requester_claims`].
+pub(crate) fn naming_requester(
+    claims: &mut ferrofed_testkit::issuer::Claims,
+    (professional, role): (&str, &str),
+) {
+    for (name, value) in [
+        (PROFESSIONAL_CLAIM, professional),
+        (ROLE_CLAIM, role),
+        (ORGANISATION_CLAIM, "ura-test-0100"),
+        (ORGANISATION_TYPE_CLAIM, "V6"),
+    ] {
+        claims.other.insert(name.to_owned(), value.to_owned());
+    }
+}
+
 /// The `Authorization` value of a caller whose token names the professional
 /// and role `asking`, or no requester at all.
 fn bearer_for(asking: Option<(&str, &str)>) -> Result<String, Box<dyn Error>> {
     let mut claims = crate::support::claims();
-    if let Some((professional, role)) = asking {
-        for (name, value) in [
-            (PROFESSIONAL_CLAIM, professional),
-            (ROLE_CLAIM, role),
-            (ORGANISATION_CLAIM, "ura-test-0100"),
-            (ORGANISATION_TYPE_CLAIM, "V6"),
-        ] {
-            claims.other.insert(name.to_owned(), value.to_owned());
-        }
+    if let Some(asking) = asking {
+        naming_requester(&mut claims, asking);
     }
     Ok(format!(
         "Bearer {}",

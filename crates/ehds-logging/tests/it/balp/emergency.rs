@@ -60,6 +60,36 @@ fn an_emergency_access_is_marked_in_its_own_entity() {
     );
 }
 
+/// Each member whose consent pre-filter denial was set aside for the
+/// emergency is named once in the mark's entity, in order; a mark that set
+/// none aside names none.
+#[test]
+fn a_member_whose_denial_was_set_aside_is_named_in_the_mark() {
+    let plain = written(&emergency_record());
+    let marks = entity(&plain, EMERGENCY_ENTITY);
+    let [mark] = marks.as_slice() else {
+        panic!("one emergency entity: {plain}");
+    };
+    assert!(details(mark, "ehds-consent-set-aside").is_empty());
+    let mut record = emergency_record();
+    record.emergency = record.emergency.map(|mark| {
+        mark.with_consent_set_aside([
+            "node-b".to_owned(),
+            "node-a".to_owned(),
+            "node-b".to_owned(),
+        ])
+    });
+    let written = written(&record);
+    let marks = entity(&written, EMERGENCY_ENTITY);
+    let [mark] = marks.as_slice() else {
+        panic!("one emergency entity: {written}");
+    };
+    assert_eq!(
+        details(mark, "ehds-consent-set-aside"),
+        ["node-a", "node-b"]
+    );
+}
+
 /// A record with no mark has no emergency entity.
 #[test]
 fn an_access_with_no_mark_has_no_emergency_entity() {

@@ -44,7 +44,8 @@
 //! `purposeOfUse`, and is marked in one entity of its own,
 //! `ehds-emergency-access`, whose `description` states the mark in words and
 //! whose `detail` entries name the purposes that marked it, so a reader of
-//! the record need not know which codes the deployment maps.
+//! the record need not know which codes the deployment maps, and each member
+//! whose consent pre-filter denial was set aside for it.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -145,6 +146,9 @@ pub mod detail {
     /// `<system>|<code>`, or `<code>`, once per purpose of use that marked
     /// the access an emergency access.
     pub const EMERGENCY_PURPOSE: &str = "ehds-emergency-purpose";
+    /// A member whose consent pre-filter denial was set aside for the
+    /// emergency, once per member.
+    pub const CONSENT_SET_ASIDE: &str = "ehds-consent-set-aside";
 }
 
 /// The name of the entity that marks an emergency access.
@@ -423,7 +427,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
 }
 
 /// The entity that marks an emergency access, naming the purposes that
-/// marked it.
+/// marked it and each member whose consent pre-filter denial was set aside.
 fn emergency_entity(emergency: &Emergency) -> Entity {
     let mut details = vec![Detail::new(detail::EMERGENCY_ACCESS, "true")];
     details.extend(emergency.purposes().iter().map(|purpose| {
@@ -432,6 +436,12 @@ fn emergency_entity(emergency: &Emergency) -> Entity {
             coded(purpose.system.as_deref(), &purpose.code),
         )
     }));
+    details.extend(
+        emergency
+            .consent_set_aside()
+            .iter()
+            .map(|member| Detail::new(detail::CONSENT_SET_ASIDE, member.clone())),
+    );
     Entity::Described(Described {
         what: None,
         kind: OTHER,

@@ -32,7 +32,7 @@ use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use openehr_rm::v1_2::common::change_control::original_version::OriginalVersion;
 use openehr_rm::v1_2::composition::composition::Composition;
 
-use super::{AccessLog, Accessed, Asked};
+use super::{AccessLog, Accessed, Asked, ConsentSetAside};
 use crate::error::{self, Code};
 use crate::facade::route::{self, Arrived};
 use crate::facade::subject;
@@ -135,11 +135,21 @@ impl Routed {
     }
 
     /// `response`, the answer to this request from `federation`, with the
-    /// facts of the access attached when an endpoint acted for it.
-    pub(crate) async fn attach(self, federation: &Federation, response: Response) -> Response {
-        let Some(endpoint) = acting(response.headers(), headers::ENDPOINT) else {
+    /// facts of the access attached when an endpoint acted for it, or when
+    /// the request set a consent pre-filter denial aside for an emergency
+    /// purpose, which is recorded whatever the answer (Art 11(5)).
+    pub(crate) async fn attach(self, federation: &Federation, mut response: Response) -> Response {
+        // NOTE: no specification governs this: our own design; only the read of an EHR by
+        // subject asks the pre-filter, so any other routed answer sets no denial aside.
+        let consent_set_aside = response
+            .extensions_mut()
+            .remove::<ConsentSetAside>()
+            .map(|set_aside| set_aside.0)
+            .unwrap_or_default();
+        let endpoint = acting(response.headers(), headers::ENDPOINT);
+        if endpoint.is_none() && consent_set_aside.is_empty() {
             return response;
-        };
+        }
         if self.unread {
             tracing::error!(
                 operation = self.operation,
@@ -149,11 +159,6 @@ impl Routed {
             return error::fixed(Code::AccessUnrecorded, &self.request_id);
         }
         let system_id = acting(response.headers(), headers::SYSTEM_ID);
-        let node = federation
-            .snapshot()
-            .endpoints()
-            .find(|registered| registered.id().as_str() == endpoint)
-            .map(|registered| registered.node().as_str().to_owned());
         let status = response.status();
         let (response, evidence) = match self.written {
             Some(written) => (response, written),
@@ -172,16 +177,36 @@ impl Routed {
         };
         let subject = DataSubject {
             patient: self.patient,
-            ehrs: self
-                .ehr_id
-                .into_iter()
-                .map(|ehr_id| EhrAt {
-                    endpoint: endpoint.clone(),
-                    ehr_id: ehr_id.as_str().to_owned(),
-                    patient: lookup.clone(),
+            ehrs: endpoint
+                .iter()
+                .flat_map(|endpoint| {
+                    self.ehr_id.iter().map(|ehr_id| EhrAt {
+                        endpoint: endpoint.clone(),
+                        ehr_id: ehr_id.as_str().to_owned(),
+                        patient: lookup.clone(),
+                    })
                 })
                 .collect(),
         };
+        let origins = endpoint
+            .map(|endpoint| {
+                let node = federation
+                    .snapshot()
+                    .endpoints()
+                    .find(|registered| registered.id().as_str() == endpoint)
+                    .map(|registered| registered.node().as_str().to_owned());
+                Asked {
+                    endpoint,
+                    node,
+                    system_id,
+                    status: status.as_str().to_owned(),
+                    rows: None,
+                    contributed: true,
+                    evidence: None,
+                }
+            })
+            .into_iter()
+            .collect();
         response.extensions_mut().insert(Accessed {
             log: self.log,
             action: self.action,
@@ -192,15 +217,8 @@ impl Routed {
             subject,
             delivered: None,
             evidence,
-            origins: vec![Asked {
-                endpoint,
-                node,
-                system_id,
-                status: status.as_str().to_owned(),
-                rows: None,
-                contributed: true,
-                evidence: None,
-            }],
+            origins,
+            consent_set_aside,
         });
         response
     }

@@ -52,6 +52,43 @@ declares nothing there. A deployment under Regulation (EU) 2025/327 Art 8
 sets `[federation.consent] disclose = false`, so an answer never shows an
 exclusion ([Withholding consent exclusions](consent-exclusions.md)).
 
+**An emergency request.** A caller asserts an emergency access through the
+purpose of use of its verified token, matched against
+`[[access_log.emergency_purpose]]`
+([Emergency access](audit.md#emergency-access)). Whether the pre-filter's
+exclusion applies to such a request is your choice, under
+`[federation.consent] emergency`:
+
+```toml
+[federation.consent]
+emergency = "apply"            # or "pass-to-node"
+```
+
+- `"apply"`, the default: the pre-filter applies to every request, an
+  emergency one included. A member it denies is not asked.
+- `"pass-to-node"`: for a request whose token declares an emergency
+  purpose, the pre-filter is still asked, and every member it denies is
+  asked all the same. Its node decides on its own consent, restrictions
+  and the purpose the request conveys (N26, N27). The access record names
+  each such member in its `ehds-emergency-access` entity
+  ([Emergency access](audit.md#emergency-access)), whatever the node
+  answered; a request whose record cannot be stored is refused `503
+  access-unrecorded`. The answer, the status and the log line say nothing
+  of it (Art 8). The setting-aside holds for that one request: the gateway
+  learns no resolution binding and no `ehr_id` route from it, so the next
+  request is filtered again. A request without an emergency purpose is
+  filtered as before.
+
+The gateway never decides on its own that an emergency justifies setting a
+consent decision aside. Regulation (EU) 2025/327 leaves whether the vital
+interests of the data subject override a restriction or an opt-out to the
+Member State (Art 8, Art 10(2), Art 11(5)), and release is the node's
+decision (N26, N27). The pre-filter is optional (N27a), so whether it
+applies to an emergency request is a deployment setting, and the default
+keeps it for every purpose. `"pass-to-node"` needs at least one
+`[[access_log.emergency_purpose]]`, or the configuration is refused.
+`OPTIONS {base}/` declares the setting as `federation.consent.emergency`.
+
 For development, rows under `[[dev.consent_denied]]` beside the
 cross-reference are a static pre-filter, accepted only under
 `profile = "development"` and declared as `development-static`:
@@ -156,10 +193,21 @@ What a deployment must provide:
   2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
   to the Mitz afsprakenstelsel.
 
+The question carries the purpose `purpose` configures, `TREAT` or `COC`,
+the only values Mitz 3.8.2 admits (§3.2.4.2), never the caller's purpose
+of use. Mitz has no emergency consultation situation, and the Wabvpz has
+no emergency exception to its Art 15a, so `config check` notes
+`emergency = "pass-to-node"` beside `[nl_gf.mitz]`: a member Mitz denies is
+then asked under a legal basis you hold, and its node applies the rules
+that bind it.
+
 Mitz answers `Permit` or `Deny` per category. `Indeterminate`, a fault, a
 status other than `200`, silence past `timeout_ms` and an answer that does
 not hold to the question are no decision: the members of that holder are
-asked, and the failure is carried in `meta.federation.consent.error`. When
+asked, and the failure is carried in `meta.federation.consent.error`. Mitz
+3.8.2 §3.2.4.6 tells the data holder's own system to treat `Indeterminate`
+under explicit consent as a `Deny`; the node is that system, and its own
+Mitz check decides (N27). When
 Mitz denies one holder and fails for another, the denied members are
 `consent-denied`, the others are asked, and the failure is still carried.
 `OPTIONS {base}/` declares the pre-filter as `"nl-gf-mitz"`.

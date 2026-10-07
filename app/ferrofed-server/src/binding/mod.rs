@@ -386,6 +386,12 @@ pub trait Binding: fmt::Debug + Sync {
 
     /// Logs what the binding is configured to reach, never a value.
     fn log_summary(&self, _settings: &Settings) {}
+
+    /// What `config check` notes about the binding's sections in
+    /// `settings`, each a sentence an operator acts on; none by default.
+    fn notes(&self, _settings: &Settings) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Enters `config check` on the calling thread for every compiled binding

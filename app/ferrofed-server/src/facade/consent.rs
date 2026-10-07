@@ -37,8 +37,33 @@ pub(crate) struct Prefiltered {
     /// member without the patient where the deployment does not disclose
     /// consent exclusions.
     pub(crate) denied: BTreeSet<NodeId>,
+    /// The candidates it denied whose denial was set aside for an emergency
+    /// purpose (`[federation.consent] emergency = "pass-to-node"`), each
+    /// asked as any other candidate and named in the access record alone.
+    pub(crate) set_aside: BTreeSet<NodeId>,
     /// Why it could not answer, when it could not.
     pub(crate) unavailable: Option<ErrorDetail>,
+}
+
+impl Prefiltered {
+    /// This decision, its denials set aside when `set_aside` holds: each
+    /// denied candidate moves to [`Prefiltered::set_aside`] and is asked.
+    fn setting_aside(self, set_aside: bool) -> Self {
+        if !set_aside || self.denied.is_empty() {
+            return self;
+        }
+        // NOTE: Regulation (EU) 2025/327 Art 11(5), N26, N27, N27a: the deployment chose to leave
+        // an emergency request to each node, which decides; the event names a count, never a value.
+        tracing::warn!(
+            members = self.denied.len(),
+            "the consent pre-filter's denials were set aside for an emergency purpose; each member is asked"
+        );
+        Self {
+            denied: BTreeSet::new(),
+            set_aside: self.denied,
+            unavailable: self.unavailable,
+        }
+    }
 }
 
 /// Asks the federation's consent pre-filter which of `candidates` may not be
@@ -48,8 +73,22 @@ pub(crate) struct Prefiltered {
 ///
 /// Without a configured pre-filter, or with no candidate, nothing is asked
 /// and nothing is denied. Only a candidate can be denied: a member the
-/// pre-filter names that was never a candidate is left as it is.
+/// pre-filter names that was never a candidate is left as it is. When
+/// `set_aside` holds, the pre-filter is asked all the same and every
+/// candidate it denies is set aside ([`Prefiltered::set_aside`]).
 pub(crate) async fn prefilter(
+    federation: &Federation,
+    (patient, requester): (&PatientRef, Option<&Requester>),
+    candidates: &[NodeId],
+    (deadline, set_aside): (Instant, bool),
+) -> Prefiltered {
+    asked(federation, (patient, requester), candidates, deadline)
+        .await
+        .setting_aside(set_aside)
+}
+
+/// What the pre-filter decided about `candidates`, as [`prefilter`] asks it.
+async fn asked(
     federation: &Federation,
     (patient, requester): (&PatientRef, Option<&Requester>),
     candidates: &[NodeId],
@@ -73,6 +112,7 @@ pub(crate) async fn prefilter(
     match decision {
         ConsentDecision::Denied(refused) => Prefiltered {
             denied: among(refused, candidates),
+            set_aside: BTreeSet::new(),
             unavailable: None,
         },
         ConsentDecision::NoSignal => Prefiltered::default(),
@@ -95,6 +135,7 @@ pub(crate) async fn prefilter(
             );
             Prefiltered {
                 denied: BTreeSet::new(),
+                set_aside: BTreeSet::new(),
                 unavailable: Some(unanswered(&failure)),
             }
         }
@@ -109,6 +150,7 @@ pub(crate) async fn prefilter(
             );
             Prefiltered {
                 denied: among(denied, candidates),
+                set_aside: BTreeSet::new(),
                 unavailable: Some(unanswered(&failure)),
             }
         }

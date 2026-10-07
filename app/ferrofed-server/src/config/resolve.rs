@@ -27,8 +27,8 @@ use crate::config::settings::{
     ServerSettings, Settings, SigningSettings, TelemetrySettings,
 };
 use crate::config::{
-    COMBINING_MARGIN_MS, Config, Federation, Localization, NodeSelection, OffsetPaging, Telemetry,
-    stored_queries,
+    COMBINING_MARGIN_MS, Config, EmergencyConsent, Federation, Localization, NodeSelection,
+    OffsetPaging, Telemetry, stored_queries,
 };
 use crate::telemetry::SampleRatio;
 
@@ -158,6 +158,13 @@ impl Config {
             audit: crate::binding::ihe::audit::config::AuditSettings::default(),
             deprecated: self.deprecated.clone(),
         };
+        // NOTE: no specification governs this: our own design; a request is an emergency
+        // only by a declared purpose, so passing one to the node needs a purpose declared.
+        if settings.federation.consent_emergency == EmergencyConsent::PassToNode
+            && settings.access_log.emergency.is_empty()
+        {
+            return Err(Error::EmergencyWithoutPurpose);
+        }
         for binding in crate::binding::compiled() {
             binding.resolve(self, &mut settings)?;
         }
@@ -317,6 +324,7 @@ impl Config {
             fan_out_template_upload: self.federation.fan_out_template_upload,
             fan_out_stored_queries: self.federation.fan_out_stored_queries,
             consent_disclosure: ConsentDisclosure::of(self.federation.consent.disclose),
+            consent_emergency: self.federation.consent.emergency,
             max_in_flight_per_node,
             max_node_answer_bytes,
         })

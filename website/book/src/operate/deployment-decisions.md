@@ -254,6 +254,16 @@ is one to whom the restriction must not be visible either (Art 8, Art
 11(5)), and `OPTIONS {base}/` declares it under
 `federation.national_contact_point`.
 
+**An emergency purpose and the pre-filter.** Regulation (EU) 2025/327
+leaves to the Member State whether the vital interests of the data subject
+override a restriction or an opt-out (Art 8, Art 10(2), Art 11(5)). The
+gateway never sets a consent decision aside on its own judgement.
+`[federation.consent] emergency = "apply"`, the default, keeps the
+pre-filter for an emergency request too; `"pass-to-node"` asks every member
+it denies all the same, so the node decides, and records each such member
+([Consent](consent.md#consent)). Record which you chose, and the legal
+basis for `"pass-to-node"`.
+
 ## The operator's template
 
 FerroFED answers the questions above for the gateway. These parts only your
