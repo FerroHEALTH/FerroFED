@@ -166,3 +166,15 @@ fn a_published_document_with_urn_full_urls_is_not_refused_as_several_subjects()
     }
     Ok(())
 }
+
+#[test]
+fn the_composition_model_is_the_canonical_json() -> Result<(), Box<dyn Error>> {
+    let document = ReceivedDocument::read(DOCUMENT)?;
+    let received = mapping()?.to_openehr(&document, &settings())?;
+    assert_eq!(
+        serde_json::to_string(received.model())?,
+        received.composition(),
+        "the typed body the client sends is the composition written out"
+    );
+    Ok(())
+}

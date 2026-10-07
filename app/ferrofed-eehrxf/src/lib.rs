@@ -18,7 +18,10 @@
 //!   FHIRconnect mappings the deployment supplies;
 //! - [`face`]: the FHIR R4 face that serves it (Regulation (EU) 2025/327
 //!   Annex II 2.1): the summary request, the `CapabilityStatement` and the
-//!   `OperationOutcome`.
+//!   `OperationOutcome`;
+//! - [`receive`]: a document received in the exchange format, checked and
+//!   mapped for the one member the deployment declares for its category
+//!   (Annex II 2.2 and 2.3).
 //!
 //! Each query names its patient through `$patient` and `$namespace` alone,
 //! so it passes the stored-query admission and the rewrite scopes it to each
@@ -39,5 +42,6 @@
 
 pub mod face;
 pub mod patient_summary;
+pub mod receive;
 pub mod reserved;
 pub mod summary;

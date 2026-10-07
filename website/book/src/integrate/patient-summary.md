@@ -10,12 +10,13 @@ interface as a FHIR R4 face on a base of its own, `{fhir-base}`, beside the
 ITS-REST face at `{base}`. No ITS-REST path changes: `{base}` stays a
 conformant ITS-REST surface (Federation Tier §4.1, N1, N28).
 
-The face answers two requests today:
+The face answers three requests today:
 
 | Request | Answer |
 |---|---|
 | `GET {fhir-base}/metadata` | the face's `CapabilityStatement` |
 | `GET` or `POST {fhir-base}/Patient/$summary` | the patient summary, an HL7 Europe Patient Summary document `Bundle` |
+| `POST {fhir-base}/Bundle` | a document received in the exchange format, written to the member its category is declared for |
 
 The document list, a `DocumentReference` search that names the summary and
 each member's own document, is planned
@@ -170,7 +171,7 @@ before any member is asked.
 
 Every summary that reached a member writes one access record (Annex II 3.2),
 naming the verified caller, the patient, every endpoint asked and the
-`ehr_id` at each, and the categories: `patient-summary` by construction
+`ehr_id` at each, and the categories: `Patient-Summaries` by construction
 (Art 14(1)(a)), beside every category the deployment's map gives the
 compositions the members answered with.
 
@@ -194,6 +195,59 @@ code and message become the issue's diagnostics:
 | `503` | `transient` |
 | any other | `exception` |
 
+## Receiving a document
+
+Annex II 2.2 and 2.3 ask an EHR system to be able to receive personal
+electronic health data in the exchange format. Send a document `Bundle` to
+the face's `Bundle` end-point (FHIR R4 documents §3.3.4):
+
+```http
+POST {fhir-base}/Bundle
+Content-Type: application/fhir+json
+Authorization: Bearer <token>
+
+{"resourceType":"Bundle","type":"document", ...}
+```
+
+The gateway stores nothing itself. It writes the document as one openEHR
+composition to the one member the deployment declares for the document's
+category (Federation Tier §2.3, N23):
+
+1. The document is read under the FHIR R4 document rules, and its category
+   is the one whose HL7 Europe document profile fixes a coding of its
+   `Composition.type`: LOINC `60591-5` for a patient summary. A category no
+   member receives is a `422` that names it.
+2. It is held to the category's `Bundle` and `Composition` profiles from the
+   package the deployment supplies. A document that breaks them is a `422`
+   with one issue per finding, located by element path. A constraint the
+   check cannot evaluate is listed as a `warning` in the answer, never
+   passed silently.
+3. It is mapped into one composition by the category's FHIRconnect mapping.
+   The composition keeps the whole document in its
+   `FEEDER_AUDIT.original_content`.
+4. The patient is resolved from every identifier of the document's `Patient`
+   in a namespace `fhir.receive_namespaces` names, at the receiving member
+   alone (§5.2). Every one must name the same `ehr_id` there. A patient the
+   member holds no EHR for, or identifiers that name two patients, are a
+   `422`, and nothing is sent to any member.
+5. The composition is committed with ITS-REST `composition_create` to the
+   member, located by its own `ehr_id`. No patient identifier is in the path,
+   the query string or the headers (§5.4.1, N33). The body carries the
+   received document as the clinical content you sent.
+
+A written document answers `200` with an `OperationOutcome` whose first issue
+names the category, the member, the endpoint and the new version's uid. A
+member that refuses the composition is a `502` that names its status, one
+that does not answer in time is a `504`, and identity services that cannot
+answer give a `424`. None of them is ever a success.
+
+Receiving takes the SMART on openEHR create permission on compositions of
+every template, `user/composition-*.c`, because the template follows from
+the document. A read scope is refused. A `patient/` grant, where the issuer
+is bound to a member, writes only into its own patient's EHR. Every receipt
+that reached the member writes one access record, an action `C` with the
+document's category by construction.
+
 ## Configuring the face
 
 ```toml
@@ -216,7 +270,24 @@ files = [
   "/etc/ferrofed/mappings/allergy.context.yml",
 ]
 context = "example_allergy.context"          # the context mapping's metadata.name
+
+[[fhir.receive]]
+category = "Patient-Summaries"               # the Art 14(1) category, by its HL7 Europe code
+member = "node-a"                            # the node id of the member that stores it
+package = "/etc/ferrofed/hl7.fhir.eu.eps-1.0.0-ballot.tgz"
+template = "/etc/ferrofed/mappings/received-summary.opt"
+files = [
+  "/etc/ferrofed/mappings/received-summary.yml",
+  "/etc/ferrofed/mappings/received-summary.context.yml",
+]
+context = "example_received_summary.context"
+language = "en"                              # the composition's language, ISO 639-1
+territory = "NL"                             # the composition's territory, ISO 3166-1
 ```
+
+For `[[fhir.receive]]`, set `receive_namespaces` under `[fhir]` as well,
+for example `receive_namespaces = ["urn:oid:2.999.1"]`: the identifier
+systems a received document's patient is resolved in.
 
 - `[fhir]` needs a demographics binding, `[pdqm]`, because every summary
   names its patient and the members federate no demographics: configuration
@@ -237,4 +308,9 @@ context = "example_allergy.context"          # the context mapping's metadata.na
   `problems`, `medication-summary`, `medical-devices-and-implants`,
   `procedures`, `immunisations`, `social-history`, `pregnancy-history`,
   `advance-directives`, `observation-results` and `care-plans`.
+- Each `[[fhir.receive]]` declares one category, once. Its member must be
+  a node of the registry and a resolver must be configured, or the start and
+  `ferrofed config check` are refused. The package is the vendored HL7
+  Europe package whose profiles the category's documents are held to, and
+  the mapping compiles when the configuration is read.
 - A change to `[fhir]` takes a restart.
