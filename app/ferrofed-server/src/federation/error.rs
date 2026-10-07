@@ -105,6 +105,23 @@ pub enum FederationError {
         /// The endpoint id that was given.
         endpoint: EndpointId,
     },
+    /// A `[[fhir.receive]]` names a member the registry does not hold.
+    #[error(
+        "fhir.receive names {member} as the member of the category {category}, which is no node of the registry"
+    )]
+    ReceivingMemberUnknown {
+        /// The category's code.
+        category: &'static str,
+        /// The member as given.
+        member: String,
+    },
+    /// A category is received but no resolver is configured, so a received
+    /// document's patient cannot be resolved to its member's `ehr_id` (§5.2).
+    #[error(
+        "[[fhir.receive]] needs a cross-reference resolver, {}, to resolve a received document's patient at its member (§5.2)",
+        crate::binding::resolver_list()
+    )]
+    ReceivingWithoutResolver,
     /// An `[auth.issuer.patient]` binding is set but no resolver is, so the
     /// token's `ehrId` cannot be resolved to the members' `ehr_id`s (§5.2).
     #[error(

@@ -8,6 +8,8 @@
 //! (RFC 6761 §6.5), a UUID of our own or the `2.999` example arc, and no
 //! value is clinical.
 
+#[cfg(feature = "patient-summary")]
+mod category;
 mod conform;
 mod faithful;
 #[cfg(feature = "openehr")]

@@ -7,16 +7,20 @@
 //! `GET {fhir-base}/metadata` answers the face's `CapabilityStatement`, and
 //! `GET` or `POST {fhir-base}/Patient/$summary` the patient summary as an
 //! HL7 Europe Patient Summary document `Bundle`, by the International Patient
-//! Summary 2.0.0 `$summary` operation. Every other path under the base is a
-//! `404`. A summary runs the gateway's own section queries over the members
-//! (`facade::summary`), maps each composition through the
+//! Summary 2.0.0 `$summary` operation. `POST {fhir-base}/Bundle` receives a
+//! document in the exchange format, at the `Bundle` end-point FHIR R4
+//! documents §3.3.4 names (Annex II 2.2 and 2.3). Every other path under the
+//! base is a `404`. A summary runs the gateway's own section queries over
+//! the members (`facade::summary`), maps each composition through the
 //! deployment's FHIRconnect mappings and writes the document
-//! ([`ferrofed_eehrxf::summary`]). The face sits beside `{base}`, so no
-//! ITS-REST path changes (Federation Tier §4.1, N28, N1).
+//! ([`ferrofed_eehrxf::summary`]); a received document is written to the
+//! one member its category is declared for (`facade::receive`). The face
+//! sits beside `{base}`, so no ITS-REST path changes (Federation Tier §4.1,
+//! N28, N1).
 //!
 //! Every request is authenticated at the same gate as the ITS-REST face
-//! (§13.1, N25), and every summary that reached a member is recorded in the
-//! access log, naming the verified caller (Annex II 3.2). Every error the
+//! (§13.1, N25), and every summary or document that reached a member is
+//! recorded in the access log, naming the verified caller (Annex II 3.2). Every error the
 //! face answers is an `OperationOutcome` ([`outcomes`]): the gateway's own
 //! refusals keep their status and their headers, and the error body is
 //! rewritten as the outcome. No specification governs the mapping of the
@@ -33,7 +37,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, Refusal, SummaryRequest};
 use ferrofed_eehrxf::summary::{self, Author, Request as SummaryDocument};
 use ferrofed_engine::outbound_id::OutboundId;
@@ -63,6 +67,10 @@ pub const SUMMARY: &str = "/Patient/$summary";
 /// The path of the capability statement under `{fhir-base}`.
 pub const METADATA: &str = "/metadata";
 
+/// The path a document in the exchange format is received at under
+/// `{fhir-base}`, the `Bundle` end-point of FHIR R4 documents §3.3.4.
+pub const BUNDLE: &str = "/Bundle";
+
 /// The product name the document's author `Device` and the capability
 /// statement carry.
 const PRODUCT: &str = "FerroFED";
@@ -76,6 +84,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route(METADATA, get(metadata))
         .route(SUMMARY, get(summary_get).post(summary_post))
+        .route(BUNDLE, post(bundle_post))
         .fallback(unserved)
 }
 
@@ -86,7 +95,9 @@ pub enum FacePath {
     Metadata,
     /// `{fhir-base}/Patient/$summary`, exactly.
     Summary,
-    /// Any other path under the base, a variant of the two above included:
+    /// `{fhir-base}/Bundle`, exactly.
+    Bundle,
+    /// Any other path under the base, a variant of the three above included:
     /// another letter case, a percent-encoded character, a trailing or a
     /// doubled slash.
     Other,
@@ -97,7 +108,7 @@ pub enum FacePath {
 ///
 /// A path is under the face when its letters, ASCII case ignored, start
 /// with the base, so a variant of the base is never read as a path outside
-/// the face; only the two exact paths are named, and every other one is
+/// the face; only the three exact paths are named, and every other one is
 /// [`FacePath::Other`], which the gate refuses.
 #[must_use]
 pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
@@ -114,6 +125,8 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
         FacePath::Metadata
     } else if path == fhir.base.join(SUMMARY) {
         FacePath::Summary
+    } else if path == fhir.base.join(BUNDLE) {
+        FacePath::Bundle
     } else {
         FacePath::Other
     })
@@ -122,9 +135,10 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
 /// Returns what a request of `method` to `face` requires at the gate.
 ///
 /// The capability statement takes a verified caller, a `GET` or `POST` of a
-/// summary the `aql-` search of every section query, and every other method
-/// and path is refused, so no variant of a path is let through on a
-/// weaker requirement.
+/// summary the `aql-` search of every section query, a `POST` of a document
+/// the `composition-` create of every template, and every other method and
+/// path is refused, so no variant of a path is let through on a weaker
+/// requirement.
 #[must_use]
 pub fn requirement(face: FacePath, method: &Method) -> Requirement {
     match face {
@@ -136,7 +150,16 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
             permission: Permission::Search,
             resource: Resource::Sections,
         },
-        FacePath::Metadata | FacePath::Summary | FacePath::Other => Requirement::Refused,
+        // NOTE: SMART on openEHR master08 §Resource Scopes; a received document is written as
+        // a composition whose template the body decides, so only a create of every one covers it.
+        FacePath::Bundle if *method == Method::POST => Requirement::Scope {
+            family: ResourceFamily::Composition,
+            permission: Permission::Create,
+            resource: Resource::Unnamed,
+        },
+        FacePath::Metadata | FacePath::Summary | FacePath::Bundle | FacePath::Other => {
+            Requirement::Refused
+        }
     }
 }
 
@@ -194,6 +217,91 @@ async fn summary_post(
     }
     let read = SummaryRequest::from_parameters(&body);
     summarised(&state, (outbound, caller), (&headers, started), read).await
+}
+
+/// `POST {fhir-base}/Bundle` with a document in the exchange format: the
+/// document written to the member that receives its category
+/// (`facade::receive`).
+async fn bundle_post(
+    State(state): State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
+    headers: http::HeaderMap,
+    body: Bytes,
+) -> Response {
+    let started = Instant::now();
+    if !fhir_json_body(&headers) {
+        return refusal(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "not-supported",
+            "a document is sent as application/fhir+json",
+        );
+    }
+    let Ok(text) = std::str::from_utf8(&body) else {
+        return refusal(
+            StatusCode::BAD_REQUEST,
+            "invalid",
+            "the document is not UTF-8 text (RFC 8259 §8.1)",
+        );
+    };
+    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    let request_id = request_id::of(&headers).unwrap_or_default();
+    let logged = outbound.to_string();
+    let (Some(federation), Some(fhir)) = (state.federation(), state.fhir()) else {
+        return crate::error::fixed(Code::NotImplemented, request_id);
+    };
+    let caller = caller.as_deref();
+    // NOTE: §13.1, N25: a document is written only for a caller the gate admitted with the
+    // scopes that cover it, whatever path reached this handler.
+    if caller.is_none_or(|caller| caller.covering().is_empty()) {
+        return refusal(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "the caller was not admitted to create a composition",
+        );
+    }
+    let conveyance = match conveyed::of(&federation, caller) {
+        Ok(conveyance) => conveyance,
+        Err(unconveyed) => return unconveyed.respond(request_id, &logged),
+    };
+    let Some(on_behalf) = caller.map(Caller::on_behalf) else {
+        return conveyed::Unconveyed::NoCaller.respond(request_id, &logged);
+    };
+    let conveyance =
+        match crate::facade::confined_by(&federation, caller, started, conveyance).await {
+            Ok(conveyance) => conveyance,
+            Err(unconfined) => return unconfined.respond(request_id, &logged),
+        };
+    let session = caller.map(Caller::session);
+    let arrived = Arrived {
+        headers: &headers,
+        request_id,
+        outbound,
+        conveyance: &conveyance,
+        started,
+        session: session.as_ref(),
+        requester: caller.and_then(Caller::requester),
+        on_behalf: &on_behalf,
+    };
+    crate::facade::receive::receive(&federation, fhir, arrived, text).await
+}
+
+/// Whether `headers` declare a FHIR JSON body.
+fn fhir_json_body(headers: &http::HeaderMap) -> bool {
+    let media = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .map(str::trim);
+    matches!(media, Some(FHIR_JSON | "application/json"))
+}
+
+/// The `OperationOutcome` of one error, answered with `status`, stating that
+/// no member was sent anything.
+fn refusal(status: StatusCode, code: &str, diagnostics: &str) -> Response {
+    let mut response = outcome(status, code, diagnostics);
+    response.extensions_mut().insert(NoAccess);
+    response
 }
 
 /// The answer to a summary request `read` from the request's caller and
@@ -449,7 +557,7 @@ fn attach(response: &mut Response, accessed: Option<crate::access::Accessed>) {
 }
 
 /// `resource` as FHIR JSON with `status`.
-fn fhir_json(status: StatusCode, resource: &impl Serialize) -> Response {
+pub(crate) fn fhir_json(status: StatusCode, resource: &impl Serialize) -> Response {
     match serde_json::to_vec(resource) {
         Ok(body) => (
             status,

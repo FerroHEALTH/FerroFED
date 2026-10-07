@@ -17,6 +17,12 @@ use crate::crosswalk::Crosswalk;
 /// `StructureDefinition` of the package carries its `url` under it.
 pub const XTEHR_CANONICAL: &str = "http://www.xt-ehr.eu/fhir/models";
 
+/// The canonical URL of HL7 Europe's `EEHRxFDocumentPriorityCategoryCS`, the
+/// code system [`Category::code`] names each category in
+/// (`hl7.fhir.eu.health-data-api` 1.0.0-ballot).
+pub const PRIORITY_SYSTEM: &str =
+    "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs";
+
 /// One priority category of Art 14(1), as this build carries it.
 ///
 /// The set grows with the enabled features, so a match over it needs a
@@ -72,6 +78,40 @@ impl Category {
         #[cfg(feature = "discharge")]
         Self::Discharge,
     ];
+
+    /// Returns the code of the category in HL7 Europe's
+    /// `EEHRxFDocumentPriorityCategoryCS`, such as `Patient-Summaries` for
+    /// Art 14(1)(a).
+    ///
+    /// The code system is [`PRIORITY_SYSTEM`] of `hl7.fhir.eu.health-data-api`
+    /// 1.0.0-ballot, and its codes are case-sensitive.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            #[cfg(feature = "patient-summary")]
+            Self::PatientSummary => "Patient-Summaries",
+            #[cfg(feature = "prescription")]
+            Self::Prescription => "Electronic-Prescriptions",
+            #[cfg(feature = "dispensation")]
+            Self::Dispensation => "Electronic-Dispensations",
+            #[cfg(feature = "imaging")]
+            Self::Imaging => "Medical-Imaging",
+            #[cfg(feature = "laboratory")]
+            Self::Laboratory => "Laboratory-Reports",
+            #[cfg(feature = "discharge")]
+            Self::Discharge => "Discharge-Reports",
+        }
+    }
+
+    /// Returns the category this build carries that `code` names, a code
+    /// [`Category::code`] gives, compared exactly.
+    #[must_use]
+    pub fn of_code(code: &str) -> Option<Self> {
+        Self::ENABLED
+            .iter()
+            .copied()
+            .find(|category| category.code() == code)
+    }
 
     /// Returns the crosswalk of the category's dataset, when this build
     /// carries one; only the patient summary has one.
