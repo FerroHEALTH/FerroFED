@@ -209,6 +209,7 @@ impl Federation {
             localization,
             consent,
             consent_disclosure: settings.federation.consent_disclosure,
+            consent_emergency: settings.federation.consent_emergency,
             observed,
             context,
             budget: settings.federation.budget,
@@ -257,6 +258,7 @@ impl Federation {
             consent_disclosure: ConsentDisclosure::of(
                 crate::config::Federation::default().consent.disclose,
             ),
+            consent_emergency: crate::config::Federation::default().consent.emergency,
             observed: Arc::new(Observed::new(
                 ResolutionBindings::new(std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,

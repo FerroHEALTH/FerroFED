@@ -34,6 +34,7 @@ pub mod config;
 pub(crate) mod patient;
 pub(crate) mod routed;
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -127,7 +128,18 @@ impl AccessLog {
     pub fn map(&self) -> &CategoryMap {
         &self.map
     }
+
+    /// The purposes of use that mark an access an emergency access.
+    #[must_use]
+    pub fn emergency(&self) -> &EmergencyPurposes {
+        &self.emergency
+    }
 }
+
+/// The members whose consent pre-filter denial a routed read set aside for
+/// an emergency purpose, attached to its answer for its record.
+#[derive(Debug, Clone)]
+pub(crate) struct ConsentSetAside(pub(crate) BTreeSet<String>);
 
 /// One origin an access asked, as the handler saw it.
 #[derive(Debug, Clone)]
@@ -172,6 +184,9 @@ pub(crate) struct Accessed {
     pub(crate) delivered: Option<usize>,
     /// The origins it asked.
     pub(crate) origins: Vec<Asked>,
+    /// The members whose consent pre-filter denial was set aside for an
+    /// emergency purpose, each asked all the same.
+    pub(crate) consent_set_aside: BTreeSet<String>,
 }
 
 impl fmt::Debug for Accessed {
@@ -221,7 +236,11 @@ impl Accessed {
         let accessor = accessor(caller);
         // NOTE: Regulation (EU) 2025/327 Art 11(5); the mark is read from the purposes the
         // verified token declares alone, never inferred from the query or a node's answer.
-        let emergency = self.log.emergency.mark(&accessor.purposes);
+        let emergency = self
+            .log
+            .emergency
+            .mark(&accessor.purposes)
+            .map(|mark| mark.with_consent_set_aside(self.consent_set_aside.iter().cloned()));
         AccessRecord {
             action: self.action,
             recorded,

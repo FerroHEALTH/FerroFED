@@ -317,7 +317,11 @@ async fn federate(
         federation,
         (&analysis, selection),
         (requester, on_behalf),
-        (deadline, disclosed),
+        (
+            deadline,
+            disclosed,
+            federation.sets_aside_consent_for(conveyance),
+        ),
     )
     .await?;
     confinement::held_within(federation, conveyance, (&analysis, &targets), request_id)?;
@@ -368,6 +372,7 @@ async fn federate(
             reached: reached.as_deref(),
             rows: &result_set.rows,
             status,
+            set_aside: &targets.set_aside,
         };
         accessed::query(log, federation.snapshot(), &answered)
     });

@@ -504,6 +504,7 @@ fn accessed(
             contributed: version.is_some(),
             evidence: version.is_some().then_some(evidence),
         }],
+        consent_set_aside: std::collections::BTreeSet::new(),
     })
 }
 

@@ -47,12 +47,12 @@ const MARK: &str = "ehds-emergency-access";
 const LOGGED: &str = "the access was declared an emergency access by its purpose of use";
 
 /// `[[access_log.emergency_purpose]]` naming break the glass.
-fn break_the_glass() -> String {
+pub(super) fn break_the_glass() -> String {
     format!("\n[[access_log.emergency_purpose]]\nsystem = \"{ACT_REASON}\"\ncode = \"BTG\"\n")
 }
 
 /// The suite's claims declaring treatment and each code of `codes`.
-fn declaring(codes: &[&str]) -> Claims {
+pub(super) fn declaring(codes: &[&str]) -> Claims {
     let mut claims = support::claims();
     let mut extensions = Extensions::treatment();
     extensions

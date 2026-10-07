@@ -74,6 +74,7 @@ use openehr_its::rest::generated::ehr::EhrGetBySubjectParams;
 use openehr_its::rest::routes::RouteMatch;
 use secrecy::SecretString;
 
+use crate::access::ConsentSetAside;
 use crate::error::{self, Code};
 use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
@@ -158,13 +159,12 @@ pub(crate) async fn serve(
     let Some((candidates, members)) = located else {
         return Unserved::Unlocalized.respond(request_id, &logged);
     };
-    let consented = consent::prefilter(
-        federation,
-        (patient, arrived.requester),
-        &members,
+    let asked = (
         budget.overall(),
-    )
-    .await;
+        federation.sets_aside_consent_for(&arrived.conveyance),
+    );
+    let consented =
+        consent::prefilter(federation, (patient, arrived.requester), &members, asked).await;
     let unbound = (patient, &consented.denied, (on_behalf, &arrived.conveyance));
     let resolved = resolve(federation, candidates, unbound, budget.overall()).await;
     let holders = resolved.holders.clone();
@@ -178,13 +178,17 @@ pub(crate) async fn serve(
             confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
         })
     {
-        return confined::refused("subject", request_id, &logged);
+        return set_aside(
+            confined::refused("subject", request_id, &logged),
+            &consented.set_aside,
+        );
     }
-    let session = arrived.session.map(|session| (session, &consented.denied));
-    learn(federation, &holders, session, started);
+    learn(federation, &holders, (arrived.session, &consented), started);
     let (endpoint, ehr_id) = match settled {
         Ok(owner) => owner,
-        Err(unserved) => return unserved.respond(request_id, &logged),
+        Err(unserved) => {
+            return set_aside(unserved.respond(request_id, &logged), &consented.set_aside);
+        }
     };
     tracing::debug!(
         endpoint = %endpoint.id(),
@@ -196,34 +200,59 @@ pub(crate) async fn serve(
         .with_request_id(arrived.outbound)
         .with_withheld(withheld)
         .with_composed_ehr_id(ehr_id.clone());
-    // NOTE: §5.4.1, N33: the node is located by its own ehr_id alone, so the
-    // request is the gateway's own, with none of the client's query or body.
-    let request = ClientRequest {
-        method: Method::GET,
-        path: format!("/ehr/{}", path_segment(&ehr_id.as_str())),
-        query: None,
-        headers: arrived.headers.clone(),
-        body: Vec::new(),
-    };
+    let request = own_request(arrived.headers, &ehr_id);
     let provenance = Provenance::of(snapshot, endpoint);
     let forwarded = match HeldRequest::hold(request) {
         Ok(request) => route::send(federation, endpoint, request, &options, &logged).await,
         Err(refused) => Err(Failure::Forward(refused)),
     };
     let at = (federation, &arrived.conveyance);
-    match forwarded {
+    let response = match forwarded {
         // NOTE: Regulation (EU) 2025/327 Art 8: a withheld refusal answers as no holder would, so
         // it names no acting endpoint (no specification governs this: our own design).
         Ok(forwarded) => route::withheld(at, endpoint, &forwarded, (request_id, &logged))
             .unwrap_or_else(|| {
-                route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
+                // NOTE: Regulation (EU) 2025/327 Art 11(5), N27a: a denial set aside holds for this
+                // request alone, so nothing its answer shows is learned for a later one.
+                if !consented.set_aside.contains(endpoint.node()) {
+                    route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
+                }
                 provenance.stamp(route::answered(forwarded))
             }),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => {
             route::failed(&failure, provenance, (request_id, &logged))
         }
+    };
+    set_aside(response, &consented.set_aside)
+}
+
+/// The read of the EHR `ehr_id` the gateway sends its holder, with the client's
+/// `headers`.
+fn own_request(headers: &HeaderMap, ehr_id: &EhrId) -> ClientRequest {
+    // NOTE: §5.4.1, N33: the node is located by its own ehr_id alone, so the
+    // request is the gateway's own, with none of the client's query or body.
+    ClientRequest {
+        method: Method::GET,
+        path: format!("/ehr/{}", path_segment(&ehr_id.as_str())),
+        query: None,
+        headers: headers.clone(),
+        body: Vec::new(),
     }
+}
+
+/// `response`, naming for its access record each member of `set_aside`, whose
+/// consent pre-filter denial was set aside for an emergency purpose.
+fn set_aside(mut response: Response, set_aside: &BTreeSet<NodeId>) -> Response {
+    if !set_aside.is_empty() {
+        response.extensions_mut().insert(ConsentSetAside(
+            set_aside
+                .iter()
+                .map(|member| member.as_str().to_owned())
+                .collect(),
+        ));
+    }
+    response
 }
 
 /// The `candidates` the localizer names for `patient`, asked on behalf of
@@ -421,20 +450,30 @@ fn candidates<'a>(
 fn learn(
     federation: &Federation,
     holders: &[(&Endpoint, EhrId)],
-    session: Option<(&SessionKey, &BTreeSet<NodeId>)>,
+    (session, consented): (Option<&SessionKey>, &consent::Prefiltered),
     now: Instant,
 ) {
-    if let Some((session, denied)) = session {
-        federation.bindings().forget_denied(session, denied);
+    // NOTE: Regulation (EU) 2025/327 Art 11(5), N27a: a denial set aside holds for this request
+    // alone, so its member's `ehr_id` is neither held for the session nor taught to the index.
+    let kept: Vec<&(&Endpoint, EhrId)> = holders
+        .iter()
+        .filter(|(endpoint, _)| !consented.set_aside.contains(endpoint.node()))
+        .collect();
+    if let Some(session) = session {
+        let forgotten: BTreeSet<NodeId> = consented
+            .denied
+            .union(&consented.set_aside)
+            .cloned()
+            .collect();
+        federation.bindings().forget_denied(session, &forgotten);
         federation.bindings().record(
             session,
             now,
-            holders
-                .iter()
+            kept.iter()
                 .map(|(endpoint, ehr_id)| (endpoint.node(), ehr_id)),
         );
     }
-    for (endpoint, ehr_id) in holders {
+    for (endpoint, ehr_id) in kept {
         owner::learn(federation.index(), ehr_id, endpoint.node());
     }
 }

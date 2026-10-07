@@ -311,6 +311,11 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
         .notes()
         .into_iter()
         .chain(settings.access_log.notes())
+        .chain(
+            binding::compiled()
+                .iter()
+                .flat_map(|binding| binding.notes(settings)),
+        )
     {
         println!("ferrofed: note: {note}");
     }
