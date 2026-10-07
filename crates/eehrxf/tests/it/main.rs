@@ -9,6 +9,9 @@
 #[cfg(test)]
 mod category;
 #[cfg(test)]
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+mod claimed;
+#[cfg(test)]
 #[cfg(feature = "patient-summary")]
 mod crosswalk;
 #[cfg(test)]

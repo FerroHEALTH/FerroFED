@@ -69,7 +69,7 @@ pub fn opt() -> PathBuf {
 pub fn mapping_files() -> [PathBuf; 2] {
     [
         PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.yml"),
-        PathBuf::from(ROOT).join("tools/ferrofed-testkit/fixtures/eehrxf/eu_allergy.context.yml"),
+        PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/mapping/eu_allergy.context.yml"),
     ]
 }
 

@@ -28,15 +28,16 @@
 //! occurrences that certainly belong to it. An occurrence of a type no slice
 //! of a type-discriminated slicing names is refused, and the root invariants
 //! of one form, a reference every entry of listed types carries, are
-//! evaluated. Other invariants, terminology bindings and the profiles of the
-//! other entries are not checked here.
+//! evaluated. Other invariants and terminology bindings are not checked
+//! here. [`check_resource`] holds any one resource, such as an entry of a
+//! document, to a profile by the same rules.
 
 mod values;
 mod walk;
 
 use std::fmt;
 
-use fhir_types::codec::Value;
+use fhir_types::codec::{Object, Value};
 
 use crate::dataset::ResourceProfile;
 use crate::dataset::constraint::DiscriminatorKind;
@@ -70,13 +71,40 @@ impl ReceivedDocument {
         let mut walk = Walk::default();
         walk.profile(bundle, "Bundle", root)?;
         walk.profile(composition, "Composition", first)?;
-        if walk.findings.is_empty() {
+        walk.finish()
+    }
+}
+
+/// Checks `resource`, a resource of type `expected` in FHIR JSON, against
+/// `profile` by the rules [`ReceivedDocument::check`] applies to a
+/// document's `Bundle` and `Composition`: the profile an entry of a document
+/// claims in its `meta.profile`, or one its slice names.
+///
+/// # Errors
+///
+/// Returns [`CheckError::ProfileType`] when `profile` constrains another
+/// resource type, and [`CheckError::NonConformant`] listing every finding
+/// when the resource breaks it.
+pub fn check_resource(
+    profile: &ResourceProfile,
+    expected: &'static str,
+    resource: &Object,
+) -> Result<Conformance, CheckError> {
+    let mut walk = Walk::default();
+    walk.profile(profile, expected, resource)?;
+    walk.finish()
+}
+
+impl Walk {
+    /// The conformance of a walk with no finding, or the findings it made.
+    fn finish(self) -> Result<Conformance, CheckError> {
+        if self.findings.is_empty() {
             Ok(Conformance {
-                unevaluated: walk.unevaluated.into_iter().collect(),
+                unevaluated: self.unevaluated.into_iter().collect(),
             })
         } else {
             Err(CheckError::NonConformant {
-                findings: walk.findings,
+                findings: self.findings,
             })
         }
     }
