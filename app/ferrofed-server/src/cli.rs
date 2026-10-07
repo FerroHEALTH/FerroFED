@@ -87,7 +87,8 @@ pub struct ReportArgs {
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
     /// A file holding a bearer token with the operator scope, which reads
-    /// the integrity incidents; without it they are asked with no token.
+    /// the dependency states and the integrity incidents; without it they
+    /// are asked with no token.
     #[arg(long, value_name = "PATH")]
     pub operator_token_file: Option<PathBuf>,
 }

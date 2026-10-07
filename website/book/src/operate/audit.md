@@ -628,7 +628,7 @@ answer is never used:
 | ITI-83 | the member's resolution is unavailable: no member is asked, and the query fails `424` under all-or-nothing completeness |
 | ITI-90, ITI-91 | the directory read fails as a directory that did not answer: the boot is refused, or a refresh keeps the registry in place |
 | ITI-93 | the message is answered `503` and nothing is applied, so the Registry sends it again |
-| ITI-94 | the exchange fails, and `GET /health/dependencies` reports the Registry `failing` with the fault `audit-failed` |
+| ITI-94 | the exchange fails, and `GET {base}/operator/dependencies` reports the Registry `failing` with the fault `audit-failed` |
 
 ## A slow disk
 
@@ -691,7 +691,7 @@ access. Put it on an encrypted volume. A spool belongs to one repository
 configuration: the FHIR Feed spool and the ITI-55 syslog spool are two
 directories.
 
-`GET /health/dependencies` reports the FHIR Feed repository as
+`GET {base}/operator/dependencies` reports the FHIR Feed repository as
 `audit_feed`: `up`, `degraded` while the gateway retries a failed delivery,
 while records wait in the spool and while any sits in quarantine, and
 `unknown` before the first record. The audit metrics of

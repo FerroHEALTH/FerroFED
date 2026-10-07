@@ -12,7 +12,7 @@
 //! and the registry loaded, the stored-query store open, the outbound
 //! clients built). A member node or the identity source never gates
 //! readiness: their last observed state is [`dependencies`]'s, reported on
-//! its own route. No specification governs health probes: our own design.
+//! the operator surface. No specification governs health probes: our own design.
 
 pub mod dependencies;
 pub mod lifecycle;

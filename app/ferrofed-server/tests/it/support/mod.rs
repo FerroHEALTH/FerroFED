@@ -418,14 +418,21 @@ pub(crate) async fn refused_at_neither(
     Ok(())
 }
 
-/// The state `GET /health/dependencies` of `app` reports of each member
+/// `GET /operator/dependencies` as an operator of the test issuer asks it.
+pub(crate) fn dependencies_request() -> Result<Request<Body>, Box<dyn StdError>> {
+    Ok(Request::get("/operator/dependencies")
+        .header(header::AUTHORIZATION, operator_bearer()?)
+        .body(Body::empty())?)
+}
+
+/// The state `GET /operator/dependencies` of `app` reports of each member
 /// endpoint, by endpoint id.
 pub(crate) async fn observed(app: &Router) -> Result<BTreeMap<String, String>, Box<dyn StdError>> {
     #[derive(Deserialize)]
     struct Report {
         endpoints: BTreeMap<String, String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     if status != StatusCode::OK {
         return Err(format!("the dependency report answered {status}: {text}").into());

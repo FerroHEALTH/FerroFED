@@ -125,7 +125,7 @@ fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, State
 
 impl AppState {
     /// Returns this state keeping its registry in step with `directory`,
-    /// whose last observed state `/health/dependencies` reports.
+    /// whose last observed state `{base}/operator/dependencies` reports.
     #[must_use]
     pub fn watching(mut self, directory: Arc<DirectoryRegistry>) -> Self {
         self.processes_mut().ihe.directory = Some(directory);

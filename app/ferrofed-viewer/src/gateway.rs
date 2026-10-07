@@ -370,7 +370,7 @@ impl Gateway {
     }
 
     /// Reads the last state the gateway observed of each member and service,
-    /// `GET {base}/health/dependencies`.
+    /// `GET {base}/operator/dependencies`.
     ///
     /// # Errors
     /// As [`Gateway::self_description`].
@@ -378,7 +378,8 @@ impl Gateway {
         &self,
         token: &AccessToken,
     ) -> Result<DependencyReport, GatewayError> {
-        self.read(Method::GET, "/health/dependencies", token).await
+        self.read(Method::GET, "/operator/dependencies", token)
+            .await
     }
 
     /// Reads the integrity incidents, `GET {base}/operator/incidents`.

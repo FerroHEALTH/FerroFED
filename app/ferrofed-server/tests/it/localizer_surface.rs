@@ -3,7 +3,7 @@
 
 //! The localizer beyond the federated query: the read of an EHR by subject
 //! is localized as an undirected query (N4, §5.2, §14.1), and the localizer
-//! shows on `GET /health/dependencies` under the rule the members follow and
+//! shows on `GET /operator/dependencies` under the rule the members follow and
 //! in the localizer call metrics.
 #![allow(
     clippy::panic_in_result_fn,
@@ -216,13 +216,13 @@ fn by_subject() -> Result<Request<Body>, http::Error> {
     .body(Body::empty())
 }
 
-/// The state `GET /health/dependencies` reports of the localizer.
+/// The state `GET /operator/dependencies` reports of the localizer.
 async fn localizer_state(app: &Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         localizer: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.localizer)

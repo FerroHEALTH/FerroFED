@@ -235,7 +235,7 @@ because no client addresses one replica. The StatefulSet:
   (`persistentVolumeClaimRetentionPolicy` `Retain`). A replica scaled away
   leaves its claim behind, and the records in it wait until that replica
   comes back. Before you delete a claim, scale back up until its spool is
-  delivered, and check that `GET /health/dependencies` reads `up` for the
+  delivered, and check that `GET {base}/operator/dependencies` reads `up` for the
   audit repository;
 - runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
   filesystem, `allowPrivilegeEscalation: false`, every capability dropped and

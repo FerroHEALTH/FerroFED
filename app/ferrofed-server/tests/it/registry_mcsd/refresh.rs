@@ -5,7 +5,7 @@
 //! applies only what changed since the last read, a refresh that breaks an
 //! integrity rule is refused and counted with the running registry kept, and
 //! a directory that does not answer keeps the registry and shows on
-//! `/health/dependencies` (§15.1, §15.2, N19, N21), as does a change the
+//! `/operator/dependencies` (§15.1, §15.2, N19, N21), as does a change the
 //! gateway refused (no specification governs the health report: our own
 //! design).
 #![allow(
@@ -17,11 +17,10 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::Body;
 use ferrofed_server::binding::ihe::mcsd::registry::RefreshOutcome;
 use ferrofed_server::reload::ReloadError;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Outage};
-use http::{Request, StatusCode};
+use http::StatusCode;
 use serde::Deserialize;
 
 use super::{Gateway, member, members};
@@ -53,19 +52,19 @@ async fn asked(gateway: &Gateway) -> Result<Vec<(String, String)>, Box<dyn Error
         .collect())
 }
 
-/// What `/health/dependencies` reports of the directory.
+/// What `/operator/dependencies` reports of the directory.
 async fn directory_state(gateway: &Gateway) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         directory: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(gateway.router(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.directory)
 }
 
-/// What `/health/dependencies` reports of the directory.
+/// What `/operator/dependencies` reports of the directory.
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 struct DirectoryHealth {
     directory: Option<String>,
@@ -82,9 +81,9 @@ impl DirectoryHealth {
     }
 }
 
-/// What `/health/dependencies` reports of the directory, and the whole body.
+/// What `/operator/dependencies` reports of the directory, and the whole body.
 async fn directory_health(gateway: &Gateway) -> Result<(DirectoryHealth, String), Box<dyn Error>> {
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(gateway.router(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok((serde_json::from_str(&text)?, text))

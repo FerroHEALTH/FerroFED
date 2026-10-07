@@ -9,7 +9,7 @@
 //! localizer that does not answer leaves no candidate under the default
 //! fail-closed policy, and every member under a declared `ask-all`; either
 //! way its failure is kept, for the route to report. Each call is recorded
-//! as the localizer's state on `GET /health/dependencies` and in the
+//! as the localizer's state on `GET {base}/operator/dependencies` and in the
 //! localizer call metrics.
 
 use std::collections::BTreeSet;

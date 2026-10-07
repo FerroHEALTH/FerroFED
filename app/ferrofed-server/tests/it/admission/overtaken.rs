@@ -4,7 +4,7 @@
 //! An admission check whose budget runs out before its first EHR call
 //! leaves the gateway: the report names a call never sent, never a node that
 //! did not answer, and the node request metrics and `GET
-//! /health/dependencies` record nothing of the member (§11.5).
+//! /operator/dependencies` record nothing of the member (§11.5).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

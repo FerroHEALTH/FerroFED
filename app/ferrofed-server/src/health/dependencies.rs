@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The last state the gateway observed of each member endpoint, of the
-//! resolver, of the consent pre-filter, of the localizer and of the
-//! demographics service, which `GET /health/dependencies` reports.
+//! The last state the gateway observed of each member endpoint and service.
 //!
-//! Nothing here sends a request: the states come from the requests the
+//! The services are the resolver, the consent pre-filter, the localizer and
+//! the demographics service, and `GET {base}/operator/dependencies` reports
+//! them all. Nothing here sends a request: the states come from the requests the
 //! gateway already makes for its clients, so a dependency nobody has asked
 //! since boot is [`Observed::Unknown`]. The record holds one slot per
 //! endpoint of the registry snapshot, and one each for the resolver, the
@@ -283,7 +283,7 @@ impl Dependencies {
         }
     }
 
-    /// Returns the report `GET /health/dependencies` answers with.
+    /// Returns the report `GET {base}/operator/dependencies` answers with.
     #[must_use]
     pub fn report(&self) -> DependencyReport {
         DependencyReport {

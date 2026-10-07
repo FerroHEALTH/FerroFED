@@ -38,7 +38,7 @@
 //! `meta.federation`, `active` where the copy matches (§12.7
 //! stored-query-drift). No node's text is copied into it.
 //!
-//! Each member's state is recorded on `GET /health/dependencies` from the
+//! Each member's state is recorded on `GET {base}/operator/dependencies` from the
 //! node's own answer, whatever the §11.1 record says: a refused store or a
 //! copy that differs or is missing is an answer, and the member is `up`.
 

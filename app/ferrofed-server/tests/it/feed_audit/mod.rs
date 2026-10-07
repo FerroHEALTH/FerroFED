@@ -23,9 +23,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use axum::Router;
-use axum::body::Body;
 use ferrofed_testkit::atna_feed::FeedRepository;
-use http::{Request, StatusCode};
+use http::StatusCode;
 use serde::Deserialize;
 
 use crate::support::call;
@@ -67,17 +66,17 @@ pub(crate) fn spooled(spool: &Path) -> Result<usize, Box<dyn Error>> {
     Ok(files)
 }
 
-/// The state `GET /health/dependencies` reports of the FHIR Feed audit
+/// The state `GET /operator/dependencies` reports of the FHIR Feed audit
 /// repository.
 pub(crate) async fn feed_state(app: &Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         audit_feed: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     if status != StatusCode::OK {
-        return Err(format!("/health/dependencies answered {status}: {text}").into());
+        return Err(format!("/operator/dependencies answered {status}: {text}").into());
     }
     Ok(serde_json::from_str::<Report>(&text)?.audit_feed)
 }

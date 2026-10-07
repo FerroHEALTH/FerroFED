@@ -21,13 +21,12 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdq::PdqSupplier;
-use http::{Request, StatusCode};
+use http::StatusCode;
 use serde::Deserialize;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
@@ -152,16 +151,16 @@ pub(crate) fn settings(
 /// The `[federation]` key of an ask-all deployment, which has no localizer.
 pub(crate) const ASK_ALL: &str = "node_selection = \"ask-all\"";
 
-/// The state `GET /health/dependencies` reports of the demographics service.
+/// The state `GET /operator/dependencies` reports of the demographics service.
 pub(crate) async fn demographics_state(app: &Router) -> Result<Option<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Report {
         demographics: Option<String>,
     }
-    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let request = crate::support::dependencies_request()?;
     let (status, text) = call(app.clone(), request).await?;
     if status != StatusCode::OK {
-        return Err(format!("/health/dependencies answered {status}: {text}").into());
+        return Err(format!("/operator/dependencies answered {status}: {text}").into());
     }
     Ok(serde_json::from_str::<Report>(&text)?.demographics)
 }

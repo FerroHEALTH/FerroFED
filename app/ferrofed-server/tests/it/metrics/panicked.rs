@@ -4,7 +4,7 @@
 //! A fan-out task that panics is the gateway's own defect: the template
 //! upload fails as the probe and the query fan-out do, and no member is
 //! counted in the node request metrics or changes state on `GET
-//! /health/dependencies` for it (§11.1 reserves `time-out` for a node that
+//! /operator/dependencies` for it (§11.1 reserves `time-out` for a node that
 //! did not answer). No specification governs the metrics or the dependency
 //! report: our own design.
 #![allow(

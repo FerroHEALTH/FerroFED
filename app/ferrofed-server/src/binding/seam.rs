@@ -63,7 +63,7 @@ impl fmt::Debug for LocalizerSeam {
     }
 }
 
-/// A source of indications a binding adds to `GET /health/dependencies`.
+/// A source of indications a binding adds to `GET {base}/operator/dependencies`.
 pub trait Indicator: fmt::Debug + Send + Sync {
     /// Returns its indications, each under the key the report names it by.
     fn indicate(&self) -> Vec<(&'static str, Indication)>;

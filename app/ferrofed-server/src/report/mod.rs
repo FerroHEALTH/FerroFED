@@ -56,9 +56,6 @@ pub const FORMAT: &str = "ferrofed-report";
 /// The version of the archive format, raised when a file changes meaning.
 pub const FORMAT_VERSION: u32 = 1;
 
-/// The path of the dependency states, below `{base}`.
-const DEPENDENCIES: &str = "/health/dependencies";
-
 /// A report, collected and not yet written.
 #[derive(Debug)]
 pub struct Report {
@@ -137,7 +134,7 @@ impl Report {
     /// Collects the report of the deployment `settings` configure, with
     /// `tree`, the merged configuration they were resolved from, and
     /// `operator`, a token with the operator scope that reads the
-    /// integrity incidents.
+    /// dependency states and the integrity incidents.
     ///
     /// # Errors
     /// [`ReportError::Serialize`] when a part the binary writes itself
@@ -306,9 +303,9 @@ impl Report {
                     &readiness,
                     outcome,
                 );
-                let dependencies = base.join(DEPENDENCIES);
+                let dependencies = base.join(crate::operator::DEPENDENCIES);
                 let outcome =
-                    Self::document::<DependencyReport>(&gateway, &dependencies, None).await;
+                    Self::document::<DependencyReport>(&gateway, &dependencies, operator).await;
                 self.add(
                     "health/dependencies.json",
                     "the last observed state of every dependency",

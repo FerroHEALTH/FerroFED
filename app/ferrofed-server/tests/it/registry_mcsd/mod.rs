@@ -6,7 +6,7 @@
 //! routes as the bootstrap document does, a refresh applies only what
 //! changed, a refresh that breaks an integrity rule is refused with the
 //! running registry kept, and a directory that does not answer keeps the
-//! registry and shows on `/health/dependencies`.
+//! registry and shows on `/operator/dependencies`.
 
 mod config;
 #[cfg(feature = "binding-nl")]

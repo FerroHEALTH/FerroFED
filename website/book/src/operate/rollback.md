@@ -65,7 +65,7 @@ store. Roll every replica back together, after the restore.
 
 The ATNA spools (`[audit] spool_dir`, `[xcpd.audit_repository] spool_dir`)
 hold the audit records the gateway has not yet delivered. Before a rollback,
-let them drain: wait until `GET {base}/health/dependencies` reads `up` for
+let them drain: wait until `GET {base}/operator/dependencies` reads `up` for
 the audit repository, then stop the gateway. A spool the earlier release
 cannot read is not lost: a file it does not recognise refuses the start,
 naming the file, and a record it cannot parse is moved to the spool's

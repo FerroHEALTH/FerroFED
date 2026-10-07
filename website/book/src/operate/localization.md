@@ -194,7 +194,7 @@ is the deployment's.
 The url is `tls://` outside `profile = "development"`; under that profile
 `tcp://host:port` is accepted and named on the banner, and without
 `spool_dir` the spool is held in memory, which a restart loses and the
-banner says so. `GET /health/dependencies` reports the repository as
+banner says so. `GET {base}/operator/dependencies` reports the repository as
 `audit_repository`: `up`, `degraded` while the gateway retries a failed
 delivery, while messages wait in the spool and while any sits in
 quarantine, and `unknown` before the first message. The metrics carry the
