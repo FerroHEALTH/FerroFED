@@ -16,6 +16,17 @@
       <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-server/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/tools/ferrofed-testkit/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/ferrofed-testkit/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-eehrxf/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-eehrxf/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-viewer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-viewer/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ehds-logging/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ehds-logging/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ihe-iti/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/nl-generic-functions/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/oauth-server-metadata/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
