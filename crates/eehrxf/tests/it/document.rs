@@ -24,6 +24,7 @@ use eehrxf::document::{
     Document, DocumentError, EmptyReason, LOINC, PATIENT_SUMMARY, SLOTS, Section, slot,
 };
 use eehrxf::mapping::Mapping;
+use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
 use fhir_types::r4::human_name::HumanName;
 use fhir_types::r4::organization::Organization;
@@ -108,7 +109,7 @@ fn every_slot_is_a_section_slice_with_the_code_the_profile_fixes() -> Result<(),
 }
 
 /// The fixtures beside this suite.
-fn fixture(name: &str) -> PathBuf {
+pub(crate) fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(name)
@@ -144,6 +145,11 @@ fn patient() -> Patient {
 /// mapping run, run `runs` times, and whose other required sections are
 /// empty.
 fn document(runs: usize) -> Result<Value, Box<dyn Error>> {
+    Ok(serde_json::to_value(&document_mapped(&mapping()?, runs)?)?)
+}
+
+/// The document of [`document`], its allergies mapped by `mapping`.
+pub(crate) fn document_mapped(mapping: &Mapping, runs: usize) -> Result<Bundle, Box<dyn Error>> {
     let mut document = Document::new(
         BASE,
         String::from("urn:uuid:4f5c1d1e-0000-4000-8000-0000000000aa"),
@@ -165,7 +171,6 @@ fn document(runs: usize) -> Result<Value, Box<dyn Error>> {
         name: Some("Synthetic operator".into()),
         ..Organization::default()
     })))?;
-    let mapping = mapping()?;
     let mut allergies = Section::new(
         slot("sectionAllergies").ok_or("the allergies slot")?,
         vec![String::from("One synthetic allergy <from one member>.")],
@@ -203,8 +208,7 @@ fn document(runs: usize) -> Result<Value, Box<dyn Error>> {
         .empty_because(EmptyReason::NilKnown);
         document.with_section(section)?;
     }
-    let bundle = document.into_bundle()?;
-    Ok(serde_json::to_value(&bundle)?)
+    Ok(document.into_bundle()?)
 }
 
 /// The literal reference `url`.

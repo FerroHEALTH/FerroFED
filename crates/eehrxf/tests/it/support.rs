@@ -42,6 +42,27 @@ pub(crate) fn eps(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     )?)
 }
 
+/// The vendored `hl7.fhir.eu.base` 2.0.1 package, which holds the EU core
+/// profiles the EPS profiles build on and the entries of a section claim.
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+pub(crate) fn eu_base_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/eu-hl7-base/hl7.fhir.eu.base-2.0.1.tgz")
+}
+
+/// Reads the profile at `url` from whichever vendored package holds it, the
+/// EPS package or the EU base package, or answers that neither does.
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+pub(crate) fn vendored(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    for package in [eps_package(), eu_base_package()] {
+        // NOTE: FHIR NPM packages; a profile one package lacks is legitimately absent there.
+        if let Ok(profile) = ResourceProfile::read(std::fs::File::open(package)?, url) {
+            return Ok(profile);
+        }
+    }
+    Err(format!("no vendored package holds the profile {url}").into())
+}
+
 /// One archive member: its path and its bytes.
 pub(crate) type Member = (String, Vec<u8>);
 
