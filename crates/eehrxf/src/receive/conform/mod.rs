@@ -76,8 +76,10 @@ impl ReceivedDocument {
 }
 
 /// Checks `resource`, a resource of type `expected` in FHIR JSON, against
-/// `profile` by the rules [`ReceivedDocument::check`] applies to a
-/// document's `Bundle` and `Composition`: the profile an entry of a document
+/// `profile`.
+///
+/// The rules are those [`ReceivedDocument::check`] applies to a document's
+/// `Bundle` and `Composition`; the profile is one an entry of a document
 /// claims in its `meta.profile`, or one its slice names.
 ///
 /// # Errors
