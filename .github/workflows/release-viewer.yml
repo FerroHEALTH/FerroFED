@@ -97,7 +97,7 @@ jobs:
       # cargo-auditable embeds the dependency list in the binary, which is
       # what the image SBOM below reads its crates from.
       - name: Install cargo-auditable
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-auditable@0.7.5
 
@@ -152,11 +152,11 @@ jobs:
       # the wasm-bindgen CLI on PATH, which must equal the wasm-bindgen crate
       # Cargo.lock holds.
       - name: Install cargo-leptos
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-leptos@0.3.11
       - name: Install the wasm-bindgen CLI
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: wasm-bindgen@0.2.129
       - name: Build the site bundle
@@ -312,7 +312,7 @@ jobs:
       # syft reads the dependency list cargo-auditable embedded in the binary,
       # so the SBOM names the crates rather than the files in the image.
       - name: Install syft
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: syft@1.51.1
       - name: Generate one SBOM per platform
