@@ -220,7 +220,7 @@ pub fn on_demand(
         ..Coding::default()
     };
     entry(
-        (id, Some((URI_SYSTEM, unique))),
+        (id, (URI_SYSTEM, unique)),
         listing,
         custodian,
         (attachment, Some(format)),
@@ -228,11 +228,13 @@ pub fn on_demand(
 }
 
 /// Returns the entry, with the logical id `id`, of the document a member
-/// `custodian` serves itself, as `fetched` holds it, whose own
-/// identifier `identifier` names it when the document gives one.
+/// `custodian` serves itself, as `fetched` holds it.
+///
+/// The document's own `Bundle.identifier`, `identifier`, which FHIR R4
+/// `bdl-9` requires of every document, names it.
 #[must_use]
 pub fn native(
-    (id, identifier): (&str, Option<(&str, &str)>),
+    (id, identifier): (&str, (&str, &str)),
     listing: Listing<'_>,
     custodian: &Organisation,
     fetched: Fetched,
@@ -251,9 +253,9 @@ pub fn native(
 }
 
 /// The entry with the logical id `id` and the master identifier
-/// `identifier`, of the content `attachment` in the format `format`.
+/// `system`|`value`, of the content `attachment` in the format `format`.
 fn entry(
-    (id, identifier): (&str, Option<(&str, &str)>),
+    (id, (system, value)): (&str, (&str, &str)),
     listing: Listing<'_>,
     custodian: &Organisation,
     (attachment, format): (Attachment, Option<Coding>),
@@ -264,7 +266,7 @@ fn entry(
             profile: vec![DOCUMENT_REFERENCE_PROFILE.into()],
             ..Meta::default()
         }),
-        master_identifier: identifier.map(|(system, value)| Identifier {
+        master_identifier: Some(Identifier {
             system: Some(system.into()),
             value: Some(value.into()),
             ..Identifier::default()
@@ -347,6 +349,41 @@ pub fn silent(endpoint: &str, status: &str) -> OperationOutcome {
         }],
         ..OperationOutcome::default()
     }
+}
+
+/// Returns the `OperationOutcome` that names a member whose own endpoint,
+/// `endpoint`, answered with no document the list names.
+///
+/// Its answer is no FHIR document `Bundle` that carries an identifier with
+/// a system and a value (FHIR R4 `bdl-9`), so the list leaves it out and
+/// names the member with the §11.1 status `node-error`.
+#[must_use]
+pub fn unusable(endpoint: &str) -> OperationOutcome {
+    OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "warning".into(),
+            code: "incomplete".into(),
+            diagnostics: Some(
+                format!("the list is incomplete: {} (§11.3)", unidentified(endpoint)).into(),
+            ),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
+    }
+}
+
+/// Returns the sentence that says the member whose own endpoint is
+/// `endpoint` answered with no document the face lists or serves.
+///
+/// The answer is no FHIR document `Bundle` with an identifier that has a
+/// system and a value (FHIR R4 `bdl-9`), which makes the member one in
+/// `node-error` (§11.1).
+#[must_use]
+pub fn unidentified(endpoint: &str) -> String {
+    format!(
+        "{endpoint} (node-error) answered no FHIR document Bundle with an identifier \
+         that has a system and a value (bdl-9)"
+    )
 }
 
 /// Returns the `searchset` of the `matches`, each under its full URL, and

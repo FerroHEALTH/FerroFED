@@ -41,8 +41,7 @@ const ALLERGIES_SECTION: &str = "48765-2";
 const EHR_SYSTEM: &str = "urn:oid:2.999.4.1";
 
 /// The member's own document, whose whitespace no serialiser would keep.
-const DOCUMENT: &[u8] =
-    b"{ \"resourceType\" :\"Bundle\",\n \"type\": \"document\" , \"entry\":[ ] }\n";
+const DOCUMENT: &[u8] = b"{ \"resourceType\" :\"Bundle\",\n \"identifier\": {\"system\": \"urn:oid:2.999.4.2\", \"value\": \"synthetic-doc-a\"},\n \"type\": \"document\" , \"entry\":[ ] }\n";
 
 /// The native endpoint of node A at `base`, serving patient summaries in
 /// the profiles `profiles`.
@@ -240,6 +239,63 @@ async fn under_partial_a_silent_native_member_is_named_in_every_section() -> Tes
         .ok_or("a narrative")?;
     assert!(div.contains("No answer from: org-a (node-error)"), "{div}");
     assert!(!div.contains("Not mapped here"), "{div}");
+    Ok(())
+}
+
+/// A member's own document with no `Bundle.identifier` (FHIR R4 `bdl-9`).
+const UNIDENTIFIED: &[u8] = b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"entry\":[]}";
+
+#[tokio::test]
+async fn a_native_member_answering_a_document_with_no_identifier_fails_the_summary() -> TestResult {
+    let members = Members::start(
+        ResponseTemplate::new(200).set_body_raw(UNIDENTIFIED.to_vec(), "application/fhir+json"),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), "")?;
+    let (status, text) = call(app, summary("")?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    let outcome: Value = serde_json::from_str(&text)?;
+    let diagnostics = outcome
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    assert!(
+        diagnostics.contains("node-a-eps (node-error)"),
+        "the member is named in node-error: {diagnostics}"
+    );
+    assert!(!text.contains(PATIENT_TAIL), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn under_partial_a_native_member_answering_a_document_with_no_identifier_is_not_covered()
+-> TestResult {
+    let members = Members::start(
+        ResponseTemplate::new(200).set_body_raw(UNIDENTIFIED.to_vec(), "application/fhir+json"),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), "best_effort = true\n")?;
+    let mut request = summary("")?;
+    request
+        .headers_mut()
+        .insert("openehr-federation-completeness", "partial".parse()?);
+    let (status, text) = call(app, request).await?;
+    assert_eq!(StatusCode::OK, status, "§11.4: {text}");
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    let document: Value = serde_json::from_str(&text)?;
+    let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
+    let div = allergies
+        .pointer("/text/div")
+        .and_then(Value::as_str)
+        .ok_or("a narrative")?;
+    assert!(div.contains("No answer from: org-a (node-error)"), "{div}");
+    assert!(
+        !div.contains("Not mapped here"),
+        "never marked as covered by its own document: {div}"
+    );
     Ok(())
 }
 

@@ -240,7 +240,7 @@ pub(super) async fn reads(app: axum::Router, url: &str, document: &[u8]) -> Test
 }
 
 /// The findings of `reference` against `EehrxfMhdDocumentReference`.
-fn findings(reference: &Value) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(super) fn findings(reference: &Value) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     health_data_api::check(&reference.to_string())
 }
 
