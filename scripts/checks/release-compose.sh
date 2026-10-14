@@ -33,13 +33,57 @@
 #                                                      is a static Linux
 #                                                      build for this host's
 #                                                      architecture
-# Needs `docker compose`, `jq` and `openssl`. Exit 1 naming each failure; 0
-# otherwise.
+#   scripts/checks/release-compose.sh --self-test      prove a missing tool
+#                                                      is named
+# Needs `docker compose` and `openssl`, and `jq` for check 4; a missing one is
+# named, with how to install it, before any check runs. Exit 1 naming each
+# failure; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 readonly RELEASE=deploy/compose
 readonly ASSETS="compose.yaml ferrofed.toml registry.toml"
+
+# self_test: runs this guard with a PATH that lacks docker, then with stand-in
+# docker and openssl and no jq, and holds each run to naming the missing tool.
+self_test() {
+  local work tool status out failed=0
+  work="$(mktemp -d)"
+  # shellcheck disable=SC2064 # expand $work now: the local is gone at EXIT.
+  trap "rm -rf '$work'" EXIT
+  mkdir "$work/bin"
+  for tool in dirname sed; do
+    ln -s "$(command -v "$tool")" "$work/bin/$tool"
+  done
+  printf '#!/bin/sh\nexit 0\n' > "$work/ferrofed"
+  chmod +x "$work/ferrofed"
+  # run WANT ARGS...: the guard over ARGS names WANT and exits 1.
+  run() {
+    local want="$1"
+    shift
+    status=0
+    out="$(PATH="$work/bin" "$BASH" "$PWD/scripts/checks/release-compose.sh" "$@" 2>&1)" || status=$?
+    if [[ "$status" -ne 1 ]] || ! grep -q -F "needs $want on PATH" <<< "$out"; then
+      echo "release compose: self-test failed: without $want it exited $status, and said:" >&2
+      sed 's/^/  /' <<< "$out" >&2
+      failed=1
+    fi
+  }
+  run docker
+  for tool in docker openssl; do
+    printf '#!/bin/sh\nexit 0\n' > "$work/bin/$tool"
+    chmod +x "$work/bin/$tool"
+  done
+  run jq "$work/ferrofed"
+  if grep -q -F 'needs docker' <<< "$out"; then
+    echo "release compose: self-test failed: a docker on PATH is named as missing." >&2
+    failed=1
+  fi
+  if [[ "$failed" -ne 0 ]]; then
+    exit 1
+  fi
+  echo "release compose: self-test OK (2 cases)."
+}
 
 case "$#" in
   0) binary="" ;;
@@ -49,9 +93,30 @@ case "$#" in
     exit 2
     ;;
 esac
+if [[ "$binary" == "--self-test" ]]; then
+  self_test
+  exit 0
+fi
 if [[ -n "$binary" ]] && [[ ! -x "$binary" ]]; then
   echo "::error::$binary is not an executable ferrofed binary." >&2
   exit 2
+fi
+
+# need TOOL HOW: names TOOL and how to install it when it is not on PATH.
+missing=0
+need() {
+  if ! command -v "$1" > /dev/null 2>&1; then
+    echo "::error::release compose needs $1 on PATH; $2" >&2
+    missing=1
+  fi
+}
+need docker "install Docker Engine with the Compose plugin, or Docker Desktop (https://docs.docker.com/get-started/get-docker/)"
+need openssl "install OpenSSL (brew install openssl, or apt-get install openssl)"
+if [[ -n "$binary" ]]; then
+  need jq "install jq (brew install jq, or apt-get install jq)"
+fi
+if [[ "$missing" -ne 0 ]]; then
+  exit 1
 fi
 
 fail=0
@@ -71,7 +136,10 @@ while IFS= read -r file; do
 done < <(git ls-files -- '*compose*.yaml' '*compose*.yml' ':(exclude)docs/specs/**' ':(glob,exclude)**/vendor/**')
 [[ "$built" -eq 0 ]] && echo "OK: no compose file carries build:"
 
-docker compose version
+if ! docker compose version; then
+  echo "::error::release compose needs the Docker Compose plugin (docker compose); install it with Docker Engine, or use Docker Desktop (https://docs.docker.com/compose/install/)" >&2
+  exit 1
+fi
 
 # The downloader's directory: the three assets, byte for byte, and secrets/.
 work="$(mktemp -d)"
