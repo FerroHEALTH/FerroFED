@@ -61,6 +61,18 @@ changelog's `[Unreleased]` section lists them, and the next release carries
 them. From FerroFED 0.0.10 on, the sheet of a release is this page at that
 release's tag.
 
+Each release from 0.0.10 on carries its own copy of this sheet and of the
+[instructions for use](../operate/instructions-for-use.md): the Markdown
+source of both pages at the tag, plain text a screen reader reads, attached
+to the release on
+[the releases page](https://github.com/FerroHEALTH/FerroFED/releases) as
+`ferrofed-vX.Y.Z-information-sheet.md` and
+`ferrofed-vX.Y.Z-instructions-for-use.md`. The gateway and console images
+of the release name the download address of each copy in their labels
+`eu.ferrofed.information-sheet` and `eu.ferrofed.instructions-for-use`,
+which `docker image inspect` prints. The links inside a copy are relative
+to this book.
+
 | Release | Date |
 |---|---|
 | 0.0.9 | 2026-10-05 |

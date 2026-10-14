@@ -12,11 +12,11 @@
 # SLSA Build Level 3 lanes.
 #
 # The release is created as a DRAFT, the gateway compose files, the nginx
-# reverse proxy configuration, the conformance seed data, the binaries, SBOMs
-# and attestation bundles are attached to it, the gateway and operator
-# console images are pushed to GHCR, and only once the expected asset set is
-# complete is it PUBLISHED. Publishing last means a half-assembled release is
-# never visible.
+# reverse proxy configuration, the conformance seed data, the information
+# sheet and instructions for use, the binaries, SBOMs and attestation bundles
+# are attached to it, the gateway and operator console images are pushed to
+# GHCR, and only once the expected asset set is complete is it PUBLISHED.
+# Publishing last means a half-assembled release is never visible.
 #
 # Every tag since v0.0.1 carries the workspace (#28), so `plan` fails a tag
 # whose tree has no root Cargo.toml, because the tag cannot then be checked
@@ -246,9 +246,9 @@ jobs:
     permissions:
       contents: write # create the GitHub release
     steps:
-      # The tag's tree, for the compose files and the seed data attached
-      # below. Checked out first, because checkout cleans the workspace and
-      # would remove the notes downloaded after it.
+      # The tag's tree, for the compose files, the seed data and the book
+      # pages attached below. Checked out first, because checkout cleans the
+      # workspace and would remove the notes downloaded after it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -372,6 +372,22 @@ jobs:
             seed-data/ferrofed-conformance-seed-data.json.sha256sum \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+      # The information sheet and the instructions for use the system is
+      # accompanied by (Regulation (EU) 2025/327 Art 30(1)(d)), as the tag's
+      # Markdown, which a screen reader reads as text, named with the tag.
+      # The script refuses a sheet that does not describe this version.
+      - name: Attach the information sheet and the instructions for use
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          scripts/release/accompanying-documents.sh "$TAG" accompanying
+          gh release upload "$TAG" \
+            "accompanying/ferrofed-${TAG}-information-sheet.md" \
+            "accompanying/ferrofed-${TAG}-instructions-for-use.md" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
   # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
 
   # A call and nothing else. The isolation is what makes the provenance
@@ -475,12 +491,15 @@ jobs:
           # The release-wide assets github-release attaches: the gateway
           # compose file, the two example files it mounts, the nginx reverse
           # proxy configuration with its SHA-256, the conformance seed data
-          # with its SHA-256, and the dashboard and alert rules.
+          # with its SHA-256, the dashboard and alert rules, and the
+          # information sheet and instructions for use of this tag.
           for asset in compose.yaml ferrofed.toml registry.toml \
             ferrofed.conf ferrofed.conf.sha256sum \
             ferrofed-conformance-seed-data.json \
             ferrofed-conformance-seed-data.json.sha256sum \
-            ferrofed-dashboard.json ferrofed-alerts.yaml; do
+            ferrofed-dashboard.json ferrofed-alerts.yaml \
+            "ferrofed-${TAG}-information-sheet.md" \
+            "ferrofed-${TAG}-instructions-for-use.md"; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done
           if [ -n "$missing" ]; then

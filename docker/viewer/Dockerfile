@@ -52,7 +52,8 @@ ENTRYPOINT ["/usr/local/bin/ferrofed-viewer"]
 CMD ["serve"]
 
 # Build-independent labels only. The release lane sets the version, revision
-# and created labels at build time.
+# and created labels at build time, and eu.ferrofed.information-sheet and
+# eu.ferrofed.instructions-for-use, the URLs of the release's two copies.
 LABEL org.opencontainers.image.title="FerroFED operator console" \
       org.opencontainers.image.description="The FerroFED operator console: a web client of the gateway's public surface" \
       org.opencontainers.image.url="https://ferrofed.eu" \
