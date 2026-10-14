@@ -7,7 +7,7 @@
 //! `GET {base}/v1/ehr/{ehr_id}` under its own `ehr_id`, with no subject value
 //! in any carrier (§5.2, §5.4.1, N3, N33). Its answer passes through with the
 //! acting endpoint named (N31, §9.6). A subject several members hold is a
-//! `409` unless the targeting header names one of them (§8.4, §12.5.2), one
+//! `400` unless the targeting header names one of them (§8.4, §12.5.2, N41), one
 //! no member holds is the operation's own `404` (§11.2), and a resolver that
 //! cannot answer is a `424` (§11.2). Every assertion on what a node received
 //! reads the node's own capture (§16, track 10).
@@ -320,7 +320,7 @@ async fn a_short_subject_inside_the_registry_base_path_is_never_forwarded() -> T
 
 // conformance: CP-26
 #[tokio::test]
-async fn a_subject_several_members_hold_is_a_409_listing_them_and_asks_nobody() -> TestResult {
+async fn a_subject_several_members_hold_is_a_400_listing_them_and_asks_nobody() -> TestResult {
     let a = node(SYSTEM_A, EHR_A).await;
     let b = node(SYSTEM_B, EHR_B).await;
     let dir = tempfile::tempdir()?;
@@ -332,7 +332,9 @@ async fn a_subject_several_members_hold_is_a_409_listing_them_and_asks_nobody() 
     )?;
 
     let (status, _, text) = answer(app, get(&by_subject(), None)?).await?;
-    assert_eq!(StatusCode::CONFLICT, status, "§12.5.2: {text}");
+    // N41: no one node is yielded, so the gateway requires an explicit target with a
+    // `400`; N42 keeps `409` for an `ehr_id` two nodes claim.
+    assert_eq!(StatusCode::BAD_REQUEST, status, "§12.5.2, N41: {text}");
     let error = error_body(&text)?;
     assert_eq!("subject-several", error.code);
     assert!(

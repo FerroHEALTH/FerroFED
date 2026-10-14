@@ -179,6 +179,7 @@ impl Code {
             | Self::ParameterValueInvalid
             | Self::DefinitionEndpointTargeted
             | Self::StoredQueryFanOutUnsupported
+            | Self::SubjectSeveral
             | Self::CorrelationInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination
             | Self::NotFound
@@ -188,7 +189,6 @@ impl Code {
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
             | Self::StoredQueryReserved
-            | Self::SubjectSeveral
             | Self::EhrIdHeld => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
@@ -304,7 +304,7 @@ impl Code {
                 "the Content-Type header is not a media type the ITS-REST operation takes"
             }
             Self::SubjectSeveral => {
-                "the subject resolves at more than one member, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2)"
+                "the subject resolves at more than one member, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2, N41)"
             }
             Self::ResolutionUnavailable => {
                 "the cross-reference service could not answer, so where the subject has an EHR is unknown (§5.2, §11.2)"
@@ -528,7 +528,7 @@ mod tests {
                 Code::MediaTypeUnsupported,
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
             ),
-            (Code::SubjectSeveral, StatusCode::CONFLICT),
+            (Code::SubjectSeveral, StatusCode::BAD_REQUEST),
             (Code::ResolutionUnavailable, StatusCode::FAILED_DEPENDENCY),
             (Code::EhrIdHeld, StatusCode::CONFLICT),
             (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),

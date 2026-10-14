@@ -51,9 +51,10 @@ pub(super) enum Unserved {
         "no member holds an EHR for this subject, so the request can be routed to no destination (§11.2)"
     )]
     Nowhere,
-    /// Several candidates know the subject.
+    /// Several candidates know the subject: a `400` requiring an explicit
+    /// target (N41), never N42's `409`, which an `ehr_id` collision keeps.
     #[error(
-        "the subject resolves at endpoints {}, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2)",
+        "the subject resolves at endpoints {}, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2, N41)",
         Listed(.0)
     )]
     Several(Vec<EndpointId>),
@@ -191,10 +192,12 @@ mod tests {
             ),
             (Unserved::Suspended, "no-destination", StatusCode::NOT_FOUND),
             (Unserved::Nowhere, "no-destination", StatusCode::NOT_FOUND),
+            // NOTE: N41, N42: several holders leave no one node, a `400` requiring an
+            // explicit target, and `409` stays with an `ehr_id` two nodes claim.
             (
                 Unserved::Several(vec![endpoint("a"), endpoint("b")]),
                 "subject-several",
-                StatusCode::CONFLICT,
+                StatusCode::BAD_REQUEST,
             ),
             (
                 Unserved::Unresolved(vec![endpoint("a")]),
