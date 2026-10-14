@@ -15,8 +15,9 @@
 //! security events and the refusal reasons ([`security`]), and `limit` from
 //! the overload limits ([`nodes::Limit`]). Nothing a request carries becomes
 //! a label, so no patient identifier and no client text can reach the
-//! surface (§5.4.1, N33). Each binding adds its own instruments under the
-//! same rule ([`crate::binding::process::Instruments`]). The instruments
+//! surface (§5.4.1, N33). The audit spools are read with no label at all
+//! ([`crate::audit::metrics`]), and each binding adds its own instruments
+//! under the same rule ([`crate::binding::process::Instruments`]). The instruments
 //! fill from what the gateway already observes: each request it answers, an
 //! incident's event, the per-endpoint report of each node request, each
 //! resolver call, each security event, each refusal of a limit, and a
@@ -180,6 +181,9 @@ pub struct Metrics {
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
+    /// Kept for the life of the provider: their callbacks read the audit
+    /// spools at each collection.
+    _audit: crate::audit::metrics::Instruments,
     /// The instruments each binding records through, kept for the life of
     /// the provider.
     #[cfg_attr(
@@ -270,6 +274,7 @@ impl Metrics {
             reloads,
             _security: security,
             _incidents: incidents,
+            _audit: crate::audit::metrics::Instruments::new(&meter),
             bindings,
         })
     }

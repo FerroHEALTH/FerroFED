@@ -154,8 +154,7 @@ impl Config {
             metrics,
             signing,
             access_log: crate::access::config::resolve(&self.access_log)?,
-            #[cfg(feature = "binding-ihe")]
-            audit: crate::binding::ihe::audit::config::AuditSettings::default(),
+            audit: crate::audit::config::AuditSettings::default(),
             deprecated: self.deprecated.clone(),
         };
         // NOTE: no specification governs this: our own design; a request is an emergency
@@ -165,9 +164,16 @@ impl Config {
         {
             return Err(Error::EmergencyWithoutPurpose);
         }
+        let audit = crate::audit::config::resolve(self);
+        if let Ok(resolved) = &audit {
+            settings.audit.clone_from(resolved);
+        }
         for binding in crate::binding::compiled() {
             binding.resolve(self, &mut settings)?;
         }
+        // NOTE: no specification governs this: our own design; a binding refuses its own
+        // section before the `[audit]` its records and the access records go to.
+        audit?;
         Ok(settings)
     }
 

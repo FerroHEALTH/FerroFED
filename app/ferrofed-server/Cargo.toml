@@ -28,9 +28,15 @@ path = "src/main.rs"
 # features it keeps (#489).
 default = ["binding-ihe", "binding-nl"]
 # The IHE binding of Annex A: the PIXm resolver, the PDQm demographics step,
-# the XCPD localizer, the mCSD care services directory, the PMIR identity feed
-# and the ATNA and BALP audit trail they record through (src/binding/ihe).
-binding-ihe = ["dep:ihe-iti", "ferrofed-identity/ihe", "ehds-logging/balp"]
+# the XCPD localizer with its ITI-55 syslog audit trail, the mCSD care
+# services directory and the PMIR identity feed (src/binding/ihe). The [audit]
+# trail they and the access record write to is built without it (#697).
+binding-ihe = [
+  "ihe-iti/pixm",
+  "ihe-iti/pmir",
+  "ihe-iti/xcpd",
+  "ferrofed-identity/ihe",
+]
 # The Dutch binding of Annex B: the NVI localizer, the Mitz consent
 # pre-filter, the LRZa URAs they read, and the Nuts grant (src/binding/nl).
 binding-nl = ["dep:nl-generic-functions", "ferrofed-identity/nl", "ferrofed-engine/nl"]
@@ -53,9 +59,9 @@ aws-lc-rs.workspace = true
 axum.workspace = true
 clap.workspace = true
 # The European logging component (#623): the access record of every access
-# to patient data, its category map, and with binding-ihe the record written
-# as a BALP AuditEvent to the audit spool.
-ehds-logging.workspace = true
+# to patient data, its category map, and the record written as a BALP
+# AuditEvent to the audit spool, in every build whatever its bindings (#697).
+ehds-logging = { workspace = true, features = ["balp"] }
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
 # the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
 ferrofed-engine.workspace = true
@@ -63,14 +69,16 @@ ferrofed-engine.workspace = true
 # summary's stored section queries, held read-only under the reserved
 # namespace beside the deployment's own definitions.
 ferrofed-eehrxf.workspace = true
-ferrofed-identity.workspace = true
+# The BALP recorders the access record is written through, in every build
+# (#697); binding-ihe adds the IHE binding's adapters.
+ferrofed-identity = { workspace = true, features = ["balp"] }
 ferrofed-registry.workspace = true
-# The ITI-20 audit repository of the XCPD localizer (#418): its syslog
-# header, spool, connection and forwarder, and the PMIR
-# ITI-94 subscriber and ITI-93 feed reader of the identity feed (#147), and
-# the ITI-83 invocation each [[pixm.manager]] names (#494); part of the IHE
-# binding.
-ihe-iti = { workspace = true, optional = true, features = ["atna", "balp", "pixm", "pmir", "xcpd"] }
+# The ITI-20 audit spool and forwarder the access record and every IHE
+# transaction's record are delivered through, in every build (#697); with
+# binding-ihe also the XCPD localizer's syslog header and connection (#418),
+# the PMIR ITI-94 subscriber and ITI-93 feed reader of the identity feed
+# (#147), and the ITI-83 invocation each [[pixm.manager]] names (#494).
+ihe-iti = { workspace = true, features = ["atna", "balp"] }
 # The Nuts grant of an endpoint's onward credentials, Annex B §B.4 (#88),
 # built from the configuration, and the BSN naming systems the NVI and Mitz
 # configuration is checked against (GF-Identification, behind `nvi`); part of

@@ -218,15 +218,14 @@ pub enum FederationError {
     #[error("the [pdqm] demographics step cannot be enabled")]
     #[cfg(feature = "binding-ihe")]
     Pdqm(#[source] PdqmConfigError),
-    /// The audit trail of the PIXm, mCSD and PMIR transactions cannot start
-    /// (`[audit]`).
+    /// The `[audit]` trail the access records and the IHE binding's BALP
+    /// records go through cannot start.
     #[error("the [audit] trail cannot start")]
-    #[cfg(feature = "binding-ihe")]
-    Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
-    /// No binding of this build records accesses, which every profile but
-    /// development requires (Regulation (EU) 2025/327 Annex II 3.2).
+    Audit(#[source] crate::audit::AuditTrailError),
+    /// `[audit]` sends the access records nowhere, which every profile but
+    /// development refuses (Regulation (EU) 2025/327 Annex II 3.2).
     #[error(
-        "no access log: every access to patient data is recorded outside the development profile, and no binding of this build records it; build with binding-ihe and set [audit]"
+        "no access log: every access to patient data is recorded outside the development profile; set [audit] destination = \"repository\""
     )]
     AccessLogUnavailable,
     /// `[access_log.retention.origins]` names an endpoint the registry does

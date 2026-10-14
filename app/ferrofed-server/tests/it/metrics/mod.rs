@@ -180,7 +180,6 @@ pub(crate) fn count(samples: &[Sample], name: &str, labels: &[(&str, &str)]) -> 
 /// Fails unless `exposition` holds a sample of the family `family` whose
 /// labels include every pair of `labels`: proof that a check reading
 /// `exposition` reads the registry the request under test recorded into.
-#[cfg(feature = "binding-ihe")]
 pub(crate) fn holds_series(
     exposition: &str,
     family: &str,

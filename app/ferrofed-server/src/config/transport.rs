@@ -326,6 +326,7 @@ pub fn check(
     for (url, site) in credential_sites(settings, registry) {
         cleartext.extend(protected_payload(profile, &url, site)?);
     }
+    cleartext.extend(crate::audit::sites(settings)?);
     for binding in crate::binding::compiled() {
         cleartext.extend(binding.sites(settings)?);
     }

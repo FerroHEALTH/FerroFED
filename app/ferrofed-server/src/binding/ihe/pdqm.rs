@@ -44,7 +44,7 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
-use crate::binding::ihe::audit::config::AuditSettings;
+use crate::audit::config::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::service_grant::{ServiceContext, resolve_service};
@@ -249,7 +249,7 @@ pub(super) fn step(
     .map_err(FederationError::Pdqm)?;
     // NOTE: PDQm §2:3.78.5.1 and §2:3.119.5.1.1: each exchange is audited, and one
     // whose record is refused fails, so the patient's resolution fails closed.
-    let step = match super::audit::recorder(audit).map_err(FederationError::Audit)? {
+    let step = match crate::audit::recorder(audit).map_err(FederationError::Audit)? {
         Some(recorder) => step.audited(&recorder),
         None => step,
     };

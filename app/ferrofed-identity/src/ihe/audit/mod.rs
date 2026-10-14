@@ -7,6 +7,7 @@
 //! BALP `AuditEvent` of the FHIR profiles over the FHIR Feed of ITI-20 or to
 //! the log ([`balp`]).
 
+#[cfg(feature = "ihe")]
 pub mod atna;
 pub mod balp;
 

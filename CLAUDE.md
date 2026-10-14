@@ -230,7 +230,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   the seams and `PatientRef`; `ihe/`, behind feature `ihe`, the PIXm
   resolver and localizer, the PDQm demographics step, the XCPD localizer,
   the PMIR identity feed, the mCSD directory and the audit recorders over
-  `ihe-iti`; `nl/`, behind feature `nl`, the NVI localizer and the Mitz
+  `ihe-iti`, whose BALP recorder alone builds under feature `balp`, which
+  `ihe` implies and the server always enables (#697); `nl/`, behind feature `nl`, the NVI localizer and the Mitz
   pre-filter over `nl-generic-functions`; and at the top `session`, the
   resolution bindings per verified caller, `fhir`, the one IHE FHIR client
   and TLS type, and `dev`, the development cross-reference),

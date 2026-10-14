@@ -530,9 +530,8 @@ pub enum Error {
     },
     /// `[audit] destination = "off"` outside development.
     #[error(
-        "{key} = \"off\" records no PIXm, mCSD or PMIR audit record, which only profile = \"development\" accepts; set it to \"log\" or \"repository\" (PIXm §2:3.83.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1)"
+        "{key} = \"off\" records no access and no IHE transaction, which only profile = \"development\" accepts; set it to \"log\" or \"repository\" (Regulation (EU) 2025/327 Annex II 3.2; PIXm §2:3.83.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1)"
     )]
-    #[cfg(feature = "binding-ihe")]
     FeedAuditOff {
         /// The key that turned the audit off.
         key: String,
@@ -542,7 +541,6 @@ pub enum Error {
     #[error(
         "{key} = \"log\" records no caller and no patient, so the access log of a gateway with a registry needs \"repository\" outside profile = \"development\" (Regulation (EU) 2025/327 Annex II 3.2)"
     )]
-    #[cfg(feature = "binding-ihe")]
     AccessAuditLog {
         /// The key that sent the access log to the log target.
         key: String,
@@ -551,7 +549,6 @@ pub enum Error {
     #[error(
         "[audit.repository] applies only under audit.destination = \"repository\"; remove it, or send the audit records there"
     )]
-    #[cfg(feature = "binding-ihe")]
     FeedAuditRepositoryUnused,
     /// `[xcpd.audit_repository]` is set while the audit messages go
     /// elsewhere.

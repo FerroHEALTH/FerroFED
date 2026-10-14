@@ -42,6 +42,7 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
+use crate::audit::AuditDestination;
 use crate::binding::ihe::audit::repository::{AuditRepository, AuditRepositorySettings};
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::{Indicator, LocalizerSeam};
@@ -89,33 +90,6 @@ pub struct Xcpd {
     pub audit: Option<AuditDestination>,
     /// The ATNA Audit Record Repository, under `audit = "repository"`.
     pub audit_repository: Option<AuditRepository>,
-}
-
-/// Where the ITI-55 audit messages go (ITI TF-2 §3.55.5.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AuditDestination {
-    /// The DICOM audit message, sent over ITI-20 to the ATNA Audit Record
-    /// Repository `[xcpd.audit_repository]` names.
-    Repository,
-    /// A structured event at the `ferrofed::audit` log target, without the
-    /// query parameters, for a deployment that routes its log to its audit
-    /// repository.
-    Log,
-    /// No audit message: development only.
-    Off,
-}
-
-impl AuditDestination {
-    /// The value as the configuration and `OPTIONS {base}/` spell it.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Repository => "repository",
-            Self::Log => "log",
-            Self::Off => "off",
-        }
-    }
 }
 
 /// One responding gateway.

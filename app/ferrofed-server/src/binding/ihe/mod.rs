@@ -6,11 +6,11 @@
 //! It holds the PIXm resolver (`[pixm]`, Annex A.1), the PDQm demographics
 //! step (`[pdqm]`, §A.2), the XCPD localizer (`[xcpd]`, Annex A.3), the PMIR
 //! identity feed (`[pmir]`, Annex A.4), the mCSD care services directory
-//! (`[registry.mcsd]`, Annex A.5), and the ATNA and BALP audit trail every
-//! one of them records through (`[audit]`, `[xcpd.audit_repository]`).
+//! (`[registry.mcsd]`, Annex A.5), and the XCPD localizer's ITI-55 syslog
+//! audit trail (`[xcpd.audit_repository]`). The others record through the
+//! `[audit]` trail every build carries ([`crate::audit`]).
 //!
-//! The profiles are one binding: they share one audit spool and forwarder,
-//! the PMIR feed is scoped by the domains `[pixm]` maps, and the PDQm step is
+//! The profiles are one binding: the PMIR feed is scoped by the domains `[pixm]` maps, and the PDQm step is
 //! refused for a namespace `[pixm.namespaces]` maps. No specification governs
 //! the grouping: our own design.
 
@@ -25,8 +25,6 @@ pub mod xcpd;
 
 use std::sync::Arc;
 
-use ehds_logging::balp::BalpSink;
-use ehds_logging::sink::AccessSink;
 use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 use ferrofed_identity::ihe::mcsd::source::DirectoryReadError;
 use ferrofed_identity::role::localizer::Localizer;
@@ -34,7 +32,7 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
-use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
+use crate::binding::seam::{LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::Config;
 use crate::config::error::Error;
@@ -79,10 +77,6 @@ const SECTIONS: &[Section] = &[
         reload: Reload::Restart,
     },
     Section {
-        key: "audit",
-        reload: Reload::Restart,
-    },
-    Section {
         key: "pmir",
         reload: Reload::Restart,
     },
@@ -95,6 +89,13 @@ impl Binding for Ihe {
 
     fn sections(&self) -> &'static [Section] {
         SECTIONS
+    }
+
+    fn audits(&self, config: &Config) -> bool {
+        config.pixm.is_some()
+            || config.pdqm.is_some()
+            || config.pmir.is_some()
+            || config.registry.mcsd.is_some()
     }
 
     fn resolve(&self, config: &Config, settings: &mut Settings) -> Result<(), Error> {
@@ -113,7 +114,6 @@ impl Binding for Ihe {
             let route = settings.server.base_path.join(&pmir.path);
             crate::config::fhir::apart(fhir, &route, "pmir.path")?;
         }
-        let audit = audit::config::resolve(config)?;
         if config.registry.document.is_some() && config.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
         }
@@ -121,22 +121,16 @@ impl Binding for Ihe {
             .registry
             .mcsd
             .as_ref()
-            .map(|directory| mcsd::resolve(directory, &ServiceContext::of(settings), audit.clone()))
+            .map(|directory| {
+                mcsd::resolve(
+                    directory,
+                    &ServiceContext::of(settings),
+                    settings.audit.clone(),
+                )
+            })
             .transpose()?;
-        settings.audit = audit;
         settings.pdqm = pdqm::resolve(config, &ServiceContext::of(settings))?;
         Ok(())
-    }
-
-    fn access_sink(
-        &self,
-        settings: &Settings,
-    ) -> Result<Option<Arc<dyn AccessSink>>, FederationError> {
-        let Some(recorder) = audit::recorder(&settings.audit).map_err(FederationError::Audit)?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(Arc::new(BalpSink::new(recorder, gateway(settings)))))
     }
 
     fn budgets(&self, config: &Config) -> StepBudgets {
@@ -226,14 +220,6 @@ impl Binding for Ihe {
             .transpose()
     }
 
-    fn indicators(&self, settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, FederationError> {
-        let feed = audit::feed(&settings.audit).map_err(FederationError::Audit)?;
-        Ok(feed
-            .into_iter()
-            .map(|trail| -> Arc<dyn Indicator> { Arc::new(audit::FeedTrail(trail)) })
-            .collect())
-    }
-
     fn read_registry(
         &self,
         settings: &Settings,
@@ -303,18 +289,6 @@ impl Binding for Ihe {
         {
             hold(directory.url.expose(), mcsd::site())?;
         }
-        if let Some(repository) = &settings.audit.repository {
-            hold(
-                repository.url.as_str(),
-                ProtectedSite {
-                    url_key: String::from("audit.repository.url"),
-                    payload: String::from(
-                        "the PIXm, PDQm, mCSD and PMIR audit records, which name the patient",
-                    ),
-                    requires: transport::Encryption::Https,
-                },
-            )?;
-        }
         for (url, site) in token_endpoints(settings) {
             hold(&url, site)?;
         }
@@ -333,7 +307,6 @@ impl Binding for Ihe {
         // NOTE: no specification governs this: our own design; the identity feed
         // outlives every federation a reload builds, so a change to it takes a restart.
         fresh.pmir = None;
-        fresh.audit.clone_from(&boot.audit);
     }
 
     fn needs_restart(&self, boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
@@ -356,7 +329,6 @@ impl Binding for Ihe {
         [
             ("registry.mcsd", directory),
             ("xcpd.audit", xcpd_audit),
-            ("audit", boot.audit != fresh.audit),
             ("pmir", pmir),
         ]
         .into_iter()
@@ -373,7 +345,6 @@ impl Binding for Ihe {
             FederationError::PdqmWithoutResolver
             | FederationError::PdqmNamespace(_)
             | FederationError::Pdqm(_) => Some("pdqm"),
-            FederationError::Audit(_) => Some("audit"),
             FederationError::FhirRegistry { source, .. } => Some(match **source {
                 FhirFormError::Read { .. } => "registry-unreadable",
                 _ => "registry-invalid",
@@ -395,15 +366,7 @@ impl Binding for Ihe {
             xcpd.audit_repository
                 .as_ref()
                 .is_some_and(|repository| repository.spool_dir.is_none())
-        }) || settings
-            .audit
-            .repository
-            .as_ref()
-            .is_some_and(|repository| repository.spool_dir.is_none())
-    }
-
-    fn check_scope(&self) -> Option<Box<dyn std::fmt::Debug>> {
-        Some(Box::new(audit::Checking::enter()))
+        })
     }
 
     fn log_summary(&self, settings: &Settings) {
@@ -421,27 +384,6 @@ impl Binding for Ihe {
             "binding configured"
         );
     }
-}
-
-/// The URL the access records name the gateway by: the audience its callers'
-/// tokens name it by, when that is a URL, and its listen address otherwise.
-#[expect(
-    clippy::expect_used,
-    reason = "a socket address is an IP address, bracketed when IPv6, and a port, which always forms an http URL"
-)]
-fn gateway(settings: &Settings) -> url::Url {
-    settings
-        .server
-        .auth
-        .audience
-        .as_deref()
-        // NOTE: RFC 7519 §4.1.3: an audience is any string, so one that is no URL is
-        // legitimately not one, and the listen address names the gateway instead.
-        .and_then(|audience| url::Url::parse(audience).ok())
-        .unwrap_or_else(|| {
-            url::Url::parse(&format!("http://{}/", settings.server.listen))
-                .expect("a socket address should form an http URL")
-        })
 }
 
 /// The token endpoint of every IHE FHIR service whose credentials are a

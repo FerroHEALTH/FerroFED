@@ -33,6 +33,10 @@
 //! localization, demographics and the consent pre-filter, and the processes
 //! that outlive a reload.
 //!
+//! [`access`] records every access to patient data, through the `[audit]`
+//! trail every build carries ([`audit`]; Regulation (EU) 2025/327 Annex II
+//! 3.2), whatever the bindings compiled in.
+//!
 //! [`admission`] is the `admission check` job: one member exercised against
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 //! [`conformance`] is the `conformance run` job: the Connectathon tracks of
@@ -59,6 +63,7 @@ compile_error!(
 pub mod access;
 pub mod admin;
 pub mod admission;
+pub mod audit;
 pub mod auth;
 pub mod banner;
 pub mod base_path;

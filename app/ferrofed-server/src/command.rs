@@ -215,9 +215,10 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
             )
             .with_cleartext(cleartext.as_deref())
             .with_audit_spool_in_memory(
-                binding::compiled()
-                    .iter()
-                    .any(|binding| binding.spools_in_memory(&settings)),
+                crate::audit::spools_in_memory(&settings.audit)
+                    || binding::compiled()
+                        .iter()
+                        .any(|binding| binding.spools_in_memory(&settings)),
             ),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );

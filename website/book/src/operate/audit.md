@@ -10,9 +10,11 @@ Audit Event. Two configurations decide where the records go:
 - `[xcpd] audit` and `[xcpd.audit_repository]` for the XCPD localizer's
   ITI-55 exchanges, which XCPD audits as a DICOM audit message over syslog
   ([The audit repository](localization.md#the-audit-repository));
-- `[audit]` for the PIXm, PDQm, mCSD and PMIR transactions, which each profile
-  audits as a FHIR `AuditEvent` built on the IHE Basic Audit Log Patterns
-  (BALP). BALP has the gateway send it over the ATX: FHIR Feed Option of
+- `[audit]` for the PIXm, PDQm, mCSD and PMIR transactions, which each
+  profile audits as a FHIR `AuditEvent` built on the IHE Basic Audit Log
+  Patterns (BALP), and for the access records ([The access
+  log](#the-access-log)), which every build writes whatever its bindings.
+  BALP has the gateway send it over the ATX: FHIR Feed Option of
   ITI-20: a FHIR `create` at the repository's FHIR base (the RESTful ATNA
   supplement, ITI TF-2 §3.20.4.2).
 
@@ -609,9 +611,9 @@ trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
   registry is configured, or `[pixm]`, `[pdqm]` or `[pmir]` is set, since
   every access to patient data is recorded: `config check`, `serve` and a
   reload refuse the configuration without it, naming `audit.destination`.
-  A build without the IHE binding records no access, and refuses a
-  registry outside development. `off` is refused outside development; under
-  development an unset `destination` records nothing.
+  Every build records accesses here, with either binding or none. `off` is
+  refused outside development; under development an unset `destination`
+  records nothing.
 - `log` writes each record as a structured event at the `ferrofed::audit`
   log target: the profile, the subtypes, the action, the outcome, the other
   party, and how many patient, query and resource entities the record

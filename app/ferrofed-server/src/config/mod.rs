@@ -125,10 +125,9 @@ pub struct Config {
     /// The category map every access record is classified with
     /// (`[access_log]`, #623).
     pub access_log: crate::access::config::AccessLog,
-    /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go
-    /// (`[audit]`, #486).
-    #[cfg(feature = "binding-ihe")]
-    pub audit: crate::binding::ihe::audit::config::Audit,
+    /// Where the access records and the IHE binding's BALP records go
+    /// (`[audit]`, #486, #697).
+    pub audit: crate::audit::config::Audit,
     /// The deprecated keys the configuration set, already read under their
     /// new names; never read from the file itself.
     #[serde(skip)]
@@ -161,8 +160,7 @@ impl Default for Config {
             signing: None,
             auth: auth::Auth::default(),
             access_log: crate::access::config::AccessLog::default(),
-            #[cfg(feature = "binding-ihe")]
-            audit: crate::binding::ihe::audit::config::Audit::default(),
+            audit: crate::audit::config::Audit::default(),
             deprecated: Vec::new(),
         }
     }

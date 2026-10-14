@@ -283,15 +283,15 @@ impl Federation {
 }
 
 /// The access log `settings` describe: the category map and the retention,
-/// over the first sink a compiled binding builds; `None` under development
-/// with no sink.
+/// over the `[audit]` trail every build carries; `None` under development
+/// with the records off.
 ///
 /// # Errors
 ///
 /// [`FederationError::RetentionEndpointUnknown`] for a retention origin
-/// `snapshot` does not hold, a binding's [`FederationError`] for a sink it cannot build, and
-/// [`FederationError::AccessLogUnavailable`] outside development when no
-/// binding of this build records accesses (Regulation (EU) 2025/327 Annex II
+/// `snapshot` does not hold, [`FederationError::Audit`] for a trail that
+/// cannot start, and [`FederationError::AccessLogUnavailable`] outside
+/// development when the records go nowhere (Regulation (EU) 2025/327 Annex II
 /// 3.2).
 fn access_log(
     settings: &Settings,
@@ -307,15 +307,15 @@ fn access_log(
             endpoint: endpoint.to_owned(),
         });
     }
-    for binding in binding::compiled() {
-        if let Some(sink) = binding.access_sink(settings)? {
-            return Ok(Some(
-                AccessLog::new(settings.access_log.map.clone(), sink)
-                    .with_retention(retention.clone())
-                    .with_emergency(settings.access_log.emergency.clone())
-                    .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
-            ));
-        }
+    // NOTE: no specification governs this: our own design; the access record is due from every
+    // deployment, so its sink is the `[audit]` trail every build carries, never a binding's.
+    if let Some(sink) = crate::audit::access_sink(settings).map_err(FederationError::Audit)? {
+        return Ok(Some(
+            AccessLog::new(settings.access_log.map.clone(), sink)
+                .with_retention(retention.clone())
+                .with_emergency(settings.access_log.emergency.clone())
+                .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
+        ));
     }
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2 asks for a record of every access, so a
     // gateway that intermediates patient data records none only under development.
@@ -485,6 +485,7 @@ fn dependencies(
     localization: &LocalizationPolicy,
 ) -> Result<Dependencies, FederationError> {
     let mut indicators = localization.indicators().to_vec();
+    indicators.extend(crate::audit::indicators(&settings.audit).map_err(FederationError::Audit)?);
     indicators.extend(binding::indicators(settings)?);
     Ok(
         Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver)

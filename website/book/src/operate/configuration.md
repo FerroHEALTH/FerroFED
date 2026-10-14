@@ -178,13 +178,17 @@ each binding is one Cargo feature of the `ferrofed-server` crate:
 | Feature | Binding | Sections |
 |---|---|---|
 | always built | development | `[dev]` |
-| `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, `[audit]`, and `registry.format = "fhir"`, which reads the document with the mCSD reader |
+| always built | the access log, no binding | `[access_log]`, `[audit]` |
+| `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, and `registry.format = "fhir"`, which reads the document with the mCSD reader |
 | `binding-nl` | Dutch Generic Functions, Annex B | `[nl_gf]` (`[nl_gf.nvi]`, `[nl_gf.mitz]`), `[credentials."<id>".nuts]` |
 
 Both features are on by default, so the released binary and the container
 image carry every binding. A build without one, such as
 `cargo build -p ferrofed-server --no-default-features --features binding-ihe`,
-refuses that binding's sections as unknown keys.
+refuses that binding's sections as unknown keys. The access record needs no
+binding: every build writes it through `[audit]` ([The audit
+trail](audit.md)), so a build with either binding, or none, runs a registry
+outside development.
 
 ```toml
 [server]

@@ -32,6 +32,7 @@ use super::{
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, settings_with_room};
 use crate::feed_audit::SETTLE;
+#[cfg(feature = "binding-ihe")]
 use crate::request_log::logged;
 use crate::support::call;
 
@@ -230,6 +231,7 @@ async fn with_no_namespace_configured_the_record_says_so() -> TestResult {
 }
 
 /// A PIX Manager that fails every ITI-83 with `500`.
+#[cfg(feature = "binding-ihe")]
 async fn failing_manager() -> Server {
     let server = Server::start().await;
     Mock::given(method("GET"))
@@ -243,6 +245,7 @@ async fn failing_manager() -> Server {
 }
 
 /// The `[pixm]` binding over the Manager at `pix`.
+#[cfg(feature = "binding-ihe")]
 fn pixm(pix: &Server) -> String {
     format!(
         "\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
@@ -253,6 +256,7 @@ fn pixm(pix: &Server) -> String {
 
 /// The identity service failing does not drop the access: the read is
 /// answered and recorded, the record saying the patient is unavailable.
+#[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn an_identity_service_that_fails_leaves_the_patient_unavailable() -> TestResult {
     let pix = failing_manager().await;
@@ -266,6 +270,7 @@ async fn an_identity_service_that_fails_leaves_the_patient_unavailable() -> Test
 
 /// §5.4, N33: neither the patient found nor a failure names the patient in
 /// a log line.
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn naming_the_patient_writes_no_identifier_to_the_log() -> TestResult {
     let runtime = tokio::runtime::Builder::new_current_thread()
