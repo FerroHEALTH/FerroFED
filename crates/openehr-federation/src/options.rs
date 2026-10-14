@@ -42,7 +42,7 @@ impl SpecVersion {
         }
     }
 
-    /// The `major.minor` of a release version such as `0.9.0`.
+    /// The `major.minor` of a release version such as `1.0.0`.
     ///
     /// # Errors
     ///

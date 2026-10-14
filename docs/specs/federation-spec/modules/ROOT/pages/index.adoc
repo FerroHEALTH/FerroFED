@@ -8,7 +8,7 @@
 [NOTE]
 .Editorial note
 ====
-This is a working draft circulated for comment. A companion note, xref:changes-from-2025-08-20.adoc[Changes from the 2025-08-20 proposal], records what changed since then. This document stands on its own as a specification and does not otherwise narrate that history.
+This specification was approved by the openEHR Specifications Editorial Committee (SEC) at its meeting of 2026-10-12 and is published as release 1.0.0. Comments remain welcome and are taken up in a later release.
 ====
 
 == Referenced documents
@@ -20,7 +20,7 @@ The following documents and sources informed several design decisions here.
 | Document | Role in the specification
 
 | _Proposal for Federation Tier with AQL_, openEHR Federation WG, 2025-08-20
-| The proposal this revision builds on. Differences are catalogued in xref:changes-from-2025-08-20.adoc[_Changes from the 2025-08-20 proposal_].
+| The proposal this revision builds on and supersedes.
 
 | HL7 https://confluence.hl7.org/spaces/FHIR/pages/144967060/Intermediaries+White+Paper[_Intermediaries White Paper_]
 | Façade transparency; the four follow-up-routing approaches; de-duplication provenance; unresponsive-server handling; auth conveyance; numbered Conformance Points.

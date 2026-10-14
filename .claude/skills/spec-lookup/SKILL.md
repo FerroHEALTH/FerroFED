@@ -76,5 +76,5 @@ section (for the federation specification: `§11.4`, `N39`, `CP-22`; and the
 schema path where the machine-readable form carries it). If the sources are
 silent, say so explicitly and name the behaviour you would match; flag it as a
 spec-silent decision to record on the tracker, never as a spec fact. If the
-answer depends on the pin (the specification is a release candidate until its
-1.0), say which pin it was read at.
+answer depends on the pin (today the 1.0.0 release, tag `1.0.0`), say which
+pin it was read at.

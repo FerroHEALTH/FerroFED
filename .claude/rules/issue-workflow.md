@@ -159,7 +159,8 @@ Each report, and each numbered item of a comment that bundles several, says:
   a report. A bundle whose items go to different upstreams names it per item.
 - **Form:** an issue (a question, objection or silence) or a pull request (a
   concrete text change).
-- **Against:** the pinned version and commit (today v0.9.0, `7162d0c`).
+- **Against:** the pinned version and commit (today 1.0.0, tag `1.0.0`,
+  commit `7dcf0f4`).
 - **Citations** in the upstream's own form. For the Federation Tier
   specification (its `CONTRIBUTING.md`, "How to reference the spec"):
   sections by § number, requirements as **N7**, conformance points as

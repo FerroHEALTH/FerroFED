@@ -15,9 +15,9 @@
 <!-- badges:end -->
 
 <!-- conformance:begin -->
-[![Federation Tier 0.9.0 gateway points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-gateway.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
-[![Federation Tier 0.9.0 node points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-node.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
-[![Federation Tier 0.9.0 operator points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-operator.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
+[![Federation Tier 1.0.0 gateway points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-gateway.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
+[![Federation Tier 1.0.0 node points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-node.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
+[![Federation Tier 1.0.0 operator points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-operator.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
 [![AQL golden cases](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Faql-golden.json)](conformance/aql-golden/pass-list.txt)
 <!-- conformance:end -->
 
@@ -105,7 +105,7 @@ know before you deploy it.
 
 - The openEHR Federation Working Group's
   [Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
-  specification, release candidate v0.9.0 at commit `7162d0c`. The
+  specification, release 1.0.0 (tag `1.0.0`, commit `7dcf0f4`). The
   [conformance statement](https://ferrofed.eu/docs/evaluate/conformance-statement.html)
   claims its Federation-Gateway profile, point by point; the
   [conformance matrix](https://ferrofed.eu/docs/evaluate/conformance.html)

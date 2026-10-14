@@ -57,7 +57,6 @@ readonly MAX_TAG_PAGES=200
 # corpus pinned by commit on a repository that publishes no releases, read
 # against the newest commit of the branch the pin follows.
 readonly WATCHED_COMMITS="\
-Federation Tier with AQL specification	syntaric/openehr-federation-spec	main
 Federation Tier reference implementation	syntaric/openehr-federation-ref	main
 Nuts specifications	nuts-foundation/nuts-specification	master
 did:web Method Specification	w3c-ccg/did-method-web	main
@@ -68,7 +67,8 @@ DIF Claim Format Registry	decentralized-identity/claim-format-registry	main"
 # per line: a corpus pinned by a release tag, read against the newest tag of
 # the same shape, the prefix (`-` for none) and a dotted version. The
 # openEHR specification repositories, the IHE IUA supplement and the Dutch
-# Generic Functions IG tag each release and publish no GitHub release. A
+# Generic Functions IG tag each release and publish no GitHub release, and
+# the Federation Tier with AQL specification tags each release. A
 # held corpus is pinned at the release another pin binds (the hold says
 # which), so a newer release of it is printed and is not a stale pin.
 readonly WATCHED_TAGS="\
@@ -77,6 +77,7 @@ openEHR AQL specification source	openEHR/specifications-QUERY	Release-	-
 openEHR Reference Model specification source	openEHR/specifications-RM	Release-	-
 openEHR BASE specification source	openEHR/specifications-BASE	Release-	the release paired with the pinned Reference Model release
 IHE IUA supplement	IHE/ITI.IUA	-	-
+Federation Tier with AQL specification	syntaric/openehr-federation-spec	-	-
 Netherlands Generic Functions IG source	nuts-foundation/nl-generic-functions-ig	v	-"
 
 # One "matrix label<TAB>package<TAB>hold" record per line: a FHIR package, or

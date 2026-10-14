@@ -106,24 +106,49 @@ fn a_body_built_from_the_constructors_validates() {
 #[test]
 fn spec_version_is_major_minor() {
     assert_eq!(
-        SpecVersion::of_release("0.9.0")
+        SpecVersion::of_release("1.0.0")
             .expect("a release")
             .as_str(),
-        "0.9",
-        "§7a.2: 0.9.0 reports 0.9"
+        "1.0",
+        "§7a.2: 1.0.0 reports 1.0"
     );
-    assert!(SpecVersion::new("0.9").is_ok(), "major.minor");
-    for refused in ["0.9.0", "0", "0.", ".9", "v0.9", "0.9-rc", ""] {
+    assert_eq!(
+        SpecVersion::of_release("1.0.1")
+            .expect("a release")
+            .as_str(),
+        "1.0",
+        "§7a.2: a patch release still reports 1.0"
+    );
+    assert_eq!(
+        SpecVersion::of_release(openehr_federation::FEDERATION_SPEC)
+            .expect("the pinned release")
+            .as_str(),
+        "1.0",
+        "§7a.2: a gateway implementing 1.0.0 reports 1.0"
+    );
+    assert!(SpecVersion::new("1.0").is_ok(), "major.minor");
+    for refused in ["1.0.0", "0.9.0", "0", "0.", ".9", "v0.9", "0.9-rc", ""] {
         assert!(
             matches!(SpecVersion::new(refused), Err(WireError::SpecVersion)),
             "`{refused}` is not major.minor"
         );
     }
     let text =
-        support::with(&options_example(), "/federation/spec_version", r#""0.9.0""#).expect("edit");
+        support::with(&options_example(), "/federation/spec_version", r#""1.0.0""#).expect("edit");
     assert!(
         refused(&text).contains("spec_version"),
         "the reader refuses a patch component"
+    );
+}
+
+#[test]
+fn the_specification_example_reports_the_pinned_release() {
+    let example: OptionsRoot =
+        serde_json::from_str(&options_example()).expect("the §7a.2 example reads");
+    assert_eq!(
+        example.federation.spec_version,
+        SpecVersion::of_release(openehr_federation::FEDERATION_SPEC).expect("the pinned release"),
+        "§7a.2: the vendored example and the pinned release name the same major.minor"
     );
 }
 

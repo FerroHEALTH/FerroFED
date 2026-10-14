@@ -5,9 +5,12 @@
 #
 # Vendors the source of the Federation Tier with AQL specification into
 # docs/specs/federation-spec/: the whole
-# repository tree at the commit the "Federation Tier with AQL specification"
-# row of docs/VERSIONS.md pins, minus the upstream's npm manifests for its
-# Antora build, which provenance lists with their sha256.
+# repository tree at the release tag the "Federation Tier with AQL
+# specification" row of docs/VERSIONS.md pins, minus the upstream's npm
+# manifests for its Antora build, which provenance lists with their sha256.
+#
+# The row pins the tag and the commit it resolved to; the script fails when
+# the tag has moved.
 #
 # The tree carries the normative AsciiDoc pages (the N# requirements and the
 # CP# conformance points), the two published JSON schemas
@@ -39,13 +42,17 @@ schemas=(
 
 pin="$(corpus_pin_cell "Federation Tier with AQL specification")"
 repo="$(corpus_pin_repo "$pin")"
-commit="$(corpus_pin_commit "$pin")"
+tag="$(corpus_pin_tag "$pin")"
+want="$(corpus_pin_commit "$pin")"
 matrix_version="$(corpus_pin_cell "Federation Tier with AQL")"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-say "$repo at $commit"
+commit="$(corpus_resolve_tag "$repo" "$tag")"
+[ "$commit" = "$want" ] || die "tag $tag of $repo resolves to $commit, the pin records $want"
+
+say "$repo tag $tag resolves to $commit"
 tree_root="$(corpus_fetch "$repo" "$commit" "$tmp")"
 [ -f "$tree_root/LICENSE" ] || die "the archive has no LICENSE"
 grep -q 'CC0 1.0 Universal' "$tree_root/LICENSE" || die "the LICENSE is not CC0 1.0 Universal"
@@ -91,7 +98,7 @@ below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
 the script.
 
 - Source: <https://github.com/$repo>
-- Pin: commit \`$commit\`
+- Pin: tag \`$tag\`, which resolves to commit \`$commit\`
 - Declared version: \`spec-version: '$spec_version'\`, status
   \`$spec_status\`, dated \`$spec_date\` (\`antora.yml\`)
 - Fetched: $fetched
@@ -105,8 +112,8 @@ the script.
 
 ## What is here
 
-- \`modules/ROOT/pages/\`: the normative body (§1 to §18), the two annexes
-  (A, the IHE binding; B, the Dutch Generic Functions) and the change record.
+- \`modules/ROOT/pages/\`: the normative body (§1 to §18) and the two
+  annexes (A, the IHE binding; B, the Dutch Generic Functions).
   The N# requirements are in \`requirements.adoc\` and the CP# conformance
   points in \`conformance.adoc\`.
 - \`modules/ROOT/attachments/\`: the two published JSON schemas.
@@ -133,11 +140,8 @@ $dropped
 
 ## The version
 
-The pinned commit is past the \`0.9.0\` git tag. It carries the SEC review
-amendments of 2026-09-28 (the \`meta.federation\` nesting, all-or-nothing as
-the default completion strategy, the \`node-error\` endpoint status), which
-change the wire contract while the document still declares
-\`spec-version: '$spec_version'\`. The 1.0 release replaces this pin.
+The pin is the \`$tag\` release tag, and the document at it declares
+\`spec-version: '$spec_version'\` with status \`$spec_status\`.
 PROV
 
 say "$files files, $pages pages, tree digest $digest"

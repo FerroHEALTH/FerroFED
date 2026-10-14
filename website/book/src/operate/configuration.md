@@ -90,7 +90,7 @@ source and run on a terminal with the development configuration of
   Manufactured by Cadasto B.V. · info@cadasto.com
   Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands
 
-  Federation Tier  0.9.0
+  Federation Tier  1.0.0
   ITS-REST         1.1.0
   AQL              1.1.0
   openehr-*        0.0.84

@@ -22,5 +22,5 @@ compare every `[workspace.dependencies]` pin with crates.io
 `openehr-*` set the workspace takes, and read the split or bump commit for the
 module moves. Land the family together with its pin rows, the lock and
 `deny.toml`. Check the vendored corpora against their upstream heads at the
-same time; the Federation Tier specification moves fast while it is a release
-candidate ([[spec-pin-0-9-0-rc]]).
+same time; the Federation Tier specification is pinned by release tag, so a
+newer tag is a re-pin of its own ([[spec-pin-1-0-0]]).

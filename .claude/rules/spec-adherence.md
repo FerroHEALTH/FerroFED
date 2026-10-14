@@ -181,12 +181,13 @@ so.
 - Subagents doing spec-facing work must be handed the relevant sections, N and
   CP numbers or URLs in their prompt, and reviewers verify claims against them.
 
-## The specification is a release candidate
+## Re-pinning the specification
 
-The pinned release is a candidate circulated for comment, and the 1.0 release
-follows. A re-pin is a deliberate act, not a refresh: re-run the vendor
-script at the new pin, read the specification's own change notes, diff every
-N and CP this repository cites, and update the tests, the issues and
+The pin is the 1.0.0 release, approved by the openEHR SEC on 2026-10-12, and
+a later release replaces it by tag. A re-pin is a deliberate act, not a
+refresh: re-run the vendor script at the new pin, diff the vendored pages
+(the release carries no change record page of its own), diff every N and CP
+this repository cites, and update the tests, the issues and
 `docs/architecture.md` in the same change. A requirement that moved or
 disappeared is never left cited at its old number.
 

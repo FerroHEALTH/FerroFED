@@ -8,12 +8,13 @@ a regional alternative), and each node then receives **standard, non-federated A
 scoped to its resolved `ehr_id`. The gateway is a transparent façade: a client never
 needs federation-specific syntax to run a basic patient query.
 
-> **Status: release candidate, v0.9.0.** The specification has been validated by a
-> working [reference implementation](https://github.com/syntaric/openehr-federation-ref),
-> which is what the 0.9.0 version reflects — but it is still circulated by the openEHR
-> Federation Working Group for comment, and nothing here is frozen. Feedback of every
-> kind is welcome — from typo fixes to fundamental disagreement with the model. See
-> [CONTRIBUTING.md](CONTRIBUTING.md).
+> **Status: approved, v1.0.0.** The specification was approved by the openEHR
+> Specifications Editorial Committee (SEC) at its meeting of 2026-10-12. It had
+> been validated by a working
+> [reference implementation](https://github.com/syntaric/openehr-federation-ref)
+> and amended in the SEC review that preceded approval. Feedback is still welcome,
+> from typo fixes to fundamental disagreement with the model, and lands in a later
+> release. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Rendered site
 
@@ -54,7 +55,7 @@ sources do appear in the output.
 ## Repository layout
 
 ```
-antora.yml                    Antora component descriptor (component: federation-aql, v0.9)
+antora.yml                    Antora component descriptor (component: federation-aql, v1.0)
 antora-playbook.yml           Antora playbook (local build and CI use the same one)
 Makefile                      Local build and preview server (make, make build, make serve)
 modules/ROOT/pages/           The specification, one AsciiDoc page per section - this is
@@ -68,8 +69,8 @@ diagrams/                     PlantUML sources for the diagrams
 ## Provenance
 
 This revision supersedes *Proposal for Federation Tier with AQL* (openEHR Federation
-Working Group, 2025-08-20). What changed, and why, is catalogued in
-[Changes from the 2025-08-20 proposal](modules/ROOT/pages/changes-from-2025-08-20.adoc).
+Working Group, 2025-08-20). The history of the revision is in this repository's git
+log and release tags.
 
 ## Contributing
 

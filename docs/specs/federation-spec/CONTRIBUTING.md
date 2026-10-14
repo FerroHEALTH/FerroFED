@@ -83,17 +83,21 @@ Four sites cannot, and must be bumped by hand together:
 
 | Site | Why it cannot be an attribute |
 | --- | --- |
-| `antora.yml`'s own `version:` | The Antora component version. It carries the **minor** version only (`0.9`) — a patch release replaces its predecessor in place, so there is no version selector and no stale URLs. Bump it only for a minor release. |
+| `antora.yml`'s own `version:` | The Antora component version. It carries the **minor** version only (`1.0`) — a patch release replaces its predecessor in place, so there is no version selector and no stale URLs. Bump it only for a minor release. |
 | `package.json`'s `version` | Outside Antora's attribute scope. |
 | `README.md` | GitHub Markdown; no attribute expansion. |
-| `rest-facade.adoc`'s `"spec_version": "0.9"` | Inside a `[source,json]` block. Substituting there needs `subs="attributes+"`, which makes the example non-copy-pasteable. It is also **deliberately `major.minor`**: the field reports the wire contract a gateway implements, and patch releases do not change it — see §7a.2. Leave it alone for a patch release; bump it for a minor one. `options-root.schema.json` enforces the `major.minor` shape with a `pattern`, so a three-component value fails CI. |
+| `rest-facade.adoc`'s `"spec_version": "1.0"` | Inside a `[source,json]` block. Substituting there needs `subs="attributes+"`, which makes the example non-copy-pasteable. It is also **deliberately `major.minor`**: the field reports the wire contract a gateway implements, and patch releases do not change it — see §7a.2. Leave it alone for a patch release; bump it for a minor one. `options-root.schema.json` enforces the `major.minor` shape with a `pattern`, so a three-component value fails CI. |
 
-A fifth site lives in another repository: the **reference implementation**
+The two schemas' `$id` URLs embed the Antora component version
+(`.../federation-aql/1.0/_attachments/...`) and move with `antora.yml`'s `version:`.
+
+A further site lives in another repository: the **reference implementation**
 (https://github.com/syntaric/openehr-federation-ref) tracks the spec version in its
-`pom.xml`, `README.md`, `CHANGELOG.md`, `docs/conformance.md`, and the `spec_version`
-literal its `ConformanceController` emits (asserted by `ConformanceOptionsIT`). A minor
-release that moves `spec_version` breaks that test until both repositories are bumped
-together.
+`pom.xml`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `docs/conformance.md`, and
+the `spec_version` literal its `ConformanceController` emits (asserted by
+`ConformanceOptionsIT`). It also vendors both schemas under
+`src/test/resources/spec-schemas/`. A minor release that moves `spec_version` breaks
+that test until both repositories are bumped together.
 
 ## What to edit
 

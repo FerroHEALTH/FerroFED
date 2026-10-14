@@ -9,22 +9,22 @@ below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
 the script.
 
 - Source: <https://github.com/syntaric/openehr-federation-spec>
-- Pin: commit `7162d0c760d23105d62a743bf0ad1073c45fdb85`
-- Declared version: `spec-version: '0.9.0'`, status
-  `Release candidate`, dated `2026-09-13` (`antora.yml`)
-- Fetched: 2026-10-02
+- Pin: tag `1.0.0`, which resolves to commit `7dcf0f44ac122fe947b1e5ceba6bcbbb7721917d`
+- Declared version: `spec-version: '1.0.0'`, status
+  `Approved by the openEHR SEC`, dated `2026-10-12` (`antora.yml`)
+- Fetched: 2026-10-14
 - Upstream licence: Creative Commons Zero v1.0 Universal (CC0 1.0), the
   repository's `LICENSE` file, vendored beside this file
 - Layout: the upstream paths, unchanged
-- Files: 50, of which 26 are `modules/ROOT/pages/*.adoc`
+- Files: 49, of which 25 are `modules/ROOT/pages/*.adoc`
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `7925f5b64180dd28ec9e4b5987b3da507a1a12f076da2ec5443786085b1cc01d`
+  `PROVENANCE.md` excluded): `de7c175163395cb10a716b735e629d2752cf4e37de05ea88b366af2924af008d`
 - Read by: #25 (the CP and N traceability of the conformance instrument), #33 (the wire types validated against both schemas) and #17 (the re-pin to 1.0)
 
 ## What is here
 
-- `modules/ROOT/pages/`: the normative body (§1 to §18), the two annexes
-  (A, the IHE binding; B, the Dutch Generic Functions) and the change record.
+- `modules/ROOT/pages/`: the normative body (§1 to §18) and the two
+  annexes (A, the IHE binding; B, the Dutch Generic Functions).
   The N# requirements are in `requirements.adoc` and the CP# conformance
   points in `conformance.adoc`.
 - `modules/ROOT/attachments/`: the two published JSON schemas.
@@ -38,8 +38,8 @@ the script.
 
 | Schema | sha256 |
 |---|---|
-| `modules/ROOT/attachments/options-root.schema.json` | `29a0dcd9fc16f50ddb9197bcc877fb071e6d85fd2b7160717f2065eb77586fd3` |
-| `modules/ROOT/attachments/federated-result-set.schema.json` | `abbcdd7f1481a6febcf5a211a987873420701991c93c89d780f660ceef1a643a` |
+| `modules/ROOT/attachments/options-root.schema.json` | `0ce1787028b90948057a3f53c20aa7c9d7eece70e0d968c31c0e751f1d9b5cf9` |
+| `modules/ROOT/attachments/federated-result-set.schema.json` | `415b6fce548810f0c86d934fe0fc7594202e913024a28c3dad9608844b47b97f` |
 
 ## What is left out
 
@@ -49,13 +49,10 @@ dependency graph claim an npm toolchain it does not use.
 
 | File | sha256 |
 |---|---|
-| `package-lock.json` | `19e2e272b767b757ca5f2a5f808590ab68f91ae3f7dd488403f3e4a116ac1c52` |
-| `package.json` | `940883fa221caa3259ee1869aed773b02c9e2428ed37336943624b4ffa788b8a` |
+| `package-lock.json` | `c2984805f5e2bfb5acc4b9600d6a5d03ef57f43e5575883e6bb951bcc01c1142` |
+| `package.json` | `c939ef7a21aa6cc405fbcbdb5c404d23f3d39dabeee2818873c25608e1ea9a04` |
 
 ## The version
 
-The pinned commit is past the `0.9.0` git tag. It carries the SEC review
-amendments of 2026-09-28 (the `meta.federation` nesting, all-or-nothing as
-the default completion strategy, the `node-error` endpoint status), which
-change the wire contract while the document still declares
-`spec-version: '0.9.0'`. The 1.0 release replaces this pin.
+The pin is the `1.0.0` release tag, and the document at it declares
+`spec-version: '1.0.0'` with status `Approved by the openEHR SEC`.

@@ -1,7 +1,7 @@
 {
   "federation": {
     "id": "rso-zl",
-    "spec_version": "0.9",
+    "spec_version": "1.0",
     "aql": { "fan_out": true },
     "dedup": {
       "default": "none",

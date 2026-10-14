@@ -29,9 +29,9 @@ schemas, its reference implementation, or a bound profile as a new comment on
 an upstream would need). Never open a new `upstream-report` issue, and give #212
 no milestone ([[upstream-reports-no-milestone]]). Never create an issue,
 checklist item or sentence that asks anyone to file them externally. Prose
-says "recorded as an upstream report on #212". While the
-specification is a release candidate these reports matter more, since the 1.0
-text may resolve them ([[spec-pin-0-9-0-rc]]).
+says "recorded as an upstream report on #212". A report written against the
+0.9.0 release candidate is read again against the 1.0.0 text, which may have
+resolved it ([[spec-pin-1-0-0]]).
 
 On 2026-10-03 the owner added: the reports are reported back upstream at the
 end, and "you must adhere to the contributing rules" of the upstream

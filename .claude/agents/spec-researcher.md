@@ -77,8 +77,8 @@ Method:
    the CP actor (`Gateway`, `Node`, `Operator`) where it matters, (d) any
    ambiguity, contradiction or spec silence, flagged explicitly, and (e)
    verbatim quotes for load-bearing sentences.
-5. Say which pin you read. The specification is a release candidate until its
-   1.0, and an N or CP number can move across a re-pin.
+5. Say which pin you read (today the 1.0.0 release, tag `1.0.0`). An N or CP
+   number can move across a re-pin.
 
 When the prompt names a report file, write the full report there with Write
 and reply with the path and its line count; a long reply is truncated and a
