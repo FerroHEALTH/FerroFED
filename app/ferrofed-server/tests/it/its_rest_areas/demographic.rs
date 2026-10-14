@@ -3,8 +3,9 @@
 
 //! `its_rest.demographic` in every mode: `unsupported: 501` without a
 //! DEMOGRAPHIC endpoint, and every request is `501` and asks nobody; routed
-//! to the declared endpoint with one, and a request naming it reaches it
-//! alone while any other is refused and asks nobody (§7a.1, §12.6, N32).
+//! to the declared endpoint with one, and a request naming it or naming none
+//! reaches it alone while one naming another is refused and asks nobody
+//! (§7a.1, §12.6, N32).
 
 use http::{Method, StatusCode};
 
@@ -26,22 +27,31 @@ async fn the_demographic_declaration_matches_the_demographic_area_in_each_mode()
             states(declared, "routed-single-node:", mode);
             states(
                 declared,
-                "names the declared endpoint node-b-pub in the targeting headers and goes to it alone, never federated",
+                "goes to the declared endpoint node-b-pub alone, never federated, whether or not the targeting headers name it",
                 mode,
             );
-            let routed = setup.send(read(Some(ENDPOINT_B))?).await?;
-            assert_eq!(
-                Some(ENDPOINT_B),
-                routed.acting.as_deref(),
-                "N31: {}",
-                routed.text
+            states(
+                declared,
+                "a header naming another endpoint is refused with targeting-conflict",
+                mode,
             );
-            assert_eq!(
-                (Vec::new(), vec![at(&Method::GET, &party)]),
-                (routed.a, routed.b),
-                "N32: one node"
-            );
-            for target in [None, Some(ENDPOINT_A), Some("*")] {
+            // NOTE: §7a.1 DEMOGRAPHIC row, §12.6: the declared destination is the
+            // explicit choice, so a request without a header goes there too.
+            for target in [Some(ENDPOINT_B), None] {
+                let routed = setup.send(read(target)?).await?;
+                assert_eq!(
+                    Some(ENDPOINT_B),
+                    routed.acting.as_deref(),
+                    "N31: {target:?}: {}",
+                    routed.text
+                );
+                assert_eq!(
+                    (Vec::new(), vec![at(&Method::GET, &party)]),
+                    (routed.a, routed.b),
+                    "N32: one node: {target:?}"
+                );
+            }
+            for target in [Some(ENDPOINT_A), Some("*")] {
                 let refused = setup.send(read(target)?).await?;
                 assert_eq!(
                     StatusCode::BAD_REQUEST,

@@ -253,7 +253,7 @@ impl Code {
                 "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
-                "a write that no binding or index routes to one node, the creation of an EHR, a definition request and a DEMOGRAPHIC request name their node in the openEHR-federation-endpoint header (§7a.1, §12.4, §12.5.1, §12.6, N23, N41, N43)"
+                "a write that no binding or index routes to one node, the creation of an EHR and a definition request name their node in the openEHR-federation-endpoint header (§12.4, §12.5.1, §12.6, N23, N41, N43)"
             }
             Self::EndpointSeveral => {
                 "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"
