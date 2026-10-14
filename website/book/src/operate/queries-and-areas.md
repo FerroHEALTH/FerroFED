@@ -112,12 +112,17 @@ page, and for a query with no `LIMIT` the ceiling `max_node_rows` plus one. A
 node that returns more rows than the ceiling may have more still, so the
 gateway reports it `node-error` and never merges its rows: the query fails
 `424` under the all-or-nothing default, and under `partial` the answer is
-incomplete and names the node (§11.4, §11.5). Raise the ceiling for a
-federation whose unbounded queries match more rows, or add a `LIMIT`:
+incomplete and names the node (§11.4, §11.5). The page a node is asked for
+is one row more than the ceiling, so the ceiling stays below the largest page
+every member serves: 9999 by default, under the 10 000 rows FerroEHR serves
+a page by default. A node that refuses the page size answers `400`, which the
+gateway reports as `node-error` naming the node's own message. Raise the
+ceiling for a federation whose nodes serve larger pages and whose unbounded
+queries match more rows, or add a `LIMIT`:
 
 ```toml
 [federation]
-max_node_rows = 10000   # rows read of one node for a query with no LIMIT; 0 is refused
+max_node_rows = 9999    # rows read of one node for a query with no LIMIT; 0 is refused
 ```
 
 `OPTIONS {base}/` declares it as `paging.max_node_rows`, and the startup log

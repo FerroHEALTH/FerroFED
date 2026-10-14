@@ -456,7 +456,9 @@ impl Default for Federation {
             best_effort: true,
             offset_strategy: OffsetPaging::Bounded,
             max_offset_window: 1000,
-            max_node_rows: 10_000,
+            // NOTE: no specification governs the ceiling: our own design; one under 10 000, so the
+            // probe row it adds fits a node that serves 10 000 rows a page, FerroEHR's default.
+            max_node_rows: 9_999,
             decomposable_aggregates: vec![
                 DecomposableAggregate::Count,
                 DecomposableAggregate::Sum,

@@ -116,7 +116,7 @@ async fn a_query_with_no_limit_sends_every_node_the_default_ceiling_plus_one() -
     let app = gateway_over(&a, &b, dir.path(), "")?;
     let (status, text) = call(app, post(body(UNBOUNDED)?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    each_asked_with([&a, &b], "10001").await
+    each_asked_with([&a, &b], "10000").await
 }
 
 #[test]
