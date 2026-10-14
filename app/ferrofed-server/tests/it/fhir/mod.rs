@@ -22,6 +22,7 @@ mod config;
 mod header;
 mod list;
 mod native;
+mod receipt;
 mod receive;
 mod refusals;
 mod summary;

@@ -6,7 +6,7 @@
 //! reserved name at its immutable version, selects by the archetypes the
 //! vendored International Patient Summary template names for its section,
 //! and every crosswalk section has a query or a recorded reason (§12.7, N44,
-//! §5.4.1, N33).
+//! §5.4.1, N33); the information sheet names the categories received.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -18,6 +18,7 @@
 
 mod crosswalk;
 mod query;
+mod sheet;
 #[cfg(test)]
 mod summary;
 mod template;

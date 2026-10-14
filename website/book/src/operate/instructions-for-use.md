@@ -164,10 +164,14 @@ years = 3                      # Art 9(2): at least three years from each access
   in the token for it, such as the HL7 v3 `ActReason` code `BTG`, or no
   access is marked ([Emergency access](audit.md#emergency-access)).
 - **The receiving members.** Annex II, points 2.2 and 2.3, ask that an EHR
-  system "be able to receive" data in the European exchange format. This
-  release has no receive path, so there is no receiving member to configure;
-  it is planned with a member declared per category
-  ([#665](https://github.com/FerroHEALTH/FerroFED/issues/665)).
+  system "be able to receive" data in the European exchange format.
+  Declare in `[[fhir.receive]]` the member that stores each category you
+  receive; a document of a category with no member declared is refused
+  ([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
+  This release receives patient summaries alone, and `GET {fhir-base}/metadata`
+  names the categories your deployment receives and those it has no
+  receiving member for
+  ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
 
 Keep two defaults, which the [claims review](../evaluate/claims-review.md#annex-ii-point-25)
 assessed against Annex II, point 2.5:
@@ -266,10 +270,13 @@ system in relation to its intended purpose". The full list is
 [Limitations](../evaluate/what-ferrofed-claims.md#limitations); the ones a
 deployment in the EU must plan for are:
 
-- **The European interoperability software component is not served.** The
-  gateway produces and receives no document in the European exchange format
-  (Annex II, points 2.1 to 2.3); the component is a library, and its open
-  hazards are in the [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
+- **The European exchange format covers patient summaries alone.** The
+  gateway serves the patient summary on its FHIR R4 face and receives
+  patient summaries there (Annex II, points 2.1 to 2.3); no other Art 14(1)
+  category is produced or received
+  ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
+  The open hazards of the interoperability component are in the
+  [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
 - **The logging component is read at your Audit Record Repository.** The
   gateway has no review route of its own: the records are read there with
   ITI-81, and the repository sets who may read them and keeps each for the
