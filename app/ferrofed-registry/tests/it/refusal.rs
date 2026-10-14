@@ -230,12 +230,15 @@ fn an_empty_product_or_version_is_refused() {
 
 #[test]
 fn a_fhir_rest_connection_type_is_refused() {
-    // §15.2: an openEHR endpoint MUST NOT rely on hl7-fhir-rest.
+    // NOTE: §15.2: an openEHR endpoint MUST NOT rely on hl7-fhir-rest, so the code declares
+    // only a member's own exchange-format endpoint, refused without what that one requires.
     let document = ONE_NODE.replace("openehr-rest-query", "hl7-fhir-rest");
-    let message = shape_refusal(&document);
     assert!(
-        message.contains("hl7-fhir-rest"),
-        "the code is named: {message}"
+        matches!(
+            refusal(&document),
+            LoadError::NativeWithoutIdentifierSystem(endpoint) if endpoint.as_str() == "node-a-pub"
+        ),
+        "an hl7-fhir-rest endpoint is never read as a Query API endpoint"
     );
 }
 

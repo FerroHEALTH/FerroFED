@@ -7,10 +7,13 @@
 //! [`ehr`] creates and reads an EHR on one node for the admission check
 //! (§12b.1), [`composition`] commits a composition the gateway composes into
 //! one node's EHR, [`forward`] passes one client request to its owning node
-//! once (§7a.3, N22, N31), and [`probe`] sends the one read of §12.5.1 step 4
-//! to each member. No specification governs the grouping: our own design.
+//! once (§7a.3, N22, N31), [`probe`] sends the one read of §12.5.1 step 4
+//! to each member, and [`native`] asks a member's own exchange-format
+//! endpoint for its patient summary. No specification governs the grouping:
+//! our own design.
 
 pub mod composition;
 pub mod ehr;
 pub mod forward;
+pub mod native;
 pub mod probe;

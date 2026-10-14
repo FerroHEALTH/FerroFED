@@ -51,6 +51,12 @@
 //! AQL text of a `PUT`, and none from the client request
 //! ([`crate::dispatch::definition`]).
 //!
+//! A request for a member's own patient summary at its native endpoint
+//! (`GET {fhir-base}/Patient/$summary`, [`crate::single_node::native`])
+//! carries `Accept: application/fhir+json`, the `Authorization`,
+//! `X-Request-Id`, `openEHR-federation-client` and `traceparent` of the
+//! member's Query API endpoint as above, and none from the client request.
+//!
 //! No specification governs the correlation header itself: our own design,
 //! under the name every proxy already uses.
 //!

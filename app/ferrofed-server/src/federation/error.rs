@@ -115,6 +115,30 @@ pub enum FederationError {
         /// The member as given.
         member: String,
     },
+    /// A member's own exchange-format endpoint names a code that is no
+    /// priority category of Regulation (EU) 2025/327 Art 14(1).
+    #[error(
+        "endpoint {endpoint} serves the category {category} natively, which is no priority category code"
+    )]
+    NativeCategoryUnknown {
+        /// The native endpoint.
+        endpoint: EndpointId,
+        /// The code as given.
+        category: String,
+    },
+    /// A member's own endpoint serves a category in a profile other than
+    /// the one the face asks every document of it in.
+    #[error(
+        "endpoint {endpoint} serves the category {category} natively and does not declare the profile {profile}"
+    )]
+    NativeProfileMissing {
+        /// The native endpoint.
+        endpoint: EndpointId,
+        /// The category's code.
+        category: String,
+        /// The profile the face asks for.
+        profile: &'static str,
+    },
     /// A category is received but no resolver is configured, so a received
     /// document's patient cannot be resolved to its member's `ehr_id` (§5.2).
     #[error(

@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_eehrxf::summary::{
-    Answer, Assembled, AssemblyError, Author, DATA_ABSENT_REASON, Held, NOT_EXHAUSTIVE,
-    Organisation, Origin, Request, SectionAnswers, assemble,
+    Answer, Assembled, AssemblyError, Author, Covered, DATA_ABSENT_REASON, Elsewhere, Held,
+    NOT_EXHAUSTIVE, Organisation, Origin, Request, SectionAnswers, assemble,
 };
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use ferrofed_testkit::eps;
@@ -119,6 +119,16 @@ fn document_headed(
     sections: &[SectionAnswers],
     header: PatientHeader,
 ) -> Result<Assembled, Box<dyn Error>> {
+    document_beside(sections, header, &[])
+}
+
+/// The document the two members' `sections` make, about the patient
+/// `header` describes, beside the members `elsewhere` that serve their own.
+fn document_beside(
+    sections: &[SectionAnswers],
+    header: PatientHeader,
+    elsewhere: &[Elsewhere],
+) -> Result<Assembled, Box<dyn Error>> {
     let mappings = Mappings::compile(&[allergies()?])?;
     let request = Request {
         base: BASE.to_owned(),
@@ -137,7 +147,7 @@ fn document_headed(
     Ok(assemble(
         &request,
         &author,
-        (&origins(), sections),
+        (&origins(), sections, elsewhere),
         &mappings,
     )?)
 }
@@ -408,6 +418,79 @@ fn an_element_the_binding_does_not_hold_is_absent_never_invented() -> Result<(),
     for absent in ["gender", "address", "telecom"] {
         assert!(patient[absent].is_null(), "{absent} is left out: {patient}");
     }
+    Ok(())
+}
+
+/// Node C, which serves its own patient summary, as its endpoint answered.
+fn node_c(answer: Covered) -> Elsewhere {
+    Elsewhere {
+        endpoint: String::from("node-c-eps"),
+        organisation: organisation("org-c"),
+        answer,
+    }
+}
+
+#[test]
+fn a_member_serving_its_own_summary_is_named_in_every_section_and_mapped_in_none()
+-> Result<(), Box<dyn Error>> {
+    let assembled = document_beside(
+        &answers(&[], &Answer::Answered(Vec::new())),
+        header(),
+        &[node_c(Covered::Document)],
+    )?;
+    let text = serde_json::to_string(&assembled.bundle)?;
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    let bundle: serde_json::Value = serde_json::from_str(&text)?;
+    for code in ["48765-2", "11450-4", "10160-0"] {
+        let held = section(&bundle, code).ok_or("the section")?;
+        let div = held["text"]["div"].as_str().ok_or("a narrative")?;
+        assert!(
+            div.contains("Not mapped here: the records of Synthetic org-c"),
+            "the member is named as covered elsewhere: {div}"
+        );
+        assert_eq!(
+            held["emptyReason"]["coding"][0]["code"], "unavailable",
+            "a section cannot know that a member it did not map holds nothing"
+        );
+    }
+    assert!(!text.contains("org-c\"}"), "the member authors nothing");
+    Ok(())
+}
+
+#[test]
+fn a_member_serving_no_summary_of_the_patient_is_named_as_holding_none()
+-> Result<(), Box<dyn Error>> {
+    let assembled = document_beside(
+        &answers(&[], &Answer::Answered(Vec::new())),
+        header(),
+        &[node_c(Covered::Absent)],
+    )?;
+    let bundle = serde_json::to_value(&assembled.bundle)?;
+    let allergies = section(&bundle, "48765-2").ok_or("the allergies section")?;
+    let div = allergies["text"]["div"].as_str().ok_or("a narrative")?;
+    assert!(div.contains("holds none for this patient"), "{div}");
+    Ok(())
+}
+
+#[test]
+fn a_silent_member_serving_its_own_summary_is_named_as_giving_no_answer()
+-> Result<(), Box<dyn Error>> {
+    let assembled = document_beside(
+        &answers(&[], &Answer::Answered(Vec::new())),
+        header(),
+        &[node_c(Covered::Silent {
+            status: String::from("time-out"),
+        })],
+    )?;
+    let bundle = serde_json::to_value(&assembled.bundle)?;
+    let allergies = section(&bundle, "48765-2").ok_or("the allergies section")?;
+    let div = allergies["text"]["div"].as_str().ok_or("a narrative")?;
+    assert!(
+        div.contains("No answer from: Synthetic org-c (time-out)."),
+        "§11.1: {div}"
+    );
+    assert!(!div.contains("Not mapped here"), "{div}");
     Ok(())
 }
 

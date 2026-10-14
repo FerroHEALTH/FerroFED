@@ -23,8 +23,12 @@
 //!   exhaustive, names every member that gave no answer, and counts every
 //!   composition no mapping covers, by member and template, which is
 //!   reported and never dropped;
-//! - a section with no entry is `nilknown` only when every member answered
-//!   and none holds content for it, and `unavailable` otherwise.
+//! - a member that serves its own patient summary is left out, and each
+//!   section names it as one that does, or as one that gave no answer when
+//!   its own endpoint did not answer;
+//! - a section with no entry is `nilknown` only when every member answered,
+//!   none holds content for it and none serves its own summary, and
+//!   `unavailable` otherwise.
 //!
 //! No specification governs how a federation authors a summary: these are
 //! our own design, against the eHealth Network guideline's header elements
@@ -107,6 +111,33 @@ pub enum Answer {
     /// It answered, with these compositions.
     Answered(Vec<Held>),
     /// It gave no answer: the §11.1 status says why.
+    Silent {
+        /// The `meta.federation` status of the endpoint.
+        status: String,
+    },
+}
+
+/// A member that serves the patient summary itself, at its own endpoint:
+/// its data are left out of the gateway's document, which says so in every
+/// section.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Elsewhere {
+    /// The member's own endpoint id.
+    pub endpoint: String,
+    /// The organisation that holds the member's data.
+    pub organisation: Organisation,
+    /// What its own endpoint answered.
+    pub answer: Covered,
+}
+
+/// What a member's own endpoint answered the request for its summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Covered {
+    /// Its own document.
+    Document,
+    /// That it holds no summary of the patient.
+    Absent,
+    /// Nothing: the §11.1 status says why.
     Silent {
         /// The `meta.federation` status of the endpoint.
         status: String,
@@ -199,6 +230,9 @@ pub enum AssemblyError {
 /// the `origins` answered, mapping each composition with `mappings`, as
 /// `author` writes it.
 ///
+/// Every section names each member `elsewhere` lists as serving its own
+/// summary, whose data it leaves out.
+///
 /// # Errors
 ///
 /// [`AssemblyError::Unnamed`] for a header with no name,
@@ -208,7 +242,7 @@ pub enum AssemblyError {
 pub fn assemble(
     request: &Request,
     author: &Author,
-    (origins, sections): (&[Origin], &[SectionAnswers]),
+    (origins, sections, elsewhere): (&[Origin], &[SectionAnswers], &[Elsewhere]),
     mappings: &Mappings,
 ) -> Result<Assembled, AssemblyError> {
     if !request.header.named() {
@@ -238,7 +272,7 @@ pub fn assemble(
         unmapped: BTreeSet::new(),
     };
     for answers in sections {
-        let section = assembly.section(answers, origins, mappings)?;
+        let section = assembly.section(answers, (origins, elsewhere), mappings)?;
         assembly.document.with_section(section)?;
     }
     Ok(Assembled {
@@ -261,17 +295,25 @@ struct Assembly {
 
 impl Assembly {
     /// The section `answers` fill, its entries mapped with `mappings` and
-    /// added to the document.
+    /// added to the document, naming each member `elsewhere` lists.
     fn section(
         &mut self,
         answers: &SectionAnswers,
-        origins: &[Origin],
+        (origins, elsewhere): (&[Origin], &[Elsewhere]),
         mappings: &Mappings,
     ) -> Result<eehrxf::document::Section, AssemblyError> {
         let slot = slot_of(answers.section)?;
         let mut entries = Vec::new();
         let mut authors = BTreeSet::new();
-        let mut silent = Vec::new();
+        let mut silent: Vec<String> = elsewhere
+            .iter()
+            .filter_map(|member| match &member.answer {
+                Covered::Silent { status } => {
+                    Some(format!("{} ({status})", member.organisation.shown()))
+                }
+                Covered::Document | Covered::Absent => None,
+            })
+            .collect();
         let mut uncovered: BTreeMap<(usize, String), usize> = BTreeMap::new();
         for (index, answer) in &answers.answers {
             let origin = origins
@@ -302,13 +344,16 @@ impl Assembly {
             }
         }
         let shown = authors_shown(&authors, &self.members, origins);
-        let paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
+        let mut paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
+        paragraphs.extend(covered_elsewhere(elsewhere));
         let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {
             section = section.with_author(author);
         }
         if entries.is_empty() {
-            let reason = if silent.is_empty() && uncovered.is_empty() {
+            // NOTE: no specification governs this: our own design; a member that serves its own
+            // summary was not mapped here, so the section cannot know it holds nothing.
+            let reason = if silent.is_empty() && uncovered.is_empty() && elsewhere.is_empty() {
                 EmptyReason::NilKnown
             } else {
                 EmptyReason::Unavailable
@@ -410,6 +455,26 @@ fn narrative(
         ));
     }
     paragraphs
+}
+
+/// The paragraphs that name each member of `elsewhere` that answered as
+/// serving its own patient summary, which holds its data for the section.
+fn covered_elsewhere(elsewhere: &[Elsewhere]) -> Vec<String> {
+    elsewhere
+        .iter()
+        .filter_map(|member| {
+            let shown = member.organisation.shown();
+            match member.answer {
+                Covered::Document => Some(format!(
+                    "Not mapped here: the records of {shown}, which serves its own patient summary."
+                )),
+                Covered::Absent => Some(format!(
+                    "Not mapped here: the records of {shown}, which serves its own patient summary and holds none for this patient."
+                )),
+                Covered::Silent { .. } => None,
+            }
+        })
+        .collect()
 }
 
 /// The patient of `request`: the identifier it was asked by, and the

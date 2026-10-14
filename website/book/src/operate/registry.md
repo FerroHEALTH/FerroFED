@@ -52,6 +52,62 @@ id = "hospital-b"
 consent_refusal_codes = ["consent-refused"]   # what this node writes in Error.code
 ```
 
+### A member's own exchange-format endpoint
+
+A member CDR may serve the patient summary in the European exchange format
+itself. Declare that endpoint as a second `[[endpoint]]` of the node, of
+connection type `hl7-fhir-rest`, naming the categories it serves, the
+profiles its documents follow, and the identifier system the gateway writes
+the member's `ehr_id` in. The member is then in the `native` mode for those
+categories, and in the `map` mode, the default, for every other one:
+
+```toml
+[[endpoint]]
+id = "hospital-a-eps"
+node = "hospital-a"
+url = "https://cdr-a.example.org/fhir"
+connection_type = "hl7-fhir-rest"
+managing_organisation = "org-a"
+categories = ["Patient-Summaries"]   # Art 14(1) priority category codes
+profiles = ["http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"]
+ehr_id_system = "urn:oid:2.999.4.1"  # the system the member reads its ehr_id in
+```
+
+For a patient summary, the gateway leaves the member out of its section
+queries and asks this endpoint `GET {url}/Patient/$summary` with
+`identifier=<ehr_id_system>|<ehr_id>` and `profile`, the member located by
+its own `ehr_id` alone (§5.4.1, N33). The request carries the onward
+credential, the `DPoP` proof and the signed caller identity of the node's
+`openehr-rest-query` endpoint, and passes the same outbound gate. No
+specification defines an identifier system for an `ehr_id` on a FHIR
+interface, so the operator declares one with the member.
+
+The endpoint is never an openEHR Query API endpoint (N19, §15.2): no query is
+sent to it, `OPTIONS {base}/` does not list it (§7a.2), and a `FROM ENDPOINT`
+directive or an `openEHR-federation-endpoint` header naming it is a `400`
+`endpoint-unknown` (§8). A node needs an `openehr-rest-query` endpoint
+beside it. Only the TOML form of the document declares one; the FHIR form and an mCSD
+directory still refuse `hl7-fhir-rest`.
+
+`config check` refuses, naming the endpoint:
+
+- an `hl7-fhir-rest` endpoint with no `ehr_id_system`, or an empty one;
+- one with no category or no profile, or an empty one;
+- one with `consent_refusal_codes`, which only an ITS-REST `Error` carries;
+- an `openehr-rest-query` endpoint that sets `categories`, `profiles` or
+  `ehr_id_system`;
+- two native endpoints of one node for one category;
+- a category code that is no Art 14(1) priority category
+  (`Patient-Summaries`, `Electronic-Prescriptions`,
+  `Electronic-Dispensations`, `Medical-Imaging`, `Laboratory-Reports`,
+  `Discharge-Reports`);
+- a `Patient-Summaries` endpoint whose profiles leave out the EPS composition
+  profile, the one the face asks every summary in.
+
+A suspended native endpoint serves nothing, and the member's data for its
+categories are mapped as any other member's. The `native` mode and its keys
+are FerroFED's design: no specification governs them.
+
 ## The registry document in FHIR form
 
 The specification recommends the FHIR `Endpoint` and `Organization` resources

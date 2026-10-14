@@ -82,10 +82,11 @@ with no marked test is not listed.
 
 ## CP-6
 
-20 tests.
+22 tests.
 
 - `app/ferrofed-server/tests/it/directive.rs`: `a_directed_aggregate_to_one_endpoint_reaches_it_unchanged`, `a_directed_subject_query_reports_unlisted_members_excluded_and_unknown_ones_not_resolved`, `a_selected_endpoint_attribute_is_added_to_the_rows_and_asked_of_no_node`, `an_endpoint_the_registry_does_not_know_is_refused_400_before_any_node_is_asked`, `no_node_receives_the_directive_and_each_receives_the_undirected_node_query`, `the_organisation_selector_asks_every_endpoint_the_organisation_manages`
 - `app/ferrofed-server/tests/it/e2e/track3.rs` (e2e): `a_directive_selects_the_node_set_and_leaves_the_row_shape_alone`, `a_named_member_where_the_patient_does_not_resolve_is_reported_not_errored`
+- `app/ferrofed-server/tests/it/fhir/native.rs`: `a_directive_naming_the_native_endpoint_is_refused_400`, `a_targeting_header_naming_the_native_endpoint_is_refused_400`
 - `app/ferrofed-server/tests/it/localization.rs`: `a_directed_query_is_never_localized`
 - `app/ferrofed-server/tests/it/localizer_surface.rs`: `a_targeted_read_by_subject_is_never_localized`
 - `app/ferrofed-server/tests/it/targeting.rs`: `a_header_and_a_directive_that_differ_are_refused_400_naming_both_sets`, `a_header_and_a_directive_that_select_the_same_set_proceed`, `the_endpoint_header_selects_the_node_set_as_the_directive_does`
@@ -279,12 +280,13 @@ with no marked test is not listed.
 
 ## CP-23
 
-35 tests.
+36 tests.
 
 - `app/ferrofed-server/tests/it/auth/token.rs`: `options_root_is_behind_the_gate`
 - `app/ferrofed-server/tests/it/consent_withheld/mod.rs`: `by_default_the_exclusion_is_disclosed_and_declared`, `the_configured_setting_withholds_the_exclusion_and_is_declared`
 - `app/ferrofed-server/tests/it/contact_point/declared.rs`: `a_declared_contact_point_is_described_with_how_its_requests_are_served`, `a_deployment_with_no_contact_point_declares_none`
 - `app/ferrofed-server/tests/it/e2e/track9_surface.rs` (e2e): `the_self_description_lists_the_members_and_demographic_answers_as_declared`
+- `app/ferrofed-server/tests/it/fhir/native.rs`: `the_native_endpoint_is_absent_from_the_self_description`
 - `app/ferrofed-server/tests/it/its_rest_areas/definition.rs`: `the_definition_declaration_states_that_a_request_goes_to_the_one_named_node`, `the_definition_declaration_states_the_distribution_only_where_offered`, `the_definition_declaration_states_the_template_fan_out_only_where_offered`, `the_definition_declaration_states_where_stored_queries_are_held`
 - `app/ferrofed-server/tests/it/its_rest_areas/demographic.rs`: `the_demographic_declaration_matches_the_demographic_area_in_each_mode`
 - `app/ferrofed-server/tests/it/its_rest_areas/ehr.rs`: `the_ehr_declaration_states_how_a_path_ehr_id_finds_its_owner`, `the_ehr_declaration_states_that_a_new_ehr_goes_only_to_the_named_endpoint`, `the_ehr_declaration_states_that_a_versioned_write_needs_the_controlling_node`, `the_ehr_declaration_states_the_read_by_subject`
@@ -322,7 +324,7 @@ with no marked test is not listed.
 
 ## CP-26
 
-139 tests.
+142 tests.
 
 - `app/ferrofed-engine/src/declared/headers.rs`: `a_utf_8_charset_passes_and_is_dropped`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable`, `an_unlisted_content_type_is_unsupported`, `any_media_type_reaches_the_node_as_the_first_listed`, `prefer_reaches_the_node_as_its_listed_preferences_only`
 - `app/ferrofed-engine/src/declared/mod.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_date_time_is_refused_by_position_never_by_value`, `a_well_formed_date_time_is_held`
@@ -337,6 +339,7 @@ with no marked test is not listed.
 - `app/ferrofed-engine/tests/it/forward.rs`: `a_free_text_parameter_passes_unclassified`, `a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped`, `a_malformed_date_time_is_refused_and_no_node_is_asked`, `a_query_parameter_the_operation_does_not_declare_is_refused_unsent`, `a_well_formed_date_time_is_forwarded_byte_identical`, `a_withheld_identifier_in_the_body_of_a_commit_is_sent_unchanged`, `a_withheld_identifier_in_the_path_or_a_forwarded_header_is_never_sent`, `a_withheld_value_in_a_client_header_is_refused_though_the_registry_authority_holds_it`, `a_withheld_value_in_the_registry_path_is_never_forwarded`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable_unsent`, `an_identifier_inside_the_composed_ehr_id_is_forwarded`, `any_media_type_reaches_the_node_as_the_first_listed`, `the_host_a_node_receives_is_the_registry_authority_never_the_client_host`, `the_same_identifier_in_a_part_the_client_wrote_is_still_withheld`
 - `app/ferrofed-engine/tests/it/gate.rs`: `a_clean_request_is_sent_with_identifiers_withheld`, `a_fan_out_with_a_leaking_query_fails_closed_and_asks_nobody`, `a_short_identifier_inside_the_scope_ehr_id_is_sent`, `a_withheld_value_in_the_registry_authority_is_sent`, `a_withheld_value_in_the_registry_path_is_never_sent`, `a_withheld_value_inside_the_minted_id_is_sent_with_that_id`, `an_identifier_in_the_aql_text_is_never_sent`, `the_header_the_gateway_adds_is_its_minted_id_and_carries_no_identifier`, `the_same_short_identifier_elsewhere_is_never_sent`
 - `app/ferrofed-engine/tests/it/masking.rs`: `a_short_identifier_in_the_base_path_is_found`, `a_short_identifier_inside_the_composed_ehr_id_passes`, `an_ehr_id_segment_the_client_wrote_is_never_masked`, `the_same_short_identifier_in_a_client_part_is_still_found`
+- `app/ferrofed-engine/tests/it/native.rs`: `a_request_that_would_carry_a_withheld_identifier_is_never_sent`, `the_member_is_asked_by_its_ehr_id_alone_and_its_document_comes_back_unchanged`
 - `app/ferrofed-engine/tests/it/nuts_service.rs`: `the_pseudonym_reaches_neither_the_authorization_server_nor_a_proof`
 - `app/ferrofed-engine/tests/it/onward.rs`: `a_token_endpoint_description_never_reaches_the_answer`
 - `app/ferrofed-identity/tests/it/mitz.rs`: `a_patient_named_by_a_pseudonym_is_never_sent_to_mitz`
@@ -352,6 +355,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/ehr_id_collision.rs`: `an_ehr_id_that_is_no_uuid_is_never_named_by_an_incident`, `no_incident_or_log_line_names_a_patient_identifier`
 - `app/ferrofed-server/tests/it/ehr_scope.rs`: `an_ehr_id_that_is_no_uuid_is_never_probed_nor_sent`, `neither_form_carries_the_patient_identifier_to_a_node`
 - `app/ferrofed-server/tests/it/fhir/header.rs`: `the_header_is_the_supplier_s_and_no_header_value_reaches_a_node`
+- `app/ferrofed-server/tests/it/fhir/native.rs`: `a_native_member_is_asked_by_its_ehr_id_alone_and_left_out_of_the_mapped_document`
 - `app/ferrofed-server/tests/it/fhir/receive.rs`: `a_document_is_written_to_its_member_by_its_ehr_id_alone`
 - `app/ferrofed-server/tests/it/fhir/summary.rs`: `the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`
 - `app/ferrofed-server/tests/it/follow_up.rs`: `a_version_read_reaches_the_node_byte_identical_and_carries_no_identifier`
@@ -613,15 +617,17 @@ with no marked test is not listed.
 
 ## Track 10
 
-25 tests.
+28 tests.
 
 - `app/ferrofed-engine/tests/it/fapi2/mod.rs`: `a_callers_token_carrying_the_patient_is_never_sent`, `no_carrier_to_the_server_or_the_node_names_the_patient`
+- `app/ferrofed-engine/tests/it/native.rs`: `a_request_that_would_carry_a_withheld_identifier_is_never_sent`, `the_member_is_asked_by_its_ehr_id_alone_and_its_document_comes_back_unchanged`
 - `app/ferrofed-server/tests/it/access/accessor.rs`: `the_professional_and_the_patient_reach_no_log_or_metric`
 - `app/ferrofed-server/tests/it/access/emergency.rs`: `the_mark_carries_no_patient_identifier_to_a_log_or_a_node`
 - `app/ferrofed-server/tests/it/access/query.rs`: `no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/contact_point/relayed.rs`: `no_iua_person_id_reaches_a_node`
 - `app/ferrofed-server/tests/it/e2e/track10.rs` (e2e): `a_committed_dv_identifier_arrives_at_a_ferroehr_node_byte_identical`, `the_four_positions_reach_neither_ferroehr_node_on_any_path`
 - `app/ferrofed-server/tests/it/fhir/header.rs`: `the_header_is_the_supplier_s_and_no_header_value_reaches_a_node`
+- `app/ferrofed-server/tests/it/fhir/native.rs`: `a_native_member_is_asked_by_its_ehr_id_alone_and_left_out_of_the_mapped_document`
 - `app/ferrofed-server/tests/it/fhir/receive.rs`: `a_document_is_written_to_its_member_by_its_ehr_id_alone`
 - `app/ferrofed-server/tests/it/fhir/summary.rs`: `the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`

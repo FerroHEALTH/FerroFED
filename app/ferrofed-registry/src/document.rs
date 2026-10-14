@@ -113,6 +113,20 @@ pub struct EndpointDoc {
     /// our own design).
     #[serde(default)]
     pub consent_refusal_codes: Vec<String>,
+    /// The categories an `hl7-fhir-rest` endpoint serves the documents of
+    /// itself, the `native` mode, each by its code, such as
+    /// `Patient-Summaries`; an `openehr-rest-query` endpoint sets none (no
+    /// specification governs the key: our own design).
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// The canonical URLs of the profiles an `hl7-fhir-rest` endpoint's
+    /// documents follow; an `openehr-rest-query` endpoint sets none.
+    #[serde(default)]
+    pub profiles: Vec<String>,
+    /// The identifier system an `hl7-fhir-rest` endpoint is told the
+    /// member's `ehr_id` in, which it requires, since no specification
+    /// defines one (N33); an `openehr-rest-query` endpoint sets none.
+    pub ehr_id_system: Option<String>,
 }
 
 /// One `creating_system_id` mapped to the endpoint that answers for it (N21,

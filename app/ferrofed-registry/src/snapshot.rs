@@ -16,23 +16,31 @@ use crate::creating_system::CreatingSystemRoute;
 use crate::document::{CreatingSystemDoc, Document, EndpointDoc, NodeDoc};
 use crate::error::{LoadError, Referrer, UrlFault};
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use crate::native::{self, NativeEndpoint};
 
 /// The connection type of an endpoint (N19, §15.2).
 ///
 /// N19 requires a defined openEHR Query API code, and §15.2 forbids relying
-/// on `hl7-fhir-rest` for an openEHR endpoint, so the one accepted code is
-/// `openehr-rest-query`, which FerroFED defines in the code system
-/// [`ConnectionType::SYSTEM`] (N19, §15.2; the code system is our own design,
-/// since no openEHR or HL7 code is registered).
+/// on `hl7-fhir-rest` for an openEHR endpoint, so the one code a Query API
+/// endpoint takes is `openehr-rest-query`, which FerroFED defines in the code
+/// system [`ConnectionType::SYSTEM`] (N19, §15.2; the code system is our own
+/// design, since no openEHR or HL7 code is registered). `hl7-fhir-rest`, the
+/// HL7 `endpoint-connection-type` code, marks a member's own endpoint for
+/// the exchange format ([`crate::native`]), never a Query API endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 pub enum ConnectionType {
     /// The openEHR ITS-REST Query API (`openehr-rest-query`).
     #[serde(rename = "openehr-rest-query")]
     OpenehrRestQuery,
+    /// A FHIR REST interface (`hl7-fhir-rest`) serving a member's own
+    /// exchange-format documents.
+    #[serde(rename = "hl7-fhir-rest")]
+    Hl7FhirRest,
 }
 
 impl ConnectionType {
-    /// The code system the codes belong to, as a FHIR `Coding.system` names it.
+    /// The code system `openehr-rest-query` belongs to, as a FHIR
+    /// `Coding.system` names it.
     pub const SYSTEM: &str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
 
     /// The connection type `code` names in [`ConnectionType::SYSTEM`], or
@@ -50,6 +58,7 @@ impl ConnectionType {
     pub fn code(self) -> &'static str {
         match self {
             Self::OpenehrRestQuery => "openehr-rest-query",
+            Self::Hl7FhirRest => "hl7-fhir-rest",
         }
     }
 }
@@ -266,6 +275,7 @@ pub struct RegistrySnapshot {
     organisations: BTreeMap<OrganisationId, Organisation>,
     nodes: BTreeMap<NodeId, Node>,
     endpoints: BTreeMap<EndpointId, Endpoint>,
+    natives: BTreeMap<EndpointId, NativeEndpoint>,
     by_system_id: BTreeMap<SystemId, NodeId>,
     creating_systems: BTreeMap<SystemId, EndpointId>,
 }
@@ -329,7 +339,7 @@ impl RegistrySnapshot {
             }
         }))?;
         let (nodes, by_system_id) = nodes(document.nodes, &organisations)?;
-        let endpoints = endpoints(document.endpoints, &nodes, &organisations)?;
+        let (endpoints, natives) = endpoints(document.endpoints, &nodes, &organisations)?;
         if let Some(node) = nodes
             .keys()
             .find(|node| !endpoints.values().any(|endpoint| endpoint.node == **node))
@@ -342,6 +352,7 @@ impl RegistrySnapshot {
             organisations,
             nodes,
             endpoints,
+            natives,
             by_system_id,
             creating_systems,
         })
@@ -360,9 +371,35 @@ impl RegistrySnapshot {
     }
 
     /// The endpoint with this `endpoint_id`.
+    ///
+    /// A native endpoint is never one, so no query reaches it and no
+    /// directive names it (N19, §8).
     #[must_use]
     pub fn endpoint(&self, id: &EndpointId) -> Option<&Endpoint> {
         self.endpoints.get(id)
+    }
+
+    /// The native endpoint with this `endpoint_id`.
+    #[must_use]
+    pub fn native_endpoint(&self, id: &EndpointId) -> Option<&NativeEndpoint> {
+        self.natives.get(id)
+    }
+
+    /// Every native endpoint, ordered by `endpoint_id`.
+    pub fn native_endpoints(&self) -> impl Iterator<Item = &NativeEndpoint> {
+        self.natives.values()
+    }
+
+    /// The native endpoint in service at which `node` serves the documents
+    /// of the category `code` itself, or `None` when the member's data for
+    /// it are mapped by the gateway.
+    #[must_use]
+    pub fn native_for(&self, node: &NodeId, code: &str) -> Option<&NativeEndpoint> {
+        self.natives.values().find(|native| {
+            native.node() == node
+                && native.status() == EndpointStatus::Active
+                && native.serves(code)
+        })
     }
 
     /// The node whose openEHR `system_id` this is, compared as master05
@@ -572,15 +609,22 @@ fn nodes(
     Ok((nodes, by_system_id))
 }
 
+/// The Query API endpoints and the native endpoints a document declares.
+type EndpointMaps = (
+    BTreeMap<EndpointId, Endpoint>,
+    BTreeMap<EndpointId, NativeEndpoint>,
+);
+
 fn endpoints(
     declared: Vec<EndpointDoc>,
     nodes: &BTreeMap<NodeId, Node>,
     organisations: &BTreeMap<OrganisationId, Organisation>,
-) -> Result<BTreeMap<EndpointId, Endpoint>, LoadError> {
+) -> Result<EndpointMaps, LoadError> {
     let mut endpoints = BTreeMap::new();
+    let mut natives = BTreeMap::new();
     let mut url_owner: BTreeMap<Url, EndpointId> = BTreeMap::new();
     for doc in declared {
-        if endpoints.contains_key(&doc.id) {
+        if endpoints.contains_key(&doc.id) || natives.contains_key(&doc.id) {
             return Err(LoadError::DuplicateEndpoint(doc.id));
         }
         if !nodes.contains_key(&doc.node) {
@@ -616,6 +660,12 @@ fn endpoints(
                 entry.insert(doc.id.clone());
             }
         }
+        if doc.connection_type == ConnectionType::Hl7FhirRest {
+            let native = native::declared(doc, url)?;
+            natives.insert(native.id().clone(), native);
+            continue;
+        }
+        native::held_to_query(&doc)?;
         if doc.consent_refusal_codes.iter().any(String::is_empty) {
             return Err(LoadError::EmptyConsentRefusalCode(doc.id));
         }
@@ -630,7 +680,8 @@ fn endpoints(
         };
         endpoints.insert(doc.id, endpoint);
     }
-    Ok(endpoints)
+    native::one_per_category(natives.values())?;
+    Ok((endpoints, natives))
 }
 
 fn creating_systems(

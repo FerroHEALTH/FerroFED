@@ -19,6 +19,7 @@
 
 mod config;
 mod header;
+mod native;
 mod receive;
 mod refusals;
 mod summary;
@@ -120,17 +121,41 @@ fn gateway_over(
     rows: &[(&str, &str)],
     (federation, tables): (&str, &str),
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    gateway_registered(dir, (a, b, pdq), rows, "", (federation, tables))
+}
+
+/// The configuration text of [`gateway_over`], with `members` appended to
+/// the registry document.
+fn text_registered(
+    dir: &Path,
+    (a, b, pdq): (&str, &str, &str),
+    rows: &[(&str, &str)],
+    members: &str,
+    (federation, tables): (&str, &str),
+) -> Result<String, Box<dyn Error>> {
     let document = dir.join("registry.toml");
-    std::fs::write(&document, registry(a, b, ""))?;
+    std::fs::write(&document, registry(a, b, members))?;
     let document = toml::Value::String(document.display().to_string());
-    let text = format!(
+    Ok(format!(
         "profile = \"development\"\n\n[server]\npublic_url = \"{PUBLIC}\"\n\n\
          [registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
          node_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
          {federation}\n{}{}{tables}",
         crossref(rows),
         fhir_tables(pdq)
-    );
+    ))
+}
+
+/// The gateway of [`gateway_over`], with `members` appended to the
+/// registry document.
+fn gateway_registered(
+    dir: &Path,
+    (a, b, pdq): (&str, &str, &str),
+    rows: &[(&str, &str)],
+    members: &str,
+    (federation, tables): (&str, &str),
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    let text = text_registered(dir, (a, b, pdq), rows, members, (federation, tables))?;
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);

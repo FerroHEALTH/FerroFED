@@ -47,6 +47,12 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! A member that serves an exchange-format category itself declares a second
+//! endpoint of connection type `hl7-fhir-rest`, a
+//! [`NativeEndpoint`](native::NativeEndpoint) the snapshot keeps apart from
+//! every Query API endpoint, so no query or directive ever reaches it (N19,
+//! §8).
+//!
 //! The follow-up routing table maps every observed `creating_system_id`, not
 //! only the members' own `system_id`s (N21, §12.2): the document registers
 //! more, a [`LearnedMap`](creating_system::LearnedMap) learns the rest from
@@ -73,6 +79,7 @@ pub mod health;
 pub mod id;
 pub mod incident;
 pub mod manufacturer;
+pub mod native;
 pub mod operator;
 pub mod secret;
 pub mod snapshot;
