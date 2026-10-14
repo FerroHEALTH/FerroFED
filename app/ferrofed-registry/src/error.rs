@@ -233,6 +233,11 @@ pub enum LoadError {
     /// native endpoint is a second one).
     #[error("node {0} has no endpoint")]
     NodeWithoutEndpoint(NodeId),
+    /// An organisation that manages no endpoint, which §8.1 rules out: "an
+    /// Organization manages 1..* Endpoints". An `ORGANISATION` selector
+    /// naming it would select nothing.
+    #[error("organisation {0} manages no endpoint (§8.1)")]
+    OrganisationWithoutEndpoint(OrganisationId),
     /// An endpoint sets a key its connection type does not take.
     #[error("endpoint {endpoint} sets {key}, which its connection type does not take")]
     MisplacedKey {

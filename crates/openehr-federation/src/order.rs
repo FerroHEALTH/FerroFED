@@ -5,7 +5,8 @@
 //! (§11.6.1, §11.6.2, N13, N39).
 //!
 //! The rewrite of the `aql` feature describes, for the node query it builds,
-//! which node columns carry the `ORDER BY` keys, which carry the tie-break
+//! which node columns or ENDPOINT attributes carry the `ORDER BY` keys, which
+//! node columns carry the tie-break
 //! after `endpoint_id`, the `LIMIT` every node was sent, and the rows the Tier
 //! skips for an `OFFSET`; the merge of the `merge` feature reads the same
 //! description. It is plain data, so neither feature
@@ -20,10 +21,21 @@ pub enum Direction {
     Descending,
 }
 
-/// One `ORDER BY` key: the node column it reads, and its direction.
+/// What one `ORDER BY` key reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortColumn {
+    /// The node row's column at this index.
+    Node(usize),
+    /// The ENDPOINT attribute value at this index among the values each
+    /// endpoint's rows carry (§9.3): one value per endpoint, which the Tier
+    /// evaluates and no node is asked for (§8.1).
+    Endpoint(usize),
+}
+
+/// One `ORDER BY` key: what it reads, and its direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SortKey {
-    column: usize,
+    column: SortColumn,
     direction: Direction,
 }
 
@@ -31,12 +43,29 @@ impl SortKey {
     /// The key reading node column `column` in `direction`.
     #[must_use]
     pub fn new(column: usize, direction: Direction) -> Self {
-        Self { column, direction }
+        Self {
+            column: SortColumn::Node(column),
+            direction,
+        }
     }
 
-    /// The node column the key reads.
+    /// The key reading the ENDPOINT attribute value at index `attribute` of
+    /// the values each endpoint's rows carry, in `direction` (§8.1, §9.3).
+    ///
+    /// The value is one per endpoint, so the key never reorders the rows of
+    /// one node, and each node's first `n` rows under the other keys stay
+    /// its share of the federated first `n` (§11.6.1).
     #[must_use]
-    pub fn column(&self) -> usize {
+    pub fn endpoint(attribute: usize, direction: Direction) -> Self {
+        Self {
+            column: SortColumn::Endpoint(attribute),
+            direction,
+        }
+    }
+
+    /// What the key reads.
+    #[must_use]
+    pub fn column(&self) -> SortColumn {
         self.column
     }
 
@@ -49,9 +78,11 @@ impl SortKey {
 
 /// The Tier order of a federated answer, its `LIMIT` and its `OFFSET`.
 ///
-/// Every node was sent one `LIMIT`, ordered by the keys and then by the
-/// tie-break columns ascending: the client's `n`, or `k + n` for a page that
-/// starts at `OFFSET k` (§11.6.2). The Tier orders the merged rows by the
+/// Every node was sent one `LIMIT`, ordered by the keys that read a node
+/// column and then by the tie-break columns ascending: the client's `n`, or
+/// `k + n` for a page that starts at `OFFSET k` (§11.6.2). A key that reads
+/// an ENDPOINT attribute ([`SortKey::endpoint`]) is the Tier's alone, and is
+/// one value at each node. The Tier orders the merged rows by the
 /// keys, then `endpoint_id`, then the tie-break columns (§11.6.1: "RECOMMENDED:
 /// `endpoint_id`, then uid"), keeps the first [`ResultOrder::limit`] and drops
 /// the first [`ResultOrder::offset`] of those, so the answer is the rows
@@ -97,6 +128,14 @@ impl ResultOrder {
             distinct: None,
             version_key: None,
         }
+    }
+
+    /// This answer ordered by `keys` in place of its keys, with its tie-break,
+    /// `LIMIT`, `OFFSET`, `DISTINCT` and version key kept.
+    #[must_use]
+    pub fn with_keys(mut self, keys: Vec<SortKey>) -> Self {
+        self.keys = keys;
+        self
     }
 
     /// This answer under `SELECT DISTINCT`: the Tier keeps one row of every

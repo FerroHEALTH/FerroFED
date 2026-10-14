@@ -188,3 +188,16 @@ fn a_node_with_only_a_native_endpoint_has_no_endpoint() {
         "a native endpoint is a second endpoint, beside one a query reaches"
     );
 }
+
+#[test]
+fn an_organisation_managing_only_a_native_endpoint_loads() {
+    let endpoint = native("node-a-eps", &serving()).replace(
+        "managing_organisation = \"org-a\"",
+        "managing_organisation = \"org-b\"",
+    );
+    let document = one_node_with(&format!("[[organisation]]\nid = \"org-b\"\n\n{endpoint}"));
+    assert!(
+        RegistrySnapshot::from_toml_str(&document).is_ok(),
+        "§8.1: a native endpoint is one of the 1..* Endpoints org-b manages"
+    );
+}

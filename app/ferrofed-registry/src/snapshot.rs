@@ -302,12 +302,24 @@ impl RegistrySnapshot {
     /// [`LoadError::Parse`] when the text is not a document of the registry's
     /// shape, and the other [`LoadError`] variants when it is but its content
     /// breaks a membership rule: a duplicate id or `system_id`, a dangling
-    /// reference, an unusable base URL, a node with no endpoint, no node at
-    /// all, or a `creating_system_id` mapped twice or mapped although it is a
-    /// member's own `system_id`.
+    /// reference, an unusable base URL, a node or an organisation with no
+    /// endpoint, no node at all, or a `creating_system_id` mapped twice or
+    /// mapped although it is a member's own `system_id`.
     pub fn from_toml_str(text: &str) -> Result<Self, LoadError> {
         let document: Document = toml::from_str(text).map_err(|e| LoadError::Parse(Box::new(e)))?;
-        Self::from_document(document)
+        let snapshot = Self::from_document(document)?;
+        // NOTE: §8.1, "an Organization manages 1..* Endpoints", a native one too; a directory's
+        // registry keeps one whose endpoints left it, and selecting it is a 404 (§11.2).
+        let manages = |id: &OrganisationId| {
+            snapshot.endpoints_managed_by(id).next().is_some()
+                || snapshot
+                    .native_endpoints()
+                    .any(|n| n.managing_organisation() == id)
+        };
+        match snapshot.organisations.keys().find(|id| !manages(id)) {
+            Some(organisation) => Err(LoadError::OrganisationWithoutEndpoint(organisation.clone())),
+            None => Ok(snapshot),
+        }
     }
 
     /// Validates a document another reader built, under the rules every form
@@ -315,11 +327,11 @@ impl RegistrySnapshot {
     ///
     /// # Errors
     ///
-    /// The [`LoadError`] variants other than [`LoadError::Read`] and
-    /// [`LoadError::Parse`]: a duplicate id or `system_id`, a dangling
-    /// reference, an unusable base URL, a node with no endpoint, no node at
-    /// all, or a `creating_system_id` mapped twice or mapped although it is a
-    /// member's own `system_id`.
+    /// The [`LoadError`] variants other than [`LoadError::Read`],
+    /// [`LoadError::Parse`] and [`LoadError::OrganisationWithoutEndpoint`]: a
+    /// duplicate id or `system_id`, a dangling reference, an unusable base
+    /// URL, a node with no endpoint, no node at all, or a `creating_system_id`
+    /// mapped twice or mapped although it is a member's own `system_id`.
     pub fn from_document(document: Document) -> Result<Self, LoadError> {
         if document.nodes.is_empty() {
             return Err(LoadError::NoNode);

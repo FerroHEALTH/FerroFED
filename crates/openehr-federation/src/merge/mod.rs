@@ -45,6 +45,10 @@
 //! tuple: two rows of two endpoints differ when their attributes do. Within
 //! one endpoint they are one value, so they change neither the order of its
 //! rows nor which of them are equal, and the argument below holds as written.
+//! An `ORDER BY` key may read one ([`crate::order::SortKey::endpoint`]): it
+//! orders the endpoints' rows among each other, and each node's first `n`
+//! under the other keys stays its share of the federated first `n`
+//! (§11.6.1).
 //! A query whose distinct columns are all ENDPOINT attributes has one value
 //! per endpoint, which any row of it carries, so its cut hides none and two
 //! equal rows at its cut are no defect.
@@ -121,7 +125,7 @@ use crate::dedup::DedupMode;
 use crate::error::WireError;
 use crate::id::EndpointId;
 use crate::meta::DedupRecord;
-use crate::order::{Direction, ResultOrder};
+use crate::order::{Direction, ResultOrder, SortColumn};
 use cell::{Cell, canonical, decode};
 use compare::{cmp_cell, rank_classes};
 
@@ -547,7 +551,10 @@ pub fn combine(
 /// Decodes the cells the order reads from every row of one node.
 ///
 /// Under `DISTINCT` the endpoint's ENDPOINT attribute values `attributes`
-/// close every row's tuple, since the client selected them too.
+/// close every row's tuple, since the client selected them too. A key on an
+/// ENDPOINT attribute reads its value from `attributes`, as the string cell
+/// the client receives (§9.3), and an endpoint that carries no value for it
+/// is refused as a row that lacks a column the order reads.
 fn decode_node(
     rows: Vec<ResultSetRow>,
     attributes: &[String],
@@ -558,7 +565,10 @@ fn decode_node(
             let keys = order
                 .keys()
                 .iter()
-                .map(|key| ordered(&raw, key.column(), order))
+                .map(|key| match key.column() {
+                    SortColumn::Node(column) => ordered(&raw, column, order),
+                    SortColumn::Endpoint(index) => attributes.get(index).map(|v| cell::text(v)),
+                })
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
             let tie = order

@@ -15,7 +15,7 @@ use openehr_query::visit::{VisitMut, walk_terminal_mut};
 use super::comparable::comparable;
 use super::refusal::Refusal;
 use crate::dedup::DedupMode;
-use crate::order::{Direction, ResultOrder, SortKey};
+use crate::order::{Direction, ResultOrder, SortColumn, SortKey};
 
 /// The parameter name the template holds the `ehr_id` in. A bound query has
 /// no parameter left, so the name cannot collide with one the client wrote.
@@ -201,15 +201,20 @@ pub(super) enum Rows {
     Plain {
         /// Whether the request selects version-identity dedup.
         dedup: bool,
+        /// Whether the client also ordered on an ENDPOINT attribute, a key
+        /// the Tier evaluates and no node is sent (§8.1, §9.3).
+        by_endpoint: bool,
     },
 }
 
 impl Rows {
-    /// The shape of a query that is `plain` (has no aggregate) under `mode`.
-    pub(super) fn of(plain: bool, mode: DedupMode) -> Self {
+    /// The shape of a query that is `plain` (has no aggregate) under `mode`,
+    /// ordered `by_endpoint` on an ENDPOINT attribute or not.
+    pub(super) fn of(plain: bool, mode: DedupMode, by_endpoint: bool) -> Self {
         if plain {
             Self::Plain {
                 dedup: mode == DedupMode::VersionIdentity,
+                by_endpoint,
             }
         } else {
             Self::Aggregate
@@ -230,7 +235,7 @@ pub(super) fn order_for(
     one_ehr: bool,
 ) -> Result<ResultOrder, Refusal> {
     match rows {
-        Rows::Plain { dedup } => push_order(query, one_ehr, dedup),
+        Rows::Plain { dedup, by_endpoint } => push_order(query, one_ehr, dedup, by_endpoint),
         Rows::Aggregate => Ok(ResultOrder::new(
             Vec::new(),
             Vec::new(),
@@ -273,6 +278,11 @@ pub(super) fn order_for(
 /// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
 /// `EHR`'s own id is the same on every row and is not a key.
 ///
+/// `by_endpoint` says the client also ordered on an ENDPOINT attribute, which
+/// the directive pass took out of `ORDER BY` (§8.1, §9.3). The query is then
+/// ordered even with no key left for the node, and the node is sent the
+/// tie-break, so its cut is the same on every repeat (§11.6.1).
+///
 /// Under `dedup`, the version uid of [`version_uid`] is the dedup key
 /// (§10.2): a hidden column when it is not selected, except under `DISTINCT`,
 /// where a query that does not select it has no key and nothing is
@@ -291,7 +301,12 @@ pub(super) fn order_for(
 /// ordered on such a path, [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query with a `LIMIT`
 /// whose selected paths do not fix every column, and
 /// [`Refusal::NegativePaging`] for a negative `LIMIT`.
-fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<ResultOrder, Refusal> {
+fn push_order(
+    query: &mut SelectQuery,
+    one_ehr: bool,
+    dedup: bool,
+    by_endpoint: bool,
+) -> Result<ResultOrder, Refusal> {
     let limit = dispatched_limit(query)?;
     let distinct = query.select.distinct;
     let version = version_uid(&query.from)
@@ -311,7 +326,7 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
         }
         None => order,
     };
-    if query.order_by.is_empty() {
+    if query.order_by.is_empty() && !by_endpoint {
         let order = ResultOrder::new(Vec::new(), Vec::new(), limit);
         return Ok(keyed(order, &mut query.select.columns));
     }
@@ -339,13 +354,13 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
         if limit.is_some() {
             pinned_by_paths(&query.select.columns, &query.from)?;
         }
-        let ordered: Vec<usize> = keys.iter().map(SortKey::column).collect();
+        let ordered: Vec<SortColumn> = keys.iter().map(SortKey::column).collect();
         let tie_break: Vec<(usize, IdentifiedPath)> = query
             .select
             .columns
             .iter()
             .enumerate()
-            .filter(|(index, _)| !ordered.contains(index))
+            .filter(|(index, _)| !ordered.contains(&SortColumn::Node(*index)))
             // NOTE: AQL master03-syntax §ORDER BY assumes comparable data and §11.6.1 a deterministic
             // order, so only a path to a primitive or an ordered data value is pushed as a key.
             .filter_map(|(index, column)| match &column.column {
@@ -484,7 +499,7 @@ fn push_ascending(order_by: &mut Vec<OrderByExpr>, path: IdentifiedPath) {
     });
 }
 
-fn direction(order: Option<SortOrder>) -> Direction {
+pub(super) fn direction(order: Option<SortOrder>) -> Direction {
     match order {
         Some(SortOrder::Descending) => Direction::Descending,
         Some(SortOrder::Ascending) | None => Direction::Ascending,

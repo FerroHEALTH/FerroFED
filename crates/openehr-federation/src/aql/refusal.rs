@@ -241,12 +241,13 @@ pub enum Refusal {
     )]
     NodeSetUndefined,
     /// The variable of the `FROM ENDPOINT` directive is bound again in
-    /// `FROM`, or used anywhere but as a selected column. A path through it
-    /// selects an ENDPOINT attribute the Tier adds to the rows (§9.3, N12);
-    /// §8.1 and §9.3 define no other use, and a node, which never sees the
-    /// directive, would receive an unbound variable.
+    /// `FROM`, or used anywhere but as a selected column or an `ORDER BY`
+    /// key. A path through it reads an ENDPOINT attribute the Tier holds per
+    /// endpoint (§8.1, §9.3, N12), which the Tier adds to the rows or orders
+    /// them on; a node, which never sees the directive, would receive an
+    /// unbound variable anywhere else.
     #[error(
-        "the endpoint directive's variable can only be selected, as an ENDPOINT attribute, and cannot be bound again in FROM (§8.1, §9.3){}",
+        "the endpoint directive's variable can only be selected or ordered on, as an ENDPOINT attribute, and cannot be bound again in FROM (§8.1, §9.3){}",
         At(.at)
     )]
     EndpointVariable {
@@ -313,6 +314,22 @@ pub enum Refusal {
         /// Where the `ORDER BY` path was written.
         at: Option<Range<usize>>,
     },
+    /// Under version-identity dedup with a node `LIMIT`, an `ORDER BY` key
+    /// reads an ENDPOINT attribute. The copies of one version at two
+    /// endpoints differ on it, so a node may fill its first `n` with copies
+    /// the Tier suppresses for another endpoint's copy that it orders behind
+    /// a row the node left out, and the node's first `n` need not hold its
+    /// share of the federated first `n` (§10.2, §11.6.1; no specification
+    /// governs the combination: our own design). Drop the key, the `LIMIT`
+    /// or the dedup.
+    #[error(
+        "under version-identity dedup with a LIMIT, ORDER BY cannot read an ENDPOINT attribute, because the copies of one version at two endpoints differ on it and a node's first rows need not then hold the federated first rows (§10.2, §11.6.1); drop the key, the LIMIT or the dedup{}",
+        At(.at)
+    )]
+    EndpointOrderDedup {
+        /// Where the `ORDER BY` key was written.
+        at: Option<Range<usize>>,
+    },
 }
 
 impl Refusal {
@@ -354,6 +371,7 @@ impl Refusal {
         "endpoint-name-collision",
         "incomparable-distinct-key",
         "incomparable-order-key",
+        "endpoint-order-dedup",
     ];
 
     /// The names a gateway once answered that no refusal raises any more.
@@ -404,6 +422,7 @@ impl Refusal {
             Self::EndpointNameCollision { .. } => "endpoint-name-collision",
             Self::IncomparableDistinctKey { .. } => "incomparable-distinct-key",
             Self::IncomparableOrderKey { .. } => "incomparable-order-key",
+            Self::EndpointOrderDedup { .. } => "endpoint-order-dedup",
         }
     }
 
@@ -432,7 +451,8 @@ impl Refusal {
             | Self::EndpointAttributeUnknown { at }
             | Self::EndpointNameCollision { at }
             | Self::IncomparableDistinctKey { at }
-            | Self::IncomparableOrderKey { at } => at.as_ref(),
+            | Self::IncomparableOrderKey { at }
+            | Self::EndpointOrderDedup { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::PartialAggregate
@@ -616,6 +636,7 @@ mod tests {
             Refusal::EndpointNameCollision { at: None },
             Refusal::IncomparableDistinctKey { at: None },
             Refusal::IncomparableOrderKey { at: None },
+            Refusal::EndpointOrderDedup { at: None },
         ]
     }
 
@@ -653,6 +674,7 @@ mod tests {
             Refusal::EndpointNameCollision { .. } => 28,
             Refusal::IncomparableDistinctKey { .. } => 29,
             Refusal::IncomparableOrderKey { .. } => 30,
+            Refusal::EndpointOrderDedup { .. } => 31,
         }
     }
 

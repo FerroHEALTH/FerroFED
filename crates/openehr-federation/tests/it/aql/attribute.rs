@@ -13,6 +13,7 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::refusal::{Indecomposable, Refusal};
 use openehr_federation::aql::{Analysis, ColumnSource, Context, Targeting};
 use openehr_federation::attribute::EndpointAttribute;
+use openehr_federation::order::{Direction, SortKey};
 
 use super::{EHR_ID, analysed, ask_all};
 
@@ -232,15 +233,30 @@ fn under_distinct_the_node_is_asked_only_its_own_columns() {
     assert_eq!(vec![EndpointAttribute::EndpointId], analysis.attributes());
 }
 
+// Adjudicated on #354: §8.1 and §9.3 make the ENDPOINT attributes values the Tier
+// holds per endpoint and forbid no ORDER BY on them, so ordering on one is accepted.
 // conformance: CP-37
 #[test]
-fn ordering_on_an_attribute_is_refused_with_or_without_a_limit() {
-    for tail in [" ORDER BY p/id", " ORDER BY p/system_id DESC LIMIT 2"] {
-        let refusal = analysed(&(selecting("p/id, c/uid/value") + tail), &directed(2))
-            .expect_err("§9.3 makes the attributes selectable, and only that");
-        assert!(
-            matches!(refusal, Refusal::EndpointVariable { at: Some(_) }),
-            "{tail}: {refusal:?}"
+fn ordering_on_an_attribute_is_accepted_with_or_without_a_limit() {
+    for (tail, key, limit) in [
+        (
+            " ORDER BY p/id",
+            SortKey::endpoint(0, Direction::Ascending),
+            None,
+        ),
+        (
+            " ORDER BY p/system_id DESC LIMIT 2",
+            SortKey::endpoint(1, Direction::Descending),
+            Some(2),
+        ),
+    ] {
+        let analysis = analysed(&(selecting("p/id, c/uid/value") + tail), &directed(2))
+            .unwrap_or_else(|refusal| panic!("{tail}: §8.1, §9.3: {refusal:?}"));
+        assert_eq!(
+            [key],
+            analysis.order().keys(),
+            "{tail}: a Tier key on the attribute"
         );
+        assert_eq!(limit, analysis.order().limit(), "{tail}");
     }
 }
