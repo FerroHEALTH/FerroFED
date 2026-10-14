@@ -40,9 +40,9 @@
 //! id's entity.
 //!
 //! An emergency access (Regulation (EU) 2025/327 Art 11(5)) keeps its
-//! purposes of use where BALP puts every purpose, in `agent:user`
-//! `purposeOfUse`, and is marked in one entity of its own,
-//! `ehds-emergency-access`, whose `description` states the mark in words and
+//! purposes of use where every purpose is written, in `agent:user`
+//! `purposeOfUse` and in `purposeOfEvent`, and is marked in one entity of
+//! its own, `ehds-emergency-access`, whose `description` states the mark in words and
 //! whose `detail` entries name the purposes that marked it, so a reader of
 //! the record need not know which codes the deployment maps, and each member
 //! whose consent pre-filter denial was set aside for it.
