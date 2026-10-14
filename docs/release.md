@@ -43,7 +43,16 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   and notice) and its SHA-256 as
   `ferrofed-conformance-seed-data.json.sha256sum`, and the Grafana dashboard
   and Prometheus alert rules of `deploy/observability/`,
-  `ferrofed-dashboard.json` and `ferrofed-alerts.yaml`. A draft is mutable and
+  `ferrofed-dashboard.json` and `ferrofed-alerts.yaml`. It attaches the two
+  documents Regulation (EU) 2025/327 Art 30(1)(d) has the system accompanied
+  by, as the tag's Markdown source, which a screen reader reads as text:
+  `ferrofed-vX.Y.Z-information-sheet.md`
+  (`website/book/src/evaluate/information-sheet.md`) and
+  `ferrofed-vX.Y.Z-instructions-for-use.md`
+  (`website/book/src/operate/instructions-for-use.md`).
+  `scripts/release/accompanying-documents.sh` writes both and refuses an
+  information sheet that does not say "FerroFED X.Y.Z, released on", so a
+  sheet left at the previous release fails here. A draft is mutable and
   invisible to anyone browsing releases, which is the window the asset
   uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
@@ -56,8 +65,9 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   alone, so it attaches no asset to the draft.
 - **finalize-release** checks that the draft carries every asset this version
   promises, eight per target, the three compose files, the nginx
-  configuration and its checksum, the two seed data files, and the dashboard
-  and alert rules, and publishes only then, and only once both images are
+  configuration and its checksum, the two seed data files, the dashboard
+  and alert rules, and the information sheet and instructions for use of
+  the tag, and publishes only then, and only once both images are
   pushed. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A pre-release is published with
   `--latest=false`, so it never becomes the repository's latest release.
@@ -93,6 +103,9 @@ names the called workflow as the signer, which a consumer can demand with
 - builds the `linux/amd64` and `linux/arm64` index from `docker/Dockerfile` with
   no cache and no QEMU, and pushes it by digest, tagged `<version>` and, for a
   release that is not a pre-release, `<major>.<minor>` and `latest`;
+- labels and annotates it with `eu.ferrofed.information-sheet` and
+  `eu.ferrofed.instructions-for-use`, the download URLs of the two documents
+  the release attaches, so an image names the copies that describe it;
 - attests SLSA provenance for the index and each platform manifest and an SPDX
   SBOM per platform, all pushed to the registry as OCI referrers, then
   verifies the published image the way a consumer would.
@@ -108,8 +121,8 @@ names the called workflow as the signer, which a consumer can demand with
   `docker/viewer/Dockerfile`;
 - builds, pushes, attests and verifies the `linux/amd64` and `linux/arm64`
   index exactly as `release-image.yml` does for the gateway, with the same
-  provenance and per-platform SPDX SBOM referrers and the same `pkg:cargo`
-  purl check.
+  two document labels, the same provenance and per-platform SPDX SBOM
+  referrers and the same `pkg:cargo` purl check.
 
 Verify a release:
 
@@ -228,7 +241,9 @@ slow one.
    `app/ferrofed-server/src/access/`, a mapping pin or the query path they
    ride, the
    [clinical safety risk file](https://ferrofed.eu/docs/evaluate/clinical-safety.html)
-   is reviewed and its review table gets a row.
+   is reviewed and its review table gets a row. The release attaches both
+   pages as they stand at the tag, so what the bump merges is the copy an
+   operator downloads (§ What the lane does).
 6. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the

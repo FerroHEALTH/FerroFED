@@ -68,7 +68,8 @@ ENTRYPOINT ["/usr/local/bin/ferrofed"]
 CMD ["serve"]
 
 # Build-independent labels only. The release lane sets the version, revision
-# and created labels at build time.
+# and created labels at build time, and eu.ferrofed.information-sheet and
+# eu.ferrofed.instructions-for-use, the URLs of the release's two copies.
 LABEL org.opencontainers.image.title="FerroFED" \
       org.opencontainers.image.description="An openEHR federation gateway: one AQL query in, standard AQL to every node, one answer out" \
       org.opencontainers.image.url="https://ferrofed.eu" \

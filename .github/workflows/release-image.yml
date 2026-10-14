@@ -137,7 +137,9 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
           # The action adds org.opencontainers.image.version, .revision and
           # .created itself; these repeat the build-independent set
-          # docker/Dockerfile carries, so the two never disagree.
+          # docker/Dockerfile carries, so the two never disagree. The two
+          # eu.ferrofed document labels name this tag's copies release.yml
+          # attaches, so they are set here alone.
           labels: |
             org.opencontainers.image.title=FerroFED
             org.opencontainers.image.description=An openEHR federation gateway: one AQL query in, standard AQL to every node, one answer out
@@ -147,6 +149,8 @@ jobs:
             org.opencontainers.image.vendor=Cadasto B.V.
             org.opencontainers.image.authors=Cadasto B.V. <info@cadasto.com>
             eu.ferrofed.manufacturer=Cadasto B.V., Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands, info@cadasto.com
+            eu.ferrofed.information-sheet=https://github.com/FerroHEALTH/FerroFED/releases/download/${{ inputs.tag }}/ferrofed-${{ inputs.tag }}-information-sheet.md
+            eu.ferrofed.instructions-for-use=https://github.com/FerroHEALTH/FerroFED/releases/download/${{ inputs.tag }}/ferrofed-${{ inputs.tag }}-instructions-for-use.md
             org.opencontainers.image.licenses=BUSL-1.1
           # The action derives its annotations from its own default labels, so
           # the custom lines above never reach the index, and GHCR reads the
@@ -160,6 +164,8 @@ jobs:
             org.opencontainers.image.vendor=Cadasto B.V.
             org.opencontainers.image.authors=Cadasto B.V. <info@cadasto.com>
             eu.ferrofed.manufacturer=Cadasto B.V., Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands, info@cadasto.com
+            eu.ferrofed.information-sheet=https://github.com/FerroHEALTH/FerroFED/releases/download/${{ inputs.tag }}/ferrofed-${{ inputs.tag }}-information-sheet.md
+            eu.ferrofed.instructions-for-use=https://github.com/FerroHEALTH/FerroFED/releases/download/${{ inputs.tag }}/ferrofed-${{ inputs.tag }}-instructions-for-use.md
             org.opencontainers.image.licenses=BUSL-1.1
 
       # Cold by construction, like the binary lane: no cache may influence a
