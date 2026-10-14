@@ -233,10 +233,11 @@ impl Walk {
     }
 
     /// Refuses an occurrence of a type-discriminated slicing whose resource
-    /// type no slice names.
-    // NOTE: R4 profiling lets an open slicing admit an occurrence no slice names; a received
-    // document is held closed on type, so an entry no slice describes is refused, never
-    // skipped (no specification governs this: our own design).
+    /// type no slice names, where the slicing's rules admit no such
+    /// occurrence there: anywhere under `closed`, and before an occurrence of
+    /// a named type under `openAtEnd`.
+    // NOTE: FHIR R4 profiling, slicing rules (<https://hl7.org/fhir/R4/profiling.html#slicing>):
+    // under `open` "additional content is allowed anywhere in the list", so no type is refused.
     fn types(
         &mut self,
         snapshot: &Snapshot<'_>,
@@ -245,6 +246,9 @@ impl Walk {
         slices: &[&Element],
         found: &[Occurrence<'_>],
     ) {
+        if slicing.rules() == SlicingRules::Open {
+            return;
+        }
         for discriminator in slicing.discriminators() {
             let path = discriminator.path();
             if discriminator.kind() != DiscriminatorKind::Type || path.contains('(') {
@@ -258,18 +262,27 @@ impl Walk {
                 })
                 .flat_map(|target| target.types().iter().map(String::as_str))
                 .collect();
-            for (at, value) in found {
-                let kind = value
-                    .and_then(|value| {
-                        if path == "$this" {
-                            Some(value)
-                        } else {
-                            follow(value, path)
-                        }
-                    })
-                    .and_then(|target| target.get("resourceType"))
-                    .and_then(Value::as_str);
-                if !kind.is_some_and(|kind| named.contains(kind)) {
+            let is_named: Vec<bool> = found
+                .iter()
+                .map(|(_, value)| {
+                    value
+                        .and_then(|value| {
+                            if path == "$this" {
+                                Some(value)
+                            } else {
+                                follow(value, path)
+                            }
+                        })
+                        .and_then(|target| target.get("resourceType"))
+                        .and_then(Value::as_str)
+                        .is_some_and(|kind| named.contains(kind))
+                })
+                .collect();
+            let last_named = is_named.iter().rposition(|hit| *hit);
+            for (position, ((at, _), hit)) in found.iter().zip(&is_named).enumerate() {
+                let at_end = last_named.is_none_or(|last| position > last);
+                let admitted = *hit || (slicing.rules() == SlicingRules::OpenAtEnd && at_end);
+                if !admitted {
                     self.find(snapshot, element, at, FindingKind::TypeNotAllowed);
                 }
             }

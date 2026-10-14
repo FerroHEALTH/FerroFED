@@ -337,6 +337,65 @@ fn a_reference_typed_patient_by_identifier_alone_is_refused() -> Result<(), Box<
     Ok(())
 }
 
+/// The synthetic document with a `Provenance` entry whose
+/// `entity.what` is `what`.
+fn with_provenance(what: &str) -> Result<String, String> {
+    document_with_entry(&format!(
+        r#"{{ "fullUrl": "http://example.org/fhir/Provenance/synthetic-provenance", "resource": {{ "resourceType": "Provenance", "id": "synthetic-provenance", "target": [{{ "reference": "AllergyIntolerance/synthetic-allergy" }}], "recorded": "2026-10-06T10:00:00Z", "agent": [{{ "who": {{ "display": "Synthetic member" }} }}], "entity": [{{ "role": "source", "what": {what} }}] }} }}"#
+    ))
+}
+
+// FHIR R4 References, logical references (https://hl7.org/fhir/R4/references.html#logical): a
+// reference by identifier alone is valid and need not resolve inside the Bundle.
+#[test]
+fn a_reference_by_identifier_alone_is_admitted_at_provenance_entity_what()
+-> Result<(), Box<dyn Error>> {
+    for what in [
+        r#"{ "identifier": { "system": "urn:oid:2.999.1.668", "value": "synthetic-source" } }"#,
+        r#"{ "type": "Composition", "identifier": { "system": "urn:oid:2.999.1.668", "value": "synthetic-source" } }"#,
+    ] {
+        ReceivedDocument::read(&with_provenance(what)?)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_reference_typed_patient_by_identifier_alone_is_refused_at_provenance_entity_what()
+-> Result<(), Box<dyn Error>> {
+    let error = refused(&with_provenance(
+        r#"{ "type": "Patient", "identifier": { "system": "urn:oid:2.999.1.665", "value": "synthetic-0666" } }"#,
+    )?)?;
+    assert!(
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::Unreferenced { identifier: true } } if location == "Bundle.entry[3].resource.entity[0].what"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_untyped_reference_by_identifier_alone_elsewhere_is_refused() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r#""author": [{ "identifier": { "system": "urn:oid:2.999.1.667", "value": "synthetic-author" } }],"#,
+    )?;
+    let error = refused(&text)?;
+    assert!(
+        matches!(error, ReceiveError::Reference { ref location, source: ReferenceError::Unreferenced { identifier: true } } if location == "Bundle.entry[0].resource.author[0]"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_typed_reference_by_identifier_alone_elsewhere_is_admitted() -> Result<(), Box<dyn Error>> {
+    let text = document_with(
+        r#""author": [{ "display": "Synthetic author" }],"#,
+        r#""author": [{ "type": "Practitioner", "identifier": { "system": "urn:oid:2.999.1.667", "value": "synthetic-author" } }],"#,
+    )?;
+    ReceivedDocument::read(&text)?;
+    Ok(())
+}
+
 #[test]
 fn a_reference_whose_target_is_unknown_is_refused() -> Result<(), Box<dyn Error>> {
     let text = document_with(

@@ -23,6 +23,9 @@ mod document;
 #[cfg(feature = "openehr")]
 mod mapping;
 #[cfg(test)]
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+mod own;
+#[cfg(test)]
 mod profile;
 #[cfg(test)]
 mod property;

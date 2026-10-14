@@ -11,6 +11,7 @@
 )]
 
 use std::error::Error;
+use std::fmt::Write;
 
 use eehrxf::dataset::ResourceProfile;
 use eehrxf::dataset::constraint::DiscriminatorKind;
@@ -330,21 +331,95 @@ fn the_published_eps_examples_are_read_and_conform() -> Result<(), Box<dyn Error
     Ok(())
 }
 
+// FHIR R4 profiling, slicing rules: `bundle-eu-eps` slices `Bundle.entry` open, and under
+// `open` "additional content is allowed anywhere in the list".
 #[test]
-fn an_entry_of_a_type_no_slice_of_the_bundle_profile_names_is_found() -> Result<(), Box<dyn Error>>
-{
+fn an_entry_of_a_type_no_slice_of_the_open_bundle_profile_names_is_admitted()
+-> Result<(), Box<dyn Error>> {
     let text = document_with_entry(
         r#"{ "fullUrl": "http://example.org/fhir/Coverage/synthetic-coverage", "resource": { "resourceType": "Coverage", "id": "synthetic-coverage", "status": "active", "beneficiary": { "reference": "Patient/synthetic-patient" }, "payor": [{ "display": "Synthetic payer" }] } }"#,
     )?;
-    let findings = findings(&text)?;
-    assert!(
-        findings
-            .iter()
-            .any(|finding| finding.element == "Bundle.entry"
-                && finding.location == "Bundle.entry[3]"
-                && finding.kind == FindingKind::TypeNotAllowed),
-        "{findings:?}"
+    let (bundle, composition) = profiles()?;
+    ReceivedDocument::read(&text)?.check(&bundle, &composition)?;
+    Ok(())
+}
+
+/// The canonical URL of the synthetic Bundle profile.
+const SYNTHETIC_BUNDLE: &str = "http://example.org/fhir/StructureDefinition/synthetic-bundle";
+
+/// A synthetic Bundle profile whose entries are sliced by the type of their
+/// resource with `rules`, one slice per resource type of `types`.
+fn synthetic_bundle(rules: &str, types: &[&str]) -> Result<ResourceProfile, Box<dyn Error>> {
+    let mut slices = String::new();
+    for kind in types {
+        write!(
+            slices,
+            r#",{{"id":"Bundle.entry:{kind}","path":"Bundle.entry","sliceName":"{kind}","min":0,"max":"*"}},
+            {{"id":"Bundle.entry:{kind}.resource","path":"Bundle.entry.resource","min":1,"max":"1","type":[{{"code":"{kind}"}}]}}"#
+        )?;
+    }
+    let definition = format!(
+        r#"{{"resourceType":"StructureDefinition","url":"{SYNTHETIC_BUNDLE}","name":"SyntheticBundle","kind":"resource","derivation":"constraint","snapshot":{{"element":[
+          {{"id":"Bundle","path":"Bundle","min":0,"max":"*"}},
+          {{"id":"Bundle.entry","path":"Bundle.entry","min":0,"max":"*","slicing":{{"discriminator":[{{"type":"type","path":"resource"}}],"rules":"{rules}"}}}},
+          {{"id":"Bundle.entry.resource","path":"Bundle.entry.resource","min":0,"max":"1","type":[{{"code":"Resource"}}]}}{slices}
+        ]}}}}"#
     );
+    let members = vec![
+        ("package/package.json", MANIFEST.to_owned()),
+        (
+            "package/StructureDefinition-synthetic-bundle.json",
+            definition,
+        ),
+    ];
+    Ok(ResourceProfile::read(
+        archive(&members)?.as_slice(),
+        SYNTHETIC_BUNDLE,
+    )?)
+}
+
+/// Checks the synthetic document against a synthetic Bundle profile sliced
+/// with `rules` over `types`, returning the locations of the entries of a
+/// type the slicing does not admit.
+fn types_refused(rules: &str, types: &[&str]) -> Result<Vec<String>, Box<dyn Error>> {
+    let profile = synthetic_bundle(rules, types)?;
+    let composition = eps(COMPOSITION_PROFILE)?;
+    match ReceivedDocument::read(DOCUMENT)?.check(&profile, &composition) {
+        Ok(_) => Ok(Vec::new()),
+        Err(CheckError::NonConformant { findings }) => Ok(findings
+            .into_iter()
+            .filter(|finding| finding.kind == FindingKind::TypeNotAllowed)
+            .map(|finding| finding.location)
+            .collect()),
+        Err(other) => Err(other.into()),
+    }
+}
+
+// FHIR R4 profiling, slicing rules: under `closed` "no additional slices are allowed".
+#[test]
+fn an_entry_of_a_type_no_slice_of_a_closed_slicing_names_is_found() -> Result<(), Box<dyn Error>> {
+    let refused = types_refused("closed", &["Composition", "Patient"])?;
+    assert_eq!(refused, ["Bundle.entry[2]"], "the allergy entry");
+    Ok(())
+}
+
+#[test]
+fn an_entry_of_a_type_no_slice_of_an_open_slicing_names_is_admitted() -> Result<(), Box<dyn Error>>
+{
+    let refused = types_refused("open", &["Composition"])?;
+    assert!(refused.is_empty(), "{refused:?}");
+    Ok(())
+}
+
+// FHIR R4 profiling, slicing rules: under `openAtEnd` additional content "is allowed, but only at
+// the end of the list".
+#[test]
+fn an_open_at_end_slicing_admits_an_unnamed_type_only_after_the_slices()
+-> Result<(), Box<dyn Error>> {
+    let at_end = types_refused("openAtEnd", &["Composition", "Patient"])?;
+    assert!(at_end.is_empty(), "{at_end:?}");
+    let before = types_refused("openAtEnd", &["Composition", "AllergyIntolerance"])?;
+    assert_eq!(before, ["Bundle.entry[1]"], "the patient entry");
     Ok(())
 }
 

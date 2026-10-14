@@ -25,6 +25,7 @@ use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 
 use super::DOCUMENT;
 use super::document_with;
+use super::document_with_entry;
 use super::eps_example;
 
 /// The fixtures beside this suite.
@@ -164,6 +165,36 @@ fn a_published_document_with_urn_full_urls_is_not_refused_as_several_subjects()
             "{source:?}"
         );
     }
+    Ok(())
+}
+
+// FHIR R4 profiling, slicing rules: an entry no slice of an open slicing names is admitted,
+// and an admitted entry no context maps becomes no openEHR content of its own.
+#[test]
+fn a_provenance_entry_is_kept_only_in_the_original() -> Result<(), Box<dyn Error>> {
+    let text = document_with_entry(
+        r#"{ "fullUrl": "http://example.org/fhir/Provenance/synthetic-provenance", "resource": { "resourceType": "Provenance", "id": "synthetic-provenance", "target": [{ "reference": "AllergyIntolerance/synthetic-allergy" }], "recorded": "2026-10-06T10:00:00Z", "agent": [{ "who": { "display": "Synthetic member" } }], "entity": [{ "role": "source", "what": { "identifier": { "system": "urn:oid:2.999.1.668", "value": "synthetic-source-composition" } } }] } }"#,
+    )?;
+    let document = ReceivedDocument::read(&text)?;
+    let received = mapping()?.to_openehr(&document, &settings())?;
+    let mut composition: Composition = serde_json::from_str(received.composition())?;
+    let audit = composition
+        .feeder_audit
+        .as_mut()
+        .ok_or("the composition carries a feeder audit")?;
+    let original = audit
+        .original_content
+        .take()
+        .ok_or("the composition keeps the original content")?;
+    let DvEncapsulated::DvParsable(parsable) = original else {
+        return Err(format!("the original is no DV_PARSABLE: {original:?}").into());
+    };
+    assert_eq!(parsable.value, text, "the original is kept byte for byte");
+    let mapped = serde_json::to_string(&composition)?;
+    assert!(
+        !mapped.contains("Provenance") && !mapped.contains("synthetic-source-composition"),
+        "no Provenance entry becomes openEHR content: {mapped}"
+    );
     Ok(())
 }
 
