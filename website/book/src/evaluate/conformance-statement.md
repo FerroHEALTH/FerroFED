@@ -70,7 +70,7 @@ statement of the text.
 
 | Product | Pinned | Scores |
 |---|---|---|
-| FerroEHR 4.3.3 | `ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f` | the Connectathon tracks, the differential run and the node profile |
+| FerroEHR 4.3.6 | `ghcr.io/ferrohealth/ferroehr:4.3.6@sha256:cd29d6526084c84e9a7fe2c9d7058bd4fe67abbfab51d07b124d84dc9805e5bb` | the Connectathon tracks, the differential run and the node profile |
 | EHRbase 2.36.0 | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the node profile |
 | The reference implementation | [`syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5`](https://github.com/syntaric/openehr-federation-ref/tree/92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5) | the differential run, as evidence and never as an oracle |
 
