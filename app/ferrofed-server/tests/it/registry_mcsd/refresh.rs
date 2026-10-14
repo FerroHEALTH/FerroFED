@@ -158,8 +158,9 @@ async fn a_refresh_with_nothing_changed_keeps_the_registry_and_counts_no_reload(
     Ok(())
 }
 
-/// A refresh whose endpoint relies on `hl7-fhir-rest` breaks §15.2 and is
-/// refused: the running registry keeps the endpoint as it was, and the
+/// A refresh whose endpoint relies on `hl7-fhir-rest`, which never marks an
+/// openEHR Query API (§15.2), and declares none of a native endpoint's keys
+/// is refused: the running registry keeps the endpoint as it was, and the
 /// refusal counts as a refused reload. CP-20 is the operator's; the gateway
 /// assists by refusing the registry.
 #[tokio::test]

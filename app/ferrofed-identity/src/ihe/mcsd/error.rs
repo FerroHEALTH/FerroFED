@@ -12,8 +12,9 @@ use ihe_iti::mcsd::error::DirectoryError;
 use thiserror::Error;
 
 use super::{
-    CONSENT_REFUSAL_CODE_EXTENSION, CREATING_SYSTEM_ID_SYSTEM, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM,
-    ORGANISATION_ID_SYSTEM, SYSTEM_ID_SYSTEM,
+    CATEGORY_SYSTEM, CONSENT_REFUSAL_CODE_EXTENSION, CREATING_SYSTEM_ID_SYSTEM,
+    EHR_ID_SYSTEM_EXTENSION, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM, ORGANISATION_ID_SYSTEM,
+    PROFILE_EXTENSION, SYSTEM_ID_SYSTEM,
 };
 
 /// A Bundle entry, named before its registry id is known: its position, and
@@ -73,15 +74,11 @@ pub enum IdentifierFault {
     Malformed(#[source] IdError),
 }
 
-/// Why an endpoint's `connectionType` is not an openEHR Query API code (N19,
-/// §15.2).
+/// Why an endpoint's `connectionType` is neither an openEHR Query API code
+/// (N19, §15.2) nor HL7's `hl7-fhir-rest`.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum ConnectionTypeFault {
-    /// The code is `hl7-fhir-rest`, which denotes a FHIR REST endpoint and
-    /// never an openEHR Query API (§15.2).
-    #[error("hl7-fhir-rest denotes a FHIR REST endpoint, never an openEHR Query API (§15.2)")]
-    FhirRest,
     /// The `connectionType` carries no code.
     #[error("the connectionType carries no code")]
     NoCode,
@@ -91,8 +88,13 @@ pub enum ConnectionTypeFault {
         /// The code as given.
         code: String,
     },
-    /// The system and code are not a defined openEHR Query API code (N19).
-    #[error("{system}|{code} is not a defined openEHR Query API connection type (N19)")]
+    /// The system and code are neither a defined openEHR Query API code
+    /// (N19) nor `hl7-fhir-rest` in HL7's `endpoint-connection-type`, which
+    /// marks a member's own FHIR endpoint and never an openEHR Query API
+    /// (§15.2).
+    #[error(
+        "{system}|{code} is neither a defined openEHR Query API connection type (N19) nor HL7's hl7-fhir-rest"
+    )]
     Unbound {
         /// The system as given.
         system: String,
@@ -184,9 +186,11 @@ pub enum FhirFormError {
         #[source]
         fault: IdentifierFault,
     },
-    /// An endpoint's `connectionType` is not an openEHR Query API code (N19,
-    /// §15.2, CP-20).
-    #[error("endpoint {endpoint} does not carry an openEHR Query API connectionType")]
+    /// An endpoint's `connectionType` is neither an openEHR Query API code
+    /// (N19, §15.2, CP-20) nor `hl7-fhir-rest`.
+    #[error(
+        "endpoint {endpoint} carries neither an openEHR Query API connectionType nor hl7-fhir-rest"
+    )]
     ConnectionType {
         /// The endpoint.
         endpoint: EndpointId,
@@ -246,6 +250,23 @@ pub enum FhirFormError {
     /// `valueCode` (§11.1, N27).
     #[error("endpoint {0} has a {url} extension with no valueCode", url = CONSENT_REFUSAL_CODE_EXTENSION)]
     ConsentRefusalCode(EndpointId),
+    /// An endpoint carries a `payloadType` coding in the category system
+    /// with no `code`.
+    #[error("endpoint {0} has a payloadType coding in {system} with no code", system = CATEGORY_SYSTEM)]
+    Category(EndpointId),
+    /// An endpoint carries a profile extension with no `valueCanonical`.
+    #[error("endpoint {0} has a {url} extension with no valueCanonical", url = PROFILE_EXTENSION)]
+    Profile(EndpointId),
+    /// An endpoint carries no single usable `ehr_id` identifier system
+    /// extension: one with no `valueUri`, or more than one.
+    #[error("endpoint {endpoint} has no single valueUri in its {url} extensions", url = EHR_ID_SYSTEM_EXTENSION)]
+    EhrIdSystem {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// [`IdentifierFault::NoValue`] or [`IdentifierFault::Repeated`].
+        #[source]
+        fault: IdentifierFault,
+    },
     /// An endpoint has no single operating organisation.
     #[error("endpoint {endpoint} has no single operating organisation")]
     Operator {

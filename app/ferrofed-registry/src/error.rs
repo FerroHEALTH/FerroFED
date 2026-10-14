@@ -250,12 +250,14 @@ pub enum LoadError {
     /// member's `ehr_id`, so the gateway could locate the member there by
     /// nothing it may send (N33).
     #[error(
-        "endpoint {0} serves the exchange format natively and declares no ehr_id_system to locate the member's ehr_id in"
+        "endpoint {0} is an hl7-fhir-rest endpoint, serving the exchange format natively, and declares no ehr_id_system to locate the member's ehr_id in"
     )]
     NativeWithoutIdentifierSystem(EndpointId),
     /// An `hl7-fhir-rest` endpoint declares no category or no profile, or
     /// an empty one.
-    #[error("endpoint {endpoint} serves the exchange format natively and declares no usable {key}")]
+    #[error(
+        "endpoint {endpoint} is an hl7-fhir-rest endpoint, serving the exchange format natively, and declares no usable {key}"
+    )]
     NativeWithout {
         /// The endpoint.
         endpoint: EndpointId,

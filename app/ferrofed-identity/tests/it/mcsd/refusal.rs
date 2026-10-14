@@ -49,18 +49,45 @@ fn connection_type_fault(bundle: &Value) -> ConnectionTypeFault {
     }
 }
 
+/// `hl7-fhir-rest` outside HL7's code system is no code FerroFED's own
+/// system defines.
 #[test]
-fn hl7_fhir_rest_is_refused_in_any_system() {
-    for system in [
-        "http://terminology.hl7.org/CodeSystem/endpoint-connection-type",
-        ConnectionType::SYSTEM,
-    ] {
-        let bundle = with_connection_type(&json!({"system": system, "code": "hl7-fhir-rest"}));
-        assert_eq!(
-            connection_type_fault(&bundle),
-            ConnectionTypeFault::FhirRest
-        );
-    }
+fn hl7_fhir_rest_in_the_openehr_system_is_refused() {
+    let bundle =
+        with_connection_type(&json!({"system": ConnectionType::SYSTEM, "code": "hl7-fhir-rest"}));
+    assert_eq!(
+        connection_type_fault(&bundle),
+        ConnectionTypeFault::Unbound {
+            system: ConnectionType::SYSTEM.to_owned(),
+            code: "hl7-fhir-rest".to_owned()
+        }
+    );
+}
+
+#[test]
+fn hl7_fhir_rest_without_a_system_is_refused() {
+    let bundle = with_connection_type(&json!({"code": "hl7-fhir-rest"}));
+    assert_eq!(
+        connection_type_fault(&bundle),
+        ConnectionTypeFault::NoSystem {
+            code: "hl7-fhir-rest".to_owned()
+        }
+    );
+}
+
+/// §15.2: an endpoint relying on `hl7-fhir-rest` is never a Query API
+/// endpoint, so in HL7's system it is a member's own FHIR endpoint, refused
+/// without the keys that make one.
+#[test]
+fn hl7_fhir_rest_in_the_hl7_system_is_refused_without_the_native_keys() {
+    let bundle = with_connection_type(
+        &json!({"system": mcsd::HL7_CONNECTION_TYPE_SYSTEM, "code": "hl7-fhir-rest"}),
+    );
+    assert!(matches!(
+        load(&bundle),
+        Err(FhirFormError::Registry(LoadError::NativeWithoutIdentifierSystem(refused)))
+            if refused == endpoint("node-a-pub")
+    ));
 }
 
 #[test]

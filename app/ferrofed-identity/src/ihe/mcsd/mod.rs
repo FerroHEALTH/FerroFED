@@ -22,13 +22,21 @@
 //!   openEHR `system_id`, and one [`CREATING_SYSTEM_ID_SYSTEM`] identifier for
 //!   each other `creating_system_id` it answers for (N21, §12.2);
 //! - an `Endpoint`'s `connectionType` is `openehr-rest-query` in
-//!   [`ConnectionType::SYSTEM`], and nothing else (N19, §15.2, CP-20);
+//!   [`ConnectionType::SYSTEM`] for an openEHR Query API endpoint (N19,
+//!   §15.2, CP-20), or `hl7-fhir-rest` in [`HL7_CONNECTION_TYPE_SYSTEM`] for
+//!   a member's own endpoint for the exchange format, and nothing else;
 //! - its `managingOrganization` names its one managing organisation (N20),
 //!   and the one `Organization` whose `endpoint` list names it operates its
 //!   node;
 //! - an `Endpoint` MAY carry one [`CONSENT_REFUSAL_CODE_EXTENSION`] extension
 //!   per ITS-REST `Error` `code` its node marks a consent refusal with, the
-//!   `consent_refusal_codes` of the native form (§11.1, N27).
+//!   `consent_refusal_codes` of the native form (§11.1, N27);
+//! - an `hl7-fhir-rest` `Endpoint` names each category it serves as a
+//!   `payloadType` coding in [`CATEGORY_SYSTEM`], each profile its documents
+//!   follow in a [`PROFILE_EXTENSION`] extension, and the identifier system
+//!   of the member's `ehr_id` in one [`EHR_ID_SYSTEM_EXTENSION`] extension,
+//!   the `categories`, `profiles` and `ehr_id_system` of the native form, and
+//!   is refused without them as the native form refuses it.
 //!
 //! Every endpoint of a node agrees on the node's `system_id` and operator.
 //! The node's `product`, `version` and identifiers have no place in this form.
@@ -122,6 +130,41 @@ pub const CREATING_SYSTEM_ID_SYSTEM: &str = "https://ferrofed.eu/fhir/sid/creati
 /// specification governs the extension: our own design).
 pub const CONSENT_REFUSAL_CODE_EXTENSION: &str =
     "https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code";
+
+/// The HL7 `endpoint-connection-type` code system `hl7-fhir-rest` belongs
+/// to, as FHIR R4 `Endpoint.connectionType` names it.
+pub const HL7_CONNECTION_TYPE_SYSTEM: &str =
+    "http://terminology.hl7.org/CodeSystem/endpoint-connection-type";
+
+/// The code system of the categories an `hl7-fhir-rest` endpoint serves, as
+/// `payloadType` codings.
+///
+/// It is HL7 Europe's `EEHRxFDocumentPriorityCategoryCS`
+/// (`hl7.fhir.eu.health-data-api` 1.0.0-ballot), whose codes, such as
+/// `Patient-Summaries`, name the priority categories of Regulation (EU)
+/// 2025/327 Art 14(1).
+// NOTE: FHIR R4 Endpoint.payloadType, "the type of content that may be used at this
+// endpoint"; a coding in another system describes other content and is not read.
+pub const CATEGORY_SYSTEM: &str =
+    "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs";
+
+/// The extension of an `hl7-fhir-rest` endpoint naming one profile its
+/// documents follow.
+///
+/// Its `valueCanonical` is the profile's canonical URL, repeated once per
+/// profile. FHIR R4 `Endpoint` has no element for it (`payloadMimeType` names
+/// a serialisation), so no specification governs the extension: our own
+/// design.
+pub const PROFILE_EXTENSION: &str = "https://ferrofed.eu/fhir/StructureDefinition/payload-profile";
+
+/// The extension of an `hl7-fhir-rest` endpoint naming the identifier system
+/// the member's `ehr_id` is written in when the endpoint is asked by
+/// identifier (N33).
+///
+/// Its `valueUri` is the system, given once. No specification defines one for
+/// a FHIR face, so no specification governs the extension: our own design.
+pub const EHR_ID_SYSTEM_EXTENSION: &str =
+    "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system";
 
 /// Reads and validates the registry document in FHIR form at `path`.
 ///
@@ -334,6 +377,7 @@ fn member(
         };
         consent_refusal_codes.push(code.to_owned());
     }
+    let native = native_keys(endpoint, &id)?;
     let operator = match operators.get(&endpoint.entry()).map(Vec::as_slice) {
         Some([operator]) => operator.clone(),
         Some([first, second, ..]) => {
@@ -361,13 +405,63 @@ fn member(
             managing_organisation,
             status,
             consent_refusal_codes,
-            categories: Vec::new(),
-            profiles: Vec::new(),
-            ehr_id_system: None,
+            categories: native.categories,
+            profiles: native.profiles,
+            ehr_id_system: native.ehr_id_system,
         },
         operator,
         system_id,
         creating_systems,
+    })
+}
+
+/// The keys of the native form only an `hl7-fhir-rest` endpoint takes, as an
+/// `Endpoint` carries them.
+struct NativeKeys {
+    categories: Vec<String>,
+    profiles: Vec<String>,
+    ehr_id_system: Option<String>,
+}
+
+/// Reads the native keys of any endpoint, so the registry holds an
+/// `openehr-rest-query` endpoint that carries one to the rule the native form
+/// holds it to.
+fn native_keys(endpoint: &DirectoryEndpoint, id: &EndpointId) -> Result<NativeKeys, FhirFormError> {
+    let mut categories = Vec::new();
+    for code in endpoint.payload_type_codes(CATEGORY_SYSTEM) {
+        let Some(code) = code else {
+            return Err(FhirFormError::Category(id.clone()));
+        };
+        categories.push(code.to_owned());
+    }
+    let mut profiles = Vec::new();
+    for profile in endpoint.extension_canonicals(PROFILE_EXTENSION) {
+        let Some(profile) = profile else {
+            return Err(FhirFormError::Profile(id.clone()));
+        };
+        profiles.push(profile.to_owned());
+    }
+    let mut systems = endpoint.extension_uris(EHR_ID_SYSTEM_EXTENSION);
+    let ehr_id_system = match (systems.next(), systems.next()) {
+        (None, _) => None,
+        (Some(Some(system)), None) => Some(system.to_owned()),
+        (Some(None), _) => {
+            return Err(FhirFormError::EhrIdSystem {
+                endpoint: id.clone(),
+                fault: IdentifierFault::NoValue,
+            });
+        }
+        (Some(Some(_)), Some(_)) => {
+            return Err(FhirFormError::EhrIdSystem {
+                endpoint: id.clone(),
+                fault: IdentifierFault::Repeated,
+            });
+        }
+    };
+    Ok(NativeKeys {
+        categories,
+        profiles,
+        ehr_id_system,
     })
 }
 
@@ -458,27 +552,28 @@ fn join_node(
 }
 
 /// The connection type an endpoint's `connectionType` codes (N19, §15.2).
-// NOTE: N19, §15.2: only a defined code is accepted, and no openEHR or HL7 system
-// is registered for one, so the one bound system is FerroFED's own.
+// NOTE: N19, §15.2: only a defined code is accepted for a Query API, and none is
+// registered, so its system is FerroFED's own; `hl7-fhir-rest` is HL7's, a native endpoint.
 fn connection_type(endpoint: &DirectoryEndpoint) -> Result<ConnectionType, ConnectionTypeFault> {
     let Some(code) = endpoint.connection_type_code() else {
         return Err(ConnectionTypeFault::NoCode);
     };
-    if code == "hl7-fhir-rest" {
-        return Err(ConnectionTypeFault::FhirRest);
-    }
     let Some(system) = endpoint.connection_type_system() else {
         return Err(ConnectionTypeFault::NoSystem {
             code: code.to_owned(),
         });
     };
-    (system == ConnectionType::SYSTEM)
-        .then(|| ConnectionType::from_code(code))
-        .flatten()
-        .ok_or_else(|| ConnectionTypeFault::Unbound {
-            system: system.to_owned(),
-            code: code.to_owned(),
-        })
+    let connection_type = match system {
+        ConnectionType::SYSTEM => ConnectionType::from_code(code),
+        HL7_CONNECTION_TYPE_SYSTEM if code == ConnectionType::Hl7FhirRest.code() => {
+            Some(ConnectionType::Hl7FhirRest)
+        }
+        _ => None,
+    };
+    connection_type.ok_or_else(|| ConnectionTypeFault::Unbound {
+        system: system.to_owned(),
+        code: code.to_owned(),
+    })
 }
 
 /// The organisation an endpoint's `managingOrganization` names (N20).
