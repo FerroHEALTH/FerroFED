@@ -3,6 +3,7 @@
 
 //! The refusals that name their key, line and file, and never echo a value.
 
+use ferrofed_server::EXIT_CONFIG;
 #[cfg(feature = "binding-ihe")]
 use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
@@ -12,6 +13,7 @@ use std::collections::BTreeMap;
 use std::error::Error as StdError;
 
 use super::{BROKEN_DEV_ROWS, env, everything, refusal, secret_file};
+use crate::run::binary;
 
 #[test]
 #[expect(
@@ -204,5 +206,19 @@ fn the_pixm_method_is_get_unless_post_is_named() -> Result<(), Box<dyn StdError>
             .ok_or("one Manager")?;
         assert_eq!(expected, manager.method, "{line:?}");
     }
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_unknown_registry_format_is_refused() -> Result<(), Box<dyn StdError>> {
+    let output = binary(
+        &["config", "check"],
+        "[registry]\ndocument = \"/nonexistent/registry.json\"\nformat = \"xml\"\n",
+    )?;
+    assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
     Ok(())
 }

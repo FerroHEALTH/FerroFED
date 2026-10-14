@@ -193,6 +193,15 @@ that only builds beside another one is a defect a caller would hit; the
 workspace `clippy` job sees the all-features union only. The job runs per
 package, never over the workspace.
 
+`test (ferrofed-server, …)` runs the server's tests in the builds a
+deployment can choose that the `test` job never compiles: without default
+features, with `binding-ihe` alone, with `binding-nl` alone and with the
+default features, each as
+`cargo nextest run --package ferrofed-server --no-default-features
+--features <build>`. A test that needs a binding is gated on it, or its
+fixture names no section of a binding it does not test, so it fails here
+when it is neither (#881).
+
 `viewer (wasm32 and site bundle)` covers the half of the operator console,
 `app/ferrofed-viewer`, that the workspace lanes never compile. The workspace
 lanes build, lint and test its server half on the host; this job runs

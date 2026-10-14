@@ -40,7 +40,7 @@ use http::StatusCode;
 use jsonwebtoken::Algorithm;
 
 use crate::facade::{Answer, body, post, settings_with_room, statuses, wire};
-use crate::nl_gf::{URAS, asked_counts, configuration, fed_manager, members, patient, query};
+use crate::nl_gf::{Resolution, URAS, asked_counts, configuration, members, patient, query};
 use crate::support::{Logs, call, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -111,14 +111,14 @@ async fn grant(dir: &Path, expires_in: u64) -> Result<Grant, Box<dyn Error>> {
 }
 
 /// The gateway over the members at `urls`, localized by the NVI at `nvi`
-/// with `tables` added, and resolved by the PIX Manager at `manager`.
+/// with `tables` added, and resolved by `resolution`.
 fn gateway(
     dir: &Path,
     urls: [&str; 3],
-    (nvi, manager): (&str, &str),
+    (nvi, resolution): (&str, &Resolution),
     tables: &str,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
-    let text = configuration(dir, "development", urls, nvi, manager)? + tables;
+    let text = configuration(dir, "development", urls, nvi, resolution.tables())? + tables;
     let settings = Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
     Ok((
@@ -151,12 +151,12 @@ async fn the_nvi_is_asked_with_the_dpop_bound_nuts_token() -> TestResult {
     let dir = tempfile::tempdir()?;
     let grant = grant(dir.path(), 300).await?;
     let nvi = guarded_nvi(&grant.authority).await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let (app, _state) = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
-        (&nvi.base(), &pix.base_url()),
+        (&nvi.base(), &resolution),
         &grant.tables,
     )?;
 
@@ -191,12 +191,12 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
         .authority
         .refuse(400, "invalid_request", "the presentation was refused");
     let nvi = guarded_nvi(&grant.authority).await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let (app, state) = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
-        (&nvi.base(), &pix.base_url()),
+        (&nvi.base(), &resolution),
         &grant.tables,
     )?;
 
@@ -212,7 +212,8 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
     }
     assert!(nvi.searches().await.is_empty(), "the NVI was sent nothing");
     assert_eq!([0, 0, 0], asked_counts(&servers).await?, "no dispatch");
-    assert_eq!(0, pix.queries(), "nothing was resolved");
+    #[cfg(feature = "binding-ihe")]
+    assert_eq!(0, resolution.pix.queries(), "nothing was resolved");
 
     let assertions: Vec<String> = grant
         .authority
@@ -279,12 +280,12 @@ async fn the_nuts_token_reaches_the_nvi_alone() -> TestResult {
     let dir = tempfile::tempdir()?;
     let grant = grant(dir.path(), 300).await?;
     let nvi = guarded_nvi(&grant.authority).await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let (app, state) = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
-        (&nvi.base(), &pix.base_url()),
+        (&nvi.base(), &resolution),
         &grant.tables,
     )?;
 
@@ -342,12 +343,12 @@ async fn a_token_the_nvi_refuses_is_replaced_on_the_next_query() -> TestResult {
     let dir = tempfile::tempdir()?;
     let grant = grant(dir.path(), 300).await?;
     let nvi = guarded_nvi(&grant.authority).await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let (app, _state) = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
-        (&nvi.base(), &pix.base_url()),
+        (&nvi.base(), &resolution),
         &grant.tables,
     )?;
     ask(&app).await?;
@@ -384,12 +385,12 @@ async fn a_token_near_the_end_of_its_lifetime_is_replaced() -> TestResult {
     let dir = tempfile::tempdir()?;
     let grant = grant(dir.path(), 31).await?;
     let nvi = guarded_nvi(&grant.authority).await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let (app, _state) = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
-        (&nvi.base(), &pix.base_url()),
+        (&nvi.base(), &resolution),
         &grant.tables,
     )?;
 
@@ -419,7 +420,7 @@ fn resolve(
             "https://c.example.org",
         ],
         "https://nvi.example.org/fhir",
-        "https://pix.example.org/fhir/",
+        "",
     )? + tables;
     Ok(Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve())
 }

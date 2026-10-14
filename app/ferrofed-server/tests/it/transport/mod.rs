@@ -24,10 +24,12 @@ use std::sync::Arc;
 
 use ferrofed_identity::dev::Profile;
 use ferrofed_server::banner::{Deployment, render};
+use ferrofed_server::config::Config;
+#[cfg(feature = "binding-ihe")]
+use ferrofed_server::config::error;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Store;
 use ferrofed_server::config::transport::{self, CleartextError, Encryption, ProtectedSite};
-use ferrofed_server::config::{Config, error};
 use ferrofed_server::federation::registry::read_registry;
 use ferrofed_server::reload::{ReloadError, Reloader};
 use ferrofed_server::state::{AppState, StateError};
@@ -82,6 +84,7 @@ fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
 }
 
 /// A PIX Manager at `url` with a bearer token, resolving node A.
+#[cfg(feature = "binding-ihe")]
 fn pix(url: &str) -> String {
     format!(
         "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
@@ -123,6 +126,7 @@ fn site(url_key: &str, payload: &str) -> ProtectedSite {
 }
 
 /// The site of PIX Manager 0 with its credentials.
+#[cfg(feature = "binding-ihe")]
 fn pix_site() -> ProtectedSite {
     site(
         "pixm.manager[0].url",
@@ -131,6 +135,7 @@ fn pix_site() -> ProtectedSite {
 }
 
 /// A PIX Manager at `url` with no credentials, resolving node A and node B.
+#[cfg(feature = "binding-ihe")]
 fn bare_pix(url: &str) -> String {
     format!(
         "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
@@ -207,6 +212,7 @@ fn a_plain_http_token_endpoint_is_refused_outside_development() -> TestResult {
     )
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn a_pix_manager_with_credentials_over_plain_http_is_refused_outside_development() -> TestResult {
     let dir = tempfile::tempdir()?;
@@ -219,6 +225,7 @@ fn a_pix_manager_with_credentials_over_plain_http_is_refused_outside_development
 
 /// Asserts that resolving `tables` under the production profile is refused
 /// at load on `site`, before any check or boot, and carries no secret.
+#[cfg(feature = "binding-ihe")]
 fn refused_at_load(dir: &Path, tables: &str, site: &ProtectedSite) -> TestResult {
     let text = configuration("production", &document(dir, HTTPS_A)?, tables);
     match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
@@ -235,6 +242,7 @@ fn refused_at_load(dir: &Path, tables: &str, site: &ProtectedSite) -> TestResult
     }
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn a_pix_manager_without_credentials_still_carries_identifiers_and_needs_https() -> TestResult {
     let dir = tempfile::tempdir()?;
@@ -273,6 +281,7 @@ fn an_otlp_endpoint_carrying_userinfo_is_refused_outside_development() -> TestRe
 
 /// An XCPD responding gateway at `url`, every request carrying a synthetic
 /// XUA assertion; `[xcpd]` itself refuses `http` outside development.
+#[cfg(feature = "binding-ihe")]
 fn xcpd(url: &str) -> String {
     format!(
         "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\nassertion = \"{SECRET}\"\n\n\
@@ -281,6 +290,7 @@ fn xcpd(url: &str) -> String {
     )
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() -> TestResult {
     let dir = tempfile::tempdir()?;
@@ -324,23 +334,20 @@ fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() 
 #[test]
 fn every_site_starts_under_development_and_is_reported() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = format!(
-        "{}\n{}",
-        grant(dir.path(), "http://idp.example.org/token")?,
-        pix("http://pix.example.org/fhir/")
-    );
+    let tables = grant(dir.path(), "http://idp.example.org/token")?;
+    let sites = vec![
+        site(ENDPOINT_URL, SECTION),
+        site(
+            "credentials.node-a-pub.oauth2.token_endpoint",
+            "credentials.node-a-pub.oauth2",
+        ),
+    ];
+    #[cfg(feature = "binding-ihe")]
+    let tables = format!("{tables}\n{}", pix("http://pix.example.org/fhir/"));
+    #[cfg(feature = "binding-ihe")]
+    let sites = [sites, vec![pix_site()]].concat();
     let settings = resolved(dir.path(), "development", HTTP_A, &tables)?;
-    reported(
-        &settings,
-        &[
-            site(ENDPOINT_URL, SECTION),
-            site(
-                "credentials.node-a-pub.oauth2.token_endpoint",
-                "credentials.node-a-pub.oauth2",
-            ),
-            pix_site(),
-        ],
-    )?;
+    reported(&settings, &sites)?;
     let otlp = format!(
         "profile = \"development\"\n\n[metrics]\notlp_endpoint = \"http://gateway:{SECRET}@127.0.0.1:4317\"\n"
     );
@@ -426,11 +433,9 @@ fn a_production_banner_names_no_cleartext_credential() -> TestResult {
 #[test]
 fn every_site_over_https_starts_outside_development() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = format!(
-        "{}\n{}",
-        grant(dir.path(), "https://idp.example.org/token")?,
-        pix("https://pix.example.org/fhir/")
-    );
+    let tables = grant(dir.path(), "https://idp.example.org/token")?;
+    #[cfg(feature = "binding-ihe")]
+    let tables = format!("{tables}\n{}", pix("https://pix.example.org/fhir/"));
     let settings = resolved(dir.path(), "production", HTTPS_A, &tables)?;
     reported(&settings, &[])?;
     AppState::build(&settings)?;
@@ -581,6 +586,7 @@ fn a_reload_cannot_switch_to_development_to_send_a_credential_in_cleartext() -> 
 
 /// A gateway under `profile` localized by one XCPD responding gateway at
 /// `url`, which carries no assertion, over the registry `document`.
+#[cfg(feature = "binding-ihe")]
 fn xcpd_configuration(profile: &str, document: &Path, url: &str) -> String {
     let document = toml::Value::String(document.display().to_string());
     crate::support::signed(&format!(
@@ -592,6 +598,7 @@ fn xcpd_configuration(profile: &str, document: &Path, url: &str) -> String {
     ))
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn a_reload_never_admits_an_xcpd_gateway_over_plain_http() -> TestResult {
     let gateway = Gateway::start_with(|document| {

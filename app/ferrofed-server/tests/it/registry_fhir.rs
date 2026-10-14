@@ -267,13 +267,3 @@ fn config_check_refuses_a_native_document_declared_as_fhir() -> TestResult {
     assert!(stderr.contains("not JSON"), "{stderr}");
     Ok(())
 }
-
-#[test]
-fn an_unknown_registry_format_is_refused() -> TestResult {
-    let output = binary(
-        &["config", "check"],
-        "[registry]\ndocument = \"/nonexistent/registry.json\"\nformat = \"xml\"\n",
-    )?;
-    assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
-    Ok(())
-}

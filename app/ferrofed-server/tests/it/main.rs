@@ -8,6 +8,7 @@ mod admin_peer;
 mod admin_record;
 mod admission;
 mod aggregate;
+#[cfg(feature = "binding-ihe")]
 mod ask_all;
 #[cfg(feature = "binding-ihe")]
 mod audit_repository;
@@ -99,6 +100,7 @@ mod public_url;
 mod query_get;
 mod query_media;
 mod readiness;
+#[cfg(feature = "binding-ihe")]
 mod registry_fhir;
 #[cfg(feature = "binding-ihe")]
 mod registry_mcsd;

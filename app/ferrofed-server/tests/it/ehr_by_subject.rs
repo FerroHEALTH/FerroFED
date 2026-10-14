@@ -42,6 +42,7 @@ const SYSTEM_A: &str = "cdr-a.example.org";
 const SYSTEM_B: &str = "cdr-b.example.org";
 
 /// The PIX Manager's ITI-83 operation.
+#[cfg(feature = "binding-ihe")]
 const PIX_OPERATION: &str = "/fhir/Patient/$ihe-pix";
 
 /// The `EHR` node `system` answers for `ehr_id`, spaced as a re-encoding
@@ -109,6 +110,7 @@ fn knowing_another(dir: &Path, a: &str, b: &str) -> Result<Router, Box<dyn Error
 /// A gateway resolving through the PIX Manager at `pix`, under the
 /// development profile, the only one that admits the mock Manager's plain
 /// `http`.
+#[cfg(feature = "binding-ihe")]
 fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dyn Error>> {
     let pixm = format!(
         "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
@@ -117,6 +119,7 @@ fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dy
 }
 
 /// A PIX Manager that fails every ITI-83 call with `500`.
+#[cfg(feature = "binding-ihe")]
 async fn failing_manager() -> Server {
     let server = Server::start().await;
     Mock::given(method("GET"))
@@ -425,6 +428,7 @@ async fn a_subject_no_member_holds_is_the_operations_own_404() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn a_cross_reference_that_cannot_answer_is_a_424_and_asks_nobody() -> TestResult {
     let a = node(SYSTEM_A, EHR_A).await;
@@ -543,6 +547,7 @@ async fn a_subject_not_given_once_or_an_undeclared_parameter_is_a_400_that_asks_
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
 // conformance: CP-26
 #[tokio::test]
 async fn a_subject_that_is_no_utf8_text_is_a_400_that_asks_no_resolver() -> TestResult {
