@@ -34,9 +34,9 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
   newest by number, so after `1.9.0` and `1.10.0` it assigns `1.10.1`. It
   never replaces a held version, because changing a definition means a new
   version (§12.7; ITS-REST "Stores a new query, or updates an existing
-  query"). `Location` names the assigned version as `./{name}/{version}`,
-  relative to the request URL. Every other rule of this list applies to it
-  as to a `PUT` at a version, the literal-patient refusal first, so a
+  query"). `Location` names the assigned version
+  ([the Location of a stored query](#the-location-of-a-stored-query)).
+  Every other rule of this list applies to it as to a `PUT` at a version, the literal-patient refusal first, so a
   refused definition takes no version.
 - A stored version is immutable. A second `PUT` to a name and version the
   registry holds is a `409` (`stored-query-held`), the held text stands, and
@@ -55,9 +55,8 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
   because the registry would hold that identifier at rest (§5.4.1, N33).
   The message never quotes it, and the security log records only the
   position of the predicate.
-- The answer is `200` with `Location` naming the stored version, as a
-  reference relative to the request URL, because the gateway does not know
-  the base URL its clients use (§4.1).
+- The answer is `200` with `Location` naming the stored version
+  ([the Location of a stored query](#the-location-of-a-stored-query)).
 - The namespace `eu.ferrofed.eehrxf`, and every namespace nested under it,
   in any letter case, holds the gateway's own queries
   ([the gateway's own queries](#the-gateways-own-queries)). A `PUT` there is
@@ -122,6 +121,21 @@ definitions](templates-and-demographics.md#templates-and-definitions)). Without 
 `POST {base}/v1/query/{name}` answer `501`.
 
 See how it works: [definitions and stored queries](../how-it-works/definitions.md).
+
+## The Location of a stored query
+
+`Location` names the URL of the stored query,
+`{base}/v1/definition/query/{name}/{version}` (ITS-REST `Location_Query`):
+
+- With `server.public_url` set
+  ([the public base URL](../operate/public-address.md#the-public-base-url)),
+  it is that absolute URL, such as
+  `https://gateway.example.org/v1/definition/query/org.example::compositions/1.0.0`.
+- Without it, the gateway does not know the scheme and host you reach it at
+  (§4.1), so it is a reference relative to the request URL: the version,
+  `1.0.0`, after a `PUT` at a version, and `./{name}/{version}` after a `PUT`
+  with no version. Resolved against your request URL (RFC 3986 §5.2), each
+  is the stored query's URL.
 
 ## The gateway's own queries
 
@@ -269,6 +283,9 @@ openEHR-federation-endpoint: node-c-pub
 - The answer has the shape and the statuses of a first distribution (`200`,
   `207` with `complete: false`, `504` or `424`), and `meta.registry:
   "held"` says the registry held the version and stored nothing.
+- With `server.public_url` set, `Location` names the stored version's URL
+  under it. Without it, the answer carries no `Location`: the admin listener
+  is another origin, and no reference from it reaches the client listener.
 - It is refused before any node is asked: `404` (`stored-query-unknown`)
   for a version the registry does not hold; `400` for a request naming no
   member (`target-required`), a body (`body-invalid`), a deployment without

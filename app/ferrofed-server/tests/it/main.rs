@@ -117,6 +117,7 @@ mod seed_data;
 mod shutdown;
 mod stored;
 mod stored_fan_out;
+mod stored_location;
 mod stored_redistribution;
 mod support;
 mod targeting;

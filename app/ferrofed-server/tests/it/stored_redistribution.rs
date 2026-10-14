@@ -200,7 +200,9 @@ async fn the_admin_action_sends_the_held_version_to_the_member_that_missed_it() 
         statuses(&answer.meta.federation),
         "§9.5: only the named member is sent it: {text}"
     );
-    assert_eq!(Some(VERSION), field(&headers, "location"), "the version");
+    // NOTE: RFC 3986 §5.2, a reference from the admin listener resolves on its own
+    // origin, so with no `server.public_url` none names the stored query.
+    assert_eq!(None, field(&headers, "location"), "no Location");
     assert_eq!(Some("node-c-pub"), field(&headers, ENDPOINT));
 
     assert_eq!(
