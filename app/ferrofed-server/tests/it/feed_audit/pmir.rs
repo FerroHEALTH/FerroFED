@@ -18,7 +18,7 @@ use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::pmir::{PatientIdentityRegistry, merge_message};
 use http::{Request, StatusCode, header};
 
-use super::{SETTLE, audit_tables, names_no_caller, transactions};
+use super::{SETTLE, audit_tables, await_feed_state, names_no_caller, transactions};
 use crate::metrics::holds_series;
 use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, TOKEN, gateway, text};
 use crate::support::send_as_is;
@@ -194,6 +194,13 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
         1,
         drained.len(),
         "the spool drains once the repository is back"
+    );
+    // The repository keeps a record before the forwarder reads its answer and
+    // frees the spool's one place, so the check waits on the forwarder itself.
+    assert_eq!(
+        Some("up"),
+        await_feed_state(&gateway.app, "up").await?.as_deref(),
+        "the delivered record has left the spool"
     );
     assert_eq!(
         ferrofed_registry::health::Observed::Up,
