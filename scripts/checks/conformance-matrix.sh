@@ -23,10 +23,11 @@
 #      attribute;
 #   6. a covered row has no marker, a planned or deferred row has one, or a
 #      node-profile or operator row is marked outside the harness (tools/);
-#   7. the matrix page, the statement block of the conformance statement or
-#      the tests page differs from a fresh rendering
+#   7. the matrix page differs from a fresh rendering, the statement block of
+#      the conformance statement or the tests page is not its committed
+#      placeholder, or either cannot be rendered
 #      (`scripts/conformance/matrix.sh --check-pages`, which the docs build
-#      runs too);
+#      runs too; the site renders both, #912);
 #   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
 #      vendored corpus does not hold, or records another total than it holds;
 #   9. a file under conformance/badges/ or the README conformance block
@@ -36,9 +37,9 @@
 # an unlisted case passes, so the pass list this reads is what the tests hold.
 #
 # Run `scripts/conformance/matrix.sh --derive` after a re-pin, and
-# `scripts/conformance/matrix.sh --render-write`, `--statement-write` and
-# `--badges-write` after a status change, a marker change or a pass-list
-# rewrite.
+# `scripts/conformance/matrix.sh --render-write` and `--badges-write` after a
+# status change, a marker change or a pass-list rewrite. The statement block
+# and the tests page need nothing: the site renders them when it is built.
 
 set -uo pipefail
 
