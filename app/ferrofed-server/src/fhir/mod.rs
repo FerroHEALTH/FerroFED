@@ -9,8 +9,10 @@
 //! HL7 Europe Patient Summary document `Bundle`, by the International Patient
 //! Summary 2.0.0 `$summary` operation. `POST {fhir-base}/Bundle` receives a
 //! document in the exchange format, at the `Bundle` end-point FHIR R4
-//! documents §3.3.4 names (Annex II 2.2 and 2.3). Every other path under the
-//! base is a `404`. A summary runs the gateway's own section queries over
+//! documents §3.3.4 names (Annex II 2.2 and 2.3), and
+//! `GET {fhir-base}/DocumentReference` lists the summaries that exist for a
+//! patient ([`ferrofed_eehrxf::list`]). Every other path under the base is a
+//! `404`. A summary runs the gateway's own section queries over
 //! the members (`facade::summary`), maps each composition through the
 //! deployment's FHIRconnect mappings and writes the document
 //! ([`ferrofed_eehrxf::summary`]); a received document is written to the
@@ -19,9 +21,9 @@
 //! N28, N1).
 //!
 //! Every request is authenticated at the same gate as the ITS-REST face
-//! (§13.1, N25), and every summary or document that reached a member is
-//! recorded in the access log, naming the verified caller (Annex II 3.2). Every error the
-//! face answers is an `OperationOutcome` ([`outcomes`]): the gateway's own
+//! (§13.1, N25), and every summary, list or document that reached a member
+//! is recorded in the access log, naming the verified caller (Annex II 3.2).
+//! Every error the face answers is an `OperationOutcome` ([`outcomes`]): the gateway's own
 //! refusals keep their status and their headers, and the error body is
 //! rewritten as the outcome. No specification governs the mapping of the
 //! gateway's errors to issue types: our own design, over the FHIR R4
@@ -57,9 +59,12 @@ use crate::conveyed;
 use crate::error::Code;
 use crate::facade::demographics::{self, Unheaded};
 use crate::facade::request::Arrived;
-use crate::facade::summary::{self as gathered, Unsummarised};
+use crate::facade::summary::{self as gathered, Scope, Unsummarised};
 use crate::request_id;
 use crate::state::AppState;
+
+mod binary;
+mod list;
 
 /// The path of the summary operation under `{fhir-base}`.
 pub const SUMMARY: &str = "/Patient/$summary";
@@ -70,6 +75,10 @@ pub const METADATA: &str = "/metadata";
 /// The path a document in the exchange format is received at under
 /// `{fhir-base}`, the `Bundle` end-point of FHIR R4 documents §3.3.4.
 pub const BUNDLE: &str = "/Bundle";
+
+/// The path of the document list under `{fhir-base}`, the
+/// `DocumentReference` search-type interaction.
+pub const DOCUMENTS: &str = "/DocumentReference";
 
 /// The product name the document's author `Device` and the capability
 /// statement carry.
@@ -85,6 +94,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route(METADATA, get(metadata))
         .route(SUMMARY, get(summary_get).post(summary_post))
         .route(BUNDLE, post(bundle_post))
+        .route(DOCUMENTS, get(list::documents))
+        .route("/Binary/{token}", get(binary::read))
         .fallback(unserved)
 }
 
@@ -97,7 +108,12 @@ pub enum FacePath {
     Summary,
     /// `{fhir-base}/Bundle`, exactly.
     Bundle,
-    /// Any other path under the base, a variant of the three above included:
+    /// `{fhir-base}/DocumentReference`, exactly.
+    Documents,
+    /// `{fhir-base}/Binary/{token}`, its token one segment of the compact
+    /// JWS alphabet.
+    Binary,
+    /// Any other path under the base, a variant of the five above included:
     /// another letter case, a percent-encoded character, a trailing or a
     /// doubled slash.
     Other,
@@ -108,7 +124,7 @@ pub enum FacePath {
 ///
 /// A path is under the face when its letters, ASCII case ignored, start
 /// with the base, so a variant of the base is never read as a path outside
-/// the face; only the three exact paths are named, and every other one is
+/// the face; only the five paths are named, and every other one is
 /// [`FacePath::Other`], which the gate refuses.
 #[must_use]
 pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
@@ -127,15 +143,32 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
         FacePath::Summary
     } else if path == fhir.base.join(BUNDLE) {
         FacePath::Bundle
+    } else if path == fhir.base.join(DOCUMENTS) {
+        FacePath::Documents
+    } else if is_binary(fhir, path) {
+        FacePath::Binary
     } else {
         FacePath::Other
     })
 }
 
+/// Whether `path` is `{fhir-base}/Binary/{token}`, the token one segment
+/// of the compact JWS alphabet (RFC 7515 §7.1).
+fn is_binary(fhir: &FhirSettings, path: &str) -> bool {
+    path.strip_prefix(fhir.base.join(binary::BINARY).as_str())
+        .is_some_and(|token| {
+            !token.is_empty()
+                && token
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+}
+
 /// Returns what a request of `method` to `face` requires at the gate.
 ///
 /// The capability statement takes a verified caller, a `GET` or `POST` of a
-/// summary the `aql-` search of every section query, a `POST` of a document
+/// summary, a `GET` of the document list or of a listed document the `aql-` search of every
+/// section query, a `POST` of a document
 /// the `composition-` create of every template, and every other method and
 /// path is refused, so no variant of a path is let through on a weaker
 /// requirement.
@@ -150,6 +183,13 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
             permission: Permission::Search,
             resource: Resource::Sections,
         },
+        // NOTE: no specification governs this: our own design; the list names the summary
+        // and carries the members' own ones, so it takes what a summary takes.
+        FacePath::Documents | FacePath::Binary if *method == Method::GET => Requirement::Scope {
+            family: ResourceFamily::Aql,
+            permission: Permission::Search,
+            resource: Resource::Sections,
+        },
         // NOTE: SMART on openEHR master08 §Resource Scopes; a received document is written as
         // a composition whose template the body decides, so only a create of every one covers it.
         FacePath::Bundle if *method == Method::POST => Requirement::Scope {
@@ -157,9 +197,12 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
             permission: Permission::Create,
             resource: Resource::Unnamed,
         },
-        FacePath::Metadata | FacePath::Summary | FacePath::Bundle | FacePath::Other => {
-            Requirement::Refused
-        }
+        FacePath::Metadata
+        | FacePath::Summary
+        | FacePath::Bundle
+        | FacePath::Documents
+        | FacePath::Binary
+        | FacePath::Other => Requirement::Refused,
     }
 }
 
@@ -177,7 +220,7 @@ async fn unserved() -> Response {
     outcome(
         StatusCode::NOT_FOUND,
         "not-found",
-        "the FHIR face serves metadata and Patient/$summary alone",
+        "the FHIR face serves metadata, Patient/$summary, DocumentReference and Bundle alone",
     )
 }
 
@@ -368,9 +411,14 @@ async fn summarised(
             return response;
         }
     };
-    match gathered::gather(Arc::clone(&federation), arrived, patient).await {
+    match gathered::gather(Arc::clone(&federation), arrived, patient, Scope::Summary).await {
         Ok(gathered) => document(&federation, fhir, &gathered, (patient, header), &logged),
-        Err(unsummarised) => refused(&federation, unsummarised, patient, (request_id, outbound)),
+        Err(unsummarised) => refused(
+            &federation,
+            (unsummarised, Scope::Summary),
+            patient,
+            (request_id, outbound),
+        ),
     }
 }
 
@@ -456,7 +504,6 @@ fn document(
         version: String::from(env!("CARGO_PKG_VERSION")),
         operator: fhir.operator.clone(),
     };
-    // TODO(#810): list each member's own document beside this one, as its endpoint sent it.
     let elsewhere = gathered::elsewhere(federation.snapshot(), gathered);
     let assembled = summary::assemble(
         &request,
@@ -487,18 +534,32 @@ fn document(
     };
     attach(
         &mut response,
-        gathered::accessed(federation, gathered, (system, value), &delivered),
+        gathered::accessed(
+            federation,
+            gathered,
+            (system, value),
+            (Scope::Summary, Some(&delivered)),
+        ),
     );
     response
 }
 
-/// The answer to a summary the section queries did not give, `unsummarised`.
+/// The answer to a request of `scope` the members did not give,
+/// `unsummarised`.
 fn refused(
     federation: &crate::federation::Federation,
-    unsummarised: Unsummarised,
+    (unsummarised, scope): (Unsummarised, Scope),
     patient: (&str, &str),
     (request_id, outbound): (&str, OutboundId),
 ) -> Response {
+    // NOTE: no specification governs this: our own design; a refused summary counts what
+    // it delivered, none, and a refused list delivered no member's own document.
+    let none = BTreeSet::new();
+    let delivered = (scope == Scope::Summary).then_some(&none);
+    let what = match scope {
+        Scope::Summary => "summary",
+        Scope::List => "list",
+    };
     match unsummarised {
         Unsummarised::Failure(failure) => failure.respond(request_id, outbound),
         Unsummarised::Internal(what) => {
@@ -514,7 +575,7 @@ fn refused(
                 "no member holds a patient summary for this identifier",
             );
             let accessed = gathered.and_then(|gathered| {
-                gathered::accessed(federation, &gathered, patient, &BTreeSet::new())
+                gathered::accessed(federation, &gathered, patient, (scope, delivered))
             });
             attach(&mut response, accessed);
             response
@@ -535,16 +596,16 @@ fn refused(
                 "incomplete"
             };
             let diagnostics = if named.is_empty() {
-                String::from(
-                    "the summary is incomplete: the patient could not be resolved at every member (§11.3)",
+                format!(
+                    "the {what} is incomplete: the patient could not be resolved at every member (§11.3)",
                 )
             } else {
-                format!("the summary is incomplete: no answer from {named} (§11.3)")
+                format!("the {what} is incomplete: no answer from {named} (§11.3)")
             };
             let mut response = outcome(status, code, &diagnostics);
             attach(
                 &mut response,
-                gathered::accessed(federation, &gathered, patient, &BTreeSet::new()),
+                gathered::accessed(federation, &gathered, patient, (scope, delivered)),
             );
             response
         }

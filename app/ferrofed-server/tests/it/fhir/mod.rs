@@ -17,8 +17,10 @@
     reason = "the test seam: the documents and the records are read as JSON values"
 )]
 
+mod binary;
 mod config;
 mod header;
+mod list;
 mod native;
 mod receive;
 mod refusals;

@@ -54,6 +54,9 @@ use crate::federation::Federation;
 /// The operation an access record names for a patient summary.
 pub(crate) const OPERATION: &str = "Patient/$summary";
 
+/// The operation an access record names for the document list.
+pub(crate) const LIST: &str = "DocumentReference";
+
 /// The rows each endpoint answered one section query with, read before the
 /// merge.
 type Rows = Arc<Mutex<BTreeMap<EndpointId, Vec<ResultSetRow>>>>;
@@ -138,6 +141,14 @@ pub(crate) enum Unsummarised {
     },
 }
 
+impl Unsummarised {
+    /// Whether node selection left no member in scope for the patient, as
+    /// for a patient no member holds (§11.2, §11.3).
+    pub(crate) fn reaches_no_member(&self) -> bool {
+        matches!(self, Self::Failure(Failure::NoDestination))
+    }
+}
+
 /// The silent members `silent` names, for a message.
 fn named(silent: &[(String, String)]) -> String {
     silent
@@ -147,8 +158,20 @@ fn named(silent: &[(String, String)]) -> String {
         .join(", ")
 }
 
+/// What a request gathers from the members.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scope {
+    /// The patient summary: every section query, and every member that
+    /// serves the summary itself.
+    Summary,
+    /// The document list: the members that serve the summary themselves
+    /// alone, since the summary the gateway writes is listed, never written.
+    List,
+}
+
 /// Runs every section query over the members for the patient
-/// `system`|`value`, as `arrived` asks.
+/// `system`|`value`, as `arrived` asks, or, for `scope` [`Scope::List`],
+/// none of them.
 ///
 /// # Errors
 ///
@@ -157,6 +180,7 @@ pub(crate) async fn gather(
     federation: Arc<Federation>,
     arrived: Arrived<'_>,
     (system, value): (&str, &str),
+    scope: Scope,
 ) -> Result<Gathered, Unsummarised> {
     let logged = arrived.outbound.to_string();
     let completion =
@@ -193,6 +217,7 @@ pub(crate) async fn gather(
         return Err(Failure::NoDestination.into());
     }
     answer::planning::remember(&federation, arrived.session, &targets);
+    let dispatched = targets.plan.dispatched().next().is_some();
     // NOTE: § The four identifiers, N33: a member asked at its own exchange-format endpoint by
     // its ehr_id is asked no section query, so its data are never in the mapped document too.
     let chosen = native::chosen(federation.snapshot(), &targets);
@@ -201,7 +226,12 @@ pub(crate) async fn gather(
     }
     let withheld = targets.plan.withheld();
     let mut planned = Vec::with_capacity(analyses.len());
-    for (position, (section, analysis)) in analyses.iter().enumerate() {
+    let run: &[(Section, Analysis)] = if scope == Scope::Summary {
+        &analyses
+    } else {
+        &[]
+    };
+    for (position, (section, analysis)) in run.iter().enumerate() {
         let (plan, sources) = if position == 0 {
             (targets.plan.clone(), targets.sources.clone())
         } else {
@@ -247,13 +277,19 @@ pub(crate) async fn gather(
         }
     }
     gathered.natives = natives;
-    concluded(gathered, status)
+    concluded(gathered, status, (scope, dispatched))
 }
 
 /// The summary `gathered` gives, the section queries and the members' own
 /// endpoints having settled on `status`: every silent member named when it
 /// is not `200`, and no summary when no member holds the patient (§11.3).
-fn concluded(gathered: Gathered, status: StatusCode) -> Result<Gathered, Unsummarised> {
+/// A list, which asks no section query, holds the summary the gateway
+/// writes when the plan `dispatched` to a member.
+fn concluded(
+    gathered: Gathered,
+    status: StatusCode,
+    (scope, dispatched): (Scope, bool),
+) -> Result<Gathered, Unsummarised> {
     if status != StatusCode::OK {
         let queried = gathered
             .reached
@@ -274,7 +310,11 @@ fn concluded(gathered: Gathered, status: StatusCode) -> Result<Gathered, Unsumma
             gathered: Box::new(gathered),
         });
     }
-    if gathered.reached.is_empty() && gathered.natives.is_empty() {
+    let holds = match scope {
+        Scope::Summary => !gathered.reached.is_empty() || !gathered.natives.is_empty(),
+        Scope::List => dispatched,
+    };
+    if !holds {
         let set_aside = (!gathered.set_aside.is_empty()).then(|| Box::new(gathered));
         return Err(Unsummarised::NotFound(set_aside));
     }
@@ -495,7 +535,7 @@ fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> Vec<Held> {
 }
 
 /// The organisation that holds `node`'s data, as the registry names it.
-fn organisation(snapshot: &RegistrySnapshot, node: &NodeId) -> Organisation {
+pub(crate) fn organisation(snapshot: &RegistrySnapshot, node: &NodeId) -> Organisation {
     let held = snapshot
         .node(node)
         .and_then(|node| snapshot.organisation(node.organisation()));
@@ -560,28 +600,37 @@ fn queried(analyses: &[(Section, Analysis)]) -> Queried {
     queried
 }
 
-/// The access record's facts of a summary of the patient `system`|`value`
-/// that `gathered` shows, which delivered the compositions `delivered`, each
-/// by its origin's index and its uid, or `None` when no request left the
-/// gateway or the federation keeps no access log (Annex II 3.2).
+/// The access record's facts of a request of `scope` for the patient
+/// `system`|`value` that `gathered` shows, or `None` when no request left
+/// the gateway or the federation keeps no access log (Annex II 3.2).
 ///
-/// The categories are read from every composition a member answered with,
-/// and the request serves the patient summary category by construction
-/// (Art 14(1)(a)), whatever the deployment's map says of its templates.
+/// `delivered` holds the compositions the gateway's document delivered,
+/// each by its origin's index and its uid, and is `None` when the answer
+/// delivered nothing; a list that answered delivered every member's own
+/// document it carries. The categories are read from every composition a
+/// member answered with, and the request serves the patient summary
+/// category by construction (Art 14(1)(a)), whatever the deployment's map
+/// says of its templates.
 pub(crate) fn accessed(
     federation: &Federation,
     gathered: &Gathered,
     (system, value): (&str, &str),
-    delivered: &BTreeSet<(usize, String)>,
+    (scope, delivered): (Scope, Option<&BTreeSet<(usize, String)>>),
 ) -> Option<Accessed> {
+    let none = BTreeSet::new();
+    let natives_delivered = scope == Scope::List && delivered.is_some();
+    let delivered = delivered.unwrap_or(&none);
     let log = federation.access_log()?;
     if gathered.sent.is_empty() && gathered.set_aside.is_empty() {
         return None;
     }
     let evidence = |objects: Vec<RootObject>| {
-        Evidence::reached(Basis::Returned, objects)
-            .queried(gathered.queried.clone())
-            .constructed(Category::PatientSummary)
+        let reached = Evidence::reached(Basis::Returned, objects);
+        match scope {
+            Scope::Summary => reached.queried(gathered.queried.clone()),
+            Scope::List => reached,
+        }
+        .constructed(Category::PatientSummary)
     };
     let objects = gathered
         .reached
@@ -606,19 +655,38 @@ pub(crate) fn accessed(
             }
         })
         .collect();
-    origins.extend(native::origins(federation.snapshot(), &gathered.natives));
+    origins.extend(native::origins(
+        federation.snapshot(),
+        &gathered.natives,
+        natives_delivered,
+    ));
+    let (operation, query) = match scope {
+        Scope::Summary => (OPERATION, format!("identifier={system}|{value}")),
+        Scope::List => (LIST, format!("patient.identifier={system}|{value}")),
+    };
+    let documents = gathered
+        .natives
+        .iter()
+        .filter(|native| {
+            natives_delivered
+                && matches!(
+                    native.answer,
+                    ferrofed_engine::single_node::native::Answer::Document(_)
+                )
+        })
+        .count();
     Some(Accessed {
         log: Arc::clone(log),
         action: Action::Query,
-        operation: OPERATION,
+        operation,
         resource: None,
-        // NOTE: BALP 1.1.4 entity:query holds the request, which a FHIR operation names in
-        // its parameters.
-        query: Some(SecretString::from(format!("identifier={system}|{value}"))),
+        // NOTE: BALP 1.1.4 entity:query holds the request, which a FHIR operation or search
+        // names in its parameters.
+        query: Some(SecretString::from(query)),
         stored_query: None,
         subject: subject(federation.snapshot(), gathered, (system, value)),
         evidence: evidence(objects),
-        delivered: Some(delivered.len()),
+        delivered: Some(delivered.len().saturating_add(documents)),
         origins,
         consent_set_aside: gathered
             .set_aside
@@ -630,7 +698,7 @@ pub(crate) fn accessed(
 
 /// Whose data `gathered` reached: the patient `system`|`value` and the
 /// `ehr_id` it resolved to at each member a request left the gateway for.
-fn subject(
+pub(crate) fn subject(
     snapshot: &RegistrySnapshot,
     gathered: &Gathered,
     (system, value): (&str, &str),

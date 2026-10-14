@@ -10,20 +10,20 @@ interface as a FHIR R4 face on a base of its own, `{fhir-base}`, beside the
 ITS-REST face at `{base}`. No ITS-REST path changes: `{base}` stays a
 conformant ITS-REST surface (Federation Tier §4.1, N1, N28).
 
-The face answers three requests today:
+The face answers five requests today:
 
 | Request | Answer |
 |---|---|
 | `GET {fhir-base}/metadata` | the face's `CapabilityStatement` |
 | `GET` or `POST {fhir-base}/Patient/$summary` | the patient summary, an HL7 Europe Patient Summary document `Bundle` |
 | `POST {fhir-base}/Bundle` | a document received in the exchange format, written to the member its category is declared for |
+| `GET {fhir-base}/DocumentReference` | the document list: the summary the gateway writes on request and each member's own one ([The document list](#the-document-list)) |
+| `GET {fhir-base}/Binary/{token}` | a member's own document, at the URL the document list names |
 
-The document list, a `DocumentReference` search that names the summary and
-each member's own document, is planned
-([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)). The gate refuses every
-other path under `{fhir-base}`, and every other method, with a `403`: a
-variant of a path, in another letter case, with a percent-encoded character
-or a trailing or doubled slash, is refused, never served.
+The gate refuses every other path under `{fhir-base}`, and every other
+method, with a `403`: a variant of a path, in another letter case, with a
+percent-encoded character or a trailing or doubled slash, is refused, never
+served.
 
 ## Asking for a summary
 
@@ -116,9 +116,9 @@ it sent it, byte for byte. The gateway's own document maps none of that
 member's data, and every section names it: "Not mapped here: the records of
 the member, which serves its own patient summary." A section with no entry
 is then `unavailable`, never `nilknown`, because the gateway did not read
-that member's data. The member's own document is not yet part of the
-answer: the document list that names it beside the gateway's document is
-planned ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
+that member's data. The document list names the member's own document,
+which a client reads through the gateway
+([The document list](#the-document-list)).
 
 A member whose own endpoint answers `404` holds no summary of the patient,
 and the sections say so. Any other answer, or none, counts as a member that
@@ -154,6 +154,91 @@ The tests hold every document the face writes to a structural check against
 the vendored `bundle-eu-eps`, `composition-eu-eps` and `patient-eu-eps`
 profiles. Validation with HL7's FHIR Validator in CI is planned
 ([#688](https://github.com/FerroHEALTH/FerroFED/issues/688)).
+
+## The document list
+
+A `DocumentReference` search names every patient summary that exists for a
+patient: the one the gateway writes on request, and the one each member in
+the `native` mode serves itself. It is the search of the HL7 Europe EU
+Health Data API Document Access Provider, with its `patient.identifier` and
+`type` parameters:
+
+```http
+GET {fhir-base}/DocumentReference?patient.identifier=urn:oid:2.999.1|SYNTHETIC-1&type=http://loinc.org|60591-5
+Authorization: Bearer <token>
+```
+
+- `patient.identifier` is required, once, as `system|value`, one patient
+  alone. The patient is resolved as for a summary (§5.2).
+- `type`, when sent, is a token: `60591-5`, `http://loinc.org|60591-5` or
+  `http://loinc.org|`. A `type` that admits no patient summary matches
+  nothing: the answer is an empty `searchset`, and nothing is resolved or
+  sent.
+- `_format`, when sent, is `json`, `application/json` or
+  `application/fhir+json`. Any other parameter or modifier is a `400`.
+
+The answer is a `Bundle` of type `searchset`, each entry a `DocumentReference`
+that claims the `EehrxfMhdDocumentReference` profile, typed LOINC `60591-5`
+in the `Patient-Summaries` category, its `subject` the identifier you sent:
+
+- The summary the gateway writes on request, its custodian the operator of
+  `[fhir.operator]`. The gateway does not write it to list it: its
+  attachment points at the request that writes it, relative to
+  `{fhir-base}`, `Patient/$summary?identifier=<system>|<value>`.
+- One entry per member in the `native` mode whose own endpoint answered
+  with a document, its custodian the member's organisation. Its
+  `attachment.url` is `Binary/{token}`, relative to `{fhir-base}`, where the
+  gateway serves the document ([Reading a member's document](#reading-a-members-document)),
+  never a URL of the member's. `contentType` is the media type the member
+  answered with (`application/octet-stream` when it named none), `hash` the
+  base64 of the SHA-1 digest of the bytes the list fetched, and `size` their
+  number. Its `masterIdentifier` is the document's own
+  `Bundle.identifier`.
+
+To list, the gateway asks each `native` member's own endpoint, by the
+member's own `ehr_id` alone, as for a summary
+([A member that serves its own summary](#a-member-that-serves-its-own-summary)),
+under the same budget, onward credential and signed caller identity. It runs
+no section query and maps nothing. It does not ask the demographics binding
+for the summary header either: the summary written on request is listed
+whenever the patient resolves at a member, and `Patient/$summary` can still
+refuse it later when the header cannot be written. A member whose own endpoint answers
+`404` holds no summary and has no entry. A patient no member holds matches
+nothing, an empty `searchset`, as does a patient whose members may not
+disclose a restriction.
+
+A `native` member that does not answer fails the list under
+all-or-nothing, `424` or `504`, with an `OperationOutcome` naming it, as for
+a summary. Under `partial`, the list answers with the entries it has, and
+an `OperationOutcome` entry with `search.mode` `outcome` names each member
+that did not answer and its §11.1 status, so the list is never presented as
+whole.
+
+`metadata` declares the search: the `DocumentReference` resource with the
+`search-type` interaction, its supported profile and the two parameters,
+and the `Binary` read.
+
+### Reading a member's document
+
+`GET {fhir-base}/Binary/{token}` answers a member's document as the member
+sends it, with the member's media type. The token is a compact JWS the
+gateway signs with its `[signing]` key, of its own JOSE type, so the gateway
+takes no other token it signs for one. It is valid for
+`fhir.document_url_lifetime_secs`, 300 seconds unless set, names the
+gateway's FHIR base as its audience, and carries the member's endpoints,
+the member's own `ehr_id`, the category and profile, and the caller it was
+listed for. It carries no patient identifier (§5.4.1, N33).
+
+The read takes the scopes of a summary. The gateway verifies the token and
+holds the caller to the one it names; an expired, altered or foreign token,
+or one listed for another caller, is a `404` that names nothing. It then
+asks the member again, by its own `ehr_id` alone, as the list did, and
+stores nothing. A member that does not answer is a `424` or `504` naming
+it, as for a summary, and one that answers `404` holds the document no
+longer. A member that writes its summary anew on every request answers
+bytes whose hash differs from the one the list gave. Every read that
+reached a member writes one access record, naming the member's endpoint and
+the `ehr_id`, and the patient behind it as the record gate finds them.
 
 ## Completeness
 
@@ -199,11 +284,18 @@ connector must relay the attributes its issuer declares. The handler holds
 the caller to the scopes the gate found covering the summary once more
 before any member is asked.
 
+The document list takes the same scopes as a summary: it names the summary
+and carries the members' own documents.
+
 Every summary that reached a member writes one access record (Annex II 3.2),
 naming the verified caller, the patient, every endpoint asked and the
 `ehr_id` at each, and the categories: `Patient-Summaries` by construction
 (Art 14(1)(a)), beside every category the deployment's map gives the
-compositions the members answered with.
+compositions the members answered with. A document list that asked a
+member's own endpoint writes one record too, naming every such endpoint
+and the `ehr_id` it was asked by, and the members whose document it
+carries; a list that asked no member, because none is in the `native`
+mode, sends nothing to a member and writes none.
 
 ## Errors
 

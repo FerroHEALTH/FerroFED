@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ehds_logging::category::Category;
+use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{EhrAt, PatientLookup};
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_engine::dispatch::DispatchOptions;
@@ -185,25 +186,33 @@ pub(crate) fn settled(
 }
 
 /// The access record's origin of every member of `natives` whose request
-/// left the gateway; none contributed to the gateway's own document, which
-/// leaves its data out (Annex II 3.2).
+/// left the gateway (Annex II 3.2): with `delivered`, each whose own
+/// document the answer carries contributed it; without, none did, as for
+/// the gateway's own document, which leaves their data out.
 pub(crate) fn origins<'a>(
     snapshot: &'a RegistrySnapshot,
     natives: &'a [Native],
+    delivered: bool,
 ) -> impl Iterator<Item = Asked> + 'a {
     natives
         .iter()
         .filter(|native| native.answer.contact().left())
-        .map(|native| Asked {
-            endpoint: native.chosen.native.as_str().to_owned(),
-            node: Some(native.chosen.node.as_str().to_owned()),
-            system_id: snapshot
-                .node(&native.chosen.node)
-                .map(|node| node.system_id().as_str().to_owned()),
-            status: native.answer.status().as_str().to_owned(),
-            rows: None,
-            contributed: false,
-            evidence: None,
+        .map(move |native| {
+            let contributed = delivered && matches!(native.answer, Answer::Document(_));
+            Asked {
+                endpoint: native.chosen.native.as_str().to_owned(),
+                node: Some(native.chosen.node.as_str().to_owned()),
+                system_id: snapshot
+                    .node(&native.chosen.node)
+                    .map(|node| node.system_id().as_str().to_owned()),
+                status: native.answer.status().as_str().to_owned(),
+                rows: None,
+                contributed,
+                evidence: contributed.then(|| {
+                    Evidence::reached(Basis::Returned, Vec::new())
+                        .constructed(Category::PatientSummary)
+                }),
+            }
         })
 }
 

@@ -21,7 +21,8 @@ use std::fmt;
 
 use fhir_types::r4::capability_statement::{
     CapabilityStatement, CapabilityStatementRest, CapabilityStatementRestResource,
-    CapabilityStatementRestResourceOperation, CapabilityStatementSoftware,
+    CapabilityStatementRestResourceInteraction, CapabilityStatementRestResourceOperation,
+    CapabilityStatementRestResourceSearchParam, CapabilityStatementSoftware,
 };
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::parameters::{Parameters, ParametersParameterValue};
@@ -172,8 +173,11 @@ impl SummaryRequest {
 }
 
 /// Returns the face's `CapabilityStatement`, written at `date`, for the
-/// product `product` at `version`: a server that serves `$summary` on
-/// `Patient` in FHIR JSON.
+/// product `product` at `version`.
+///
+/// It describes a server that serves `$summary` on `Patient` and the
+/// `DocumentReference` search of the document list ([`crate::list`]), with
+/// the `Binary` read of a member's document, in FHIR JSON.
 #[must_use]
 pub fn capability(product: &str, version: &str, date: &str) -> CapabilityStatement {
     CapabilityStatement {
@@ -189,18 +193,74 @@ pub fn capability(product: &str, version: &str, date: &str) -> CapabilityStateme
         format: vec![FHIR_JSON.into()],
         rest: vec![CapabilityStatementRest {
             mode: "server".into(),
-            resource: vec![CapabilityStatementRestResource {
-                r#type: "Patient".into(),
-                operation: vec![CapabilityStatementRestResourceOperation {
-                    name: "summary".into(),
-                    definition: SUMMARY_OPERATION.into(),
-                    ..CapabilityStatementRestResourceOperation::default()
-                }],
-                ..CapabilityStatementRestResource::default()
-            }],
+            resource: vec![
+                CapabilityStatementRestResource {
+                    r#type: "Patient".into(),
+                    operation: vec![CapabilityStatementRestResourceOperation {
+                        name: "summary".into(),
+                        definition: SUMMARY_OPERATION.into(),
+                        ..CapabilityStatementRestResourceOperation::default()
+                    }],
+                    ..CapabilityStatementRestResource::default()
+                },
+                documents(),
+                binary(),
+            ],
             ..CapabilityStatementRest::default()
         }],
         ..CapabilityStatement::default()
+    }
+}
+
+/// The `Binary` resource of the capability statement: the read of a
+/// member's document at the URL the document list names.
+fn binary() -> CapabilityStatementRestResource {
+    CapabilityStatementRestResource {
+        r#type: "Binary".into(),
+        interaction: vec![CapabilityStatementRestResourceInteraction {
+            code: "read".into(),
+            documentation: Some(
+                "A member's own document, at the attachment URL the document list names; the URL is valid for a short time and for the caller it was listed for.".into(),
+            ),
+            ..CapabilityStatementRestResourceInteraction::default()
+        }],
+        ..CapabilityStatementRestResource::default()
+    }
+}
+
+/// The `DocumentReference` resource of the capability statement: the
+/// search-type interaction with the two parameters the list takes, after
+/// the HL7 Europe EU Health Data API Document Access Provider.
+fn documents() -> CapabilityStatementRestResource {
+    let parameter = |name: &str, definition: Option<&str>, documentation: &str| {
+        CapabilityStatementRestResourceSearchParam {
+            name: name.into(),
+            definition: definition.map(Into::into),
+            r#type: "token".into(),
+            documentation: Some(documentation.into()),
+            ..CapabilityStatementRestResourceSearchParam::default()
+        }
+    };
+    CapabilityStatementRestResource {
+        r#type: "DocumentReference".into(),
+        supported_profile: vec![crate::list::DOCUMENT_REFERENCE_PROFILE.into()],
+        interaction: vec![CapabilityStatementRestResourceInteraction {
+            code: "search-type".into(),
+            ..CapabilityStatementRestResourceInteraction::default()
+        }],
+        search_param: vec![
+            parameter(
+                "patient.identifier",
+                None,
+                "The patient, as system|value; required, and one patient alone.",
+            ),
+            parameter(
+                "type",
+                Some("http://hl7.org/fhir/SearchParameter/clinical-type"),
+                "The document type; the face lists patient summaries, LOINC 60591-5.",
+            ),
+        ],
+        ..CapabilityStatementRestResource::default()
     }
 }
 

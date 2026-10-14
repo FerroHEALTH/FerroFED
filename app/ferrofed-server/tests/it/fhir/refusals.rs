@@ -287,6 +287,13 @@ async fn every_path_under_the_face_is_refused_with_no_credential() -> TestResult
         "/fhir/Patient/%24summary",
         "/FHIR/Patient/$summary",
         "/fhir/metadata",
+        "/fhir/DocumentReference",
+        "/fhir/DocumentReference/",
+        "/fhir/documentreference",
+        "/fhir/Binary/",
+        "/fhir/Binary/abc.def.ghi",
+        "/fhir/binary/abc.def.ghi",
+        "/fhir/Binary/abc/def",
         "/fhir/anything",
     ] {
         let response = send_as_is(app.clone(), Request::get(path).body(Body::empty())?).await?;

@@ -53,6 +53,28 @@ impl Signer {
     pub fn keys(&self) -> &KeyRing {
         &self.keys
     }
+
+    /// Signs `claims` as a compact JWS of the JOSE type `typ` (RFC 8725
+    /// §3.11) with the current key, naming its `kid`.
+    ///
+    /// The gateway signs a token of its own, such as a URL it serves, with
+    /// the keys that sign its conveyances, and a distinct `typ` keeps the
+    /// two apart.
+    ///
+    /// # Errors
+    ///
+    /// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+    pub fn sign(
+        &self,
+        typ: &str,
+        claims: &impl serde::Serialize,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let key = self.keys.current();
+        let mut header = jsonwebtoken::Header::new(key.algorithm());
+        header.typ = Some(typ.to_owned());
+        header.kid = Some(key.kid().to_owned());
+        jsonwebtoken::encode(&header, claims, key.private())
+    }
 }
 
 #[cfg(test)]
@@ -72,5 +94,21 @@ mod tests {
             .with_issuer_at(a.clone(), "client-a");
         assert_eq!("client-a", signer.issuer_at(&a));
         assert_eq!("urn:example:gateway", signer.issuer_at(&b));
+    }
+
+    #[test]
+    fn a_token_of_its_own_names_its_type_and_the_current_key() {
+        let signer = Signer::new(Arc::clone(&KEYS), "urn:example:gateway");
+        let token = signer
+            .sign(
+                "example+jwt",
+                &[("sub", "synthetic")]
+                    .into_iter()
+                    .collect::<std::collections::BTreeMap<_, _>>(),
+            )
+            .expect("the key signs");
+        let header = jsonwebtoken::decode_header(&token).expect("a JWS");
+        assert_eq!(header.typ.as_deref(), Some("example+jwt"));
+        assert_eq!(header.kid.as_deref(), Some(KEYS.current().kid()));
     }
 }

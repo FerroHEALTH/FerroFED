@@ -40,7 +40,7 @@ use crate::config::public_url::PublicUrl;
 const OWN_SEGMENTS: [&str; 4] = ["v1", "health", "operator", ".well-known"];
 
 /// The `[fhir]` table as written.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Fhir {
     /// The path the face is served under, `{fhir-base}`.
@@ -55,6 +55,22 @@ pub struct Fhir {
     pub receive_namespaces: Vec<String>,
     /// The categories the face receives documents of, one member each.
     pub receive: Vec<ReceiveEntry>,
+    /// How long, in seconds, the URL of a member's document in the
+    /// document list stays valid.
+    pub document_url_lifetime_secs: u64,
+}
+
+impl Default for Fhir {
+    fn default() -> Self {
+        Self {
+            base: None,
+            operator: Operator::default(),
+            mapping: Vec::new(),
+            receive_namespaces: Vec::new(),
+            receive: Vec::new(),
+            document_url_lifetime_secs: 300,
+        }
+    }
 }
 
 /// One `[[fhir.receive]]` entry: the member that stores the documents of
@@ -124,6 +140,9 @@ pub struct FhirSettings {
     pub receivers: Arc<Receivers>,
     /// The identifier systems a received document's patient is resolved in.
     pub receive_namespaces: Vec<IdentifierNamespace>,
+    /// How long the URL of a member's document in the document list stays
+    /// valid.
+    pub document_url_lifetime: std::time::Duration,
     /// The table as written, which a reload compares.
     pub written: Fhir,
 }
@@ -209,6 +228,9 @@ pub enum FhirError {
     /// A received category cannot be checked or mapped.
     #[error("a [[fhir.receive]] is refused")]
     Receivers(#[from] ReceiversError),
+    /// `fhir.document_url_lifetime_secs` is zero.
+    #[error("fhir.document_url_lifetime_secs is at least one second")]
+    DocumentUrlLifetime,
     /// A route a binding serves lies on the face's base, or the base on it.
     #[error("fhir.base and {key} name overlapping routes; give each a path of its own")]
     Clash {
@@ -318,6 +340,9 @@ impl Fhir {
         if !demographics {
             return Err(FhirError::NoDemographics);
         }
+        if self.document_url_lifetime_secs == 0 {
+            return Err(FhirError::DocumentUrlLifetime);
+        }
         Ok(FhirSettings {
             base,
             absolute: absolute.as_str().trim_end_matches('/').to_owned(),
@@ -329,6 +354,7 @@ impl Fhir {
             mappings,
             receivers: Arc::new(self.receivers()?),
             receive_namespaces: self.namespaces()?,
+            document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             written: self.clone(),
         })
     }
