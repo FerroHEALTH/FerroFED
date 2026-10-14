@@ -478,8 +478,8 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 /// not, and every other definition request routed to
 /// one explicitly chosen node, or a template upload fanned out where offered
 /// (§12.6, N43). The DEMOGRAPHIC area is never federated: it is `501`, or
-/// routed to the one `demographic` endpoint the deployment declared, which
-/// each request names (§7a.1, §12.4, §12.6, N23, N32).
+/// routed to the one `demographic` endpoint the deployment declared, with or
+/// without a targeting header naming it (§7a.1, §12.6, N32).
 fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, DescribeError> {
     let (query, routed) = if registry && federation.fans_out_stored_queries() {
         (
@@ -538,9 +538,10 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
         },
         demographic: DemographicSupport::new(match federation.demographic_endpoint() {
             Some(endpoint) => format!(
-                "routed-single-node: a request under {{base}}/v1/demographic/ names the \
-                 declared endpoint {endpoint} in the targeting headers and goes to it \
-                 alone, never federated"
+                "routed-single-node: a request under {{base}}/v1/demographic/ goes to the \
+                 declared endpoint {endpoint} alone, never federated, whether or not the \
+                 targeting headers name it; a header naming another endpoint is refused \
+                 with targeting-conflict"
             ),
             None => "unsupported: 501".to_owned(),
         })?,

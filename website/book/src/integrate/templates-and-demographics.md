@@ -3,9 +3,10 @@
 
 # Templates, definitions and demographics
 
-A request under the definition area or the DEMOGRAPHIC area goes to the one
-node you name. The one exception is a template upload, which a deployment may
-offer to fan out to several members.
+A request under the definition area goes to the one node you name, and one
+under the DEMOGRAPHIC area to the one node the deployment declares. The one
+exception is a template upload, which a deployment may offer to fan out to
+several members.
 
 ## Templates and definitions
 
@@ -106,16 +107,15 @@ DEMOGRAPHIC API (§5.1, §7a.1, N32). Read `its_rest.demographic` in
   `{base}/v1/demographic/` answers `501` (`not-implemented`), and no node is
   asked.
 - `routed-single-node`, naming one endpoint. The deployment keeps its
-  demographics at that member, and you name that endpoint in
-  `openEHR-federation-endpoint` on every DEMOGRAPHIC request, as you name the
-  node of a definition request: the gateway never picks the node for you
-  (§7a.1, §12.4, §12.6, N23). The request then goes there alone: the body
-  byte for byte, only the headers and query parameters the operation
-  declares, and the node's answer as it sent it, with
-  `openEHR-federation-endpoint` and `openEHR-federation-system-id` naming who
-  acted (§7a.3, N31). Without the header the request is a `400`
-  (`target-required`) and no node is asked; a header naming another endpoint
-  is a `400` (`targeting-conflict`) naming both, and
+  demographics at that member, and every DEMOGRAPHIC request goes there
+  alone, whether or not you name that endpoint in
+  `openEHR-federation-endpoint`: the operator fixed the one destination and
+  declared it, which is the explicit choice §12.6 asks for (§7a.1, §12.6,
+  N32). The request carries the body byte for byte, only the headers and
+  query parameters the operation declares, and the node's answer comes back
+  as it sent it, with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id` naming who acted (§7a.3, N31). A header
+  naming another endpoint is a `400` (`targeting-conflict`) naming both, and
   several endpoints, `*` or an unknown id are refused as on any routed
   request (`endpoint-several`, `endpoint-unknown`). Nothing is fanned out or
   merged.

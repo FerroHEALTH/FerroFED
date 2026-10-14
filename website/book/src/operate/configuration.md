@@ -9,7 +9,8 @@ a registry is configured, the federated query `POST {base}/v1/query/aql`, the
 EHR resources and the definition area routed to one node, and, when
 `[stored_queries]` is set, the stored-query registry. The DEMOGRAPHIC area
 answers `501` unless `federation.demographic_endpoint` declares the one
-endpoint a request names to reach it, and every other path under
+endpoint that serves it, which a request reaches without a targeting header,
+and every other path under
 `{base}/v1/` answers `501`. `{base}` is `/` unless you set
 [the base path](#the-base-path).
 
@@ -522,7 +523,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
 | `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; a template upload naming `*` or several endpoints fanned out to each when `federation.fan_out_template_upload` is set; stored-query definitions held at the gateway when `[stored_queries]` is set, and distributed to the members a `PUT` names when `federation.fan_out_stored_queries` is set beside it; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
-| `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
+| `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint, with or without `openEHR-federation-endpoint` naming it; a header naming another endpoint is a `400` |
 | any other path under `{base}/v1/` | `501` |
 | any other path | `404` |
 

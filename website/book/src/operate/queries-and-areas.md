@@ -336,17 +336,17 @@ member's endpoint as the one that serves the area:
 demographic_endpoint = "hospital-a.demographic"
 ```
 
-- The request chooses its node, as a definition request does (§7a.1, §12.4,
-  §12.6, N23): every DEMOGRAPHIC operation ITS-REST 1.1.0 defines names that
-  endpoint in `openEHR-federation-endpoint`, and then goes to it alone,
-  through the same single-node path as a definition request:
+- The setting is the explicit choice of §12.6: one destination you fix and
+  `OPTIONS {base}/` declares (§7a.1, §12.6, N32). Every DEMOGRAPHIC
+  operation ITS-REST 1.1.0 defines goes to that endpoint alone, whether or
+  not `openEHR-federation-endpoint` names it, through the same single-node
+  path as a definition request:
   the query string and the declared headers are held to what the operation
   declares, the body travels byte-identical, and the node's answer comes back
   as the node sent it, with `openEHR-federation-endpoint` and
   `openEHR-federation-system-id` naming the endpoint (§7a.3, N31). Nothing is
   probed, fanned out or sent to another member.
-- The gateway never applies the setting as a default. A request naming no
-  endpoint is a `400` (`target-required`), and no node is asked. A header
+- A targeting header may name the declared endpoint and no other. A header
   naming another endpoint is a `400` (`targeting-conflict`), several
   endpoints an `endpoint-several`, and `*` or an unknown id an
   `endpoint-unknown`.
@@ -355,8 +355,8 @@ demographic_endpoint = "hospital-a.demographic"
   setting it without `registry.document`. A suspended endpoint answers
   `no-destination`.
 - `OPTIONS {base}/` declares `its_rest.demographic` as `unsupported: 501`
-  without the setting, and as `routed-single-node` naming the endpoint a
-  client names, with it. The setting is named in the startup log line.
+  without the setting, and as `routed-single-node` naming the declared
+  endpoint, with it. The setting is named in the startup log line.
 
 ## Fan-out template upload
 

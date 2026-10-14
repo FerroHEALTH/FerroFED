@@ -4,10 +4,11 @@
 //! The DEMOGRAPHIC area against two mock nodes (§7a.1, §12.6, N32, N31, N33;
 //! CP-25): it is never federated. By default every request under
 //! `{base}/v1/demographic/` answers `501` and no node is asked. With
-//! `federation.demographic_endpoint` set, a request whose targeting header
-//! names that endpoint goes to it alone, byte-identical, and is answered as
-//! that node answered; one naming no endpoint or another is refused, because
-//! the request chooses its node (§12.4, §12.6, N23). `OPTIONS {base}/`
+//! `federation.demographic_endpoint` set, a request that names that endpoint
+//! in its targeting header, or names none, goes to it alone, byte-identical,
+//! and is answered as that node answered, because the operator's declared
+//! destination is the explicit choice; one naming another endpoint is
+//! refused (§7a.1, §12.6, N32). `OPTIONS {base}/`
 //! declares whichever behaviour runs, and the behaviour matches it. Every
 //! assertion on what a node received reads the node's own capture (§16,
 //! track 10).
@@ -235,22 +236,50 @@ async fn a_header_naming_the_declared_endpoint_is_accepted() -> TestResult {
     Ok(())
 }
 
+// NOTE: §7a.1 DEMOGRAPHIC row, §12.6: one destination fixed by the operator and
+// declared in OPTIONS is the explicit choice, so a request without a header goes there.
 // conformance: CP-25
 #[tokio::test]
-async fn with_the_setting_a_request_naming_no_endpoint_is_refused_and_no_node_is_asked()
--> TestResult {
-    for request in [read(None)?, create(None)?] {
-        let a = Server::start().await;
-        let b = holder(&person()).await;
-        let dir = tempfile::tempdir()?;
-        refused_at_neither(
-            over(dir.path(), (&a, &b), ROUTED_TO_B)?,
-            request,
-            "target-required",
-            (&a, &b),
-        )
-        .await?;
+async fn with_the_setting_a_request_naming_no_endpoint_goes_to_the_declared_one_alone() -> TestResult
+{
+    let a = Server::start().await;
+    let b = holder(&person()).await;
+    mount(
+        &b,
+        "POST",
+        PERSONS.to_owned(),
+        ResponseTemplate::new(201).insert_header("ETag", format!("\"{PARTY}\"").as_str()),
+    )
+    .await;
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), (&a, &b), ROUTED_TO_B)?;
+    for (request, status) in [
+        (read(None)?, StatusCode::OK),
+        (create(None)?, StatusCode::CREATED),
+    ] {
+        let mut request = request;
+        let fields = request.headers_mut();
+        fields.insert("x-patient", PATIENT.parse()?);
+        fields.insert(
+            header::AUTHORIZATION,
+            format!("Bearer {}", *CLIENT_TOKEN).parse()?,
+        );
+        let (answered, headers, _) = exchange(app.clone(), request).await?;
+        assert_eq!(status, answered, "§7a.1, §12.6");
+        acted(&headers, ENDPOINT_B, "cdr-b.example.org");
     }
+    assert_eq!(
+        vec![
+            ("GET".to_owned(), format!("{PERSONS}/{PARTY}")),
+            ("POST".to_owned(), PERSONS.to_owned()),
+        ],
+        asked(&b).await?,
+        "node B is asked once for each"
+    );
+    assert!(asked(&a).await?.is_empty(), "node A is never asked");
+    let composed = wire(&b).await?;
+    assert!(!composed.contains(PATIENT), "N33: {composed}");
+    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
     Ok(())
 }
 

@@ -316,7 +316,7 @@ with no marked test is not listed.
 
 14 tests.
 
-- `app/ferrofed-server/tests/it/demographic.rs`: `a_header_naming_another_endpoint_several_or_a_star_is_refused`, `a_header_naming_the_declared_endpoint_is_accepted`, `by_default_a_read_and_a_create_are_501_and_no_node_is_asked`, `options_declares_each_mode_and_the_behaviour_matches_it`, `options_on_a_party_names_its_methods_only_when_routed`, `the_conflict_names_both_endpoints`, `with_the_setting_a_create_body_is_forwarded_unchanged`, `with_the_setting_a_party_read_reaches_only_that_node_byte_identical`, `with_the_setting_a_path_naming_no_its_rest_operation_is_still_501`, `with_the_setting_a_request_naming_no_endpoint_is_refused_and_no_node_is_asked`
+- `app/ferrofed-server/tests/it/demographic.rs`: `a_header_naming_another_endpoint_several_or_a_star_is_refused`, `a_header_naming_the_declared_endpoint_is_accepted`, `by_default_a_read_and_a_create_are_501_and_no_node_is_asked`, `options_declares_each_mode_and_the_behaviour_matches_it`, `options_on_a_party_names_its_methods_only_when_routed`, `the_conflict_names_both_endpoints`, `with_the_setting_a_create_body_is_forwarded_unchanged`, `with_the_setting_a_party_read_reaches_only_that_node_byte_identical`, `with_the_setting_a_path_naming_no_its_rest_operation_is_still_501`, `with_the_setting_a_request_naming_no_endpoint_goes_to_the_declared_one_alone`
 - `app/ferrofed-server/tests/it/e2e/track9_surface.rs` (e2e): `the_self_description_lists_the_members_and_demographic_answers_as_declared`
 - `app/ferrofed-server/tests/it/errors.rs`: `an_unexposed_its_rest_area_is_a_501_not_implemented`
 - `app/ferrofed-server/tests/it/its_rest_areas/demographic.rs`: `the_demographic_declaration_matches_the_demographic_area_in_each_mode`

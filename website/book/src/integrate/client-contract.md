@@ -18,8 +18,8 @@ deployment that offers the stored-query registry stores queries under
 `{base}/v1/definition/query/` itself instead, and runs them by name at
 `GET` or `POST {base}/v1/query/{name}` ([stored queries](stored-queries.md), §12.7).
 The DEMOGRAPHIC API under `{base}/v1/demographic/` is never federated: it
-answers `501`, or goes to the one endpoint the deployment declared for it when
-you name that endpoint ([demographics](templates-and-demographics.md#demographics), §7a.1, N32). Every other ITS-REST path under
+answers `501`, or goes to the one endpoint the deployment declared for it,
+with or without a targeting header naming it ([demographics](templates-and-demographics.md#demographics), §7a.1, N32). Every other ITS-REST path under
 `/v1/` answers `501` (N32).
 
 The contract continues on three pages: [follow-ups](follow-ups.md), the

@@ -5,8 +5,9 @@
 //! definition request and a DEMOGRAPHIC request each go to one endpoint that
 //! is named, never found (§7a.1, §12.4, §12.6, N23, N32, N43).
 //!
-//! The client names it in the targeting headers, always; for the DEMOGRAPHIC
-//! area the deployment declares the one endpoint the client may name.
+//! The client names it in the targeting headers; for the DEMOGRAPHIC area
+//! the deployment declares the one endpoint that serves it, which a request
+//! without a header goes to and a header may name, never another.
 //! Nothing is probed and no node is picked implicitly.
 
 use std::time::Instant;
@@ -31,8 +32,9 @@ use crate::federation::Federation;
 pub(super) enum Chooser<'a> {
     /// Any one endpoint of the registry (§8.4, §12.4, §12.6).
     Client,
-    /// Only this endpoint, the one the deployment declared for the area
-    /// (§7a.1, N32).
+    /// Only this endpoint, the one the deployment declared for the area,
+    /// which a request without a targeting header goes to (§7a.1, §12.6,
+    /// N32).
     Declared(&'a EndpointId),
 }
 
@@ -42,7 +44,7 @@ pub(super) enum Chooser<'a> {
 ///
 /// A new EHR has no owner for a binding or the index to name, and a template
 /// or a stored query lives at the node it was sent to, so only the client
-/// can name the node; a DEMOGRAPHIC request names the endpoint the
+/// can name the node; a DEMOGRAPHIC request goes to the endpoint the
 /// deployment declared for it. The query string and the declared values are
 /// held first, as on the EHR route ([`held`]); then the
 /// endpoint is [`chosen`]: nothing is probed and no node is picked
@@ -96,7 +98,7 @@ pub(super) async fn to_named(
         endpoint = %endpoint.id(),
         area,
         request_id = logged,
-        "routed to the endpoint the targeting headers name"
+        "routed to the endpoint the targeting headers or the declaration name"
     );
     let provenance = Provenance::of(snapshot, endpoint);
     let sent = (request, arrived.outbound, &arrived.conveyance);
@@ -119,10 +121,11 @@ pub(super) async fn to_named(
 /// where `chooser` allows it, or the code and the message refusing the
 /// request (§8.4.1, §12.6).
 ///
-/// The headers must name exactly one endpoint the registry holds: none is
-/// `target-required`, several `endpoint-several`, and an unknown id or `*`
-/// `endpoint-unknown`. Where the deployment declared the area's endpoint, a
-/// header naming another is `targeting-conflict`, naming both.
+/// The headers name at most one endpoint the registry holds: several is
+/// `endpoint-several`, and an unknown id or `*` `endpoint-unknown`. For
+/// [`Chooser::Client`], none is `target-required`. Where the deployment
+/// declared the area's endpoint, no header routes to it, and a header naming
+/// another is `targeting-conflict`, naming both.
 fn chosen<'a>(
     snapshot: &'a RegistrySnapshot,
     headers: &HeaderMap,
@@ -130,16 +133,22 @@ fn chosen<'a>(
 ) -> Result<&'a Endpoint, (Code, String)> {
     let targeted = owner::targeted(snapshot, headers)
         .map_err(|untargeted| (untargeted.code(), untargeted.to_string()))?;
-    // NOTE: §7a.1, §12.6, §12.4, N23: the request names its node, so a declared
-    // endpoint only bounds what it may name and is never applied as a default.
-    let Some(endpoint) = targeted else {
-        let code = Code::TargetRequired;
-        return Err((code, code.message().to_owned()));
-    };
-    match chooser {
-        Chooser::Client => Ok(endpoint),
-        Chooser::Declared(declared) if endpoint.id() == declared => Ok(endpoint),
-        Chooser::Declared(declared) => Err((
+    match (chooser, targeted) {
+        // NOTE: §12.6, §12.4, N23: the request names its node, so an area with no
+        // declared endpoint is never given a default.
+        (Chooser::Client, None) => {
+            let code = Code::TargetRequired;
+            Err((code, code.message().to_owned()))
+        }
+        (Chooser::Client, Some(endpoint)) => Ok(endpoint),
+        // NOTE: §7a.1 DEMOGRAPHIC row, §12.6: one destination fixed by the operator
+        // and declared in OPTIONS is the explicit choice, so it needs no header.
+        (Chooser::Declared(declared), None) => snapshot.endpoint(declared).ok_or_else(|| {
+            let code = Code::NoDestination;
+            (code, code.message().to_owned())
+        }),
+        (Chooser::Declared(declared), Some(endpoint)) if endpoint.id() == declared => Ok(endpoint),
+        (Chooser::Declared(declared), Some(endpoint)) => Err((
             Code::TargetingConflict,
             format!(
                 "the targeting headers select the endpoint {}, and this area is served \
