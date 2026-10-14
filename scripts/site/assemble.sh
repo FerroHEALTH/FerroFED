@@ -53,13 +53,23 @@ roadmap() {
 # what keeps the output out of website/book/.
 book="$(mktemp -d)"
 block="$(mktemp)"
-trap 'rm -rf "$book"; rm -f "$block"' EXIT
+source="$(mktemp -d)"
+trap 'rm -rf "$book" "$source"; rm -f "$block"' EXIT
 
 # The conformance pages are rendered from the matrix and the test markers, so
 # a page that disagrees with them fails the build before mdBook runs (#95).
 bash scripts/conformance/matrix.sh --check-pages
 
-mdbook build website/book --dest-dir "$book"
+# The statement block and the tests page read the markers of every test file,
+# so the repository holds placeholders and the site renders both into its own
+# copy of the book, which keeps a rendering from going stale on main (#912).
+cp -R website/book/src website/book/book.toml "$source/"
+for extra in website/book/vendor website/book/js website/book/theme; do
+  if [[ -e "$extra" ]]; then cp -R "$extra" "$source/"; fi
+done
+bash scripts/conformance/matrix.sh --statement-write-into "$source/src" > /dev/null
+
+mdbook build "$source" --dest-dir "$book"
 
 rm -rf "${OUT:?}"
 mkdir -p "$OUT/docs"
