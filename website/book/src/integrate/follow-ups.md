@@ -294,8 +294,9 @@ endpoint in `openEHR-federation-endpoint` and its `system_id` in
 
 - **Several members hold the subject:** a patient can have an EHR at more
   than one member, and this operation returns one. The gateway never picks
-  one by where the patient resolved (§12.5.2), so the answer is a `409`
-  (`subject-several`) listing the endpoints. Name one in
+  one by where the patient resolved (§12.5.2), so the answer is a `400`
+  (`subject-several`) listing the endpoints, which requires an explicit
+  target (N41). Name one in
   `openEHR-federation-endpoint` to read its EHR; the header limits the
   resolution to that endpoint (§8.4).
 - **No member holds the subject**, or not the one the header names: the

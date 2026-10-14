@@ -23,8 +23,9 @@
 //! contacted, and one it does not deny is left to its node (N27a, N27). The resolution settles the answer:
 //!
 //! - one member knows the subject: its EHR, forwarded once;
-//! - several members know it: `409` listing their endpoints, because the
-//!   gateway never chooses by where the patient resolved (§12.5.2);
+//! - several members know it: `400` listing their endpoints, requiring an
+//!   explicit target, because the gateway never chooses by where the patient
+//!   resolved (§12.5.2, N41);
 //! - the cross-reference could not answer for a member: `424`, because that
 //!   member may hold the EHR too (§11.2, §11.5);
 //! - the consent pre-filter denied every member that might hold it, and no

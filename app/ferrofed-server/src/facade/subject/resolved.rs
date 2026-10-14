@@ -33,7 +33,7 @@ pub(super) struct Resolved<'a> {
 impl<'a> Resolved<'a> {
     /// The one endpoint that holds the subject's EHR, with its `ehr_id`.
     ///
-    /// Two holders are a `409` whatever the others answered. Otherwise a
+    /// Two holders are a `400` whatever the others answered (N41). Otherwise a
     /// candidate the cross-reference could not answer for may hold it too,
     /// so neither one holder nor none is an answer then (§11.5). A candidate
     /// the consent pre-filter denied was never asked, so with no holder among
@@ -51,8 +51,8 @@ impl<'a> Resolved<'a> {
             denied,
         } = self;
         if holders.len() > 1 {
-            // NOTE: §12.5.2: the gateway never breaks a tie by where the patient
-            // resolved, so several holders are listed and none is chosen.
+            // NOTE: §12.5.2, N41: the gateway never breaks a tie by where the patient
+            // resolved, so several holders are listed for an explicit target and none is chosen.
             let endpoints = holders
                 .iter()
                 .map(|(endpoint, _)| endpoint.id().clone())

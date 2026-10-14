@@ -156,7 +156,8 @@ pub enum Code {
     MediaTypeUnsupported,
     /// The subject of `GET {base}/v1/ehr` resolves at more than one member,
     /// and no targeting header names one of them: the gateway never chooses
-    /// by where the patient resolved (§12.5.2). The body lists the endpoints.
+    /// by where the patient resolved (§12.5.2). It answers N41's `400`, which
+    /// requires an explicit target, and the body lists the endpoints.
     SubjectSeveral,
     /// The cross-reference service could not answer for a member, so where
     /// the subject of `GET {base}/v1/ehr` has its EHR is unknown (§5.2,

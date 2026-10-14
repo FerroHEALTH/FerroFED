@@ -187,7 +187,7 @@ and its set is closed, so the code says which.
 | `parameter-value-invalid` | 400 | A request routed to one node carries a value that is not what the ITS-REST operation declares for it: a path `version_uid` that is no `OBJECT_VERSION_ID`, a `versioned_object_uid` that is no UUID, a `version_at_time` that is no extended ISO 8601 date-time, or a `detail_level` outside its listed values. The gateway sends nothing; the message names the header, or the parameter by its position and declared name, and never quotes the value (§5.4.1, N33). |
 | `media-type-not-acceptable` | 406 | The `Accept` header of a request routed to one node admits none of the media types the ITS-REST operation answers in, as a node would answer it (RFC 9110 §12.5.1). The message lists the media types the operation offers. |
 | `media-type-unsupported` | 415 | The `Content-Type` header of a request routed to one node, or of a request the gateway answers itself (`POST {base}/v1/query/aql`, a stored query run by name, a stored-query definition `PUT`), is not one of the media types the ITS-REST operation takes, or carries a parameter other than `charset=utf-8` (RFC 9110 §8.3, §15.5.16); the gateway sends and stores nothing. A body sent without a `Content-Type` is never refused: it is read as, or travels with, the first media type the operation lists. The message lists the media types the operation takes. |
-| `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
+| `subject-several` | 400 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2, N41). |
 | `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
 | `ehr-id-held` | 409 | `PUT {base}/v1/ehr/{ehr_id}` names one member in `openEHR-federation-endpoint` while your session's resolution bindings or the gateway's `ehr_id` index already place that `ehr_id` at another member. Creating it would put one `ehr_id` at two members, the collision of §12.5.2, so the gateway sends the create to no node. The message names the holding endpoints and the one you named, and never quotes the `ehr_id`. When the member you named is the one that holds it, the create is sent there and that node answers its own `409` (ITS-REST 1.1.0 `ehr_create_with_id`; §12.4, §12.5.2, N23, N42). |
 | `definition-endpoint-targeted` | 400 | A stored-query `PUT` names members to distribute the definition to, and its AQL carries a `FROM ENDPOINT` or `ORGANISATION` directive. The directive names members of the federation, which a node cannot run, so the gateway distributes nothing and stores nothing; store it without naming members and it runs federated (§12.7, §8.1, N44). |
@@ -227,12 +227,16 @@ to a node:
 - `controlling-system-unreachable`: a versioned write would be committed at
   a node other than its controlling CDR, which would fork the object (§10.3,
   N23).
-- `subject-several`: the subject of `GET {base}/v1/ehr` resolves at more
-  than one member. This is no integrity defect: a patient may have an EHR at
-  several members, each under its own `ehr_id`, and the read by subject
-  returns one EHR, so the gateway asks you to name the member (§12.5.2).
 - `stored-query-held`: the registry already holds the stored query's name
   and version, and a stored version is immutable (§12.7, N44).
+- `stored-query-reserved`: the stored query's namespace is the one the
+  gateway reserves for its own read-only queries (§12.7, N44).
+
+`subject-several` is a `400`, never a `409`: the subject of
+`GET {base}/v1/ehr` resolving at more than one member is no integrity
+defect, because a patient may have an EHR at several members, each under its
+own `ehr_id`. The read by subject returns one EHR, so the gateway asks you to
+name the member, as N41 has it when no one node is found (§12.5.2).
 
 ## Query refusals
 

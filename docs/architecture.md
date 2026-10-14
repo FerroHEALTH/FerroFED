@@ -429,8 +429,11 @@ identifier in the query string, which N33 forbids the gateway to dispatch, and
 the specification is silent on the operation. FerroFED treats `subject_id` and
 `subject_namespace` as resolution input (§5.2), dispatches
 `GET {base}/v1/ehr/{ehr_id}` to the one node that resolved, answers `404` when
-none did, and `409` naming the claimants when several did, the N42 shape
-(decision A12; FerroFED's own; draft on #17). Built in #218: the targeting
+none did, and `400` naming the endpoints when several did, N41's answer when
+the earlier steps yield no one node, which requires an explicit target
+(decision A12, amended on #354 from `409`: N42 keeps `409` for an `ehr_id`
+two nodes claim, an integrity defect, while several members holding one
+patient is the normal state of a federation; FerroFED's own; draft on #17). Built in #218: the targeting
 header narrows the resolution to the one endpoint it names (§8.4), which is
 how a client reads one of several holders, and a cross-reference that cannot
 answer for a member is a `424`, never the `404`, because that member may hold
@@ -2622,7 +2625,7 @@ R4 is #23, #25 and #27).
 | A9 | The ENDPOINT attribute names [R1 D10] | the §9.3 set, plus `p/id` until 1.0 settles §8.3 against §9.3; every other path `400` | the §8.3 example is the only place a client learns the syntax; `p/organization` is named by neither | decided (owner, 2026-10-01); the `url` attribute re-checked against 1.0.0 (#354): §9.3 still lets a gateway omit `url` from rows, and FerroFED never withholds it, filling it from the registry whenever it is selected, so this stands; a setting that withheld it would refuse a query selecting `url` with `400` and never omit the cell, because §9.1 makes `rows[n][i]` the value of `columns[i]` |
 | A10 | ITS-REST `offset` and `fetch` [R1 D3] | follow the declared `OFFSET` and `LIMIT` strategies; both set and different is `400` | they are the same paging §11.6 governs; dropping them silently is the reference implementation's divergence | decided (owner, 2026-10-01) |
 | A11 | The `query` group [R1 D2] | FerroFED handlers over the generated DTOs | N37's `424`/`504` with `meta.federation` cannot pass through `ApiError` and belong in no ITS-REST crate | decided (owner, 2026-10-01) |
-| A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `409` | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |
+| A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `400` (amended on #354 from `409`; N41) | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |
 | A13 | `Location` on a routed answer [R1 D6] | unmodified until 1.0; the conflict with N1 and N28 held on #17 | N31 and §7a.3 say unmodified | decided (owner, 2026-10-01) |
 | A14 | The Step-1 seams [R2 D1] | one trait per role, one active implementation, outcomes not errors, per-seam budgets | §14, §5.2 and §14.3 keep the questions apart; N4's fail-closed rule presumes one localizer | decided (owner, 2026-10-01) |
 | A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as the `xcpd` feature of `ihe-iti`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
