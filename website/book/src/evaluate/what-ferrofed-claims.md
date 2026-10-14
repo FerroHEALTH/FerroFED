@@ -310,10 +310,10 @@ Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.10: the re-pin to the specification's 1.0 release, with FerroFED's
+v0.0.10: the specification's 1.0.0 release, re-pinned on `main`
+([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)), with FerroFED's
 choices revisited where the upstream reports bear on them
-([#17](https://github.com/FerroHEALTH/FerroFED/issues/17),
-[#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and EHDS
+([#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and EHDS
 readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the
 European interoperability and logging software components, and the
 manufacturer's conformity work
@@ -339,9 +339,11 @@ security features of the EHR system in relation to its intended purpose".
 These are the ones to know before you deploy FerroFED; the
 [claims review](claims-review.md) records how this list is kept.
 
-- **The specification is a release candidate.** FerroFED implements v0.9.0
-  of the Federation Tier with AQL. Requirement and conformance-point numbers
-  can move at the 1.0 release, and the re-pin is
+- **The specification is release 1.0.0.** FerroFED implements the 1.0.0
+  release of the Federation Tier with AQL, approved by the openEHR SEC on
+  2026-10-12, and reports `spec_version` `"1.0"` in `OPTIONS {base}/`.
+  Releases up to v0.0.9 implement the 0.9.0 release candidate and report
+  `"0.9"`; the re-pin is
   [#17](https://github.com/FerroHEALTH/FerroFED/issues/17).
 - **No EHDS harmonised component is complete.** The gateway records every
   access to patient data as Annex II, point 3.2, asks of the European
@@ -421,7 +423,6 @@ runs it. The [conformance statement](conformance-statement.md) is that claim
 for the Federation-Gateway profile, with every deferral and its reason. The
 [conformance matrix](conformance.md) records where each point
 stands, and the [obligations checklist](obligations.md) does the same for
-every normative statement of the specification. The specification is a
-release candidate; when 1.0 is published, the vendored text is re-pinned and
-every citation is checked against it
-([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
+every normative statement of the specification. Both are held to the 1.0.0
+release, to which the vendored text was re-pinned from the 0.9.0 release
+candidate ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).

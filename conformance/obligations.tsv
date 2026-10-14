@@ -46,6 +46,14 @@
 # `scripts/conformance/obligations.sh --derive`. A re-pin that adds, removes
 # or rewords such a line fails `scripts/checks/obligations.sh` until the rows
 # of that page are reclassified and the digest is derived again.
+#
+# The 1.0.0 release dropped the change record page,
+# changes-from-2025-08-20.adoc, and its four rows were retired at the re-pin
+# (#17). Three restated rules that keep their own rows here
+# (result-set#meta-latency.2, partial-results#failure-carries-envelope.1,
+# follow-up-routing#fanout-endpoint-targeted-refused.1). The fourth was an
+# Editor new-gap against the 0.9.0 pin (commit 7162d0c), #212 comment
+# 5966718241 item 14, whose WARNING the release removed with the page.
 id	page	anchor_or_section	actor	keyword	n	cp	status	evidence	clause
 index#1.1	index.adoc	1	Gateway	MUST	N1	CP-1	tested	app/ferrofed-server/tests/it/facade/query.rs::a_patient_query_is_one_result_set_over_both_nodes; app/ferrofed-server/tests/it/e2e/crossref.rs::one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire	a client MUST be able to send it a conformant openEHR AQL query and follow-up requests without knowing it is federated
 index#1.2	index.adoc	1	Gateway	MAY	N44	CP-40	tested	app/ferrofed-server/tests/it/stored.rs::a_stored_query_invoked_by_name_fans_out_and_names_the_gateways_definition (offered and declared)	A gateway MAY also hold federated stored queries itself
@@ -458,10 +466,6 @@ annex-b-dutch-gf#B.5.1	annex-b-dutch-gf.adoc	B.5	Node	SHALL	N26,N27	CP-18	n/a	bi
 annex-b-dutch-gf#B.5.2	annex-b-dutch-gf.adoc	B.5	Node	SHALL	N26,N27	CP-18	n/a	binds the GF authorization decision point of a Dutch deployment, never the gateway; #87	Implementers need not run Rego in production, but the outcome SHALL match the specified policy
 annex-b-dutch-gf#pseudonymised-walkthrough.1	annex-b-dutch-gf.adoc	pseudonymised-walkthrough	Gateway	MAY	N5,N33	CP-26	tested	owner decision on #16 (either input accepted, never pseudonymised in the core); hygiene holds for any value: app/ferrofed-server/tests/it/outbound.rs::either_carrier_and_a_projection_reach_a_node_as_its_ehr_id_alone	the identifier a client presents MAY be a pseudonymised one
 annex-b-dutch-gf#pseudonymised-walkthrough.2	annex-b-dutch-gf.adoc	pseudonymised-walkthrough	Operator	MAY	N33	CP-26	n/a	a deployment choice; a regional adapter may pseudonymise (owner decision on #16, #87)	A deployment MAY equally have the client present the BSN and the gateway exchange it at the Pseudonymization Service
-changes-from-2025-08-20#its-rest-alignment.1	changes-from-2025-08-20.adoc	its-rest-alignment	Gateway	MUST	N40	CP-31	n/a	informative change record; the rule lives at result-set#meta-latency.2 (this F5 text omits node-error, which R1 later added)	It MUST be omitted, not invented, for the statuses settled before any request existed to time
-changes-from-2025-08-20#sec-amendments.1	changes-from-2025-08-20.adoc	sec-amendments	Gateway	MUST	N37	CP-30	n/a	informative change record; the rule lives at partial-results#failure-carries-envelope.1	A failing response MUST still carry the diagnostic envelope
-changes-from-2025-08-20#sec-amendments.2	changes-from-2025-08-20.adoc	sec-amendments	Gateway	MUST NOT	N44	CP-40	n/a	informative change record; the rule lives at follow-up-routing#fanout-endpoint-targeted-refused.1	an endpoint-targeted definition MUST NOT be distributed
-changes-from-2025-08-20#sec-amendments.3	changes-from-2025-08-20.adoc	sec-amendments	Editor	MUST	-	-	new-gap	#212 comment 5966718241 item 14; the WARNING says the version bump "is recorded as an open item in §18 so it cannot be lost", and future.adoc carries no such item; T150 on #212 covers the bump, not the missing §18 entry	It is recorded as an open item in §18 so it cannot be lost
 options-root.schema#/properties/federation/properties/dedup	options-root.schema.json	/properties/federation/properties/dedup	Gateway	MUST	N15	CP-23	tested	crates/openehr-federation/tests/it/options.rs::the_dedup_default_is_none_and_modes_are_listed; app/ferrofed-server/tests/it/options.rs::the_dedup_policy_names_the_default_the_modes_and_the_header	Default MUST be 'none' (N15)
 options-root.schema#/properties/federation/properties/completeness.1	options-root.schema.json	/properties/federation/properties/completeness	Gateway	MUST	N37	CP-23	tested	crates/openehr-federation/tests/it/options.rs::the_completeness_default_is_all_or_nothing	ALL-OR-NOTHING MUST be the default
 options-root.schema#/properties/federation/properties/completeness.2	options-root.schema.json	/properties/federation/properties/completeness	Gateway	MUST	N37	CP-23	tested	crates/openehr-federation/tests/it/options.rs::best_effort_requires_opt_in; app/ferrofed-server/tests/it/options.rs::the_completeness_modes_follow_the_configuration	A gateway offering the opt-in BEST-EFFORT mode MUST declare it here and MUST say how a client selects it per request

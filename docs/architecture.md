@@ -56,17 +56,19 @@ non-federated AQL scoped to its `ehr_id` (§4, §7). The patient identifier used
 for resolution is consumed at the gateway and never reaches a node, in any
 carrier (§5.4, N33).
 
-The specification is a release candidate circulated for comment. Its 1.0
-release is expected the week of 2026-10-08, and #17 re-pins to it: re-vendor,
-diff, re-cite every issue, and re-check the held upstream-report drafts.
+The specification is pinned at its 1.0.0 release, approved by the openEHR
+SEC on 2026-10-12. #17 re-pinned to it from the 0.9.0 release candidate: the
+release moves `federation.spec_version` to `"1.0"` (§7a.2) and the `$id` of
+both schemas, and drops the change record page, and no N, CP or section
+number moved.
 
 **Pinned versions.** The pins live in `docs/VERSIONS.md`; this table records
 the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 
 | Component | Pin | Ground |
 |---|---|---|
-| Federation Tier with AQL | 0.9.0 (`syntaric/openehr-federation-spec` at `7162d0c760d23105d62a743bf0ad1073c45fdb85`, 2026-09-28, CC0 1.0) | the specification FerroFED implements. The pinned commit is past the `0.9.0` tag and carries the SEC review amendments (the `meta.federation` nesting, the all-or-nothing default, the `node-error` status) while `antora.yml` still declares `0.9.0`, which is held as a draft on #17 |
-| Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
+| Federation Tier with AQL | 1.0.0 (`syntaric/openehr-federation-spec` tag `1.0.0`, commit `7dcf0f44ac122fe947b1e5ceba6bcbbb7721917d`, 2026-10-12, CC0 1.0) | the specification FerroFED implements, as approved by the openEHR SEC. It carries the SEC review amendments (the `meta.federation` nesting, the all-or-nothing default, the `node-error` status), and its `spec_version` `"1.0"` is the first value that names that contract unambiguously (§7a.2) |
+| Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | it has no release matching 1.0.0 (its newest tag is `0.9.0`), so the pin stays. Evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
 | `openehr-query` | 0.0.84 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |

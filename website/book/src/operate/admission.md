@@ -5,12 +5,12 @@
 
 A federation admits a node before the node serves any request, and it does
 not admit a node that fails its admission conditions
-([§12b.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/membership.html),
-[N42a](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n42a)).
+([§12b.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/membership.html),
+[N42a](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/requirements.html#n42a)).
 The conditions cover at least the identifier-integrity rules of §12b.2.
 Admission is your act as the federation operator. FerroFED does not decide
 it, and the specification scores it against you, not against the gateway
-([CP-33a](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33a)).
+([CP-33a](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/conformance.html#cp-33a)).
 
 The specification asks you to verify the conditions by test and not by
 attestation alone. FerroFED helps in two ways:
@@ -52,8 +52,8 @@ checked without a write, below
 The subjects travel only in the `EHR_STATUS` body and to your
 cross-reference. Every request passes the same outbound gate as a query, with
 the run's subjects withheld from the path, the query string and the headers
-([§5.4.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/identity-resolution.html#identifier-hygiene),
-[N33](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n33)).
+([§5.4.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/identity-resolution.html#identifier-hygiene),
+[N33](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/requirements.html#n33)).
 The report prints the endpoint id, the node id, `system_id`s and the
 `ehr_id`s the node created. It never prints a subject or a node's error body,
 which could echo one.
@@ -170,7 +170,7 @@ node's `ehr_id` space is your registry decision.
 **The rule:** a node's openEHR `system_id` is unique across the federation
 and is not shared with another node. A shared one makes `creating_system_id`
 routing ambiguous
-([§12.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/follow-up-routing.html)),
+([§12.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/follow-up-routing.html)),
 so a follow-up write could reach the wrong CDR.
 
 **What the check does:** the registry already holds every member's
@@ -188,7 +188,7 @@ federation uses the same `system_id`.
 
 **The rule:** the node's environment can resolve a patient identifier to the
 node's local `ehr_id`
-([§5.5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/identity-resolution.html#node-obligation)).
+([§5.5](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/identity-resolution.html#node-obligation)).
 Who provides it, the node, its organisation's MPI or a regional service, does
 not matter.
 
@@ -220,6 +220,6 @@ is yours.
 
 The gateway also keeps a backstop at request time. An `ehr_id` that two
 members claim raises an integrity incident and is never served
-([§12.5.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/follow-up-routing.html#ehr-id-collision)).
+([§12.5.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/follow-up-routing.html#ehr-id-collision)).
 That alarm surfaces a collision admission missed. It does not replace
 admission.

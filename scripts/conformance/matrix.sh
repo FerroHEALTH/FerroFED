@@ -529,7 +529,7 @@ render_statement() {
       print "| | |"
       print "|---|---|"
       print "| Profile | Federation-Gateway ([§16.2](" site "/testing.html#_16_2_two_conformance_profiles)) |"
-      print "| Specification | Federation Tier with AQL " version ", " tolower(status) " of " date " |"
+      print "| Specification | Federation Tier with AQL " version ", " tolower(substr(status, 1, 1)) substr(status, 2) ", " date " |"
       print "| Source | [`syntaric/openehr-federation-spec` at `" commit "`](" spec_repo "/tree/" commit ") |"
       print "| Rendered text | <" site "/> |"
       printf "| Gateway points | %d of %d scored by a test, %d deferred, %d planned |\n", gwc, gw, gwd, gwp

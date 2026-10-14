@@ -20,17 +20,20 @@ same row there.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Federation Tier with AQL | 0.9.0 | `docs/architecture.md`, the `FEDERATION_SPEC` constant of `openehr-federation`, the source of the `spec_version` an `OPTIONS {base}/` body carries |
+| Federation Tier with AQL | 1.0.0 | `docs/architecture.md`, the `FEDERATION_SPEC` constant of `openehr-federation`, the source of the `spec_version` an `OPTIONS {base}/` body carries |
 | openEHR ITS-REST | 1.1.0 | `docs/architecture.md`, the `ITS_REST` constant of `ferrofed-engine` |
 | openEHR AQL | 1.1.0 | `docs/architecture.md`, the `AQL` constant of `openehr-federation` |
 
-The federation specification is a release candidate circulated for comment by
-the openEHR Federation Working Group. Its 1.0 release replaces this row and the
-two corpus rows below in one change: re-pin, re-run both vendor scripts, and
-diff the trees. The pinned commit is past the `0.9.0` git tag: it carries the
-SEC review amendments of 2026-09-28 (the `meta.federation` nesting, the
-all-or-nothing default, the `node-error` status) while the document still
-declares `spec-version: '0.9.0'`.
+The federation specification is pinned at its 1.0.0 release, approved by the
+openEHR SEC on 2026-10-12 and tagged `1.0.0` upstream. The corpus row below
+pins that tag and the commit it resolves to, and the vendor script fails when
+the tag has moved. Against the `0.9.0` pin it replaced, the release changes
+the declared version, the `$id` of both schemas, and the
+`federation.spec_version` an `OPTIONS {base}/` body reports, now `"1.0"`
+(§7a.2), and it drops the change record page; no N, CP or section number
+moved. The reference implementation row below stays at commit `92aff3c`: the
+reference implementation has no release that matches 1.0.0, and its newest
+tag is `0.9.0`.
 
 The federation specification binds ITS-REST by name, Release-1.1.0, so the
 ITS-REST row follows it rather than the latest ITS-REST development line.
@@ -102,7 +105,7 @@ reason no reader is needed; its self-test fails on a row with neither.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Federation Tier with AQL specification | `syntaric/openehr-federation-spec` commit `7162d0c760d23105d62a743bf0ad1073c45fdb85` | `scripts/vendor/federation-spec.sh`, `docs/specs/federation-spec/PROVENANCE.md` |
+| Federation Tier with AQL specification | `syntaric/openehr-federation-spec` tag `1.0.0`, commit `7dcf0f44ac122fe947b1e5ceba6bcbbb7721917d` | `scripts/vendor/federation-spec.sh`, `docs/specs/federation-spec/PROVENANCE.md` |
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules, the Query validation document and the SMART on openEHR source (`docs/smart_app_launch/`, DEVELOPMENT status in this release) | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |

@@ -5,12 +5,12 @@
 
 `ferrofed conformance run` drives the Connectathon test tracks of the
 Federation Tier with AQL
-([§16.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html))
+([§16.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html))
 against your own deployment: its registry, its nodes and its
 cross-reference. It plays an unmodified openEHR client over ITS-REST and
 writes the same per-track and per-point report the FerroFED test harness
 writes from its own run
-([§16.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html)).
+([§16.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html)).
 Use it to score an installation before a Connectathon, after an upgrade, or
 when you admit a member.
 
@@ -107,7 +107,7 @@ credentials the configuration names for it, never your token.
 
 `--node-profile` also checks every active member against the node
 obligations of
-[§16.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html),
+[§16.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html),
 through the member's node client with its onward credentials, as the
 gateway reaches it, and records the findings as the node profile:
 
@@ -176,7 +176,7 @@ The run writes four files to `--out`.
 
 - `report.tsv` and `report.md` hold one row per track and per conformance
   point of
-  [§17](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html),
+  [§17](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/conformance.html),
   with the columns `kind`, `id`, `title`, `actor`, `status`, `result`,
   `passed`, `failed`, `not_run`, `issue` and `reason` the harness report
   has. `status` is FerroFED's own: `covered`, `deferred`, `node-profile` or
@@ -193,7 +193,7 @@ A row's `result` reads:
 | `fail` | a scenario that scores it failed; the reason says which check |
 | `not-run` | a scenario that scores it did not run, or none does; the reason says why |
 | `deferred` | FerroFED defers the point by a recorded decision |
-| `node-pass`, `node-fail`, `node-not-observable`, `unchecked` | a Node point, scored against the member and never the gateway ([§16.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html)) |
+| `node-pass`, `node-fail`, `node-not-observable`, `unchecked` | a Node point, scored against the member and never the gateway ([§16.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html)) |
 | `operator-pass`, `operator-fail`, `operator-not-observable`, `not-applicable` | an Operator point, scored against you |
 
 **A `pass` from the run is narrower than a `pass` from the harness.** Many

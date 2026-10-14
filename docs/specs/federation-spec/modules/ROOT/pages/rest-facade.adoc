@@ -55,7 +55,7 @@ The body is therefore versioned with this specification, and `federation.spec_ve
 * The endpoint list is federation membership information and contains no patient data. It MUST NOT be gated on a patient identifier, and it MUST be subject to the gateway's normal authentication (xref:security.adoc[§13]). A deployment MAY restrict the detail returned to unauthenticated callers.
 * `OPTIONS` on a sub-path (e.g. `+OPTIONS {base}/v1/ehr/{ehr_id}+`) SHOULD return the HTTP methods allowed for that resource, per ordinary HTTP semantics.
 * [[definition-area-split]]Note that `its_rest.definition` describes the area as a whole while `definition.stored_query_registry` describes one artefact within it, and the two can legitimately differ. The example below declares templates single-node-routed and stored queries held at the gateway registry, which is the expected shape for a gateway that adopted xref:follow-up-routing.adoc#stored-query-registry[§12.7] without changing template handling. The `its_rest` values are free-form descriptions of behaviour and a client MUST NOT parse them as a closed vocabulary. A client tests the `definition` object's booleans programmatically.
-* `federation.spec_version` carries the version of this specification the gateway implements, in `major.minor` form. Patch releases are editorial and do not change the wire contract, so a gateway implementing 0.9.0 reports `"0.9"` and would still report `"0.9"` at 0.9.1. A client MUST NOT match on a patch component. A minor release may change the wire contract and so does move this value: 0.4.0 did, by correcting `rows` to the ITS-REST array form (xref:changes-from-2025-08-20.adoc#its-rest-alignment[Changes]). 0.9.0 changes no wire structure, but it is a minor release and so moves the value too, from `"0.4"` to `"0.9"`. The field identifies which release a gateway was built against, and a client pinning `"0.4"` should be told the document has moved on (xref:changes-from-2025-08-20.adoc#implementation-validated[Changes]).
+* `federation.spec_version` carries the version of this specification the gateway implements, in `major.minor` form. Patch releases are editorial and do not change the wire contract, so a gateway implementing 1.0.0 reports `"1.0"` and would still report `"1.0"` at 1.0.1. A client MUST NOT match on a patch component. A minor release may change the wire contract and so does move this value: 0.4.0 did, by correcting `rows` to the ITS-REST array form. 0.9.0 changed no wire structure, but it was a minor release and so moved the value too, from `"0.4"` to `"0.9"`. The field identifies which release a gateway was built against, and a client pinning an older value should be told the document has moved on. `"1.0"` is the first value that identifies the amended contract unambiguously: the SEC amendments changed the wire contract within the 0.9.x line, so `"0.9"` may denote either the pre-amendment or the amended shape.
 
 .Example `OPTIONS /` response body
 [source,json]
@@ -63,7 +63,7 @@ The body is therefore versioned with this specification, and `federation.spec_ve
 {
   "federation": {
     "id": "rso-zl",
-    "spec_version": "0.9",
+    "spec_version": "1.0",
     "aql": { "fan_out": true },
     "dedup": {
       "default": "none",

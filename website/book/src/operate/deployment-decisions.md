@@ -5,9 +5,9 @@
 
 The specification fixes no authentication solution. It fixes five questions
 a deployment must answer and record instead
-([§13.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-deployment-decisions),
-[N25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n25),
-[CP-39](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-39)).
+([§13.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-deployment-decisions),
+[N25](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/requirements.html#n25),
+[CP-39](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/conformance.html#cp-39)).
 CP-39 is an operator point: the specification scores it against your
 deployment, not against the gateway. This page gives FerroFED's own answer
 to each question, as the gateway behaves with its default configuration,
@@ -23,7 +23,7 @@ each node ([Configuration](onward-credentials.md#oauth-20-to-a-node)), and the
 
 ## 1. Which identity is verified across the trust boundary
 
-([§13.4 authn-which-identity](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-which-identity))
+([§13.4 authn-which-identity](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-which-identity))
 
 There are two boundaries, and a different identity crosses each.
 
@@ -57,7 +57,7 @@ introspection), `auth.audience`, `auth.mode`,
 
 ## 2. Who authenticates the end user, and where that trust stops
 
-([§13.4 authn-end-user](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-end-user))
+([§13.4 authn-end-user](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-end-user))
 
 **The requesting organisation does.** Its authorization server, or the proxy
 in the edge mode, authenticates its own clinicians and systems and issues
@@ -101,7 +101,7 @@ relay a professional another Member State authenticated.
 
 ## 3. Purpose of use
 
-([§13.4 authn-purpose-of-use](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-purpose-of-use))
+([§13.4 authn-purpose-of-use](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-purpose-of-use))
 
 The purpose travels in the caller's token, never in the query: the IHE IUA
 `extensions.ihe_iua.purpose_of_use` claim, HL7 v3 `PurposeOfUse` codings, or
@@ -127,7 +127,7 @@ its nodes then decide without one.
 
 ## 4. What the token is bound to
 
-([§13.4 authn-token-binding](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-token-binding))
+([§13.4 authn-token-binding](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-token-binding))
 
 The specification asks two separate questions here.
 
@@ -178,7 +178,7 @@ proxy's TLS settings.
 
 ## 5. What the technique does not cover
 
-([§13.4 authn-residual-risk](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/security.html#authn-residual-risk))
+([§13.4 authn-residual-risk](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/security.html#authn-residual-risk))
 
 **Addressed technically, by the gateway:**
 

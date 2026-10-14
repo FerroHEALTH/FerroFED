@@ -78,4 +78,4 @@ pub const AQL: &str = "1.1.0";
 ///
 /// The `OPTIONS {base}/` self-description reports its `major.minor` as
 /// `spec_version` (§7a.2, [`options::SpecVersion::of_release`]).
-pub const FEDERATION_SPEC: &str = "0.9.0";
+pub const FEDERATION_SPEC: &str = "1.0.0";

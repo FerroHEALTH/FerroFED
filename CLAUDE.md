@@ -103,11 +103,10 @@ FerroFED raised, the open ITS-REST `Error` the error vocabulary writes its
 model's primitives, `Ordered` marker and reference targets the rewrite orders
 keys by.
 
-The specification is a release candidate. The vendored pin is v0.9.0 at
-commit `7162d0c`, and the 1.0 release is expected the week of 2026-10-08; the
-re-pin is its own issue (`.claude/memory/spec-pin-0-9-0-rc.md`). Every
-requirement (`N#`) and conformance point (`CP-#`) cited here is cited against
-the pinned text until that issue lands.
+The specification is pinned at its 1.0.0 release, tag `1.0.0` at commit
+`7dcf0f4`, approved by the openEHR SEC on 2026-10-12
+(`.claude/memory/spec-pin-1-0-0.md`). Every requirement (`N#`) and
+conformance point (`CP-#`) cited here is cited against that text.
 
 ## The two layers
 
