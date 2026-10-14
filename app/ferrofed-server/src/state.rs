@@ -95,7 +95,7 @@ pub enum StateError {
     /// The audit trail of the PMIR transactions cannot start (`[audit]`).
     #[error("the [audit] trail cannot start")]
     #[cfg(feature = "binding-ihe")]
-    Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
+    Audit(#[source] crate::audit::AuditTrailError),
 }
 
 impl AppState {
@@ -167,7 +167,7 @@ impl AppState {
     /// directory loads. A shared or embedded store is not opened, so the
     /// check reaches no database and takes no file lock, and nothing is
     /// written to disk: a spool directory a binding would create or write is
-    /// checked in place ([`crate::binding::check_scope`]).
+    /// checked in place ([`crate::binding::check_scope`], [`crate::audit::Checking`]).
     ///
     /// Returns the credentials that travel unencrypted under the
     /// development profile, so the caller can say so.
@@ -177,6 +177,7 @@ impl AppState {
     /// federation, the transport of a credential, the definition files, or a
     /// spool directory.
     pub fn check(settings: &Settings) -> Result<Vec<ProtectedSite>, StateError> {
+        let audit = crate::audit::Checking::enter();
         let scope = crate::binding::check_scope();
         let federation = Federation::load(settings)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
@@ -192,6 +193,7 @@ impl AppState {
         }
         drop(federation);
         drop(scope);
+        drop(audit);
         Ok(cleartext)
     }
 

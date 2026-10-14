@@ -7,9 +7,15 @@
 //! No specification governs the grouping: our own design.
 
 pub mod audit;
+#[cfg(feature = "ihe")]
 pub mod iua;
+#[cfg(feature = "ihe")]
 pub mod mcsd;
+#[cfg(feature = "ihe")]
 pub mod pdqm;
+#[cfg(feature = "ihe")]
 pub mod pixm;
+#[cfg(feature = "ihe")]
 pub mod pmir;
+#[cfg(feature = "ihe")]
 pub mod xcpd;

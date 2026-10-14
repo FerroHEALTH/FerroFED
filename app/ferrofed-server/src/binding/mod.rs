@@ -301,17 +301,11 @@ pub trait Binding: fmt::Debug + Sync {
         Ok(Vec::new())
     }
 
-    /// Returns the sink the access log stores its records through, when the
-    /// binding's settings name one (Regulation (EU) 2025/327 Annex II 3.2).
-    ///
-    /// # Errors
-    ///
-    /// The [`FederationError`] of a sink that cannot be built.
-    fn access_sink(
-        &self,
-        _settings: &Settings,
-    ) -> Result<Option<Arc<dyn ehds_logging::sink::AccessSink>>, FederationError> {
-        Ok(None)
+    /// Whether a section of the binding that `config` sets records its
+    /// transactions through `[audit]`, which then needs a destination outside
+    /// development.
+    fn audits(&self, _config: &Config) -> bool {
+        false
     }
 
     /// Returns the table of the binding's onward grant that `credentials`

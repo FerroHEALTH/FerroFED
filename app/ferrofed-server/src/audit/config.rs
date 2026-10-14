@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Where the audit records of the FHIR profiles' transactions go, `[audit]`.
+//! Where the access records and the IHE binding's BALP records go, `[audit]`.
 //!
-//! The transactions are PIXm ITI-83 (`[pixm]`), PDQm ITI-78 and ITI-119
-//! (`[pdqm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and PMIR ITI-93 and
-//! ITI-94 (`[pmir]`). The access log of every federated query, stored-query
-//! execution, routed read and routed write writes its records here too
-//! ([`crate::access`]; Regulation (EU) 2025/327 Annex II 3.2), so a gateway
-//! with a registry needs a destination outside development.
+//! The access log of every federated query, stored-query execution, routed
+//! read and routed write writes its records here ([`crate::access`];
+//! Regulation (EU) 2025/327 Annex II 3.2) in every build, so a gateway with
+//! a registry needs a destination outside development whatever its
+//! bindings. Under the IHE binding the PIXm ITI-83 (`[pixm]`), PDQm ITI-78
+//! and ITI-119 (`[pdqm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and
+//! PMIR ITI-93 and ITI-94 (`[pmir]`) transactions are recorded here too.
 //!
 //! ```toml
 //! [audit]
@@ -47,7 +48,7 @@ use ihe_iti::balp::{NetworkAddress, Observer};
 use serde::Deserialize;
 use url::Url;
 
-use crate::binding::ihe::xcpd::AuditDestination;
+use crate::audit::AuditDestination;
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::secrets::secret;
@@ -58,7 +59,7 @@ use crate::config::secrets::secret;
 pub struct Audit {
     /// Where the records go: `repository`, `log`, or `off`, which only
     /// `profile = "development"` admits. Outside development it has no
-    /// default once a PIXm, PDQm, mCSD or PMIR binding or a registry is
+    /// default once a registry, or a binding section that records here, is
     /// configured, and a registry needs `repository`.
     pub destination: Option<AuditDestination>,
     /// The Audit Record Repository, under `destination = "repository"`.
@@ -172,7 +173,7 @@ const KEY: &str = "audit";
 /// # Errors
 ///
 /// [`Error::Missing`] for no `destination` outside development while a
-/// PIXm, PDQm, mCSD or PMIR binding is configured, for no `[audit.repository]`
+/// registry or a binding section that records here is configured, for no `[audit.repository]`
 /// under `repository`, and for no `url`, `hostname` or, outside
 /// development, `spool_dir`; [`Error::FeedAuditOff`] for `off` outside
 /// development; [`Error::AccessAuditLog`] for `log` outside development
@@ -183,10 +184,10 @@ const KEY: &str = "audit";
 pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let profile = config.profile;
     let table = &config.audit;
-    let audited = config.pixm.is_some()
-        || config.pdqm.is_some()
-        || config.registry.configured()
-        || config.pmir.is_some();
+    let audited = config.registry.configured()
+        || crate::binding::compiled()
+            .iter()
+            .any(|binding| binding.audits(config));
     // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 and
     // Regulation (EU) 2025/327 Annex II 3.2 have every exchange and access recorded.
     let destination = match table.destination {

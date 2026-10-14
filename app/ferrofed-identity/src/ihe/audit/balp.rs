@@ -36,16 +36,19 @@ use async_trait::async_trait;
 use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer};
+#[cfg(feature = "ihe")]
 use ihe_iti::user::{PurposeOfUse, User};
 use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::ihe::audit::AUDIT_TARGET;
+#[cfg(feature = "ihe")]
 use crate::role::behalf::OnBehalfOf;
 
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
 /// caller is the user of the exchange, and the gateway its own system.
+#[cfg(feature = "ihe")]
 pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_iti::user::OnBehalfOf {
     match on_behalf {
         OnBehalfOf::Caller(caller) => ihe_iti::user::OnBehalfOf::User(

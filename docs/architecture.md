@@ -756,9 +756,11 @@ never blocks on FerroPIX.
 wires each regional or national binding through one `Binding` trait, and each
 binding is one module of `app/ferrofed-server/src/binding/` behind one Cargo
 feature of `ferrofed-server`: the development binding (`[dev]`, always
-built), `binding-ihe` (PIXm, PDQm, XCPD, mCSD, PMIR and the ATNA and BALP
-trail they record through) and `binding-nl` (NVI, Mitz, the LRZa URAs and the
-Nuts grant), both features on by default. A binding declares the
+built), `binding-ihe` (PIXm, PDQm, XCPD, mCSD, PMIR and XCPD's ITI-55 syslog
+trail) and `binding-nl` (NVI, Mitz, the LRZa URAs and the Nuts grant), both
+features on by default. The `[audit]` trail and the BALP access record are
+built in every build, whatever the bindings (#697), because access logging is
+a duty of every deployment (A58). A binding declares the
 configuration sections it reads and whether a registry reload applies each or
 it takes a restart, resolves them, and declares the roles they fill
 (resolver, localizer, demographics step, consent pre-filter, registry source,

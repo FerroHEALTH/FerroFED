@@ -46,8 +46,9 @@
 //!     and kept in step with it (§15.1, N21);
 //!   - `ihe::audit`: the ITI-55 audit messages over ITI-20 syslog
 //!     (`ihe::audit::atna`), and the BALP `AuditEvent` of the PIXm, PDQm,
-//!     mCSD and PMIR transactions over the FHIR Feed of ITI-20 or to the
-//!     audit log target (`ihe::audit::balp`);
+//!     mCSD and PMIR transactions and of each access record over the FHIR
+//!     Feed of ITI-20 or to the audit log target (`ihe::audit::balp`), which
+//!     feature `balp` builds alone, for a server without the IHE binding;
 //! - `nl` (feature `nl`): the adapters of the Dutch binding over
 //!   `nl_generic_functions` (Annex B), and the custodian map both read:
 //!   - `nl::nvi`: the localizer over the NVI Localization Service (Annex B
@@ -69,7 +70,7 @@
 
 pub mod dev;
 pub mod fhir;
-#[cfg(feature = "ihe")]
+#[cfg(feature = "balp")]
 pub mod ihe;
 #[cfg(feature = "nl")]
 pub mod nl;

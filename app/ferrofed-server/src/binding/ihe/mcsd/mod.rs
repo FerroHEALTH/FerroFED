@@ -13,7 +13,7 @@ use std::time::Duration;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
-use crate::binding::ihe::audit::config::AuditSettings;
+use crate::audit::config::AuditSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};

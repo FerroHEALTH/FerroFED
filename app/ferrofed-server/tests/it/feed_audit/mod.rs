@@ -12,10 +12,15 @@
 //! in the spool (§3.20.4.1.1); and a record the spool cannot take fails the
 //! transaction closed, as the ITI-55 audit trail does.
 
+#[cfg(feature = "binding-ihe")]
 mod config;
+#[cfg(feature = "binding-ihe")]
 mod log;
+#[cfg(feature = "binding-ihe")]
 mod mcsd;
+#[cfg(feature = "binding-ihe")]
 mod pixm;
+#[cfg(feature = "binding-ihe")]
 mod pmir;
 
 use std::error::Error;
@@ -219,6 +224,13 @@ pub(crate) fn names_the_default_caller(record: &str) -> Result<(), Box<dyn Error
 
 /// Fails unless `record` names no user and no client application, as a
 /// record the gateway makes on its own behalf (the BALP `NoUser` examples).
+#[cfg_attr(
+    not(feature = "binding-ihe"),
+    expect(
+        dead_code,
+        reason = "only the IHE transactions are made on the gateway's own behalf"
+    )
+)]
 pub(crate) fn names_no_caller(record: &str) -> Result<(), Box<dyn Error>> {
     let named = named_user(record)?;
     if !named.users.is_empty() {
@@ -232,6 +244,13 @@ pub(crate) fn names_no_caller(record: &str) -> Result<(), Box<dyn Error>> {
 }
 
 /// The IHE transaction codes of `record`, an `AuditEvent` as JSON.
+#[cfg_attr(
+    not(feature = "binding-ihe"),
+    expect(
+        dead_code,
+        reason = "only the IHE binding's records carry a transaction code"
+    )
+)]
 pub(crate) fn transactions(record: &str) -> Result<Vec<String>, Box<dyn Error>> {
     #[derive(Deserialize)]
     struct Coding {

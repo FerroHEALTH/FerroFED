@@ -93,8 +93,8 @@ What the record does not cover:
 - Under the development profile, an unset `[audit] destination` records
   nothing, and `log` writes counts that name no one. Outside development, a
   gateway with a registry refuses every destination but `repository`.
-- A build without the IHE binding records no access, and refuses a registry
-  outside development.
+- Every build records accesses, with the IHE binding, the Dutch binding,
+  both or neither: the access log needs no regional binding.
 - FerroFED offers no interface of its own to review the records (Annex II,
   point 3.3), and keeps them for no period by origin and category (point
   3.4). Both are planned

@@ -448,6 +448,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         fhir: boot.fhir.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
+        audit: boot.audit.clone(),
         ..fresh
     };
     for binding in binding::compiled() {
@@ -492,6 +493,7 @@ type RestartKey = (&'static str, fn(&Settings, &Settings) -> bool);
 /// them.
 const RESTART_KEYS: &[RestartKey] = &[
     ("signing", signing_changed),
+    ("audit", |boot, fresh| boot.audit != fresh.audit),
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),
@@ -639,6 +641,7 @@ fn federation_class(error: &FederationError) -> &'static str {
         FederationError::Transport(_) => "http-client",
         FederationError::Unsigned => "signing",
         FederationError::RetentionEndpointUnknown { .. } => "access-log",
+        FederationError::Audit(_) => "audit",
         _ => binding::class(error).unwrap_or("binding"),
     }
 }
@@ -654,7 +657,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{effective, needs_restart};
-    use crate::binding::ihe::xcpd::AuditDestination;
+    use crate::audit::AuditDestination;
     use crate::config::Config;
     use crate::config::settings::Settings;
 

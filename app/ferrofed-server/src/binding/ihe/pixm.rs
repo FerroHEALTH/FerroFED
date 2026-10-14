@@ -22,7 +22,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ihe_iti::pixm::Invocation;
 use serde::Deserialize;
 
-use crate::binding::ihe::audit::config::AuditSettings;
+use crate::audit::config::AuditSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::service_grant::{ServiceContext, resolve_service};
@@ -211,7 +211,7 @@ pub(super) fn resolver(
     // NOTE: PIXm §2:3.83.5.1.1: each ITI-83 exchange is audited, and one whose
     // record is refused fails, so the query fails closed.
     Ok(Arc::new(
-        match crate::binding::ihe::audit::recorder(audit).map_err(FederationError::Audit)? {
+        match crate::audit::recorder(audit).map_err(FederationError::Audit)? {
             Some(recorder) => resolver.audited(&recorder),
             None => resolver,
         },

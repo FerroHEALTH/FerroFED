@@ -94,9 +94,8 @@ pub struct Settings {
     /// The category map every access record is classified with, named by
     /// its digest, and how long each record is kept.
     pub access_log: crate::access::config::AccessLogSettings,
-    /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
-    #[cfg(feature = "binding-ihe")]
-    pub audit: crate::binding::ihe::audit::config::AuditSettings,
+    /// Where the access records and the IHE binding's BALP records go.
+    pub audit: crate::audit::config::AuditSettings,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
     pub deprecated: Vec<crate::config::deprecated::Deprecated>,

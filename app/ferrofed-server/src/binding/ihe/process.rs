@@ -119,7 +119,7 @@ fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, State
         .flat_map(|pixm| pixm.managers.iter())
         .flat_map(|manager| manager.members.values().cloned())
         .collect();
-    let audit = super::audit::recorder(&settings.audit).map_err(StateError::Audit)?;
+    let audit = crate::audit::recorder(&settings.audit).map_err(StateError::Audit)?;
     Ok(Some(Arc::new(IdentityFeed::new(pmir, domains, audit)?)))
 }
 

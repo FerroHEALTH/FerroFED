@@ -3,7 +3,6 @@
 
 //! Integration tests through the library run path the binary shares.
 
-#[cfg(feature = "binding-ihe")]
 mod access;
 mod admin_peer;
 mod admin_record;
@@ -44,7 +43,6 @@ mod endpoint_attributes;
 mod endpoint_report;
 mod errors;
 mod facade;
-#[cfg(feature = "binding-ihe")]
 mod feed_audit;
 #[cfg(feature = "binding-ihe")]
 mod fhir;

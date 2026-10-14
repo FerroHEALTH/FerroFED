@@ -347,9 +347,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
     // NOTE: mCSD §2:3.90.5.1 and §2:3.91.5.1: each search and history is audited,
     // and one whose record is refused fails like a directory that did not answer.
     Ok(
-        match crate::binding::ihe::audit::recorder(&settings.audit)
-            .map_err(FederationError::Audit)?
-        {
+        match crate::audit::recorder(&settings.audit).map_err(FederationError::Audit)? {
             Some(recorder) => source.audited(recorder),
             None => source,
         },
