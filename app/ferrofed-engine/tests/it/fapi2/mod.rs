@@ -17,7 +17,8 @@ use std::error::Error;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::conveyance::{Conveyance, Principal, Verification};
+use ferrofed_engine::conveyance::Conveyance;
+use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;

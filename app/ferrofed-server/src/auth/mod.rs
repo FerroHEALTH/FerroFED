@@ -55,7 +55,7 @@ use std::time::Duration;
 use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
-use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
+use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};

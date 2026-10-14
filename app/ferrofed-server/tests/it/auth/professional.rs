@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 
 use axum::body::Body;
-use ferrofed_engine::conveyance::AssuranceLevel;
+use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::config::auth::assurance::Assurance;

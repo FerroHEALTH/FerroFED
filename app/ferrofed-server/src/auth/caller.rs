@@ -24,8 +24,8 @@
 
 use std::fmt;
 
+use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
-use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
