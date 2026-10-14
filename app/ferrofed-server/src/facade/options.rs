@@ -474,7 +474,8 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 
 /// The `its_rest` member: how each ITS-REST area of `federation` is served
 /// (§7a.1, N30, N32), with stored queries held at the gateway when
-/// `registry` is `true` (§12.7) and every other definition request routed to
+/// `registry` is `true` (§12.7), their execution declared `501` when it is
+/// not, and every other definition request routed to
 /// one explicitly chosen node, or a template upload fanned out where offered
 /// (§12.6, N43). The DEMOGRAPHIC area is never federated: it is `501`, or
 /// routed to the one `demographic` endpoint the deployment declared, which
@@ -483,7 +484,8 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     let (query, routed) = if registry && federation.fans_out_stored_queries() {
         (
             "federated: GET and POST {base}/v1/query/aql and GET and POST \
-             {base}/v1/query/{name}[/{version}] fan out",
+             {base}/v1/query/{name}[/{version}] fan out, each stored query served \
+             from the gateway registry",
             "routed-single-node: a template request under {base}/v1/definition/template/ goes \
              to the one endpoint the targeting headers name, never merged; \
              stored queries at the gateway registry, which runs its own copy; \
@@ -494,14 +496,19 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     } else if registry {
         (
             "federated: GET and POST {base}/v1/query/aql and GET and POST \
-             {base}/v1/query/{name}[/{version}] fan out",
+             {base}/v1/query/{name}[/{version}] fan out, each stored query served \
+             from the gateway registry",
             "routed-single-node: a template request under {base}/v1/definition/template/ goes \
              to the one endpoint the targeting headers name, never merged; \
              stored queries at the gateway registry",
         )
     } else {
         (
-            "federated: GET and POST {base}/v1/query/aql fan out",
+            // NOTE: N32 has an unsupported area answered `501` and declared under N30;
+            // routing would carry query_parameters the gateway cannot check (§5.4.2, N33).
+            "federated: GET and POST {base}/v1/query/aql fan out; GET and POST \
+             {base}/v1/query/{name}[/{version}] answer 501 Not Implemented, since no \
+             stored-query registry is offered",
             "routed-single-node: a request under {base}/v1/definition/ goes to the one \
              endpoint the targeting headers name, never merged",
         )
