@@ -55,14 +55,12 @@ use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::auth::permission::{Requirement, Resource};
 use crate::config::fhir::FhirSettings;
-use crate::conveyed;
 use crate::error::Code;
 use crate::facade::demographics::{self, Unheaded};
-use crate::facade::request::Arrived;
 use crate::facade::summary::{self as gathered, Scope, Unsummarised};
-use crate::request_id;
 use crate::state::AppState;
 
+mod admission;
 mod binary;
 mod list;
 
@@ -287,46 +285,28 @@ async fn bundle_post(
             "the document is not UTF-8 text (RFC 8259 §8.1)",
         );
     };
-    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let request_id = request_id::of(&headers).unwrap_or_default();
-    let logged = outbound.to_string();
-    let (Some(federation), Some(fhir)) = (state.federation(), state.fhir()) else {
-        return crate::error::fixed(Code::NotImplemented, request_id);
+    let admitted = admission::admit(
+        &state,
+        (outbound, caller.as_deref()),
+        (&headers, started),
+        || {
+            refusal(
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "the caller was not admitted to create a composition",
+            )
+        },
+    );
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
     };
-    let caller = caller.as_deref();
-    // NOTE: §13.1, N25: a document is written only for a caller the gate admitted with the
-    // scopes that cover it, whatever path reached this handler.
-    if caller.is_none_or(|caller| caller.covering().is_empty()) {
-        return refusal(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "the caller was not admitted to create a composition",
-        );
-    }
-    let conveyance = match conveyed::of(&federation, caller) {
-        Ok(conveyance) => conveyance,
-        Err(unconveyed) => return unconveyed.respond(request_id, &logged),
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
     };
-    let Some(on_behalf) = caller.map(Caller::on_behalf) else {
-        return conveyed::Unconveyed::NoCaller.respond(request_id, &logged);
-    };
-    let conveyance =
-        match crate::facade::confined_by(&federation, caller, started, conveyance).await {
-            Ok(conveyance) => conveyance,
-            Err(unconfined) => return unconfined.respond(request_id, &logged),
-        };
-    let session = caller.map(Caller::session);
-    let arrived = Arrived {
-        headers: &headers,
-        request_id,
-        outbound,
-        conveyance: &conveyance,
-        started,
-        session: session.as_ref(),
-        requester: caller.and_then(Caller::requester),
-        on_behalf: &on_behalf,
-    };
-    crate::facade::receive::receive(&federation, fhir, arrived, text).await
+    let arrived = admitted.arrived(&confined);
+    crate::facade::receive::receive(&admitted.federation, admitted.fhir, arrived, text).await
 }
 
 /// Whether `headers` declare a FHIR JSON body.
@@ -337,6 +317,16 @@ fn fhir_json_body(headers: &http::HeaderMap) -> bool {
         .and_then(|value| value.split(';').next())
         .map(str::trim);
     matches!(media, Some(FHIR_JSON | "application/json"))
+}
+
+/// The `OperationOutcome` of a caller the gate did not admit to the section
+/// queries a summary, a list or a listed document runs over.
+fn unadmitted() -> Response {
+    outcome(
+        StatusCode::FORBIDDEN,
+        "forbidden",
+        "the caller was not admitted to the section queries",
+    )
 }
 
 /// The `OperationOutcome` of one error, answered with `status`, stating that
@@ -361,49 +351,27 @@ async fn summarised(
             return outcome(StatusCode::BAD_REQUEST, "invalid", &refusal.to_string());
         }
     };
-    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let request_id = request_id::of(headers).unwrap_or_default();
-    let logged = outbound.to_string();
-    let (Some(federation), Some(fhir)) = (state.federation(), state.fhir()) else {
-        return crate::error::fixed(Code::NotImplemented, request_id);
+    let admitted = admission::admit(
+        state,
+        (outbound, caller.as_deref()),
+        (headers, started),
+        unadmitted,
+    );
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
     };
-    let caller = caller.as_deref();
-    // NOTE: §13.1, N25: the summary runs only for a caller the gate admitted with the scopes
-    // that cover it, whatever path reached this handler.
-    if caller.is_none_or(|caller| caller.covering().is_empty()) {
-        return outcome(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "the caller was not admitted to the section queries",
-        );
-    }
-    let conveyance = match conveyed::of(&federation, caller) {
-        Ok(conveyance) => conveyance,
-        Err(unconveyed) => return unconveyed.respond(request_id, &logged),
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
     };
-    let Some(on_behalf) = caller.map(Caller::on_behalf) else {
-        return conveyed::Unconveyed::NoCaller.respond(request_id, &logged);
-    };
-    let conveyance =
-        match crate::facade::confined_by(&federation, caller, started, conveyance).await {
-            Ok(conveyance) => conveyance,
-            Err(unconfined) => return unconfined.respond(request_id, &logged),
-        };
-    let session = caller.map(Caller::session);
-    let arrived = Arrived {
-        headers,
-        request_id,
-        outbound,
-        conveyance: &conveyance,
-        started,
-        session: session.as_ref(),
-        requester: caller.and_then(Caller::requester),
-        on_behalf: &on_behalf,
-    };
+    let arrived = admitted.arrived(&confined);
+    let (federation, fhir) = (&admitted.federation, admitted.fhir);
+    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
     // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any member
     // is asked, so no member is reached for a summary that could name no patient.
-    let header = match headed(&federation, (patient, &on_behalf), started).await {
+    let header = match headed(federation, (patient, arrived.on_behalf), started).await {
         Ok(header) => header,
         Err(unheaded) => {
             let mut response = unheaded_outcome(unheaded);
@@ -411,10 +379,10 @@ async fn summarised(
             return response;
         }
     };
-    match gathered::gather(Arc::clone(&federation), arrived, patient, Scope::Summary).await {
-        Ok(gathered) => document(&federation, fhir, &gathered, (patient, header), &logged),
+    match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Summary).await {
+        Ok(gathered) => document(federation, fhir, &gathered, (patient, header), logged),
         Err(unsummarised) => refused(
-            &federation,
+            federation,
             (unsummarised, Scope::Summary),
             patient,
             (request_id, outbound),

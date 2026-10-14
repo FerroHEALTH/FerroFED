@@ -42,16 +42,14 @@ use http::{HeaderValue, StatusCode, header};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
-use super::{attach, outcome};
+use super::{admission, attach, outcome, unadmitted};
 use crate::access::{Accessed, NoAccess};
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::conveyed;
 use crate::error::Code;
 use crate::facade::native::{self, Chosen, Native};
-use crate::facade::request::Arrived;
 use crate::federation::Federation;
-use crate::request_id;
 use crate::state::AppState;
 
 /// The path prefix of a member's document under `{fhir-base}`.
@@ -216,61 +214,41 @@ pub(super) async fn read(
     headers: http::HeaderMap,
 ) -> Response {
     let started = Instant::now();
-    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let request_id = request_id::of(&headers).unwrap_or_default();
-    let logged = outbound.to_string();
-    let (Some(federation), Some(fhir)) = (state.federation(), state.fhir()) else {
-        return crate::error::fixed(Code::NotImplemented, request_id);
+    let admitted = admission::admit(
+        &state,
+        (outbound, caller.as_deref()),
+        (&headers, started),
+        unadmitted,
+    );
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
     };
-    let caller = caller.as_deref();
-    // NOTE: §13.1, N25: a document is read only for a caller the gate admitted with the
-    // scopes that cover it, whatever path reached this handler.
-    let Some(admitted) = caller.filter(|caller| !caller.covering().is_empty()) else {
-        return outcome(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "the caller was not admitted to the section queries",
-        );
-    };
+    let (federation, fhir) = (&admitted.federation, admitted.fhir);
+    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let Some(signer) = federation.signer() else {
-        return conveyed::Unconveyed::Unsigned.respond(request_id, &logged);
+        return conveyed::Unconveyed::Unsigned.respond(request_id, logged);
     };
     let claims = match verified(signer, fhir, &token) {
         Ok(claims) => claims,
-        Err(refused) => return untaken(&refused, &logged),
+        Err(refused) => return untaken(&refused, logged),
     };
-    if claims.sub != admitted.subject() || claims.caller_iss != admitted.issuer() {
-        return untaken(&Untaken::OtherCaller, &logged);
+    if claims.sub != admitted.caller.subject() || claims.caller_iss != admitted.caller.issuer() {
+        return untaken(&Untaken::OtherCaller, logged);
     }
-    let member = match chosen(&federation, &claims) {
+    let member = match chosen(federation, &claims) {
         Ok(member) => member,
-        Err(refused) => return untaken(&refused, &logged),
+        Err(refused) => return untaken(&refused, logged),
     };
-    let conveyance = match conveyed::of(&federation, caller) {
-        Ok(conveyance) => conveyance,
-        Err(unconveyed) => return unconveyed.respond(request_id, &logged),
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
     };
-    let on_behalf = admitted.on_behalf();
-    let conveyance =
-        match crate::facade::confined_by(&federation, caller, started, conveyance).await {
-            Ok(conveyance) => conveyance,
-            Err(unconfined) => return unconfined.respond(request_id, &logged),
-        };
-    let session = admitted.session();
-    let arrived = Arrived {
-        headers: &headers,
-        request_id,
-        outbound,
-        conveyance: &conveyance,
-        started,
-        session: Some(&session),
-        requester: admitted.requester(),
-        on_behalf: &on_behalf,
-    };
+    let arrived = admitted.arrived(&confined);
     // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
     // what it reads of every request, and the member is located by its ehr_id alone.
     let asked = native::asked(
-        &federation,
+        federation,
         &arrived,
         vec![member],
         Arc::new(Withheld::none()),
@@ -284,7 +262,7 @@ pub(super) async fn read(
         return crate::error::fixed(Code::Internal, request_id);
     };
     let mut response = answered(native);
-    attach(&mut response, accessed(&federation, native));
+    attach(&mut response, accessed(federation, native));
     response
 }
 

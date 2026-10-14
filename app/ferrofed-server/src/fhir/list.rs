@@ -33,17 +33,13 @@ use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use http::{StatusCode, Uri, header};
 
-use super::{attach, fhir_json, outcome, refused};
+use super::{admission, attach, fhir_json, outcome, refused, unadmitted};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
-use crate::conveyed;
-use crate::error::Code;
 use crate::facade::native::Native;
-use crate::facade::request::Arrived;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
-use crate::request_id;
 use crate::state::AppState;
 
 /// The media type of a member's document that names none (RFC 9110 §8.3).
@@ -66,21 +62,15 @@ pub(super) async fn documents(
             return response;
         }
     };
-    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let request_id = request_id::of(&headers).unwrap_or_default();
-    let logged = outbound.to_string();
-    let (Some(federation), Some(fhir)) = (state.federation(), state.fhir()) else {
-        return crate::error::fixed(Code::NotImplemented, request_id);
-    };
-    let caller = caller.as_deref();
-    // NOTE: §13.1, N25: the list is answered only for a caller the gate admitted with the
-    // scopes that cover it, whatever path reached this handler.
-    let Some(admitted) = caller.filter(|caller| !caller.covering().is_empty()) else {
-        return outcome(
-            StatusCode::FORBIDDEN,
-            "forbidden",
-            "the caller was not admitted to the section queries",
-        );
+    let admitted = admission::admit(
+        &state,
+        (outbound, caller.as_deref()),
+        (&headers, started),
+        unadmitted,
+    );
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
     };
     // NOTE: FHIR R4 search; a `type` that admits no patient summary matches nothing the face
     // lists, so the empty set is answered and nothing is resolved or sent.
@@ -89,32 +79,22 @@ pub(super) async fn documents(
         response.extensions_mut().insert(NoAccess);
         return response;
     }
-    let conveyance = match conveyed::of(&federation, caller) {
-        Ok(conveyance) => conveyance,
-        Err(unconveyed) => return unconveyed.respond(request_id, &logged),
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
     };
-    let Some(on_behalf) = caller.map(Caller::on_behalf) else {
-        return conveyed::Unconveyed::NoCaller.respond(request_id, &logged);
-    };
-    let conveyance =
-        match crate::facade::confined_by(&federation, caller, started, conveyance).await {
-            Ok(conveyance) => conveyance,
-            Err(unconfined) => return unconfined.respond(request_id, &logged),
-        };
-    let session = caller.map(Caller::session);
-    let arrived = Arrived {
-        headers: &headers,
-        request_id,
-        outbound,
-        conveyance: &conveyance,
-        started,
-        session: session.as_ref(),
-        requester: caller.and_then(Caller::requester),
-        on_behalf: &on_behalf,
-    };
+    let arrived = admitted.arrived(&confined);
+    let (federation, fhir) = (&admitted.federation, admitted.fhir);
+    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
-    match gathered::gather(Arc::clone(&federation), arrived, patient, Scope::List).await {
-        Ok(gathered) => listed(&federation, (fhir, admitted), &gathered, patient, &logged),
+    match gathered::gather(Arc::clone(federation), arrived, patient, Scope::List).await {
+        Ok(gathered) => listed(
+            federation,
+            (fhir, admitted.caller),
+            &gathered,
+            patient,
+            logged,
+        ),
         // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
         // document, and answers as one no member may disclose does.
         Err(unsummarised) if unsummarised.reaches_no_member() => {
@@ -125,13 +105,13 @@ pub(super) async fn documents(
         Err(Unsummarised::NotFound(gathered)) => {
             let mut response = fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
             let accessed = gathered.and_then(|gathered| {
-                gathered::accessed(&federation, &gathered, patient, (Scope::List, None))
+                gathered::accessed(federation, &gathered, patient, (Scope::List, None))
             });
             attach(&mut response, accessed);
             response
         }
         Err(unsummarised) => refused(
-            &federation,
+            federation,
             (unsummarised, Scope::List),
             patient,
             (request_id, outbound),
