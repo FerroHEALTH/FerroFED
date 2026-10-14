@@ -4,8 +4,8 @@
 //! `its_rest.query` in every mode: the `GET` and `POST` forms of
 //! `{base}/v1/query/aql` fan out, and so do the forms of
 //! `{base}/v1/query/{name}[/{version}]` where the registry is offered; where
-//! it is not, a stored query invoked by name is `501` and asks nobody (§7,
-//! §7a.1, §12.7, N1, N30, N44).
+//! it is not, a stored query invoked by name is `501`, asks nobody, and is
+//! declared so (§7, §7a.1, §12.7, N1, N30, N32, N44).
 
 use http::{Method, StatusCode};
 
@@ -67,6 +67,17 @@ async fn the_query_declaration_names_stored_query_execution_only_where_the_regis
             mode.registry(),
             declared.contains("GET and POST {base}/v1/query/{name}[/{version}] fan out"),
             "§7a.1, §12.7: {mode:?}: {declared}"
+        );
+        // N32: execution without a registry is `501`, and N30 has it declared.
+        assert_eq!(
+            !mode.registry(),
+            declared.contains("GET and POST {base}/v1/query/{name}[/{version}] answer 501"),
+            "N30, N32: {mode:?}: {declared}"
+        );
+        assert_eq!(
+            mode.registry(),
+            declared.contains("served from the gateway registry"),
+            "§12.7, N44: {mode:?}: {declared}"
         );
         if mode.registry() {
             let held = setup.send(store("1.0.0", None)?).await?;
