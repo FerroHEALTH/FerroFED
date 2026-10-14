@@ -244,7 +244,13 @@ impl Document {
     }
 
     /// Adds `patient`, under its `id`, as the document's subject, claiming
-    /// the `patient-eu-eps` profile, and returns its `fullUrl`.
+    /// the `patient-eu-eps` profile, and returns the relative reference
+    /// `Patient/{id}` every reference to the patient is written with.
+    ///
+    /// The document's `Composition.subject` is written with that reference,
+    /// and a mapping run names the patient with it too, so the document
+    /// names its subject in one form, which resolves to the patient's entry
+    /// against the `fullUrl` base of the entry that holds it.
     ///
     /// # Errors
     ///
@@ -253,15 +259,19 @@ impl Document {
     pub fn with_patient(&mut self, mut patient: Patient) -> Result<String, DocumentError> {
         let meta = patient.meta.get_or_insert_with(Meta::default);
         meta.profile.push(EPS_PATIENT.into());
-        let added = self.add(&[Resource::Patient(Box::new(patient))])?;
-        let full_url = added
-            .into_iter()
-            .next()
-            .ok_or_else(|| DocumentError::NoId {
-                resource: String::from("Patient"),
-            })?;
-        self.patient = Some(full_url.clone());
-        Ok(full_url)
+        self.add(&[Resource::Patient(Box::new(patient))])?;
+        let id = match self.entries.last() {
+            Some((_, Resource::Patient(added))) => added.id.clone(),
+            _ => None,
+        }
+        .ok_or_else(|| DocumentError::NoId {
+            resource: String::from("Patient"),
+        })?;
+        // NOTE: FHIR R4 Bundle references (bundle.html#references) resolve `Patient/{id}` against the
+        // holding entry's RESTful fullUrl base; writing the one relative form keeps one subject string.
+        let reference = format!("Patient/{id}");
+        self.patient = Some(reference.clone());
+        Ok(reference)
     }
 
     /// Adds `authored` and names it an author of the composition, returning

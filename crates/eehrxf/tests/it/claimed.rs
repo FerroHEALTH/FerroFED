@@ -132,9 +132,23 @@ fn every_profile_the_document_claims_holds() -> Result<(), Box<dyn Error>> {
         })
         .collect();
     assert_eq!(1, allergies.len(), "one mapped allergy");
+    assert!(
+        claimed.contains(ALLERGY_EU_CORE),
+        "the mapped allergy claims {ALLERGY_EU_CORE}: {claimed:?}"
+    );
     for allergy in allergies {
-        // NOTE: the context mapping names the profile its output conforms to, which the entry
-        // does not repeat in its meta.profile, so the entry is held to it here.
+        let object = Json::to_json(allergy)?;
+        let profiles = object
+            .get("meta")
+            .and_then(|meta| meta.get("profile"))
+            .ok_or("the allergy claims a profile")?;
+        assert_eq!(
+            profiles,
+            &Value::Array(vec![Value::String(ALLERGY_EU_CORE.to_owned())]),
+            "the context's profile is claimed once"
+        );
+        // NOTE: FHIR R4 Resource.meta.profile is a claim of conformance; the writer claims the
+        // profile its context maps to, and the entry is held to that claim here.
         check_resource(
             &vendored(ALLERGY_EU_CORE)?,
             "AllergyIntolerance",

@@ -142,6 +142,23 @@ fn a_composition_maps_to_its_resource_with_one_provenance() -> Result<(), Box<dy
         Some("Synthetic substance one"),
         "the substance became the code"
     );
+    // FHIR R4 Resource.meta.profile: the mapped resource claims the profile its context maps to.
+    let profiles: Vec<Option<&str>> = allergy
+        .meta
+        .as_ref()
+        .map(|meta| {
+            meta.profile
+                .iter()
+                .map(|url| url.value.as_deref())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(
+        profiles,
+        [Some(
+            "http://example.org/fhir/StructureDefinition/ferrofed-allergy"
+        )]
+    );
     assert_eq!(
         allergy.id.as_deref(),
         Some("7c4e1d20-0000-4000-8000-000000000001"),
