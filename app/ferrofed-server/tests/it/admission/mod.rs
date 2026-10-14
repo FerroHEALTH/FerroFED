@@ -57,7 +57,9 @@ const V4: [&str; 3] = [
 const UNREACHABLE_B: &str = "http://127.0.0.1:0/node-b";
 
 /// The `ehr_id` domain of node A and node B at the PIX Manager.
+#[cfg(feature = "binding-ihe")]
 const DOMAIN_A: &str = "urn:oid:2.999.10";
+#[cfg(feature = "binding-ihe")]
 const DOMAIN_B: &str = "urn:oid:2.999.20";
 
 /// The subject of each test EHR a node created, by the `ehr_id` it issued.
@@ -172,11 +174,13 @@ async fn node(ids: &[&str], system_id: &str) -> (Server, Issued) {
 
 /// A PIX Manager that maps each subject to the `ehr_id` `issued` holds for
 /// it at node A, shifted by `shift` places when it is to answer wrongly.
+#[cfg(feature = "binding-ihe")]
 struct Crossref {
     issued: Issued,
     shift: usize,
 }
 
+#[cfg(feature = "binding-ihe")]
 impl Respond for Crossref {
     fn respond(&self, request: &Request) -> ResponseTemplate {
         let subject = request
@@ -201,6 +205,7 @@ impl Respond for Crossref {
 }
 
 /// A PIX Manager over `issued`, answering wrongly when `shift` is not zero.
+#[cfg(feature = "binding-ihe")]
 async fn manager(issued: &Issued, shift: usize) -> Server {
     let server = Server::start().await;
     Mock::given(method("GET"))
@@ -215,6 +220,7 @@ async fn manager(issued: &Issued, shift: usize) -> Server {
 }
 
 /// The `[pixm]` table of one Manager at `pix` serving node A and node B.
+#[cfg(feature = "binding-ihe")]
 fn pixm(pix: &str) -> String {
     format!(
         "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"

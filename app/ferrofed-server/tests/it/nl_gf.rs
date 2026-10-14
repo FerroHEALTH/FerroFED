@@ -8,10 +8,12 @@
 //! cross-references the pseudonym to each node's `ehr_id` (Step 1c), and each
 //! node receives AQL keyed on its own `ehr_id` alone (Step 2, N33, §5.4).
 //!
-//! In process: three mock CDRs, the stub Localization Service and the harness
-//! PIX Manager fed over ITI-104. Every identifier is synthetic, in the
-//! `urn:oid:2.999` example arc, which `[nl_gf.nvi] namespaces` lists as
-//! standing for the pseudonymised BSN.
+//! In process: three mock CDRs, the stub Localization Service, and the
+//! harness PIX Manager fed over ITI-104 in a build with the IHE binding or
+//! the development cross-reference holding the same `ehr_id`s in a build
+//! without it. Every identifier is synthetic, in the `urn:oid:2.999` example
+//! arc, which `[nl_gf.nvi] namespaces` lists as standing for the
+//! pseudonymised BSN.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -25,6 +27,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_server::binding::Role;
 use ferrofed_server::binding::nl::nvi::NL_GF_NVI;
 use ferrofed_server::config::settings::Settings;
@@ -35,8 +38,11 @@ use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::nvi::LocalizationService;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_testkit::pix::PixManager;
-use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
+use ferrofed_testkit::seed::PatientId;
+#[cfg(feature = "binding-ihe")]
+use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain};
 use http::{Request, StatusCode};
 use openehr_federation::options::OptionsRoot;
 use uuid::Uuid;
@@ -54,6 +60,7 @@ const MEMBERS: [&str; 3] = ["node-a", "node-b", "node-c"];
 pub(crate) const URAS: [&str; 3] = ["ura-test-0001", "ura-test-0002", "ura-test-0003"];
 
 /// The `ehr_id` domains of the three members at the PIX Manager.
+#[cfg(feature = "binding-ihe")]
 const DOMAINS: [EhrDomain; 3] = [EhrDomain::new(21), EhrDomain::new(22), EhrDomain::new(23)];
 
 /// The patient's `ehr_id` at node A and node B, unrelated values (§B.7 Step
@@ -79,15 +86,80 @@ pub(crate) fn query() -> String {
     )
 }
 
+/// What resolves the patient at each member the NVI names (§B.7 Step 1c):
+/// the harness PIX Manager, fed over ITI-104 with the patient's `ehr_id` at
+/// node A and node B, in a build with the IHE binding, and the development
+/// cross-reference holding the same `ehr_id`s in a build without it.
+#[derive(Debug)]
+pub(crate) struct Resolution {
+    /// The configuration tables that name the resolver.
+    tables: String,
+    /// The PIX Manager, whose queries a test counts.
+    #[cfg(feature = "binding-ihe")]
+    pub(crate) pix: PixManager,
+}
+
+impl Resolution {
+    /// Starts the PIX Manager and feeds it the patient.
+    #[cfg(feature = "binding-ihe")]
+    pub(crate) async fn start() -> Result<Self, Box<dyn Error>> {
+        let pix = PixManager::start().await?;
+        let feed = CrossReferenceSeed {
+            patient: patient(),
+            ehrs: vec![(DOMAINS[0], EHR_A), (DOMAINS[1], EHR_B)],
+        };
+        assert_eq!(
+            StatusCode::CREATED,
+            seed::feed(&pix.base_url(), &feed).await?,
+            "ITI-104 creates the Patient"
+        );
+        let mut tables = format!(
+            "[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n",
+            pix.base_url()
+        );
+        for (member, domain) in MEMBERS.into_iter().zip(DOMAINS) {
+            writeln!(tables, "\"{member}\" = \"{}\"", domain.system())?;
+        }
+        Ok(Self { tables, pix })
+    }
+
+    /// Writes the development cross-reference of the patient, ready at once.
+    #[cfg(not(feature = "binding-ihe"))]
+    pub(crate) fn start() -> impl Future<Output = Result<Self, Box<dyn Error>>> {
+        std::future::ready(Self::dev())
+    }
+
+    /// The development cross-reference of the patient.
+    #[cfg(not(feature = "binding-ihe"))]
+    fn dev() -> Result<Self, Box<dyn Error>> {
+        let patient = patient();
+        let mut tables = String::new();
+        for (member, ehr_id) in [("node-a", EHR_A), ("node-b", EHR_B)] {
+            write!(
+                tables,
+                "\n[[dev.crossref]]\nnamespace = \"{}\"\nvalue = \"{}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n",
+                patient.namespace(),
+                patient.value()
+            )?;
+        }
+        Ok(Self { tables })
+    }
+
+    /// The configuration tables that name the resolver.
+    pub(crate) fn tables(&self) -> &str {
+        &self.tables
+    }
+}
+
 /// The gateway over the members at `urls`, localized by the NVI at `nvi`
-/// and resolved by the `[pixm]` Manager at `manager`.
+/// and resolved by `resolution`.
 fn gateway(
     dir: &Path,
     urls: [&str; 3],
     nvi: &str,
-    manager: &str,
+    resolution: &Resolution,
 ) -> Result<Router, Box<dyn Error>> {
-    let text = configuration(dir, "development", urls, nvi, manager)?;
+    let text = configuration(dir, "development", urls, nvi, resolution.tables())?;
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
@@ -98,36 +170,34 @@ fn gateway(
 }
 
 /// The configuration under `profile` of the gateway [`gateway`] builds, with
-/// its registry document written into `dir`.
+/// its registry document written into `dir` and the resolver `tables`.
 pub(crate) fn configuration(
     dir: &Path,
     profile: &str,
     urls: [&str; 3],
     nvi: &str,
-    manager: &str,
+    tables: &str,
 ) -> Result<String, Box<dyn Error>> {
     let mut registry = String::new();
-    let mut members = String::new();
     let mut custodians = String::new();
-    for (((member, url), domain), ura) in MEMBERS.into_iter().zip(urls).zip(DOMAINS).zip(URAS) {
+    for ((member, url), ura) in MEMBERS.into_iter().zip(urls).zip(URAS) {
         write!(
             registry,
             "\n[[organisation]]\nid = \"org-{member}\"\n\n[[node]]\nid = \"{member}\"\norganisation = \"org-{member}\"\nsystem_id = \"{member}.example.org\"\n\n[[endpoint]]\nid = \"{member}-pub\"\nnode = \"{member}\"\nurl = \"{url}\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-{member}\"\n"
         )?;
-        writeln!(members, "\"{member}\" = \"{}\"", domain.system())?;
         writeln!(custodians, "\"{ura}\" = \"{member}\"")?;
     }
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n[[pixm.manager]]\nurl = \"{manager}\"\n\n[pixm.manager.members]\n{members}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n{tables}",
         document = toml::Value::String(document.display().to_string()),
         namespace = patient().namespace(),
     ))
 }
 
 /// The configuration [`configuration`] writes, with every URL `https`, the
-/// localized selection, and `edit` applied to its text.
+/// localized selection, no resolver, and `edit` applied to its text.
 fn edited(
     dir: &Path,
     profile: &str,
@@ -143,25 +213,9 @@ fn edited(
             "https://c.example.org",
         ],
         nvi,
-        "https://pix.example.org/fhir/",
+        "",
     )?;
     Ok(crate::support::signed(&edit(text)))
-}
-
-/// The harness PIX Manager, fed with the patient's `ehr_id` at node A and
-/// node B.
-pub(crate) async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
-    let pix = PixManager::start().await?;
-    let feed = CrossReferenceSeed {
-        patient: patient(),
-        ehrs: vec![(DOMAINS[0], EHR_A), (DOMAINS[1], EHR_B)],
-    };
-    assert_eq!(
-        StatusCode::CREATED,
-        seed::feed(&pix.base_url(), &feed).await?,
-        "ITI-104 creates the Patient"
-    );
-    Ok(pix)
 }
 
 pub(crate) async fn members() -> [Server; 3] {
@@ -188,14 +242,14 @@ async fn the_pseudonymised_walkthrough_runs_end_to_end_and_no_node_sees_the_pseu
     nvi.index(&patient().value(), URAS[0]);
     nvi.index(&patient().value(), URAS[1]);
     nvi.index(&patient().value(), "ura-outside-federation");
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
         &nvi.base(),
-        &pix.base_url(),
+        &resolution,
     )?;
 
     let (status, text) = call(app.clone(), post(body(&query())?)?).await?;
@@ -269,14 +323,14 @@ async fn a_member_the_nvi_leaves_out_is_not_localized_and_complete_holds() -> Te
     let nvi = LocalizationService::start().await;
     nvi.index(&patient().value(), URAS[0]);
     nvi.index(&patient().value(), URAS[1]);
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
         &nvi.base(),
-        &pix.base_url(),
+        &resolution,
     )?;
 
     let (status, text) = call(app, post(body(&query())?)?).await?;
@@ -304,14 +358,14 @@ async fn an_nvi_that_does_not_answer_fails_the_query_closed() -> TestResult {
     let nvi = LocalizationService::start().await;
     nvi.index(&patient().value(), URAS[0]);
     nvi.refuse();
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
         &nvi.base(),
-        &pix.base_url(),
+        &resolution,
     )?;
 
     let (status, text) = call(app, post(body(&query())?)?).await?;
@@ -342,21 +396,22 @@ async fn an_nvi_that_does_not_answer_fails_the_query_closed() -> TestResult {
         asked_counts(&servers).await?,
         "no dispatch, no ask-all (§14.1)"
     );
-    assert_eq!(0, pix.queries(), "nothing was resolved");
+    #[cfg(feature = "binding-ihe")]
+    assert_eq!(0, resolution.pix.queries(), "nothing was resolved");
     Ok(())
 }
 
 #[tokio::test]
 async fn a_patient_in_a_namespace_that_is_no_pseudonym_is_never_sent_to_the_nvi() -> TestResult {
     let nvi = LocalizationService::start().await;
-    let pix = fed_manager().await?;
+    let resolution = Resolution::start().await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
         dir.path(),
         [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
         &nvi.base(),
-        &pix.base_url(),
+        &resolution,
     )?;
     let direct = PatientId::new(2, 487);
     let aql = format!(
@@ -468,6 +523,7 @@ fn the_nvi_under_the_ask_all_selection_refuses_to_boot() -> TestResult {
     }
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn the_nvi_and_xcpd_together_refuse_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;

@@ -15,10 +15,11 @@ use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
 use crate::facade::registry;
 
-use super::{
-    SYSTEM_A, TestResult, V4, check_a, dev_federation, federation, manager, node, pixm, verdict,
-};
+use super::{SYSTEM_A, TestResult, V4, check_a, dev_federation, federation, node, verdict};
+#[cfg(feature = "binding-ihe")]
+use super::{manager, pixm};
 
+#[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn the_round_trip_passes_when_the_cross_reference_knows_each_new_ehr() -> TestResult {
     let (a, issued) = node(&V4, SYSTEM_A).await;
@@ -74,6 +75,7 @@ async fn the_round_trip_s_audit_records_are_the_gateway_s_own_and_name_no_caller
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn the_round_trip_fails_when_the_cross_reference_names_another_ehr() -> TestResult {
     let (a, issued) = node(&V4, SYSTEM_A).await;

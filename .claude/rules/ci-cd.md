@@ -172,7 +172,12 @@ ferrofed-engine --package ferrofed-server -- -D warnings`, which covers each
 published crate's layer and profile features and the regional binding
 features (`binding-ihe` and `binding-nl` of the server, `ihe` and `nl` of
 the identity crate, `nl` of the engine), per package and never the
-workspace all-features union; the `fuzz lockfile` job (`fuzz/Cargo.lock`
+workspace all-features union; the `binding-tests` job, which runs the
+server's tests in each build the all-features run never compiles (`cargo
+nextest run --profile ci --locked --package ferrofed-server
+--no-default-features --features <build>` for no feature, `binding-ihe`,
+`binding-nl` and `default`), so a test that needs a binding is gated on it;
+the `fuzz lockfile` job (`fuzz/Cargo.lock`
 matches the workspace); the `release compose` job (`ferrofed config check`,
 built as a static musl binary, over the release compose assets and the
 example Kubernetes ConfigMap, and over the example the last release attached,

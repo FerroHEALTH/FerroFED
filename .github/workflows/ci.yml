@@ -740,6 +740,48 @@ jobs:
       # nextest does not run doctests, so they get their own compile.
       - run: cargo test --doc --workspace --locked --all-features
 
+  # The server's tests in a build without its default features and in each
+  # regional binding alone (#881; no specification governs it: our own
+  # design). The test job above builds every feature at once and the
+  # features job only lints each one, so a test that needs a binding without
+  # being gated on it would fail only in a build that leaves the binding out.
+  binding-tests:
+    name: test (ferrofed-server, ${{ matrix.build }})
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build: no-default-features
+            features: ""
+          - build: binding-ihe
+            features: binding-ihe
+          - build: binding-nl
+            features: binding-nl
+          - build: default
+            features: default
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache-shared-key: binding-tests-${{ matrix.build }}
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        with:
+          tool: cargo-nextest
+      - name: Run the server's tests in the build
+        env:
+          FEATURES: ${{ matrix.features }}
+        run: >-
+          cargo nextest run --profile ci --locked --package ferrofed-server
+          --no-default-features --features "${FEATURES}" --no-tests=pass
+
   # The container-backed suite (#39; no specification governs it: our own
   # design). Every such test checks FERROFED_E2E first and returns early without it, so the
   # test job above stays offline; this job sets the gate and runs the e2e
@@ -1261,6 +1303,7 @@ jobs:
       - fuzz-lockfile
       - clippy
       - test
+      - binding-tests
       - e2e
       - conformance-report
       - release-compose

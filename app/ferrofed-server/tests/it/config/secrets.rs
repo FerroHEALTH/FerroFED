@@ -216,15 +216,18 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");
 
-    let manager = "[[pixm.manager]]\nurl = \"http://127.0.0.1:9\"\n\
-                   [pixm.manager.credentials]\nbearer_token = \"Qz7left\\nQz7right\"\n";
-    let error = refusal(manager)?;
-    assert!(
-        matches!(&error, Error::Authorization { key, .. }
-            if key == "pixm.manager[0].credentials.bearer_token"),
-        "a PIX Manager credential is held to the same rule: {error:?}"
-    );
-    assert!(!everything(&error).contains("Qz7"), "{error}");
+    #[cfg(feature = "binding-ihe")]
+    {
+        let manager = "[[pixm.manager]]\nurl = \"http://127.0.0.1:9\"\n\
+                       [pixm.manager.credentials]\nbearer_token = \"Qz7left\\nQz7right\"\n";
+        let error = refusal(manager)?;
+        assert!(
+            matches!(&error, Error::Authorization { key, .. }
+                if key == "pixm.manager[0].credentials.bearer_token"),
+            "a PIX Manager credential is held to the same rule: {error:?}"
+        );
+        assert!(!everything(&error).contains("Qz7"), "{error}");
+    }
     Ok(())
 }
 

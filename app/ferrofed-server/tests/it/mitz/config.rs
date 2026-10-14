@@ -228,6 +228,7 @@ fn development_consent_rows_and_mitz_together_refuse_to_boot() -> TestResult {
     }
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
