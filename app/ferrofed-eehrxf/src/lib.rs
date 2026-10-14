@@ -19,6 +19,8 @@
 //! - [`face`]: the FHIR R4 face that serves it (Regulation (EU) 2025/327
 //!   Annex II 2.1): the summary request, the `CapabilityStatement` and the
 //!   `OperationOutcome`;
+//! - [`list`]: the document list of that face, a `DocumentReference` search
+//!   answering the summary written on request and each member's own one;
 //! - [`receive`]: a document received in the exchange format, checked and
 //!   mapped for the one member the deployment declares for its category
 //!   (Annex II 2.2 and 2.3).
@@ -41,6 +43,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod face;
+pub mod list;
 pub mod patient_summary;
 pub mod receive;
 pub mod reserved;

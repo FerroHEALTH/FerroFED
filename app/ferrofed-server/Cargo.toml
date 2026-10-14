@@ -56,6 +56,7 @@ anyhow.workspace = true
 # run checks its synthetic seed files against (#546), from the crypto library
 # the engine already uses.
 aws-lc-rs.workspace = true
+base64.workspace = true
 axum.workspace = true
 clap.workspace = true
 # The European logging component (#623): the access record of every access
@@ -150,7 +151,6 @@ uuid.workspace = true
 [dev-dependencies]
 # The query an Audit Log Used record carries, base64, read back by the
 # ITI-81 search test (#818).
-base64.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 # The JWK Set the gateway publishes, read as the onward tests verify it (#81).

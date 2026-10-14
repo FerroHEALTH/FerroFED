@@ -396,8 +396,9 @@ them:
   the patient summary built from them on a FHIR R4 face of its own, the
   interface of Annex II, point 2.1
   ([The patient summary over FHIR](../integrate/patient-summary.md)). The
-  document list on that face is planned
-  ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
+  same face lists the summaries that exist for a patient, the members' own
+  ones included
+  ([The document list](../integrate/patient-summary.md#the-document-list)).
 
 Five of the manufacturer's obligations have a first answer:
 
@@ -512,7 +513,8 @@ namespace are described under
 The FHIR face of Annex II 2.1 assembles the patient summary from their
 answers ([The patient summary over FHIR](../integrate/patient-summary.md),
 [#809](https://github.com/FerroHEALTH/FerroFED/issues/809)); the document
-list is planned ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
+list names it beside each member's own summary
+([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
 ## Not legal advice
 
