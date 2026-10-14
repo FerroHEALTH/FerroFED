@@ -12,7 +12,9 @@
 //! `searchset` with the gateway's summary, retrievable through
 //! `Patient/$summary`, and each member's document at `Binary/{token}`, a URL
 //! the gateway signs for the caller ([`super::binary`]). A
-//! member that does not answer fails the list under all-or-nothing, and
+//! member that does not answer, or answers with no FHIR document `Bundle`
+//! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
+//! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4).
 
 use std::collections::BTreeSet;
@@ -165,7 +167,8 @@ fn listed(
     let mut outcomes = Vec::new();
     for native in &gathered.natives {
         match &native.answer {
-            Answer::Document(forwarded) => {
+            Answer::Document(document) => {
+                let forwarded = document.forwarded();
                 let Some(fetched) = fetched(federation, (fhir, caller), native, forwarded) else {
                     tracing::error!(
                         request_id = logged,
@@ -186,18 +189,18 @@ fn listed(
                     attach(&mut response, accessed);
                     return response;
                 };
-                let head = head(forwarded.body());
-                let identifier = head
-                    .as_ref()
-                    .map(|(system, value)| (system.as_str(), value.as_str()));
                 let custodian = gathered::organisation(federation.snapshot(), &native.chosen.node);
                 let id = minted();
                 matches.push((
                     format!("urn:uuid:{id}"),
-                    list::native((&id, identifier), listing, &custodian, fetched),
+                    list::native((&id, document.identifier()), listing, &custodian, fetched),
                 ));
             }
             Answer::Absent => {}
+            Answer::Unusable { .. } => outcomes.push((
+                format!("urn:uuid:{}", minted()),
+                list::unusable(native.chosen.native.as_str()),
+            )),
             silent => outcomes.push((
                 format!("urn:uuid:{}", minted()),
                 list::silent(native.chosen.native.as_str(), silent.status().as_str()),
@@ -248,30 +251,4 @@ fn fetched(
         hash: STANDARD.encode(hash.as_ref()),
         size,
     })
-}
-
-/// The `Bundle.identifier` of a document, as far as the list reads it.
-#[derive(serde::Deserialize)]
-struct Head {
-    /// The document's identifier.
-    identifier: Option<HeadIdentifier>,
-}
-
-/// An identifier's system and value.
-#[derive(serde::Deserialize)]
-struct HeadIdentifier {
-    /// The system.
-    system: Option<String>,
-    /// The value.
-    value: Option<String>,
-}
-
-/// The system and value of the identifier of the document `bytes`, the
-/// document left unchanged.
-fn head(bytes: &[u8]) -> Option<(String, String)> {
-    // NOTE: FHIR R4 Bundle bdl-9; a document that gives no readable identifier is legitimately
-    // listed with none, its bytes carried as they are.
-    let head: Head = serde_json::from_slice(bytes).ok()?;
-    let identifier = head.identifier?;
-    Some((identifier.system?, identifier.value?))
 }

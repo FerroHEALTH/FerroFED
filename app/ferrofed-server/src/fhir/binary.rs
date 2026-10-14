@@ -16,7 +16,10 @@
 //! identifier (§5.4.1, N33). A read verifies the token, holds the caller to
 //! the one it names, and asks the member again by its `ehr_id` alone, as the
 //! list did; the bytes are answered as the member sent them and nothing is
-//! stored. No specification governs the token: our own design.
+//! stored. An answer that is no FHIR document `Bundle` whose identifier has
+//! a system and a value (FHIR R4 `bdl-9`) is never served: the member is
+//! named in `node-error` with `424` (§11.1, §11.3). No specification
+//! governs the token: our own design.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -289,7 +292,8 @@ pub(super) async fn read(
 /// them, or the outcome that says why there are none (§11.3, §11.4).
 fn answered(native: &Native) -> Response {
     match &native.answer {
-        Answer::Document(forwarded) => {
+        Answer::Document(document) => {
+            let forwarded = document.forwarded();
             let media = forwarded
                 .headers()
                 .get(header::CONTENT_TYPE)
@@ -302,6 +306,14 @@ fn answered(native: &Native) -> Response {
             )
                 .into_response()
         }
+        Answer::Unusable { .. } => outcome(
+            StatusCode::FAILED_DEPENDENCY,
+            "incomplete",
+            &format!(
+                "the document could not be read: {} (§11.3)",
+                ferrofed_eehrxf::list::unidentified(native.chosen.native.as_str())
+            ),
+        ),
         Answer::Absent => outcome(
             StatusCode::NOT_FOUND,
             "not-found",
