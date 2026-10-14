@@ -4,7 +4,8 @@
 //! The PostgreSQL store of the stored-query registry against a real
 //! PostgreSQL 18, one database per use on one server (§12.7, N44, CP-40):
 //! the store suite every writable store passes, two gateway instances in
-//! one process racing the same new version with exactly one stored, a
+//! one process racing the same new version with exactly one stored, and
+//! racing `PUT`s with no version each storing a version of its own, a
 //! version one instance stored read and run by name at the other, and a row
 //! naming its patient by a literal, written past the gateway, never served
 //! or run (§5.4.1, N33).
@@ -157,6 +158,51 @@ async fn two_gateways_racing_one_new_version_store_exactly_one() -> TestResult {
         usize::try_from(ROUNDS)?,
         listed.len(),
         "one version a round, whichever instance stored it"
+    );
+    Ok(())
+}
+
+// conformance: CP-40
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_gateways_racing_unversioned_puts_store_two_versions_or_refuse_one() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let server = database::postgres("stored_assigned_race", &[]).await?;
+    let url = server.url("stored_assigned_race");
+    let dir = tempfile::tempdir()?;
+    let members = ("http://a.invalid", "http://b.invalid");
+    let one = gateway(dir.path(), members, &url)?;
+    let two = gateway(dir.path(), members, &url)?;
+    let unversioned = |who: &str| {
+        Request::put(format!("/v1/definition/query/{NAME}"))
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from(marked(who)))
+    };
+    let mut stored: u32 = 0;
+    for _ in 0..ROUNDS {
+        let (first, second) = tokio::join!(
+            call(one.clone(), unversioned("one")?),
+            call(two.clone(), unversioned("two")?),
+        );
+        for (status, text) in [first?, second?] {
+            match status {
+                StatusCode::OK => stored += 1,
+                StatusCode::CONFLICT => {
+                    assert_eq!("stored-query-held", error_body(&text)?.code, "{text}");
+                }
+                other => panic!("§12.7: stored or refused, never anything else: {other} {text}"),
+            }
+        }
+    }
+    assert!(stored >= ROUNDS, "a round stores one version or two");
+    let (status, text) = call(two, get(NAME)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let listed: Vec<StoredQuery> = serde_json::from_str(&text)?;
+    assert_eq!(
+        usize::try_from(stored)?,
+        listed.len(),
+        "§12.7, N44: each stored PUT holds a version of its own, and none is replaced"
     );
     Ok(())
 }

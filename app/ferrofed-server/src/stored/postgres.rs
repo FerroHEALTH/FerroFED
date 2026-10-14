@@ -11,7 +11,12 @@
 //! replicas inserting one pair at once store exactly one of them, in one
 //! statement, with no read before the write
 //! (<https://www.postgresql.org/docs/18/sql-insert.html#SQL-ON-CONFLICT>).
-//! Each time the store connects, one transaction under a transaction-level
+//! A definition stored with no version takes the trait's own
+//! [`DefinitionStore::insert_assigned`]: it reads the versions of its name
+//! and inserts the next with that statement, and when another replica stored
+//! that version first it reads again, a bounded number of times, so two
+//! replicas racing on one name store two versions or one is refused, and
+//! neither replaces the other's (§12.7 stored-query-versioning). Each time the store connects, one transaction under a transaction-level
 //! advisory lock creates the schema when absent, reads the schema version
 //! [`VERSIONS`] records ([`schema`]), runs every migration past it in order
 //! and records the version it reached, so replicas starting together do not

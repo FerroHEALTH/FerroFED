@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 60] = [
+    pub const GATEWAY: [Self; 59] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -38,7 +38,6 @@ impl Code {
         Self::ProbeRequiresUuid,
         Self::QueryNameInvalid,
         Self::QueryVersionInvalid,
-        Self::QueryVersionRequired,
         Self::QueryTypeUnsupported,
         Self::SubjectLiteral,
         Self::StoredQueryHeld,
@@ -83,10 +82,21 @@ impl Code {
         )
     }
 
+    /// The codes of the gateway's own conditions it once answered and
+    /// answers no more.
+    ///
+    /// A client may still match on one, so a retired code is kept here and
+    /// never given to another condition. `query-version-required`: a
+    /// definition `PUT` with no version is stored at a version the registry
+    /// assigns (§12.7 stored-query-versioning; ITS-REST Definition API,
+    /// `definition_query_store`).
+    pub const RETIRED: &[&str] = &["query-version-required"];
+
     /// Every code the gateway once answered and answers no more
-    /// ([`Refusal::RETIRED`]), kept so no other condition is ever given one.
+    /// ([`Code::RETIRED`], then [`Refusal::RETIRED`]), kept so no other
+    /// condition is ever given one.
     pub fn retired() -> impl Iterator<Item = &'static str> {
-        Refusal::RETIRED.iter().copied()
+        Self::RETIRED.iter().chain(Refusal::RETIRED).copied()
     }
 
     /// The code as the error body's `code` member carries it.
@@ -120,7 +130,6 @@ impl Code {
             Self::ProbeRequiresUuid => "probe-requires-uuid",
             Self::QueryNameInvalid => "query-name-invalid",
             Self::QueryVersionInvalid => "query-version-invalid",
-            Self::QueryVersionRequired => "query-version-required",
             Self::QueryTypeUnsupported => "query-type-unsupported",
             Self::SubjectLiteral => "subject-literal",
             Self::StoredQueryHeld => "stored-query-held",
@@ -178,7 +187,6 @@ impl Code {
             | Self::ProbeRequiresUuid
             | Self::QueryNameInvalid
             | Self::QueryVersionInvalid
-            | Self::QueryVersionRequired
             | Self::QueryTypeUnsupported
             | Self::SubjectLiteral
             | Self::PrecedingVersionInvalid
@@ -283,9 +291,6 @@ impl Code {
             }
             Self::QueryVersionInvalid => {
                 "a stored query version is major.minor.patch, or {major} or {major}.{minor} where a version is looked up"
-            }
-            Self::QueryVersionRequired => {
-                "the registry stores a definition at a version: PUT {base}/v1/definition/query/{name}/{version} (§12.7)"
             }
             Self::QueryTypeUnsupported => "the registry stores AQL only",
             Self::SubjectLiteral => {
@@ -418,40 +423,39 @@ mod tests {
             Code::ProbeRequiresUuid => Some(23),
             Code::QueryNameInvalid => Some(24),
             Code::QueryVersionInvalid => Some(25),
-            Code::QueryVersionRequired => Some(26),
-            Code::QueryTypeUnsupported => Some(27),
-            Code::SubjectLiteral => Some(28),
-            Code::StoredQueryHeld => Some(29),
-            Code::StoredQueryUnknown => Some(30),
-            Code::PrecedingVersionInvalid => Some(31),
-            Code::ParameterValueInvalid => Some(32),
-            Code::MediaTypeNotAcceptable => Some(33),
-            Code::MediaTypeUnsupported => Some(34),
-            Code::SubjectSeveral => Some(35),
-            Code::ResolutionUnavailable => Some(36),
-            Code::EhrIdHeld => Some(37),
-            Code::DefinitionEndpointTargeted => Some(38),
-            Code::StoredQueryFanOutUnsupported => Some(39),
-            Code::StoredQueryReadOnly => Some(40),
-            Code::StoredQueryReserved => Some(41),
-            Code::ConsentDenied => Some(42),
-            Code::Unauthenticated => Some(43),
-            Code::ScopeInsufficient => Some(44),
-            Code::PurposeOfUseRequired => Some(45),
-            Code::AuthenticationUnavailable => Some(46),
-            Code::OperationRefused => Some(47),
-            Code::LocalizationUnavailable => Some(48),
-            Code::PatientContextMissing => Some(49),
-            Code::PatientConfinement => Some(50),
-            Code::PatientContextUnavailable => Some(51),
-            Code::SubjectUnavailable => Some(52),
-            Code::Overloaded => Some(53),
-            Code::RateLimited => Some(54),
-            Code::AccessUnrecorded => Some(55),
-            Code::NaturalPersonRequired => Some(56),
-            Code::AuthenticationAssuranceInsufficient => Some(57),
-            Code::ContactPointAttributesRequired => Some(58),
-            Code::CorrelationInvalid => Some(59),
+            Code::QueryTypeUnsupported => Some(26),
+            Code::SubjectLiteral => Some(27),
+            Code::StoredQueryHeld => Some(28),
+            Code::StoredQueryUnknown => Some(29),
+            Code::PrecedingVersionInvalid => Some(30),
+            Code::ParameterValueInvalid => Some(31),
+            Code::MediaTypeNotAcceptable => Some(32),
+            Code::MediaTypeUnsupported => Some(33),
+            Code::SubjectSeveral => Some(34),
+            Code::ResolutionUnavailable => Some(35),
+            Code::EhrIdHeld => Some(36),
+            Code::DefinitionEndpointTargeted => Some(37),
+            Code::StoredQueryFanOutUnsupported => Some(38),
+            Code::StoredQueryReadOnly => Some(39),
+            Code::StoredQueryReserved => Some(40),
+            Code::ConsentDenied => Some(41),
+            Code::Unauthenticated => Some(42),
+            Code::ScopeInsufficient => Some(43),
+            Code::PurposeOfUseRequired => Some(44),
+            Code::AuthenticationUnavailable => Some(45),
+            Code::OperationRefused => Some(46),
+            Code::LocalizationUnavailable => Some(47),
+            Code::PatientContextMissing => Some(48),
+            Code::PatientConfinement => Some(49),
+            Code::PatientContextUnavailable => Some(50),
+            Code::SubjectUnavailable => Some(51),
+            Code::Overloaded => Some(52),
+            Code::RateLimited => Some(53),
+            Code::AccessUnrecorded => Some(54),
+            Code::NaturalPersonRequired => Some(55),
+            Code::AuthenticationAssuranceInsufficient => Some(56),
+            Code::ContactPointAttributesRequired => Some(57),
+            Code::CorrelationInvalid => Some(58),
         }
     }
 
@@ -485,6 +489,17 @@ mod tests {
                 "{code}"
             );
         }
+    }
+
+    #[test]
+    fn a_retired_code_is_listed_once_and_the_unversioned_put_code_is_one() {
+        let retired: Vec<&str> = Code::retired().collect();
+        let distinct: BTreeSet<&str> = retired.iter().copied().collect();
+        assert_eq!(retired.len(), distinct.len(), "{retired:?}");
+        assert!(
+            distinct.contains("query-version-required"),
+            "§12.7 stored-query-versioning: an unversioned PUT is stored"
+        );
     }
 
     #[test]
@@ -528,7 +543,6 @@ mod tests {
             (Code::ProbeRequiresUuid, StatusCode::BAD_REQUEST),
             (Code::QueryNameInvalid, StatusCode::BAD_REQUEST),
             (Code::QueryVersionInvalid, StatusCode::BAD_REQUEST),
-            (Code::QueryVersionRequired, StatusCode::BAD_REQUEST),
             (Code::QueryTypeUnsupported, StatusCode::BAD_REQUEST),
             (Code::SubjectLiteral, StatusCode::BAD_REQUEST),
             (Code::StoredQueryHeld, StatusCode::CONFLICT),

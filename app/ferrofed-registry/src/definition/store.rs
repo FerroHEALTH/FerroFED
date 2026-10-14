@@ -7,8 +7,11 @@
 //! A stored version is immutable and outlives the process, because a client
 //! that registered it invokes it by name after a restart, and a second `PUT`
 //! refused before a restart is refused after it too (§12.7, N44). So the
-//! store's one write is [`DefinitionStore::insert_if_absent`], which refuses
-//! a held name and version atomically, and its read loads every definition
+//! store's write is [`DefinitionStore::insert_if_absent`], which refuses
+//! a held name and version atomically, or, for a definition stored with no
+//! version, [`DefinitionStore::insert_assigned`], which stores it at the next
+//! version and never replaces one (§12.7 stored-query-versioning), and its
+//! read loads every definition
 //! into [`Definitions`] when the gateway starts. A version never changes once
 //! held, so the in-memory view never needs invalidating. A store several
 //! gateway processes share can gain versions another process inserted, so
@@ -23,7 +26,16 @@ use std::error::Error;
 use std::fmt;
 use std::sync::{Arc, PoisonError, RwLock};
 
+use jiff::Timestamp;
+
 use crate::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
+
+/// How many versions [`DefinitionStore::insert_assigned`] assigns, each
+/// after another writer stored the one before, before it answers
+/// [`Assignment::Contended`].
+// NOTE: no specification governs this: our own design; a bound keeps a name
+// many writers race on from holding a blocking thread without end.
+pub const ASSIGNMENT_ATTEMPTS: usize = 8;
 
 /// What an insert did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +46,20 @@ pub enum Insertion {
     /// A definition of the same name and version is already held, and it
     /// stands unchanged (§12.7, N44).
     Held,
+}
+
+/// What an insert at a version the store assigns did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum Assignment {
+    /// The definition is stored at the version the store assigned.
+    Stored(StoredDefinition),
+    /// Another writer stored each version the store assigned first, in each
+    /// of its [`ASSIGNMENT_ATTEMPTS`]; nothing is stored.
+    Contended,
+    /// The patch of the newest held version is the largest a version holds,
+    /// so no next version exists; nothing is stored.
+    Exhausted,
 }
 
 /// A store failure, carrying the backend's own error.
@@ -65,6 +91,46 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
     /// A [`StoreError`] when the backend cannot complete the insert; nothing
     /// is stored then. [`StoreError::ReadOnly`] from a read-only store.
     fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError>;
+
+    /// Stores `aql` under `name`, saved at `saved`, at the version the store
+    /// assigns: `1.0.0` for a name it holds no version of, else the next
+    /// patch of the newest it holds ([`QueryVersion::assigned_after`];
+    /// §12.7 stored-query-versioning). It never replaces a held version.
+    ///
+    /// The default reads the versions of `name` and inserts at the next one
+    /// with [`DefinitionStore::insert_if_absent`]; when another writer stored
+    /// that version first, it reads again and assigns the next, at most
+    /// [`ASSIGNMENT_ATTEMPTS`] times. Two writers racing on one name so store
+    /// two versions, or one of them answers [`Assignment::Contended`]. A
+    /// backend that reads and inserts in one transaction overrides it.
+    ///
+    /// # Errors
+    ///
+    /// The [`StoreError`] of [`DefinitionStore::load_named`] or
+    /// [`DefinitionStore::insert_if_absent`]; nothing is stored then.
+    fn insert_assigned(
+        &self,
+        name: &QueryName,
+        aql: &str,
+        saved: Timestamp,
+    ) -> Result<Assignment, StoreError> {
+        for _ in 0..ASSIGNMENT_ATTEMPTS {
+            let newest = self
+                .load_named(name)?
+                .iter()
+                .map(StoredDefinition::version)
+                .max();
+            let Some(version) = QueryVersion::assigned_after(newest) else {
+                return Ok(Assignment::Exhausted);
+            };
+            let definition = StoredDefinition::new(name.clone(), version, aql.to_owned(), saved);
+            match self.insert_if_absent(&definition)? {
+                Insertion::Stored => return Ok(Assignment::Stored(definition)),
+                Insertion::Held => {}
+            }
+        }
+        Ok(Assignment::Contended)
+    }
 
     /// Every definition the store holds.
     ///
@@ -193,6 +259,32 @@ impl Definitions {
                 .insert(definition.version(), Arc::new(definition));
         }
         Ok(insertion)
+    }
+
+    /// Stores `aql` under `name`, saved at `saved`, at the version the store
+    /// assigns (§12.7 stored-query-versioning).
+    ///
+    /// The store decides the version, so two writers never store one. This
+    /// call writes to the store: a caller on an asynchronous runtime makes it
+    /// on a thread that may block.
+    ///
+    /// # Errors
+    ///
+    /// The [`StoreError`] of [`DefinitionStore::insert_assigned`].
+    pub fn insert_assigned(
+        &self,
+        name: &QueryName,
+        aql: &str,
+        saved: Timestamp,
+    ) -> Result<Assignment, StoreError> {
+        let assignment = self.store.insert_assigned(name, aql, saved)?;
+        if let Assignment::Stored(definition) = &assignment {
+            self.write()
+                .entry(definition.name().clone())
+                .or_default()
+                .insert(definition.version(), Arc::new(definition.clone()));
+        }
+        Ok(assignment)
     }
 
     /// The definition of `name` that `version` selects: that version, the

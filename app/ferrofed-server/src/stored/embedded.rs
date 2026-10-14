@@ -7,7 +7,9 @@
 //! One table maps a qualified query name and a version to the instant the
 //! definition was stored and its AQL. An insert reads the key and writes it
 //! in one write transaction, so a second `PUT` of a held name and version is
-//! refused atomically, which is the immutability rule with no race; `redb` is
+//! refused atomically, which is the immutability rule with no race, and an
+//! insert with no version reads the newest version of its name and writes the
+//! next in one write transaction, so it never replaces one; `redb` is
 //! an ACID embedded store (<https://docs.rs/redb/4.3.0/redb/>). The file holds
 //! names, versions, instants and parameterised AQL, and never a patient
 //! identifier: a definition names its patient through a `$parameter`, and an
@@ -18,8 +20,8 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrofed_registry::definition::StoredDefinition;
-use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
@@ -107,6 +109,38 @@ impl DefinitionStore for RedbStore {
         Ok(insertion)
     }
 
+    // NOTE: §12.7 stored-query-versioning; the newest version is read and the
+    // next one written in one write transaction, so no writer stores it first.
+    fn insert_assigned(
+        &self,
+        name: &QueryName,
+        aql: &str,
+        saved: Timestamp,
+    ) -> Result<Assignment, StoreError> {
+        let write = self.database.begin_write().map_err(backend)?;
+        let assigned = {
+            let mut table = write.open_table(DEFINITIONS).map_err(backend)?;
+            let newest = newest(&table, name.as_str())?;
+            match QueryVersion::assigned_after(newest) {
+                Some(version) => {
+                    let (text, instant) = (version.to_string(), saved.to_string());
+                    table
+                        .insert((name.as_str(), text.as_str()), (instant.as_str(), aql))
+                        .map_err(backend)?;
+                    let definition =
+                        StoredDefinition::new(name.clone(), version, aql.to_owned(), saved);
+                    Assignment::Stored(definition)
+                }
+                None => Assignment::Exhausted,
+            }
+        };
+        match assigned {
+            Assignment::Stored(_) => write.commit().map_err(backend)?,
+            Assignment::Contended | Assignment::Exhausted => write.abort().map_err(backend)?,
+        }
+        Ok(assigned)
+    }
+
     fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {
         let read = self.database.begin_read().map_err(backend)?;
         let table = read.open_table(DEFINITIONS).map_err(backend)?;
@@ -124,6 +158,24 @@ impl DefinitionStore for RedbStore {
         }
         Ok(definitions)
     }
+}
+
+/// The newest version of `name` `table` holds, by number.
+fn newest(
+    table: &impl ReadableTable<(&'static str, &'static str), (&'static str, &'static str)>,
+    name: &str,
+) -> Result<Option<QueryVersion>, StoreError> {
+    let mut newest = None;
+    for row in table.range((name, "")..).map_err(backend)? {
+        let (key, _) = row.map_err(backend)?;
+        let (held, version) = key.value();
+        if held != name {
+            break;
+        }
+        let version = version.parse::<QueryVersion>().map_err(corrupt)?;
+        newest = newest.max(Some(version));
+    }
+    Ok(newest)
 }
 
 /// Brings the layout `write` sees to [`schema::CURRENT`], recording the
