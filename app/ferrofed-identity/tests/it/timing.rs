@@ -9,7 +9,8 @@
 //! the next timer whenever the runtime is idle, even while a handshake is
 //! still in flight. A wait starts after the forwarder and its repository are
 //! set up, and lasts what the forwarder's own timeouts allow plus [`SLACK`].
-//! No specification governs this: our own design.
+//! A wait for a delivery waits on the delivery itself and is bounded only
+//! by [`HANG`]. No specification governs this: our own design.
 
 use std::time::Duration;
 
@@ -20,3 +21,8 @@ pub(crate) const SLACK: Duration = Duration::from_secs(3);
 pub(crate) const fn within(waits: Duration) -> Duration {
     waits.saturating_add(SLACK)
 }
+
+/// The longest a test waits for an event before it fails and names what it
+/// waited for. It guards against a hang and holds the code to no budget,
+/// and it stays under the 60 seconds after which nextest kills a test.
+pub(crate) const HANG: Duration = Duration::from_secs(45);
