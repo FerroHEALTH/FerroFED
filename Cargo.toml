@@ -48,10 +48,10 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.47" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.32" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.33" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.22" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.14" }
+ehds-logging = { path = "crates/ehds-logging", version = "0.0.15" }
 eehrxf = { path = "crates/eehrxf", version = "0.0.11" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -154,7 +154,7 @@ redb = { version = "4.3.0", default-features = false, features = ["std"] }
 # (aws-lc-rs, the platform verifier). Verified against crates.io on 2026-10-03.
 tokio-postgres = { version = "0.7.18", default-features = false, features = ["runtime"] }
 tokio-postgres-rustls = "0.14.0"
-rustls = { version = "0.23.45", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+rustls = { version = "0.23.46", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 rustls-platform-verifier = "0.7.1"
 # The ATNA audit repository connection (#418): ITI-20 syslog over TLS (RFC
 # 5425) behind crates/ihe-iti's `atna` feature, at the version reqwest and
