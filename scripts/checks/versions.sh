@@ -27,8 +27,9 @@
 #                          README.md status line names ("is at vX.Y.Z") is
 #                          not older than the product version.
 #   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint,
-#                          kubeconform, lychee and promtool versions
-#                          .github/workflows/ci.yml installs, the Kubernetes release and the schema
+#                          kubeconform, lychee, promtool and validator_cli
+#                          versions .github/workflows/ci.yml installs, the
+#                          Kubernetes release and the schema
 #                          commit kubeconform validates against, and the
 #                          cargo-auditable, cargo-cyclonedx and syft versions
 #                          the release workflows install.
@@ -1038,6 +1039,9 @@ if [[ -f "$ci" ]]; then
     promtool)
       sed -nE 's|^[[:space:]]*PROMETHEUS_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
+    validator_cli)
+      sed -nE 's|^[[:space:]]*FHIR_VALIDATOR_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      ;;
     'kubeconform schema version')
       sed -nE 's|.*-kubernetes-version[[:space:]]+([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
@@ -1047,7 +1051,7 @@ if [[ -f "$ci" ]]; then
     *) ;;
     esac
   }
-  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee promtool)
+  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee promtool validator_cli)
   for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"

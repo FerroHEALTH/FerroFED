@@ -74,8 +74,10 @@ pub fn mapping_files() -> [PathBuf; 2] {
 }
 
 /// Returns a canonical composition of the template `template`, its uid
-/// `uid`, recording the synthetic substance `substance`; [`TEMPLATE`] is the
-/// one the fixture mapping maps.
+/// `uid`, recording the synthetic substance `substance`.
+///
+/// Its clinical status is `active`, and [`TEMPLATE`] is the template the
+/// fixture mapping maps.
 ///
 /// Its entry is the synthetic allergy evaluation the fixture maps. A mock
 /// member answers a section query with it as it stands: no CDR evaluates the
@@ -122,6 +124,20 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
                     "name": { "_type": "DV_TEXT", "value": "Substance" },
                     "archetype_node_id": "at0002",
                     "value": { "_type": "DV_TEXT", "value": substance }
+                }, {
+                    "_type": "ELEMENT",
+                    "name": { "_type": "DV_TEXT", "value": "Clinical status" },
+                    "archetype_node_id": "at0003",
+                    "value": {
+                        "_type": "DV_CODED_TEXT",
+                        "value": "Active",
+                        "defining_code": {
+                            "_type": "CODE_PHRASE",
+                            "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical" },
+                            "code_string": "active",
+                            "preferred_term": "Active"
+                        }
+                    }
                 }]
             }
         }]

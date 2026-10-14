@@ -21,6 +21,8 @@
 //! - [`eps`]: the patient summary fixtures, and the structural check of a
 //!   document against the vendored HL7 Europe Patient Summary profiles
 //!   (#689);
+//! - [`emit`]: where a test writes an exchange-format document it has held
+//!   to the vendored profiles, for HL7's FHIR Validator lane (#688);
 //! - [`health_data_api`]: the structural check of a `DocumentReference`
 //!   against the vendored HL7 Europe EU Health Data API profile (#810);
 //! - [`dpop`]: the check a test device makes of a `DPoP` proof, and the
@@ -74,6 +76,7 @@ pub mod atna;
 pub mod atna_feed;
 pub mod containers;
 pub mod dpop;
+pub mod emit;
 pub mod eps;
 pub mod fapi;
 pub mod health_data_api;

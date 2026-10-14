@@ -194,6 +194,12 @@ gated JUnit report, the node profile findings and the differential report;
 the `journeys (browser)` job, which sets `FERROFED_JOURNEYS=1`, builds the
 console's site bundle and runs the testkit's browser journeys in headless
 Chrome at the pinned Chrome for Testing release (`leptos-ui.md` §11);
+the `fhir-validator (EEHRxF documents)` job, which runs HL7's FHIR Validator,
+pinned by version and SHA-256, offline over every patient summary document
+the `test` job's suites write under `FERROFED_EMIT_DIR`, against the vendored
+HL7 Europe and MyHealth@EU packages and the registry packages the script pins
+(`scripts/checks/fhir-validator.sh`), fails on an error, and uploads the
+`eehrxf-fhir-validation` artifact;
 the `conformance report` job, which joins the conformance markers with the
 JUnit reports of the offline and the gated run and the node profile
 findings (`scripts/conformance/report.sh`) into the per-run report of §16.4,

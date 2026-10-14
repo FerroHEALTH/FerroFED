@@ -63,6 +63,26 @@ pub(crate) fn vendored(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     Err(format!("no vendored package holds the profile {url}").into())
 }
 
+/// The environment variable naming the directory a suite writes the
+/// documents it has held to the vendored profiles to, for HL7's FHIR
+/// Validator lane (#688); the testkit's `emit` module reads the same one,
+/// and this crate links nothing of FerroFED.
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+const EMIT_DIR_VARIABLE: &str = "FERROFED_EMIT_DIR";
+
+/// Writes `text` to `<dir>/<name>.json` when [`EMIT_DIR_VARIABLE`] names a
+/// directory, and does nothing when it is unset.
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+pub(crate) fn emit(name: &str, text: &str) -> Result<(), Box<dyn Error>> {
+    let Some(dir) = std::env::var_os(EMIT_DIR_VARIABLE) else {
+        return Ok(());
+    };
+    let dir = PathBuf::from(dir);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(format!("{name}.json")), text)?;
+    Ok(())
+}
+
 /// One archive member: its path and its bytes.
 pub(crate) type Member = (String, Vec<u8>);
 

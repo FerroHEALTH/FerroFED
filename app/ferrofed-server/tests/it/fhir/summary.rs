@@ -42,6 +42,7 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
     );
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-server-summary-two-members", &text)?;
     let document: Value = serde_json::from_str(&text)?;
     let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
     assert_eq!(
@@ -225,6 +226,7 @@ async fn under_partial_a_silent_member_is_named_in_every_section() -> TestResult
     assert_eq!(StatusCode::OK, status, "§11.4: {text}");
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-server-summary-partial", &text)?;
     let document: Value = serde_json::from_str(&text)?;
     let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
     assert_eq!(allergies["entry"].as_array().map(Vec::len), Some(1));

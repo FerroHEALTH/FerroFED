@@ -24,7 +24,7 @@ use fhir_types::codec::{Json, Value};
 use fhir_types::r4::bundle::Bundle;
 
 use super::document::{document_mapped, fixture};
-use super::support::{eps, vendored};
+use super::support::{emit, eps, vendored};
 
 /// The canonical URL of the EPS `Composition` profile.
 const EPS_COMPOSITION: &str = "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps";
@@ -155,6 +155,10 @@ fn every_profile_the_document_claims_holds() -> Result<(), Box<dyn Error>> {
             &Json::to_json(allergy)?,
         )?;
     }
+    emit(
+        "eehrxf-summary-eu-mapping",
+        &serde_json::to_string(&bundle)?,
+    )?;
     Ok(())
 }
 
