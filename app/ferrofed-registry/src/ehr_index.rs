@@ -21,7 +21,8 @@
 //! lasts until the entry is forgotten as least recently used or the process
 //! restarts; a later read then asks every member again, and a collision that
 //! still stands is found again (no specification governs this: our own
-//! design).
+//! design). The operator who observed the remedy forgets the entry at once
+//! ([`EhrIndex::forget`]).
 //!
 //! ```
 //! use std::num::NonZeroUsize;
@@ -247,6 +248,23 @@ impl EhrIndex {
         true
     }
 
+    /// Forgets `ehr_id` whatever its entry names, and returns the members it
+    /// was held at, in `node_id` order, or none when it was not held.
+    ///
+    /// The operator's clear of a held collision calls it: only the operator
+    /// can observe that a node remedied a collision (§12b.2), so a later read
+    /// asks every member again, and a collision that still stands is found
+    /// again (§12.5.2, N42).
+    pub fn forget(&self, ehr_id: &EhrId) -> Vec<NodeId> {
+        let mut held = self.lock();
+        let Some(entry) = held.entries.remove(ehr_id) else {
+            return Vec::new();
+        };
+        held.recency.remove(&entry.used);
+        drop(held);
+        entry.owners.into_iter().collect()
+    }
+
     /// How many `ehr_id`s the index holds.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -414,6 +432,29 @@ mod tests {
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
         index.learn(&ehr(EHR_3), &node("node-a"));
         assert_eq!(2, index.len(), "the forgotten place is reused");
+    }
+
+    #[test]
+    fn forgetting_a_collision_names_its_claimants_and_frees_its_place() {
+        let index = EhrIndex::new(NonZeroUsize::new(2).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_2), &node("node-a"));
+        assert_eq!(
+            vec![node("node-a"), node("node-b")],
+            index.forget(&ehr(&EHR_1.to_ascii_uppercase())),
+            "every claimant, in node_id order, whatever the case"
+        );
+        assert_eq!(Indexed::None, index.lookup(&ehr(EHR_1)));
+        assert!(index.forget(&ehr(EHR_1)).is_empty(), "nothing is left");
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        assert_eq!(2, index.len(), "the freed place is used, nothing evicted");
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
+        assert_eq!(
+            Learning::New,
+            index.learn(&ehr(EHR_1), &node("node-b")),
+            "a forgotten collision is learned afresh, one claimant at a time"
+        );
     }
 
     #[test]

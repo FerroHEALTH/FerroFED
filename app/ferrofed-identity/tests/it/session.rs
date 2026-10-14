@@ -526,3 +526,38 @@ fn a_full_store_drops_expired_bindings_before_a_live_session() {
         bindings.lookup(&other, later, &ehr(EHR_C))
     );
 }
+
+#[test]
+fn forgetting_an_ehr_id_drops_its_bindings_in_every_session_and_names_their_members() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let now = Instant::now();
+    let first = SessionKey::new("session-1");
+    let second = SessionKey::new("session-2");
+    bindings.record(
+        &first,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_A)),
+            (&node("node-a"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(&second, now, [(&node("node-c"), &ehr(EHR_A))]);
+    let forgotten = bindings.forget_ehr_id(&ehr(&EHR_A.to_ascii_uppercase()));
+    assert_eq!(2, forgotten.sessions, "both sessions held it");
+    assert_eq!(
+        vec![node("node-a"), node("node-b"), node("node-c")],
+        forgotten.members.into_iter().collect::<Vec<_>>()
+    );
+    assert_eq!(Bound::None, bindings.lookup(&first, now, &ehr(EHR_A)));
+    assert_eq!(Bound::None, bindings.lookup(&second, now, &ehr(EHR_A)));
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&first, now, &ehr(EHR_B)),
+        "another ehr_id of the session is kept"
+    );
+    assert_eq!(1, bindings.len());
+    let again = bindings.forget_ehr_id(&ehr(EHR_A));
+    assert_eq!((0, true), (again.sessions, again.members.is_empty()));
+    assert_eq!(0, bindings.forget_ehr_id(&ehr(EHR_C)).sessions);
+}

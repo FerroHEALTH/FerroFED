@@ -146,7 +146,7 @@ addresses, only `*` or `**` covers it.
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
 | `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries` and `/operator/dependencies` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
-| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
+| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
 
@@ -275,13 +275,17 @@ surface carries:
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
 | `GET {base}/operator/dependencies` | the state the gateway last observed of each member endpoint and service ([Health probes](health.md#the-dependency-report)) |
 
-The incident report is `{"counts": {...}, "recent": [...]}`: `counts` names
-every incident kind with how many the gateway emitted since it started, and
-`recent` lists the kept incidents oldest first, each with its `kind`, its
-RFC 3339 `at`, its `description`, and the `creating_system_id`, `ehr_id`,
-`detection`, `endpoints` and `nodes` it is about. The gateway keeps the last
-25 of each of the four kinds, so the report is one page of at most 100
-incidents and takes no paging parameters.
+The incident report is `{"counts": {...}, "recent": [...], "cleared":
+[...]}`: `counts` names every incident kind with how many the gateway
+emitted since it started, and `recent` lists the kept incidents oldest
+first, each with its `kind`, its RFC 3339 `at`, its `description`, and the
+`creating_system_id`, `ehr_id`, `detection`, `endpoints` and `nodes` it is
+about. The gateway keeps the last 25 of each of the four kinds, so the
+report is one page of at most 100 incidents and takes no paging parameters.
+`cleared` lists the last 25 collisions you cleared on this replica, oldest
+first, each with its `at`, its `ehr_id` (a bare UUID, else `null`) and the
+member node ids as `claimants`; a clear removes no incident
+([Clearing a held collision](registry.md#clearing-a-held-collision)).
 
 The routing table and the stored queries answer one page, as
 `{"items": [...], "offset": 0, "total": 2}`, where `total` counts every row

@@ -62,6 +62,15 @@ pub enum IdentityChange {
     Unscoped,
 }
 
+/// What [`ResolutionBindings::forget_ehr_id`] dropped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Forgotten {
+    /// How many sessions held a binding of the `ehr_id`.
+    pub sessions: usize,
+    /// Every member those bindings named, in `node_id` order.
+    pub members: BTreeSet<NodeId>,
+}
+
 /// One session's bindings, each with the instant it expires.
 struct Session {
     /// When the session's last live binding expires, the order a full store
@@ -331,6 +340,27 @@ impl ResolutionBindings {
         }
         drop(sessions);
         stale
+    }
+
+    /// Drops every binding of `ehr_id`, in every session, live or lapsed,
+    /// and returns what they named.
+    ///
+    /// The operator's clear of a held collision calls it: only the operator
+    /// can observe that a node remedied a collision (§12b.2), so the next
+    /// follow-up on the `ehr_id` takes the later steps of §12.5.1 again, and
+    /// a collision that still stands is found again (§12.5.2, N42).
+    pub fn forget_ehr_id(&self, ehr_id: &EhrId) -> Forgotten {
+        let mut sessions = self.lock();
+        let mut forgotten = Forgotten::default();
+        for held in sessions.values_mut() {
+            if let Some(nodes) = held.by_ehr.remove(ehr_id) {
+                forgotten.sessions = forgotten.sessions.saturating_add(1);
+                forgotten.members.extend(nodes.into_keys());
+            }
+        }
+        sessions.retain(|_, held| !held.by_ehr.is_empty());
+        drop(sessions);
+        forgotten
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionKey, Session>> {

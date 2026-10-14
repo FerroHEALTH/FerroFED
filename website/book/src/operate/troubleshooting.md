@@ -261,8 +261,12 @@ with `kind` `EhrIdCollision`, the `detection` and the `claimants`, and
 `ferrofed_integrity_incidents_total{kind="EhrIdCollision"}`.
 
 **Fix.** Have the member that issued or adopted the `ehr_id` in error fix it,
-then restart the gateway. Until then a client reaches one member by naming
-it in `openEHR-federation-endpoint`
+then clear the collision on each replica's admin listener with
+`POST /admin/ehr-ids/{ehr_id}/clear`
+([Clearing a held collision](registry.md#clearing-a-held-collision)). A read
+that is still refused `409` with `detection` `ask-all` after the clear
+means the collision still stands at the nodes. Until then a client reaches
+one member by naming it in `openEHR-federation-endpoint`
 ([Integrity incidents](registry.md#integrity-incidents)).
 
 ### The operator console shows a refusal
@@ -427,7 +431,7 @@ which every row has.
 | `parameter-invalid` | 400 | A query parameter is no AQL literal, or an operator route's `limit` is out of range. | The request line alone. | The client sends a string, number or boolean ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `patient-invalid` | 400 | The patient identifier or namespace forms no patient reference. | The request line alone. | The client names the patient and its namespace ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `no-destination` | 404 | No member is in scope, or every probed member answered `404`. | `OPTIONS {base}/` shows the endpoints' standing. | Correct the registry membership, or the client names an existing EHR ([Every query answers `404`](#every-query-answers-404-no-destination)). |
-| `ehr-id-collision` | 409 | Two members claim one `ehr_id`. | `EhrIdCollision` under `ferrofed::integrity`. | The member at fault fixes it, then restart ([Integrity incidents](registry.md#integrity-incidents)). |
+| `ehr-id-collision` | 409 | Two members claim one `ehr_id`. | `EhrIdCollision` under `ferrofed::integrity`. | The member at fault fixes it, then clear it on each replica ([Clearing a held collision](registry.md#clearing-a-held-collision)). |
 | `controlling-system-unreachable` | 409 | A versioned write amends a version another member created. | `a versioned write was refused at a node that does not control the version it amends` at `WARN` under `ferrofed_server::facade::route::ehr`. | The client writes through the member that created the version; correct a `[[creating_system]]` mapping that names the wrong node ([The registry document](registry.md#the-registry-document)). |
 | `internal` | 500 | The gateway failed on its own side. | `the federated query failed` or `the routed request failed` at `ERROR`, or `outbound-gate-stopped` under `ferrofed::security`, with the `request_id`. | Report it with the `request_id` and the lines ([Complaints and incidents](../evaluate/post-market.md#making-a-complaint)). |
 | `not-found` | 404 | The path is outside the base path and every surface. | The request line shows `<unmatched>`. | Point the client and probes at `server.base_path` ([The base path](configuration.md#the-base-path)). |

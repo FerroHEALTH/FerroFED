@@ -17,6 +17,7 @@ mod banner;
 mod base_url;
 mod caller_bindings;
 mod client_address;
+mod collision_clear;
 mod completeness;
 mod config;
 mod conformance_run;

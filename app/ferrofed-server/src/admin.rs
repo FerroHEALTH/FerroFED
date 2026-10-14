@@ -8,10 +8,12 @@
 //! It serves the Prometheus text exposition at `GET /metrics`
 //! ([`metrics`]), and the distribution of a stored-query version the
 //! registry holds to the members that miss it at `POST`
-//! [`DISTRIBUTE`]. Every other path is `404`. Neither route is on the
-//! gateway's client listener, and neither is part of the ITS-REST surface.
+//! [`DISTRIBUTE`], and the clear of one `ehr_id` from this process's
+//! routing state at `POST` [`CLEAR_EHR_ID`]. Every other path is `404`. No
+//! route is on the gateway's client listener, and none is part of the
+//! ITS-REST surface.
 //!
-//! Every write or administrative action, the distribution among them, is
+//! Every write or administrative action, the distribution and the clear among them, is
 //! admitted by the gateway's client authentication ([`Gate`], built from
 //! `[auth]`) only for a caller whose token carries the operator scope its
 //! issuer's entry names, from any peer ([`operator_only`]). Under
@@ -26,7 +28,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::Router;
 use axum::body::Bytes;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::rejection::ExtensionRejection;
@@ -35,7 +36,9 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::serve::{Listener, ListenerExt};
+use axum::{Json, Router};
 use ferrofed_identity::dev::Profile;
+use ferrofed_registry::id::EhrId;
 use ferrofed_registry::secret::Secret;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 
@@ -56,6 +59,10 @@ use crate::state::AppState;
 /// the qualified name and the `major.minor.patch` version, as ITS-REST's
 /// Definition API spells them.
 pub const DISTRIBUTE: &str = "/admin/stored-queries/{qualified_query_name}/{version}/distribute";
+
+/// The path of the operator's clear of one `ehr_id`, a node-local
+/// identifier, from this process's `ehr_id` index and resolution bindings.
+pub const CLEAR_EHR_ID: &str = "/admin/ehr-ids/{ehr_id}/clear";
 
 /// Why the admin listener refused a request before its route read anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -231,8 +238,8 @@ impl Access {
 }
 
 /// Returns the admin listener's application over `state`, admitting as
-/// `access` says: `GET /metrics` and `POST` [`DISTRIBUTE`], and `404` on
-/// every other path.
+/// `access` says: `GET /metrics`, `POST` [`DISTRIBUTE`] and `POST`
+/// [`CLEAR_EHR_ID`], and `404` on every other path.
 ///
 /// A development profile admits a loopback peer to the write actions
 /// without a credential; the peer is the [`ConnectInfo<SocketAddr>`] the
@@ -244,6 +251,7 @@ pub fn router(state: Arc<AppState>, access: Access) -> Router {
         .route_layer(middleware::from_fn_with_state(Arc::clone(&access), scrape));
     Router::new()
         .route(DISTRIBUTE, post(distribute))
+        .route(CLEAR_EHR_ID, post(clear_ehr_id))
         .route_layer(middleware::from_fn_with_state(access, operator_only))
         .with_state(state)
         .merge(metrics)
@@ -413,4 +421,40 @@ async fn distribute(
     body: Bytes,
 ) -> Response {
     stored::distribute_held(&state, (&name, &version), (&headers, &body)).await
+}
+
+/// The message of a clear that carries a body.
+const CLEAR_TAKES_NO_BODY: &str =
+    "the clear of an ehr_id takes no body: it names the ehr_id in the path alone";
+
+/// `POST` [`CLEAR_EHR_ID`]: forgets the path `ehr_id` from this process's
+/// `ehr_id` index and from the resolution bindings of every session, and
+/// answers `200` with the
+/// [`ClearedEhrId`](ferrofed_registry::operator::ClearedEhrId) saying what was held.
+///
+/// The action takes no `body`. An `ehr_id` this process holds nothing for
+/// answers `200` too, with `held` saying `nothing`: each replica holds its
+/// own routing state, so another replica may still hold it. It is refused
+/// with `400` (`ehr-id-invalid`) for a path value that is no
+/// `HIER_OBJECT_ID`, `400` (`body-invalid`) for a body, and `501` when the
+/// gateway runs without a registry.
+// NOTE: §12b.2, §18: remedying a collision is the federation's governance, and
+// only the operator can observe a node's remedy, so the clear is theirs alone.
+async fn clear_ehr_id(
+    State(state): State<Arc<AppState>>,
+    Path(ehr_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let request_id = request_id::of(&headers).unwrap_or_default();
+    if !body.is_empty() {
+        return error::response(Code::BodyInvalid, CLEAR_TAKES_NO_BODY, request_id);
+    }
+    let Ok(ehr_id) = EhrId::new(ehr_id) else {
+        return error::fixed(Code::EhrIdInvalid, request_id);
+    };
+    let Some(federation) = state.federation() else {
+        return error::fixed(Code::NotImplemented, request_id);
+    };
+    Json(federation.clear_ehr_id(&ehr_id)).into_response()
 }

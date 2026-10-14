@@ -35,8 +35,9 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_identity::session::{IdentityChange, ResolutionBindings};
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::Incident;
+use ferrofed_registry::operator::ClearedEhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use jsonwebtoken::jwk::Jwk;
 use openehr_federation::aggregate::AggregateFunction;
@@ -399,6 +400,36 @@ impl Federation {
             "an identity change dropped resolution bindings"
         );
         dropped
+    }
+
+    /// The operator's clear: forgets `ehr_id` from the index and from the
+    /// bindings of every session in this process, and returns what it
+    /// forgot.
+    ///
+    /// Only the operator can observe that a node remedied a collision, and
+    /// what a federation does about one is left to its governance (§12b.2,
+    /// §18). A later read takes the steps of §12.5.1 again, its ask-all
+    /// probe among them, so a collision that still stands is refused `409`
+    /// again (§12.5.2, N42); a write is never probed for, so one the
+    /// targeting headers do not route answers `400 target-required` (N41).
+    /// A cleared collision is listed in the incident report and logged
+    /// under the integrity target, naming the `ehr_id` only when it is a
+    /// bare UUID (§5.4.1, N33).
+    pub fn clear_ehr_id(&self, ehr_id: &EhrId) -> ClearedEhrId {
+        let indexed = self.observed.index.forget(ehr_id);
+        let bound = self.observed.bindings.forget_ehr_id(ehr_id);
+        let cleared = ClearedEhrId::of(ehr_id, &indexed, (bound.sessions, &bound.members));
+        cleared.record();
+        tracing::info!(
+            target: ferrofed_registry::incident::TARGET,
+            ehr_id = cleared.ehr_id.as_deref(),
+            held = ?cleared.held,
+            claimants = cleared.claimants.join(", "),
+            indexed = cleared.indexed,
+            sessions = cleared.sessions,
+            "the operator cleared an ehr_id from this process's index and resolution bindings"
+        );
+        cleared
     }
 
     /// The last state the gateway observed of each member endpoint and of

@@ -5,20 +5,22 @@
 //!
 //! The gateway writes and the operator console reads the integrity
 //! incidents, the `creating_system_id` routing table, and pages of the
-//! stored-query registry. Every report carries routing ids, counts and
+//! stored-query registry, and the body of the operator's clear of an
+//! `ehr_id` on the admin listener. Every report carries routing ids, counts and
 //! stored definitions only. An `ehr_id` is named only when it is a bare
 //! UUID, which cannot spell a patient identifier, and a stored definition
 //! names no patient, because one that does is refused before it is held
 //! (§5.4.1, N33, §12.7). No specification governs the operator surface: our
 //! own design.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Mutex, PoisonError};
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::creating_system::LearnedMap;
+use crate::id::{EhrId, NodeId};
 use crate::incident::{Incident, Kind};
 use crate::snapshot::RegistrySnapshot;
 
@@ -50,14 +52,20 @@ pub(crate) fn record(incident: &Incident) {
 /// The body of `GET {base}/operator/incidents`.
 ///
 /// It is one page by construction: at most [`RECENT_PER_KIND`] incidents of
-/// each of the four kinds, never more than [`MAX_PAGE`] in all.
+/// each of the four kinds, never more than [`MAX_PAGE`] in all, and at most
+/// [`RECENT_PER_KIND`] cleared collisions beside them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct IncidentReport {
     /// How many incidents of each kind were emitted since the process
     /// started, every kind listed.
     pub counts: BTreeMap<String, u64>,
     /// The most recent incidents of every kind, oldest first.
     pub recent: Vec<RecordedIncident>,
+    /// The collisions the operator cleared most recently, oldest first: an
+    /// incident is an event, so a clear is listed beside it and removes
+    /// none.
+    pub cleared: Vec<RecordedClear>,
 }
 
 impl IncidentReport {
@@ -81,7 +89,17 @@ impl IncidentReport {
             .iter()
             .map(|(at, incident)| RecordedIncident::of(incident, *at))
             .collect();
-        Self { counts, recent }
+        let cleared = CLEARED
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .cloned()
+            .collect();
+        Self {
+            counts,
+            recent,
+            cleared,
+        }
     }
 }
 
@@ -155,6 +173,108 @@ impl RecordedIncident {
             nodes,
         }
     }
+}
+
+/// What this process held for an `ehr_id` before the operator cleared it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HeldBefore {
+    /// The index or the session bindings named two members or more: a
+    /// collision (§12.5.2, N42).
+    Collision,
+    /// They named one member only.
+    Owner,
+    /// Neither held the `ehr_id`.
+    Nothing,
+}
+
+/// Where a clear took effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClearScope {
+    /// This process alone: each replica holds its own index and bindings,
+    /// so a deployment of several replicas is cleared at each of them.
+    Replica,
+}
+
+/// The body of the operator's clear of an `ehr_id` on the admin listener:
+/// what this process forgot.
+///
+/// It names the `ehr_id` only when it is a bare UUID, and members by
+/// `node_id`, never a patient identifier (§5.4.1, N33).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClearedEhrId {
+    /// The `ehr_id` cleared, only when it is a bare UUID.
+    pub ehr_id: Option<String>,
+    /// What the process held for it before the clear.
+    pub held: HeldBefore,
+    /// Every member the index or a binding named, in `node_id` order.
+    pub claimants: Vec<String>,
+    /// Whether the `ehr_id` index held an entry for it.
+    pub indexed: bool,
+    /// How many client sessions held a binding of it.
+    pub sessions: usize,
+    /// Where the clear took effect.
+    pub scope: ClearScope,
+}
+
+impl ClearedEhrId {
+    /// The clear of `ehr_id`, which forgot the index entry naming `indexed`
+    /// and bindings in `sessions` sessions naming `bound`.
+    #[must_use]
+    pub fn of(
+        ehr_id: &EhrId,
+        indexed: &[NodeId],
+        (sessions, bound): (usize, &BTreeSet<NodeId>),
+    ) -> Self {
+        let claimants: BTreeSet<&NodeId> = indexed.iter().chain(bound).collect();
+        let held = match claimants.len() {
+            0 if sessions == 0 => HeldBefore::Nothing,
+            0 | 1 => HeldBefore::Owner,
+            _ => HeldBefore::Collision,
+        };
+        Self {
+            ehr_id: ehr_id.is_uuid().then(|| ehr_id.to_string()),
+            held,
+            claimants: claimants.into_iter().map(ToString::to_string).collect(),
+            indexed: !indexed.is_empty(),
+            sessions,
+            scope: ClearScope::Replica,
+        }
+    }
+
+    /// Keeps the clear, made now, among the recent clears the incident
+    /// report lists, when it cleared a collision; dropping the oldest beyond
+    /// [`RECENT_PER_KIND`].
+    pub fn record(&self) {
+        if self.held != HeldBefore::Collision {
+            return;
+        }
+        let mut cleared = CLEARED.lock().unwrap_or_else(PoisonError::into_inner);
+        while cleared.len() >= RECENT_PER_KIND {
+            cleared.pop_front();
+        }
+        cleared.push_back(RecordedClear {
+            at: Timestamp::now().to_string(),
+            ehr_id: self.ehr_id.clone(),
+            claimants: self.claimants.clone(),
+        });
+    }
+}
+
+/// The collisions the operator cleared since the process started, newest
+/// last and at most [`RECENT_PER_KIND`] of them.
+static CLEARED: Mutex<VecDeque<RecordedClear>> = Mutex::new(VecDeque::new());
+
+/// One collision the operator cleared, as the incident report lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecordedClear {
+    /// When it was cleared, RFC 3339.
+    pub at: String,
+    /// The `ehr_id` cleared, only when it is a bare UUID.
+    pub ehr_id: Option<String>,
+    /// The members the process held it at, in `node_id` order.
+    pub claimants: Vec<String>,
 }
 
 /// Where a `creating_system_id` routes, and on what ground (N21, §12.2).
@@ -287,9 +407,13 @@ impl<T> Page<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::{
-        IncidentReport, MAX_PAGE, Page, PageRequest, RECENT_PER_KIND, RecordedIncident, record,
+        ClearScope, ClearedEhrId, HeldBefore, IncidentReport, MAX_PAGE, Page, PageRequest,
+        RECENT_PER_KIND, RecordedClear, RecordedIncident, record,
     };
+    use crate::id::{EhrId, NodeId};
     use crate::incident::{Detection, Incident, Kind};
     use jiff::Timestamp;
 
@@ -359,6 +483,48 @@ mod tests {
                     == Some("legacy-x.example.org")),
             "{report:?}"
         );
+    }
+
+    #[test]
+    fn a_clear_says_what_was_held_and_only_a_cleared_collision_is_listed() {
+        let ehr_id: EhrId = "6f0e5b1a-2c3d-4e5f-8a9b-0c1d2e3f4a5b"
+            .parse()
+            .expect("an ehr_id");
+        let node = |id: &str| id.parse::<NodeId>().expect("a node");
+        let nothing = ClearedEhrId::of(&ehr_id, &[], (0, &BTreeSet::new()));
+        assert_eq!(
+            (HeldBefore::Nothing, false, 0),
+            (nothing.held, nothing.indexed, nothing.sessions)
+        );
+        let owner = ClearedEhrId::of(&ehr_id, &[node("node-a")], (1, &BTreeSet::new()));
+        assert_eq!(HeldBefore::Owner, owner.held);
+        let collision = ClearedEhrId::of(
+            &ehr_id,
+            &[node("node-b")],
+            (1, &BTreeSet::from([node("node-a")])),
+        );
+        assert_eq!(HeldBefore::Collision, collision.held);
+        assert_eq!(vec!["node-a", "node-b"], collision.claimants);
+        assert_eq!(ClearScope::Replica, collision.scope);
+        for clear in [&nothing, &owner, &collision] {
+            clear.record();
+        }
+        let listed: Vec<RecordedClear> = IncidentReport::current()
+            .cleared
+            .into_iter()
+            .filter(|cleared| cleared.ehr_id.as_deref() == Some(ehr_id.as_str()))
+            .collect();
+        assert_eq!(1, listed.len(), "{listed:?}");
+        let unnamed: EhrId = "synthetic-patient-9999".parse().expect("an ehr_id");
+        let hidden = ClearedEhrId::of(&unnamed, &[node("node-a")], (0, &BTreeSet::new()));
+        assert_eq!(None, hidden.ehr_id, "only a bare UUID is named");
+    }
+
+    #[test]
+    fn a_report_without_clears_still_reads() {
+        let report: IncidentReport =
+            serde_json::from_str(r#"{"counts":{},"recent":[]}"#).expect("a report");
+        assert!(report.cleared.is_empty());
     }
 
     #[test]
