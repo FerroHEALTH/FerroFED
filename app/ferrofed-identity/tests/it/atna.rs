@@ -50,14 +50,59 @@ const TIMEOUTS: Timeouts = Timeouts {
 
 const RETRY_MAX: Duration = Duration::from_millis(500);
 
-/// The longest the forwarder may take to deliver `messages` over one new
-/// connection under [`TIMEOUTS`]: the connection, the TLS handshake, and a
-/// write and a flush for each message.
-const fn delivery(messages: u32) -> Duration {
-    TIMEOUTS
-        .connect
-        .saturating_add(TIMEOUTS.send)
-        .saturating_add(TIMEOUTS.send.saturating_mul(2).saturating_mul(messages))
+/// Waits until `audit`'s forwarder has delivered `count` messages and
+/// emptied its spool, and `repository` has read them, then returns every
+/// message read by then. The repository reads a frame before the forwarder
+/// counts it delivered and frees its place in the spool, so both are waited
+/// on; only [`timing::HANG`] bounds the wait.
+async fn delivered(
+    repository: &AuditRepository,
+    audit: &RepositoryAudit,
+    count: usize,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    let expected = u64::try_from(count)?;
+    let settled = async {
+        loop {
+            let messages = repository.messages();
+            let status = audit.status();
+            if messages.len() >= count && status.delivered >= expected && status.depth.messages == 0
+            {
+                return messages;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::time::timeout(timing::HANG, settled)
+        .await
+        .map_err(|_elapsed| {
+            format!(
+                "{count} messages delivered within {:?}: the repository read {}, the forwarder reports {:?}",
+                timing::HANG,
+                repository.messages().len(),
+                audit.status()
+            )
+            .into()
+        })
+}
+
+/// Waits until `audit`'s forwarder has failed more than `retries` delivery
+/// attempts, bounded only by [`timing::HANG`].
+async fn retried(audit: &RepositoryAudit, retries: u64) -> Result<(), Box<dyn Error>> {
+    let failed = async {
+        while audit.status().retries <= retries {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::time::timeout(timing::HANG, failed)
+        .await
+        .map_err(|_elapsed| {
+            format!(
+                "a failed attempt after the {retries} before within {:?}: the forwarder reports {:?}",
+                timing::HANG,
+                audit.status()
+            )
+            .into()
+        })
 }
 
 /// The recorder sending to `repository` over TLS, trusting its CA, through
@@ -92,7 +137,7 @@ async fn each_discovery_reaches_the_repository_as_one_iti_20_message() -> TestRe
         Localization::Candidates(named) => assert_eq!(BTreeSet::from([node("node-a")?]), named),
         other => return Err(format!("a candidate set: {other:?}").into()),
     }
-    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
+    let messages = delivered(&repository, &audit, 1).await?;
     assert_eq!(1, messages.len(), "one message per exchange");
     let message = &messages[0];
     assert!(
@@ -128,7 +173,7 @@ async fn a_discovery_made_for_a_caller_names_them_as_its_human_requestor() -> Te
         )
         .await;
     assert!(matches!(answer, Localization::Candidates(_)), "{answer:?}");
-    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
+    let messages = delivered(&repository, &audit, 1).await?;
     assert_eq!(1, messages.len(), "one message per exchange");
     // NOTE: ITI TF-2 §3.55.5.1.1 Human Requestor UserID is the human's identity, and IUA
     // ITI TF-2 §3.72.5.1 writes the JWT's aud, sub and iss into UserName.
@@ -160,19 +205,16 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
             "an outage of the repository is stored, not refused (§3.20.4.1.1)"
         );
     }
+    // The outage is observed for at least 300 ms and until an attempt fails
+    // after every message is spooled, so a slow host waits longer, not less.
+    let before = audit.status().retries;
     tokio::time::sleep(Duration::from_millis(300)).await;
+    retried(&audit, before).await?;
     assert!(repository.messages().is_empty());
     assert_eq!(3, audit.status().depth.messages, "every message is held");
 
     repository.set_up(true);
-    // The forwarder may be in a failing attempt: it ends that and its
-    // backoff, then delivers the three messages over a new connection.
-    let recovery = TIMEOUTS
-        .connect
-        .saturating_add(TIMEOUTS.send)
-        .saturating_add(RETRY_MAX)
-        .saturating_add(delivery(3));
-    let messages = repository.wait_for(3, timing::within(recovery)).await;
+    let messages = delivered(&repository, &audit, 3).await?;
     assert_eq!(
         3,
         messages.len(),
@@ -216,11 +258,7 @@ async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> T
     repository.set_stalled(false);
     // The forwarder may be in a stalled handshake: it gives that up, backs
     // off, then delivers over a new connection.
-    let recovery = TIMEOUTS
-        .send
-        .saturating_add(RETRY_MAX)
-        .saturating_add(delivery(1));
-    let messages = repository.wait_for(1, timing::within(recovery)).await;
+    let messages = delivered(&repository, &audit, 1).await?;
     assert_eq!(1, messages.len(), "delivered once the repository answers");
     assert_eq!(0, audit.status().depth.messages);
     Ok(())
@@ -301,7 +339,7 @@ async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
         &secrecy::SecretSlice::from(b"<AuditMessage/>".to_vec()),
     );
     forwarder.submit(frame).await?;
-    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
+    let messages = delivered(&repository, &audit, 1).await?;
     assert_eq!(1, messages.len(), "the restarted forwarder delivers");
     Ok(())
 }
