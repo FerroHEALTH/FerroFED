@@ -13,8 +13,11 @@
 #      operator status sits on another actor;
 #   4. a planned, missing, built-untested, new-gap, contradiction or deferred
 #      row names no #N, or an n/a row gives no reason;
-#   5. a tested row names no test as ::function, or names a function that no
-#      Rust file of the tree defines with `fn <name>`;
+#   5. a tested row names no test as file::function, or any row cites a file
+#      (a path with a / and an extension, alone or as file::function) that
+#      the tree does not hold, a function its file does not define with
+#      `fn <name>`, or a bare ::function with no file before it in the cell
+#      (a bare ::function names a function of the last file cited before it);
 #   6. a row's point is not in conformance/matrix.tsv, or one of its
 #      requirements is not in conformance/requirements.tsv;
 #   7. a row's page is not a vendored page or schema, or a vendored source
@@ -42,14 +45,16 @@ readonly PAGE=website/book/src/evaluate/obligations.md
 readonly GENERATOR=scripts/conformance/obligations.sh
 readonly HEADER=$'id\tpage\tanchor_or_section\tactor\tkeyword\tn\tcp\tstatus\tevidence\tclause'
 
-# The Rust sources of the tree a tested row may name a function in, outside
-# the vendored corpora: the git index in a work tree, a walk otherwise.
-rust_sources() {
+# The files of the tree a row may cite: the git index in a work tree, a walk
+# otherwise, keeping only the files present on disk.
+tree_files() {
   if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    git ls-files --cached --others --exclude-standard -- '*.rs' ':!docs/specs/**'
+    git ls-files --cached --others --exclude-standard
   else
-    find . -name '*.rs' -not -path './docs/specs/*' -not -path './target/*' | sed 's|^\./||'
-  fi
+    find . -type f -not -path './target/*' -not -path './.git/*' | sed 's|^\./||'
+  fi | while IFS= read -r f; do
+    if [[ -f "$f" ]]; then printf '%s\n' "$f"; fi
+  done
   return
 }
 
@@ -79,9 +84,21 @@ check_tree() {
     grep -v '^#' "$MATRIX" | tail -n +2 | cut -f1 > "$work/cps"
     grep -v '^#' "$REQUIREMENTS" | tail -n +2 | cut -f1 > "$work/ns"
     grep -v '^#' "$SOURCES" | tail -n +2 > "$work/sources"
-    rust_sources | while IFS= read -r src; do
-      [[ -f "$src" ]] && grep -h -o -E '\bfn [a-z_][a-z0-9_]*' "$src"
-    done | sed 's/^fn //' | LC_ALL=C sort -u > "$work/fns"
+    tree_files | LC_ALL=C sort -u > "$work/files"
+    # Every `fn <name>` of a Rust source outside the vendored corpora, as
+    # path<TAB>name.
+    grep -E '\.rs$' "$work/files" | grep -v '^docs/specs/' | tr '\n' '\0' |
+      xargs -0 grep -H -E '(^|[^A-Za-z0-9_])fn [a-z_]' /dev/null |
+      awk '{
+        at = index($0, ":")
+        p = substr($0, 1, at - 1)
+        rest = " " substr($0, at + 1)
+        while (match(rest, /[^A-Za-z0-9_]fn [a-z_][a-z0-9_]*/)) {
+          print p "\t" substr(rest, RSTART + 4, RLENGTH - 4)
+          rest = substr(rest, RSTART + RLENGTH)
+        }
+      }' |
+      LC_ALL=C sort -u > "$work/fns"
 
     # Checks 1 to 7, one message per line.
     findings="$(
@@ -98,7 +115,8 @@ check_tree() {
         FILENAME == ARGV[1] { cp[$1] = 1; next }
         FILENAME == ARGV[2] { req[$1] = 1; next }
         FILENAME == ARGV[3] { src[$1] = 1; lines[$1] = $2; next }
-        FILENAME == ARGV[4] { fn[$1] = 1; next }
+        FILENAME == ARGV[4] { fn[$1, $2] = 1; next }
+        FILENAME == ARGV[5] { have[$1] = 1; next }
         ++row == 1 { next }
         {
           id = $1
@@ -113,17 +131,29 @@ check_tree() {
           if (s == "operator" && a != "Operator") print file ": " id " is " a "'"'"'s, so its status cannot be operator"
           if (s ~ /^(planned|missing|built-untested|new-gap|contradiction|deferred)$/ && !issue(ev)) print file ": " id " is " s " and names no issue as #N"
           if (s == "n/a" && (ev == "" || ev == "-")) print file ": " id " is n/a and gives no reason"
-          if (s == "tested") {
-            named = 0
-            rest = ev
-            while (match(rest, /::[a-z_][a-z0-9_]*/)) {
-              name = substr(rest, RSTART + 2, RLENGTH - 2)
-              rest = substr(rest, RSTART + RLENGTH)
-              named++
-              if (!(name in fn)) print file ": " id " names the test " name ", which no Rust file defines"
+          named = 0
+          cur = ""
+          split("", told)
+          rest = ev
+          while (match(rest, /[A-Za-z0-9_.\/-]*::[a-z_][a-z0-9_]*|[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+/)) {
+            tok = substr(rest, RSTART, RLENGTH)
+            rest = substr(rest, RSTART + RLENGTH)
+            at = index(tok, "::")
+            if (at == 0) { path = tok; name = "" }
+            else { path = substr(tok, 1, at - 1); name = substr(tok, at + 2); named++ }
+            if (path == "") {
+              if (cur == "") { print file ": " id " names ::" name " with no file before it"; continue }
+              path = cur
             }
-            if (named == 0) print file ": " id " is tested and names no test as file::function"
+            cur = path
+            if (!(path in have)) {
+              if (!(path in told)) print file ": " id " cites " path ", which the tree does not hold"
+              told[path] = 1
+            } else if (name != "" && !((path, name) in fn)) {
+              print file ": " id " names the test " name ", which " path " does not define"
+            }
           }
+          if (s == "tested" && named == 0) print file ": " id " is tested and names no test as file::function"
           if ($7 != "-" && !($7 in cp)) print file ": " id " cites " $7 ", which is not in conformance/matrix.tsv"
           if ($6 != "-") {
             k = split($6, ns, ",")
@@ -137,7 +167,7 @@ check_tree() {
         END {
           for (p in src) if (lines[p] > 0 && !(p in rows)) print file ": " p " carries a keyword and has no row"
         }
-      ' "$work/cps" "$work/ns" "$work/sources" "$work/fns" "$work/rows" | LC_ALL=C sort
+      ' "$work/cps" "$work/ns" "$work/sources" "$work/fns" "$work/files" "$work/rows" | LC_ALL=C sort
     )"
     if [[ -n "$findings" ]]; then
       while IFS= read -r line; do problem "$line"; done <<< "$findings"
@@ -191,7 +221,8 @@ self_test() {
     printf '= Requirements\n\n[[n1]]\nThe gateway MUST answer.\nThe node SHOULD log.\n' > "$dir/$spec/pages/requirements.adoc"
     printf '= Contributors\n\nNo keyword here.\n' > "$dir/$spec/pages/contributors.adoc"
     printf '{ "description": "It MAY be absent." }\n' > "$dir/$spec/attachments/options-root.schema.json"
-    printf '#[test]\nfn the_gateway_answers() {}\n' > "$dir/app/x/tests/it.rs"
+    printf '#[test]\nfn the_gateway_answers() {}\n#[test]\nfn the_gateway_answers_again() {}\n' > "$dir/app/x/tests/it.rs"
+    printf '#[test]\nfn elsewhere() {}\n' > "$dir/app/x/tests/other.rs"
     printf '# comment\ncp\tactor\nCP-1\tGateway\nCP-33a\tOperator\n' > "$dir/$MATRIX"
     printf '# comment\nrequirement\tcps\nN1\tCP-1\nN27a\t-\n' > "$dir/$REQUIREMENTS"
     {
@@ -246,6 +277,22 @@ self_test() {
   expect 1 "a tested row naming a function no file defines"
   edit $'s/app\/x\/tests\/it.rs::the_gateway_answers/app\/x\/tests\/it.rs/'
   expect 1 "a tested row naming no test"
+  edit 's|app/x/tests/it.rs::|app/x/tests/gone.rs::|'
+  expect 1 "a tested row naming a file the tree does not hold"
+  edit 's|app/x/tests/it.rs::the_gateway_answers|app/x/tests/it.rs::elsewhere|'
+  expect 1 "a tested row naming a function another file defines"
+  edit 's|::the_gateway_answers|::the_gateway_answers; ::the_gateway_answers_again|'
+  expect 0 "a bare ::function its file before it defines"
+  edit 's|::the_gateway_answers|::the_gateway_answers; ::elsewhere|'
+  expect 1 "a bare ::function its file before it does not define"
+  edit 's|::the_gateway_answers|::the_gateway_answers; app/x/tests/other.rs::elsewhere|'
+  expect 0 "a second file::function in one cell"
+  edit 's|app/x/tests/it.rs::the_gateway_answers|::the_gateway_answers|'
+  expect 1 "a bare ::function with no file before it"
+  edit 's|#12 (rest-facade|#12, app/x/tests/gone.rs (rest-facade|'
+  expect 1 "a planned row citing a file the tree does not hold"
+  edit 's|#12 (rest-facade|#12, app/x/tests/other.rs (rest-facade|'
+  expect 0 "a planned row citing a file the tree holds"
   edit $'s/\tCP-1\ttested/\tCP-99\ttested/'
   expect 1 "a point the matrix does not hold"
   edit $'s/\tN1\tCP-1/\tN1,N2\tCP-1/'
