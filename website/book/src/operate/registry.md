@@ -437,7 +437,8 @@ collision, and a follow-up on it is refused `409` (`ehr-id-collision`),
 even after one claimant's binding lapses (§12.5.2, N42). A caller's bindings
 can span several patients, so the gateway never lets a lapse narrow a
 collision to the member where one patient resolved. Only an identity change,
-a consent denial of a claimant, or a claimant leaving the registry clears it.
+a consent denial of a claimant, a claimant leaving the registry, or your
+[clear](#clearing-a-held-collision) clears it.
 
 When the bindings are full, a new one first drops every binding that has
 expired, then the bindings of the other callers whose last binding expires
@@ -478,9 +479,11 @@ both, the index raises the index-insert alarm of §12b.2 once (an
 and from then on it routes neither: a request for that `ehr_id` that names
 no node is refused `409` (`ehr-id-collision`). A held collision has no expiry
 of its own, because nothing the gateway observes shows that a node was
-remedied. It lasts until the entry is forgotten as least recently used or the
-gateway restarts; after that, a read probes every member again, and a
-collision that still stands is found and reported again.
+remedied. It lasts until you clear it
+([Clearing a held collision](#clearing-a-held-collision)), the entry is
+forgotten as least recently used, or the gateway restarts; after that, a
+read probes every member again, and a collision that still stands is found
+and reported again.
 
 ## Reloading the registry
 
@@ -600,11 +603,65 @@ wrote in a path, so the line then leaves the `ehr_id` field out.
 Two nodes holding one `ehr_id` breaks the identifier-integrity conditions of
 §12b.2, which admission should have checked, so the remedy is at the node.
 The `claimants` name the members that hold the `ehr_id`. Have the node that
-issued or adopted it in error fix it, then restart the gateway, which forgets
-the collision the index holds (the index also forgets it when the entry is
-the least recently used one past the index capacity). Until then, requests
-that name no node are refused, and a client can still reach one of the
-members by naming its endpoint in the `openEHR-federation-endpoint` header.
+issued or adopted it in error fix it, then clear the collision the gateway
+holds ([Clearing a held collision](#clearing-a-held-collision)); a restart
+forgets it too, and the index forgets it when the entry is the least
+recently used one past the index capacity. Until then, requests that name
+no node are refused, and a client can still reach one of the members by
+naming its endpoint in the `openEHR-federation-endpoint` header.
+
+### Clearing a held collision
+
+Nothing the gateway observes shows that a node remedied a collision, and
+what a federation does about one is left to its governance (§12b.2, §18),
+so the clear is yours. Once the node at fault has fixed it, send the
+`ehr_id` to the [admin listener](metrics.md#who-the-admin-listener-serves)
+with an access token that carries the `operator_scope` of its issuer:
+
+```http
+POST /admin/ehr-ids/7d44b88c-4199-4bad-97dc-d78268e01398/clear
+Authorization: Bearer <an access token with the operator scope>
+```
+
+- The gateway forgets that `ehr_id` from the `ehr_id` index and from the
+  resolution bindings of every caller. The request takes the node-local
+  `ehr_id` from the `claimants` incident and nothing else: no body and no
+  patient identifier.
+- The next read of the `ehr_id` that names no node asks every member
+  again. One member holding it is routed to; two or more are refused `409`
+  (`ehr-id-collision`) again, with a new `EhrIdCollision` incident
+  (`detection` `ask-all`). A write is never probed for, so one that names no
+  node answers `400` (`target-required`) until a read or a resolution
+  teaches the gateway its owner (§12.5.1, N41).
+- It answers `200` with what this process held, also when it held nothing:
+
+  ```json
+  {
+    "ehr_id": "7d44b88c-4199-4bad-97dc-d78268e01398",
+    "held": "collision",
+    "claimants": ["node-a", "node-b"],
+    "indexed": true,
+    "sessions": 1,
+    "scope": "replica"
+  }
+  ```
+
+  `held` is `collision` (two members or more), `owner` (one) or `nothing`;
+  `claimants` are member node ids; `indexed` says whether the index held an
+  entry; `sessions` counts the callers whose binding was dropped. `ehr_id`
+  is `null` for an `ehr_id` that is no bare UUID.
+- It is refused `400` for a path value that is no `HIER_OBJECT_ID`
+  (`ehr-id-invalid`) or a body (`body-invalid`), `401` and `403` as every
+  admin write action is, and `501` when the gateway runs without a
+  registry. Where `[metrics] listen` is unset, the action does not exist.
+- `scope` is `replica`: the index and the bindings are per process, so with
+  several replicas send the clear to each replica's admin listener
+  ([Running several replicas](deployment-shape.md#running-several-replicas)).
+- The clear is recorded with the operator who ran it, as every admin write
+  action is ([Who the admin listener serves](metrics.md#who-the-admin-listener-serves)),
+  logged at `INFO` under `ferrofed::integrity`, and a cleared collision is
+  listed under `cleared` in `GET {base}/operator/incidents` beside the
+  incidents, which stay as they were reported.
 
 The gateway counts every incident by `kind` on its [metrics](metrics.md)
 surface, `ferrofed_integrity_incidents_total`, and the line carries the

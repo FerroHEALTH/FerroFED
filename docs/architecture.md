@@ -1631,6 +1631,30 @@ already lives (§2.2). The request waits on none of it. There is no webhook
 outbound channel with its own credentials, retries and failure handling for
 no gain over a scrape.
 
+**The operator's clear of a held collision** (decided on #354, built on
+#876; §12b.2 and §18 leave what a federation does about a confirmed
+collision to its governance, so the clear is our own design). A collision
+the index or a binding holds answers `409` at the step that holds it until
+it is forgotten, and nothing the gateway observes shows that a node
+remedied it, so the operator who observed the remedy clears it:
+`POST /admin/ehr-ids/{ehr_id}/clear` on the admin listener, admitted and
+recorded like every admin write action. It takes the node-local `ehr_id`
+alone, parsed as a `HIER_OBJECT_ID`, and no body, and forgets that
+`ehr_id` from the index and from the bindings of every session of the
+process. A later read takes §12.5.1 again, so a collision that still stands
+is found by the ask-all probe and refused `409` again (N42); a write is
+never probed for, so one the targeting headers do not route answers `400
+target-required` (N41). The state is per process (decision A56), so the
+clear acts on the replica that receives it and its answer says `scope:
+"replica"`; an `ehr_id` that process holds nothing for answers `200` with
+`held: "nothing"`, because another replica may still hold it. An incident is
+an event and is never withdrawn, so a cleared collision is listed under
+`cleared` in the incident report beside the incidents (bounded like them),
+and the clear is logged at `INFO` under `ferrofed::integrity`, naming the
+`ehr_id` only when it is a bare UUID (§5.4.1, N33). The "complete probe"
+alternative of the same decision is dropped: a held entry answers `409`
+before any probe runs.
+
 **Metrics** (#281, decision A50; no specification governs metrics: our own
 design). One OpenTelemetry `MeterProvider` feeds two readers, the
 Prometheus pull reader and, when `[metrics] otlp_endpoint` names a

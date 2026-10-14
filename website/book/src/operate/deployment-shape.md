@@ -131,7 +131,10 @@ two remedies:
 
 The replicas never share the bindings or the index: each lives in the
 memory of one process and is lost on its restart, and the gateway writes
-nothing derived from a patient identifier to a shared store.
+nothing derived from a patient identifier to a shared store. For the same
+reason the operator's clear of a held `ehr_id` collision clears the replica
+whose admin listener receives it, so send it to each replica
+([Clearing a held collision](registry.md#clearing-a-held-collision)).
 
 The stored-query registry is the exception, because a stored version must be
 the same on every replica and a second `PUT` of it refused on every replica
