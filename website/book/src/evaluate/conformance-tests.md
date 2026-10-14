@@ -544,13 +544,14 @@ with no marked test is not listed.
 
 ## CP-40
 
-49 tests.
+56 tests.
 
 - `app/ferrofed-server/tests/it/definition.rs`: `the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_node`
-- `app/ferrofed-server/tests/it/e2e/stored_postgres.rs` (e2e): `a_row_naming_its_patient_by_a_literal_is_never_served_or_run`, `a_version_one_instance_stored_is_run_by_name_at_the_other`, `two_gateways_racing_one_new_version_store_exactly_one`
+- `app/ferrofed-server/tests/it/e2e/stored_postgres.rs` (e2e): `a_row_naming_its_patient_by_a_literal_is_never_served_or_run`, `a_version_one_instance_stored_is_run_by_name_at_the_other`, `two_gateways_racing_one_new_version_store_exactly_one`, `two_gateways_racing_unversioned_puts_store_two_versions_or_refuse_one`
 - `app/ferrofed-server/tests/it/e2e/track9_surface.rs` (e2e): `a_definition_fan_out_reports_a_one_node_rejection_as_partial`, `a_stored_query_is_held_at_the_gateway_and_runs_by_name_over_both_members`
 - `app/ferrofed-server/tests/it/its_rest_areas/definition.rs`: `the_definition_declaration_states_the_distribution_only_where_offered`
 - `app/ferrofed-server/tests/it/query_get.rs`: `a_stored_get_reads_a_q_key_as_a_query_parameter`, `a_stored_query_runs_by_get_with_and_without_a_version`
+- `app/ferrofed-server/tests/it/stored/assigned.rs`: `a_distribution_sends_the_version_the_registry_assigned`, `a_literal_patient_is_refused_before_any_version_is_assigned`, `a_new_name_is_stored_at_one_zero_zero_and_named_in_location`, `an_unversioned_put_in_the_reserved_namespace_is_refused`, `concurrent_unversioned_puts_each_store_a_version_of_their_own`, `the_next_patch_follows_the_newest_version_by_number_and_none_is_replaced`
 - `app/ferrofed-server/tests/it/stored/declaration.rs`: `options_declares_the_registry_and_the_methods_it_serves`
 - `app/ferrofed-server/tests/it/stored/files.rs`: `a_definition_file_is_read_listed_and_run_by_name`, `a_held_version_put_naming_members_at_a_read_only_registry_is_a_405`, `a_put_at_a_read_only_registry_is_a_405_naming_the_read_methods`, `the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothing`
 - `app/ferrofed-server/tests/it/stored/held.rs`: `a_held_definition_naming_its_patient_by_a_literal_refuses_the_start`, `a_literal_a_shared_store_gains_after_the_start_is_never_served`

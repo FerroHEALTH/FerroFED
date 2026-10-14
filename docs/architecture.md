@@ -1691,19 +1691,34 @@ it by name after any restart, and a refusal that held before a restart must
 still hold after it. Configuration cannot carry a client write, and memory
 does not survive a restart, so the definitions need a durable store. They are
 written once and never changed, so
-`DefinitionStore::insert_if_absent((name, version), aql)` is the whole write
-interface:
+`DefinitionStore::insert_if_absent((name, version), aql)` is the write
+interface, beside `DefinitionStore::insert_assigned(name, aql)` for a `PUT
+{base}/v1/definition/query/{name}` with no version (decided on #354, #875):
+§12.7 `stored-query-versioning` says changing a definition means a new
+version, and ITS-REST lets that operation store a new query or update one,
+so the registry stores it as a new version it assigns, `1.0.0` for a new
+name, else the next patch of the newest version by number, and names it in
+`Location` as `./{name}/{version}`. It never replaces a held version, the
+literal-patient refusal comes before any version is assigned, a distribution
+sends the assigned version, and the `400 query-version-required` it answered
+before is a retired code. The trait's default reads the versions of the name
+and inserts the next with `insert_if_absent`, reading again when another
+writer stored it first, at most eight times, and then answers `409
+stored-query-held`; two writers racing on one name so store two versions or
+one is refused, never one silent winner:
 
 - **`redb`** (the default, one gateway instance): the insert runs in one write
   transaction, so a second `PUT` of a held pair fails atomically, which is the
-  immutability rule with no race. `redb` is the family's embedded store
+  immutability rule with no race, and an unversioned insert reads the newest
+  version and writes the next in one write transaction. `redb` is the family's embedded store
   (FerroBRIDGE's identity store, FerroTERM's concept store);
 - **PostgreSQL 18** (the server's `postgres` cargo feature, off by default,
   where several gateway replicas run; built with #268): the same interface,
   with the primary key `(name, version)` of `ferrofed.stored_query_definition`
   as the race guard. The insert is `INSERT … ON CONFLICT DO NOTHING`, and the
   affected-row count says stored or held, so two replicas inserting one pair
-  at once store exactly one. A `redb` file is opened by one process at a time,
+  at once store exactly one; an unversioned insert takes the trait's default,
+  that statement and a bounded retry. A `redb` file is opened by one process at a time,
   so each replica would hold its own copy: a version registered on one replica
   would be unknown to the next, and two replicas could each accept a different
   first `PUT` of the same name and version, which breaks the immutability

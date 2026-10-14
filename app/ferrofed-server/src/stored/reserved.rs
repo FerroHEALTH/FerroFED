@@ -16,8 +16,9 @@
 use std::fmt;
 
 use ferrofed_eehrxf::reserved;
-use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use jiff::Timestamp;
 
 use crate::facade::security;
 
@@ -79,6 +80,18 @@ impl DefinitionStore for Reserved {
             return Err(StoreError::ReadOnly);
         }
         self.store.insert_if_absent(definition)
+    }
+
+    fn insert_assigned(
+        &self,
+        name: &QueryName,
+        aql: &str,
+        saved: Timestamp,
+    ) -> Result<Assignment, StoreError> {
+        if reserved::reserves(name) {
+            return Err(StoreError::ReadOnly);
+        }
+        self.store.insert_assigned(name, aql, saved)
     }
 
     fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {

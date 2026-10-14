@@ -23,8 +23,9 @@
 use std::fmt;
 use std::ops::Range;
 
-use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use jiff::Timestamp;
 use openehr_federation::aql::Context;
 use openehr_federation::aql::definition::{Definition, SubjectOrigin};
 use openehr_federation::aql::refusal::Refusal;
@@ -125,6 +126,15 @@ impl Admitted {
 impl DefinitionStore for Admitted {
     fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError> {
         self.store.insert_if_absent(definition)
+    }
+
+    fn insert_assigned(
+        &self,
+        name: &QueryName,
+        aql: &str,
+        saved: Timestamp,
+    ) -> Result<Assignment, StoreError> {
+        self.store.insert_assigned(name, aql, saved)
     }
 
     fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {

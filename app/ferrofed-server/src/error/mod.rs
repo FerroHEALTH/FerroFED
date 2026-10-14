@@ -121,9 +121,6 @@ pub enum Code {
     /// A stored query's version is not `major.minor.patch`, or, where a
     /// version is looked up, a `{major}` or `{major}.{minor}` prefix.
     QueryVersionInvalid,
-    /// A stored query is `PUT` without a version, which the registry
-    /// requires (§12.7, N44).
-    QueryVersionRequired,
     /// A stored query's `query_type` is not AQL.
     QueryTypeUnsupported,
     /// A stored-query definition names the patient by a literal, which the

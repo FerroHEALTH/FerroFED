@@ -27,9 +27,17 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
   is a `400` (`query-name-invalid`, `query-version-invalid`). The body is
   `text/plain`: send that `Content-Type`, with `charset=utf-8` if you like,
   or none. Any other is a `415` (`media-type-unsupported`), and nothing is
-  stored. A `PUT` with no
-  version is a `400` (`query-version-required`), because the registry stores
-  only at a version. `query_type`, when sent, is `AQL` in any case.
+  stored. `query_type`, when sent, is `AQL` in any case.
+- A `PUT` with no version, `PUT {base}/v1/definition/query/{name}`, stores
+  the query as a new version the registry assigns: `1.0.0` for a name it
+  holds no version of, else the next patch of the newest version it holds,
+  newest by number, so after `1.9.0` and `1.10.0` it assigns `1.10.1`. It
+  never replaces a held version, because changing a definition means a new
+  version (§12.7; ITS-REST "Stores a new query, or updates an existing
+  query"). `Location` names the assigned version as `./{name}/{version}`,
+  relative to the request URL. Every other rule of this list applies to it
+  as to a `PUT` at a version, the literal-patient refusal first, so a
+  refused definition takes no version.
 - A stored version is immutable. A second `PUT` to a name and version the
   registry holds is a `409` (`stored-query-held`), the held text stands, and
   so does the refusal after the gateway restarts. Store a change as a new
@@ -61,7 +69,10 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - Behind several replicas sharing one registry, a version one replica
   stored is read and run at every other, and of two `PUT`s of the same new
   version at once exactly one is stored; the other is a `409`
-  (`stored-query-held`).
+  (`stored-query-held`). Two `PUT`s of one name with no version at once each
+  store a version of their own. A replica that loses the race for the next
+  version eight times in a row answers `409` (`stored-query-held`) and stores
+  nothing; send the `PUT` again.
 
 The gateway holds the canonical print of the parsed query, so a comment or
 any other text the parser drops is not kept, and `GET` returns the query in
@@ -171,7 +182,8 @@ offered:
 - The registry stores the definition first, under every rule above. Each
   named member is then sent the registry's copy, its canonical AQL, with
   ITS-REST `PUT /definition/query/{name}/{version}` and `query_type=AQL`, on
-  its own. No header of yours is sent. A member that fails never removes the
+  its own. A `PUT` with no version sends the version the registry
+  assigned. No header of yours is sent. A member that fails never removes the
   registry's definition, and a member that accepted is never sent a
   rollback.
 - The answer is the registry's `StoredQuery` (`name`, `type`, `version`,

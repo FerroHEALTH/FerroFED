@@ -25,10 +25,11 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! The definitions live behind [`store::DefinitionStore`], whose one write
-//! is an insert that refuses a held name and version, and every read goes
-//! through the in-memory [`store::Definitions`] (no specification governs
-//! the storage: our own design).
+//! The definitions live behind [`store::DefinitionStore`], whose writes are
+//! an insert that refuses a held name and version and an insert at the next
+//! version the store assigns, and every read goes through the in-memory
+//! [`store::Definitions`] (no specification governs the storage: our own
+//! design).
 
 pub mod store;
 
@@ -167,6 +168,35 @@ impl QueryVersion {
             major,
             minor,
             patch,
+        }
+    }
+
+    /// Returns the version the registry assigns a definition stored with no
+    /// version, when `newest` is the newest version of its name it holds:
+    /// `1.0.0` for a name it holds no version of, else the next patch of
+    /// `newest` (§12.7 stored-query-versioning).
+    ///
+    /// The newest is the highest by [`Ord`], which compares the numbers, so
+    /// `1.10.0` is newer than `1.9.0`. Returns `None` when the patch of
+    /// `newest` is the largest a version holds, so it has no next patch.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ferrofed_registry::definition::QueryVersion;
+    ///
+    /// assert_eq!(Some(QueryVersion::new(1, 0, 0)), QueryVersion::assigned_after(None));
+    /// let newest = QueryVersion::new(1, 10, 0).max(QueryVersion::new(1, 9, 0));
+    /// assert_eq!(Some(QueryVersion::new(1, 10, 1)), QueryVersion::assigned_after(Some(newest)));
+    /// ```
+    #[must_use]
+    pub fn assigned_after(newest: Option<Self>) -> Option<Self> {
+        match newest {
+            None => Some(Self::new(1, 0, 0)),
+            Some(newest) => newest
+                .patch
+                .checked_add(1)
+                .map(|patch| Self { patch, ..newest }),
         }
     }
 }

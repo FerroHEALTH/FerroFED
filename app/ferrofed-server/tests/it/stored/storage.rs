@@ -8,7 +8,7 @@ use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::facade::{PATIENT, PATIENT_TAIL, node_answering, received};
-use crate::support::{call, error_body, send};
+use crate::support::{call, error_body, exchange, send};
 
 use super::{
     NAME, TestResult, bound, get, invoke, parameterised, put, store_file, stored, two_members,
@@ -232,11 +232,6 @@ async fn a_name_a_version_or_a_query_type_outside_its_rest_is_refused() -> TestR
             StatusCode::BAD_REQUEST,
             "query-version-invalid",
         ),
-        (
-            unversioned,
-            StatusCode::BAD_REQUEST,
-            "query-version-required",
-        ),
         (typed, StatusCode::BAD_REQUEST, "query-type-unsupported"),
         (
             undeclared,
@@ -260,11 +255,20 @@ async fn a_name_a_version_or_a_query_type_outside_its_rest_is_refused() -> TestR
     }
     let typed = Request::put(format!("/v1/definition/query/{NAME}/1.0.0?query_type=aql"))
         .body(Body::from(aql))?;
-    let (status, text) = call(app, typed).await?;
+    let (status, text) = call(app.clone(), typed).await?;
     assert_eq!(
         StatusCode::OK,
         status,
         "the ITS-REST default, in any case: {text}"
+    );
+    // NOTE: §12.7 stored-query-versioning, ITS-REST `definition_query_store`
+    // (adjudicated on #354): an unversioned PUT is stored at the next version.
+    let (status, headers, body) = exchange(app, unversioned).await?;
+    assert_eq!(StatusCode::OK, status, "{}", String::from_utf8(body)?);
+    assert_eq!(
+        Some(format!("./{NAME}/1.0.1").as_str()),
+        headers.get(header::LOCATION).and_then(|v| v.to_str().ok()),
+        "the next patch of the held 1.0.0"
     );
     assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
     Ok(())

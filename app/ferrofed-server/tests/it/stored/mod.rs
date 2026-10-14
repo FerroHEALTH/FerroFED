@@ -9,12 +9,14 @@
 //! writable backend passes is [`suite`], the `[stored_queries]` backends are
 //! configured in [`backends`], the read-only backend is [`files`], and a held
 //! definition no `PUT` admitted is refused on every read in [`held`]. The
-//! gateway's own read-only definitions are [`reserved`].
+//! gateway's own read-only definitions are [`reserved`], and a `PUT` with no
+//! version, stored at the version the registry assigns, is [`assigned`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
 
+mod assigned;
 mod backends;
 mod declaration;
 mod files;

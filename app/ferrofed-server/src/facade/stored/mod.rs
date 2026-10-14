@@ -7,7 +7,10 @@
 //!
 //! The gateway is authoritative for each definition (§12.7). `PUT
 //! {base}/v1/definition/query/{name}/{version}` stores the AQL on ITS-REST's
-//! semver segment, `GET` on the same path reads it back, and `GET
+//! semver segment, `PUT {base}/v1/definition/query/{name}` stores it at the
+//! version the registry assigns, the next patch of the newest held or
+//! `1.0.0`, which never replaces a held version (`put`; §12.7
+//! stored-query-versioning), `GET` on a versioned path reads it back, and `GET
 //! {base}/v1/definition/query/{name}` lists every version of every name the
 //! segment starts (ITS-REST Definition API). A definition is analysed as a
 //! façade query before it is held, and one that names its patient by a
@@ -42,32 +45,27 @@ use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use ferrofed_eehrxf::reserved;
-use ferrofed_engine::declared::query;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_registry::definition::store::{Definitions, Insertion};
+use ferrofed_registry::definition::store::Definitions;
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
-use jiff::Timestamp;
-use openehr_its::rest::generated::definition::{
-    DefinitionQueryVersionStoreYamlParams, StoredQuery,
-};
+use openehr_its::rest::generated::definition::StoredQuery;
 use openehr_its::rest::generated::query::{
     AdhocQueryExecute, Query, QueryExecuteStoredQueryParams, QueryExecuteStoredQueryVersionParams,
 };
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::error::{self, Code};
+use crate::facade::answer;
 use crate::facade::request::{self, Submitted};
 use crate::facade::route::Arrived;
 use crate::facade::stored::distribution::Registry;
-use crate::facade::{answer, security};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
-use crate::stored::{self, Inadmissible};
 
 mod distribution;
+mod put;
 
 /// The path parameter that names the stored query.
 const NAME_PARAM: &str = "qualified_query_name";
@@ -95,11 +93,9 @@ const AQL: &str = "AQL";
 /// APIs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Operation {
-    /// `PUT /definition/query/{name}/{version}`.
+    /// `PUT /definition/query/{name}/{version}`, or `PUT
+    /// /definition/query/{name}` at the version the registry assigns.
     Store,
-    /// `PUT /definition/query/{name}`, refused: the registry stores at a
-    /// version (§12.7).
-    StoreUnversioned,
     /// `GET /definition/query/{name}/{version}`.
     Read,
     /// `GET /definition/query/{name}`.
@@ -122,8 +118,9 @@ enum Carrier {
 /// operation.
 fn operation(matched: &RouteMatch) -> Option<Operation> {
     match matched.operation_id {
-        "definition_query_version_store.yaml" => Some(Operation::Store),
-        "definition_query_store.yaml" => Some(Operation::StoreUnversioned),
+        "definition_query_version_store.yaml" | "definition_query_store.yaml" => {
+            Some(Operation::Store)
+        }
         "definition_query_version_get" => Some(Operation::Read),
         "definition_query_list" => Some(Operation::List),
         "query_execute_stored_query_body" | "query_execute_stored_query_version_body" => {
@@ -150,7 +147,7 @@ pub(crate) fn accepts(matched: &RouteMatch, read_only: bool) -> bool {
 impl Operation {
     /// Whether the operation stores a definition.
     fn stores(self) -> bool {
-        matches!(self, Self::Store | Self::StoreUnversioned)
+        matches!(self, Self::Store)
     }
 }
 
@@ -181,8 +178,7 @@ pub(crate) async fn serve<'a>(
         return Ok(read_only(request_id));
     }
     let answered = match operation {
-        Operation::Store => store(federation, definitions, matched, &arrived).await,
-        Operation::StoreUnversioned => Err(Refused::fixed(Code::QueryVersionRequired)),
+        Operation::Store => put::store(federation, definitions, matched, &arrived).await,
         Operation::Read => read(federation, definitions, matched, &arrived).await,
         Operation::List => list(definitions, matched, &arrived).await,
         Operation::Execute(carrier) => {
@@ -301,31 +297,6 @@ fn pattern(matched: &RouteMatch) -> Result<Option<VersionPattern>, Refused> {
         .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))
 }
 
-/// Checks the query string of a `PUT`: only the declared `query_type`, and
-/// only AQL (ITS-REST Definition API).
-///
-/// Parameter names are held to those the operation declares, by position,
-/// and the query string is decoded by the operation's generated parameters
-/// (RFC 3986 §2.1, so a `+` is a literal plus).
-fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refused> {
-    let query = arrived.uri.query();
-    if let Some(query) = query {
-        query::every_declared(matched, query).map_err(|unlisted| {
-            security::query_parameter_refused(unlisted.position, &arrived.outbound.to_string());
-            Refused::with(Code::QueryParameterRefused, &unlisted)
-        })?;
-    }
-    let params =
-        DefinitionQueryVersionStoreYamlParams::from_request(matched, query, &HeaderMap::new())
-            .map_err(|_named| Refused::with(Code::BodyInvalid, &QUERY_STRING_INVALID))?;
-    match params.query_type {
-        Some(language) if !language.eq_ignore_ascii_case(AQL) => {
-            Err(Refused::fixed(Code::QueryTypeUnsupported))
-        }
-        Some(_) | None => Ok(()),
-    }
-}
-
 /// The members of a stored-query invocation: the `Query` body of a `POST`,
 /// or the query string of a `GET`, which the operation's generated
 /// parameters decode, a `q` key included as a query parameter, since the
@@ -357,102 +328,6 @@ fn members(
         Carrier::Query => QueryExecuteStoredQueryParams::from_request(matched, query, headers)
             .map(|p| decoded(p.offset, p.fetch, p.query_parameters))
             .map_err(|_named| Refused::with(Code::BodyInvalid, &QUERY_STRING_INVALID)),
-    }
-}
-
-/// `PUT {base}/v1/definition/query/{name}/{version}`: stores the definition
-/// unless its name and version are held (§12.7, N44).
-///
-/// The body is the AQL text (ITS-REST `text/plain`), and a `Content-Type`
-/// naming another media type is a `415` before anything is read or stored.
-/// A name in the namespace the gateway reserves for its own read-only
-/// queries is a `409` (`stored-query-reserved`) at any version, as a held
-/// version is (ITS-REST `409_StoredQuery_version`; RFC 9110 §15.5.10).
-/// It is analysed as a
-/// façade query, with every `$parameter` standing in for a value an
-/// invocation binds, and refused with a `400` when the rewrite would refuse
-/// it whatever is bound, or when it names its patient by a literal. The text
-/// held is the canonical print of the parse. A stored definition answers
-/// `200` with `Location` naming it, as a reference relative to the request
-/// (RFC 9110 §10.2.2), because the gateway does not know its public base URL
-/// (§4.1, N28).
-///
-/// A request naming members for distribution is refused before anything is
-/// stored when its targeting cannot be answered, or when the definition
-/// carries a `FROM ENDPOINT` or `ORGANISATION` directive (§12.7
-/// fanout-endpoint-targeted-refused); otherwise the definition is stored and
-/// then distributed ([`distribution::distribute`]).
-async fn store(
-    federation: &Federation,
-    definitions: &Arc<Definitions>,
-    matched: &RouteMatch,
-    arrived: &Arrived<'_>,
-) -> Result<Response, Refused> {
-    let started = Instant::now();
-    let logged = arrived.outbound.to_string();
-    let ids = (arrived.request_id, logged.as_str());
-    if let Some(response) =
-        request::unsupported_media(matched, (arrived.headers, &arrived.body), ids)
-    {
-        return Ok(response);
-    }
-    let name = name(matched)?;
-    if reserved::reserves(&name) {
-        return Err(Refused::fixed(Code::StoredQueryReserved));
-    }
-    let version = segment(matched, VERSION_PARAM)
-        .unwrap_or_default()
-        .parse::<QueryVersion>()
-        .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))?;
-    query_string(matched, arrived)?;
-    let distributed = distribution::requested(federation, arrived.headers)?;
-    let text =
-        std::str::from_utf8(&arrived.body).map_err(|_text| Refused::fixed(Code::BodyInvalid))?;
-    let admitted = stored::admit(text, federation.context()).map_err(|refused| match refused {
-        Inadmissible::Refused(refusal) => {
-            security::refused(&refusal, &logged);
-            Refused::with(Code::Refused((&refusal).into()), &refusal)
-        }
-        Inadmissible::SubjectLiteral { at } => {
-            security::definition_refused(at.as_ref(), &logged);
-            Refused::fixed(Code::SubjectLiteral)
-        }
-    })?;
-    if distributed.is_some() {
-        distribution::distributable(admitted.aql(), &logged)?;
-    }
-    let stored = StoredDefinition::new(name, version, admitted.aql().to_owned(), Timestamp::now());
-    let copy = stored.clone();
-    let held = Arc::clone(definitions);
-    // NOTE: no specification governs this: our own design; the insert commits
-    // to disk, so it runs where a blocking call may wait.
-    let inserted = tokio::task::spawn_blocking(move || held.insert(stored)).await;
-    match inserted {
-        Ok(Ok(Insertion::Stored)) => match distributed {
-            Some(selected) => {
-                let sent = (Registry::Stored, &selected);
-                let sent_as = (arrived.outbound, &arrived.conveyance, started);
-                distribution::distribute(federation, &copy, sent, sent_as).await
-            }
-            None => stored_answer(version),
-        },
-        Ok(Ok(Insertion::Held)) => Err(Refused::fixed(Code::StoredQueryHeld)),
-        Ok(Err(failure)) => {
-            tracing::error!(
-                error = crate::chain(&failure),
-                request_id = logged,
-                "a stored query could not be stored"
-            );
-            Err(Refused::fixed(Code::Internal))
-        }
-        Err(failure) => {
-            tracing::error!(
-                error = %failure,
-                request_id = logged,
-                "the stored-query insert did not complete"
-            );
-            Err(Refused::fixed(Code::Internal))
-        }
     }
 }
 
@@ -537,16 +412,6 @@ async fn redistributed(
         Refused::fixed(Code::Internal)
     })?;
     distribution::distribute(federation, &held, sent, (outbound, &conveyance, started)).await
-}
-
-/// The `200` of a stored definition, with `Location` relative to the request
-/// path, which ends in the version.
-fn stored_answer(version: QueryVersion) -> Result<Response, Refused> {
-    let location = HeaderValue::try_from(version.to_string()).map_err(|_invalid| {
-        tracing::error!("a version is not a valid header value");
-        Refused::fixed(Code::Internal)
-    })?;
-    Ok((StatusCode::OK, [(header::LOCATION, location)]).into_response())
 }
 
 /// The ITS-REST `StoredQuery` of `definition`.
