@@ -381,12 +381,12 @@ configuration, so the body says what the gateway does today:
 | Member | What FerroFED declares |
 |---|---|
 | `federation.id` | the deployment's `federation.id` |
-| `federation.spec_version` | `0.9`, the `major.minor` of the pinned specification release |
+| `federation.spec_version` | `1.0`, the `major.minor` of the pinned specification release |
 | `aql.fan_out` | `true`: an undirected query asks every member (§4.3, N4) |
 | `dedup` | `default: "none"`, `modes: ["none", "version-identity"]`, and the request header `openEHR-federation-dedup` (§10, N15) |
 | `timeout` | the configured `per_node_ms` and `overall_ms`, with `policy: "abandon-and-mark"`: a node past its budget is abandoned and reported `time-out` (§11.5, N38) |
 | `completeness` | `default: "all-or-nothing"`; `best_effort` and, when it is offered, `opt_in` naming `openEHR-federation-completeness: partial` (§11.4, N37) |
-| `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
+| `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39); and `max_node_rows`, the most rows read of one node for a query with no `LIMIT` (§11.5) |
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload` as `federation.fan_out_template_upload` sets it (`false` by default); `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise; `stored_query_fan_out` is `true` while `federation.fan_out_stored_queries` is set beside the registry and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`, the default: a localizer that does not answer leaves every member `not-localized` with its error, and nothing is asked; `"ask-all"` only where the deployment set `federation.localization.on_failure` (§14.1, N30) |

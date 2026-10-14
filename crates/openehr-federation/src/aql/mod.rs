@@ -86,9 +86,9 @@ use subject::Subject;
 /// The ITS-REST paging members sent beside the AQL (`AdhocQueryExecute`
 /// `offset` and `fetch`, or the GET parameters of the same names).
 ///
-/// They page like the AQL `OFFSET` and `LIMIT` clauses and follow the same
-/// rules (§11.6 and N39 name only the clauses; no specification governs the
-/// members: our own design).
+/// They select a window over the rows the AQL selects (ITS-REST `offset`:
+/// "the row number in result-set to start result-set from"), which is then
+/// paged across the fan-out as the AQL clauses are (§11.6, N39).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Paging {
     /// The `offset` member.
@@ -372,6 +372,7 @@ pub enum ColumnSource {
 pub struct NodeQuery {
     aql: String,
     columns: Vec<ColumnSource>,
+    limit: Option<u64>,
 }
 
 impl NodeQuery {
@@ -379,6 +380,13 @@ impl NodeQuery {
     #[must_use]
     pub fn aql(&self) -> &str {
         &self.aql
+    }
+
+    /// The `LIMIT` the AQL carries (§11.6.1, §11.6.2), or `None` for a query
+    /// that asks for every row the node matches.
+    #[must_use]
+    pub fn limit(&self) -> Option<u64> {
+        self.limit
     }
 
     /// One source per façade column, in façade order.
@@ -443,6 +451,7 @@ impl PatientQuery {
         NodeQuery {
             aql: to_aql(&rewrite::scope_to(&self.template, ehr_id.value())),
             columns: self.sources.clone(),
+            limit: self.order.limit(),
         }
     }
 }
@@ -737,6 +746,7 @@ fn unscoped(
         node: NodeQuery {
             aql: to_aql(&query),
             columns: sources,
+            limit: order.limit(),
         },
         columns,
         ehr_scoped: findings.ehr_scoped,

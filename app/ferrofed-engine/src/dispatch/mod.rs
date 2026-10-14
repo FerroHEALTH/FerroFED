@@ -58,10 +58,11 @@ use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
     CallOptions, Client, ClientError, CredentialsProvider, ErrorBody, RetryPolicy, Transport,
 };
-use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
+use openehr_its::rest::generated::query::ResultSet;
 use url::Url;
 
 pub mod cap;
+mod ceiling;
 mod classify;
 pub mod definition;
 pub(crate) mod dpop;
@@ -88,7 +89,7 @@ pub type SharedCredentials = Arc<dyn CredentialsProvider>;
 pub struct NodeQuery {
     aql: String,
     offset: Option<u32>,
-    fetch: Option<u32>,
+    fetch: Option<u64>,
     scope: Option<String>,
     width: usize,
 }
@@ -131,9 +132,11 @@ impl NodeQuery {
         self
     }
 
-    /// This query asking the node for at most `fetch` rows.
+    /// This query asking the node for at most `fetch` rows: for a query
+    /// whose AQL carries a `LIMIT`, that `LIMIT`, and otherwise the ceiling
+    /// of [`NodeClients::with_row_ceiling`] plus one, which the client sets.
     #[must_use]
-    pub fn with_fetch(mut self, fetch: u32) -> Self {
+    pub fn with_fetch(mut self, fetch: u64) -> Self {
         self.fetch = Some(fetch);
         self
     }
@@ -142,17 +145,6 @@ impl NodeQuery {
     #[must_use]
     pub fn aql(&self) -> &str {
         &self.aql
-    }
-
-    /// The ITS-REST request body for this query.
-    fn body(&self) -> AdhocQueryExecute {
-        AdhocQueryExecute {
-            q: self.aql.clone(),
-            offset: self.offset.map(i64::from),
-            fetch: self.fetch.map(i64::from),
-            query_parameters: None,
-            additional_properties: BTreeMap::new(),
-        }
     }
 }
 
@@ -556,6 +548,7 @@ pub struct NodeClient<T> {
     on_behalf: Option<SharedOnBehalf>,
     dpop: Option<NodeProver>,
     in_flight: Option<cap::InFlight>,
+    row_ceiling: Option<std::num::NonZeroU32>,
 }
 
 impl<T: Transport + Clone> NodeClient<T> {
@@ -593,6 +586,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             on_behalf: None,
             dpop: None,
             in_flight: None,
+            row_ceiling: None,
         })
     }
 

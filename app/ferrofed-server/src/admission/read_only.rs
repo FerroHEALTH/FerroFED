@@ -84,7 +84,7 @@ pub async fn check(
     let aql = parse_str(EXISTING_EHRS).map_err(AdmissionError::Template)?;
     let query = NodeQuery::new(to_aql(&aql))
         .with_width(WIDTH)
-        .with_fetch(u32::from(count));
+        .with_fetch(u64::from(count));
 
     let existing = match client.query(&query, &options).await {
         Ok(NodeReply::Answered { result_set, .. }) => existing(&result_set.rows),

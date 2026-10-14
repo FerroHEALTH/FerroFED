@@ -189,7 +189,7 @@ impl Federation {
         )
         .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
         .and_then(|clients| clients.with_dpop(&onward.dpop))
-        .map(|clients| clients.with_in_flight_cap(settings.federation.max_in_flight_per_node))
+        .map(|clients| limited(clients, &settings.federation))
         .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
             .with_offset_strategy(settings.federation.offset)
@@ -216,6 +216,7 @@ impl Federation {
             observed,
             context,
             budget: settings.federation.budget,
+            max_node_rows: Some(settings.federation.max_node_rows),
             best_effort: settings.federation.best_effort,
             demographic: settings.federation.demographic_endpoint.clone(),
             dependencies,
@@ -237,7 +238,9 @@ impl Federation {
     /// It offers best-effort completion, as the configuration does by
     /// default; [`Federation::with_best_effort`] withdraws it. It fans no
     /// template upload out, as the configuration does not by default;
-    /// [`Federation::with_template_fan_out`] offers it.
+    /// [`Federation::with_template_fan_out`] offers it. Its clients read at
+    /// most the configuration's default `max_node_rows` of one node for a
+    /// query with no `LIMIT`.
     #[must_use]
     pub fn new(
         id: FederationId,
@@ -250,7 +253,13 @@ impl Federation {
         let dependencies =
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        let max_node_rows = NonZeroU32::new(crate::config::Federation::default().max_node_rows);
+        let clients = match max_node_rows {
+            Some(ceiling) => clients.with_row_ceiling(ceiling),
+            None => clients,
+        };
         Self {
+            max_node_rows,
             id,
             snapshot: Arc::new(snapshot),
             clients,
@@ -283,6 +292,18 @@ impl Federation {
             access: None,
         }
     }
+}
+
+/// `clients` held to the per-node limits `federation` sets: the requests in
+/// flight to one endpoint (§11.5, N38), and the rows read of one node for a
+/// query with no `LIMIT` (§11.5).
+fn limited(
+    clients: NodeClients<NodeTransport>,
+    federation: &crate::config::settings::FederationSettings,
+) -> NodeClients<NodeTransport> {
+    clients
+        .with_in_flight_cap(federation.max_in_flight_per_node)
+        .with_row_ceiling(federation.max_node_rows)
 }
 
 /// The access log `settings` describe: the category map and the retention,

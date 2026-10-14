@@ -277,12 +277,7 @@ pub async fn patient(
                 let node = query.for_node(ehr_id.hier_object_id());
                 sources.get_or_insert_with(|| node.columns().to_vec());
                 plan = plan
-                    .dispatch(
-                        endpoint,
-                        NodeQuery::new(node.aql())
-                            .with_scope(ehr_id.hier_object_id())
-                            .with_width(super::cells::width(node.columns())),
-                    )
+                    .dispatch(endpoint, sent(&node).with_scope(ehr_id.hier_object_id()))
                     .map_err(TargetsError::Plan)?;
                 bound.push((member.clone(), ehr_id.clone()));
             }
@@ -339,9 +334,7 @@ pub fn retarget(
             .ok_or(TargetsError::Unbound)?;
         let node = query.for_node(ehr_id.hier_object_id());
         sources.get_or_insert_with(|| node.columns().to_vec());
-        Ok(NodeQuery::new(node.aql())
-            .with_scope(ehr_id.hier_object_id())
-            .with_width(super::cells::width(node.columns())))
+        Ok(sent(&node).with_scope(ehr_id.hier_object_id()))
     })?;
     Ok((plan, sources.unwrap_or_default()))
 }
@@ -571,11 +564,11 @@ pub fn unscoped(
     // is scoped to none and the outbound gate reads its literal like any other text.
     let scope = query.ehr_scope().and_then(|value| EhrId::new(value).ok());
     for endpoint in membership.asked.into_values() {
-        let mut sent = NodeQuery::new(node.aql()).with_width(super::cells::width(node.columns()));
+        let mut query = sent(node);
         if let Some(ehr_id) = &scope {
-            sent = sent.with_scope(ehr_id.hier_object_id());
+            query = query.with_scope(ehr_id.hier_object_id());
         }
-        plan = plan.dispatch(endpoint, sent).map_err(TargetsError::Plan)?;
+        plan = plan.dispatch(endpoint, query).map_err(TargetsError::Plan)?;
     }
     Ok(Targets {
         plan,
@@ -586,6 +579,21 @@ pub fn unscoped(
         set_aside: BTreeSet::new(),
         resolver: None,
     })
+}
+
+/// The query `node` is dispatched as: its AQL, reading the cells its columns
+/// need, and asking for as many rows as its `LIMIT`, so no node applies its
+/// own default page (ITS-REST Query API `Fetch`: "the default depends on the
+/// implementation"). A query with no `LIMIT` gets its `fetch` from the node
+/// client's row ceiling ([`NodeClients::with_row_ceiling`]).
+///
+/// [`NodeClients::with_row_ceiling`]: ferrofed_engine::dispatch::NodeClients::with_row_ceiling
+fn sent(node: &openehr_federation::aql::NodeQuery) -> NodeQuery {
+    let query = NodeQuery::new(node.aql()).with_width(super::cells::width(node.columns()));
+    match node.limit() {
+        Some(limit) => query.with_fetch(limit),
+        None => query,
+    }
 }
 
 /// The endpoint each member is asked through, and the endpoints never asked.

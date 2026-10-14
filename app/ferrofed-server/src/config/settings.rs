@@ -140,6 +140,10 @@ pub struct FederationSettings {
     /// How `OFFSET k > 0` is answered across a fan-out, with its bound: the
     /// `paging` an `OPTIONS {base}/` body declares (§11.6.2, §7a.2, N39).
     pub offset: OffsetStrategy,
+    /// The most rows the gateway reads of one node for a query whose AQL
+    /// carries no `LIMIT`, as `paging.max_node_rows` declares it (§11.5,
+    /// §7a.2).
+    pub max_node_rows: NonZeroU32,
     /// The aggregate functions recombined across a fan-out: the
     /// `aggregates.decomposable` an `OPTIONS {base}/` body declares
     /// (§11.6.3, §7a.2).
@@ -380,6 +384,7 @@ impl Settings {
             best_effort = self.federation.best_effort,
             offset_strategy = self.federation.offset.name(),
             max_offset_window = self.federation.offset.max_window().map(NonZeroU32::get),
+            max_node_rows = self.federation.max_node_rows.get(),
             decomposable_aggregates = decomposable.join(","),
             demographic_endpoint = self
                 .federation

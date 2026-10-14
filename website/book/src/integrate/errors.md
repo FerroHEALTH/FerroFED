@@ -264,7 +264,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `undefined-function` | 400 | The query calls a function AQL 1.1.0 does not define, such as a product-specific `MEDIAN`, and would reach more than one node. The gateway cannot tell whether the function aggregates; direct the query to one node, or select the rows and compute it in the application (N14, §11.6.3). The functions AQL defines (`LENGTH`, `ROUND`, `NOW`, `TERMINOLOGY` and the rest) are sent to every node as written. |
 | `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
 | `offset-page` | 400 | The gateway computes an `OFFSET` page from `k + n` rows per node, and this page cannot be computed that way: `k + n` is past the configured bound, or the query has no `LIMIT` or no `ORDER BY` (§11.6.2, N39). |
-| `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree. |
+| `paging-conflict` | retired | Retired since #868: no longer raised. The ITS-REST `offset` and `fetch` members compose with the query's `OFFSET` and `LIMIT` as a window over its result, so they can no longer disagree. Until then it was a `400` for a member that differed from its clause. |
 | `negative-paging` | 400 | An ITS-REST paging member, or a row count of the query, is negative. |
 | `top-backward` | 400 | `TOP … BACKWARD` is not supported across a fan-out; write `ORDER BY … DESC LIMIT n`. |
 | `top-with-limit` | 400 | The query uses the deprecated `TOP` together with a `LIMIT` clause, which AQL forbids; write `ORDER BY … LIMIT n`. |

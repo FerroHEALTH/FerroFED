@@ -6,20 +6,40 @@
 //! `node_request` span ([`crate::trace_context`]), and its answer
 //! classified.
 
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 use std::time::Instant;
 
 use openehr_its::rest::client::{CallOptions, Transport};
-use openehr_its::rest::generated::query::QueryExecuteAdhocQueryBodyParams;
 use openehr_its::rest::generated::query::client::QueryClient;
+use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryExecuteAdhocQueryBodyParams};
 
 use super::cap::Slot;
 use super::{
-    Contact, DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, cap, classify,
+    Contact, DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, cap, ceiling,
+    classify,
 };
 use crate::trace_context;
 
 /// The ITS-REST operation every query to a node is sent through.
 const OPERATION: &str = "query_execute_adhoc_query_body";
+
+impl NodeQuery {
+    /// The ITS-REST request body for this query.
+    fn body(&self) -> AdhocQueryExecute {
+        AdhocQueryExecute {
+            q: self.aql.clone(),
+            offset: self.offset.map(i64::from),
+            // NOTE: ITS-REST `fetch` is an int64; a count past i64::MAX asks no
+            // fewer rows than any node holds, so it is sent as i64::MAX.
+            fetch: self
+                .fetch
+                .map(|rows| i64::try_from(rows).unwrap_or(i64::MAX)),
+            query_parameters: None,
+            additional_properties: BTreeMap::new(),
+        }
+    }
+}
 
 impl<T: Transport + Clone> NodeClient<T> {
     /// Sends `query` to the node and classifies the answer.
@@ -65,7 +85,8 @@ impl<T: Transport + Clone> NodeClient<T> {
         until: tokio::time::Instant,
     ) -> Option<Result<NodeReply, DispatchError>> {
         let budgeted = async {
-            let call = match self.prepared(query, options) {
+            let (query, ceiling) = self.paged(query);
+            let call = match self.prepared(&query, options) {
                 Ok(call) => call,
                 Err(unsent) => return Some(Err(unsent)),
             };
@@ -77,7 +98,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             // timeout_at (docs.rs) polls the send first, so a query that never left is not abandoned.
             tokio::time::timeout_at(
                 until,
-                self.sent_query(query, options, call, (started, slot)),
+                self.sent_query((&query, ceiling), options, call, (started, slot)),
             )
             .await
             .ok()
@@ -96,12 +117,14 @@ impl<T: Transport + Clone> NodeClient<T> {
         query: &NodeQuery,
         options: &DispatchOptions,
     ) -> Result<NodeReply, DispatchError> {
-        let call = self.prepared(query, options)?;
+        let (query, ceiling) = self.paged(query);
+        let call = self.prepared(&query, options)?;
         let started = Instant::now();
         let Ok(slot) = self.slot(options.deadline()).await else {
             return Ok(cap::capped_reply(classify::elapsed_ms(started)));
         };
-        self.sent_query(query, options, call, (started, slot)).await
+        self.sent_query((&query, ceiling), options, call, (started, slot))
+            .await
     }
 
     /// The call options of `query` under `options`, once the outbound gate
@@ -119,10 +142,10 @@ impl<T: Transport + Clone> NodeClient<T> {
 
     /// Sends `query` once with `call`, holding `slot` of the endpoint's cap
     /// until the node answered or failed, its latency measured from
-    /// `started`.
+    /// `started`, and holds its answer to `ceiling` rows where it has one.
     async fn sent_query(
         &self,
-        query: &NodeQuery,
+        (query, ceiling): (&NodeQuery, Option<NonZeroU32>),
         options: &DispatchOptions,
         call: CallOptions,
         (started, _slot): (Instant, Slot),
@@ -138,9 +161,12 @@ impl<T: Transport + Clone> NodeClient<T> {
             .await;
         let latency_ms = classify::elapsed_ms(started);
         match answer {
-            Ok(outcome) => Ok(classify::narrow(
-                classify::answered(outcome, latency_ms, options.withheld()),
-                query.width,
+            Ok(outcome) => Ok(ceiling::held(
+                classify::narrow(
+                    classify::answered(outcome, latency_ms, options.withheld()),
+                    query.width,
+                ),
+                ceiling,
             )),
             Err(error) => classify::failed(
                 (&self.endpoint, &self.consent_refusal_codes),

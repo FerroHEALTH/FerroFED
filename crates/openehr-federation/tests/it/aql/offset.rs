@@ -274,3 +274,138 @@ fn the_strategy_names_what_options_declares() {
     assert_eq!(bounded.name(), "bounded");
     assert_eq!(bounded.max_window(), Some(bound()));
 }
+
+// ── The ITS-REST members as a window over the AQL result (§11.6) ───────────
+//
+// ITS-REST Query API: `offset` is "the row number in result-set to start
+// result-set from" and `fetch` the "number of rows to fetch", so the members
+// select rows of what the AQL `OFFSET` and `LIMIT` select.
+
+fn members(offset: Option<i64>, fetch: Option<i64>) -> Paging {
+    Paging { offset, fetch }
+}
+
+// conformance: CP-32
+#[test]
+fn an_offset_member_adds_to_the_aql_offset() {
+    let aql = patient_query("ORDER BY c/uid/value LIMIT 10 OFFSET 5");
+    let analysis =
+        analysed(&aql, members(Some(2), None), &bounded()).expect("the window is bounded");
+    assert_same_aql(
+        &node_aql(&analysis),
+        &format!("SELECT c/uid/value {SCOPED} = '{EHR_ID}' ORDER BY c/uid/value LIMIT 15"),
+    );
+    assert_eq!(
+        (analysis.order().limit(), analysis.order().offset()),
+        (Some(15), 7),
+        "skip 5 + 2, and the 8 rows the LIMIT leaves after the member offset"
+    );
+}
+
+#[test]
+fn a_node_query_names_the_limit_its_aql_carries() {
+    let paged = analysed(
+        &patient_query("ORDER BY c/uid/value LIMIT 10 OFFSET 5"),
+        Paging::default(),
+        &bounded(),
+    )
+    .expect("the page is bounded");
+    let Analysis::Patient(query) = paged else {
+        panic!("a patient query")
+    };
+    let node = query.for_node(&HierObjectId::new(EHR_ID).expect("a HIER_OBJECT_ID"));
+    assert_eq!(node.limit(), Some(15), "k + n, the rows asked of the node");
+    let unbounded = analysed(
+        &format!("SELECT c/name/value {FROM}"),
+        Paging::default(),
+        &bounded(),
+    )
+    .expect("no page");
+    let Analysis::Unscoped(query) = unbounded else {
+        panic!("no patient is named")
+    };
+    assert_eq!(query.node_query().limit(), None, "every row it matches");
+}
+
+// conformance: CP-32
+#[test]
+fn a_fetch_member_smaller_than_the_aql_limit_is_the_count() {
+    let aql = patient_query("ORDER BY c/uid/value LIMIT 10 OFFSET 5");
+    let analysis =
+        analysed(&aql, members(Some(2), Some(3)), &bounded()).expect("the window is bounded");
+    assert_eq!(
+        (analysis.order().limit(), analysis.order().offset()),
+        (Some(10), 7),
+        "skip 7, count 3: each node is sent LIMIT 7 + 3"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn a_fetch_member_larger_than_the_aql_limit_keeps_the_rows_the_limit_leaves() {
+    let aql = patient_query("ORDER BY c/uid/value LIMIT 4 OFFSET 5");
+    let analysis =
+        analysed(&aql, members(Some(1), Some(10)), &bounded()).expect("the window is bounded");
+    assert_eq!(
+        (analysis.order().limit(), analysis.order().offset()),
+        (Some(9), 6),
+        "skip 6, count min(4 - 1, 10) = 3"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn an_offset_member_past_the_aql_limit_selects_no_row() {
+    let aql = patient_query("ORDER BY c/uid/value LIMIT 3");
+    let analysis =
+        analysed(&aql, members(Some(5), None), &bounded()).expect("the window is bounded");
+    assert_eq!(
+        (analysis.order().limit(), analysis.order().offset()),
+        (Some(5), 5),
+        "count 0: the Tier keeps rows [5, 5), none"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn the_composed_window_is_held_to_the_bound() {
+    let at_bound = patient_query("ORDER BY c/uid/value LIMIT 10 OFFSET 10");
+    let analysis = analysed(&at_bound, members(Some(5), Some(5)), &bounded())
+        .expect("skip 15 + count 5 is the bound");
+    assert_eq!(analysis.order().limit(), Some(20));
+    let past = patient_query("ORDER BY c/uid/value LIMIT 10 OFFSET 11");
+    assert_eq!(
+        refusal(&past, members(Some(5), Some(5)), &bounded()),
+        Refusal::OffsetPage {
+            reason: OffsetPage::PastTheBound { max_window: 20 }
+        },
+        "§11.6.2: skip 16 + count 5 is past the bound of 20 rows per node"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn an_offset_member_beside_the_aql_limit_is_refused_under_the_reject_strategy() {
+    let aql = patient_query("ORDER BY c/uid/value LIMIT 10");
+    assert_eq!(
+        refusal(&aql, members(Some(2), None), &rejecting()),
+        Refusal::OffsetUnsupported,
+        "§11.6.2 option 1, N39: the composed skip is past zero"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn a_member_offset_that_overflows_the_skip_is_past_the_bound() {
+    let aql = patient_query(&format!(
+        "ORDER BY c/uid/value LIMIT 10 OFFSET {}",
+        i64::MAX
+    ));
+    assert_eq!(
+        refusal(&aql, members(Some(1), None), &bounded()),
+        Refusal::OffsetPage {
+            reason: OffsetPage::PastTheBound { max_window: 20 }
+        },
+        "the skip is checked arithmetic"
+    );
+}

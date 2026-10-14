@@ -83,6 +83,12 @@ impl Code {
         )
     }
 
+    /// Every code the gateway once answered and answers no more
+    /// ([`Refusal::RETIRED`]), kept so no other condition is ever given one.
+    pub fn retired() -> impl Iterator<Item = &'static str> {
+        Refusal::RETIRED.iter().copied()
+    }
+
     /// The code as the error body's `code` member carries it.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -464,7 +470,13 @@ mod tests {
         let distinct: BTreeSet<&str> = codes.iter().copied().collect();
         assert_eq!(codes.len(), distinct.len(), "{codes:?}");
         assert_eq!(Code::GATEWAY.len() + Refusal::KINDS.len(), codes.len());
-        for code in codes {
+        for retired in Code::retired() {
+            assert!(
+                !distinct.contains(retired),
+                "{retired} is retired, so no condition answers it"
+            );
+        }
+        for code in codes.into_iter().chain(Code::retired()) {
             assert!(
                 !code.is_empty()
                     && !code.starts_with('-')

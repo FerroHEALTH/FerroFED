@@ -40,7 +40,7 @@ impl<T: Transport> NodeClient<T> {
         let base = self.client.base();
         let mut url = base.clone();
         url.set_path(&format!("{}/query/aql", base.path()));
-        let paging: Vec<String> = [query.offset, query.fetch]
+        let paging: Vec<String> = [query.offset.map(u64::from), query.fetch]
             .into_iter()
             .flatten()
             .map(|number| number.to_string())
