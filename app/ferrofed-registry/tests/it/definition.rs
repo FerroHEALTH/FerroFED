@@ -82,9 +82,21 @@ fn a_name_outside_the_its_rest_form_is_refused() {
         ("aql", QueryNameError::Reserved),
         ("AQL", QueryNameError::Reserved),
         ("org.openehr::Aql", QueryNameError::Reserved),
+        (".", QueryNameError::DotSegment),
+        ("..", QueryNameError::DotSegment),
     ] {
         assert_eq!(Err(error), QueryName::new(refused), "{refused:?}");
     }
+}
+
+#[test]
+fn only_a_whole_name_that_is_a_dot_segment_is_refused() -> TestResult {
+    // A path segment of three dots, or one that holds `::`, is no dot-segment
+    // (RFC 3986 §3.3), so ITS-REST's `[a-zA-Z0-9_.-]` admits these.
+    for admitted in ["...", "..::q", ".::q", "ns::..", "ns::.", ".q", "q.."] {
+        assert_eq!(admitted, QueryName::new(admitted)?.as_str(), "{admitted:?}");
+    }
+    Ok(())
 }
 
 #[test]

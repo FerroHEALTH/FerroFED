@@ -197,6 +197,43 @@ async fn a_definition_the_rewrite_refuses_whatever_is_bound_is_refused_at_put() 
     Ok(())
 }
 
+// The router hands a raw `..` segment to the façade unnormalised, and
+// decodes `%2E%2E` to it, so both spellings reach the name check.
+#[tokio::test]
+async fn a_name_that_is_a_dot_segment_is_refused_on_every_route() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let app = two_members(dir.path(), &a, &b)?;
+    let aql = parameterised();
+    for name in [".", "..", "%2E", "%2E%2E", "%2e%2e", ".%2E"] {
+        let unversioned = Request::put(format!("/v1/definition/query/{name}"))
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from(aql.clone()))?;
+        for request in [
+            put(name, "1.0.0", &aql)?,
+            unversioned,
+            get(&format!("{name}/1.0.0"))?,
+            invoke(name, "{}", &[])?,
+        ] {
+            let route = request.uri().to_string();
+            let (status, text) = call(app.clone(), request).await?;
+            assert_eq!(StatusCode::BAD_REQUEST, status, "{route}: {text}");
+            assert_eq!("query-name-invalid", error_body(&text)?.code, "{route}");
+        }
+    }
+    let (status, text) = call(app.clone(), put("...", "1.0.0", &aql)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "three dots are no dot-segment: {text}"
+    );
+    let (status, text) = call(app, get(".../1.0.0")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_name_a_version_or_a_query_type_outside_its_rest_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;

@@ -49,7 +49,8 @@ const RESERVED: &str = "aql";
 ///
 /// The query name is one or more of `[a-zA-Z0-9_.-]` and is never `aql` in
 /// any case, which ITS-REST reserves; the namespace, "a reverse domain name",
-/// takes the same characters. The type has no `Display` of a refused value:
+/// takes the same characters. A name without a namespace is never `.` or
+/// `..`, the two RFC 3986 dot-segments, because no request path carries one. The type has no `Display` of a refused value:
 /// a refusal never quotes what was sent.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct QueryName(String);
@@ -69,6 +70,10 @@ pub enum QueryNameError {
     /// The query name is `aql`, which ITS-REST reserves.
     #[error("the query name aql is reserved for ad hoc queries")]
     Reserved,
+    /// The whole name is `.` or `..`, a dot-segment no request path carries
+    /// (RFC 3986 §3.3).
+    #[error("a stored query name without a namespace is not . or ..")]
+    DotSegment,
 }
 
 impl QueryName {
@@ -77,7 +82,8 @@ impl QueryName {
     /// # Errors
     ///
     /// [`QueryNameError`] when `value` is not `[{namespace}::]{query-name}`
-    /// over the ITS-REST characters, or names the reserved `aql`.
+    /// over the ITS-REST characters, names the reserved `aql`, or is a
+    /// dot-segment.
     pub fn new(value: &str) -> Result<Self, QueryNameError> {
         let (namespace, name) = match value.split_once(NAMESPACE_SEPARATOR) {
             Some((namespace, name)) => (Some(namespace), name),
@@ -93,6 +99,12 @@ impl QueryName {
         }
         if name.eq_ignore_ascii_case(RESERVED) {
             return Err(QueryNameError::Reserved);
+        }
+        // NOTE: ITS-REST expands `{qualified_query_name}` with `style: simple` (RFC 6570 §3.2.2),
+        // which keeps `.`, so `.` and `..` become dot-segments that RFC 3986 §5.2.4 removes, and
+        // §2.3 says a producer should not encode `.`: no URL names such a query.
+        if matches!(value, "." | "..") {
+            return Err(QueryNameError::DotSegment);
         }
         Ok(Self(value.to_owned()))
     }
