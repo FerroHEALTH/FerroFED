@@ -18,6 +18,9 @@
 use std::fmt;
 use std::path::Path;
 
+use fhir_types::codec::{Json, Object, Value};
+use fhir_types::r4::bundle::Bundle;
+use fhir_types::r4::resource::Resource;
 use fhir_types::r4::schema::SCHEMAS;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::engine::traverse::functions::NoMappingFunctions;
@@ -32,6 +35,7 @@ use fhirconnect::operations::programs::ProgramSetError;
 use fhirconnect::operations::run;
 use fhirconnect::operations::run::Settings;
 use fhirconnect::resolve::compile::compile;
+use fhirconnect::resolve::select::select_by_template;
 use openehr_mapping_core::diagnostic::Diagnostic;
 use openehr_mapping_core::header::metadata::MappingName;
 use openehr_mapping_core::header::metadata::MappingNameError;
@@ -178,23 +182,97 @@ impl Mapping {
         if !matches!(payload, CompositionPayload::Canonical(_)) {
             return Err(MappingError::NotCanonical);
         }
+        let template = payload.template_id();
         let request = ToFhirRequest::new(payload);
         let request = match context {
             Some(context) => request.with_context(context),
             None => request,
         };
-        run::to_fhir(
+        let refused = |source: OperationError| MappingError::Run {
+            source: Box::new(source),
+        };
+        let response = run::to_fhir(
             &self.programs,
             &SCHEMAS,
             &NoMappingFunctions,
             settings,
             &request,
         )
-        .map_err(|source| MappingError::Run {
-            source: Box::new(source),
-        })
+        .map_err(refused)?;
+        let template = template.ok_or_else(|| refused(OperationError::CanonicalTemplate))?;
+        let program = select_by_template(self.programs.programs(), &template)
+            .map_err(|source| refused(OperationError::Select { source }))?;
+        let mut bundle = response.into_bundle();
+        claim(
+            &mut bundle,
+            program.resource().as_str(),
+            program.profile().url().as_str(),
+        )?;
+        Ok(ToFhirResponse::new(bundle))
     }
 }
+
+/// Claims `profile` in the `meta.profile` of every mapped resource of
+/// `bundle`, each entry of `resource_type`, unless it claims it already.
+///
+/// The context mapping that ran maps to `profile`, so the resource it wrote
+/// claims conformance to it, appended after any profile it claims.
+// NOTE: FHIR R4 Resource.meta.profile is a claim of conformance; the run's context maps to
+// `profile`, so the mapped resource claims it, and a receiver selects its mapping by it.
+fn claim(bundle: &mut Bundle, resource_type: &str, profile: &str) -> Result<(), MappingError> {
+    let mut claimed = false;
+    for resource in bundle
+        .entry
+        .iter_mut()
+        .filter_map(|entry| entry.resource.as_mut())
+    {
+        let mut object = Json::to_json(&*resource).map_err(claim_error)?;
+        if !matches!(object.get("resourceType"), Some(Value::String(name)) if name == resource_type)
+        {
+            continue;
+        }
+        let meta = object
+            .entry(String::from("meta"))
+            .or_insert_with(|| Value::Object(Object::new()));
+        let Value::Object(meta) = meta else {
+            return Err(claim_error(Unclaimable("its meta is no object")));
+        };
+        let profiles = meta
+            .entry(String::from("profile"))
+            .or_insert_with(|| Value::Array(Vec::new()));
+        let Value::Array(profiles) = profiles else {
+            return Err(claim_error(Unclaimable("its meta.profile is no array")));
+        };
+        if !profiles
+            .iter()
+            .any(|held| matches!(held, Value::String(url) if url == profile))
+        {
+            profiles.push(Value::String(profile.to_owned()));
+        }
+        *resource = Resource::from_json(&object, &mut fhir_types::codec::Path::root(resource_type))
+            .map_err(claim_error)?;
+        claimed = true;
+    }
+    if claimed {
+        Ok(())
+    } else {
+        Err(claim_error(Unclaimable(
+            "the run wrote no resource of the mapped type",
+        )))
+    }
+}
+
+/// The claim failure `source`.
+fn claim_error(source: impl std::error::Error + Send + Sync + 'static) -> MappingError {
+    MappingError::Claim {
+        source: Box::new(source),
+    }
+}
+
+/// Why the mapped resource cannot claim its profile.
+#[derive(Debug, thiserror::Error)]
+#[error("the mapped resource cannot claim its profile: {0}")]
+struct Unclaimable(&'static str);
 
 /// One compiled context mapping: its name, the template it maps and the
 /// profile it maps to.
@@ -252,6 +330,13 @@ pub enum MappingError {
         #[source]
         source: Box<OperationError>,
     },
+    /// The mapped resource could not claim the profile its context maps to.
+    #[error("the mapped resource cannot claim its profile")]
+    Claim {
+        /// The encoding failure.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 }
 
 /// Renders a diagnostic list on one line.
@@ -266,5 +351,84 @@ impl fmt::Display for Refusals<'_> {
             write!(f, "{diagnostic}")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fhir_types::codec::{Json, Path, Value};
+    use fhir_types::r4::bundle::Bundle;
+
+    use super::claim;
+
+    const PROFILE: &str = "http://example.org/fhir/StructureDefinition/ferrofed-allergy";
+
+    const PROVENANCE: &str = r#"{ "resource": { "resourceType": "Provenance", "id": "v", "target": [{ "reference": "AllergyIntolerance/a1" }], "recorded": "2026-10-14T10:00:00Z", "agent": [{ "who": { "display": "Synthetic" } }] } }"#;
+
+    fn bundle(entries: &[String]) -> Bundle {
+        let text = format!(
+            r#"{{ "resourceType": "Bundle", "type": "collection", "entry": [{}] }}"#,
+            entries.join(",")
+        );
+        let Ok(Value::Object(read)) = serde_json::from_str::<Value>(&text) else {
+            panic!("the fixture should be a JSON object");
+        };
+        Bundle::from_json(&read, &mut Path::root("Bundle")).expect("the fixture should decode")
+    }
+
+    fn allergy(id: &str, meta: &str) -> String {
+        format!(
+            r#"{{ "resource": {{ "resourceType": "AllergyIntolerance", "id": "{id}"{meta}, "patient": {{ "reference": "Patient/p" }} }} }}"#
+        )
+    }
+
+    fn claims(bundle: &Bundle) -> Vec<Vec<String>> {
+        bundle
+            .entry
+            .iter()
+            .filter_map(|entry| entry.resource.as_ref())
+            .map(|resource| Json::to_json(resource).expect("an entry should encode"))
+            .filter(|object| {
+                object.get("resourceType").and_then(Value::as_str) == Some("AllergyIntolerance")
+            })
+            .map(|object| {
+                object
+                    .get("meta")
+                    .and_then(|meta| meta.get("profile"))
+                    .and_then(Value::as_array)
+                    .map(|profiles| {
+                        profiles
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(String::from)
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_entry_of_the_mapped_type_claims_the_profile_once() {
+        let mut mapped = bundle(&[
+            allergy("a1", ""),
+            String::from(PROVENANCE),
+            allergy(
+                "a2",
+                &format!(r#", "meta": {{ "profile": ["{PROFILE}"] }}"#),
+            ),
+        ]);
+        claim(&mut mapped, "AllergyIntolerance", PROFILE).expect("the run should claim");
+        assert_eq!(
+            claims(&mapped),
+            vec![vec![String::from(PROFILE)], vec![String::from(PROFILE)]],
+            "both allergies claim the profile, and the one that held it holds it once"
+        );
+    }
+
+    #[test]
+    fn a_run_with_no_entry_of_the_mapped_type_is_refused() {
+        let mut mapped = bundle(&[String::from(PROVENANCE)]);
+        assert!(claim(&mut mapped, "AllergyIntolerance", PROFILE).is_err());
     }
 }

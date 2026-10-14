@@ -388,7 +388,12 @@ pub fn check(document: &str) -> Result<Vec<String>, Box<dyn Error>> {
         }
     }
     if let Some(composition) = compositions.first() {
-        composition_findings(composition, &composition_profile, &urls, &mut need);
+        composition_findings(
+            (composition, full_url_of(&entries, composition)),
+            &composition_profile,
+            &urls,
+            &mut need,
+        );
     }
     Ok(findings)
 }
@@ -443,18 +448,43 @@ fn coded(concept: &Value, fixed: &Value) -> bool {
     })
 }
 
-/// Whether `reference` names one of `urls`.
-fn resolves(reference: &Value, urls: &BTreeSet<String>) -> bool {
-    reference
-        .at("reference")
-        .as_str()
-        .is_some_and(|url| urls.contains(url))
+/// The `fullUrl` of the entry of `entries` that holds `resource`, or the
+/// empty string, which no reference resolves against.
+fn full_url_of<'a>(entries: &'a [Value], resource: &Value) -> &'a str {
+    entries
+        .iter()
+        .find(|entry| entry.at("resource") == resource)
+        .and_then(|entry| entry.at("fullUrl").as_str())
+        .unwrap_or_default()
 }
 
-/// The findings of `composition` against its profile's `elements`, its
-/// references resolved among `urls`.
+/// Whether `reference`, held by the entry whose `fullUrl` is `holder`, names
+/// one of `urls`.
+///
+/// An absolute reference names the entry whose `fullUrl` it is; a relative
+/// `Type/id` resolves against the base of the holder's REST-style `fullUrl`
+/// (FHIR R4 Bundle references,
+/// <https://hl7.org/fhir/R4/bundle.html#references>).
+fn resolves(reference: &Value, holder: &str, urls: &BTreeSet<String>) -> bool {
+    let Some(url) = reference.at("reference").as_str() else {
+        return false;
+    };
+    if urls.contains(url) {
+        return true;
+    }
+    let relative = url.split('/').count() == 2 && !url.contains(':') && !url.starts_with('#');
+    let base = holder
+        .rsplitn(3, '/')
+        .nth(2)
+        .filter(|base| base.contains("://"));
+    relative && base.is_some_and(|base| urls.contains(&format!("{base}/{url}")))
+}
+
+/// The findings of `composition`, held by the entry whose `fullUrl` is
+/// `holder`, against its profile's `elements`, its references resolved
+/// among `urls`.
 fn composition_findings(
-    composition: &Value,
+    (composition, holder): (&Value, &str),
     elements: &[Value],
     urls: &BTreeSet<String>,
     need: &mut impl FnMut(bool, String),
@@ -482,12 +512,12 @@ fn composition_findings(
         "Composition.type is no patient summary".to_owned(),
     );
     need(
-        resolves(composition.at("subject"), urls),
+        resolves(composition.at("subject"), holder, urls),
         "Composition.subject resolves".to_owned(),
     );
     for author in composition.at("author").as_array().into_iter().flatten() {
         need(
-            resolves(author, urls),
+            resolves(author, holder, urls),
             "Composition.author resolves".to_owned(),
         );
     }
@@ -518,13 +548,18 @@ fn composition_findings(
         need(held <= 1, format!("Composition.section:{slice} above 1"));
     }
     for section in &sections {
-        section_findings(section, urls, need);
+        section_findings(section, holder, urls, need);
     }
 }
 
-/// The findings of one composition `section`, its references resolved among
-/// `urls`.
-fn section_findings(section: &Value, urls: &BTreeSet<String>, need: &mut impl FnMut(bool, String)) {
+/// The findings of one composition `section` of the composition whose entry's
+/// `fullUrl` is `holder`, its references resolved among `urls`.
+fn section_findings(
+    section: &Value,
+    holder: &str,
+    urls: &BTreeSet<String>,
+    need: &mut impl FnMut(bool, String),
+) {
     for member in ["title", "code", "text"] {
         need(
             !section.at(member).is_null(),
@@ -552,7 +587,7 @@ fn section_findings(section: &Value, urls: &BTreeSet<String>, need: &mut impl Fn
         .chain(section.at("author").as_array().into_iter().flatten())
     {
         need(
-            resolves(reference, urls),
+            resolves(reference, holder, urls),
             format!("a section reference resolves: {reference}"),
         );
     }
@@ -561,4 +596,61 @@ fn section_findings(section: &Value, urls: &BTreeSet<String>, need: &mut impl Fn
         div.starts_with(r#"<div xmlns="http://www.w3.org/1999/xhtml">"#),
         "txt-1: the narrative is an XHTML div".to_owned(),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use serde_json::json;
+
+    use super::resolves;
+
+    /// The composition entry that holds the references.
+    const HOLDER: &str = "http://example.org/fhir/Composition/c";
+
+    /// The entries of a document under `http://example.org/fhir`.
+    fn urls() -> BTreeSet<String> {
+        BTreeSet::from([
+            String::from("http://example.org/fhir/Composition/c"),
+            String::from("http://example.org/fhir/Patient/p"),
+        ])
+    }
+
+    #[test]
+    fn an_absolute_reference_resolves_to_the_entry_it_names() {
+        let reference = json!({ "reference": "http://example.org/fhir/Patient/p" });
+        assert!(resolves(&reference, HOLDER, &urls()));
+    }
+
+    // FHIR R4 Bundle references: a relative reference resolves against the holder's RESTful base.
+    #[test]
+    fn a_relative_reference_resolves_against_the_holders_base() {
+        assert!(resolves(
+            &json!({ "reference": "Patient/p" }),
+            HOLDER,
+            &urls()
+        ));
+        assert!(!resolves(
+            &json!({ "reference": "Patient/q" }),
+            HOLDER,
+            &urls()
+        ));
+    }
+
+    #[test]
+    fn a_relative_reference_held_by_an_entry_with_no_restful_full_url_does_not_resolve() {
+        let reference = json!({ "reference": "Patient/p" });
+        let holder = "urn:uuid:4f5c1d1e-0000-4000-8000-0000000000aa";
+        assert!(!resolves(&reference, holder, &urls()));
+    }
+
+    #[test]
+    fn a_reference_with_no_literal_does_not_resolve() {
+        assert!(!resolves(
+            &json!({ "display": "Synthetic" }),
+            HOLDER,
+            &urls()
+        ));
+    }
 }

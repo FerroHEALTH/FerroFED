@@ -251,7 +251,17 @@ fn the_document_is_a_bundle_the_eps_profiles_constrain() -> Result<(), Box<dyn E
     let subject = composition["subject"]["reference"]
         .as_str()
         .ok_or("a subject")?;
-    assert!(urls.contains(subject), "the subject is an entry");
+    assert_eq!(
+        subject, "Patient/synthetic-subject",
+        "the subject is the one relative form a mapped resource names it by"
+    );
+    // R4 resolves a relative reference against the holding entry's fullUrl base
+    // (<https://hl7.org/fhir/R4/bundle.html#references>).
+    let subject_url = format!("{BASE}/{subject}");
+    assert!(
+        urls.contains(subject_url.as_str()),
+        "the subject is an entry"
+    );
     assert_eq!(composition["author"].as_array().map(Vec::len), Some(2));
     let sections = composition["section"].as_array().ok_or("sections")?;
     let held: BTreeSet<&str> = sections
@@ -287,7 +297,7 @@ fn the_document_is_a_bundle_the_eps_profiles_constrain() -> Result<(), Box<dyn E
     );
     let patient = entries
         .iter()
-        .find(|(url, _)| url == subject)
+        .find(|(url, _)| *url == subject_url)
         .ok_or("the patient entry")?;
     assert_eq!(
         patient.1["meta"]["profile"][0],
