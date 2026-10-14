@@ -37,8 +37,11 @@
 # Usage:
 #   scripts/checks/ihe-citations.sh              check the tracked tree
 #   scripts/checks/ihe-citations.sh --self-test  prove each refusal and pass
-# Needs pdftotext (poppler) when a vendored text is a PDF. Exit 1 naming each
-# citation the vendored text does not hold; 0 otherwise.
+# Needs pdftotext (poppler) to read a vendored text that is a PDF. Without it
+# the guard names each PDF it could not read on stderr, and counts a citation
+# no text it read holds as not checked, as it does for a cache-only text; a
+# citation a text it read holds is still held to its designator. Exit 1 naming each citation the vendored text does
+# not hold; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -87,10 +90,8 @@ headings() {
       ' "$file"
       ;;
     *.pdf)
-      if ! command -v pdftotext > /dev/null 2>&1; then
-        echo "ihe-citations: $file is a PDF and pdftotext is not on PATH; install poppler (poppler-utils)." >&2
-        return 1
-      fi
+      # check names a PDF it cannot read and leaves its citations unchecked.
+      command -v pdftotext > /dev/null 2>&1 || return 0
       pdftotext -layout "$file" - | layout_headings
       ;;
   esac
@@ -170,11 +171,13 @@ citations() {
     }'
 }
 
-# judge UNVENDORED INDEX CITATIONS: prints a finding per citation INDEX does
-# not hold, outside the UNVENDORED roots INDEX does not hold either, and exits
-# 1 when there is one.
+# judge UNVENDORED INDEX CITATIONS UNREAD: prints a finding per citation INDEX
+# does not hold, outside the UNVENDORED roots INDEX does not hold either, and
+# exits 1 when there is one. UNREAD names the PDFs left out of INDEX for want
+# of pdftotext; a citation INDEX does not hold may be in one of them, even
+# inside a transaction another text holds, so it is counted as not checked.
 judge() {
-  awk -F '\t' '
+  awk -F '\t' -v unread="$4" '
     FNR == 1 { part++ }
     part == 1 { skip[$1] = $2; order[++roots] = $1; next }
     part == 2 {
@@ -199,6 +202,7 @@ judge() {
         sub(/\.[0-9]+$/, "", root)
       }
       if (under != "" && !(under in present)) { unchecked[under]++; next }
+      if (unread != "" && !(canon in present)) { unreadable++; next }
       checked++
       if (!(canon in present)) {
         parent = canon
@@ -226,6 +230,9 @@ judge() {
       for (i = 1; i <= roots; i++) {
         if (unchecked[order[i]] > 0) { printf "ihe-citations: %d citation(s) under %s not checked: %s\n", unchecked[order[i]], order[i], skip[order[i]] }
       }
+      if (unreadable > 0) {
+        printf "ihe-citations: %d citation(s) not checked: no text read holds their section, and pdftotext is not on PATH to read %s; install poppler (brew install poppler, or apt-get install poppler-utils) to check them\n", unreadable, unread
+      }
       if (bad > 0) { printf "ihe-citations: %d of %d citation(s) name a section the vendored text does not hold\n", bad, checked; exit 1 }
       printf "ihe-citations: %d IHE citation(s), every one in the vendored text\n", checked
     }' "$1" "$2" "$3"
@@ -234,7 +241,13 @@ judge() {
 # check ROOT: builds the index under ROOT and judges the citations read from
 # stdin as `PATH:LINE:TEXT`.
 check() {
-  local root="$1" work status=0
+  local root="$1" work status=0 file unread=""
+  if ! command -v pdftotext > /dev/null 2>&1; then
+    while IFS= read -r file; do
+      echo "ihe-citations: pdftotext is not on PATH, so ${file#"$root"/} is not read; install poppler (brew install poppler, or apt-get install poppler-utils)." >&2
+      unread="$unread${unread:+, }${file#"$root"/}"
+    done < <(corpus_files "$root" | grep '\.pdf$' || true)
+  fi
   work="$(mktemp -d)"
   build_index "$root" > "$work/index.tsv" || status=$?
   if [[ "$status" -eq 0 ]] && [[ ! -s "$work/index.tsv" ]]; then
@@ -247,7 +260,7 @@ check() {
   fi
   citations > "$work/citations.tsv"
   printf '%s\n' "$UNVENDORED" > "$work/unvendored.tsv"
-  judge "$work/unvendored.tsv" "$work/index.tsv" "$work/citations.tsv" || status=$?
+  judge "$work/unvendored.tsv" "$work/index.tsv" "$work/citations.tsv" "$unread" || status=$?
   rm -rf "$work"
   return "$status"
 }
@@ -276,11 +289,13 @@ self_test() {
   printf '## 9 Copyright\n# Volume 1 - Profiles\n## 34.1 Actors\n# Volume 2 - Transactions\n#### 3.72.4.3 Expected Actions\n' \
     > "$work/docs/specs/ihe-iua/IUA.md"
 
-  # expect WANT LINE: a source line LINE exits WANT.
+  # expect WANT LINE: a source line LINE exits WANT, the tools found on
+  # $search.
+  local search="$PATH"
   expect() {
     local want="$1" status=0
     n=$((n + 1))
-    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$2" | check "$work" > "$work/out" 2>&1 || status=$?
+    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$2" | PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
     if [[ "$status" -ne "$want" ]]; then
       echo "ihe-citations: self-test failed: '$2' exited $status, wanted $want." >&2
       sed 's/^/  /' "$work/out" >&2
@@ -338,6 +353,25 @@ self_test() {
     echo "ihe-citations: self-test failed: the layout headings read '$layout'." >&2
     failed=1
   fi
+  # Without pdftotext a PDF is named as not read, a citation only it could
+  # hold is not checked, and a citation another text holds is still judged.
+  local tool
+  mkdir -p "$work/bin" "$work/docs/specs/ihe-atna"
+  for tool in awk dirname find grep head mktemp rm sed sort; do
+    ln -s "$(command -v "$tool")" "$work/bin/$tool"
+  done
+  printf 'not read\n' > "$work/docs/specs/ihe-atna/Suppl.pdf"
+  search="$work/bin"
+  expect 0 '/// ITI-81 §3.81.4.1.2.1 the date search.'
+  if ! grep -q -F 'pdftotext is not on PATH, so docs/specs/ihe-atna/Suppl.pdf is not read; install poppler' "$work/out" ||
+    ! grep -q -F '1 citation(s) not checked' "$work/out"; then
+    echo "ihe-citations: self-test failed: without pdftotext the PDF is not named, or the citation is not counted as not checked." >&2
+    sed 's/^/  /' "$work/out" >&2
+    failed=1
+  fi
+  expect 0 '/// PIXm §2:3.83.4.2.2.1 lists the identifiers.'
+  expect 1 '/// PDQm §2:3.83.4 the messages.'
+  expect 1 '/// ITI-38 §3.55.4.2.3 names another transaction.'
   if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
