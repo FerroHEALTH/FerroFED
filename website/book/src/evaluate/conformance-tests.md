@@ -324,7 +324,7 @@ with no marked test is not listed.
 
 ## CP-26
 
-142 tests.
+145 tests.
 
 - `app/ferrofed-engine/src/declared/headers.rs`: `a_utf_8_charset_passes_and_is_dropped`, `an_accept_list_reaches_the_node_as_its_best_listed_match`, `an_accept_that_admits_nothing_listed_is_not_acceptable`, `an_unlisted_content_type_is_unsupported`, `any_media_type_reaches_the_node_as_the_first_listed`, `prefer_reaches_the_node_as_its_listed_preferences_only`
 - `app/ferrofed-engine/src/declared/mod.rs`: `a_free_text_parameter_passes_unclassified`, `a_malformed_date_time_is_refused_by_position_never_by_value`, `a_well_formed_date_time_is_held`
@@ -368,7 +368,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/path_ehr_id/probe.rs`: `neither_the_probe_nor_the_routed_read_carries_an_identifier_or_the_clients_credential`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `neither_identifier_reaches_a_log_line_a_metric_or_a_node`
 - `app/ferrofed-server/tests/it/probed_ehr_id.rs`: `a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe`, `a_read_whose_ehr_id_is_no_uuid_and_that_nothing_routes_is_refused_and_probes_nobody`, `an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed`
-- `app/ferrofed-server/tests/it/query_get.rs`: `a_client_ehr_id_in_the_query_string_is_dropped`
+- `app/ferrofed-server/tests/it/query_get.rs`: `a_client_ehr_id_in_the_query_string_is_dropped`, `a_quoted_identifier_bound_as_the_subject_resolves_nowhere_and_asks_nobody`, `a_quoted_identifier_in_a_get_query_parameter_is_refused_before_dispatch`, `a_quoted_identifier_in_a_stored_get_query_parameter_is_refused_before_dispatch`
 - `app/ferrofed-server/tests/it/routing/hygiene.rs`: `an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_authorization`, `an_identifier_in_a_query_parameter_is_refused_before_anything_is_sent`
 - `app/ferrofed-server/tests/it/routing_log.rs`: `no_event_of_a_routed_request_names_the_clients_id`
 - `app/ferrofed-server/tests/it/traces/traceparent.rs`: `an_identifier_hidden_in_the_clients_trace_id_reaches_no_node_and_no_span`

@@ -7,8 +7,9 @@
 //! request and the client the same answer (N1, CP-1; ITS-REST Query API). The
 //! query string is decoded by the generated `openehr-its` parameters, a `+`
 //! is a literal plus, and a refusal is `400 body-invalid` that asks nobody.
-//! No node request carries the patient identifier (§5.4.1, N33), and the
-//! request log carries neither `q` nor a parameter value (§5.4.3).
+//! No node request carries the patient identifier (§5.4.1, N33), not even
+//! one bound as a double-quoted value, whose quotes the decoding keeps, and
+//! the request log carries neither `q` nor a parameter value (§5.4.3).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -396,6 +397,131 @@ fn neither_q_nor_a_parameter_value_of_a_get_reaches_the_log() -> TestResult {
         "c%2Fuid",
     ] {
         assert!(!text.contains(needle), "{needle} reached the log: {text}");
+    }
+    Ok(())
+}
+
+/// The patient query naming the patient by literal, with the composition
+/// name bound through `$name`.
+fn named_by_literal() -> String {
+    format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}' \
+         AND c/name/value = $name"
+    )
+}
+
+/// The patient's identifier as a double-quoted query-string value, whose
+/// quotes the `GET` forms keep, each case with its name.
+fn quoted_identifiers() -> [(&'static str, String); 3] {
+    [
+        ("the identifier quoted", format!("\"{PATIENT}\"")),
+        (
+            "the identifier quoted with surrounding text",
+            format!("\"visit of {PATIENT} today\""),
+        ),
+        (
+            "the identifier namespace-qualified and quoted",
+            format!("\"{NAMESPACE}::{PATIENT}\""),
+        ),
+    ]
+}
+
+/// Asserts that `uri` is a `400 identifier-elsewhere` that quotes nothing
+/// and that neither member received anything (§5.4.1, N33).
+async fn refused_unsent(app: &Router, uri: &str, case: &str, nodes: [&Server; 2]) -> TestResult {
+    let (status, text) = call(app.clone(), get(uri)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{case}: {text}");
+    assert_eq!(
+        "identifier-elsewhere",
+        error_body(&text)?.code,
+        "{case}: {text}"
+    );
+    assert!(
+        !text.contains(PATIENT_TAIL),
+        "{case}: the answer quotes the identifier: {text}"
+    );
+    for node in nodes {
+        let sent = received(node).await?;
+        assert!(
+            sent.is_empty(),
+            "{case}: a refused request asks nobody (§5.4.1, N33): {sent:?}"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_quoted_identifier_in_a_get_query_parameter_is_refused_before_dispatch() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (app, a, b) = both_members(dir.path()).await?;
+    let (literal, bound) = (encoded(&named_by_literal()), encoded(&parameterised()));
+    for (case, value) in quoted_identifiers() {
+        let value = encoded(&value);
+        let uri = format!("/v1/query/aql?q={literal}&name={value}");
+        refused_unsent(&app, &uri, &format!("{case}, subject by literal"), [&a, &b]).await?;
+        let uri = format!("/v1/query/aql?q={bound}&patient={PATIENT}&name={value}");
+        refused_unsent(&app, &uri, &format!("{case}, subject bound"), [&a, &b]).await?;
+    }
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_quoted_identifier_in_a_stored_get_query_parameter_is_refused_before_dispatch()
+-> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (app, a, b) = registry_members(dir.path()).await?;
+    let put = Request::put(format!("/v1/definition/query/{NAME}/1.0.0"))
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(Body::from(parameterised()))?;
+    let (status, text) = call(app.clone(), put).await?;
+    assert_eq!(StatusCode::OK, status, "§12.7: stored: {text}");
+    for path in [
+        format!("/v1/query/{NAME}"),
+        format!("/v1/query/{NAME}/1.0.0"),
+    ] {
+        for (case, value) in quoted_identifiers() {
+            let uri = format!("{path}?patient={PATIENT}&name={}", encoded(&value));
+            refused_unsent(&app, &uri, &format!("{path}: {case}"), [&a, &b]).await?;
+        }
+    }
+    Ok(())
+}
+
+/// A quoted identifier bound as the subject is resolution input that names
+/// no patient the cross-reference holds, so every member is `not-resolved`
+/// and none is asked (§5.4.1, §11.1, N33).
+// conformance: CP-26
+#[tokio::test]
+async fn a_quoted_identifier_bound_as_the_subject_resolves_nowhere_and_asks_nobody() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (app, a, b) = both_members(dir.path()).await?;
+    let uri = format!(
+        "/v1/query/aql?q={}&patient={}&name=x",
+        encoded(&parameterised()),
+        encoded(&format!("\"{PATIENT}\""))
+    );
+    let (status, text) = call(app, get(&uri)?).await?;
+    let (status, _, rows, endpoints) = outcome(status, &text)?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(rows.is_empty(), "{text}");
+    assert_eq!(
+        vec![
+            ("node-a-pub".to_owned(), "not-resolved".to_owned()),
+            ("node-b-pub".to_owned(), "not-resolved".to_owned()),
+        ],
+        endpoints,
+        "{text}"
+    );
+    for node in [&a, &b] {
+        let sent = received(node).await?;
+        assert!(
+            sent.is_empty(),
+            "a member that resolves nothing is not asked: {sent:?}"
+        );
     }
     Ok(())
 }
