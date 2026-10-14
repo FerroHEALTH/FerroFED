@@ -29,7 +29,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Crates that implement storage, by crates.io name. A new storage engine is
@@ -143,25 +143,9 @@ fn closure_of(package: &str, feature: &str) -> Result<BTreeSet<String>, Box<dyn 
 /// The package names in the normal and build dependency closure of `package`,
 /// with the features `selection` names.
 fn tree(package: &str, selection: &[&str]) -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let manifest = Path::new(ROOT).join("Cargo.toml");
-    let output = Command::new(env!("CARGO"))
-        .arg("tree")
-        .arg("--manifest-path")
-        .arg(&manifest)
-        .args(["--package", package])
-        .args(["--edges", "normal,build"])
-        .args(["--prefix", "none", "--format", "{p}"])
-        .args(selection)
-        .arg("--locked")
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "cargo tree failed for {package}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-    Ok(String::from_utf8(output.stdout)?
+    let mut arguments = vec!["--prefix", "none", "--format", "{p}"];
+    arguments.extend_from_slice(selection);
+    Ok(cargo_tree(package, &arguments)?
         .lines()
         .filter_map(|line| line.split_whitespace().next())
         .map(str::to_owned)
@@ -171,29 +155,22 @@ fn tree(package: &str, selection: &[&str]) -> Result<BTreeSet<String>, Box<dyn E
 /// The package names `package` depends on directly through its normal and
 /// build dependencies, with every feature on.
 fn direct(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let manifest = Path::new(ROOT).join("Cargo.toml");
-    let output = Command::new(env!("CARGO"))
-        .arg("tree")
-        .arg("--manifest-path")
-        .arg(&manifest)
-        .args(["--package", package])
-        .args(["--edges", "normal,build"])
-        .args(["--depth", "1"])
-        .args(["--prefix", "none", "--format", "{p}"])
-        .args(["--all-features", "--locked"])
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "cargo tree failed for {package}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .map(str::to_owned)
-        .collect())
+    Ok(cargo_tree(
+        package,
+        &[
+            "--depth",
+            "1",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}",
+            "--all-features",
+        ],
+    )?
+    .lines()
+    .filter_map(|line| line.split_whitespace().next())
+    .map(str::to_owned)
+    .collect())
 }
 
 /// The package names in `package`'s normal and build closure, with every
@@ -203,31 +180,72 @@ fn dependents(package: &str, target: &str) -> Result<BTreeSet<String>, Box<dyn E
     if !closure(package)?.contains(target) {
         return Ok(BTreeSet::new());
     }
-    let manifest = Path::new(ROOT).join("Cargo.toml");
+    Ok(cargo_tree(
+        package,
+        &[
+            "--invert",
+            target,
+            "--depth",
+            "1",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}",
+            "--all-features",
+        ],
+    )?
+    .lines()
+    .filter_map(|line| line.split_whitespace().next())
+    .filter(|name| *name != target)
+    .map(str::to_owned)
+    .collect())
+}
+
+/// Runs `cargo tree` over the normal and build edges of `package` with
+/// `arguments` added, and returns what it printed.
+///
+/// The child reads the lockfile and the registry already on disk
+/// (`--frozen`), so it never reaches the network. Cargo still takes the
+/// package cache lock of its home to resolve, offline too, and a cargo
+/// building elsewhere on the machine holds that lock for its whole build. So
+/// the child runs with a home of its own in a temporary directory, whose lock
+/// no other cargo takes, and whose `registry` and `git` link to the real
+/// home's, which an offline, frozen resolution only reads (the Cargo book,
+/// "Cargo Home"). It never cleans the cache it borrows
+/// (`cache.auto-clean-frequency`).
+fn cargo_tree(package: &str, arguments: &[&str]) -> Result<String, Box<dyn Error>> {
+    let home = tempfile::tempdir()?;
+    let shared = match std::env::var_os("CARGO_HOME") {
+        Some(shared) => PathBuf::from(shared),
+        None => std::env::home_dir()
+            .ok_or("neither CARGO_HOME nor a home directory names the cargo home")?
+            .join(".cargo"),
+    };
+    for cache in ["registry", "git"] {
+        let source = shared.join(cache);
+        if source.exists() {
+            std::os::unix::fs::symlink(&source, home.path().join(cache))?;
+        }
+    }
     let output = Command::new(env!("CARGO"))
+        .env("CARGO_HOME", home.path())
+        .env("CARGO_CACHE_AUTO_CLEAN_FREQUENCY", "never")
         .arg("tree")
         .arg("--manifest-path")
-        .arg(&manifest)
+        .arg(Path::new(ROOT).join("Cargo.toml"))
         .args(["--package", package])
-        .args(["--invert", target])
         .args(["--edges", "normal,build"])
-        .args(["--depth", "1"])
-        .args(["--prefix", "none", "--format", "{p}"])
-        .args(["--all-features", "--locked"])
+        .args(arguments)
+        .arg("--frozen")
         .output()?;
     if !output.status.success() {
         return Err(format!(
-            "cargo tree --invert {target} failed for {package}: {}",
+            "cargo tree {arguments:?} failed for {package}: {}",
             String::from_utf8_lossy(&output.stderr)
         )
         .into());
     }
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .filter(|name| *name != target)
-        .map(str::to_owned)
-        .collect())
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 /// The package names of the members under one workspace directory, read from

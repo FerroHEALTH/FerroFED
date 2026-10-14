@@ -18,6 +18,15 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 filter = 'test(/^e2e::differential::/)'
 slow-timeout = { period = "60s", terminate-after = 20 }
 
+# The engine's architecture tests run one cargo tree per workspace member,
+# some twenty processes in the longest of them, which take ten seconds on an
+# idle machine and several times that on one busy with other builds, so they
+# get three minutes. Their child cargo runs offline with a package cache lock
+# of its own, so no wait on another cargo falls inside that budget.
+[[profile.default.overrides]]
+filter = 'package(ferrofed-engine) & test(/^architecture::/)'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).

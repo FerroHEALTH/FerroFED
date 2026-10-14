@@ -123,6 +123,14 @@ impl AuditRepository {
 
     /// Waits up to `within` until `count` messages have arrived, and returns
     /// every message read by then.
+    ///
+    /// It returns once this repository has read the frames, which can be
+    /// before the forwarder counts them delivered and frees their places in
+    /// the spool. A test that needs the spool drained also waits on the
+    /// forwarder: on its `status` reporting the messages delivered and a
+    /// spool depth of zero, as the `delivered` wait of `ferrofed-identity`'s
+    /// ATNA tests does, or on the `audit_repository` state the gateway
+    /// reports on `GET /operator/dependencies` reading `up`.
     pub async fn wait_for(&self, count: usize, within: Duration) -> Vec<String> {
         let until = Instant::now() + within;
         loop {
