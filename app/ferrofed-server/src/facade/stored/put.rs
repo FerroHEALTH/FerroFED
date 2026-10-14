@@ -14,18 +14,20 @@ use ferrofed_eehrxf::reserved;
 use ferrofed_engine::declared::query;
 use ferrofed_registry::definition::store::{Assignment, Definitions, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
-use http::{HeaderMap, HeaderValue, StatusCode, header};
+use http::{HeaderMap, StatusCode, header};
 use jiff::Timestamp;
 use openehr_its::rest::generated::definition::{
     DefinitionQueryStoreYamlParams, DefinitionQueryVersionStoreYamlParams,
 };
 use openehr_its::rest::routes::RouteMatch;
 
+use crate::config::public_url::PublicUrl;
 use crate::error::Code;
 use crate::facade::request;
 use crate::facade::route::Arrived;
 use crate::facade::security;
 use crate::facade::stored::distribution::{self, Registry};
+use crate::facade::stored::location::{self, Answered};
 use crate::facade::stored::{AQL, QUERY_STRING_INVALID, Refused, VERSION_PARAM, name, segment};
 use crate::federation::Federation;
 use crate::stored::{self, Inadmissible};
@@ -78,9 +80,8 @@ fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refus
 /// it whatever is bound, or when it names its patient by a literal, before
 /// any version is assigned. The text
 /// held is the canonical print of the parse. A stored definition answers
-/// `200` with `Location` naming it, as a reference relative to the request
-/// (RFC 9110 §10.2.2), because the gateway does not know its public base URL
-/// (§4.1, N28).
+/// `200` with `Location` naming its URL ([`location::location`]; ITS-REST
+/// `200_StoredQuery_stored`).
 ///
 /// A request naming members for distribution is refused before anything is
 /// stored when its targeting cannot be answered, or when the definition
@@ -89,7 +90,7 @@ fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refus
 /// then distributed at the version stored ([`distribution::distribute`]).
 pub(super) async fn store(
     federation: &Federation,
-    definitions: &Arc<Definitions>,
+    (definitions, public): (&Arc<Definitions>, Option<&PublicUrl>),
     matched: &RouteMatch,
     arrived: &Arrived<'_>,
 ) -> Result<Response, Refused> {
@@ -132,7 +133,12 @@ pub(super) async fn store(
         distribution::distributable(admitted.aql(), &logged)?;
     }
     let stored = kept(definitions, (name, version), admitted.aql(), &logged).await?;
-    let location = location(&stored, version.is_none())?;
+    let answered = if version.is_some() {
+        Answered::Versioned
+    } else {
+        Answered::Unversioned
+    };
+    let location = location::location(&stored, answered, public)?;
     let mut response = match distributed {
         Some(selected) => {
             let sent = (Registry::Stored, &selected);
@@ -141,7 +147,9 @@ pub(super) async fn store(
         }
         None => StatusCode::OK.into_response(),
     };
-    response.headers_mut().insert(header::LOCATION, location);
+    if let Some(location) = location {
+        response.headers_mut().insert(header::LOCATION, location);
+    }
     Ok(response)
 }
 
@@ -220,20 +228,4 @@ async fn kept(
             Err(Refused::fixed(Code::Internal))
         }
     }
-}
-
-/// The `Location` of `stored`, relative to the request path (RFC 9110
-/// §10.2.2): its version after a path that ends in one, else
-/// `./{name}/{version}` after a path that ends in the name, the `./` keeping
-/// the `::` of a namespaced name from reading as a URI scheme (RFC 3986 §4.2).
-fn location(stored: &StoredDefinition, unversioned: bool) -> Result<HeaderValue, Refused> {
-    let reference = if unversioned {
-        format!("./{}/{}", stored.name(), stored.version())
-    } else {
-        stored.version().to_string()
-    };
-    HeaderValue::try_from(reference).map_err(|_invalid| {
-        tracing::error!("a stored query's location is not a valid header value");
-        Refused::fixed(Code::Internal)
-    })
 }

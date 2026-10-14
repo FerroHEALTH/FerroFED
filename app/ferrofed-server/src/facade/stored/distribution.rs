@@ -52,7 +52,7 @@ use ferrofed_engine::dispatch::{Contact, DispatchError};
 use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::Endpoint;
-use http::{HeaderMap, HeaderValue, StatusCode, header};
+use http::{HeaderMap, StatusCode};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::error::WireError;
 use openehr_federation::headers;
@@ -271,14 +271,8 @@ pub(super) async fn distribute(
             .map(|(_, outcome)| outcome)
             .collect::<Vec<_>>(),
     );
-    let location = HeaderValue::try_from(version).map_err(|_invalid| {
-        tracing::error!("a version is not a valid header value");
-        Refused::fixed(Code::Internal)
-    })?;
     let answered = (code, Some(registry));
-    let mut response = reported(federation, definition, &outcomes, answered, &logged)?;
-    response.headers_mut().insert(header::LOCATION, location);
-    Ok(response)
+    reported(federation, definition, &outcomes, answered, &logged)
 }
 
 /// Reads each member of `selected`'s copy of the registry's `definition`

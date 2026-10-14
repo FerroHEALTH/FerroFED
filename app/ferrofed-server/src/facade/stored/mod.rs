@@ -55,16 +55,19 @@ use openehr_its::rest::generated::query::{
 };
 use openehr_its::rest::routes::RouteMatch;
 
+use crate::config::public_url::PublicUrl;
 use crate::error::{self, Code};
 use crate::facade::answer;
 use crate::facade::request::{self, Submitted};
 use crate::facade::route::Arrived;
 use crate::facade::stored::distribution::Registry;
+use crate::facade::stored::location::Answered;
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
 
 mod distribution;
+mod location;
 mod put;
 
 /// The path parameter that names the stored query.
@@ -166,7 +169,7 @@ const READ_ONLY_ALLOW: &str = "GET, OPTIONS";
 )]
 pub(crate) async fn serve<'a>(
     federation: &Federation,
-    definitions: &Arc<Definitions>,
+    (definitions, public): (&Arc<Definitions>, Option<&PublicUrl>),
     matched: &RouteMatch,
     arrived: Arrived<'a>,
 ) -> Result<Response, Arrived<'a>> {
@@ -178,7 +181,7 @@ pub(crate) async fn serve<'a>(
         return Ok(read_only(request_id));
     }
     let answered = match operation {
-        Operation::Store => put::store(federation, definitions, matched, &arrived).await,
+        Operation::Store => put::store(federation, (definitions, public), matched, &arrived).await,
         Operation::Read => read(federation, definitions, matched, &arrived).await,
         Operation::List => list(definitions, matched, &arrived).await,
         Operation::Execute(carrier) => {
@@ -369,15 +372,20 @@ pub(crate) async fn distribute_held(
         return error::fixed(Code::NotImplemented, request_id);
     };
     let at = (name, version);
-    redistributed(&federation, definitions, at, (headers, body))
-        .await
-        .unwrap_or_else(|refused| refused.respond(request_id))
+    redistributed(
+        &federation,
+        (definitions, state.public_url()),
+        at,
+        (headers, body),
+    )
+    .await
+    .unwrap_or_else(|refused| refused.respond(request_id))
 }
 
 /// The distribution [`distribute_held`] answers, or its refusal.
 async fn redistributed(
     federation: &Federation,
-    definitions: &Arc<Definitions>,
+    (definitions, public): (&Arc<Definitions>, Option<&PublicUrl>),
     (name, version): (&str, &str),
     (headers, body): (&HeaderMap, &[u8]),
 ) -> Result<Response, Refused> {
@@ -411,7 +419,13 @@ async fn redistributed(
         );
         Refused::fixed(Code::Internal)
     })?;
-    distribution::distribute(federation, &held, sent, (outbound, &conveyance, started)).await
+    let location = location::location(&held, Answered::Admin, public)?;
+    let mut response =
+        distribution::distribute(federation, &held, sent, (outbound, &conveyance, started)).await?;
+    if let Some(location) = location {
+        response.headers_mut().insert(header::LOCATION, location);
+    }
+    Ok(response)
 }
 
 /// The ITS-REST `StoredQuery` of `definition`.

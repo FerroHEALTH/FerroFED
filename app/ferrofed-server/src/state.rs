@@ -14,6 +14,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use crate::binding::ihe::pmir::IdentityFeedError;
 use crate::binding::process::{Processes, Sources};
 use crate::config::fhir::FhirSettings;
+use crate::config::public_url::PublicUrl;
 use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
@@ -44,6 +45,9 @@ pub struct AppState {
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
     /// (EU) 2025/327 Annex II 2.1). It is fixed for the life of the process.
     fhir: Option<Arc<FhirSettings>>,
+    /// The absolute URL clients reach `{base}` at, `server.public_url`, when
+    /// it is set; the stored-query answers name their `Location` under it.
+    public_url: Option<PublicUrl>,
     /// The metrics surface every recording site and the admin listener
     /// share; it outlives every federation a reload builds.
     metrics: Arc<Metrics>,
@@ -156,6 +160,7 @@ impl AppState {
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
             fhir: settings.fhir.clone().map(Arc::new),
+            public_url: settings.server.public_url.clone(),
             metrics,
             processes: Processes::build(settings)?,
         })
@@ -207,6 +212,7 @@ impl AppState {
             federation: RwLock::new(None),
             definitions: None,
             fhir: None,
+            public_url: None,
             metrics: Arc::default(),
             processes: Processes::default(),
         }
@@ -223,6 +229,7 @@ impl AppState {
             federation: RwLock::new(Some(Arc::new(federation.metered(metrics.nodes())))),
             definitions: None,
             fhir: None,
+            public_url: None,
             metrics,
             processes: Processes::default(),
         }
@@ -302,6 +309,13 @@ impl AppState {
     #[must_use]
     pub fn fhir(&self) -> Option<&Arc<FhirSettings>> {
         self.fhir.as_ref()
+    }
+
+    /// Returns the absolute URL clients reach `{base}` at, when
+    /// `server.public_url` is set.
+    #[must_use]
+    pub fn public_url(&self) -> Option<&PublicUrl> {
+        self.public_url.as_ref()
     }
 
     /// Returns what the bindings run for the life of the process.

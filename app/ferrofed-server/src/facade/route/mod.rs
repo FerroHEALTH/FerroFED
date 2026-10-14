@@ -208,7 +208,14 @@ pub(crate) async fn unrouted(
     if let Some(definitions) = state.definitions()
         && let Lookup::Matched(matched) = routes::lookup(&method, path)
     {
-        match crate::facade::stored::serve(serving, definitions, &matched, arrived).await {
+        match crate::facade::stored::serve(
+            serving,
+            (definitions, state.public_url()),
+            &matched,
+            arrived,
+        )
+        .await
+        {
             Ok(response) => return response,
             Err(unanswered) => arrived = unanswered,
         }
