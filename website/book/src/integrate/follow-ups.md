@@ -198,10 +198,12 @@ outcomes:
   (`controlling-system-unreachable`), and no node is sent it. The message
   names the controlling system: the version's `creating_system_id` as the
   registry spells it, with the controlling node and its endpoint. When no
-  member is known to control the version, the message points at the place in
-  your request that names it (`If-Match`, the path, or the version of a
-  `CONTRIBUTION` by its position), because the only spelling of that system
-  is your own and the gateway never quotes your request. The path `ehr_id`
+  member is known to control the version, the message names the version's
+  `creating_system_id` as your request spells it, says the controlling
+  system is outside the federation, and points at the place in your request
+  that names the version (`If-Match`, the path, or the version of a
+  `CONTRIBUTION` by its position). It quotes no other part of your request.
+  The path `ehr_id`
   belongs to the node it routes to, so the gateway cannot send the write to
   the controlling node instead; send it there under that node's own `ehr_id`
   for the patient.

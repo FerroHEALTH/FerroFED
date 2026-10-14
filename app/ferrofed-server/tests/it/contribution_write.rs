@@ -287,13 +287,20 @@ async fn a_contribution_amending_a_version_no_member_is_known_to_control_is_409(
         (&a, &b),
     )
     .await?;
+    let message = error_body(&text)?.message;
+    // NOTE: §10.3 copy-write-reject, §12.2, N36: the creating_system_id is the
+    // controlling system's name, so the 409 names it and places it outside the federation.
     assert!(
-        !text.contains("external.example.org"),
-        "the client's creating_system_id is not quoted: {text}"
+        message.contains("external.example.org") && message.contains("outside the federation"),
+        "the error names the controlling system (§10.3, §12.2, N36): {message}"
     );
     assert!(
-        text.contains("the preceding_version_uid of version 2 of the CONTRIBUTION"),
-        "the error points at the controlling system it cannot quote (§10.3): {text}"
+        message.contains("the preceding_version_uid of version 2 of the CONTRIBUTION"),
+        "the error points at where the request names the version (§10.3): {message}"
+    );
+    assert!(
+        !message.contains(EHR_A) && !message.contains("5c3e9b1a"),
+        "no other value of the request is quoted: {message}"
     );
     Ok(())
 }

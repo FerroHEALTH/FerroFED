@@ -404,7 +404,7 @@ with no marked test is not listed.
 5 tests.
 
 - `app/ferrofed-server/tests/it/dedup.rs`: `under_version_identity_one_row_comes_back_and_the_copy_is_named`
-- `app/ferrofed-server/tests/it/dedup_write.rs`: `a_write_against_the_surviving_row_while_its_owner_is_down_is_a_409_and_reaches_no_node`, `a_write_through_the_owners_ehr_id_reaches_the_owner_alone_and_claims_no_copy`, `every_refusal_names_the_controlling_system_and_quotes_nothing_of_the_request`, `with_the_owner_up_a_write_through_the_copys_ehr_id_is_still_a_409`
+- `app/ferrofed-server/tests/it/dedup_write.rs`: `a_write_against_the_surviving_row_while_its_owner_is_down_is_a_409_and_reaches_no_node`, `a_write_through_the_owners_ehr_id_reaches_the_owner_alone_and_claims_no_copy`, `every_refusal_names_the_controlling_system_and_quotes_no_other_part_of_the_request`, `with_the_owner_up_a_write_through_the_copys_ehr_id_is_still_a_409`
 
 ## CP-30
 
