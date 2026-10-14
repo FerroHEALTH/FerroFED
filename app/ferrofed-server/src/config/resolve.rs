@@ -114,9 +114,16 @@ impl Config {
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
         stored_query_fan_out(&federation, stored_queries.as_ref())?;
+        let terminology = self.resolve_terminology()?;
+        let mut fhir = self.resolve_fhir(&base_path, public_url.as_ref())?;
+        if let Some(fhir) = &mut fhir {
+            fhir.terminology = crate::config::eehrxf::terminology(terminology.as_ref())?;
+            fhir.terminology_written
+                .clone_from(&self.eehrxf.terminology);
+        }
         let mut settings = Settings {
             profile: self.profile,
-            fhir: self.resolve_fhir(&base_path, public_url.as_ref())?,
+            fhir,
             server: ServerSettings {
                 listen,
                 base_path,

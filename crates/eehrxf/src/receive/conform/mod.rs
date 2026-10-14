@@ -45,6 +45,9 @@ use crate::dataset::ResourceProfile;
 use crate::dataset::constraint::DiscriminatorKind;
 use crate::receive::ReceivedDocument;
 use crate::receive::conform::walk::Walk;
+use crate::terminology::bindings::BindingFinding;
+use crate::terminology::bindings::BindingGap;
+use crate::terminology::bindings::UnevaluatedBinding;
 
 // TODO(#808): hold the document to the other invariants and the terminology
 // bindings of its profiles and to the profile each other entry claims.
@@ -157,6 +160,14 @@ pub enum Unread {
     Order,
     /// An invariant of the profile, by its key.
     Invariant(String),
+    /// A `required` binding, to the value set it names, and why it was not
+    /// evaluated.
+    Binding {
+        /// The canonical URL of the value set, when the binding names one.
+        value_set: Option<String>,
+        /// Why it was not evaluated.
+        gap: BindingGap,
+    },
 }
 
 impl fmt::Display for Unread {
@@ -166,6 +177,51 @@ impl fmt::Display for Unread {
             Self::Discriminator { kind, path } => write!(f, "the {kind} discriminator at {path}"),
             Self::Order => f.write_str("the slice order"),
             Self::Invariant(key) => write!(f, "the invariant {key}"),
+            Self::Binding { value_set, gap } => {
+                let value_set = value_set.as_deref().unwrap_or("no value set");
+                match gap {
+                    BindingGap::NoExpansion => write!(
+                        f,
+                        "the required binding to {value_set}, of which no expansion is read"
+                    ),
+                    BindingGap::NoValueSet => {
+                        f.write_str("the required binding, which names no value set")
+                    }
+                    BindingGap::Sliced => {
+                        write!(f, "the required binding to {value_set} inside a slice")
+                    }
+                    BindingGap::Type(code) => write!(
+                        f,
+                        "the required binding to {value_set} on an element of type {code}"
+                    ),
+                }
+            }
+        }
+    }
+}
+
+impl From<UnevaluatedBinding> for Unevaluated {
+    fn from(binding: UnevaluatedBinding) -> Self {
+        Self {
+            profile: binding.profile,
+            element: binding.element,
+            reason: Unread::Binding {
+                value_set: binding.value_set,
+                gap: binding.gap,
+            },
+        }
+    }
+}
+
+impl From<BindingFinding> for Finding {
+    fn from(finding: BindingFinding) -> Self {
+        Self {
+            profile: finding.profile,
+            element: finding.element,
+            location: finding.location,
+            kind: FindingKind::NotInValueSet {
+                value_set: finding.value_set,
+            },
         }
     }
 }
@@ -223,6 +279,11 @@ pub enum FindingKind {
         /// The invariant's key.
         key: String,
     },
+    /// The concept is not in the value set a `required` binding names.
+    NotInValueSet {
+        /// The canonical URL of the value set.
+        value_set: String,
+    },
 }
 
 impl fmt::Display for FindingKind {
@@ -236,6 +297,12 @@ impl fmt::Display for FindingKind {
             Self::NoSlice => f.write_str("the occurrence matches no slice of a closed slicing"),
             Self::TypeNotAllowed => f.write_str("the resource type is one no slice names"),
             Self::Invariant { key } => write!(f, "the invariant {key} does not hold"),
+            Self::NotInValueSet { value_set } => {
+                write!(
+                    f,
+                    "the concept is not in the required value set {value_set}"
+                )
+            }
         }
     }
 }

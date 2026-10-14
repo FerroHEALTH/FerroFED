@@ -23,7 +23,10 @@
 //!   answering the summary written on request and each member's own one;
 //! - [`receive`]: a document received in the exchange format, checked and
 //!   mapped for the one member the deployment declares for its category
-//!   (Annex II 2.2 and 2.3).
+//!   (Annex II 2.2 and 2.3), its required bindings held to the expansions of
+//!   its package and its codings displayed;
+//! - [`terminology`]: the FHIR terminology server the component asks, over
+//!   HTTP.
 //!
 //! Each query names its patient through `$patient` and `$namespace` alone,
 //! so it passes the stored-query admission and the rewrite scopes it to each
@@ -48,3 +51,4 @@ pub mod patient_summary;
 pub mod receive;
 pub mod reserved;
 pub mod summary;
+pub mod terminology;

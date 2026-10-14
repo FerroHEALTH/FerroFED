@@ -1230,11 +1230,13 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
+ "async-trait",
  "fhir-types",
  "fhirconnect",
  "flate2",
+ "http",
  "openehr-mapping-core",
  "openehr-rm",
  "proptest",
@@ -1242,6 +1244,7 @@ dependencies = [
  "serde_json",
  "tar",
  "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
@@ -1390,17 +1393,23 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 name = "ferrofed-eehrxf"
 version = "0.0.1"
 dependencies = [
+ "async-trait",
  "eehrxf",
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
  "fhir-types",
  "fhirconnect",
+ "http",
  "jiff",
  "openehr-query",
+ "reqwest",
+ "secrecy",
  "serde_json",
  "thiserror 2.0.21",
+ "tokio",
  "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -1492,6 +1501,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "clap",
+ "eehrxf",
  "ehds-logging",
  "ferrofed-eehrxf",
  "ferrofed-engine",

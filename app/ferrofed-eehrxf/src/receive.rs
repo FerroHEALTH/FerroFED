@@ -25,8 +25,12 @@ use eehrxf::dataset::{DatasetError, ResourceProfile};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::receive::category::Uncategorised;
 use eehrxf::receive::conform::{CheckError, Finding, FindingKind, Unevaluated};
+use eehrxf::receive::displays::DisplayError;
 use eehrxf::receive::openehr::{ReceiveMappingError, ReceivedComposition};
 use eehrxf::receive::{ReceiveError, ReceivedDocument};
+use eehrxf::terminology::bindings::BindingError;
+use eehrxf::terminology::expansion::{ExpansionError, Expansions};
+use eehrxf::terminology::{Terminology, TerminologyError};
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::run::Settings;
@@ -92,6 +96,15 @@ pub enum ReceiversError {
         #[source]
         source: DatasetError,
     },
+    /// The package's value set expansions cannot be read.
+    #[error("the value set expansions of the category {category} cannot be read")]
+    Expansions {
+        /// The category's code.
+        category: &'static str,
+        /// Why.
+        #[source]
+        source: ExpansionError,
+    },
     /// The context mapping does not compile.
     #[error("the context mapping {context} of the category {category} does not compile")]
     Compile {
@@ -114,6 +127,8 @@ struct Receiver {
     bundle: ResourceProfile,
     /// The `Composition` profile.
     composition: ResourceProfile,
+    /// The value set expansions the package carries.
+    expansions: Expansions,
     /// The mapping into openEHR.
     mapping: Mapping,
     /// The composition language.
@@ -167,6 +182,17 @@ impl Receivers {
             };
             let bundle = profile(profiles.bundle)?;
             let composition = profile(profiles.composition)?;
+            let package =
+                std::fs::File::open(&source.package).map_err(|error| ReceiversError::Package {
+                    category,
+                    path: source.package.clone(),
+                    source: error,
+                })?;
+            let expansions =
+                Expansions::read(package).map_err(|error| ReceiversError::Expansions {
+                    category,
+                    source: error,
+                })?;
             let mapping = Mapping::compile(&source.opt, &source.files, &[source.context.as_str()])
                 .map_err(|error| ReceiversError::Compile {
                     category,
@@ -179,6 +205,7 @@ impl Receivers {
                     member: source.member.clone(),
                     bundle,
                     composition,
+                    expansions,
                     mapping,
                     language: source.language.clone(),
                     territory: source.territory.clone(),
@@ -206,14 +233,24 @@ impl Receivers {
     /// composition its category's member stores.
     ///
     /// The document is read under the R4 document rules, its category named
-    /// from its `Composition.type`, held to the category's profiles, and
+    /// from its `Composition.type`, held to the category's profiles and to
+    /// their `required` bindings, the expansions its package carries and
+    /// `terminology`'s `$validate-code` deciding each, its codings given the
+    /// displays `terminology`'s `$lookup` answers where it carries none, and
     /// mapped by the category's mapping with `device` as the engine's own
-    /// `Device` reference at the instant `now`.
+    /// `Device` reference at the instant `now`. With no terminology server,
+    /// a binding no expansion decides is listed as not evaluated, and a
+    /// coding with no display is refused.
     ///
     /// # Errors
     ///
     /// The [`Unreceived`] that names the first step the document fails.
-    pub fn receive(&self, text: &str, (device, now): (&str, &str)) -> Result<Prepared, Unreceived> {
+    pub async fn receive(
+        &self,
+        text: &str,
+        (device, now): (&str, &str),
+        terminology: &Terminology,
+    ) -> Result<Prepared, Unreceived> {
         let document = ReceivedDocument::read(text)?;
         let category = document.category()?;
         let receiver = self.by.get(&category).ok_or(Unreceived::NoMember {
@@ -225,6 +262,38 @@ impl Receivers {
                 CheckError::NonConformant { findings } => Unreceived::NonConformant { findings },
                 other => Unreceived::Check(other),
             })?;
+        let bindings = document
+            .check_bindings(
+                &receiver.bundle,
+                &receiver.composition,
+                &receiver.expansions,
+            )
+            .map_err(Unreceived::Bindings)?
+            .complete(terminology)
+            .await
+            .map_err(Unreceived::Terminology)?;
+        if !bindings.findings().is_empty() {
+            return Err(Unreceived::NonConformant {
+                findings: bindings
+                    .findings()
+                    .iter()
+                    .cloned()
+                    .map(Finding::from)
+                    .collect(),
+            });
+        }
+        let mut unevaluated = conformance.unevaluated().to_vec();
+        unevaluated.extend(
+            bindings
+                .unevaluated()
+                .iter()
+                .cloned()
+                .map(Unevaluated::from),
+        );
+        let document = document
+            .displayed(terminology)
+            .await
+            .map_err(Unreceived::Display)?;
         let settings = Settings::new(device, now).with_defaults(
             Defaults::at(now)
                 .with_language(receiver.language.as_str())
@@ -250,7 +319,7 @@ impl Receivers {
             category,
             member: receiver.member.clone(),
             composition,
-            unevaluated: conformance.unevaluated().to_vec(),
+            unevaluated,
             subject,
         })
     }
@@ -410,4 +479,14 @@ pub enum Unreceived {
     /// The mapping refused the document.
     #[error("the document could not be mapped into openEHR")]
     Mapping(#[source] ReceiveMappingError),
+    /// The document's `required` bindings could not be checked.
+    #[error("the document's required bindings could not be checked")]
+    Bindings(#[source] BindingError),
+    /// The terminology server gave no answer to a binding check.
+    #[error("the terminology server could not check a required binding")]
+    Terminology(#[source] TerminologyError),
+    /// A coding of the document carries no display, and none could be
+    /// looked up.
+    #[error("a coding of the document has no display")]
+    Display(#[source] DisplayError),
 }

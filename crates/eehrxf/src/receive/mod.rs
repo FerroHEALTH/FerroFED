@@ -34,6 +34,7 @@
 
 pub mod category;
 pub mod conform;
+pub mod displays;
 mod entries;
 #[cfg(feature = "openehr")]
 pub mod openehr;

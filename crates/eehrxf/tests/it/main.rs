@@ -36,3 +36,6 @@ mod receive;
 mod refusals;
 #[cfg(test)]
 mod support;
+#[cfg(test)]
+#[cfg(feature = "fhir-r4")]
+mod terminology;

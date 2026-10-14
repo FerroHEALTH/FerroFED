@@ -21,3 +21,4 @@ mod query;
 #[cfg(test)]
 mod summary;
 mod template;
+mod terminology;

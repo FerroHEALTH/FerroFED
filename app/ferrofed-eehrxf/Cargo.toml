@@ -35,6 +35,13 @@ jiff.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.
 openehr-query.workspace = true
+# The terminology server seam the HTTP client implements.
+async-trait.workspace = true
+# The status a terminology server answers with, and the headers of a call.
+http.workspace = true
+# The HTTP client a terminology server is asked through, built by the identity
+# crate with its credential and TLS material.
+reqwest.workspace = true
 # A FHIR Parameters body.
 serde_json.workspace = true
 thiserror.workspace = true
@@ -47,6 +54,10 @@ url.workspace = true
 ferrofed-testkit.workspace = true
 # The written document, read back in the tests.
 serde_json.workspace = true
+# The runtime the terminology client is driven on, and the stub server it asks.
+secrecy.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+wiremock.workspace = true
 
 [lints]
 workspace = true

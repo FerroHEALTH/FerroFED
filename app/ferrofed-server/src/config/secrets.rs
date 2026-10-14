@@ -34,7 +34,6 @@ use crate::jwks::JWKS_PATH;
 /// to fit the `Authorization` header it is sent in.
 ///
 /// TLS material is refused here: a service's own table names it.
-#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn resolve_credentials(
     section: &str,
     credentials: &Credentials,

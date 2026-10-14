@@ -24,6 +24,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
 use ferrofed_eehrxf::summary::Organisation;
@@ -143,6 +144,12 @@ pub struct FhirSettings {
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
+    /// The terminology server the receive path asks, or none
+    /// (`[eehrxf.terminology]`).
+    pub terminology: Terminology,
+    /// The `[eehrxf.terminology]` table as written, which a reload
+    /// compares.
+    pub terminology_written: Option<crate::config::eehrxf::TerminologyServer>,
     /// The table as written, which a reload compares.
     pub written: Fhir,
 }
@@ -355,6 +362,8 @@ impl Fhir {
             receivers: Arc::new(self.receivers()?),
             receive_namespaces: self.namespaces()?,
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
+            terminology: Terminology::none(),
+            terminology_written: None,
             written: self.clone(),
         })
     }

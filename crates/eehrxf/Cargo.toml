@@ -5,7 +5,7 @@ name = "eehrxf"
 description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, mapped from openEHR by FHIRconnect"
 # The name is not reserved on crates.io yet, and it must be claimed before the
 # `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.11"
+version = "0.0.12"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -44,7 +44,9 @@ discharge = []
 # with no openEHR crate, so the dataset and serialisation layers stay
 # openEHR-free.
 fhir-r4 = [
+  "dep:async-trait",
   "dep:fhir-types",
+  "dep:http",
   "fhir-types/r4",
   "fhir-types/resources",
 ]
@@ -59,7 +61,12 @@ openehr = [
 ]
 
 [dependencies]
+# The terminology server seam, an object-safe async trait the system that
+# reaches the server implements.
+async-trait = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
+# The status a terminology server answered with, carried by every refusal.
+http = { workspace = true, optional = true }
 fhirconnect = { workspace = true, optional = true }
 flate2.workspace = true
 openehr-mapping-core = { workspace = true, optional = true }
@@ -73,6 +80,8 @@ thiserror.workspace = true
 # The property that a package read twice gives the same model, over shuffled
 # archive orders.
 proptest.workspace = true
+# The runtime the terminology rules are awaited on in the tests.
+tokio = { workspace = true, features = ["rt", "macros"] }
 
 [lints]
 workspace = true
