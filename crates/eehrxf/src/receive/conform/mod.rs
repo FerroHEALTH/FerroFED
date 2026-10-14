@@ -26,7 +26,9 @@
 //! other discriminators admit, because an occurrence they refuse belongs to
 //! it under no reading, and the contents of a slice are checked over the
 //! occurrences that certainly belong to it. An occurrence of a type no slice
-//! of a type-discriminated slicing names is refused, and the root invariants
+//! of a type-discriminated slicing names is refused where the slicing is
+//! `closed`, or `openAtEnd` and the occurrence comes before a named one, and
+//! admitted where it is `open`. The root invariants
 //! of one form, a reference every entry of listed types carries, are
 //! evaluated. Other invariants and terminology bindings are not checked
 //! here. [`check_resource`] holds any one resource, such as an entry of a
@@ -214,7 +216,7 @@ pub enum FindingKind {
     /// The occurrence matches no slice of a `closed` slicing.
     NoSlice,
     /// The occurrence is of a resource type no slice of a type-discriminated
-    /// slicing names.
+    /// slicing names, where the slicing's rules admit no such occurrence.
     TypeNotAllowed,
     /// The document breaks an invariant of the profile, by its key.
     Invariant {

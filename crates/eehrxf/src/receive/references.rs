@@ -18,8 +18,11 @@
 //! - Any other reference resolves to an entry or a contained resource; or
 //!   it names, by its canonical path, a resource outside the document whose
 //!   type is not `Patient` and agrees with its `type`; or it names its target
-//!   by `display` alone, or by `identifier` under a declared `type` other
-//!   than `Patient`. Every other outcome of the resolver is refused.
+//!   by `display` alone, or by `identifier` alone under a declared `type`
+//!   other than `Patient`. At `Provenance.entity.what` alone, a logical
+//!   reference by `identifier` (<https://hl7.org/fhir/R4/references.html#logical>)
+//!   is admitted with no declared `type` too. Every other outcome of the
+//!   resolver is refused, a `reference` the document cannot resolve included.
 
 use fhir_types::codec::Object;
 use fhir_types::codec::Value;
@@ -38,6 +41,13 @@ use crate::receive::reference::resolve_in;
 // `beneficiary` (Coverage) and `for` (Task) each name the person a resource is about
 // (<https://hl7.org/fhir/R4/references.html>); no specification lists them: our own design.
 const SUBJECT_ELEMENTS: &[&str] = &["subject", "patient", "beneficiary", "for"];
+
+/// The one element, by its backbone path and name, where an untyped
+/// reference by `identifier` alone is admitted.
+// NOTE: FHIR R4 References, logical references (<https://hl7.org/fhir/R4/references.html#logical>);
+// the summary's writer names a source composition only this way, and an untyped identifier
+// elsewhere could name another patient, so the admission is confined to this element.
+const LOGICAL: (&str, &str) = ("Provenance.entity", "what");
 
 /// What one walk over one entry holds the document's references to.
 struct Walk<'a, 'd> {
@@ -121,7 +131,8 @@ impl Walk<'_, '_> {
                     Kind::Complex(name) => {
                         let object = item.as_object().ok_or_else(|| unread(&place))?;
                         if name == "Reference" {
-                            self.reference(key, object, &place)?;
+                            let logical = schema.path == LOGICAL.0 && key == LOGICAL.1;
+                            self.reference(key, logical, object, &place)?;
                         }
                         let inner = SCHEMAS.type_named(name).ok_or_else(|| unread(&place))?;
                         self.object(inner, object, &place, false)?;
@@ -142,6 +153,7 @@ impl Walk<'_, '_> {
     fn reference(
         &self,
         element: &str,
+        logical: bool,
         reference: &Object,
         location: &str,
     ) -> Result<(), ReceiveError> {
@@ -156,7 +168,9 @@ impl Walk<'_, '_> {
             }
             Ok(Target::Contained { .. }) => !subject,
             Err(ReferenceError::Unreferenced { identifier }) => {
-                !subject && declared != Some("Patient") && (!identifier || declared.is_some())
+                !subject
+                    && declared != Some("Patient")
+                    && (!identifier || declared.is_some() || logical)
             }
             Err(ReferenceError::NotInBundle {
                 kind: Some(ref kind),

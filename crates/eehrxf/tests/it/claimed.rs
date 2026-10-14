@@ -35,7 +35,7 @@ const ALLERGY_EU_CORE: &str =
 
 /// The synthetic mapping of the allergies section to the EU core profile the
 /// patient summary crosswalk admits for it.
-fn eu_mapping() -> Result<Mapping, Box<dyn Error>> {
+pub(crate) fn eu_mapping() -> Result<Mapping, Box<dyn Error>> {
     let opt = std::fs::read_to_string(fixture("opt/allergy.opt"))?;
     Ok(Mapping::compile(
         &opt,
@@ -102,34 +102,9 @@ fn check_entries(bundle: &Bundle) -> Result<BTreeSet<String>, Box<dyn Error>> {
 fn every_profile_the_document_claims_holds() -> Result<(), Box<dyn Error>> {
     let bundle = document_mapped(&eu_mapping()?, 1)?;
     let root = Json::to_json(&bundle)?;
-    let provenance: BTreeSet<String> = bundle
-        .entry
-        .iter()
-        .enumerate()
-        .filter(|(_, entry)| {
-            matches!(
-                entry.resource,
-                Some(fhir_types::r4::resource::Resource::Provenance(_))
-            )
-        })
-        .map(|(index, _)| format!("Bundle.entry[{index}]"))
-        .collect();
-    match check_resource(&eps(EPS_BUNDLE)?, "Bundle", &root) {
-        Ok(_) => {}
-        // NOTE: FHIR R4 profiling: `bundle-eu-eps` slices `entry` open, so a Provenance entry
-        // no slice names is admitted; the receive check holds it closed on type (#842).
-        Err(CheckError::NonConformant { findings }) => {
-            let left: Vec<_> = findings
-                .iter()
-                .filter(|finding| {
-                    !(finding.kind == FindingKind::TypeNotAllowed
-                        && provenance.contains(&finding.location))
-                })
-                .collect();
-            assert!(left.is_empty(), "bundle-eu-eps: {left:?}");
-        }
-        Err(other) => return Err(other.into()),
-    }
+    // NOTE: FHIR R4 profiling, slicing rules: `bundle-eu-eps` slices `entry` open, so the
+    // Provenance entries no slice names are admitted.
+    check_resource(&eps(EPS_BUNDLE)?, "Bundle", &root)?;
     let composition = bundle
         .entry
         .first()
