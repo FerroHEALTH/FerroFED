@@ -201,6 +201,14 @@ pub(crate) const REGISTER: &[Entry] = &[
     },
     Entry {
         test: "standard",
+        steps: &["t9-options"],
+        aspects: &["options.federation.spec_version"],
+        verdict: Verdict::ReferenceDivergence,
+        cause: "§7a.2 has a gateway implementing 1.0.0 report `\"1.0\"`; the reference implementation is pinned at its 0.9.0 release, the newest it has, and reports `\"0.9\"`.",
+        recorded: "#17 issuecomment-6172906098",
+    },
+    Entry {
+        test: "standard",
         steps: STANDARD_META,
         aspects: &["meta.federation.dedup"],
         verdict: Verdict::SpecificationAmbiguity,
