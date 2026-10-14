@@ -240,11 +240,7 @@ fn max_node_rows(body: &OptionsRoot) -> Result<Option<u32>, serde_json::Error> {
 #[tokio::test]
 async fn the_row_ceiling_follows_the_configuration() -> TestResult {
     let default = described("").await?;
-    assert_eq!(
-        Some(9_999),
-        max_node_rows(&default)?,
-        "the default ceiling"
-    );
+    assert_eq!(Some(9_999), max_node_rows(&default)?, "the default ceiling");
     let narrow = described("max_node_rows = 50").await?;
     assert_eq!(
         Some(50),
