@@ -38,7 +38,7 @@ use ferrofed_identity::role::consent::{ConsentPrefilter, ON_UNAVAILABLE};
 use ferrofed_registry::manufacturer;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
-use openehr_federation::aql::{OffsetStrategy, Targeting};
+use openehr_federation::aql::Targeting;
 use openehr_federation::error::WireError;
 use openehr_federation::headers;
 use openehr_federation::id::EndpointId;
@@ -68,6 +68,12 @@ const ROOT_ALLOW: &str = "GET, HEAD, OPTIONS";
 // NOTE: §11.6.2 bounds the second strategy, and the schema's `paging` object
 // is open; it names no member for the bound, so the name is our own design.
 pub const MAX_WINDOW: &str = "max_window";
+
+/// The `paging` member that carries the most rows the gateway reads of one
+/// node for a query whose AQL carries no `LIMIT`.
+// NOTE: §11.5 forbids reading a share a node's default page may have cut as
+// complete, and the schema's `paging` object is open; the name is our own design.
+pub const MAX_NODE_ROWS: &str = "max_node_rows";
 
 /// The `localization` member that names the configured localizer's binding.
 pub const LOCALIZATION_MODE: &str = "mode";
@@ -190,7 +196,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         },
         timeout: timeout(federation)?,
         completeness: completeness(federation.best_effort()),
-        paging: paging(federation.offset_strategy())?,
+        paging: paging(federation)?,
         aggregates: Aggregates {
             decomposable: federation
                 .decomposable_aggregates()
@@ -459,12 +465,17 @@ fn completeness(best_effort: bool) -> Completeness {
 }
 
 /// The `paging` member: the `OFFSET k > 0` strategy and, when it is
-/// bounded, its bound on `k + n` (§11.6.2, N39). No cursor is offered, so
+/// bounded, its bound on `k + n` (§11.6.2, N39), and the most rows read of
+/// one node for a query with no `LIMIT` (§11.5). No cursor is offered, so
 /// the strategy is never `cursor` (§11.6.4).
-fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
+fn paging(federation: &Federation) -> Result<Paging, DescribeError> {
+    let strategy = federation.offset_strategy();
     let mut extra = Extra::new();
     if let Some(window) = strategy.max_window() {
         extra.insert_serialized(MAX_WINDOW, &window.get())?;
+    }
+    if let Some(ceiling) = federation.max_node_rows() {
+        extra.insert_serialized(MAX_NODE_ROWS, &ceiling.get())?;
     }
     Ok(Paging {
         offset_strategy: strategy.name().to_owned(),

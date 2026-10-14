@@ -279,20 +279,42 @@ fn a_fetch_member_that_agrees_with_limit_is_accepted() {
     );
 }
 
+/// The node AQL of a patient query analysed with the paging members.
+fn paged_node_aql(aql: &str, offset: Option<i64>, fetch: Option<i64>) -> String {
+    let Analysis::Patient(query) = with_paging(aql, offset, fetch).unwrap() else {
+        panic!("a patient query")
+    };
+    query
+        .for_node(&HierObjectId::new(EHR_ID).unwrap())
+        .aql()
+        .to_owned()
+}
+
+// ITS-REST Query API `fetch`, "number of rows to fetch", selects rows of the
+// AQL result, so a larger fetch leaves the LIMIT the smaller count (§11.6).
 #[test]
-fn a_fetch_member_that_disagrees_with_limit_is_refused() {
+fn a_fetch_member_larger_than_limit_keeps_the_limit() {
     let aql = format!(
         "{} LIMIT 10",
         query("c/uid/value", &format!("{SUBJECT} = '4711'"))
     );
-    let refusal = with_paging(&aql, None, Some(20)).unwrap_err();
-    assert_eq!(
-        refusal,
-        Refusal::PagingConflict {
-            member: "fetch",
-            clause: "LIMIT"
-        },
-        "the member and the clause page alike (§11.6)"
+    assert_same_aql(
+        &paged_node_aql(&aql, None, Some(20)),
+        &format!("SELECT c/uid/value {FROM} WHERE e/ehr_id/value = '{EHR_ID}' LIMIT 10"),
+    );
+}
+
+// ITS-REST Query API `fetch` selects rows of the AQL result: a smaller fetch
+// is the count of the window (§11.6).
+#[test]
+fn a_fetch_member_smaller_than_limit_is_the_count() {
+    let aql = format!(
+        "{} LIMIT 10",
+        query("c/uid/value", &format!("{SUBJECT} = '4711'"))
+    );
+    assert_same_aql(
+        &paged_node_aql(&aql, None, Some(4)),
+        &format!("SELECT c/uid/value {FROM} WHERE e/ehr_id/value = '{EHR_ID}' LIMIT 4"),
     );
 }
 
@@ -306,20 +328,19 @@ fn an_offset_member_past_zero_is_refused_like_offset() {
     );
 }
 
+// ITS-REST Query API `offset` is "the row number in result-set to start
+// result-set from", a row of the AQL result past its OFFSET, so the skip is
+// their sum, still refused under the reject strategy (§11.6.2, N39).
 #[test]
-fn an_offset_member_that_disagrees_with_offset_is_refused() {
+fn an_offset_member_beside_offset_starts_further_in_and_is_refused_like_offset() {
     let aql = format!(
-        "{} LIMIT 10 OFFSET 5",
+        "{} ORDER BY c/uid/value LIMIT 10 OFFSET 5",
         query("c/uid/value", &format!("{SUBJECT} = '4711'"))
     );
-    let refusal = with_paging(&aql, Some(6), None).unwrap_err();
     assert_eq!(
-        refusal,
-        Refusal::PagingConflict {
-            member: "offset",
-            clause: "OFFSET"
-        },
-        "the member and the clause page alike (§11.6)"
+        with_paging(&aql, Some(6), None).unwrap_err(),
+        Refusal::OffsetUnsupported,
+        "§11.6.2, N39"
     );
 }
 

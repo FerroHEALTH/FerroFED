@@ -266,26 +266,23 @@ impl Config {
             key: String::from("federation.id"),
         })?;
         let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
-        let binding_capacity =
-            NonZeroU32::new(self.federation.binding_capacity).ok_or_else(|| Error::Zero {
-                key: String::from("federation.binding_capacity"),
-            })?;
-        let ehr_index_capacity =
-            NonZeroU32::new(self.federation.ehr_index_capacity).ok_or_else(|| Error::Zero {
-                key: String::from("federation.ehr_index_capacity"),
-            })?;
-        let max_in_flight_per_node = NonZeroU32::new(self.federation.max_in_flight_per_node)
-            .ok_or_else(|| Error::Zero {
-                key: String::from("federation.max_in_flight_per_node"),
-            })?;
+        let binding_capacity = positive_count(
+            "federation.binding_capacity",
+            self.federation.binding_capacity,
+        )?;
+        let ehr_index_capacity = positive_count(
+            "federation.ehr_index_capacity",
+            self.federation.ehr_index_capacity,
+        )?;
+        let max_in_flight_per_node = positive_count(
+            "federation.max_in_flight_per_node",
+            self.federation.max_in_flight_per_node,
+        )?;
         let max_node_answer_bytes = NonZeroUsize::new(self.federation.max_node_answer_bytes)
             .ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_node_answer_bytes"),
             })?;
-        let max_window =
-            NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
-                key: String::from("federation.max_offset_window"),
-            })?;
+        let (offset, max_node_rows) = resolve_paging(&self.federation)?;
         let demographic_endpoint = self
             .federation
             .demographic_endpoint
@@ -293,10 +290,6 @@ impl Config {
             .map(EndpointId::new)
             .transpose()
             .map_err(|source| Error::DemographicEndpoint { source })?;
-        let offset = match self.federation.offset_strategy {
-            OffsetPaging::Reject => OffsetStrategy::Reject,
-            OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
-        };
         let localization = match (
             &self.federation.localization,
             self.federation.node_selection,
@@ -319,6 +312,7 @@ impl Config {
             node_selection: self.federation.node_selection,
             best_effort: self.federation.best_effort,
             offset,
+            max_node_rows,
             decomposable: self
                 .federation
                 .decomposable_aggregates
@@ -508,6 +502,26 @@ pub(crate) fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
         });
     }
     Ok(Duration::from_millis(millis))
+}
+
+/// The `OFFSET` strategy with its bound (§11.6.2, N39), and the most rows
+/// read of one node for a query with no `LIMIT` (§11.5), as `federation`
+/// sets them; a zero bound or ceiling is refused.
+fn resolve_paging(federation: &Federation) -> Result<(OffsetStrategy, NonZeroU32), Error> {
+    let max_window = positive_count("federation.max_offset_window", federation.max_offset_window)?;
+    let max_node_rows = positive_count("federation.max_node_rows", federation.max_node_rows)?;
+    let offset = match federation.offset_strategy {
+        OffsetPaging::Reject => OffsetStrategy::Reject,
+        OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
+    };
+    Ok((offset, max_node_rows))
+}
+
+/// The count `key` sets, refused when it is zero.
+fn positive_count(key: &str, count: u32) -> Result<NonZeroU32, Error> {
+    NonZeroU32::new(count).ok_or_else(|| Error::Zero {
+        key: key.to_owned(),
+    })
 }
 
 /// The localizer's budget the configuration declares, in milliseconds: the

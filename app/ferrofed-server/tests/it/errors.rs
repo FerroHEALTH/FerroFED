@@ -506,7 +506,16 @@ fn documented() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
 
 #[test]
 fn the_book_documents_every_code_with_its_status_and_nothing_else() -> TestResult {
-    let documented = documented()?;
+    let mut documented = documented()?;
+    for retired in Code::retired() {
+        let row = documented
+            .remove(retired)
+            .ok_or_else(|| format!("{retired} is documented as retired"))?;
+        assert_eq!(
+            "retired", row,
+            "a retired code names no status, since it is no longer answered: {retired}"
+        );
+    }
     let answered: BTreeMap<String, String> = Code::every()
         .map(|code| (code.as_str().to_owned(), code.status().as_str().to_owned()))
         .collect();

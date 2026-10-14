@@ -257,6 +257,12 @@ pub struct Federation {
     /// `k + n` (§11.6.2: "permitted only where the gateway can bound
     /// `k + n`"). A page past it is a `400` naming the bound; zero is refused.
     pub max_offset_window: u32,
+    /// The most rows the gateway reads of one node for a query whose AQL
+    /// carries no `LIMIT`: each node is sent `fetch` set to it plus one, so
+    /// no node's own default page applies, and a node that answers more
+    /// rows is `node-error` (§11.1, §11.5); zero is refused. A query with a
+    /// `LIMIT` is sent that `LIMIT` as its `fetch`.
+    pub max_node_rows: u32,
     /// The aggregate functions an undirected query may apply, recombined at
     /// the Tier (§11.6.3, N39): by default every one, `COUNT`, `SUM`, `MIN`,
     /// `MAX` and `AVG`. An empty list refuses every undirected aggregate with
@@ -450,6 +456,7 @@ impl Default for Federation {
             best_effort: true,
             offset_strategy: OffsetPaging::Bounded,
             max_offset_window: 1000,
+            max_node_rows: 10_000,
             decomposable_aggregates: vec![
                 DecomposableAggregate::Count,
                 DecomposableAggregate::Sum,

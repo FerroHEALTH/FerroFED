@@ -68,6 +68,7 @@ pub struct Federation {
     observed: Arc<Observed>,
     context: Context,
     budget: Budget,
+    max_node_rows: Option<NonZeroU32>,
     best_effort: bool,
     demographic: Option<EndpointId>,
     dependencies: Dependencies,
@@ -295,6 +296,15 @@ impl Federation {
         self
     }
 
+    /// This federation reading at most `ceiling` rows of one node for a
+    /// query whose AQL carries no `LIMIT` (§11.5).
+    #[must_use]
+    pub fn with_max_node_rows(mut self, ceiling: NonZeroU32) -> Self {
+        self.clients = self.clients.with_row_ceiling(ceiling);
+        self.max_node_rows = Some(ceiling);
+        self
+    }
+
     /// This federation, offering best-effort completion when `offered` is
     /// `true` (§11.4).
     #[must_use]
@@ -499,6 +509,14 @@ impl Federation {
         self.context.offset_strategy()
     }
 
+    /// The most rows the gateway reads of one node for a query whose AQL
+    /// carries no `LIMIT` (§11.5), as `paging.max_node_rows` declares it in
+    /// `OPTIONS {base}/` (§7a.2).
+    #[must_use]
+    pub fn max_node_rows(&self) -> Option<NonZeroU32> {
+        self.max_node_rows
+    }
+
     /// The dedup modes a request may select with `openEHR-federation-dedup`,
     /// the default `none` first (§10, N15), as `dedup` declares them in
     /// `OPTIONS {base}/` (§7a.2).
@@ -536,6 +554,7 @@ impl std::fmt::Debug for Federation {
             .field("template_fan_out", &self.template_fan_out)
             .field("stored_query_fan_out", &self.stored_query_fan_out)
             .field("offset_strategy", &self.context.offset_strategy())
+            .field("max_node_rows", &self.max_node_rows)
             .field(
                 "decomposable_aggregates",
                 &self.context.decomposable_aggregates(),

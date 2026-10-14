@@ -79,8 +79,15 @@ the gateway never sends `OFFSET` to a node (§11.6.2, N39). By default it
 computes the page exactly: for `ORDER BY … LIMIT n OFFSET k` it asks each node
 for its first `k + n` rows with no `OFFSET`, merges them in the federation
 order, and returns rows `k` to `k + n`. A node that returns its `k + n` rows
-out of that order is reported `node-error`, as for `LIMIT n`. The ITS-REST
-`offset` and `fetch` members page the same way.
+out of that order is reported `node-error`, as for `LIMIT n`.
+
+The ITS-REST `offset` and `fetch` members select a window over the rows your
+AQL selects: ITS-REST defines `offset` as "the row number in result-set to
+start result-set from". The window starts at the AQL `OFFSET` plus `offset`,
+and holds the smaller of `fetch` and the rows the AQL `LIMIT` leaves after
+`offset`. `LIMIT 10 OFFSET 5` with `offset` 2 and `fetch` 3 returns rows 7 to
+9. The window is then paged as the AQL clauses are, so the bound below holds
+its skip plus its count.
 
 The page is computed only where `k + n` is bounded. The gateway answers `400`
 for a page whose `k + n` is past `max_offset_window` (the message names the
@@ -95,6 +102,26 @@ max_offset_window = 1000      # rows asked of one node for a page, k + n; 0 is r
 ```
 
 The strategy and the bound are named in the startup log line.
+
+### The rows read of one node
+
+ITS-REST leaves the rows a node returns without `fetch` to the node, so a
+node's own default page could look like its whole answer. The gateway sends
+every node an explicit `fetch`: the `LIMIT` its query carries, `k + n` for a
+page, and for a query with no `LIMIT` the ceiling `max_node_rows` plus one. A
+node that returns more rows than the ceiling may have more still, so the
+gateway reports it `node-error` and never merges its rows: the query fails
+`424` under the all-or-nothing default, and under `partial` the answer is
+incomplete and names the node (§11.4, §11.5). Raise the ceiling for a
+federation whose unbounded queries match more rows, or add a `LIMIT`:
+
+```toml
+[federation]
+max_node_rows = 10000   # rows read of one node for a query with no LIMIT; 0 is refused
+```
+
+`OPTIONS {base}/` declares it as `paging.max_node_rows`, and the startup log
+line names it.
 
 ## Aggregates across nodes
 

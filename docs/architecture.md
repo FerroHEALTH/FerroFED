@@ -271,10 +271,28 @@ node column to its façade index and inserts the re-injected subject constant
 
 **ITS-REST paging members.** `AdhocQueryExecute` and the stored-query bodies
 carry `offset` and `fetch` beside the AQL, and the GET forms carry them as
-parameters. §11.6 and N39 speak only of AQL `OFFSET` and `LIMIT`. FerroFED
-treats `offset` exactly as AQL `OFFSET` under the declared strategy and `fetch`
-as `LIMIT`, and refuses a request that sets the clause and the member to
-different values (decision A10; draft on #17).
+parameters. §11.6 and N39 speak only of AQL `OFFSET` and `LIMIT`. ITS-REST
+1.1.0 defines `offset` as "the row number in result-set to start result-set
+from" and `fetch` as the "number of rows to fetch" (`query-codegen.openapi.yaml`),
+so FerroFED reads the members as a window over the rows the AQL selects: the
+skip is the AQL `OFFSET` plus `offset`, and the count is the smaller of the
+rows the AQL `LIMIT` leaves after `offset` and `fetch`. The window is then
+paged across the fan-out under the declared `OFFSET` strategy exactly as the
+clauses are, `max_offset_window` holding the composed skip plus count
+(decision A10, amended on #354; report T161 on #212).
+
+**An explicit `fetch` on every node query.** ITS-REST leaves the rows a node
+answers without `fetch` to the node ("the default depends on the
+implementation"), and a node's default page would look like its whole answer,
+which §11.5 forbids reading as complete. Every node query therefore carries
+`fetch`: the `LIMIT` its AQL carries (the client's `n`, or `k + n` under the
+bounded strategy), and for a query with no `LIMIT` the configured
+`federation.max_node_rows` plus one, 10000 rows by default. A node that
+answers more rows than that ceiling is `node-error`, never merged: the query
+fails under all-or-nothing, and under best-effort the answer is incomplete and
+names the node (§11.4). `OPTIONS {base}/` declares the ceiling as
+`paging.max_node_rows`. No specification governs the ceiling: our own design
+(decision A10).
 
 **A query with no patient carrier.** N4 derives an undirected node set from
 localization, and localization is keyed on the patient. FerroFED answers such a
@@ -2625,7 +2643,7 @@ R4 is #23, #25 and #27).
 | A7 | The same subject value twice [R1 D11] | consumed once; two different values are `400` | the first reduces to one scope, the second does not (§7.1) | decided (owner, 2026-10-01) |
 | A8 | A query with no patient carrier [R1 D12] | answered only where the node set is defined: directed, or ask-all with no localizer; `400` otherwise | N4 keys localization on the patient | decided (owner, 2026-10-01) |
 | A9 | The ENDPOINT attribute names [R1 D10] | the §9.3 set, plus `p/id` until 1.0 settles §8.3 against §9.3; every other path `400` | the §8.3 example is the only place a client learns the syntax; `p/organization` is named by neither | decided (owner, 2026-10-01); the `url` attribute re-checked against 1.0.0 (#354): §9.3 still lets a gateway omit `url` from rows, and FerroFED never withholds it, filling it from the registry whenever it is selected, so this stands; a setting that withheld it would refuse a query selecting `url` with `400` and never omit the cell, because §9.1 makes `rows[n][i]` the value of `columns[i]` |
-| A10 | ITS-REST `offset` and `fetch` [R1 D3] | follow the declared `OFFSET` and `LIMIT` strategies; both set and different is `400` | they are the same paging §11.6 governs; dropping them silently is the reference implementation's divergence | decided (owner, 2026-10-01) |
+| A10 | ITS-REST `offset` and `fetch` [R1 D3; amended on #354] | the members select a window over the AQL result (skip = AQL `OFFSET` + `offset`; count = the smaller of the rows the AQL `LIMIT` leaves after `offset` and `fetch`), paged under the declared `OFFSET` strategy as the clauses are; every node query carries an explicit `fetch`, the `LIMIT` it carries or `federation.max_node_rows` plus one (10000 by default), and a node that answers past that ceiling is `node-error` | §11.6 and N39 govern the paging; ITS-REST 1.1.0 defines `offset` as "the row number in result-set to start result-set from", a position in the AQL's result, and leaves a node's `fetch` default "to the implementation", which §11.5 forbids reading as a complete share; dropping the members silently is the reference implementation's divergence; the ceiling: no specification governs it, our own design | decided (owner, 2026-10-01); amended on #354 (2026-10-14, T161 on #212): the `400` for a member that differs from its clause is withdrawn (#868) |
 | A11 | The `query` group [R1 D2] | FerroFED handlers over the generated DTOs | N37's `424`/`504` with `meta.federation` cannot pass through `ApiError` and belong in no ITS-REST crate | decided (owner, 2026-10-01) |
 | A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `400` (amended on #354 from `409`; N41) | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |
 | A13 | `Location` on a routed answer [R1 D6] | unmodified until 1.0; the conflict with N1 and N28 held on #17 | N31 and §7a.3 say unmodified | decided (owner, 2026-10-01) |

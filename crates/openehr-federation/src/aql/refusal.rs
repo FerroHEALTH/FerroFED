@@ -180,15 +180,6 @@ pub enum Refusal {
         /// Why it cannot.
         reason: OffsetPage,
     },
-    /// The query clause and the ITS-REST member of the same name page
-    /// differently (ITS-REST Query API `Offset` and `Fetch`, §11.6).
-    #[error("the {member} member and the query's {clause} clause disagree")]
-    PagingConflict {
-        /// The ITS-REST member.
-        member: &'static str,
-        /// The AQL clause it pages like.
-        clause: &'static str,
-    },
     /// An ITS-REST paging member, or a row count of the query, is negative.
     #[error("the {member} member is negative")]
     NegativePaging {
@@ -329,7 +320,8 @@ impl Refusal {
     /// order.
     ///
     /// The names are API: a gateway answers them as the stable code of its
-    /// error body, so a name is only ever added, never renamed or removed.
+    /// error body, so a name is only ever added, never renamed or removed. A
+    /// name no refusal raises any more moves to [`Refusal::RETIRED`].
     pub const KINDS: &[&str] = &[
         "not-aql",
         "parameters",
@@ -350,7 +342,6 @@ impl Refusal {
         "undefined-function",
         "offset-unsupported",
         "offset-page",
-        "paging-conflict",
         "negative-paging",
         "top-backward",
         "top-with-limit",
@@ -364,6 +355,15 @@ impl Refusal {
         "incomparable-distinct-key",
         "incomparable-order-key",
     ];
+
+    /// The names a gateway once answered that no refusal raises any more.
+    ///
+    /// A client may still match on one, so a retired name is kept here and
+    /// never given to another refusal. `paging-conflict`: the ITS-REST
+    /// `offset` and `fetch` members now select a window over the AQL result
+    /// (ITS-REST Query API `Offset`, §11.6), so they no longer disagree with
+    /// the AQL `OFFSET` and `LIMIT`.
+    pub const RETIRED: &[&str] = &["paging-conflict"];
 
     /// A stable name for this refusal: the code a gateway's error body
     /// carries, and the name a security event records the refusal by, so
@@ -392,7 +392,6 @@ impl Refusal {
             Self::UndefinedFunction { .. } => "undefined-function",
             Self::OffsetUnsupported => "offset-unsupported",
             Self::OffsetPage { .. } => "offset-page",
-            Self::PagingConflict { .. } => "paging-conflict",
             Self::NegativePaging { .. } => "negative-paging",
             Self::TopBackward => "top-backward",
             Self::TopWithLimit => "top-with-limit",
@@ -439,7 +438,6 @@ impl Refusal {
             | Self::PartialAggregate
             | Self::OffsetUnsupported
             | Self::OffsetPage { .. }
-            | Self::PagingConflict { .. }
             | Self::NegativePaging { .. }
             | Self::TopBackward
             | Self::TopWithLimit
@@ -606,10 +604,6 @@ mod tests {
             Refusal::OffsetPage {
                 reason: OffsetPage::NoLimit,
             },
-            Refusal::PagingConflict {
-                member: "fetch",
-                clause: "LIMIT",
-            },
             Refusal::NegativePaging { member: "offset" },
             Refusal::TopBackward,
             Refusal::TopWithLimit,
@@ -647,19 +641,18 @@ mod tests {
             Refusal::UndefinedFunction { .. } => 16,
             Refusal::OffsetUnsupported => 17,
             Refusal::OffsetPage { .. } => 18,
-            Refusal::PagingConflict { .. } => 19,
-            Refusal::NegativePaging { .. } => 20,
-            Refusal::TopBackward => 21,
-            Refusal::TopWithLimit => 22,
-            Refusal::TopWithFetch => 23,
-            Refusal::OrderNotSelected { .. } => 24,
-            Refusal::UnorderedDistinctCut { .. } => 25,
-            Refusal::NodeSetUndefined => 26,
-            Refusal::EndpointVariable { .. } => 27,
-            Refusal::EndpointAttributeUnknown { .. } => 28,
-            Refusal::EndpointNameCollision { .. } => 29,
-            Refusal::IncomparableDistinctKey { .. } => 30,
-            Refusal::IncomparableOrderKey { .. } => 31,
+            Refusal::NegativePaging { .. } => 19,
+            Refusal::TopBackward => 20,
+            Refusal::TopWithLimit => 21,
+            Refusal::TopWithFetch => 22,
+            Refusal::OrderNotSelected { .. } => 23,
+            Refusal::UnorderedDistinctCut { .. } => 24,
+            Refusal::NodeSetUndefined => 25,
+            Refusal::EndpointVariable { .. } => 26,
+            Refusal::EndpointAttributeUnknown { .. } => 27,
+            Refusal::EndpointNameCollision { .. } => 28,
+            Refusal::IncomparableDistinctKey { .. } => 29,
+            Refusal::IncomparableOrderKey { .. } => 30,
         }
     }
 
@@ -677,8 +670,26 @@ mod tests {
     }
 
     #[test]
+    fn a_retired_name_is_never_a_live_kind_and_is_listed_once() {
+        for retired in Refusal::RETIRED {
+            assert!(
+                !Refusal::KINDS.contains(retired),
+                "{retired} is retired, so no refusal raises it"
+            );
+            assert_eq!(
+                1,
+                Refusal::RETIRED
+                    .iter()
+                    .filter(|name| *name == retired)
+                    .count(),
+                "{retired}"
+            );
+        }
+    }
+
+    #[test]
     fn every_kind_is_lower_kebab_case() {
-        for kind in Refusal::KINDS {
+        for kind in Refusal::KINDS.iter().chain(Refusal::RETIRED) {
             assert!(
                 !kind.is_empty()
                     && !kind.starts_with('-')

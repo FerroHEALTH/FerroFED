@@ -14,9 +14,12 @@ use super::{OffsetStrategy, Paging};
 /// (ITS-REST Query API `Offset` and `Fetch`, §11.6), and returns the rows the
 /// Tier skips.
 ///
-/// `OFFSET` never reaches a node (§11.6.2). Under
-/// [`OffsetStrategy::Bounded`], a page at `OFFSET k` is dispatched as
-/// `LIMIT k + n`, and the Tier skips `k` rows of the merged order.
+/// The members select a window over the rows the AQL selects
+/// ([`window`]), and the window is then paged as an AQL `OFFSET` and `LIMIT`
+/// would be. `OFFSET` never reaches a node (§11.6.2). Under
+/// [`OffsetStrategy::Bounded`], a page at skip `k` with count `n` is
+/// dispatched as `LIMIT k + n`, and the Tier skips `k` rows of the merged
+/// order.
 pub(super) fn page(
     query: &mut SelectQuery,
     paging: Paging,
@@ -51,61 +54,71 @@ pub(super) fn page(
         return Err(Refusal::NegativePaging { member: "LIMIT" });
     }
     let clause_offset = query.limit.as_ref().and_then(|limit| limit.offset);
-    if let (Some(member), Some(clause)) = (paging.fetch, clause_limit)
-        && member != clause
-    {
-        return Err(Refusal::PagingConflict {
-            member: "fetch",
-            clause: "LIMIT",
-        });
-    }
-    if let (Some(member), Some(clause)) = (paging.offset, clause_offset)
-        && member != clause
-    {
-        return Err(Refusal::PagingConflict {
-            member: "offset",
-            clause: "OFFSET",
-        });
-    }
     if clause_offset.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "OFFSET" });
     }
-    let limit = clause_limit.or(paging.fetch);
-    let offset = clause_offset.or(paging.offset).unwrap_or(0);
-    let (dispatched, skip) = if offset == 0 {
-        (limit, 0)
-    } else {
-        let OffsetStrategy::Bounded { max_window } = strategy else {
-            return Err(Refusal::OffsetUnsupported);
-        };
-        let Some(limit) = limit else {
-            return Err(Refusal::OffsetPage {
-                reason: OffsetPage::NoLimit,
-            });
-        };
-        // NOTE: §11.6.2 is silent on OFFSET without ORDER BY, so this is our own
-        // design: its "merging, ordering and slicing" has no order to slice.
-        if query.order_by.is_empty() {
-            return Err(Refusal::OffsetPage {
-                reason: OffsetPage::NoOrder,
-            });
+    let (skip, count) = window(clause_offset, clause_limit, paging);
+    let (dispatched, skip) = match skip {
+        Some(0) => (count, 0),
+        skip => {
+            let OffsetStrategy::Bounded { max_window } = strategy else {
+                return Err(Refusal::OffsetUnsupported);
+            };
+            let Some(count) = count else {
+                return Err(Refusal::OffsetPage {
+                    reason: OffsetPage::NoLimit,
+                });
+            };
+            // NOTE: §11.6.2 is silent on OFFSET without ORDER BY, so this is our own
+            // design: its "merging, ordering and slicing" has no order to slice.
+            if query.order_by.is_empty() {
+                return Err(Refusal::OffsetPage {
+                    reason: OffsetPage::NoOrder,
+                });
+            }
+            let past = || Refusal::OffsetPage {
+                reason: OffsetPage::PastTheBound {
+                    max_window: max_window.get(),
+                },
+            };
+            let skip = skip.ok_or_else(past)?;
+            let window = skip
+                .checked_add(count)
+                .filter(|window| *window <= i64::from(max_window.get()))
+                .ok_or_else(past)?;
+            let skip = u64::try_from(skip)
+                .map_err(|_negative| Refusal::NegativePaging { member: "OFFSET" })?;
+            (Some(window), skip)
         }
-        let past = Refusal::OffsetPage {
-            reason: OffsetPage::PastTheBound {
-                max_window: max_window.get(),
-            },
-        };
-        let window = offset
-            .checked_add(limit)
-            .filter(|window| *window <= i64::from(max_window.get()))
-            .ok_or(past)?;
-        let skip = u64::try_from(offset)
-            .map_err(|_negative| Refusal::NegativePaging { member: "OFFSET" })?;
-        (Some(window), skip)
     };
     query.limit = dispatched.map(|limit| Limit {
         limit,
         offset: None,
     });
     Ok(skip)
+}
+
+/// The rows of the AQL result the request selects: the skip from the first
+/// row the AQL matches, and the count, `None` for every remaining row.
+///
+/// ITS-REST defines `offset` as "the row number in result-set to start
+/// result-set from" and `fetch` as the "number of rows to fetch" (Query API,
+/// `query-codegen.openapi.yaml`), so the members select a window over the
+/// rows the AQL `OFFSET` and `LIMIT` select (§11.6): the skip is the AQL
+/// `OFFSET` plus `offset`, and the count the smaller of the rows the AQL
+/// `LIMIT` leaves after `offset` and `fetch`. Every argument is non-negative.
+/// The skip is `None` when it overflows, a page past every bound.
+fn window(
+    clause_offset: Option<i64>,
+    clause_limit: Option<i64>,
+    paging: Paging,
+) -> (Option<i64>, Option<i64>) {
+    let member_offset = paging.offset.unwrap_or(0);
+    let skip = clause_offset.unwrap_or(0).checked_add(member_offset);
+    let remaining = clause_limit.map(|limit| limit.saturating_sub(member_offset).max(0));
+    let count = match (remaining, paging.fetch) {
+        (Some(remaining), Some(fetch)) => Some(remaining.min(fetch)),
+        (remaining, fetch) => remaining.or(fetch),
+    };
+    (skip, count)
 }

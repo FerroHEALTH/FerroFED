@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::{MANUFACTURER, MAX_WINDOW, SUPPORTED_UNTIL};
+use ferrofed_server::facade::options::{MANUFACTURER, MAX_NODE_ROWS, MAX_WINDOW, SUPPORTED_UNTIL};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
@@ -219,9 +219,37 @@ async fn no_targeting_mechanism_no_carrier_and_no_async_member_is_declared() -> 
         .map(|(name, _)| name)
         .collect();
     assert_eq!(
-        vec![MAX_WINDOW],
+        vec![MAX_NODE_ROWS, MAX_WINDOW],
         paging,
-        "the bounded strategy's bound only"
+        "the row ceiling of a query with no LIMIT, and the bounded strategy's bound"
+    );
+    Ok(())
+}
+
+/// The `paging.max_node_rows` member of `body`.
+fn max_node_rows(body: &OptionsRoot) -> Result<Option<u32>, serde_json::Error> {
+    body.federation
+        .paging
+        .extra
+        .get(MAX_NODE_ROWS)
+        .map(|raw| serde_json::from_str(raw.get()))
+        .transpose()
+}
+
+// conformance: CP-23
+#[tokio::test]
+async fn the_row_ceiling_follows_the_configuration() -> TestResult {
+    let default = described("").await?;
+    assert_eq!(
+        Some(10_000),
+        max_node_rows(&default)?,
+        "the default ceiling"
+    );
+    let narrow = described("max_node_rows = 50").await?;
+    assert_eq!(
+        Some(50),
+        max_node_rows(&narrow)?,
+        "§11.5: the configured ceiling"
     );
     Ok(())
 }

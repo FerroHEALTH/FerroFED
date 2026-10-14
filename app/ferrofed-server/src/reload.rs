@@ -575,6 +575,9 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("federation.offset", |boot, fresh| {
         boot.federation.offset != fresh.federation.offset
     }),
+    ("federation.max_node_rows", |boot, fresh| {
+        boot.federation.max_node_rows != fresh.federation.max_node_rows
+    }),
     ("federation.decomposable_aggregates", |boot, fresh| {
         boot.federation.decomposable != fresh.federation.decomposable
     }),
