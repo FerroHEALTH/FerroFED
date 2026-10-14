@@ -224,16 +224,19 @@ fn the_directive_variable_bound_again_in_from_is_refused() {
     assert_eq!("endpoint-variable", refusal.kind());
 }
 
+// The ORDER BY case moved to the accepted side on #354 (§8.1, §9.3); the other uses stay
+// refused.
 #[test]
-fn the_directive_variable_outside_a_selected_column_is_refused() {
+fn the_directive_variable_outside_a_selected_column_or_order_key_is_refused() {
     for aql in [
         format!(
             r#"SELECT c/uid/value FROM ENDPOINT p ["node_1"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE {SUBJECT} AND p/id = 'node_1'"#
         ),
-        r#"SELECT c/uid/value FROM ENDPOINT p ["node_1"] CONTAINS EHR e CONTAINS COMPOSITION c ORDER BY p/id"#
-            .to_owned(),
         r#"SELECT LENGTH(p/id) FROM ENDPOINT p ["node_1"] CONTAINS EHR e CONTAINS COMPOSITION c"#
             .to_owned(),
+        format!(
+            r#"SELECT c/uid/value FROM ENDPOINT p ["node_1"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE {SUBJECT} AND c/uid/value = p/id ORDER BY p/id"#
+        ),
     ] {
         let refusal = refused(&aql);
         assert!(

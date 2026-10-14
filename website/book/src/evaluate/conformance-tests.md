@@ -531,14 +531,16 @@ with no marked test is not listed.
 
 ## CP-37
 
-19 tests.
+29 tests.
 
 - `app/ferrofed-server/tests/it/directive.rs`: `a_selected_endpoint_attribute_is_added_to_the_rows_and_asked_of_no_node`
 - `app/ferrofed-server/tests/it/e2e/attributes.rs` (e2e): `the_example_query_adds_each_nodes_attributes_over_two_cdr_nodes`
 - `app/ferrofed-server/tests/it/e2e/track3.rs` (e2e): `a_directive_selects_the_node_set_and_leaves_the_row_shape_alone`
-- `app/ferrofed-server/tests/it/endpoint_attributes.rs`: `a_query_selecting_no_attribute_keeps_the_single_cdr_row_shape`, `every_attribute_reads_the_registry_entry_of_its_endpoint`, `ordering_on_an_attribute_is_refused_400_before_any_node_is_asked`, `the_example_query_answers_the_example_columns_and_rows`, `under_distinct_a_shared_organisation_collapses_the_rows`, `under_distinct_an_endpoint_id_keeps_the_rows_of_two_endpoints_apart`
-- `crates/openehr-federation/tests/it/aql/attribute.rs`: `a_query_selecting_no_attribute_keeps_the_single_cdr_shape`, `every_attribute_the_table_lists_is_selectable`, `ordering_on_an_attribute_is_refused_with_or_without_a_limit`, `the_example_query_names_its_attributes_and_asks_no_node_for_them`, `under_distinct_the_node_is_asked_only_its_own_columns`
+- `app/ferrofed-server/tests/it/endpoint_attributes.rs`: `a_query_selecting_no_attribute_keeps_the_single_cdr_row_shape`, `an_attribute_key_among_node_keys_keeps_its_place`, `every_attribute_reads_the_registry_entry_of_its_endpoint`, `ordering_on_an_attribute_alone_orders_the_endpoints_at_the_tier`, `the_attribute_elsewhere_than_select_and_order_by_is_still_refused_400`, `the_example_query_answers_the_example_columns_and_rows`, `under_distinct_a_shared_organisation_collapses_the_rows`, `under_distinct_an_endpoint_id_keeps_the_rows_of_two_endpoints_apart`
+- `crates/openehr-federation/tests/it/aql/attribute.rs`: `a_query_selecting_no_attribute_keeps_the_single_cdr_shape`, `every_attribute_the_table_lists_is_selectable`, `ordering_on_an_attribute_is_accepted_with_or_without_a_limit`, `the_example_query_names_its_attributes_and_asks_no_node_for_them`, `under_distinct_the_node_is_asked_only_its_own_columns`
+- `crates/openehr-federation/tests/it/aql/endpoint_order.rs`: `an_attribute_key_alone_is_the_tier_key_and_the_node_keeps_the_tie_break_and_limit`, `an_attribute_key_keeps_its_place_among_the_node_keys`, `an_attribute_ordered_on_and_not_selected_follows_the_selected_ones`, `an_unscoped_query_ordered_on_an_attribute_sends_no_directive`
 - `crates/openehr-federation/tests/it/attributes.rs`: `distinct_on_attributes_alone_keeps_one_row_per_value_and_refuses_no_cut_node`, `each_row_keeps_the_attributes_of_its_endpoint_in_the_tier_order`, `under_distinct_a_shared_attribute_value_collapses_the_rows`, `under_distinct_rows_of_two_endpoints_are_two_values`, `without_an_order_each_row_keeps_its_endpoint_attributes`
+- `crates/openehr-federation/tests/it/endpoint_order.rs`: `an_attribute_key_after_a_node_key_breaks_its_ties`, `an_attribute_key_alone_orders_the_endpoints_and_the_uid_breaks_the_tie`, `an_attribute_key_before_a_node_key_orders_first_and_a_tie_falls_to_the_node_key`, `an_attribute_value_compares_as_a_string_cell_does`
 
 ## CP-40
 

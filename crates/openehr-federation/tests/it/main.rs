@@ -24,6 +24,8 @@ mod distinct;
 #[cfg(test)]
 mod drift;
 #[cfg(test)]
+mod endpoint_order;
+#[cfg(test)]
 mod envelope;
 #[cfg(test)]
 mod examples;

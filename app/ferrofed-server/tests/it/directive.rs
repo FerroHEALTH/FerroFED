@@ -49,8 +49,9 @@ pub(crate) fn directed(directive: &str) -> String {
 }
 
 /// Three members: node A of `org-a`, node B of `org-b`, and node C, operated
-/// by `org-a`, whose endpoint `org-a` manages; and `org-c`, which manages
-/// none.
+/// by `org-a`, whose Query API endpoint `org-a` manages; and `org-c`, which
+/// manages only node C's own exchange-format endpoint, which no selector
+/// reaches (§8.1: an organisation manages at least one endpoint).
 pub(crate) fn members(a: &str, b: &str, c: &str) -> String {
     registry(
         a,
@@ -71,6 +72,16 @@ node = "node-c"
 url = "{c}"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-a"
+
+[[endpoint]]
+id = "node-c-eps"
+node = "node-c"
+url = "{c}/fhir"
+connection_type = "hl7-fhir-rest"
+managing_organisation = "org-c"
+categories = ["Patient-Summaries"]
+profiles = ["http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"]
+ehr_id_system = "urn:oid:2.999.4.1"
 "#
         ),
     )

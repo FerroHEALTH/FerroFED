@@ -19,11 +19,14 @@ use super::{OffsetStrategy, Paging};
 /// would be. `OFFSET` never reaches a node (§11.6.2). Under
 /// [`OffsetStrategy::Bounded`], a page at skip `k` with count `n` is
 /// dispatched as `LIMIT k + n`, and the Tier skips `k` rows of the merged
-/// order.
+/// order. `by_endpoint` says the client ordered on an ENDPOINT attribute the
+/// directive pass took out of `ORDER BY`, so the query is ordered even when
+/// no `ORDER BY` term is left (§8.1, §9.3).
 pub(super) fn page(
     query: &mut SelectQuery,
     paging: Paging,
     strategy: OffsetStrategy,
+    by_endpoint: bool,
 ) -> Result<u64, Refusal> {
     if paging.offset.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "offset" });
@@ -71,7 +74,7 @@ pub(super) fn page(
             };
             // NOTE: §11.6.2 is silent on OFFSET without ORDER BY, so this is our own
             // design: its "merging, ordering and slicing" has no order to slice.
-            if query.order_by.is_empty() {
+            if query.order_by.is_empty() && !by_endpoint {
                 return Err(Refusal::OffsetPage {
                     reason: OffsetPage::NoOrder,
                 });

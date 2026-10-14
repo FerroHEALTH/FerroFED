@@ -68,15 +68,20 @@ async fn node(rows: &[&[&str]]) -> Server {
 
 /// The §9.4 members: `node_1` of Org A at `one`, `node_2` of Org B at `two`,
 /// and `node_3` of Org C at `three`, which the example does not direct at.
+/// Org B is declared only when it manages `node_2` (§8.1: an organisation
+/// manages at least one endpoint).
 fn members(one: &str, two: &str, three: &str, second_organisation: &str) -> String {
+    let org_b = if second_organisation == "org-b" {
+        "[[organisation]]\nid = \"org-b\"\n"
+    } else {
+        ""
+    };
     format!(
         r#"
 [[organisation]]
 id = "org-a"
 
-[[organisation]]
-id = "org-b"
-
+{org_b}
 [[organisation]]
 id = "org-c"
 
@@ -445,18 +450,101 @@ async fn under_distinct_a_shared_organisation_collapses_the_rows() -> TestResult
     Ok(())
 }
 
+/// Synthetic composition uids that interleave across node 1 and node 2.
+const U1: &str = "11111111-1111-4111-8111-111111111111::cdr1.rso.nl::1";
+const U2: &str = "22222222-2222-4222-8222-222222222222::cdr2.rso.nl::1";
+const U3: &str = "33333333-3333-4333-8333-333333333333::cdr1.rso.nl::1";
+const U4: &str = "44444444-4444-4444-8444-444444444444::cdr2.rso.nl::1";
+
+/// The `(endpoint id, uid)` of every row of `answer`.
+fn placed(answer: &Answer) -> Vec<(&str, &str)> {
+    answer
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.first().map_or("", String::as_str),
+                row.get(1).map_or("", String::as_str),
+            )
+        })
+        .collect()
+}
+
+/// Asserts that what node 1 and node 2 received carries no directive, no
+/// path through its variable and no patient identifier, and does carry
+/// `sent` (§8.1, N33).
+async fn assert_dispatched(nodes: &Nodes, sent: &str) -> TestResult {
+    for node in [&nodes.one, &nodes.two] {
+        let captured = wire(node).await?;
+        for absent in ["ENDPOINT", "p/", "node_1", "node_2", "12345"] {
+            assert!(
+                !captured.contains_ignoring_ascii_case(absent),
+                "§8.1, N33: a node received {absent:?}: {captured}"
+            );
+        }
+        assert!(captured.contains(sent), "{sent}: {captured}");
+    }
+    Ok(())
+}
+
+// Adjudicated on #354: §8.1 and §9.3 forbid no ORDER BY on an ENDPOINT attribute, so the
+// query is ordered at the Tier where the refusal of endpoint-variable stood.
 // conformance: CP-37
 #[tokio::test]
-async fn ordering_on_an_attribute_is_refused_400_before_any_node_is_asked() -> TestResult {
+async fn ordering_on_an_attribute_alone_orders_the_endpoints_at_the_tier() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    for (direction, expected) in [
+        ("", [("node_1", U1), ("node_1", U3), ("node_2", U2)]),
+        (" DESC", [("node_2", U2), ("node_2", U4), ("node_1", U1)]),
+    ] {
+        let nodes = Nodes::answering(&[&[U1], &[U3]], &[&[U2], &[U4]]).await;
+        let query = selecting("p/id AS endpoint_id, c/uid/value")
+            + " ORDER BY p/id"
+            + direction
+            + " LIMIT 3";
+        let answer = rows_of(nodes.gateway(dir.path(), "org-b")?, &query).await?;
+        assert_eq!(
+            expected.to_vec(),
+            placed(&answer),
+            "{direction}: §8.1, §11.6.1, the endpoint key and then the uid"
+        );
+        assert_eq!([1, 1, 0], nodes.asked().await?);
+        assert_dispatched(&nodes, "ORDER BY c/uid/value ASC LIMIT 3").await?;
+    }
+    Ok(())
+}
+
+// conformance: CP-37
+#[tokio::test]
+async fn an_attribute_key_among_node_keys_keeps_its_place() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    for (organisation, expected) in [
+        ("org-b", [("node_2", U4), ("node_2", U2), ("node_1", U3)]),
+        ("org-a", [("node_2", U4), ("node_1", U3), ("node_2", U2)]),
+    ] {
+        let nodes = Nodes::answering(&[&[U3], &[U1]], &[&[U4], &[U2]]).await;
+        let query = selecting("p/id AS endpoint_id, c/uid/value")
+            + " ORDER BY p/organisation DESC, c/uid/value DESC LIMIT 3";
+        let answer = rows_of(nodes.gateway(dir.path(), organisation)?, &query).await?;
+        assert_eq!(
+            expected.to_vec(),
+            placed(&answer),
+            "node_2 managed by {organisation}: the organisation first, then the uid"
+        );
+        assert_dispatched(&nodes, "ORDER BY c/uid/value DESC LIMIT 3").await?;
+    }
+    Ok(())
+}
+
+// conformance: CP-37
+#[tokio::test]
+async fn the_attribute_elsewhere_than_select_and_order_by_is_still_refused_400() -> TestResult {
     let nodes = Nodes::answering(&[&[UID_1]], &[&[UID_2]]).await;
     let dir = tempfile::tempdir()?;
-    for tail in [" ORDER BY p/id", " ORDER BY p/system_id LIMIT 1"] {
-        let query = selecting("p/id AS endpoint_id, c/uid/value") + tail;
-        let (status, text) =
-            call(nodes.gateway(dir.path(), "org-b")?, post(body(&query)?)?).await?;
-        assert_eq!(StatusCode::BAD_REQUEST, status, "{tail}: {text}");
-        assert_eq!("endpoint-variable", error_body(&text)?.code, "{tail}");
-    }
+    let query = selecting("LENGTH(p/id), c/uid/value") + " ORDER BY p/id";
+    let (status, text) = call(nodes.gateway(dir.path(), "org-b")?, post(body(&query)?)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!("endpoint-variable", error_body(&text)?.code);
     assert_eq!([0, 0, 0], nodes.asked().await?);
     Ok(())
 }

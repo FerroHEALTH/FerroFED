@@ -18,7 +18,9 @@ See how it works: [follow-ups and writes](../how-it-works/follow-ups-and-writes.
 the operator admitted them. It declares each `[[organisation]]`, each
 `[[node]]` with its openEHR `system_id`, and each `[[endpoint]]` with its base
 URL, connection type and managing organisation. An unknown key, a dangling
-reference or a duplicate id refuses the whole document.
+reference or a duplicate id refuses the whole document, and so does an
+organisation that manages no endpoint (§8.1: "an Organization manages 1..*
+Endpoints"); a native `hl7-fhir-rest` endpoint counts as one.
 
 The document is also the follow-up routing table (N21). A follow-up for a
 version is routed on the `creating_system_id` inside its uid (§12.2). A
@@ -178,6 +180,11 @@ the resource, when:
 - a consent refusal code extension carries no `valueCode`;
 - anything the native form refuses: a duplicate `system_id`, an unusable base
   URL, or a `creating_system_id` that is a member's own.
+
+The FHIR form and an mCSD directory keep an organisation whose endpoints left
+the directory, so a refresh that deletes an organisation's last endpoint is
+applied; a selector that names it then selects nothing, and the request
+answers `404` with `no-destination` (§11.2).
 
 ## The registry read from an mCSD directory
 

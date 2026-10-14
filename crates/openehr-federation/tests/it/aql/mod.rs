@@ -15,6 +15,7 @@ mod dedup;
 mod definition;
 mod directive;
 mod distinct;
+mod endpoint_order;
 mod entry;
 mod folding;
 mod function;

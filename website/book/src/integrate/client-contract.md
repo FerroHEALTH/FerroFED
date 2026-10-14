@@ -130,15 +130,18 @@ N19), and the keywords are case-insensitive like every AQL keyword.
   so the node query is the same as for the undirected request (N7).
 - An identifier the registry does not know is refused `400` with
   `endpoint-unknown` or `organisation-unknown`, before any node is asked
-  (§8.4.1). A known organisation that manages no endpoint leaves the request
-  without a destination, `404` with `no-destination`.
+  (§8.4.1). A registry document refuses an organisation that manages no
+  endpoint (§8.1: "an Organization manages 1..* Endpoints"). A selection
+  that still holds no endpoint, such as an organisation whose endpoints left
+  an mCSD directory, leaves the request without a destination, `404` with
+  `no-destination` (§11.2).
 - A query directed at one endpoint may use what a fan-out refuses: an
   aggregate, which goes to the node unchanged (N14, §11.6.3), and a function
   AQL does not define. Pinned to more than one endpoint, the same query
   follows the rules for an undirected one.
-- The variable (`p` above) may only be selected, as an ENDPOINT attribute
-  (§9.3). Using it in `WHERE`, in `ORDER BY` or inside a function, or binding
-  its name again in `FROM`, is refused `400` with `endpoint-variable`.
+- The variable (`p` above) may be selected or ordered on, as an ENDPOINT
+  attribute (§9.3). Using it in `WHERE` or inside a function, or binding its
+  name again in `FROM`, is refused `400` with `endpoint-variable`.
 
 Or leave the AQL as it is and send the node set in a header (§8.4). This is
 the form for a stored query or a query a user wrote, since the query text
@@ -211,9 +214,19 @@ WHERE e/ehr_status/subject/external_ref/id/value = '12345'
 - An attribute beside an aggregate over more than one endpoint would count per
   endpoint, so it is refused `400` with `indecomposable-aggregate`; pinned to
   one endpoint, the aggregate row carries the attribute (§11.6.3).
-- Ordering on an attribute is refused `400` with `endpoint-variable`: §9.3
-  defines the attributes as selectable only. The gateway already orders tied
-  rows by endpoint id (§11.6.1).
+- You can order on an attribute, alone or among other keys:
+  `ORDER BY p/organisation DESC, c/context/start_time/value LIMIT 10`. The
+  gateway orders on it itself, in the place you wrote it, and compares its
+  values as it compares any string. No node receives the key: each node is
+  sent your other keys and your `LIMIT`, and since an attribute has one value
+  per endpoint, each node's first rows under those keys are still its share
+  of the federated first rows (§8.1, §11.6.1). Rows tied on every key are
+  ordered by endpoint id, then by uid (§11.6.1).
+- Under `SELECT DISTINCT`, an attribute you order on must also be selected,
+  as a path must (`order-not-selected`, N13). Under version-identity dedup
+  with a `LIMIT`, ordering on an attribute is refused `400` with
+  `endpoint-order-dedup`: the copies of one version at two endpoints differ
+  on it (§10.2, §11.6.1).
 
 ## What a client gets back
 

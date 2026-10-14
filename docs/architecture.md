@@ -228,8 +228,9 @@ its public AST. FerroFED has no AQL parser, no printer and no text splicing.
    - enforce the reduction constraint: one patient value, in the top-level
      `AND` chain, under `=` (§7.1). The same value repeated is consumed once;
      two different values are `400` (decision A7);
-   - refuse a directive-variable path outside the §9.3 attribute set (decision
-     A9), and a query whose node set the specification does not define
+   - refuse a directive-variable path outside the §9.3 attribute set, or
+     outside a selected column or an `ORDER BY` key (decision A9), and a
+     query whose node set the specification does not define
      (decision A8);
    - fold `CONCAT`, `CONCAT_WS` and `SUBSTRING` over literal arguments, and
      refuse a string function over a literal that cannot be folded on an
@@ -1514,6 +1515,12 @@ A `[[creating_system]]` entry maps a `creating_system_id` that is no member's
 own `system_id` to an endpoint (N21, §12.2, #67); a member's own `system_id`
 maps to it implicitly, and a mapping that names an undeclared endpoint, maps
 one id twice, or re-maps a member's `system_id` refuses the document.
+The TOML document also refuses an organisation that manages no endpoint, a
+native one counting (§8.1: "an Organization manages 1..* Endpoints"; #354
+item 5, #874). The FHIR form and the mCSD directory keep such an
+organisation, for the reason the directory paragraph below gives for a
+deleted endpoint, and an `ORGANISATION` selector that selects no endpoint
+answers `404` `no-destination` (§11.2) in every form.
 A query takes the snapshot once at entry and uses it to the end, so a reload
 never changes membership under a running query. Admission is a reviewed act,
 so there is no registry write API; the document's own change process (review,
@@ -2642,7 +2649,7 @@ R4 is #23, #25 and #27).
 | A6 | An integer on the String identifier path [R1 D9] | `400`, never coerced, written or bound | `OBJECT_ID.value` and `DV_IDENTIFIER.id` are `String`; AQL types a bound parameter as its literal | decided (owner, 2026-10-01) |
 | A7 | The same subject value twice [R1 D11] | consumed once; two different values are `400` | the first reduces to one scope, the second does not (§7.1) | decided (owner, 2026-10-01) |
 | A8 | A query with no patient carrier [R1 D12] | answered only where the node set is defined: directed, or ask-all with no localizer; `400` otherwise | N4 keys localization on the patient | decided (owner, 2026-10-01) |
-| A9 | The ENDPOINT attribute names [R1 D10] | the §9.3 set, plus `p/id` until 1.0 settles §8.3 against §9.3; every other path `400` | the §8.3 example is the only place a client learns the syntax; `p/organization` is named by neither | decided (owner, 2026-10-01); the `url` attribute re-checked against 1.0.0 (#354): §9.3 still lets a gateway omit `url` from rows, and FerroFED never withholds it, filling it from the registry whenever it is selected, so this stands; a setting that withheld it would refuse a query selecting `url` with `400` and never omit the cell, because §9.1 makes `rows[n][i]` the value of `columns[i]` |
+| A9 | The ENDPOINT attribute names [R1 D10] | the §9.3 set, plus `p/id` until 1.0 settles §8.3 against §9.3; every other path `400` | the §8.3 example is the only place a client learns the syntax; `p/organization` is named by neither | decided (owner, 2026-10-01); the `url` attribute re-checked against 1.0.0 (#354): §9.3 still lets a gateway omit `url` from rows, and FerroFED never withholds it, filling it from the registry whenever it is selected, so this stands; a setting that withheld it would refuse a query selecting `url` with `400` and never omit the cell, because §9.1 makes `rows[n][i]` the value of `columns[i]`; an attribute is also an `ORDER BY` key (#354 item 5, #874): §8.1 and §9.3 hold it per endpoint and forbid no ordering on it, so the key is taken out of every node query and the Tier orders on the value it holds per endpoint, in the place the client wrote it, compared as any string cell is, before the A43 tie-break on `endpoint_id` then the uid; each node keeps the other keys and the client's `LIMIT n`, and because the value is constant per node, its first `n` stays its share of the federated first `n` (§11.6.1). Under `DISTINCT` the attribute must also be selected (`order-not-selected`, N13), and under version-identity dedup with a `LIMIT` the key is refused `400` `endpoint-order-dedup`, because the copies of one version at two endpoints differ on it and §11.6.1's containment fails (§10.2). The variable anywhere else stays `endpoint-variable` |
 | A10 | ITS-REST `offset` and `fetch` [R1 D3; amended on #354] | the members select a window over the AQL result (skip = AQL `OFFSET` + `offset`; count = the smaller of the rows the AQL `LIMIT` leaves after `offset` and `fetch`), paged under the declared `OFFSET` strategy as the clauses are; every node query carries an explicit `fetch`, the `LIMIT` it carries or `federation.max_node_rows` plus one (10000 by default), and a node that answers past that ceiling is `node-error` | §11.6 and N39 govern the paging; ITS-REST 1.1.0 defines `offset` as "the row number in result-set to start result-set from", a position in the AQL's result, and leaves a node's `fetch` default "to the implementation", which §11.5 forbids reading as a complete share; dropping the members silently is the reference implementation's divergence; the ceiling: no specification governs it, our own design | decided (owner, 2026-10-01); amended on #354 (2026-10-14, T161 on #212): the `400` for a member that differs from its clause is withdrawn (#868) |
 | A11 | The `query` group [R1 D2] | FerroFED handlers over the generated DTOs | N37's `424`/`504` with `meta.federation` cannot pass through `ApiError` and belong in no ITS-REST crate | decided (owner, 2026-10-01) |
 | A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `400` (amended on #354 from `409`; N41) | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |

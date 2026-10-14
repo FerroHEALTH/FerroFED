@@ -317,6 +317,31 @@ fn a_node_without_an_endpoint_is_refused() {
 }
 
 #[test]
+fn an_organisation_without_an_endpoint_is_refused() {
+    let document = one_node_with("[[organisation]]\nid = \"org-b\"\nname = \"Org B\"\n");
+    let error = refusal(&document);
+    assert!(
+        matches!(&error, LoadError::OrganisationWithoutEndpoint(id) if id.as_str() == "org-b"),
+        "§8.1: an Organization manages 1..* Endpoints: {error:?}"
+    );
+    assert_eq!(
+        "organisation org-b manages no endpoint (§8.1)",
+        error.to_string()
+    );
+}
+
+#[test]
+fn an_organisation_managing_an_endpoint_of_another_organisation_s_node_loads() {
+    let document = one_node_with(
+        "[[organisation]]\nid = \"org-b\"\n\n[[endpoint]]\nid = \"node-a-org-b\"\nnode = \"node-a\"\nurl = \"https://cdr-a.example.org/org-b/\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-b\"\n",
+    );
+    assert!(
+        RegistrySnapshot::from_toml_str(&document).is_ok(),
+        "§8.1, N20: org-b manages one endpoint"
+    );
+}
+
+#[test]
 fn a_document_with_no_node_is_refused() {
     assert!(
         matches!(

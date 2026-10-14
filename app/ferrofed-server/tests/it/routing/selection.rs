@@ -120,7 +120,8 @@ async fn the_organisation_header_routes_to_the_one_endpoint_it_manages() -> Test
 #[tokio::test]
 async fn the_routing_headers_select_one_endpoint_and_never_two_sets() -> TestResult {
     let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
-    let more = "\n[[organisation]]\nid = \"org-c\"\n\n[[endpoint]]\nid = \"node-a-two\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n";
+    // org-c manages only a native endpoint, which no selector reaches (§8.1 asks 1..*).
+    let more = "\n[[organisation]]\nid = \"org-c\"\n\n[[endpoint]]\nid = \"node-a-two\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n\n[[endpoint]]\nid = \"node-a-eps\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9/fhir\"\nconnection_type = \"hl7-fhir-rest\"\nmanaging_organisation = \"org-c\"\ncategories = [\"Patient-Summaries\"]\nprofiles = [\"http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps\"]\nehr_id_system = \"urn:oid:2.999.4.1\"\n";
     for (fields, answer) in [
         (
             vec![
