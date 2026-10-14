@@ -79,7 +79,7 @@ jobs:
       # syft, trivy and osv-scanner even when no SBOM travelled with it
       # (https://github.com/rust-secure-code/cargo-auditable).
       - name: Install cargo-auditable
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-auditable@0.7.5
 
@@ -140,7 +140,7 @@ jobs:
       # source graph records the direct and transitive edges; the syft
       # document below reads what the shipped binary actually carries.
       - name: Install cargo-cyclonedx
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-cyclonedx@0.5.9
       - name: Generate the dependency SBOM
@@ -169,7 +169,7 @@ jobs:
           echo "SBOM=$sbom" >> "$GITHUB_ENV"
 
       - name: Install syft
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: syft@1.51.1
       - name: Generate the build SBOM from the shipped binary
@@ -244,7 +244,7 @@ jobs:
       # workflow's signer identity before extracting it. An artifact is bound
       # to this run; a release asset is whatever is attached when it is read.
       - name: Hand the tarball to the image lane
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ferrofed-${{ inputs.tag }}-${{ inputs.target }}
           path: ${{ env.ASSET }}
