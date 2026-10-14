@@ -44,6 +44,7 @@ use fhir_types::r4::bundle::{
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::endpoint::Endpoint;
+use fhir_types::r4::extension::{Extension, ExtensionValue};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::organization::Organization;
 use fhir_types::r4::reference::Reference;
@@ -74,6 +75,23 @@ pub const SYSTEM_ID: &str = "https://ferrofed.eu/fhir/sid/system-id";
 
 /// The code system of the openEHR Query API connection type.
 pub const CONNECTION_TYPE: &str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
+
+/// The HL7 code system of the `hl7-fhir-rest` connection type.
+pub const HL7_CONNECTION_TYPE: &str =
+    "http://terminology.hl7.org/CodeSystem/endpoint-connection-type";
+
+/// The code system of the categories a member's own FHIR endpoint serves,
+/// written as `payloadType` codings.
+pub const CATEGORY: &str =
+    "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs";
+
+/// The extension naming one profile a member's own FHIR endpoint's documents
+/// follow.
+pub const PROFILE: &str = "https://ferrofed.eu/fhir/StructureDefinition/payload-profile";
+
+/// The extension naming the identifier system of the member's `ehr_id` at
+/// its own FHIR endpoint.
+pub const EHR_ID_SYSTEM: &str = "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system";
 
 /// The instant the device's clock starts at.
 const EPOCH: &str = "2026-01-01T00:00:00Z";
@@ -223,6 +241,76 @@ impl Member {
         };
         Ok(endpoint)
     }
+
+    /// The member's own `hl7-fhir-rest` endpoint for the exchange format,
+    /// built as [`Member::endpoint`] is and spelled by `native`: its
+    /// categories as `payloadType` codings in [`CATEGORY`], its profiles in
+    /// [`PROFILE`] extensions and the identifier system of the member's
+    /// `ehr_id` in an [`EHR_ID_SYSTEM`] extension.
+    ///
+    /// # Errors
+    /// [`McsdHarnessError::Example`] when the vendored example cannot be read.
+    pub fn native_endpoint(&self, native: &Native<'_>) -> Result<Endpoint, McsdHarnessError> {
+        let mut endpoint =
+            self.endpoint_with_connection_type(HL7_CONNECTION_TYPE, "hl7-fhir-rest")?;
+        endpoint.id = Some(native.endpoint.to_owned());
+        endpoint.identifier = vec![
+            identifier(ENDPOINT_ID, native.endpoint),
+            identifier(NODE_ID, &self.node),
+            identifier(SYSTEM_ID, &self.system_id),
+        ];
+        endpoint.managing_organization = Some(reference(&format!(
+            "Organization/{}",
+            native.manager.unwrap_or(&self.organisation)
+        )));
+        endpoint.payload_type = vec![CodeableConcept {
+            coding: native
+                .categories
+                .iter()
+                .map(|code| Coding {
+                    system: Some(CATEGORY.into()),
+                    code: Some((*code).into()),
+                    ..Coding::default()
+                })
+                .collect(),
+            text: Some("EEHRxF".into()),
+            ..CodeableConcept::default()
+        }];
+        endpoint.payload_mime_type = vec!["application/fhir+json".into()];
+        endpoint.extension = native
+            .profiles
+            .iter()
+            .map(|profile| Extension {
+                url: PROFILE.into(),
+                value: Some(ExtensionValue::Canonical((*profile).into())),
+                ..Extension::default()
+            })
+            .chain(native.ehr_id_system.map(|system| Extension {
+                url: EHR_ID_SYSTEM.into(),
+                value: Some(ExtensionValue::Uri(system.into())),
+                ..Extension::default()
+            }))
+            .collect();
+        endpoint.address = native.address.into();
+        Ok(endpoint)
+    }
+}
+
+/// What a member's own FHIR endpoint declares ([`Member::native_endpoint`]).
+#[derive(Debug, Clone, Copy)]
+pub struct Native<'a> {
+    /// The endpoint's `endpoint_id`, also its logical id.
+    pub endpoint: &'a str,
+    /// Its FHIR base URL.
+    pub address: &'a str,
+    /// The organisation managing it, when another than the member's.
+    pub manager: Option<&'a str>,
+    /// The codes of the categories it serves.
+    pub categories: &'a [&'a str],
+    /// The canonical URLs of the profiles its documents follow.
+    pub profiles: &'a [&'a str],
+    /// The identifier system of the member's `ehr_id`.
+    pub ehr_id_system: Option<&'a str>,
 }
 
 /// The harness directory could not be set up.

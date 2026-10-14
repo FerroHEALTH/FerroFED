@@ -839,7 +839,14 @@ carried in `connectionType` itself: the mCSD `Endpoint` profile binds it to the
 HL7 endpoint connection types extensibly, and its `ihe-endpointspecifictype`
 extension belongs to the document-sharing profile, which an openEHR endpoint
 is not (#74). That meets N19 and CP-20 and is FerroFED's own; the missing
-registered code is a draft on #17.
+registered code is a draft on #17. A member's own exchange-format endpoint
+(A64) is `hl7-fhir-rest` in HL7's endpoint connection type system: its
+Art 14(1) categories are `Endpoint.payloadType` codings in the priority
+category code system ("the type of content that may be used at this
+endpoint", FHIR R4), and its profiles and the identifier system of its
+`ehr_id` are two FerroFED extensions, `payload-profile` and `ehr-id-system`,
+because neither R4 nor mCSD 4.0.0 carries them; a FHIR-form or mCSD registry
+holds it to every refusal the TOML registry does (#883).
 
 **The FHIR model** (decision A16) comes from `fhir-types` (`r4`), compiled
 only in `crates/ihe-iti` (section 11), so the core never compiles it. Its

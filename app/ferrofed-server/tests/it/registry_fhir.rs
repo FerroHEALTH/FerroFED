@@ -16,6 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
+use ehds_logging::category::PRIORITY_SYSTEM;
+use ferrofed_identity::ihe::mcsd;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
@@ -265,5 +267,95 @@ fn config_check_refuses_a_native_document_declared_as_fhir() -> TestResult {
     assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not JSON"), "{stderr}");
+    Ok(())
+}
+
+/// The registry of [`fhir_registry`] with node A's own `hl7-fhir-rest`
+/// endpoint beside its Query API endpoint, serving `category` in the EPS
+/// composition profile.
+fn fhir_registry_with_native(category: &str) -> String {
+    let native = format!(
+        r#"{{
+  "fullUrl": "https://registry.example.org/fhir/Endpoint/node-a-eps",
+  "resource": {{
+    "resourceType": "Endpoint",
+    "id": "node-a-eps",
+    "extension": [
+      {{"url": "{profile}", "valueCanonical": "{eps}"}},
+      {{"url": "{ehr_id_system}", "valueUri": "urn:oid:2.999.4.1"}}
+    ],
+    "identifier": [
+      {{"system": "https://ferrofed.eu/fhir/sid/endpoint-id", "value": "node-a-eps"}},
+      {{"system": "https://ferrofed.eu/fhir/sid/node-id", "value": "node-a"}},
+      {{"system": "https://ferrofed.eu/fhir/sid/system-id", "value": "cdr-a.example.org"}}
+    ],
+    "status": "active",
+    "connectionType": {{"system": "{hl7}", "code": "hl7-fhir-rest"}},
+    "managingOrganization": {{"reference": "Organization/org-a"}},
+    "payloadType": [{{"coding": [{{"system": "{categories}", "code": "{category}"}}]}}],
+    "address": "http://127.0.0.1:11/fhir"
+  }}
+}}"#,
+        profile = mcsd::PROFILE_EXTENSION,
+        eps = ferrofed_eehrxf::face::EPS_COMPOSITION,
+        ehr_id_system = mcsd::EHR_ID_SYSTEM_EXTENSION,
+        hl7 = mcsd::HL7_CONNECTION_TYPE_SYSTEM,
+        categories = mcsd::CATEGORY_SYSTEM,
+    );
+    let organisation_a = organisation("org-a", "node-a-pub").replace(
+        r#"[{"reference": "Endpoint/node-a-pub"}]"#,
+        r#"[{"reference": "Endpoint/node-a-pub"}, {"reference": "Endpoint/node-a-eps"}]"#,
+    );
+    format!(
+        r#"{{"resourceType": "Bundle", "type": "collection", "entry": [{}, {}, {}, {}, {native}]}}"#,
+        organisation_a,
+        organisation("org-b", "node-b-pub"),
+        endpoint(
+            "node-a-pub",
+            "node-a",
+            "cdr-a.example.org",
+            "http://127.0.0.1:9/openehr",
+            "org-a",
+            OPENEHR
+        ),
+        endpoint(
+            "node-b-pub",
+            "node-b",
+            "cdr-b.example.org",
+            "http://127.0.0.1:10/openehr",
+            "org-b",
+            OPENEHR
+        ),
+    )
+}
+
+#[test]
+fn the_fhir_form_spells_the_categories_in_the_priority_code_system() {
+    assert_eq!(mcsd::CATEGORY_SYSTEM, PRIORITY_SYSTEM);
+}
+
+#[test]
+fn config_check_accepts_a_native_endpoint_in_fhir_form() -> TestResult {
+    let output = config_check(&fhir_registry_with_native("Patient-Summaries"))?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+/// A native endpoint read from the FHIR form meets the checks the native
+/// form's does: a code that is no priority category is refused.
+#[test]
+fn config_check_refuses_a_native_endpoint_in_fhir_form_serving_no_priority_category() -> TestResult
+{
+    let output = config_check(&fhir_registry_with_native("Discharge-Summaries"))?;
+    assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("node-a-eps") && stderr.contains("no priority category"),
+        "the endpoint and the reason are named: {stderr}"
+    );
     Ok(())
 }

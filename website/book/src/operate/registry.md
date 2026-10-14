@@ -88,8 +88,9 @@ The endpoint is never an openEHR Query API endpoint (N19, §15.2): no query is
 sent to it, `OPTIONS {base}/` does not list it (§7a.2), and a `FROM ENDPOINT`
 directive or an `openEHR-federation-endpoint` header naming it is a `400`
 `endpoint-unknown` (§8). A node needs an `openehr-rest-query` endpoint
-beside it. Only the TOML form of the document declares one; the FHIR form and an mCSD
-directory still refuse `hl7-fhir-rest`.
+beside it. The FHIR form and an mCSD directory declare one too, as
+[a member's own endpoint in FHIR form](#a-members-own-endpoint-in-fhir-form)
+shows.
 
 `config check` refuses, naming the endpoint:
 
@@ -140,7 +141,7 @@ specification governs these systems; they are FerroFED's design):
 | `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/node-id` | the node the endpoint belongs to, exactly one |
 | `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/system-id` | that node's openEHR `system_id`, exactly one |
 | `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/creating-system-id` | each further `creating_system_id` the endpoint answers for (N21), zero or more |
-| `Endpoint.connectionType` | `openehr-rest-query` in `https://ferrofed.eu/fhir/CodeSystem/connection-type` |
+| `Endpoint.connectionType` | `openehr-rest-query` in `https://ferrofed.eu/fhir/CodeSystem/connection-type`, or `hl7-fhir-rest` in `http://terminology.hl7.org/CodeSystem/endpoint-connection-type` for a member's own exchange-format endpoint |
 | `Endpoint.managingOrganization` | the one managing organisation (N20) |
 | `Endpoint.status` | `active`, or `suspended` for an endpoint taken out of service |
 | `Endpoint.address` | the ITS-REST base URL |
@@ -157,17 +158,81 @@ References resolve inside the Bundle as FHIR R4 §2.36.4.1 resolves them: a
 relative `Organization/org-a` against the root of a REST `fullUrl` such as
 `https://registry.example.org/fhir/Endpoint/node-a-pub`, and an absolute
 reference, a `urn:uuid:` included, against an entry's `fullUrl`. Give every
-entry a `fullUrl`. Other elements (`payloadType`, `period`, `header` and the
-rest) are not read. A node's `product`, `version` and node identifiers have
-no place in this form; a registry that needs them uses the native form.
+entry a `fullUrl`. Other elements (`payloadType` codings outside the category
+system below, `payloadMimeType`, `period`, `header` and the rest) are not
+read. A node's `product`, `version` and node identifiers have no place in
+this form; a registry that needs them uses the native form.
+
+### A member's own endpoint in FHIR form
+
+An `Endpoint` whose `connectionType` is `hl7-fhir-rest` in HL7's
+`http://terminology.hl7.org/CodeSystem/endpoint-connection-type` is
+[a member's own exchange-format endpoint](#a-members-own-exchange-format-endpoint),
+the native form's `hl7-fhir-rest` `[[endpoint]]`. It carries the identifiers,
+the managing organisation, the status and the address of any endpoint, is
+listed by the organisation that operates its node, and declares the three
+keys of the native form:
+
+| FHIR element | Native form key |
+|---|---|
+| `Endpoint.payloadType.coding` with system `http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs` | `categories`: one coding per category it serves, by its Art 14(1) priority category code, one or more |
+| `Endpoint.extension` with url `https://ferrofed.eu/fhir/StructureDefinition/payload-profile` | `profiles`: one `valueCanonical` per profile its documents follow, one or more |
+| `Endpoint.extension` with url `https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system` | `ehr_id_system`: one `valueUri`, exactly one |
+
+FHIR R4 defines `payloadType` as the type of content the endpoint serves, so
+the categories are codings there, in the code system of HL7 Europe's Health
+Data API that the gateway's category codes come from; a coding in another
+system describes other content and is not read. FHIR R4 has no element for a
+document profile (`payloadMimeType` names a serialisation) or for the
+identifier system of an `ehr_id`, so those two are FerroFED's extensions (no
+specification governs them; they are FerroFED's design):
+
+```json
+{
+  "resourceType": "Endpoint",
+  "id": "hospital-a-eps",
+  "extension": [
+    {"url": "https://ferrofed.eu/fhir/StructureDefinition/payload-profile",
+     "valueCanonical": "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"},
+    {"url": "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system",
+     "valueUri": "urn:oid:2.999.4.1"}
+  ],
+  "identifier": [
+    {"system": "https://ferrofed.eu/fhir/sid/endpoint-id", "value": "hospital-a-eps"},
+    {"system": "https://ferrofed.eu/fhir/sid/node-id", "value": "hospital-a"},
+    {"system": "https://ferrofed.eu/fhir/sid/system-id", "value": "cdr-a.example.org"}
+  ],
+  "status": "active",
+  "connectionType": {
+    "system": "http://terminology.hl7.org/CodeSystem/endpoint-connection-type",
+    "code": "hl7-fhir-rest"
+  },
+  "managingOrganization": {"reference": "Organization/org-a"},
+  "payloadType": [{"coding": [{
+    "system": "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs",
+    "code": "Patient-Summaries"
+  }]}],
+  "payloadMimeType": ["application/fhir+json"],
+  "address": "https://cdr-a.example.org/fhir"
+}
+```
+
+The endpoint meets every rule the native form's does, and `config check`
+names it when it breaks one: an `hl7-fhir-rest` endpoint with no
+`ehr_id_system` extension, no category coding or no profile extension, or
+with a consent refusal code extension, is refused, and so is an
+`openehr-rest-query` endpoint that carries a category coding or either
+extension. A category coding with no `code`, a profile extension with no
+`valueCanonical`, and an `ehr_id_system` extension with no `valueUri` or
+given twice are refused as the FHIR form's own faults.
 
 `config check` refuses the document with the configuration exit code, naming
 the resource, when:
 
-- an endpoint's `connectionType` is `hl7-fhir-rest`, carries no system (an
-  informal string), or is any other system and code (N19, §15.2). CP-20 is
-  an operator point, and this check is how the gateway helps the operator
-  meet it;
+- an endpoint's `connectionType` carries no system (an informal string), or
+  is a system and code other than `openehr-rest-query` in FerroFED's system
+  and `hl7-fhir-rest` in HL7's (N19, §15.2). CP-20 is an operator point, and
+  this check is how the gateway helps the operator meet it;
 - an endpoint has no `managingOrganization`, or one that names no
   `Organization` of the Bundle (N20);
 - an endpoint is listed by no organisation, or by two;
@@ -255,9 +320,9 @@ A refresh that changed something goes through the same checks as a reload:
 - When it breaks a rule, it is refused. The running registry stays, the
   gateway logs `registry reload refused` with the `class` of the
   [reload classes](#reloading-the-registry), and the refusal counts as a
-  refused reload. A content that breaks a registry rule (an endpoint relying
-  on `hl7-fhir-rest`, a `system_id` given to two nodes, a registry left with
-  no node) is `registry-invalid`. A sound registry that the rest of the
+  refused reload. A content that breaks a registry rule (an `hl7-fhir-rest`
+  endpoint without the keys of a native endpoint, a `system_id` given to two
+  nodes, a registry left with no node) is `registry-invalid`. A sound registry that the rest of the
   configuration no longer fits is refused under the class of that part:
   `dev-cross-reference` or `pixm` for a resolver row naming a member the
   refresh removed, `localization`, `demographic-endpoint`, `credentials`
