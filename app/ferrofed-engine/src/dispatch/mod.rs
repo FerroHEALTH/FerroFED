@@ -551,6 +551,7 @@ pub fn is_consent_refusal(forwarded: &Forwarded, refusal_codes: &BTreeSet<String
 pub struct NodeClient<T> {
     endpoint: EndpointId,
     client: Client<T>,
+    credentials: Option<SharedCredentials>,
     consent_refusal_codes: BTreeSet<String>,
     on_behalf: Option<SharedOnBehalf>,
     dpop: Option<NodeProver>,
@@ -587,19 +588,12 @@ impl<T: Transport + Clone> NodeClient<T> {
         Ok(Self {
             endpoint: endpoint.id().clone(),
             client,
+            credentials: None,
             consent_refusal_codes: endpoint.consent_refusal_codes().clone(),
             on_behalf: None,
             dpop: None,
             in_flight: None,
         })
-    }
-
-    /// This client asking `provider` for the onward credentials of every
-    /// request.
-    #[must_use]
-    pub fn with_credentials_provider(mut self, provider: SharedCredentials) -> Self {
-        self.client = self.client.with_credentials_provider(provider);
-        self
     }
 
     /// The endpoint this client dispatches to.

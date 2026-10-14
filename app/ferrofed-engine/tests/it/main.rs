@@ -28,6 +28,7 @@ mod forward;
 mod gate;
 mod masking;
 mod mtls;
+mod native;
 #[cfg(feature = "nl")]
 mod nuts;
 #[cfg(feature = "nl")]

@@ -95,6 +95,35 @@ The section queries run from the code that defines them, so the face works
 whether or not the deployment sets `[stored_queries]`. The text is the one
 the registry lists at version `1.0.0`.
 
+### A member that serves its own summary
+
+A member the registry declares in the `native` mode for patient summaries
+([a member's own exchange-format endpoint](../operate/registry.md#a-members-own-exchange-format-endpoint))
+is resolved with every other member, then left out of the section queries.
+The gateway asks its own endpoint instead, at the same time and under the
+same budget:
+
+```text
+GET {member-fhir-base}/Patient/$summary?identifier=<ehr_id_system>|<ehr_id>&profile=http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps
+Accept: application/fhir+json
+```
+
+The request names the member's own `ehr_id` and nothing else about the
+patient (§5.4.1, N33). It passes the outbound identifier-hygiene gate, and
+carries the onward credential and the signed caller identity of the
+member's `openehr-rest-query` endpoint. The member's document comes back as
+it sent it, byte for byte. The gateway's own document maps none of that
+member's data, and every section names it: "Not mapped here: the records of
+the member, which serves its own patient summary." A section with no entry
+is then `unavailable`, never `nilknown`, because the gateway did not read
+that member's data. The member's own document is not yet part of the
+answer: the document list that names it beside the gateway's document is
+planned ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
+
+A member whose own endpoint answers `404` holds no summary of the patient,
+and the sections say so. Any other answer, or none, counts as a member that
+did not answer, as below.
+
 ## The document
 
 The answer is a `Bundle` of type `document`, `application/fhir+json`, that
@@ -129,7 +158,8 @@ profiles. Validation with HL7's FHIR Validator in CI is planned
 ## Completeness
 
 A summary is all-or-nothing by default, as a federated query is (§11.3,
-§11.4). A member that does not answer one of the section queries fails the
+§11.4). A member that does not answer one of the section queries, or a
+member in the `native` mode whose own endpoint does not answer, fails the
 summary: the answer is the status the query would take, `424` or `504`, with
 an `OperationOutcome` that names each such endpoint and its §11.1 status.
 

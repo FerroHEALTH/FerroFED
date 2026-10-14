@@ -1,22 +1,33 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The node clients whose onward credentials depend on whom each request is
-//! made for: a token exchanged per verified caller (§13.1, N25, N26; RFC
-//! 8693), obtained when the request is sent.
+//! The onward credentials of the node clients: a provider per endpoint, or
+//! credentials that depend on whom each request is made for, a token
+//! exchanged per verified caller (§13.1, N25, N26; RFC 8693) and obtained
+//! when the request is sent.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
-use openehr_its::rest::client::{Client, Transport};
+use openehr_its::rest::client::{Client, ClientError, Transport};
+use url::Url;
 
 use crate::onward::grant::exchange::SharedOnBehalf;
 
-use super::{DispatchOptions, NodeClient, NodeClients, SetupError};
+use super::{DispatchOptions, NodeClient, NodeClients, SetupError, SharedCredentials};
 
 impl<T: Transport + Clone> NodeClient<T> {
+    /// This client asking `provider` for the onward credentials of every
+    /// request.
+    #[must_use]
+    pub fn with_credentials_provider(mut self, provider: SharedCredentials) -> Self {
+        self.client = self.client.with_credentials_provider(Arc::clone(&provider));
+        self.credentials = Some(provider);
+        self
+    }
+
     /// This client asking `source` for the onward credentials of each
     /// request on behalf of the principal that request conveys.
     ///
@@ -45,6 +56,33 @@ impl<T: Transport + Clone> NodeClient<T> {
             None => client,
             Some(prover) => Cow::Owned(client.into_owned().with_dpop_prover(prover.clone())),
         }
+    }
+
+    /// A client rooted at `base`, another interface of the same node,
+    /// sending as [`NodeClient::client_for`] does: over the endpoint's
+    /// transport, with its retry budget, its onward credentials, obtained on
+    /// behalf of the principal `options` conveys where they are, and its
+    /// `DPoP` prover.
+    ///
+    /// No specification governs reaching a node's second endpoint with the
+    /// first one's credentials: our own design.
+    pub(crate) fn client_at(
+        &self,
+        base: Url,
+        options: &DispatchOptions,
+    ) -> Result<Client<T>, ClientError> {
+        let mut client =
+            Client::new(self.client.transport().clone(), base)?.with_retry(self.client.retry());
+        if let Some(source) = &self.on_behalf {
+            client = client
+                .with_credentials_provider(source.provider(&options.conveyance, &options.withheld));
+        } else if let Some(provider) = &self.credentials {
+            client = client.with_credentials_provider(Arc::clone(provider));
+        }
+        if let Some(prover) = &self.dpop {
+            client = client.with_dpop_prover(prover.clone());
+        }
+        Ok(client)
     }
 }
 

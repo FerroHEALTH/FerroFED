@@ -62,6 +62,7 @@ pub(crate) mod demographics;
 pub mod follow_up;
 pub mod intake;
 mod localize;
+mod native;
 pub mod options;
 pub mod owner;
 pub mod plan;

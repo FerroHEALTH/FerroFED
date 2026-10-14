@@ -28,7 +28,9 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::patient_summary::{ISSUER, PATIENT, Section};
-use ferrofed_eehrxf::summary::{Answer, Held, Organisation, Origin, SectionAnswers};
+use ferrofed_eehrxf::summary::{
+    Answer, Covered, Elsewhere, Held, Organisation, Origin, SectionAnswers,
+};
 use ferrofed_engine::fanout::reader::RowReader;
 use ferrofed_engine::fanout::{Completion, FanOutError, FederatedAnswer, Plan};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -44,6 +46,7 @@ use tokio::task::JoinSet;
 
 use crate::access::{Accessed, Asked};
 use crate::facade::answer::{self, Failure};
+use crate::facade::native::{self, Native};
 use crate::facade::request::{self, Arrived, Submitted};
 use crate::facade::{cells, completeness, follow_up, intake, plan, security};
 use crate::federation::Federation;
@@ -100,6 +103,9 @@ pub(crate) struct Gathered {
     /// The members whose consent pre-filter denial was set aside for an
     /// emergency purpose.
     pub(crate) set_aside: BTreeSet<NodeId>,
+    /// The members that serve the patient summary themselves, each with
+    /// what its own endpoint answered, in endpoint order.
+    pub(crate) natives: Vec<Native>,
 }
 
 /// Why the section queries give no summary.
@@ -171,7 +177,7 @@ pub(crate) async fn gather(
     )
     .await?;
     let disclosed = federation.discloses_consent_to(arrived.conveyance);
-    let (targets, _) = answer::planning::targeted(
+    let (mut targets, _) = answer::planning::targeted(
         &federation,
         (first, plan::Selection::Undirected),
         (arrived.requester, arrived.on_behalf),
@@ -187,6 +193,13 @@ pub(crate) async fn gather(
         return Err(Failure::NoDestination.into());
     }
     answer::planning::remember(&federation, arrived.session, &targets);
+    // NOTE: § The four identifiers, N33: a member asked at its own exchange-format endpoint by
+    // its ehr_id is asked no section query, so its data are never in the mapped document too.
+    let chosen = native::chosen(federation.snapshot(), &targets);
+    for member in &chosen {
+        targets.plan = targets.plan.leaving_out(&member.via);
+    }
+    let withheld = targets.plan.withheld();
     let mut planned = Vec::with_capacity(analyses.len());
     for (position, (section, analysis)) in analyses.iter().enumerate() {
         let (plan, sources) = if position == 0 {
@@ -210,7 +223,11 @@ pub(crate) async fn gather(
         }));
         planned.push((*section, plan, sources, rows));
     }
-    let answers = fanned_out(&federation, &arrived, planned).await?;
+    let (answers, natives) = tokio::join!(
+        fanned_out(&federation, &arrived, planned),
+        native::asked(&federation, &arrived, chosen, withheld)
+    );
+    let (answers, natives) = (answers?, natives?);
     let mut status = StatusCode::OK;
     for (_, answer, _, _) in &answers {
         answer::fan_out::observed(&federation, answer);
@@ -221,19 +238,35 @@ pub(crate) async fn gather(
             status = settled;
         }
     }
+    let status = native::settled(&natives, status, completion);
     let mut gathered = collected(&federation, &targets.resolved, &answers, &analyses)?;
     gathered.set_aside = targets.set_aside;
+    for native in &natives {
+        if native.answer.contact().left() {
+            gathered.sent.insert(native.chosen.native.clone());
+        }
+    }
+    gathered.natives = natives;
+    concluded(gathered, status)
+}
+
+/// The summary `gathered` gives, the section queries and the members' own
+/// endpoints having settled on `status`: every silent member named when it
+/// is not `200`, and no summary when no member holds the patient (§11.3).
+fn concluded(gathered: Gathered, status: StatusCode) -> Result<Gathered, Unsummarised> {
     if status != StatusCode::OK {
-        let silent = gathered
+        let queried = gathered
             .reached
             .iter()
-            .filter(|reached| reached.status != EndpointStatus::Active)
-            .map(|reached| {
-                (
-                    reached.endpoint.as_str().to_owned(),
-                    reached.status.as_str().to_owned(),
-                )
-            })
+            .map(|reached| (&reached.endpoint, reached.status));
+        let asked = gathered
+            .natives
+            .iter()
+            .map(|native| (&native.chosen.native, native.answer.status()));
+        let silent = queried
+            .chain(asked)
+            .filter(|(_, status)| *status != EndpointStatus::Active)
+            .map(|(endpoint, status)| (endpoint.as_str().to_owned(), status.as_str().to_owned()))
             .collect();
         return Err(Unsummarised::Incomplete {
             status,
@@ -241,7 +274,7 @@ pub(crate) async fn gather(
             gathered: Box::new(gathered),
         });
     }
-    if gathered.reached.is_empty() {
+    if gathered.reached.is_empty() && gathered.natives.is_empty() {
         let set_aside = (!gathered.set_aside.is_empty()).then(|| Box::new(gathered));
         return Err(Unsummarised::NotFound(set_aside));
     }
@@ -401,6 +434,7 @@ fn collected(
         sent,
         queried: queried(analyses),
         set_aside: BTreeSet::new(),
+        natives: Vec::new(),
     };
     for (section, answer, sources, rows) in answers {
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();
@@ -487,6 +521,26 @@ fn organisation(snapshot: &RegistrySnapshot, node: &NodeId) -> Organisation {
     }
 }
 
+/// The members `gathered` asked at their own endpoint, as the document
+/// names them.
+pub(crate) fn elsewhere(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Elsewhere> {
+    gathered
+        .natives
+        .iter()
+        .map(|native| Elsewhere {
+            endpoint: native.chosen.native.as_str().to_owned(),
+            organisation: organisation(snapshot, &native.chosen.node),
+            answer: match &native.answer {
+                ferrofed_engine::single_node::native::Answer::Document(_) => Covered::Document,
+                ferrofed_engine::single_node::native::Answer::Absent => Covered::Absent,
+                silent => Covered::Silent {
+                    status: silent.status().as_str().to_owned(),
+                },
+            },
+        })
+        .collect()
+}
+
 /// The ids every section query constrains its data to.
 fn queried(analyses: &[(Section, Analysis)]) -> Queried {
     let mut queried = Queried {
@@ -534,7 +588,7 @@ pub(crate) fn accessed(
         .iter()
         .flat_map(|reached| reached.objects.iter().cloned())
         .collect();
-    let origins = gathered
+    let mut origins: Vec<Asked> = gathered
         .reached
         .iter()
         .enumerate()
@@ -552,6 +606,7 @@ pub(crate) fn accessed(
             }
         })
         .collect();
+    origins.extend(native::origins(federation.snapshot(), &gathered.natives));
     Some(Accessed {
         log: Arc::clone(log),
         action: Action::Query,
@@ -600,6 +655,7 @@ fn subject(
                     patient: PatientLookup::RequestNamed,
                 })
             })
+            .chain(native::ehrs(&gathered.natives))
             .collect(),
     }
 }

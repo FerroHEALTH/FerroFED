@@ -357,6 +357,24 @@ impl Plan {
         Ok(self)
     }
 
+    /// This plan with `endpoint` dispatched to no more, its member asked
+    /// by another request than the plan's query.
+    ///
+    /// The endpoint then has no status in the answer of this plan, so the
+    /// request that asks it reports it.
+    #[must_use]
+    pub fn leaving_out(mut self, endpoint: &EndpointId) -> Self {
+        self.dispatch.remove(endpoint);
+        self
+    }
+
+    /// The identifiers no request of this plan may carry, the ones
+    /// resolution consumed (§5.4.1, N33).
+    #[must_use]
+    pub fn withheld(&self) -> Arc<Withheld> {
+        Arc::clone(&self.withheld)
+    }
+
     /// The endpoints the plan dispatches to, in endpoint id order.
     pub fn dispatched(&self) -> impl Iterator<Item = &EndpointId> {
         self.dispatch.keys()

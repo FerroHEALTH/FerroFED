@@ -8,6 +8,8 @@ use std::collections::BTreeSet;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
+use ehds_logging::category::Category;
+use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::resolver::Resolver;
@@ -159,6 +161,7 @@ impl Federation {
             .map(|seam| -> Arc<dyn Resolver> { Arc::clone(&seam.resolver) });
         patient_bound(settings, &snapshot, resolver.is_some())?;
         receiving(settings, &snapshot, resolver.is_some())?;
+        natives(&snapshot)?;
         let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
         if selection == NodeSelection::Localized {
             binding::single(&offers, Role::Localizer)?;
@@ -469,6 +472,41 @@ fn receiving(
                 category: category.code(),
                 member: member.to_owned(),
             });
+        }
+    }
+    Ok(())
+}
+
+/// Holds every member's own exchange-format endpoint of `snapshot` to the
+/// priority categories of Regulation (EU) 2025/327 Art 14(1), and one that
+/// serves patient summaries to the profile the face asks every summary in.
+///
+/// # Errors
+///
+/// Returns [`FederationError::NativeCategoryUnknown`] for a code that is no
+/// priority category, and [`FederationError::NativeProfileMissing`] for a
+/// patient summary endpoint that does not declare the EPS composition.
+fn natives(snapshot: &RegistrySnapshot) -> Result<(), FederationError> {
+    for native in snapshot.native_endpoints() {
+        for code in native.categories() {
+            let Some(category) = Category::priority(code) else {
+                return Err(FederationError::NativeCategoryUnknown {
+                    endpoint: native.id().clone(),
+                    category: code.clone(),
+                });
+            };
+            // NOTE: IPS OperationDefinition-summary `profile`; the face asks every member
+            // for the profile it answers in itself, so a native one must declare it.
+            let profile = EPS_COMPOSITION;
+            if category == Category::PatientSummary
+                && !native.profiles().iter().any(|declared| declared == profile)
+            {
+                return Err(FederationError::NativeProfileMissing {
+                    endpoint: native.id().clone(),
+                    category: code.clone(),
+                    profile,
+                });
+            }
         }
     }
     Ok(())

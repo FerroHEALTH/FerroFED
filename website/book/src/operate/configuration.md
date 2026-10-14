@@ -157,7 +157,7 @@ The sections, and the page that covers each:
 | `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
-| `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
+| `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from; a member's own exchange-format endpoint is an `hl7-fhir-rest` endpoint of the document | [The registry](registry.md), [A member's own exchange-format endpoint](registry.md#a-members-own-exchange-format-endpoint) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |
 | `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](localization.md#xcpd-localization-xcpd), [The audit repository](localization.md#the-audit-repository) |

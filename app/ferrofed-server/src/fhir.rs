@@ -456,10 +456,12 @@ fn document(
         version: String::from(env!("CARGO_PKG_VERSION")),
         operator: fhir.operator.clone(),
     };
+    // TODO(#810): list each member's own document beside this one, as its endpoint sent it.
+    let elsewhere = gathered::elsewhere(federation.snapshot(), gathered);
     let assembled = summary::assemble(
         &request,
         &author,
-        (&gathered.origins, &gathered.sections),
+        (&gathered.origins, &gathered.sections, &elsewhere),
         &fhir.mappings,
     );
     let (mut response, delivered) = match assembled {

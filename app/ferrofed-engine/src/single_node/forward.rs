@@ -46,7 +46,7 @@ use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, U
 use http::{HeaderMap, HeaderName, Method, StatusCode};
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{
-    ClientError, ErrorBody, Request, Transport, TransportError, path_segment,
+    Answer, ClientError, ErrorBody, Request, Transport, TransportError, path_segment,
 };
 use openehr_its::rest::routes::{self, Lookup, ParamLocation, RouteMatch};
 
@@ -109,6 +109,19 @@ impl Forwarded {
     #[must_use]
     pub fn body(&self) -> &[u8] {
         &self.body
+    }
+
+    /// The node's `answer`, less the hop-by-hop fields, its body bytes
+    /// unchanged.
+    pub(super) fn of_answer(answer: Answer) -> Self {
+        let status = answer.status();
+        let mut headers = answer.headers().clone();
+        strip_hop_by_hop(&mut headers);
+        Self {
+            status,
+            headers,
+            body: answer.into_body(),
+        }
     }
 
     /// The status, the headers and the body.
@@ -512,16 +525,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                     body: answer.error_body(),
                 })
             }
-            Ok(answer) => {
-                let status = answer.status();
-                let mut headers = answer.headers().clone();
-                strip_hop_by_hop(&mut headers);
-                Ok(Forwarded {
-                    status,
-                    headers,
-                    body: answer.into_body(),
-                })
-            }
+            Ok(answer) => Ok(Forwarded::of_answer(answer)),
             Err(error) => Err(self.unanswered(error, options)),
         }
     }
@@ -609,7 +613,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// that answers a node's `DPoP` nonce challenge. It is a request never
     /// sent unless the error's `sent` says the call's request left, and
     /// then the node's time-out (RFC 9449 §9).
-    fn unanswered(&self, error: ClientError, options: &DispatchOptions) -> ForwardError {
+    pub(super) fn unanswered(&self, error: ClientError, options: &DispatchOptions) -> ForwardError {
         let endpoint = self.endpoint().clone();
         if let Some(over) = Oversized::of_client_error(&error) {
             return ForwardError::Oversized {

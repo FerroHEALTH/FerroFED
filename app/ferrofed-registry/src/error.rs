@@ -228,10 +228,50 @@ pub enum LoadError {
     /// `Error` could carry as a refusal (§11.1, N27).
     #[error("endpoint {0} lists an empty consent refusal code")]
     EmptyConsentRefusalCode(EndpointId),
-    /// A node with no endpoint, which nothing could reach (a node has 1..*
-    /// endpoints, § The four identifiers).
+    /// A node with no `openehr-rest-query` endpoint, which no query could
+    /// reach (a node has 1..* endpoints, § The four identifiers, and a
+    /// native endpoint is a second one).
     #[error("node {0} has no endpoint")]
     NodeWithoutEndpoint(NodeId),
+    /// An endpoint sets a key its connection type does not take.
+    #[error("endpoint {endpoint} sets {key}, which its connection type does not take")]
+    MisplacedKey {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// The key.
+        key: &'static str,
+    },
+    /// An `hl7-fhir-rest` endpoint declares no identifier system for the
+    /// member's `ehr_id`, so the gateway could locate the member there by
+    /// nothing it may send (N33).
+    #[error(
+        "endpoint {0} serves the exchange format natively and declares no ehr_id_system to locate the member's ehr_id in"
+    )]
+    NativeWithoutIdentifierSystem(EndpointId),
+    /// An `hl7-fhir-rest` endpoint declares no category or no profile, or
+    /// an empty one.
+    #[error("endpoint {endpoint} serves the exchange format natively and declares no usable {key}")]
+    NativeWithout {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// `categories` or `profiles`.
+        key: &'static str,
+    },
+    /// Two native endpoints of one node serve one category, so the member
+    /// would be in no single mode for it.
+    #[error(
+        "node {node} serves the category {category} natively at endpoint {first} and endpoint {second}"
+    )]
+    NativeCategoryTwice {
+        /// The node.
+        node: NodeId,
+        /// The category's code.
+        category: String,
+        /// The endpoint declared first.
+        first: EndpointId,
+        /// The endpoint declared second.
+        second: EndpointId,
+    },
     /// A `[[creating_system]]` mapping names an endpoint the document does
     /// not declare.
     #[error(
