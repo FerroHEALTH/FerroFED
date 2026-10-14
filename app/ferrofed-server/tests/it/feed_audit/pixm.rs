@@ -433,13 +433,20 @@ async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestRe
     )?;
     let guard = tracing::subscriber::set_default(capture);
     let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
-    let records = repository.wait_for(1, SETTLE).await;
+    let records = repository.wait_for(2, SETTLE).await;
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        2,
+        records.len(),
+        "one record per ITI-83 exchange, and one of the access (Annex II 3.2)"
+    );
+    let resolutions = resolutions(&records);
+    assert_eq!(1, resolutions.len(), "one record per ITI-83 exchange");
     let claims = crate::support::claims();
     assert!(
-        records.iter().any(|record| record.contains(&claims.sub)),
-        "the caller reaches the repository"
+        resolutions[0].contains(&claims.sub),
+        "the caller reaches the repository in the ITI-83 record"
     );
     let log = logs.text();
     let exposition = state.metrics().render()?;
