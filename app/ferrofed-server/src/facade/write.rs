@@ -31,9 +31,10 @@
 //! unchanged (N22, N42a), and the write is refused `409` naming the
 //! controlling system (§10.3 `copy-write-reject`, N36): its
 //! `creating_system_id` as the registry spells it, with the controlling node
-//! and its endpoint, or, for a system the registry does not know, the place
-//! in the request that names the version. No value of the request is quoted
-//! back. The refusal never asks the controlling node anything, so it is the
+//! and its endpoint, or, for a system the registry does not know, its
+//! `creating_system_id` as the request spells it, outside the federation,
+//! with the place in the request that names the version (§12.2). No other
+//! value of the request is quoted back. The refusal never asks the controlling node anything, so it is the
 //! same whether that node is up or down, and a write derived from a
 //! de-duplicated row is held to it whichever endpoint the row was read from
 //! (§10.3 `dedup-write-target`, CP-29).
@@ -225,11 +226,15 @@ pub enum NotControlling {
         at: NodeId,
     },
     /// The registry routes the preceding version's `creating_system_id` to no
-    /// node: it is no member's `system_id` and no registered mapping's.
+    /// node: it is no member's `system_id` and no registered mapping's, so
+    /// the controlling system is outside the federation.
     #[error(
-        "the controlling system of {named} is the creating_system_id in it, which is no member's system_id and no registered creating_system mapping, so no member is known to control the version, and the request's ehr_id routes the write to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23, N36)"
+        "the controlling system of {named} is {creating_system_id}, its creating_system_id, which is no member's system_id and no registered creating_system mapping, so the controlling system is outside the federation, and the request's ehr_id routes the write to node {at}, which does not control the version; a versioned write is never committed at another node than its controlling CDR (§10.3, §12.2, §12a.1, N23, N36)"
     )]
     Unregistered {
+        /// The version's `creating_system_id`, read in the RM `system_id`
+        /// form and written as the request spells it.
+        creating_system_id: SystemId,
         /// Where the request names the version.
         named: Named,
         /// The node the path `ehr_id` routes to.
@@ -274,27 +279,23 @@ fn controlled_at(
     (named, version): (Named, &ObjectVersionId),
     at: &NodeId,
 ) -> Result<(), Refused> {
-    // NOTE: §12a.1, a creating_system_id that is no openEHR uid is no member's
-    // system_id, so it names no controlling CDR, the unregistered answer.
-    let registered = SystemId::creating_system_id_of(version)
-        .ok()
-        .and_then(|creating_system_id| {
-            snapshot
-                .registered_creating_system(&creating_system_id)
-                .map(|(spelled, route)| (spelled.clone(), route))
-        });
-    match registered {
+    // NOTE: BASE OBJECT_VERSION_ID, §12.2: the creating_system_id is a uid, so a
+    // version without one in that form names no version, the malformed answer.
+    let creating_system_id = SystemId::creating_system_id_of(version)
+        .map_err(|_malformed| PrecedingInvalid::Malformed)?;
+    match snapshot.registered_creating_system(&creating_system_id) {
         Some((_, route)) if route.node() == at => Ok(()),
-        Some((creating_system_id, route)) => Err(NotControlling::Elsewhere {
-            creating_system_id,
+        Some((spelled, route)) => Err(NotControlling::Elsewhere {
+            creating_system_id: spelled.clone(),
             endpoint: through(snapshot, &route),
             controller: route.node().clone(),
             at: at.clone(),
         }
         .into()),
-        // NOTE: §10.3 copy-write-reject with §5.4.3: the unregistered system is the
-        // request's own value, so the refusal identifies it by where the request names it.
+        // NOTE: §10.3 copy-write-reject, §12.2, N36: the creating_system_id is the
+        // controlling system's one name, echoed only once read as an RM system_id.
         None => Err(NotControlling::Unregistered {
+            creating_system_id,
             named,
             at: at.clone(),
         }

@@ -307,8 +307,8 @@ fn names_the_owner_alone(fields: &HeaderMap) {
 
 // conformance: CP-29
 #[tokio::test]
-async fn every_refusal_names_the_controlling_system_and_quotes_nothing_of_the_request() -> TestResult
-{
+async fn every_refusal_names_the_controlling_system_and_quotes_no_other_part_of_the_request()
+-> TestResult {
     let mapped = "7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d::LEGACY-A.Example.Org::4";
     let member = "6a1f0c2e-4b7d-4e3a-9c5f-2d8e7b6a5c41::CDR-A.Example.Org::1";
     let cases: [(&str, &str, &[&str], &[&str]); 3] = [
@@ -324,11 +324,13 @@ async fn every_refusal_names_the_controlling_system_and_quotes_nothing_of_the_re
             &["legacy-a.example.org", "node-a", ENDPOINT_A],
             &["LEGACY-A.Example.Org", "7a6b5c4d"],
         ),
+        // NOTE: §10.3 copy-write-reject, §12.2, N36: a system outside the federation
+        // is named by its creating_system_id, the one name it always has.
         (
             CREATED_ELSEWHERE,
             "",
-            &["If-Match"],
-            &["external.example.org", "5c3e9b1a"],
+            &["If-Match", "external.example.org", "outside the federation"],
+            &["5c3e9b1a"],
         ),
     ];
     for (version, extra, named, unquoted) in cases {
