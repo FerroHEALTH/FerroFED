@@ -7,8 +7,8 @@
 //! The answer to a request routed or dispatched to a single node names that
 //! node's endpoint and its `system_id`, whatever the node answered (N31). A
 //! federated AQL answer lists the endpoints that contributed rows to it, and
-//! their nodes' `system_id`s, in registry order (§7a.3);
-//! `meta.federation.endpoints[]` stays the normative carrier there and names
+//! their nodes' `system_id`s, in the order of `meta.federation.endpoints[]`
+//! (§7a.3); that array stays the normative carrier there and names
 //! every endpoint, listed or not (§11.1). Both headers carry registry
 //! endpoint ids and openEHR `system_id`s alone, never a value the request
 //! carried (§5.4.1, N33).

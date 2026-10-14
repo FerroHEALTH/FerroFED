@@ -52,8 +52,8 @@ pub enum Indexed {
     None,
     /// Exactly one member was seen holding it (§12.5.1 step 3).
     One(NodeId),
-    /// Several members were seen holding it, in `node_id` order: step 3 gives
-    /// no unambiguous answer, so routing moves on (N41, N42).
+    /// Several members were seen holding it, in `node_id` order: an `ehr_id`
+    /// collision, which no later step and no probe settles (§12.5.2, N42).
     Several(Vec<NodeId>),
 }
 
