@@ -12,7 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
-use ferrofed_engine::conveyance::AssuranceLevel;
+use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_registry::secret::Secret;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::assurance::Assurance;

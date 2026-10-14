@@ -51,8 +51,8 @@ use ehds_logging::record::{
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
+use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::Relayed;
-use ferrofed_engine::conveyance::{Acting, AssuranceLevel};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use http::{Method, StatusCode};

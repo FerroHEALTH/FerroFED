@@ -17,7 +17,9 @@
 use std::sync::Arc;
 
 use axum::response::Response;
-use ferrofed_engine::conveyance::{self, Conveyance, Principal, Purpose, Signer, Verification};
+use ferrofed_engine::conveyance::caller::{Principal, Purpose, Verification};
+use ferrofed_engine::conveyance::signer::Signer;
+use ferrofed_engine::conveyance::{self, Conveyance};
 use ferrofed_engine::onward::grant::exchange::SubjectToken;
 use openehr_federation::id::FederationId;
 
@@ -110,8 +112,8 @@ pub fn gateway(federation: &Federation) -> Result<Conveyance, Unconveyed> {
 
 /// What a node is told of `caller`; its `client_id` and anything about a
 /// patient are not among it (§5.4.1, N33).
-fn conveyed(caller: &Caller) -> conveyance::Caller {
-    conveyance::Caller {
+fn conveyed(caller: &Caller) -> conveyance::caller::Caller {
+    conveyance::caller::Caller {
         issuer: caller.issuer().to_owned(),
         subject: caller.subject().to_owned(),
         organisation: caller.organisation().map(str::to_owned),
@@ -137,7 +139,7 @@ fn conveyed(caller: &Caller) -> conveyance::Caller {
         },
         // NOTE: 2025/327 Art 13(4), 2026/2099 Annex Table 1: the node can name the professional
         // of each registration, and the outbound gate reads these with every other claim.
-        professional: Box::new(conveyance::Professional {
+        professional: Box::new(conveyance::caller::Professional {
             name: caller.professional().name.clone(),
             identifier: caller.professional().identifier.clone(),
             issuing_authority: caller.professional().issuing_authority.clone(),

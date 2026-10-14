@@ -40,7 +40,8 @@ use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::conveyance::{Conveyance, Principal, Verification};
+use crate::conveyance::Conveyance;
+use crate::conveyance::caller::{Principal, Verification};
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
 use crate::onward::grant::client_credentials::ClientCredentials;

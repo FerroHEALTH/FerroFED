@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use ferrofed_engine::conveyance::AssuranceLevel;
+use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::AuthFault;
 use ferrofed_server::config::error::Error as ConfigError;

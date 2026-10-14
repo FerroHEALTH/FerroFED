@@ -19,8 +19,10 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::caller::{Caller, Principal};
 use ferrofed_engine::conveyance::relayed::Relayed;
-use ferrofed_engine::conveyance::{Caller, Conveyance, HEADER, LIFETIME, Principal, Signer};
+use ferrofed_engine::conveyance::signer::Signer;
+use ferrofed_engine::conveyance::{Conveyance, HEADER, LIFETIME};
 use ferrofed_engine::dispatch::definition::DefinitionAt;
 use ferrofed_engine::dispatch::{
     DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery,

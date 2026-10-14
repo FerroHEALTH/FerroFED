@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_engine::conveyance::AssuranceLevel;
+use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use serde::Deserialize;
 
 use crate::config::auth::{AuthFault, fault};

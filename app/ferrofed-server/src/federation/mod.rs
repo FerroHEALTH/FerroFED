@@ -24,7 +24,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use ehds_logging::record::Purpose;
-use ferrofed_engine::conveyance::{Conveyance, Principal, Signer};
+use ferrofed_engine::conveyance::Conveyance;
+use ferrofed_engine::conveyance::caller::Principal;
+use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::consent::ConsentPrefilter;

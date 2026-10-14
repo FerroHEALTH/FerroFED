@@ -17,7 +17,9 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_engine::conveyance::{Conveyance, Principal, Signer};
+use ferrofed_engine::conveyance::Conveyance;
+use ferrofed_engine::conveyance::caller::Principal;
+use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::keys::{KeyError, KeyRing, SigningKey};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};

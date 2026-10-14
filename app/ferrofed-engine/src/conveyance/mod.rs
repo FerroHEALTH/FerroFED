@@ -6,8 +6,9 @@
 //! N24, N25, §12.4, CP-16).
 //!
 //! The token is signed with the current key of the gateway's
-//! [`KeyRing`], the key whose public half the gateway publishes as its JWK
-//! Set and declares as `federation.auth.jwks_uri` (N30), so a node verifies
+//! [`KeyRing`](crate::onward::keys::KeyRing), the key whose public half the
+//! gateway publishes as its JWK Set and declares as
+//! `federation.auth.jwks_uri` (N30), so a node verifies
 //! it the way it verifies the gateway's client assertions. Its JOSE header
 //! names the key's algorithm, ES256 for a P-256 key and ES384 for a P-384
 //! one, the key's `kid` and the type [`TYPE`] (RFC 8725 §3.11). A
@@ -37,28 +38,29 @@
 //! | `national_contact_point` | for a caller a national contact point relays ([`Relayed`]): the professional of Implementing Regulation (EU) 2026/2099 Annex Table 1 under `health_professional` and the provider of Table 2 under `healthcare_provider`, each attribute under its Annex data identifier, and the contact point that asserted them as `asserted_by` |
 //!
 //! It never carries `person_id` or any other patient identifier (§5.4.1,
-//! N33): a [`Caller`] holds no field for one, and the outbound gate reads
-//! every caller claim against the identifiers a request withholds
+//! N33): a [`Caller`](caller::Caller) holds no field for one, and the
+//! outbound gate reads every caller claim against the identifiers a request withholds
 //! ([`crate::hygiene`]). The caller's own token is never in it. §13.1 leaves
 //! end-user conveyance open, so the header and its claims are FerroFED's own
 //! design.
 
+pub mod caller;
 pub mod confinement;
 pub mod relayed;
+pub mod signer;
 
-use std::collections::BTreeMap;
-use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_registry::id::{EhrId, EndpointId};
 use jsonwebtoken::Header;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
+use crate::conveyance::caller::{AssuranceLevel, Principal, Purpose};
 use crate::conveyance::confinement::Confinement;
 use crate::conveyance::relayed::{Relayed, Role};
+use crate::conveyance::signer::Signer;
 use crate::onward::grant::exchange::SubjectToken;
-use crate::onward::keys::KeyRing;
 
 /// The header every request to a node carries the caller's identity in.
 pub const HEADER: &str = "openEHR-federation-client";
@@ -71,223 +73,6 @@ pub const TYPE: &str = "openehr-federation-client+jwt";
 // NOTE: no specification governs this: our own design; one minute outlasts any
 // per-node budget and keeps a captured token short-lived.
 pub const LIFETIME: Duration = Duration::from_secs(60);
-
-/// How the gateway verified a caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Verification {
-    /// A signed access token, against its issuer's key set (RFC 9068).
-    Signature,
-    /// An access token its issuer's introspection endpoint called active
-    /// (RFC 7662).
-    Introspection,
-    /// The edge's signed assertion: the edge authenticated the caller, and
-    /// the gateway verified what the edge asserted.
-    Edge,
-}
-
-impl Verification {
-    /// The `verified_by` claim's value.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Signature => "signature",
-            Self::Introspection => "introspection",
-            Self::Edge => "edge",
-        }
-    }
-}
-
-/// One purpose of use: a code and the system that defines it, the HL7 v3
-/// `PurposeOfUse` coding IHE IUA conveys (§13.4).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Purpose {
-    /// The code system, when the caller's token names one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<String>,
-    /// The code.
-    pub code: String,
-}
-
-/// The caller as the gateway verified it, the facts a node is told.
-///
-/// It holds no patient identifier and no credential. `Debug` shows how the
-/// caller was verified and no value.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Caller {
-    /// The issuer that vouched for the caller.
-    pub issuer: String,
-    /// The caller's subject.
-    pub subject: String,
-    /// The caller's organisation, when its token names one.
-    pub organisation: Option<String>,
-    /// The caller's purposes of use.
-    pub purposes: Vec<Purpose>,
-    /// The caller's scopes as granted, space-separated; for a caller whose
-    /// grant is confined to one patient, the granted `patient/` scopes that
-    /// cover the operation.
-    pub scope: String,
-    /// How the gateway verified the caller.
-    pub verified_by: Verification,
-    /// The professional's identification the caller's token states, boxed
-    /// so a [`Principal`] stays small.
-    pub professional: Box<Professional>,
-    /// Who acts behind the caller's token.
-    pub acting: Acting,
-    /// The assurance level of the caller's authentication, when its issuer
-    /// declares how its tokens state one.
-    pub assurance_level: Option<AssuranceLevel>,
-    /// The professional and the provider a national contact point relays,
-    /// as it asserts them, when the caller is one.
-    pub relayed: Option<Box<Relayed>>,
-}
-
-/// The professional's identification a caller's token states, as IHE IUA
-/// names it (ITI TF-2 3.71.4.2.2.1.1), with the agency that issued the
-/// identifier.
-///
-/// They are the professional's attributes of Implementing Regulation (EU)
-/// 2026/2099 Annex Table 1 a token of the caller's own issuer can state, so
-/// a node can identify the professional of every registration or update
-/// (Regulation (EU) 2025/327 Art 13(4)).
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct Professional {
-    /// `subject_name`, the professional's name.
-    pub name: Option<String>,
-    /// `national_provider_identifier`, the identifier the professional's
-    /// national authority issued.
-    pub identifier: Option<String>,
-    /// The name of the agency that issued `identifier`: the Annex Table 1
-    /// `issuing_authority_name`, which IUA defines no claim for.
-    pub issuing_authority: Option<String>,
-    /// `subject_role`, the professional's roles.
-    pub roles: Vec<Role>,
-}
-
-impl fmt::Debug for Professional {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Professional")
-            .field("name", &self.name.is_some())
-            .field("identifier", &self.identifier.is_some())
-            .field("issuing_authority", &self.issuing_authority.is_some())
-            .field("roles", &self.roles.len())
-            .finish()
-    }
-}
-
-/// Who acts behind a caller's token.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Acting {
-    /// The natural person the caller's `sub` names.
-    #[default]
-    Person,
-    /// A client application: the caller's `sub` is its `client_id` (IHE IUA
-    /// ITI TF-2 3.71.4.2.2.1), or only `system/` scopes cover the operation
-    /// (SMART on openEHR master08 §Resource Scopes).
-    Client,
-}
-
-impl Acting {
-    /// The `acting` claim's value.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Person => "person",
-            Self::Client => "client",
-        }
-    }
-}
-
-/// An assurance level of an electronic identification means, as Regulation
-/// (EU) No 910/2014 Art 8(2) names them, lowest first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AssuranceLevel {
-    /// Level low, Art 8(2)(a).
-    Low,
-    /// Level substantial, Art 8(2)(b).
-    Substantial,
-    /// Level high, Art 8(2)(c).
-    High,
-}
-
-impl AssuranceLevel {
-    /// The level's name: the `assurance_level` claim's value, and the name
-    /// a configuration writes.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Substantial => "substantial",
-            Self::High => "high",
-        }
-    }
-}
-
-impl fmt::Debug for Caller {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Caller")
-            .field("verified_by", &self.verified_by)
-            .finish_non_exhaustive()
-    }
-}
-
-/// On whose behalf a request reaches a node.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Principal {
-    /// A caller the gateway verified.
-    Caller(Caller),
-    /// The gateway itself, for its operator, with no client caller: the
-    /// admission check and the operator's stored-query distribution.
-    Gateway,
-}
-
-/// The gateway's signer of conveyances: its keys, and the `iss` each node
-/// knows it by.
-#[derive(Debug)]
-pub struct Signer {
-    keys: Arc<KeyRing>,
-    issuer: String,
-    issuers: BTreeMap<EndpointId, String>,
-}
-
-impl Signer {
-    /// A signer with the current key of `keys`, naming the gateway `issuer`
-    /// to every node.
-    #[must_use]
-    pub fn new(keys: Arc<KeyRing>, issuer: impl Into<String>) -> Self {
-        Self {
-            keys,
-            issuer: issuer.into(),
-            issuers: BTreeMap::new(),
-        }
-    }
-
-    /// This signer, naming the gateway `issuer` to `endpoint`.
-    ///
-    /// An endpoint the gateway obtains an OAuth 2.0 token from knows the
-    /// gateway as the `client_id` of its client assertions, so the two name
-    /// the gateway the same way.
-    #[must_use]
-    pub fn with_issuer_at(mut self, endpoint: EndpointId, issuer: impl Into<String>) -> Self {
-        self.issuers.insert(endpoint, issuer.into());
-        self
-    }
-
-    /// The `iss` `endpoint` receives.
-    #[must_use]
-    pub fn issuer_at(&self, endpoint: &EndpointId) -> &str {
-        self.issuers.get(endpoint).unwrap_or(&self.issuer)
-    }
-
-    /// The keys the signer signs with.
-    #[must_use]
-    pub fn keys(&self) -> &KeyRing {
-        &self.keys
-    }
-}
 
 /// A conveyance that could not be signed, so nothing was sent.
 #[derive(Debug, thiserror::Error)]
@@ -538,7 +323,7 @@ impl Conveyance {
             claims.assurance_level = caller.assurance_level.map(AssuranceLevel::as_str);
             claims.national_contact_point = caller.relayed.as_deref().map(Relayed::claim);
         }
-        let key = self.0.signer.keys.current();
+        let key = self.0.signer.keys().current();
         let mut header = Header::new(key.algorithm());
         header.typ = Some(TYPE.to_owned());
         header.kid = Some(key.kid().to_owned());
@@ -588,12 +373,13 @@ pub(crate) mod tests {
     use ferrofed_registry::id::{EhrId, EndpointId};
     use secrecy::SecretString;
 
-    use super::{
-        Acting, AssuranceLevel, Caller, Conveyance, ConveyanceError, Principal, Professional,
-        Purpose, Signer, Verification,
+    use super::{Conveyance, ConveyanceError};
+    use crate::conveyance::caller::{
+        Acting, AssuranceLevel, Caller, Principal, Professional, Purpose, Verification,
     };
     use crate::conveyance::confinement::Confinement;
     use crate::conveyance::relayed::Role;
+    use crate::conveyance::signer::Signer;
     use crate::onward::SystemClock;
     use crate::onward::keys::{KeyRing, SigningKey};
 
@@ -601,7 +387,7 @@ pub(crate) mod tests {
     const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
 
     /// The keys of every unit test's conveyance, generated once.
-    static KEYS: LazyLock<Arc<KeyRing>> = LazyLock::new(|| {
+    pub(super) static KEYS: LazyLock<Arc<KeyRing>> = LazyLock::new(|| {
         let pem = ferrofed_testkit::oauth::es384_pem().expect("a test key should generate");
         let key = SigningKey::from_pem(&SecretString::from(pem)).expect("an ES384 key");
         Arc::new(
@@ -667,16 +453,6 @@ pub(crate) mod tests {
         }
         let gateway = Conveyance::new(signer(), Principal::Gateway);
         assert!(gateway.carried().is_empty(), "the gateway's own claims");
-    }
-
-    #[test]
-    fn an_endpoint_without_an_issuer_of_its_own_gets_the_gateways() {
-        let a = EndpointId::new("node-a-pub").expect("an id");
-        let b = EndpointId::new("node-b-pub").expect("an id");
-        let signer = Signer::new(Arc::clone(&KEYS), "urn:example:gateway")
-            .with_issuer_at(a.clone(), "client-a");
-        assert_eq!("client-a", signer.issuer_at(&a));
-        assert_eq!("urn:example:gateway", signer.issuer_at(&b));
     }
 
     /// The confinement claims of a signed token, read without verifying it.

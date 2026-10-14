@@ -12,7 +12,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::conveyance::{Conveyance, Principal, Verification};
+use ferrofed_engine::conveyance::Conveyance;
+use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::{
     Contact, DispatchOptions, NodeClient, NodeQuery, SharedCredentials,
 };
