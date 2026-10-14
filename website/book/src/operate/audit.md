@@ -45,7 +45,7 @@ record names the caller as BALP maps the token (BALP §3:5.7.5.4):
 
 | Record | Where the caller is named |
 |---|---|
-| ITI-83, ITI-78 and ITI-119 (`AuditEvent`) | the `agent:user` of the BALP pattern: type `IRCP`, `who.identifier.system` the token's `iss`, `who.identifier.value` its `sub`, `requestor` true, `purposeOfUse` every purpose of use the token declares; and an Application agent (DICOM `110150`) with the token's `client_id` as `who.identifier.value` |
+| ITI-83, ITI-78 and ITI-119 (`AuditEvent`) | the `agent:user` of the BALP pattern: type `IRCP`, `who.identifier.system` the token's `iss`, `who.identifier.value` its `sub`, `requestor` true, `purposeOfUse` every purpose of use the token declares, which `purposeOfEvent` repeats ([Where the purposes of use are found](#where-the-purposes-of-use-are-found)); and an Application agent (DICOM `110150`) with the token's `client_id` as `who.identifier.value` |
 | ITI-55 (DICOM audit message) | the Human Requestor `ActiveParticipant` (ITI TF-2 §3.55.5.1.1): `UserID` the token's `sub`, `UserName` written `aud<sub@iss>` (IUA ITI TF-2 §3.72.5.1), `UserIsRequestor` true, and the gateway's own participant `UserIsRequestor` false. The DICOM schema has no element for the client or the purpose of use, so the message names neither |
 
 A transaction the gateway makes on its own behalf names no caller: the
@@ -62,6 +62,26 @@ record `on_behalf` as `caller` or `gateway`, and never the caller's `sub`,
 `client_id` or issuer; no metric label carries them. Each
 node is told of the caller by the signed conveyance alone
 ([Onward credentials](onward-credentials.md)), never by an audit record.
+
+### Where the purposes of use are found
+
+An `AuditEvent` carries every purpose of use the caller's token declares
+in two places, emergency purposes such as `BTG` among them:
+
+| Element | What it holds |
+|---|---|
+| `agent.purposeOfUse` of the `agent:user` | every purpose of use the token declares, in the token's order, where BALP 1.1.4 places a purpose of use it knows to be the agent's |
+| `purposeOfEvent` | the same codings, each once, in the order the agents first name them |
+
+An Audit Record Repository that keeps its records in the DICOM audit
+message form reads the second. The RESTful ATNA supplement (Rev. 3.6)
+maps `purposeOfEvent` to the `EventIdentification` `PurposeOfUse` and
+gives `agent.purposeOfUse` no DICOM counterpart (Tables 3.20.4.2.2.1-1 and
+3.81.4.2.2.1-1), and ITI TF-2 §3.20.7.1.2 asks that a purpose of use be
+encoded in `EventIdentification`. BALP binds both elements to the HL7 v3
+`PurposeOfUse` value set, so writing both keeps the record's pattern. A
+record of a transaction the gateway makes on its own behalf names no
+caller and carries neither.
 
 ## The address a request came from
 
@@ -193,9 +213,10 @@ A record whose token declares one of them carries one more entity:
 | `detail` `ehds-emergency-purpose` | each declared purpose that marked it, `system\|code` |
 | `detail` `ehds-consent-set-aside` | under `[federation.consent] emergency = "pass-to-node"`, each member the consent pre-filter denied that was asked all the same, by its node id |
 
-The purposes stay where BALP puts every purpose of use, in the
-`agent:user` `purposeOfUse`, so the record keeps its BALP pattern. The
-entity lets a person's access service show the mark without knowing which
+The purposes stay where every purpose of use is written, in the
+`agent:user` `purposeOfUse` and in `purposeOfEvent` ([Where the purposes
+of use are found](#where-the-purposes-of-use-are-found)), so the record
+keeps its BALP pattern. The entity lets a person's access service show the mark without knowing which
 codes your deployment maps.
 
 What the mark does and does not say:

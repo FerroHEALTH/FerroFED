@@ -30,7 +30,8 @@ fn emergency_record() -> AccessRecord {
 /// Regulation (EU) 2025/327 Art 11(5): an emergency access is marked in an
 /// entity of its own, stated in words and naming the purpose that marked
 /// it, and its purposes stay in `agent:user` `purposeOfUse`, where BALP
-/// 1.1.4 puts every purpose.
+/// 1.1.4 puts every purpose, and at `purposeOfEvent`, which the `RESTful`
+/// ATNA supplement maps to the DICOM `EventIdentification` `PurposeOfUse`.
 #[test]
 fn an_emergency_access_is_marked_in_its_own_entity() {
     let written = written(&emergency_record());
@@ -53,6 +54,17 @@ fn an_emergency_access_is_marked_in_its_own_entity() {
         .filter_map(|purpose| purpose["coding"][0]["code"].as_str())
         .collect();
     assert_eq!(codes, ["TREAT", "BTG"], "BALP agent:user purposeOfUse");
+    let event: Vec<&str> = written["purposeOfEvent"]
+        .as_array()
+        .expect("purposeOfEvent")
+        .iter()
+        .filter_map(|purpose| purpose["coding"][0]["code"].as_str())
+        .collect();
+    assert_eq!(
+        event,
+        ["TREAT", "BTG"],
+        "purposeOfEvent, read by a DICOM-form repository"
+    );
     assert_eq!(
         profile(&written),
         Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery"),
