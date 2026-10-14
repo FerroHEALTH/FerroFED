@@ -154,6 +154,11 @@ impl FeedRepository {
 
     /// Waits up to `within` until `count` records have been accepted, and
     /// returns every record accepted by then.
+    ///
+    /// It returns once this repository has stored the records, which can be
+    /// before the sender has read the `201` and freed its spool. A test that
+    /// needs the spool drained also waits for the `audit_feed` state the
+    /// gateway reports on `GET /operator/dependencies` to read `up`.
     pub async fn wait_for(&self, count: usize, within: Duration) -> Vec<String> {
         let until = Instant::now() + within;
         loop {
