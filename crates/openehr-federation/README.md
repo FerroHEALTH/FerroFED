@@ -12,8 +12,9 @@ specification, with a feature per layer.
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
 | `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`
-and the decomposable aggregates today; dedup follows in build order.
+The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`,
+the dedup of one version returned by several nodes, and the decomposable
+aggregates.
 
 ## The `merge` feature
 

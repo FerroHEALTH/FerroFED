@@ -197,7 +197,7 @@ the same compositions. The problem list and the past history share
 
 | Id | Hazardous situation | Harm | Before | Control | Implemented by | After |
 |---|---|---|---|---|---|---|
-| X-01 | One component changes the other's output or behaviour (Art 30(1)(b)) | an access goes unrecorded, or a document changes, because of the other component | S3, P2 | two crates with no edge between them; only the composition root links both; the engine compiles neither | `app/ferrofed-engine/tests/it/architecture.rs` (`the_two_harmonised_components_are_independent_of_each_other`, `no_crate_but_the_composition_root_links_both_components`, `the_engine_compiles_neither_component_and_no_fhir`); the server tests that each output is unchanged by the other are planned with [#689](https://github.com/FerroHEALTH/FerroFED/issues/689) | S3, P1 at the crate level |
+| X-01 | One component changes the other's output or behaviour (Art 30(1)(b)) | an access goes unrecorded, or a document changes, because of the other component | S3, P2 | two crates with no edge between them; only the composition root links both; the engine compiles neither | `app/ferrofed-engine/tests/it/architecture.rs` (`the_two_harmonised_components_are_independent_of_each_other`, `no_crate_but_the_composition_root_links_both_components`, `the_engine_compiles_neither_component_and_no_fhir`); the server tests that each output is unchanged by the other are planned with [#935](https://github.com/FerroHEALTH/FerroFED/issues/935) | S3, P1 at the crate level |
 
 ## The completeness default, re-examined
 
