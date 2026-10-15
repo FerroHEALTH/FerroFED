@@ -61,7 +61,7 @@ name both. Every row of the inventory below names what it carries.
 | Trace spans | none: route templates, registry ids, operations, statuses and counts; the trace id is the gateway's own, never the client's | your OpenTelemetry collector | your collector's retention | [Tracing](../operate/tracing.md) | `[telemetry] otlp_endpoint`, `trace_sample_ratio` |
 | Stored-query definitions | none: parameterised AQL, and a definition that names a patient by a literal is refused | `redb`, PostgreSQL or read-only files | durable; a stored version is immutable (§12.7, N44) | the bound values of an invocation are never written ([Stored queries](../operate/queries-and-areas.md#stored-queries)) | `[stored_queries]` |
 | The PMIR identity feed | the Patient Master Identities each ITI-93 message names, with their identifiers and demographics | process memory for one message, then the audit spool | one message; the audit record as above | `https` outside development; a feed token from a file; only the kind and count of each change is logged ([The identity feed](../operate/identity.md#the-identity-feed-pmir)) | `[pmir]` |
-| The operator console's sessions | the operator's ID Token claims and access token | the console's process memory | `idle_timeout_s` (1 800) without a request, `absolute_timeout_s` (43 200) at most, and no longer than the access token; lost on restart | held on the server, known to the browser by an opaque `HttpOnly` cookie; every page `no-store`; a query answer is rendered and not kept ([The operator console](../operate/operator-console.md)) | `[session]`, `[oidc]` |
+| The operator console's sessions | the operator's ID Token claims, access token and refresh token | the console's process memory | `idle_timeout_s` (1 800) without a request, `absolute_timeout_s` (43 200) at most, and no longer than the access token unless the provider issued a refresh token; lost on restart | held on the server, known to the browser by an opaque `HttpOnly` cookie; every page `no-store`; a query answer is rendered and not kept ([The operator console](../operate/operator-console.md)) | `[session]`, `[oidc]` |
 
 Two kinds of state hold no personal data: the registry document (organisations,
 endpoints, `system_id` mappings) and the `creating_system_id` routes the
@@ -119,7 +119,7 @@ hands to another system is kept as long as that system keeps it.
 |---|---|---|---|
 | A resolution binding | 15 minutes after the last resolution that returned it | `federation.binding_ttl_ms`, `binding_capacity` | a restart forgets it |
 | An `ehr_id` index entry | until 100 000 newer entries push it out | `federation.ehr_index_capacity` | a restart forgets it |
-| An operator console session | 30 minutes idle, 12 hours at most | `session.idle_timeout_s`, `absolute_timeout_s` | the access token's own lifetime |
+| An operator console session | 30 minutes idle, 12 hours at most | `session.idle_timeout_s`, `absolute_timeout_s` | the access token's own lifetime, unless a refresh token renews it; a refused refresh ends it |
 | An IHE audit record or an access record in the spool | until the repository accepts it | `spool_max_bytes`, `spool_max_events` | a quarantined record waits for you to remove it |
 | An audit record at the repository | none from the gateway | none | the repository's retention policy |
 | Log lines, metrics, spans | none from the gateway | none | your log, metrics and trace stores |

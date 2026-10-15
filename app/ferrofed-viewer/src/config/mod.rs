@@ -30,6 +30,7 @@
 //! redirect_uri = "https://console.example.org/auth/callback"
 //! end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
 //! post_logout_redirect_uri = "https://console.example.org/"
+//! offline_access = true
 //!
 //! [[admin.replicas]]
 //! name = "gateway-0"
@@ -172,6 +173,10 @@ pub struct Oidc {
     pub redirect_uri: String,
     /// The scopes requested, `openid` among them.
     pub scopes: Vec<String>,
+    /// Whether the sign-in asks for `offline_access` (OpenID Connect Core
+    /// 1.0 §11), so the provider issues a refresh token the console renews
+    /// the operator's access token with; off unless set.
+    pub offline_access: bool,
     /// The provider's end-session endpoint, where a sign-out sends the
     /// operator (OpenID Connect RP-Initiated Logout 1.0 §2); without it a
     /// sign-out ends the console's session alone.
@@ -194,6 +199,7 @@ impl Default for Oidc {
             client_secret_file: None,
             redirect_uri: String::new(),
             scopes: vec![String::from("openid")],
+            offline_access: false,
             end_session_endpoint: None,
             post_logout_redirect_uri: None,
         }

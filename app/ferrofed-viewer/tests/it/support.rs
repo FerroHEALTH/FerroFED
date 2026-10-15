@@ -86,6 +86,7 @@ pub(crate) fn signed_in() -> SignedIn {
     SignedIn {
         access_token: SecretString::from(OPERATOR_TOKEN),
         expires_in: None,
+        refresh_token: None,
         id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
     }
 }

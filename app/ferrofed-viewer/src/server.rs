@@ -139,6 +139,9 @@ pub fn router(state: ViewerState) -> axum::Router {
             crate::app::shell,
         ))
         .layer(axum::middleware::from_fn(require_session))
+        .layer(axum::middleware::from_fn(
+            crate::oidc::refresh::refresh_session,
+        ))
         .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state));
     with_security_headers(pages.layer(bundle_compression()), form_action).with_state(options)

@@ -74,7 +74,8 @@ openehr-its = { workspace = true, features = ["rest-client"] }
 reqwest.workspace = true
 secrecy.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time"] }
+# `sync` holds one refresh of a session's access token at a time.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
 toml.workspace = true
 # The site bundle is served brotli- or gzip-compressed, as the request's
 # Accept-Encoding chooses.

@@ -17,22 +17,26 @@
 //!   sign-in completes, have an idle and an absolute timeout, and a bound of
 //!   their own that refuses a new session rather than evicting one. Only
 //!   their own expiry removes them: no amount of sign-in traffic touches this
-//!   pool.
+//!   pool. A session that holds a refresh token outlives its access token
+//!   ([`refresh`]); its idle and absolute timeouts still end it.
 //!
 //! No specification governs the session store: our own design.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use aws_lc_rs::rand::{SecureRandom as _, SystemRandom};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use cookie::{Cookie, SameSite};
+
 use secrecy::{ExposeSecret as _, SecretString};
 
 use crate::config::settings::SessionSettings;
+
+mod cookies;
+pub mod refresh;
 
 /// The name of the cookie that carries a signed-in session, under the
 /// `__Host-` prefix when the cookie is `Secure`.
@@ -185,6 +189,14 @@ struct Session {
     access_token: SecretString,
     /// When the access token expires, when the provider said.
     expires: Option<Instant>,
+    /// How long the access token lasts in all, when the provider said.
+    lifetime: Option<Duration>,
+    /// The refresh token the provider issued, which never leaves the server
+    /// (RFC 6749 §10.4).
+    refresh_token: Option<SecretString>,
+    /// Held by the one refresh of this session in flight, so a rotated
+    /// refresh token is never spent twice.
+    refresh_gate: Arc<tokio::sync::Mutex<()>>,
     /// The ID Token of the sign-in, the hint a sign-out sends the provider.
     id_token: Option<SecretString>,
 }
@@ -192,13 +204,16 @@ struct Session {
 /// What a completed sign-in leaves the session.
 ///
 /// It is the operator's access token, how long the provider says it lasts
-/// (RFC 6749 §5.1), and the ID Token a sign-out hints with (OpenID Connect
-/// RP-Initiated Logout 1.0 §2).
+/// (RFC 6749 §5.1), the refresh token when the provider issued one, and the
+/// ID Token a sign-out hints with (OpenID Connect RP-Initiated Logout 1.0
+/// §2).
 pub struct SignedIn {
     /// The access token.
     pub access_token: SecretString,
     /// Its lifetime, `expires_in`, when the provider sent one.
-    pub expires_in: Option<std::time::Duration>,
+    pub expires_in: Option<Duration>,
+    /// The refresh token, when the provider issued one.
+    pub refresh_token: Option<SecretString>,
     /// The verified ID Token of the sign-in.
     pub id_token: Option<SecretString>,
 }
@@ -346,6 +361,9 @@ impl Sessions {
                 expires: signed_in
                     .expires_in
                     .and_then(|lifetime| now.checked_add(lifetime)),
+                lifetime: signed_in.expires_in,
+                refresh_token: signed_in.refresh_token,
+                refresh_gate: Arc::default(),
                 id_token: signed_in.id_token,
             },
         );
@@ -354,6 +372,10 @@ impl Sessions {
 
     /// The access token of the live signed-in session `id`, which the
     /// request now touches; an expired session is dropped and answers `None`.
+    ///
+    /// A session that holds a refresh token outlives its access token, and
+    /// answers `None` while its access token is expired and not yet
+    /// refreshed.
     ///
     /// # Errors
     /// Returns [`SessionError::Poisoned`] when the store is unusable.
@@ -365,7 +387,8 @@ impl Sessions {
         };
         if live(&self.settings, session, now) {
             session.touched = now;
-            Ok(Some(session.access_token.clone()))
+            let valid = session.expires.is_none_or(|expires| now < expires);
+            Ok(valid.then(|| session.access_token.clone()))
         } else {
             store.sessions.remove(id);
             Ok(None)
@@ -384,17 +407,6 @@ impl Sessions {
         })
     }
 
-    /// The name `base` takes on this console: [`HOST_PREFIX`] and `base` when
-    /// the cookies are `Secure`, and `base` alone when they are not.
-    #[must_use]
-    pub fn cookie_name(&self, base: &str) -> String {
-        if self.settings.secure_cookie {
-            format!("{HOST_PREFIX}{base}")
-        } else {
-            base.to_owned()
-        }
-    }
-
     /// Ends the signed-in session `id`, if it is held, and returns the ID
     /// Token its sign-in left, for the provider's end-session request.
     ///
@@ -408,51 +420,6 @@ impl Sessions {
             .and_then(|session| session.id_token))
     }
 
-    /// The `Set-Cookie` value that hands the browser the pending sign-in
-    /// `id`, expiring with the sign-in.
-    #[must_use]
-    pub fn sign_in_cookie(&self, id: &SessionId) -> Cookie<'static> {
-        let max_age = i64::try_from(self.settings.sign_in_timeout.as_secs()).unwrap_or(i64::MAX);
-        self.cookie(SIGN_IN_COOKIE, id.as_str())
-            .max_age(cookie::time::Duration::seconds(max_age))
-            .build()
-    }
-
-    /// The `Set-Cookie` value that removes the pending sign-in cookie.
-    #[must_use]
-    pub fn sign_in_cookie_removal(&self) -> Cookie<'static> {
-        self.cookie(SIGN_IN_COOKIE, "")
-            .max_age(cookie::time::Duration::ZERO)
-            .build()
-    }
-
-    /// The `Set-Cookie` value that hands the browser the signed-in session
-    /// `id`.
-    #[must_use]
-    pub fn session_cookie(&self, id: &SessionId) -> Cookie<'static> {
-        self.cookie(COOKIE, id.as_str()).build()
-    }
-
-    /// The `Set-Cookie` value that removes the signed-in session cookie.
-    #[must_use]
-    pub fn session_cookie_removal(&self) -> Cookie<'static> {
-        self.cookie(COOKIE, "")
-            .max_age(cookie::time::Duration::ZERO)
-            .build()
-    }
-
-    /// A cookie that no script reads (`HttpOnly`), that a cross-site
-    /// subrequest does not carry while the provider's redirect back does
-    /// (`SameSite=Lax`), and that is `Secure` unless the configuration turns
-    /// it off.
-    fn cookie(&self, base: &str, value: &str) -> cookie::CookieBuilder<'static> {
-        Cookie::build((self.cookie_name(base), value.to_owned()))
-            .path("/")
-            .http_only(true)
-            .secure(self.settings.secure_cookie)
-            .same_site(SameSite::Lax)
-    }
-
     /// Locks the store.
     fn lock(&self) -> Result<MutexGuard<'_, Store>, SessionError> {
         self.store
@@ -462,11 +429,11 @@ impl Sessions {
 }
 
 /// Whether `session` is inside its idle and its absolute timeout at `now`,
-/// and its access token has not expired.
+/// and its access token has not expired or a refresh token can replace it.
 fn live(settings: &SessionSettings, session: &Session, now: Instant) -> bool {
     now.saturating_duration_since(session.touched) < settings.idle_timeout
         && now.saturating_duration_since(session.created) < settings.absolute_timeout
-        && session.expires.is_none_or(|expires| now < expires)
+        && (session.refresh_token.is_some() || session.expires.is_none_or(|expires| now < expires))
 }
 
 /// The PKCE `S256` challenge of `verifier`: the base64url of its SHA-256
@@ -497,7 +464,7 @@ mod tests {
     use secrecy::{ExposeSecret, SecretString};
     use std::time::Duration;
 
-    fn settings() -> SessionSettings {
+    pub(super) fn settings() -> SessionSettings {
         SessionSettings {
             secure_cookie: true,
             sign_in_timeout: Duration::from_secs(60),
@@ -512,10 +479,11 @@ mod tests {
         PendingSignIn::mint().expect("the random source works")
     }
 
-    fn signed_in() -> SignedIn {
+    pub(super) fn signed_in() -> SignedIn {
         SignedIn {
             access_token: SecretString::from("synthetic-access-token"),
             expires_in: None,
+            refresh_token: None,
             id_token: Some(SecretString::from("synthetic-id-token")),
         }
     }
@@ -623,38 +591,6 @@ mod tests {
     }
 
     #[test]
-    fn the_cookies_are_host_bound_http_only_lax_and_secure_and_the_sign_in_one_expires() {
-        let sessions = Sessions::new(settings());
-        let id = SessionId::from_cookie("abc");
-        assert_eq!(
-            "__Host-ferrofed_viewer_session=abc; HttpOnly; SameSite=Lax; Secure; Path=/",
-            sessions.session_cookie(&id).to_string()
-        );
-        assert_eq!(
-            "__Host-ferrofed_viewer_sign_in=abc; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=60",
-            sessions.sign_in_cookie(&id).to_string()
-        );
-        assert!(
-            sessions
-                .sign_in_cookie_removal()
-                .to_string()
-                .contains("Max-Age=0")
-        );
-    }
-
-    #[test]
-    fn a_cookie_that_is_not_secure_carries_no_host_prefix_a_browser_would_refuse() {
-        let sessions = Sessions::new(SessionSettings {
-            secure_cookie: false,
-            ..settings()
-        });
-        assert_eq!(
-            "ferrofed_viewer_session",
-            sessions.cookie_name(super::COOKIE)
-        );
-    }
-
-    #[test]
     fn an_ended_session_is_no_longer_live_and_hands_back_its_id_token() {
         let sessions = Sessions::new(settings());
         let id = sessions.establish(signed_in()).expect("room");
@@ -666,15 +602,6 @@ mod tests {
         assert!(sessions.access_token(&id).expect("usable").is_none());
         assert!(sessions.end(&id).expect("usable").is_none());
         assert_eq!(0, sessions.occupancy().expect("usable").sessions);
-    }
-
-    #[test]
-    fn the_session_cookie_removal_expires_the_same_host_bound_cookie() {
-        let sessions = Sessions::new(settings());
-        assert_eq!(
-            "__Host-ferrofed_viewer_session=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0",
-            sessions.session_cookie_removal().to_string()
-        );
     }
 
     #[test]
