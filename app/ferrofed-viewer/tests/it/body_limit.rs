@@ -96,7 +96,7 @@ async fn an_oversized_body_sent_without_its_length_runs_no_function() -> Result<
             ("confirm", "yes"),
         ])))?;
     let (response, _) = send(&service, request).await?;
-    assert_ne!(StatusCode::OK, response.status());
+    assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status());
     assert_eq!(0, asked(&listener).await?, "no replica is asked");
     Ok(())
 }
