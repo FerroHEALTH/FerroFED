@@ -23,10 +23,10 @@
 //!   composition no mapping covers.
 //!
 //! A path is the R4 element path of the element's definition, such as
-//! `AllergyIntolerance.code`, or the path a declared loss names, never what
-//! the element holds: a report carries no clinical value, no code value and
-//! no patient identifier. The crate records nowhere: the system that applied
-//! the transformation hands the report to its log.
+//! `AllergyIntolerance.code`, for a declared loss too, never what the element
+//! holds or the index it sits at: a report carries no clinical value, no code
+//! value and no patient identifier. The crate records nowhere: the system
+//! that applied the transformation hands the report to its log.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -232,19 +232,19 @@ impl Report {
     }
 
     /// Counts every loss the mapping run declared in `outcome`: each issue
-    /// of severity `warning`, at the path the loss names when it names one
-    /// that holds no value.
+    /// of severity `warning`, at the R4 element path its `expression`
+    /// locates, and with no path when the loss has no FHIR element.
     pub fn count_losses(&mut self, outcome: &OperationOutcome) {
         for issue in &outcome.issue {
             if issue.severity.value.as_deref() != Some("warning") {
                 continue;
             }
-            let text = issue
-                .details
-                .as_ref()
-                .and_then(|details| details.text.as_ref())
-                .and_then(|text| text.value.as_deref());
-            self.dropped.add(text.and_then(loss_path));
+            let path = issue
+                .expression
+                .first()
+                .and_then(|expression| expression.value.as_deref())
+                .map(element_path);
+            self.dropped.add(path.as_deref());
         }
     }
 
@@ -307,21 +307,21 @@ impl Report {
     }
 }
 
-/// Returns the path a declared loss's text names, when its form names one
-/// that holds no value: the output path of a `0..1` write that kept the last
-/// of many, the mapping that did not run, or the cell of a one-way rule.
-// NOTE: no specification governs this: our own design; fhirconnect 0.1.108 answers its losses
-// as text alone, so a path is read from the fixed forms that name no value, others go unnamed.
-fn loss_path(text: &str) -> Option<&str> {
-    if let Some((path, _)) = text.split_once(" holds one value, so the write dropped ") {
-        return Some(path);
+/// Returns the R4 element path of the element a loss's `expression` locates:
+/// the path with every repetition index removed, so
+/// `Condition.code.coding[1].code` counts at `Condition.code.coding.code`.
+// NOTE: R4 OperationOutcome.issue.expression admits only element names, repetition indicators
+// and the default child accessor, so dropping the bracketed indexes leaves the definition path.
+fn element_path(expression: &str) -> String {
+    let mut path = String::with_capacity(expression.len());
+    let mut indexed = false;
+    for character in expression.chars() {
+        match character {
+            '[' => indexed = true,
+            ']' => indexed = false,
+            _ if !indexed => path.push(character),
+            _ => {}
+        }
     }
-    if let Some(rest) = text.strip_prefix("the mapping ") {
-        return rest
-            .split_once(" did not run: ")
-            .map(|(mapping, _)| mapping);
-    }
-    text.split_once(" filled ")
-        .filter(|(_, rest)| rest.ends_with(" by a rule that runs one way"))
-        .map(|(cell, _)| cell)
+    path
 }
