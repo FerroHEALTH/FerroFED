@@ -639,7 +639,7 @@ mod tests {
             session.as_str()
         );
         let service = crate::server::router(state);
-        for path in ["/", "/no/such/page"] {
+        for path in ["/", "/no/such/page", "/members"] {
             let request = http::Request::get(path)
                 .header("cookie", &cookie)
                 .body(axum::body::Body::empty())
@@ -659,6 +659,7 @@ mod tests {
             assert!(!body.contains(r#"href="/login""#), "{path}: {body}");
             assert!(!body.contains("<nav"), "{path}: {body}");
             assert!(!body.contains("Sign out"), "{path}: {body}");
+            assert!(!body.contains("<table"), "{path}: {body}");
         }
     }
 }

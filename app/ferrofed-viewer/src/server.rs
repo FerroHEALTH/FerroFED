@@ -232,9 +232,15 @@ async fn require_session(
         .map(|id| state.sessions().access_token(&id));
     match signed_in {
         Some(Ok(Some(_token))) => next.run(request).await,
+        // NOTE: RFC 9110 §15.6.1: the answer stays a 500, and the page says why
+        // in the shell's notice; its loaders read the store again and show nothing.
         Some(Err(error)) => {
             tracing::error!(%error, "the session store could not be read");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            let mut response = next.run(request).await;
+            if !response.status().is_server_error() {
+                *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            }
+            response
         }
         Some(Ok(None)) | None => {
             let mut response = StatusCode::SEE_OTHER.into_response();
