@@ -43,6 +43,7 @@ item	element	target	section	status	issue
 2	A detailed description of the system in place to evaluate the EHR system performance, where applicable	website/book/src/operate/conformance-run.md	-	documented	-
 2	A detailed description of the system in place to evaluate the EHR system performance, where applicable	website/book/src/evaluate/clinical-safety.md	Method	documented	-
 3	The references to any common specification used in accordance with Article 36	website/book/src/evaluate/regulatory-status.md	The obligations and their dates	planned	#526
+4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/annex-ii.md	-	partial	#525
 4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/conformance-statement.md	-	partial	#525
 4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/conformance.md	-	partial	#525
 4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/obligations.md	-	partial	#525

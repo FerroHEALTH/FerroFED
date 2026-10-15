@@ -210,9 +210,8 @@ rest of the interoperability component is planned on it
 ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), so the features
 of that path that can stop or delay an answer are assessed here, with Art
 7(1), which names the manufacturers of the systems a healthcare provider
-uses. The Annex II checklist that
-[#525](https://github.com/FerroHEALTH/FerroFED/issues/525) builds takes its
-reasoning for point 2.5 from this section.
+uses. The [Annex II checklist](annex-ii.md) takes its reasoning for point
+2.5 from this section.
 
 ### The completeness default
 
