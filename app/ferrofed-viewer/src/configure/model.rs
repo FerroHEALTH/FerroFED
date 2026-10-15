@@ -60,11 +60,12 @@ pub struct ConfigForm {
     pub product_version: String,
     /// The node's Query API endpoints: `endpoint_id`, base URL and
     /// optionally `suspended`, separated by spaces, each endpoint separated
-    /// by a semicolon.
+    /// by a semicolon, a semicolon inside one written `%3B`.
     pub endpoints: String,
     /// The node's FHIR endpoints: `endpoint_id`, base URL, `system=`,
     /// `categories=`, `profiles=` and optionally `suspended`, separated by
-    /// spaces, each endpoint separated by a semicolon.
+    /// spaces, each endpoint separated by a semicolon, a semicolon inside
+    /// one written `%3B`.
     pub fhir_endpoints: String,
     /// Not empty when the form showed the FHIR endpoints field; a form
     /// without it, as one drawn before the field existed, keeps the held

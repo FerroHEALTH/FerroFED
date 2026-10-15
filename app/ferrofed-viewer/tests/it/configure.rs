@@ -312,6 +312,31 @@ async fn a_change_the_gateway_refuses_shows_its_status_and_code() -> Result<(), 
     Ok(())
 }
 
+// NOTE: no specification governs this: our own design; the gateway's message
+// names the key it refused, as `config check` does, and reaches the page as text.
+#[tokio::test]
+async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
+-> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    answers(
+        &listener,
+        ("PUT", "/admin/config/members/node-c"),
+        422,
+        r#"{"message":"the revision's configuration is refused: registry.timeout_ms <b>is</b> zero; it must be positive","code":"configuration-invalid"}"#,
+    )
+    .await;
+    let (service, session) = signed_in_console(&listener)?;
+    let html = configured(&service, &session, save_c()).await?;
+    assert!(
+        html.contains("Replica gateway-0 refused the save: 422 (configuration-invalid)."),
+        "{html}"
+    );
+    assert!(html.contains("registry.timeout_ms"), "{html}");
+    assert!(html.contains("&lt;b&gt;is&lt;/b&gt;"), "{html}");
+    assert!(!html.contains("<b>is</b>"), "{html}");
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;

@@ -164,30 +164,39 @@ pub const CONFIGURE_BODY_LIMIT: usize = 3 * crate::configure::import::IMPORT_LIM
 
 /// Holds every request's body to [`BODY_LIMIT`], or the configuration
 /// form's to [`CONFIGURE_BODY_LIMIT`], before anything reads it: a body
-/// whose `Content-Length` is over the limit is `413`, and a longer body
-/// sent without one fails when it is read.
+/// over the limit is `413` (RFC 9110 §15.5.14), whether its
+/// `Content-Length` declares it or it is sent chunked and grows past it.
 ///
 /// A server function reads its body whole before it checks the session,
-/// so the limit holds for a caller with no session too. Axum's own default
-/// limit is raised to [`CONFIGURE_BODY_LIMIT`] beside it, so an import at
-/// its limit is read whole.
+/// so the limit holds for a caller with no session too. The body is read
+/// here, up to the limit, and handed on whole; a body that breaks off is
+/// `400`. Axum's own default limit is raised to [`CONFIGURE_BODY_LIMIT`]
+/// beside it, so an import at its limit is read whole.
 async fn limit_body(request: Request, next: Next) -> Response {
+    use http_body_util::BodyExt as _;
     use leptos::server_fn::ServerFn as _;
     let limit = if request.uri().path() == crate::configure::act::Configure::url() {
         CONFIGURE_BODY_LIMIT
     } else {
         BODY_LIMIT
     };
-    let inner = tower::ServiceExt::map_request(
-        next,
-        |request: http::Request<tower_http::body::Limited<axum::body::Body>>| {
-            request.map(axum::body::Body::new)
-        },
-    );
-    let limited = tower_http::limit::RequestBodyLimit::new(inner, limit);
-    match tower::ServiceExt::oneshot(limited, request).await {
-        Ok(response) => response.map(axum::body::Body::new),
-        Err(never) => match never {},
+    let (parts, body) = request.into_parts();
+    let declared = parts
+        .headers
+        .get(http::header::CONTENT_LENGTH)
+        .and_then(|length| length.to_str().ok()?.parse::<u64>().ok());
+    if declared.is_some_and(|length| u64::try_from(limit).is_ok_and(|limit| length > limit)) {
+        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    }
+    match http_body_util::Limited::new(body, limit).collect().await {
+        Ok(read) => {
+            let body = axum::body::Body::from(read.to_bytes());
+            next.run(Request::from_parts(parts, body)).await
+        }
+        Err(error) if error.is::<http_body_util::LengthLimitError>() => {
+            StatusCode::PAYLOAD_TOO_LARGE.into_response()
+        }
+        Err(_broken) => StatusCode::BAD_REQUEST.into_response(),
     }
 }
 

@@ -60,10 +60,12 @@ pub(crate) fn replica_said<T>(
         Acted::Done(report) => done(replica, report),
         Acted::Refused(Refusal::Gateway { status, code }) => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
-            let hint = if code == "scope-insufficient" {
-                " Your access token may carry no operator scope."
-            } else {
-                ""
+            let hint = match &answer.said {
+                _ if code == "scope-insufficient" => {
+                    String::from(" Your access token may carry no operator scope.")
+                }
+                Some(said) => format!(" The gateway says: {}.", said.trim_end_matches('.')),
+                None => String::new(),
             };
             view! {
                 <p role="alert">

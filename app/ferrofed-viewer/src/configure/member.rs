@@ -7,8 +7,13 @@
 //! A member's Query API endpoints (`openehr-rest-query`) and its FHIR
 //! endpoints (`hl7-fhir-rest`, the exchange-format endpoints) are each one
 //! field of the form, one endpoint after another, separated by a
-//! semicolon. Every refusal names the field and the endpoint's position,
-//! never what it holds.
+//! semicolon; a semicolon inside an endpoint is written `%3B`
+//! ([`escaped`]). Every refusal names the field and the endpoint's
+//! position, never what it holds.
+//!
+//! The fields stay `<input>` elements: the server renders their value into
+//! an attribute, which Leptos escapes, never into a `<textarea>`, whose
+//! children it leaves unescaped.
 
 use ferrofed_registry::console::{
     ConsoleEndpoint, ConsoleMember, ConsoleNode, ConsoleOrganisation,
@@ -49,13 +54,13 @@ pub fn member(form: &ConfigForm) -> Result<(ConsoleMember, Shown), Refusal> {
         .map_err(|_bad| invalid("The system_id is not an openEHR UID."))?;
     let mut endpoints = Vec::new();
     for (position, line) in lines(&form.endpoints) {
-        endpoints.push(endpoint(line, position)?);
+        endpoints.push(endpoint(&line, position)?);
     }
     if endpoints.is_empty() {
         return Err(invalid("Give at least one Query API endpoint."));
     }
     for (position, line) in lines(&form.fhir_endpoints) {
-        endpoints.push(fhir_endpoint(line, position)?);
+        endpoints.push(fhir_endpoint(&line, position)?);
     }
     let member = ConsoleMember {
         organisation: ConsoleOrganisation {
@@ -78,14 +83,69 @@ pub fn member(form: &ConfigForm) -> Result<(ConsoleMember, Shown), Refusal> {
 }
 
 /// The endpoints `field` names, one per semicolon, empty ones left out,
-/// each with its position from 1.
-fn lines(field: &str) -> impl Iterator<Item = (usize, &str)> {
+/// each read back with [`unescaped`] and with its position from 1.
+fn lines(field: &str) -> impl Iterator<Item = (usize, String)> {
     field
         .split(';')
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .zip(1_usize..)
-        .map(|(line, position)| (position, line))
+        .map(|(line, position)| (position, unescaped(line)))
+}
+
+/// Returns `endpoint` as an endpoints field writes it, so the semicolon
+/// that separates endpoints never occurs inside one.
+///
+/// A `;` is written `%3B`, and a `%` followed by `3B` after any number of
+/// `25` gains one `25` after it, so a save reads back `endpoint`
+/// exactly and any other percent-encoding passes as it stands.
+#[must_use]
+pub fn escaped(endpoint: &str) -> String {
+    let mut written = String::with_capacity(endpoint.len());
+    let mut chars = endpoint.chars();
+    while let Some(next) = chars.next() {
+        match next {
+            ';' => written.push_str("%3B"),
+            '%' if escapes_semicolon(chars.as_str()) => written.push_str("%25"),
+            other => written.push(other),
+        }
+    }
+    written
+}
+
+/// Returns the endpoint `written` stands for, undoing [`escaped`] once.
+fn unescaped(written: &str) -> String {
+    let mut endpoint = String::with_capacity(written.len());
+    let mut chars = written.chars();
+    while let Some(next) = chars.next() {
+        let rest = chars.as_str();
+        if next == '%' {
+            if let Some(after) = rest.strip_prefix("3B").or_else(|| rest.strip_prefix("3b")) {
+                endpoint.push(';');
+                chars = after.chars();
+                continue;
+            }
+            if let Some(after) = rest.strip_prefix("25")
+                && escapes_semicolon(after)
+            {
+                endpoint.push('%');
+                chars = after.chars();
+                continue;
+            }
+        }
+        endpoint.push(next);
+    }
+    endpoint
+}
+
+/// Whether `rest`, the text after a `%`, is any number of `25` and then
+/// `3B` in either case.
+fn escapes_semicolon(rest: &str) -> bool {
+    let mut rest = rest;
+    while let Some(after) = rest.strip_prefix("25") {
+        rest = after;
+    }
+    rest.starts_with("3B") || rest.starts_with("3b")
 }
 
 /// The `endpoint_id` `id` of the `kind` endpoint at `position`.
@@ -306,6 +366,29 @@ mod tests {
                 "{line}: {refused:?}"
             );
         }
+    }
+
+    #[test]
+    fn an_endpoint_escaped_for_the_field_reads_back_whole() {
+        for held in [
+            "node-c-pub https://cdr-c.example.org/openehr;v=1/x;y",
+            "node-c-pub https://cdr-c.example.org/a%3Bb%3bc%253Bd%2525%3B%20e",
+            "node-c-pub https://cdr-c.example.org/%25%2%3%",
+            "node-c-fhir https://x.example.org/fhir;r4 system=urn:a;b categories=A profiles=http://p.example.org/x;1",
+        ] {
+            let written = escaped(held);
+            assert!(!written.contains(';'), "{written}");
+            let read: Vec<(usize, String)> = lines(&format!("{written}; {written}")).collect();
+            assert_eq!(
+                vec![(1, held.to_owned()), (2, held.to_owned())],
+                read,
+                "{written}"
+            );
+        }
+        assert_eq!(
+            "https://x.example.org/a%20b",
+            unescaped("https://x.example.org/a%20b")
+        );
     }
 
     #[test]

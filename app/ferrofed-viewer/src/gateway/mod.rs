@@ -129,6 +129,21 @@ impl GatewayError {
     /// body carries, when the gateway answered at all.
     #[must_use]
     pub fn refusal(&self) -> Option<(StatusCode, Option<String>)> {
+        self.refused()
+            .map(|(status, body)| (status, error_of(body).and_then(|error| error.code)))
+    }
+
+    /// The `message` of the gateway's error body, when the gateway refused
+    /// the call with its error document.
+    #[must_use]
+    pub fn message(&self) -> Option<String> {
+        self.refused()
+            .and_then(|(_status, body)| error_of(body))
+            .and_then(|error| error.message)
+    }
+
+    /// The status the gateway refused the call with and the body it sent.
+    fn refused(&self) -> Option<(StatusCode, &ErrorBody)> {
         let (status, body) = match self {
             Self::Status { status, body }
             | Self::Call {
@@ -148,7 +163,7 @@ impl GatewayError {
             | Self::Envelope { .. }
             | Self::Report { .. } => return None,
         };
-        Some((status, code_of(body)))
+        Some((status, body))
     }
 
     /// The status of a gateway answer whose body the console cannot read,
@@ -317,19 +332,19 @@ impl Unanswered {
     }
 }
 
-/// The `code` member the gateway writes into its ITS-REST `Error` body.
+/// The `message` of the ITS-REST `Error` body and the `code` member the
+/// gateway writes into it.
 #[derive(serde::Deserialize)]
 struct Coded {
+    message: Option<String>,
     code: Option<String>,
 }
 
-/// The stable error code `body` carries, if it is the gateway's error body.
-fn code_of(body: &ErrorBody) -> Option<String> {
+/// The gateway's error document `body`, if it is one.
+fn error_of(body: &ErrorBody) -> Option<Coded> {
     // NOTE: no specification governs this: our own design; a body that is not
     // the gateway's error document carries no code, which is not a failure.
-    serde_json::from_slice::<Coded>(body.raw())
-        .ok()
-        .and_then(|coded| coded.code)
+    serde_json::from_slice::<Coded>(body.raw()).ok()
 }
 
 /// The gateway the console is a client of.

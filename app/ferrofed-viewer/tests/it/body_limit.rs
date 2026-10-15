@@ -7,12 +7,13 @@
 
 use std::error::Error;
 
-use axum::body::Body;
+use axum::body::{Body, Bytes, HttpBody as _};
 use ferrofed_testkit::mock::Server;
 use ferrofed_viewer::configure::import::IMPORT_LIMIT;
 use ferrofed_viewer::server::{BODY_LIMIT, CONFIGURE_BODY_LIMIT};
 use ferrofed_viewer::session::COOKIE;
 use http::{Request, StatusCode};
+use http_body_util::{BodyExt as _, Full};
 
 use crate::configure::{answers, form, signed_in_console};
 use crate::support::send;
@@ -95,7 +96,42 @@ async fn an_oversized_body_sent_without_its_length_runs_no_function() -> Result<
             ("confirm", "yes"),
         ])))?;
     let (response, _) = send(&service, request).await?;
-    assert_ne!(StatusCode::OK, response.status());
+    assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status());
+    assert_eq!(0, asked(&listener).await?, "no replica is asked");
+    Ok(())
+}
+
+// NOTE: RFC 9110 §15.5.14; a body sent chunked, its length unknown until it
+// is read, is answered 413 once it grows past the limit, as a declared one is.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chunked_body_over_the_limit_is_413_and_runs_no_function() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let (service, session) = signed_in_console(&listener)?;
+    for (path, limit) in [
+        ("/api/configure", CONFIGURE_BODY_LIMIT),
+        ("/api/configuration", BODY_LIMIT),
+    ] {
+        let chunked = Full::new(Bytes::from(form(&[
+            ("action", "import"),
+            ("toml", &"#".repeat(limit)),
+            ("reason", "r"),
+            ("confirm", "yes"),
+        ])))
+        .map_frame(|frame| frame);
+        assert!(
+            !chunked.is_end_stream() && chunked.size_hint().exact().is_none(),
+            "the body declares no length"
+        );
+        let request = Request::post(path)
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("transfer-encoding", "chunked")
+            .header("accept", "application/json")
+            .header("sec-fetch-site", "same-origin")
+            .header("cookie", format!("{COOKIE}={}", session.as_str()))
+            .body(Body::new(chunked))?;
+        let (response, _) = send(&service, request).await?;
+        assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status(), "{path}");
+    }
     assert_eq!(0, asked(&listener).await?, "no replica is asked");
     Ok(())
 }
