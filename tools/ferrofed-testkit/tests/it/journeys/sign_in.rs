@@ -13,7 +13,7 @@
 use std::error::Error;
 
 use ferrofed_viewer::app::PRODUCT;
-use thirtyfour::SameSite;
+use thirtyfour::{By, SameSite};
 
 use crate::journeys::browser::{Browser, until, with_browser};
 use crate::journeys::journeys_enabled;
@@ -21,10 +21,14 @@ use crate::journeys::stack::Stack;
 
 /// Signs the operator in from the landing page, and waits until the browser
 /// is back on it with a session cookie.
+///
+/// The landing page offers a visitor the sign-in and neither the navigation
+/// nor the sign-out, and the signed-in operator both.
 pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn Error>> {
     browser.goto(&stack.url("/")).await?;
     browser.titled(PRODUCT).await?;
     browser.console_clean("the landing page").await?;
+    signed_out_shell(browser).await?;
     browser.follow("Sign in").await?;
     until("the browser holds a session cookie", async || {
         Ok(browser.cookie(stack.cookie()).await?.is_some())
@@ -32,7 +36,30 @@ pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<
     .await?;
     browser.at(&stack.url("/")).await?;
     browser.titled(PRODUCT).await?;
+    browser
+        .element(By::XPath("//nav[@aria-label = 'Views']//a[. = 'Members']"))
+        .await?;
+    browser
+        .element(By::XPath("//form//button[. = 'Sign out']"))
+        .await?;
     browser.console_clean("the sign-in").await
+}
+
+/// Holds that the page a visitor reads draws the sign-in, and neither the
+/// navigation nor the sign-out.
+pub(crate) async fn signed_out_shell(browser: &Browser) -> Result<(), Box<dyn Error>> {
+    browser.element(By::LinkText("Sign in")).await?;
+    if !browser.driver().find_all(By::Tag("nav")).await?.is_empty() {
+        return Err("a visitor's page draws the navigation".into());
+    }
+    let sign_out = browser
+        .driver()
+        .find_all(By::XPath("//button[. = 'Sign out']"))
+        .await?;
+    if !sign_out.is_empty() {
+        return Err("a visitor's page offers the sign-out".into());
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

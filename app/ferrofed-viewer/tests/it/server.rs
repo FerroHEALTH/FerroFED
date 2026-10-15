@@ -9,7 +9,7 @@ use std::error::Error;
 
 use http::StatusCode;
 
-use crate::support::{console, get, header, send};
+use crate::support::{console, get, get_as, header, send, signed_in};
 
 #[tokio::test]
 async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
@@ -38,6 +38,41 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
         body.contains(r#"<a href="/login" rel="external">"#),
         "{body}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
+    for path in ["/", "/no/such/page"] {
+        let (_response, body) = send(&service, get(path)?).await?;
+        assert!(!body.contains("<nav"), "{path}: {body}");
+        assert!(!body.contains("Sign out"), "{path}: {body}");
+        assert!(!body.contains(r#"href="/members""#), "{path}: {body}");
+    }
+    let (_response, body) = send(&service, get("/")?).await?;
+    assert!(
+        body.contains(r#"<a href="/login" rel="external">"#),
+        "{body}"
+    );
+
+    let session = state.sessions().establish(signed_in())?;
+    for path in ["/", "/no/such/page"] {
+        let (_response, body) = send(&service, get_as(path, &session)?).await?;
+        assert!(
+            body.contains(r#"<nav aria-label="Views""#),
+            "{path}: {body}"
+        );
+        assert!(body.contains("Sign out"), "{path}: {body}");
+        assert!(body.contains(r#"href="/members""#), "{path}: {body}");
+    }
+    let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    assert!(!body.contains(r#"href="/login""#), "{body}");
+
+    state.sessions().end(&session)?;
+    let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    assert!(!body.contains("<nav"), "an ended session: {body}");
     Ok(())
 }
 

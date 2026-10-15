@@ -53,50 +53,17 @@ pub fn App() -> impl IntoView {
     // NOTE: the Leptos book, `ssr/22_life_cycle`: a value the server decides reaches
     // the hydrating page serialized, so both halves draw the same navigation.
     let administered = *SharedValue::new_str(administered);
-    let configuration = administered.then(|| {
-        view! {
-            <li>
-                <a href=crate::configure::CONFIGURATION>"Configuration"</a>
-            </li>
-        }
-    });
+    let signed_in = *SharedValue::new_str(signed_in);
+    let navigation = signed_in.then(|| navigation(administered));
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
         <Router>
-            <nav aria-label="Views">
-                <ul>
-                    <li>
-                        <a href="/">"Console"</a>
-                    </li>
-                    <li>
-                        <a href=views::MEMBERS>"Members"</a>
-                    </li>
-                    <li>
-                        <a href=views::INTEGRITY>"Integrity"</a>
-                    </li>
-                    <li>
-                        <a href=views::STORED_QUERIES>"Stored queries"</a>
-                    </li>
-                    <li>
-                        <a href=views::FEDERATION>"Self-description"</a>
-                    </li>
-                    <li>
-                        <a href=crate::query::QUERY>"Query"</a>
-                    </li>
-                    {configuration}
-                </ul>
-                // The sign-out route is the server's: a plain form post it
-                // answers with a redirect, which no client router takes.
-                <form method="post" action=SIGN_OUT>
-                    <button type="submit">"Sign out"</button>
-                </form>
-            </nav>
-            <main>
+            {navigation} <main>
                 // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills renders
                 // `Async`, whole in one sweep, so no content waits on a script to be swapped in.
                 <Routes fallback=NotFound>
-                    <Route path=path!("/") view=Landing />
+                    <Route path=path!("/") view=move || view! { <Landing signed_in /> } />
                     <Route path=path!("/members") view=views::MembersPage ssr=SsrMode::Async />
                     <Route path=path!("/integrity") view=views::IntegrityPage ssr=SsrMode::Async />
                     <Route
@@ -116,10 +83,53 @@ pub fn App() -> impl IntoView {
                         ssr=SsrMode::Async
                     />
                 </Routes>
-            </main>
-            <Footer />
+            </main> <Footer />
         </Router>
     }
+}
+
+/// The navigation a signed-in operator reads: a link to every view, the
+/// configuration page when a replica's admin listener is configured, and
+/// the sign-out.
+fn navigation(administered: bool) -> AnyView {
+    let configuration = administered.then(|| {
+        view! {
+            <li>
+                <a href=crate::configure::CONFIGURATION>"Configuration"</a>
+            </li>
+        }
+    });
+    view! {
+        <nav aria-label="Views">
+            <ul>
+                <li>
+                    <a href="/">"Console"</a>
+                </li>
+                <li>
+                    <a href=views::MEMBERS>"Members"</a>
+                </li>
+                <li>
+                    <a href=views::INTEGRITY>"Integrity"</a>
+                </li>
+                <li>
+                    <a href=views::STORED_QUERIES>"Stored queries"</a>
+                </li>
+                <li>
+                    <a href=views::FEDERATION>"Self-description"</a>
+                </li>
+                <li>
+                    <a href=crate::query::QUERY>"Query"</a>
+                </li>
+                {configuration}
+            </ul>
+            // The sign-out route is the server's: a plain form post it
+            // answers with a redirect, which no client router takes.
+            <form method="post" action=SIGN_OUT>
+                <button type="submit">"Sign out"</button>
+            </form>
+        </nav>
+    }
+    .into_any()
 }
 
 /// The footer of every page: the product, its version and its manufacturer,
@@ -138,28 +148,47 @@ fn Footer() -> impl IntoView {
     }
 }
 
-/// The landing page: what the console is, and the way to sign in.
+/// The landing page: what the console is, and the way to sign in, or for a
+/// signed-in operator what the navigation leads to.
 #[component]
-fn Landing() -> impl IntoView {
+fn Landing(
+    /// Whether the request carries a live signed-in session.
+    signed_in: bool,
+) -> impl IntoView {
+    let next = if signed_in {
+        view! {
+            <p>
+                "The navigation leads to the members and their health, the integrity incidents "
+                "and the creating_system_id routing table, the stored queries, the gateway's "
+                "self-description, and the query console, which runs an AQL or a stored query "
+                "through the gateway and shows every node's status beside the rows."
+            </p>
+        }
+        .into_any()
+    } else {
+        view! {
+            <p>
+                "Sign in to see the members and their health, the integrity incidents and the "
+                "creating_system_id routing table, the stored queries, the gateway's "
+                "self-description, and the query console."
+            </p>
+            <p>
+                // The sign-in route is the server's, so the client router must not
+                // take the click once the page has hydrated.
+                <a href=SIGN_IN rel="external">
+                    "Sign in"
+                </a>
+            </p>
+        }
+        .into_any()
+    };
     view! {
         <h1>{PRODUCT}</h1>
         <p>
             "The console shows an operator the state of a FerroFED federation through the "
             "gateway's own public surface. It holds no clinical data."
         </p>
-        <p>
-            "Sign in to see the members and their health, the integrity incidents and the "
-            "creating_system_id routing table, the stored queries, the gateway's "
-            "self-description, and the query console, which runs an AQL or a stored query "
-            "through the gateway and shows every node's status beside the rows."
-        </p>
-        <p>
-            // The sign-in route is the server's, so the client router must not
-            // take the click once the page has hydrated.
-            <a href=SIGN_IN rel="external">
-                "Sign in"
-            </a>
-        </p>
+        {next}
     }
 }
 
@@ -192,5 +221,20 @@ fn administered() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
         true
+    }
+}
+
+/// Whether the request carries a live signed-in session, which the
+/// navigation and the sign-out are drawn for.
+fn signed_in() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        views::load::server::signed_in().is_ok()
+    }
+    // NOTE: the browser reads the value the server decided; this runs only if
+    // that value is missing, and then draws the page a visitor sees.
+    #[cfg(target_arch = "wasm32")]
+    {
+        false
     }
 }
