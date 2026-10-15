@@ -10,7 +10,10 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::error::document::DocumentFault;
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+
+pub mod document;
 
 /// The registry-owned namespace an [`IdError`] is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,7 +153,7 @@ pub enum LoadError {
     /// unknown or missing field, a value of the wrong type, or an identifier
     /// that breaks its form.
     #[error("the registry document does not have the registry's shape")]
-    Parse(#[source] Box<toml::de::Error>),
+    Parse(#[source] DocumentFault),
     /// The document admits no node.
     #[error("the registry document admits no node")]
     NoNode,

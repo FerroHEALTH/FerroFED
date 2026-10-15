@@ -14,6 +14,7 @@ use url::Url;
 use crate::creating_system::CreatingSystemRoute;
 use crate::document::Document;
 use crate::error::LoadError;
+use crate::error::document::DocumentFault;
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use crate::native::NativeEndpoint;
 
@@ -310,7 +311,8 @@ impl RegistrySnapshot {
     /// endpoint, no node at all, or a `creating_system_id` mapped twice or
     /// mapped although it is a member's own `system_id`.
     pub fn from_toml_str(text: &str) -> Result<Self, LoadError> {
-        let document: Document = toml::from_str(text).map_err(|e| LoadError::Parse(Box::new(e)))?;
+        let document: Document = toml::from_str(text)
+            .map_err(|error| LoadError::Parse(DocumentFault::from_toml(&error, text)))?;
         let snapshot = Self::from_document(document)?;
         // NOTE: §8.1, "an Organization manages 1..* Endpoints", a native one too; a directory's
         // registry keeps one whose endpoints left it, and selecting it is a 404 (§11.2).
