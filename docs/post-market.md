@@ -7,7 +7,8 @@ The working checklist the manufacturer of FerroFED, Cadasto B.V., follows
 for a complaint, a non-conforming version and a serious incident, under
 Regulation (EU) 2025/327 Art 30(1)(i) to (o), Art 30(5), Art 43(5), Art 44
 and Art 45(1), and for an actively exploited vulnerability or a severe
-incident under Regulation (EU) 2024/2847 (the CRA) Art 14. The public
+incident under Regulation (EU) 2024/2847 (the CRA) Art 14, and the register
+of economic operators of EHDS Art 35 and CRA Art 23. The public
 account, with the quotations, is the book's
 [Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html)
 page; this page is what a maintainer does, step by step. The Regulations fix
@@ -142,7 +143,8 @@ ENISA (Art 14(1), (3), (7)).
    security advisory, which holds the record from here on.
 2. **Within 24 hours: the early warning** (Art 14(2)(a), (4)(a)). Name the
    Member States where Cadasto B.V. knows FerroFED has been made available,
-   from its contracts. For an incident, say whether it is suspected of being
+   from its contracts, as the register of economic operators below records
+   them. For an incident, say whether it is suspected of being
    caused by unlawful or malicious acts.
 3. **Within 72 hours: the notification** (Art 14(2)(b), (4)(b)). The
    releases concerned, the nature of the exploit and the vulnerability, or
@@ -174,6 +176,120 @@ ENISA (Art 14(1), (3), (7)).
 8. **EHDS and NIS 2.** Check the same day whether the event is also a
    serious incident (the section above) and whether a NIS 2 notification is
    due. Neither is covered by the CRA notifications.
+
+## The register of economic operators
+
+EHDS Art 35 has economic operators "on request, identify ... to the market
+surveillance authorities, for 10 years from the date when the last EHR
+system covered by the EU declaration of conformity has been placed on the
+market: (a) any economic operator that has supplied them with an EHR system;
+and (b) any economic operator to which they have supplied an EHR system".
+CRA Art 23(1) asks for "the name and address" of each, the second "where
+available", and Art 23(2) has the information presented "for 10 years after
+they have been supplied with the product with digital elements and for 10
+years after they have supplied" it. Decision A73 (#654) meets both with a
+register of every economic operator Cadasto B.V. supplies under a contract.
+The steps below are our own design; no article prescribes them.
+
+### What it holds
+
+One row per supply, in the columns of
+[`docs/registers/economic-operators.tsv`](registers/economic-operators.tsv):
+the direction (`supplied-to` for Art 35(b) and Art 23(1)(b), `supplied-by`
+for Art 35(a) and Art 23(1)(a)), the date, the operator's name and address,
+its role under Regulation (EU) 2019/1020 Art 3(13), the versions and the
+artefacts supplied, the Member States where the contract has FerroFED made
+available or put into service, the contract's reference, and `keep_until`.
+The Member States column is also where step 2 of the CRA section above
+reads "the Member States on the territory of which the manufacturer is
+aware that their product with digital elements has been made available"
+(CRA Art 14(2)(a)).
+
+### Where it is kept
+
+The rows name customers and their addresses, so the register is kept
+outside the public repository, as a private copy of that file under git,
+read by the owner and by whoever the owner names. The public copy holds the
+column row and no entry, and `scripts/checks/economic-operators.sh` fails CI
+if a row is ever added to it.
+
+### Who and when
+
+The owner keeps the register and enters every row. A row is entered within
+one working day of a supply: when a release is delivered under a contract,
+or when a contract gives an operator a release to make available or put
+into service. A release delivered later under the same contract is a new
+row, because rows are appended and never rewritten.
+
+EHDS Art 35 applies from 26 March 2027, the general date of Art 105, on the
+reading the book's regulatory status page asks counsel to confirm. CRA Art
+23 applies from 11 December 2027 (Art 71(2)), and Art 69(2) holds a release
+placed on the market before that date to it only once the release is
+"subject to a substantial modification". The register is kept from the
+first supply all the same, so the 10 years can be shown whichever date
+applies.
+
+### For how long
+
+A row stays at least 10 years after its supply (CRA Art 23(2)) and at least
+10 years after the last EHR system covered by the declaration of conformity
+of its versions has been placed on the market (EHDS Art 35). The second date
+is not known when the row is entered, so `keep_until` stays empty and is
+filled only once both are known; a row with an empty `keep_until` is never
+removed. A published release cannot be changed or deleted
+([`release.md`](release.md)), so when the last placing on the market of a
+version has happened is a decision for the owner (below).
+
+### The check
+
+Before each commit to the private register, and before answering a request,
+the owner runs `scripts/checks/economic-operators.sh --register <path>`. It
+refuses a malformed row, a `keep_until` less than 10 years after the supply,
+and, across the file's git history, a row removed before its `keep_until`
+has passed or changed in any column but an empty `keep_until`.
+
+### A public download
+
+Each tagged release is published on GitHub and as container images for
+anyone to download, and the download is not gated (A73). Cadasto B.V. does
+not know who downloads a release, so a download is no row; the release is
+stated to be supplied for non-production use and for non-commercial
+production use under the licence. EHDS Art 35 has no "where available"
+qualifier, unlike CRA Art 23(1)(b). If counsel holds that an anonymous
+production user is an economic operator Cadasto B.V. supplied, for example
+one that puts FerroFED into service under EHDS Art 26(2), the A73 fallback
+applies: downloads move behind a registration, and each registration is a
+row. Until that answer, whether a download is a supply to an identified
+operator is undecided, and the register does not decide it.
+
+### A request from a market surveillance authority
+
+The owner answers it as the next section says. Run the check, then select
+the rows of the versions and the period the request names, and give for
+each the operator's name and address, its role, the versions and the date
+of supply. Say plainly that the versions were also published for download,
+and that their downloaders are not known. Keep the request, the answer and
+the rows given.
+
+### Open for the owner
+
+These facts and decisions are the manufacturer's, and none is recorded in
+the repository:
+
+1. Where the private register is kept, and who other than the owner reads
+   it.
+2. The rows: every supply under a contract so far, with the operator's name,
+   address and role, the versions, the artefacts, the Member States and the
+   contract reference.
+3. Whether any economic operator has supplied Cadasto B.V. with an EHR
+   system or a product with digital elements that is part of what it
+   supplies (the `supplied-by` rows).
+4. Counsel's answer on whether an anonymous production user of a public
+   download is an economic operator Cadasto B.V. supplied, which decides
+   whether the A73 registration fallback applies.
+5. When the last placing on the market of a version under its declaration
+   of conformity has happened, which fixes each row's `keep_until` under
+   EHDS Art 35.
 
 ## A request from an authority
 

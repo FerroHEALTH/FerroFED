@@ -9,7 +9,9 @@ involved in a serious incident. It describes the manufacturer's procedures
 under Regulation (EU) 2025/327 on the European Health Data Space (the EHDS
 Regulation), Art 30(1)(i) to (o), Art 30(5) and Art 44, and the reports of
 an actively exploited vulnerability or a severe incident under Regulation
-(EU) 2024/2847, the Cyber Resilience Act (CRA), Art 14. The
+(EU) 2024/2847, the Cyber Resilience Act (CRA), Art 14. It also says how
+the economic operators FerroFED is supplied to are recorded (EHDS Art 35,
+CRA Art 23). The
 [regulatory status](regulatory-status.md) page sets out why those articles
 reach FerroFED and from which date. The maintainers' working checklist for
 the same procedures is
@@ -89,6 +91,47 @@ No row names the person who complained or carries patient data. The
 manufacturer keeps the correspondence itself, outside the repository. A
 vulnerability enters the registers once its advisory is published, so a row
 never discloses one before its fix.
+
+## The register of economic operators
+
+The EHDS Regulation has every economic operator "on request, identify ... to
+the market surveillance authorities, for 10 years from the date when the
+last EHR system covered by the EU declaration of conformity has been placed
+on the market: (a) any economic operator that has supplied them with an EHR
+system; and (b) any economic operator to which they have supplied an EHR
+system" (Art 35). The CRA asks for "the name and address" of each, the
+second "where available" (Art 23(1)), "for 10 years after they have been
+supplied with the product with digital elements and for 10 years after they
+have supplied" it (Art 23(2)).
+
+Cadasto B.V. keeps a register of every economic operator it supplies
+FerroFED to under a contract: commercial licensees, resellers, integrators
+and hosts. Each row names the operator, its address and role, the versions
+and artefacts supplied, the date, the Member States where the contract has
+FerroFED made available or put into service, and the contract. A row is
+entered within one working day of the supply, is never rewritten, and is
+kept at least 10 years after the supply and 10 years after the last
+placing on the market under the declaration of conformity of its versions.
+
+The rows are business data, so the register is kept outside the public
+repository. Its format is public, in
+[`docs/registers/economic-operators.tsv`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/registers/economic-operators.tsv),
+which holds no row, and `scripts/checks/economic-operators.sh` checks both
+copies: the public one for having no row, and the private one, under git,
+for every row being kept for its period. A market surveillance authority's
+request goes to the single point of contact above and is answered from the
+register (see [Cooperation with the authorities](#cooperation-with-the-authorities)).
+
+A release published on GitHub can be downloaded by anyone, and the download
+is not gated. Cadasto B.V. does not know who downloads it, so a download is
+not entered in the register. The release is supplied for non-production use
+and for non-commercial production use under the
+[licence](licensing.md); production use beyond that needs a commercial
+licence, which is a contract and so a row. Art 35 has no "where available"
+qualifier. Whether an anonymous user who puts a downloaded release into
+production is an economic operator Cadasto B.V. supplied is a question for
+the manufacturer's counsel; if counsel says it is, downloads move behind a
+registration and each registration is entered.
 
 ## Corrective action, recall and withdrawal
 
@@ -362,4 +405,9 @@ marking or registration is a finding of non-compliance in its own right (Art
 45(1)). The [technical documentation](technical-documentation.md) says how a
 request for it, or for a translation of parts of it, is answered within 30
 days (Art 37(4)); the declaration is planned under
-[#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
+[#525](https://github.com/FerroHEALTH/FerroFED/issues/525). A request to
+identify the economic operators supplied (EHDS Art 35, CRA Art 23) is
+answered from the [register of economic operators](#the-register-of-economic-operators),
+with each operator's name and address, and with the statement that the
+versions concerned were also published for download to recipients the
+manufacturer does not know.

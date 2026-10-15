@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The register of economic operators FerroFED was supplied to or by, kept by
+# its manufacturer, Cadasto B.V. (Regulation (EU) 2025/327 Art 35,
+# Regulation (EU) 2024/2847 Art 23). This copy is the register's format and
+# holds no row: the rows name customers and their addresses, which the
+# manufacturer keeps outside the public repository, in a private copy of
+# this file under git. scripts/checks/economic-operators.sh refuses a row
+# here, and checks the private copy with --register.
+#
+# One row per supply under a contract, appended and never rewritten. The
+# only change to a row is filling its keep_until; a row leaves the register
+# only after that date. A public download, which names no recipient, is no
+# row (docs/post-market.md, The register of economic operators).
+#
+# Columns:
+#   id             E-<year>-<number>, in the order the supplies were made
+#   direction      supplied-to (Art 35(b), Art 23(1)(b)) or supplied-by
+#                  (Art 35(a), Art 23(1)(a))
+#   supplied       the date of the supply, YYYY-MM-DD
+#   operator       the economic operator's name (Art 23(1))
+#   address        its address (Art 23(1))
+#   role           its role under Regulation (EU) 2019/1020 Art 3(13):
+#                  manufacturer, authorised-representative, importer,
+#                  distributor, fulfilment-service-provider or other
+#   versions       the FerroFED versions supplied, comma-separated
+#   form           what was supplied, comma-separated: source, binaries,
+#                  gateway-image, console-image
+#   member_states  the Member States where the contract has it made
+#                  available or put into service, two-letter country codes,
+#                  comma-separated; may be empty on a supplied-by row
+#   contract       the contract's reference in the manufacturer's records
+#   keep_until     empty until known; then the later of 10 years after the
+#                  supply (Art 23(2)) and 10 years after the last placing on
+#                  the market under the declaration of conformity that covers
+#                  the versions (Art 35), YYYY-MM-DD
+id	direction	supplied	operator	address	role	versions	form	member_states	contract	keep_until

@@ -247,6 +247,17 @@ with its end date published.
 lists every release with its support period, five years from its release
 date, and its end date. FerroFED 0.0.10 is supported until 2031-10-15.
 
+## Economic operators supplied
+
+Art 38(2) asks for no record of supply. Art 35 has the manufacturer
+identify, on request and for 10 years, "any economic operator to which they
+have supplied an EHR system", and the Cyber Resilience Act's Art 23 asks
+for that operator's name and address. Cadasto B.V. enters every economic
+operator it supplies FerroFED to under a contract in a register it keeps
+outside the public repository; the register's format is public and checked
+in CI. A public download is not entered, because its recipient is not known
+([The register of economic operators](post-market.md#the-register-of-economic-operators)).
+
 ## Accessible formats
 
 Recital 37 asks for the sheet and the instructions "including in accessible
