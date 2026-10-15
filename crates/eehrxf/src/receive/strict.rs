@@ -28,7 +28,7 @@ use serde::de::Visitor;
 ///
 /// Returns the `serde_json` error: a syntax error for text that is not JSON,
 /// and a data error ([`serde_json::Error::is_data`]) for a repeated name.
-pub(super) fn unique_names(text: &str) -> Result<(), serde_json::Error> {
+pub(crate) fn unique_names(text: &str) -> Result<(), serde_json::Error> {
     serde_json::from_str::<Unique>(text).map(|_| ())
 }
 

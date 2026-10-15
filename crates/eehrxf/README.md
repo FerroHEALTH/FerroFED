@@ -23,8 +23,12 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   eHealth Network element ids and to the elements and slices of the HL7
   Europe profile, with the producer obligation and the profiles a
   FHIRconnect context may map to in order to feed each. `Crosswalk::check`
-  holds the rows to the packages they name. The patient summary carries one
-  (`crosswalk::patient_summary`, feature `patient-summary`).
+  holds the rows to the packages they name. The patient summary
+  (`crosswalk::patient_summary`, feature `patient-summary`), the electronic
+  prescription (`crosswalk::prescription`, feature `prescription`) and the
+  electronic dispensation (`crosswalk::dispensation`, feature
+  `dispensation`) carry one, the last two against the HL7 Europe MPD 1.0.0
+  `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles.
 - `fhir-r4`: the FHIR R4 serialisation of the exchange format. It compiles
   the R4 resources and no openEHR crate.
 - `mapping` (feature `openehr`, which turns on `fhir-r4`): FHIRconnect 1.0.0
@@ -32,6 +36,18 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   run in process, through FerroBRIDGE's `fhirconnect` engine, over a
   canonical-JSON composition. The answer is a FHIR R4 `Bundle` of the mapped
   resources with one `Provenance` covering them.
+- `medication` (feature `fhir-r4` with `prescription` or `dispensation`):
+  the electronic prescription and dispensation datasets as Rust records.
+  `Prescription::read` reads a member's `MedicationRequest`s, one per item,
+  and `Dispense::read` its `MedicationDispense`, each strictly against FHIR
+  R4 and with a typed refusal for an element the dataset requires and the
+  resource lacks; `Prescription::requests` and `Dispense::resource` write
+  them back in the MPD form. `Mpd` checks a resource, and each `Medication`
+  it contains, against the vendored MPD profiles by the rules of the
+  `receive` check. The number of dispensations an item has left travels in
+  the extension
+  `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` on
+  `dispenseRequest`, written only when a value is given.
 - `receive` (feature `fhir-r4`): a document received in the exchange format
   (Annex II 2.2 and 2.3). `ReceivedDocument::read` decodes it against FHIR R4,
   holds it to the document rules of the R4 `Bundle` (`bdl-9`, `bdl-10`,
