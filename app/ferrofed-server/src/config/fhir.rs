@@ -24,6 +24,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use eehrxf::category::Category;
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
@@ -152,6 +153,41 @@ pub struct FhirSettings {
     pub terminology_written: Option<crate::config::eehrxf::TerminologyServer>,
     /// The table as written, which a reload compares.
     pub written: Fhir,
+}
+
+impl FhirSettings {
+    /// Returns the notes `config check` prints about the face: each Art
+    /// 14(1) category received, with its member, then the categories this
+    /// build carries that no member receives.
+    ///
+    /// The categories are those the capability statement names, read from
+    /// the same [`Receivers`].
+    #[must_use]
+    pub fn notes(&self) -> Vec<String> {
+        let mut notes: Vec<String> = self
+            .receivers
+            .members()
+            .map(|(category, member)| {
+                format!(
+                    "[[fhir.receive]] {}: the FHIR face receives documents of this Art 14(1) category and writes them to the member {member}",
+                    category.code()
+                )
+            })
+            .collect();
+        let unreceived: Vec<&str> = self.receivers.unreceived().map(Category::code).collect();
+        if !unreceived.is_empty() {
+            let which = if unreceived.len() == 1 {
+                "this Art 14(1) category"
+            } else {
+                "any of these Art 14(1) categories"
+            };
+            notes.push(format!(
+                "[[fhir.receive]] names no receiving member for {}: the FHIR face refuses a document of {which}",
+                unreceived.join(", ")
+            ));
+        }
+        notes
+    }
 }
 
 /// Why the `[fhir]` table is refused.

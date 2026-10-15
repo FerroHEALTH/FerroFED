@@ -399,7 +399,9 @@ The capability statement, `GET {fhir-base}/metadata`, declares the
 `create` on `Bundle`. Its documentation names the categories the deployment
 receives and those it has no receiving member for, by their HL7 Europe
 codes, and its supported profiles are the `Bundle` profiles of the
-categories received.
+categories received. `ferrofed config check` prints the same categories,
+each received one with its member
+([Running it](../operate/configuration.md#running-it)).
 
 ## Terminology
 

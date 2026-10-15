@@ -72,6 +72,24 @@ at start; setting both the old and the new key is refused
 ([the compatibility policy](upgrading.md#the-compatibility-policy)). No key
 is deprecated in this release.
 
+With a FHIR face (`[fhir]`), `config check` also prints a `note:` line for
+each Art 14(1) category the face receives, naming the member its
+`[[fhir.receive]]` entry declares, and one line naming the categories this
+release carries that no member receives. These are the categories
+`GET {fhir-base}/metadata` names
+([Receiving a document](../integrate/patient-summary.md#receiving-a-document)).
+A configuration with no `[fhir]` gets neither line.
+
+```text
+ferrofed: note: [[fhir.receive]] Patient-Summaries: the FHIR face receives documents of this Art 14(1) category and writes them to the member node-a
+```
+
+A face with no `[[fhir.receive]]` entry prints this line instead:
+
+```text
+ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category
+```
+
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first

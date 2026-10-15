@@ -21,6 +21,7 @@ use crate::cli::{
     AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs, RunArgs,
 };
 use crate::config::Config;
+use crate::config::fhir::FhirSettings;
 use crate::config::settings::Settings;
 use crate::conformance::fixture::SyntheticPatient;
 use crate::conformance::run::{RunError, RunOptions};
@@ -324,6 +325,7 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
         .notes()
         .into_iter()
         .chain(settings.access_log.notes())
+        .chain(settings.fhir.iter().flat_map(FhirSettings::notes))
         .chain(
             binding::compiled()
                 .iter()

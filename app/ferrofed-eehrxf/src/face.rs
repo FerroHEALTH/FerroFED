@@ -259,12 +259,7 @@ pub fn bundle(receivers: &Receivers) -> CapabilityStatementRestResource {
             codes.join(", ")
         }
     };
-    let unreceived = codes(
-        &mut Category::ENABLED
-            .iter()
-            .copied()
-            .filter(|category| !received.contains(category)),
-    );
+    let unreceived = codes(&mut receivers.unreceived());
     let documentation = format!(
         "Receives a document in the European electronic health record exchange format and writes it to the one member the deployment declares for its Art 14(1) category. Categories received: {}. Categories with no receiving member: {unreceived}; a document of one of them, or of any other category, is refused with an OperationOutcome that names its category.",
         codes(&mut received.iter().copied()),

@@ -223,6 +223,15 @@ impl Receivers {
             .map(|(category, receiver)| (*category, receiver.member.as_str()))
     }
 
+    /// Returns every category this build carries that no member receives,
+    /// in the order of Art 14(1).
+    pub fn unreceived(&self) -> impl Iterator<Item = Category> {
+        Category::ENABLED
+            .iter()
+            .copied()
+            .filter(|category| !self.by.contains_key(category))
+    }
+
     /// Returns whether no category is received.
     #[must_use]
     pub fn is_empty(&self) -> bool {
