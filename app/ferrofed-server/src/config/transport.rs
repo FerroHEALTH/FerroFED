@@ -40,9 +40,10 @@
 //! XCPD audit messages go to, which must be `tls://` ([`encrypted_syslog`]);
 //! the Dutch binding the NVI Localization Service of `[nl_gf.nvi]`, Mitz of
 //! `[nl_gf.mitz]` and the authorization server of a Nuts grant. Any other URL
-//! may stay `http`. The encrypted-connection site is the stored-query store's
-//! PostgreSQL connection string, whose `sslmode` must be `require` when it
-//! carries a password and reaches a host over the network.
+//! may stay `http`. The encrypted-connection sites are the PostgreSQL
+//! connection strings of the stored-query store and of the configuration
+//! revision store, whose `sslmode` must be `require` when it carries a
+//! password and reaches a host over the network.
 //!
 //! The specification assumes transport security and binds it through the
 //! security profiles (§2.2, §13, Annex B); no specification governs these
@@ -354,6 +355,16 @@ pub fn check(
         let site = ProtectedSite {
             url_key: String::from("stored_queries.url"),
             payload: String::from("the password in stored_queries.url"),
+            requires: Encryption::Tls,
+        };
+        let requires_tls = !crate::stored::postgres::exposes_password(url);
+        cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
+    }
+    #[cfg(feature = "postgres")]
+    if let Some(crate::config::revisions::Store::Postgres(url)) = &settings.revisions {
+        let site = ProtectedSite {
+            url_key: String::from("config.url"),
+            payload: String::from("the password in config.url"),
             requires: Encryption::Tls,
         };
         let requires_tls = !crate::stored::postgres::exposes_password(url);

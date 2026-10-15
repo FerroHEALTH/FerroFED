@@ -710,6 +710,9 @@ pub enum Error {
     /// `[eehrxf.terminology]` is refused.
     #[error(transparent)]
     Terminology(#[from] crate::config::eehrxf::TerminologyFault),
+    /// `[config]` is refused.
+    #[error(transparent)]
+    Revisions(#[from] crate::config::revisions::RevisionsFault),
     /// `[access_log.retention]` declares a retention the logging component refuses.
     #[error("[access_log.retention] declares a retention that cannot be used")]
     AccessLogRetention(#[source] ehds_logging::retention::RetentionError),

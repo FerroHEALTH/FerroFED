@@ -31,10 +31,12 @@ The admin listener serves `GET /metrics` and the operator's
 [stored-query distribution](../integrate/stored-queries.md#repairing-drift)
 (`POST /admin/stored-queries/{name}/{version}/distribute`),
 [clear of a held `ehr_id` collision](registry.md#clearing-a-held-collision)
-(`POST /admin/ehr-ids/{ehr_id}/clear`) and
+(`POST /admin/ehr-ids/{ehr_id}/clear`),
 [export of the identity state](identity-state-export.md)
-(`POST /admin/identity-state/export`), answers every
-other path `404`, and never sits under the base path. It is never the
+(`POST /admin/identity-state/export`), and under `config.ui = "managed"`
+the [configuration revisions](configuration-revisions.md#the-routes) under
+`/admin/config`. It answers every other path `404`, the revision routes
+too under `config.ui = "off"`, and never sits under the base path. It is never the
 gateway's own listener, so no client of the federation reaches it.
 
 ### Who the admin listener serves
@@ -45,6 +47,7 @@ gateway's own listener, so no client of the federation reaches it.
 | `GET /metrics`, `scrape_token` set | a scrape with `Authorization: Bearer <the scrape token>` | `401 unauthenticated` with a `WWW-Authenticate: Bearer` challenge, for a scrape with no token, another token or another scheme |
 | A write action, such as the distribution | a caller whose access token carries the `operator_scope` of its [`[[auth.issuer]]`](authentication.md#the-operator-surface), from any peer | `401 unauthenticated` without a token that verifies, `403 scope-insufficient` without the operator scope |
 | A write action under `profile = "development"` | as above, and a loopback peer (`127.0.0.0/8`, `::1`) that sends no credential | as above |
+| A read of the configuration revisions, `GET /admin/config…` | as a write action, and never recorded as one | as a write action |
 
 A write action is verified by the same client authentication as the
 gateway's own listener, against the issuers of `[auth]` and in its mode,

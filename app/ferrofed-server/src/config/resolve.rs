@@ -162,6 +162,7 @@ impl Config {
             signing,
             access_log: crate::access::config::resolve(&self.access_log)?,
             audit: crate::audit::config::AuditSettings::default(),
+            revisions: crate::config::revisions::resolve(self)?,
             deprecated: self.deprecated.clone(),
         };
         // NOTE: no specification governs this: our own design; a request is an emergency

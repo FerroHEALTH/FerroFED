@@ -78,6 +78,8 @@ mod crossref;
 mod differential;
 mod keycloak;
 mod pixm;
+#[cfg(feature = "postgres")]
+mod revisions_postgres;
 mod santempi;
 mod scenario;
 #[cfg(feature = "postgres")]

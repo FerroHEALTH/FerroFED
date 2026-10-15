@@ -32,7 +32,7 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
@@ -124,10 +124,10 @@ pub enum PostgresError {
     #[error("the PostgreSQL connection string does not parse")]
     Unparsable,
     /// The store's thread has stopped, so nothing reaches the database.
-    #[error("the stored-query store's thread has stopped")]
+    #[error("the PostgreSQL store's thread has stopped")]
     Stopped,
     /// The database did not answer within the budget.
-    #[error("the stored-query database did not answer within {}s", .0.as_secs())]
+    #[error("the PostgreSQL database did not answer within {}s", .0.as_secs())]
     Timeout(Duration),
     /// An insert reported a row count other than one or none.
     #[error("an insert reported {0} rows, where one or none is possible")]
@@ -137,24 +137,25 @@ pub enum PostgresError {
 /// The stored-query definitions in one shared PostgreSQL database.
 #[derive(Debug)]
 pub struct PostgresStore {
-    commands: Sender<Command>,
+    connection: Connection,
 }
 
-/// One call into the store's thread, with where its answer goes.
-enum Command {
-    /// [`DefinitionStore::insert_if_absent`].
-    Insert {
-        definition: StoredDefinition,
-        reply: SyncSender<Result<Insertion, StoreError>>,
-    },
-    /// [`DefinitionStore::load`], or with a name
-    /// [`DefinitionStore::load_named`].
-    Load {
-        name: Option<QueryName>,
-        reply: SyncSender<Result<Vec<StoredDefinition>, StoreError>>,
-    },
-}
+/// One call into a connection's thread, which sends its own answer.
+type Job = Box<dyn FnOnce(&mut Worker) + Send>;
 
+/// What a connection runs each time it connects, before any statement: the
+/// schema created when absent and its layout migrated.
+pub(crate) type Prepare = for<'c> fn(&'c mut Client) -> Statement<'c, ()>;
+
+/// A connection to a PostgreSQL database on a thread of its own, with a
+/// runtime of its own, reopened when it closes.
+///
+/// A store over it is called where a thread may block, so each call is sent
+/// to that thread and waited for.
+#[derive(Debug)]
+pub(crate) struct Connection {
+    jobs: Sender<Job>,
+}
 /// Whether `url` parses as a PostgreSQL connection string, a URL or libpq
 /// key/value pairs.
 #[must_use]
@@ -189,6 +190,76 @@ pub fn exposes_password(url: &SecretUrl) -> bool {
         && !matches!(config.get_ssl_mode(), SslMode::Require)
 }
 
+impl Connection {
+    /// Connects to the database `url` names on a thread named `name`,
+    /// running `prepare` first, so a database that cannot be reached or
+    /// prepared refuses the open.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Backend`] when `url` does not parse, the TLS setup
+    /// fails, the database cannot be reached in time, or `prepare` fails.
+    pub(crate) fn open(
+        url: &SecretUrl,
+        name: &'static str,
+        prepare: Prepare,
+    ) -> Result<Self, StoreError> {
+        let config =
+            Config::from_str(url.expose()).map_err(|_quoted| backend(PostgresError::Unparsable))?;
+        let tls = tls().map_err(backend)?;
+        let (jobs, received) = mpsc::channel::<Job>();
+        let (ready, opened) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name(String::from(name))
+            .spawn(move || {
+                let mut worker = match Worker::start(config, tls, prepare) {
+                    Ok(worker) => worker,
+                    Err(error) => {
+                        if ready.send(Err(error)).is_err() {
+                            tracing::debug!("a PostgreSQL store's opener stopped waiting");
+                        }
+                        return;
+                    }
+                };
+                if ready.send(Ok(())).is_ok() {
+                    for job in &received {
+                        job(&mut worker);
+                    }
+                }
+            })
+            .map_err(backend)?;
+        opened
+            .recv()
+            .map_err(|_stopped| backend(PostgresError::Stopped))??;
+        Ok(Self { jobs })
+    }
+
+    /// Runs `work` on the connection's thread and waits for its answer.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Backend`] when the thread has stopped, the database does
+    /// not answer in time, and every error `work` returns.
+    pub(crate) fn call<T, W>(&self, work: W) -> Result<T, StoreError>
+    where
+        T: Send + 'static,
+        W: for<'c> FnOnce(&'c Client) -> Statement<'c, T> + Send + 'static,
+    {
+        let (reply, answer) = mpsc::sync_channel(1);
+        let job: Job = Box::new(move |worker: &mut Worker| {
+            if reply.send(worker.run(work)).is_err() {
+                tracing::debug!("a PostgreSQL store caller stopped waiting");
+            }
+        });
+        self.jobs
+            .send(job)
+            .map_err(|_stopped| backend(PostgresError::Stopped))?;
+        answer
+            .recv()
+            .map_err(|_stopped| backend(PostgresError::Stopped))?
+    }
+}
+
 impl PostgresStore {
     /// Connects to the database `url` names and creates the schema and the
     /// table when absent.
@@ -199,63 +270,27 @@ impl PostgresStore {
     /// fails, the database cannot be reached in time, or the schema cannot
     /// be created.
     pub fn open(url: &SecretUrl) -> Result<Self, StoreError> {
-        let config =
-            Config::from_str(url.expose()).map_err(|_quoted| backend(PostgresError::Unparsable))?;
-        let tls = tls().map_err(backend)?;
-        let (commands, received) = mpsc::channel();
-        let (ready, opened) = mpsc::sync_channel(1);
-        thread::Builder::new()
-            .name(String::from("ferrofed-stored-queries"))
-            .spawn(move || {
-                let worker = match Worker::start(config, tls) {
-                    Ok(worker) => worker,
-                    Err(error) => {
-                        if ready.send(Err(error)).is_err() {
-                            tracing::debug!("the stored-query store's opener stopped waiting");
-                        }
-                        return;
-                    }
-                };
-                if ready.send(Ok(())).is_ok() {
-                    worker.serve(&received);
-                }
-            })
-            .map_err(backend)?;
-        opened
-            .recv()
-            .map_err(|_stopped| backend(PostgresError::Stopped))??;
-        Ok(Self { commands })
-    }
-
-    /// Sends `command`, built around a reply channel, and waits for its
-    /// answer.
-    fn call<T>(
-        &self,
-        command: impl FnOnce(SyncSender<Result<T, StoreError>>) -> Command,
-    ) -> Result<T, StoreError> {
-        let (reply, answer) = mpsc::sync_channel(1);
-        self.commands
-            .send(command(reply))
-            .map_err(|_stopped| backend(PostgresError::Stopped))?;
-        answer
-            .recv()
-            .map_err(|_stopped| backend(PostgresError::Stopped))?
+        Connection::open(url, "ferrofed-stored-queries", prepare_definitions)
+            .map(|connection| Self { connection })
     }
 }
 
 impl DefinitionStore for PostgresStore {
     fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError> {
         let definition = definition.clone();
-        self.call(|reply| Command::Insert { definition, reply })
+        self.connection
+            .call(move |client| Box::pin(insert(client, definition)))
     }
 
     fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {
-        self.call(|reply| Command::Load { name: None, reply })
+        self.connection
+            .call(move |client| Box::pin(load(client, None)))
     }
 
     fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
         let name = Some(name.clone());
-        self.call(|reply| Command::Load { name, reply })
+        self.connection
+            .call(move |client| Box::pin(load(client, name)))
     }
 
     fn is_shared(&self) -> bool {
@@ -263,49 +298,32 @@ impl DefinitionStore for PostgresStore {
     }
 }
 
-/// The store's thread: a runtime, and the connection it reopens when it
+/// A connection's thread: a runtime, and the connection it reopens when it
 /// closes.
-struct Worker {
+pub(crate) struct Worker {
     runtime: Runtime,
     config: Config,
     tls: MakeRustlsConnect,
+    prepare: Prepare,
     client: Option<Client>,
 }
 
 impl Worker {
     /// Builds the runtime and connects once, so a store that cannot be
     /// reached refuses the start.
-    fn start(config: Config, tls: MakeRustlsConnect) -> Result<Self, StoreError> {
+    fn start(config: Config, tls: MakeRustlsConnect, prepare: Prepare) -> Result<Self, StoreError> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(backend)?;
-        let client = runtime.block_on(within(connect(&config, &tls)))?;
+        let client = runtime.block_on(within(connect(&config, &tls, prepare)))?;
         Ok(Self {
             runtime,
             config,
             tls,
+            prepare,
             client: Some(client),
         })
-    }
-
-    /// Answers every command until the store is dropped.
-    fn serve(mut self, commands: &Receiver<Command>) {
-        for command in commands {
-            let delivered = match command {
-                Command::Insert { definition, reply } => {
-                    let answer = self.run(|client| Box::pin(insert(client, definition)));
-                    reply.send(answer).is_ok()
-                }
-                Command::Load { name, reply } => {
-                    let answer = self.run(|client| Box::pin(load(client, name)));
-                    reply.send(answer).is_ok()
-                }
-            };
-            if !delivered {
-                tracing::debug!("a stored-query store caller stopped waiting");
-            }
-        }
     }
 
     /// Runs `work` on an open connection, reconnecting first when the last
@@ -313,9 +331,10 @@ impl Worker {
     fn run<T>(&mut self, work: impl FnOnce(&Client) -> Statement<'_, T>) -> Result<T, StoreError> {
         let client = match self.client.take() {
             Some(client) if !client.is_closed() => client,
-            Some(_) | None => self
-                .runtime
-                .block_on(within(connect(&self.config, &self.tls)))?,
+            Some(_) | None => {
+                self.runtime
+                    .block_on(within(connect(&self.config, &self.tls, self.prepare)))?
+            }
         };
         let answer = self.runtime.block_on(within(work(&client)));
         let timed_out = matches!(
@@ -329,9 +348,9 @@ impl Worker {
         answer
     }
 }
-
 /// One statement's future, borrowing the connection it runs on.
-type Statement<'a, T> = std::pin::Pin<Box<dyn Future<Output = Result<T, StoreError>> + 'a>>;
+pub(crate) type Statement<'a, T> =
+    std::pin::Pin<Box<dyn Future<Output = Result<T, StoreError>> + 'a>>;
 
 /// `future`, failed with [`PostgresError::Timeout`] past [`BUDGET`].
 async fn within<T>(future: impl Future<Output = Result<T, StoreError>>) -> Result<T, StoreError> {
@@ -340,17 +359,36 @@ async fn within<T>(future: impl Future<Output = Result<T, StoreError>>) -> Resul
         .map_err(|_elapsed| backend(PostgresError::Timeout(BUDGET)))?
 }
 
-/// Opens a connection, drives it on the store's runtime, and creates the
-/// schema and the table when absent.
-async fn connect(config: &Config, tls: &MakeRustlsConnect) -> Result<Client, StoreError> {
+/// Opens a connection, drives it on the thread's runtime, and runs
+/// `prepare` on it.
+async fn connect(
+    config: &Config,
+    tls: &MakeRustlsConnect,
+    prepare: Prepare,
+) -> Result<Client, StoreError> {
     let (mut client, connection) = config.connect(tls.clone()).await.map_err(backend)?;
     tokio::spawn(async move {
         if let Err(error) = connection.await {
-            tracing::warn!(error = %error, "the stored-query store's connection closed");
+            tracing::warn!(error = %error, "a PostgreSQL store's connection closed");
         }
     });
     prepare(&mut client).await?;
     Ok(client)
+}
+
+/// [`prepare`], as a connection runs it.
+fn prepare_definitions(client: &mut Client) -> Statement<'_, ()> {
+    Box::pin(prepare(client))
+}
+
+/// Takes the lock one replica migrates under in `transaction`, and creates
+/// the schema and the table of schema versions when absent.
+///
+/// # Errors
+///
+/// [`StoreError::Backend`] when a statement fails.
+pub(crate) async fn lock(transaction: &tokio_postgres::Transaction<'_>) -> Result<(), StoreError> {
+    transaction.batch_execute(LOCK).await.map_err(backend)
 }
 
 /// Creates the schema when absent and migrates the definitions' layout to
