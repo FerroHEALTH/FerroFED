@@ -184,9 +184,10 @@ gh run download <run id> --repo FerroHEALTH/FerroFED \
 ```
 
 The archive also holds the release's EU declaration of conformity once one
-exists. If the repository stops serving a release within those ten years,
-Cadasto B.V. publishes the archived declaration again at
-<https://ferrofed.eu>, so it stays online as Art 39(4) asks.
+exists. Where Cadasto B.V. publishes the archived declaration again, if the
+repository stops serving a release within those ten years, is the
+manufacturer's decision. It is not recorded yet; it is decided with the
+declaration itself.
 
 Art 30(3) also asks the manufacturer to make the source code available to
 the relevant authorities "upon a reasoned request". The source of every
