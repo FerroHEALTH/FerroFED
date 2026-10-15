@@ -65,6 +65,7 @@
 //! Policy"; this record names the scope, never a person.
 
 pub mod detail;
+pub mod inserted;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -401,6 +402,9 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     entities.extend(record.subject.population.as_ref().map(population_entity));
     if let Some(emergency) = &record.emergency {
         entities.push(emergency_entity(emergency));
+    }
+    if record.subject_inserted {
+        entities.push(inserted::entity());
     }
     entities
 }

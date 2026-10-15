@@ -695,6 +695,7 @@ pub(crate) fn accessed(
             .iter()
             .map(|member| member.as_str().to_owned())
             .collect(),
+        subject_inserted: false,
     })
 }
 

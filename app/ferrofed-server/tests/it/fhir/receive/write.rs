@@ -23,7 +23,7 @@ use crate::fhir::TestResult;
 use crate::support::call;
 
 /// Every request target and header `server` received, the bodies left out.
-async fn composed(server: &Server) -> Result<String, Box<dyn Error>> {
+pub(super) async fn composed(server: &Server) -> Result<String, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut text = String::new();
     for request in requests {

@@ -235,6 +235,9 @@ pub(crate) struct Accessed {
     /// The members whose consent pre-filter denial was set aside for an
     /// emergency purpose, each asked all the same.
     pub(crate) consent_set_aside: BTreeSet<String>,
+    /// That the data subject inserted what the access wrote, marked in the
+    /// written data as inserted by them (Regulation (EU) 2025/327 Art 5).
+    pub(crate) subject_inserted: bool,
 }
 
 impl fmt::Debug for Accessed {
@@ -316,6 +319,7 @@ impl Accessed {
             retention,
             labels,
             emergency,
+            subject_inserted: self.subject_inserted,
         }
     }
 }

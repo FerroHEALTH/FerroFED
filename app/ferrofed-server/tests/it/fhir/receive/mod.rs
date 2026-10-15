@@ -12,6 +12,7 @@
 mod audit;
 mod check;
 mod display;
+mod inserted;
 mod refused;
 mod start;
 mod write;

@@ -177,6 +177,28 @@ map it only when your national rules treat every emergency treatment as an
 access in the vital interests. The IHE IUA example token declares `BTG`
 beside `TREAT` (ITI TF-2 3.71.4.2.2.1.1).
 
+## Information a person inserted
+
+Regulation (EU) 2025/327 Art 5 lets a person insert information in their
+own EHR, which "shall be clearly distinguishable as having been inserted by
+the natural person". A document the FHIR face receives from a person under
+their own grant, a token acting for that person and confined to their
+patient ([Patient grants](authentication.md#patient-grants)), is written
+with each entry naming the record's subject as its provider
+([Inserted by the person](../evaluate/receiving-documents.md#inserted-by-the-person)).
+The record of that receipt carries one more entity:
+
+| Element | Value |
+|---|---|
+| `type` | `4` (other) |
+| `name` | `ehds-subject-inserted` |
+| `description` | a sentence that states the mark in words, citing Art 5 |
+| `detail` `ehds-subject-inserted` | `true` |
+
+The entity names no identifier of the person; the record names the person
+as the caller and as the data subject, as any record does. A receipt the
+member refused, and a professional's receipt, carry no such entity.
+
 ## Categories
 
 A record names the categories of the data accessed: the six priority

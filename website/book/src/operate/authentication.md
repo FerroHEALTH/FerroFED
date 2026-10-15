@@ -246,6 +246,24 @@ The summary comes from every member the cross-reference places the person
 at, and the access record names the person as the caller and as the data
 subject ([The patient summary over FHIR](../integrate/patient-summary.md#authentication-and-the-access-log)).
 
+A person inserts information in their own EHR (Art 5) with such a token
+too. A document the FHIR face receives under a token whose `sub` names the
+person, with a `patient/` scope that creates compositions
+(`patient/composition-*.c`), is written into the person's own EHR at the
+receiving member, every entry naming the record's subject as its provider,
+and its access record says the person inserted it ([Inserted by the
+person](../evaluate/receiving-documents.md#inserted-by-the-person)).
+
+Over ITS-REST the gateway routes a person's write as it routes any
+caller's. Under a patient grant whose scopes cover a composition update or
+delete, it sends the request to the member that owns the composition,
+confined to the person's own EHR as above, with the body unchanged (§5.4).
+It does not mark such a write as the person's, and it cannot tell a
+person's entry from a professional's: only the member, which records the
+committer of each version and is told in the caller token that a person
+acts (`acting` is `person`), can stop a person changing an entry a health
+professional wrote, as Art 5 asks.
+
 A token whose resource scopes are all `patient/` never reaches the
 DEMOGRAPHIC API, whether or not its issuer is bound and even when its client
 is listed in `demographic_clients`: a patient scope reaches its patient's

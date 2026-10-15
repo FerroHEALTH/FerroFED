@@ -647,6 +647,9 @@ pub struct AccessRecord {
     /// use, as made to protect the vital interests of the data subject (Art
     /// 11(5)), when it did.
     pub emergency: Option<Emergency>,
+    /// That the data subject inserted the information the access wrote,
+    /// which the written data marks as inserted by them (Art 5).
+    pub subject_inserted: bool,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -664,6 +667,7 @@ impl fmt::Debug for AccessRecord {
             .field("retention", &self.retention)
             .field("labels", &self.labels)
             .field("emergency", &self.emergency)
+            .field("subject_inserted", &self.subject_inserted)
             .finish()
     }
 }

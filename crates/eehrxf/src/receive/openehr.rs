@@ -27,7 +27,10 @@ use fhirconnect::operations::run;
 use fhirconnect::operations::run::Settings;
 use openehr_rm::v1_2::common::archetyped::feeder_audit::FeederAudit;
 use openehr_rm::v1_2::common::archetyped::feeder_audit_details::FeederAuditDetails;
+use openehr_rm::v1_2::common::generic::party_proxy::PartyProxy;
+use openehr_rm::v1_2::common::generic::party_self::PartySelf;
 use openehr_rm::v1_2::composition::composition::Composition;
+use openehr_rm::v1_2::composition::content::content_item::ContentItem;
 use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 use openehr_rm::v1_2::data_types::encapsulated::dv_parsable::DvParsable;
 
@@ -163,6 +166,167 @@ impl Mapping {
             template_id,
             outcome: response.outcome().cloned(),
         })
+    }
+}
+
+impl ReceivedComposition {
+    /// Returns this composition with every entry's provider the subject of
+    /// the record, for a document the subject inserted.
+    ///
+    /// The openEHR RM defines `ENTRY.provider` as "the agent who provided
+    /// the information", which "is usually the patient or the clinician"
+    /// (RM Release 1.1.0, EHR IM, §Entry and its Subclasses,
+    /// <https://specifications.openehr.org/releases/RM/Release-1.1.0/ehr.html#_entry_class>),
+    /// and refers to the subject of the record with a `PARTY_SELF` (Common
+    /// IM, §`PARTY_SELF` and Referring to the Patient from the EHR,
+    /// <https://specifications.openehr.org/releases/RM/Release-1.1.0/common.html#_party_self_class>).
+    /// Each entry, in the composition and in every section, gets a
+    /// `PARTY_SELF` with no `external_ref`, so the mark names no identifier
+    /// of the patient. A provider the mapping wrote is replaced; the
+    /// document as received stays in the original content.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SubjectInsertionError::NoEntry`] when the composition holds
+    /// no entry, [`SubjectInsertionError::GenericEntry`] when it holds a
+    /// `GENERIC_ENTRY`, which has no provider, and
+    /// [`SubjectInsertionError::Encode`] when it cannot be written out.
+    pub fn inserted_by_subject(mut self) -> Result<Self, SubjectInsertionError> {
+        let marked = match self.model.content.as_mut() {
+            Some(content) => mark_subject(content)?,
+            None => 0,
+        };
+        if marked == 0 {
+            return Err(SubjectInsertionError::NoEntry);
+        }
+        self.composition = serde_json::to_string(&self.model)
+            .map_err(|source| SubjectInsertionError::Encode { source })?;
+        Ok(self)
+    }
+}
+
+/// Sets the provider of every entry among `items`, and in their sections,
+/// to the subject of the record, and returns how many it set.
+fn mark_subject(items: &mut [ContentItem]) -> Result<usize, SubjectInsertionError> {
+    let mut marked = 0_usize;
+    for item in items {
+        let provider = match item {
+            ContentItem::Section(section) => {
+                let within = match section.items.as_mut() {
+                    Some(items) => mark_subject(items)?,
+                    None => 0,
+                };
+                marked = marked.saturating_add(within);
+                continue;
+            }
+            ContentItem::GenericEntry(_) => return Err(SubjectInsertionError::GenericEntry),
+            ContentItem::Action(entry) => &mut entry.provider,
+            ContentItem::AdminEntry(entry) => &mut entry.provider,
+            ContentItem::Evaluation(entry) => &mut entry.provider,
+            ContentItem::Instruction(entry) => &mut entry.provider,
+            ContentItem::Observation(entry) => &mut entry.provider,
+        };
+        *provider = Some(PartyProxy::PartySelf(PartySelf { external_ref: None }));
+        marked = marked.saturating_add(1);
+    }
+    Ok(marked)
+}
+
+/// Why a composition cannot be marked as inserted by its subject.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SubjectInsertionError {
+    /// The composition holds no entry, so nothing in it can carry the mark.
+    #[error("the composition holds no entry a provider can be named in")]
+    NoEntry,
+    /// The composition holds a `GENERIC_ENTRY`, which has no provider.
+    #[error("the composition holds a GENERIC_ENTRY, which names no provider")]
+    GenericEntry,
+    /// The marked composition cannot be written as canonical JSON.
+    #[error("the marked composition cannot be written as canonical JSON")]
+    Encode {
+        /// The write failure.
+        #[source]
+        source: serde_json::Error,
+    },
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+mod tests {
+    use std::error::Error;
+
+    use openehr_rm::v1_2::composition::composition::Composition;
+
+    use super::{ReceivedComposition, SubjectInsertionError};
+
+    /// A synthetic composition whose `content` member is `content`.
+    fn composition(content: &str) -> Result<ReceivedComposition, Box<dyn Error>> {
+        let text = format!(
+            r#"{{
+  "_type": "COMPOSITION",
+  "name": {{ "_type": "DV_TEXT", "value": "Synthetic" }},
+  "archetype_node_id": "openEHR-EHR-COMPOSITION.synthetic.v1",
+  "archetype_details": {{
+    "_type": "ARCHETYPED",
+    "archetype_id": {{ "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.synthetic.v1" }},
+    "template_id": {{ "_type": "TEMPLATE_ID", "value": "synthetic.v1" }},
+    "rm_version": "1.1.0"
+  }},
+  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "en" }},
+  "territory": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }}, "code_string": "NL" }},
+  "category": {{ "_type": "DV_CODED_TEXT", "value": "persistent", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "431" }} }},
+  "composer": {{ "_type": "PARTY_SELF" }}{content}
+}}"#
+        );
+        let model: Composition = serde_json::from_str(&text)?;
+        Ok(ReceivedComposition {
+            composition: serde_json::to_string(&model)?,
+            model,
+            template_id: String::from("synthetic.v1"),
+            outcome: None,
+        })
+    }
+
+    #[test]
+    fn a_composition_with_no_entry_cannot_carry_the_mark() -> Result<(), Box<dyn Error>> {
+        let refused = composition("")?.inserted_by_subject();
+        assert!(
+            matches!(refused, Err(SubjectInsertionError::NoEntry)),
+            "{refused:?}"
+        );
+        let empty = composition(
+            r#",
+  "content": [{ "_type": "SECTION", "name": { "_type": "DV_TEXT", "value": "Empty" }, "archetype_node_id": "openEHR-EHR-SECTION.synthetic.v1" }]"#,
+        )?;
+        let refused = empty.inserted_by_subject();
+        assert!(
+            matches!(refused, Err(SubjectInsertionError::NoEntry)),
+            "a section with no entry carries no mark: {refused:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_generic_entry_cannot_carry_the_mark() -> Result<(), Box<dyn Error>> {
+        let generic = composition(
+            r#",
+  "content": [{
+    "_type": "GENERIC_ENTRY",
+    "name": { "_type": "DV_TEXT", "value": "Legacy" },
+    "archetype_node_id": "openEHR-EHR-GENERIC_ENTRY.synthetic.v1",
+    "data": { "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Item" }, "archetype_node_id": "at0001" }
+  }]"#,
+        )?;
+        let refused = generic.inserted_by_subject();
+        assert!(
+            matches!(refused, Err(SubjectInsertionError::GenericEntry)),
+            "{refused:?}"
+        );
+        Ok(())
     }
 }
 

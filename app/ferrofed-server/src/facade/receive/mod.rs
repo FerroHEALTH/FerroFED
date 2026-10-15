@@ -36,6 +36,8 @@ use ehds_logging::record::{
     Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
 };
 use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Written};
+use ferrofed_engine::conveyance::Conveyance;
+use ferrofed_engine::conveyance::caller::{Acting, Principal};
 use ferrofed_engine::dispatch::{Contact, DispatchOptions};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
@@ -122,14 +124,35 @@ pub(crate) async fn receive(
     if !confined::admits(arrived.conveyance, endpoint.id(), &resolved.ehr_id) {
         return confined::refused("receive", arrived.request_id, &logged);
     }
+    let mut prepared = prepared;
+    let inserted = in_person(arrived.conveyance);
+    // NOTE: Regulation (EU) 2025/327 Art 5, RM Release 1.1.0 ENTRY.provider: what a person
+    // inserts under their own grant names the record's subject as each entry's provider.
+    if inserted {
+        prepared.composition = match prepared.composition.inserted_by_subject() {
+            Ok(marked) => marked,
+            Err(unmarked) => return refusal::unmarked(&unmarked, &logged),
+        };
+    }
     write(
         federation,
         &arrived,
         (&prepared, endpoint),
-        resolved,
+        (resolved, inserted),
         &deadlines,
     )
     .await
+}
+
+/// Whether the caller under `conveyance` is a natural person whose grant is
+/// confined to their own record: the grant a person inserts information in
+/// their own EHR with (Regulation (EU) 2025/327 Art 5).
+fn in_person(conveyance: &Conveyance) -> bool {
+    conveyance.confinement().is_some()
+        && matches!(
+            conveyance.principal(),
+            Principal::Caller(caller) if caller.acting == Acting::Person
+        )
 }
 
 /// The patient of a prepared document, resolved at its member.
@@ -255,12 +278,13 @@ async fn resolve(
 }
 
 /// Commits the composition of `prepared` into `resolved`'s EHR at
-/// `endpoint`, within the per-node deadline of `deadlines`.
+/// `endpoint`, within the per-node deadline of `deadlines`; `inserted` says
+/// the composition is marked as inserted by its subject.
 async fn write(
     federation: &Federation,
     arrived: &Arrived<'_>,
     (prepared, endpoint): (&Prepared, &Endpoint),
-    resolved: Resolved,
+    (resolved, inserted): (Resolved, bool),
     deadlines: &Deadlines,
 ) -> Response {
     let logged = arrived.outbound.to_string();
@@ -304,6 +328,7 @@ async fn write(
         endpoint,
         ehr_id: &ehr_id,
         named,
+        inserted,
     };
     match created {
         Ok(version) => {
@@ -341,6 +366,8 @@ struct Origin<'a> {
     ehr_id: &'a EhrId,
     /// The identifier the patient was named by.
     named: PatientIdentifier,
+    /// That the composition is marked as inserted by its subject.
+    inserted: bool,
 }
 
 /// The access record's facts of a write of `prepared` sent to `at`, which
@@ -406,5 +433,6 @@ fn accessed(
             evidence: written.is_some().then_some(evidence),
         }],
         consent_set_aside: std::collections::BTreeSet::new(),
+        subject_inserted: at.inserted && written.is_some(),
     })
 }

@@ -20,10 +20,14 @@ use eehrxf::receive::openehr::ReceiveMappingError;
 use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run::Settings;
+use openehr_rm::v1_2::common::generic::party_proxy::PartyProxy;
+use openehr_rm::v1_2::common::generic::party_self::PartySelf;
 use openehr_rm::v1_2::composition::composition::Composition;
+use openehr_rm::v1_2::composition::content::content_item::ContentItem;
 use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 
 use super::DOCUMENT;
+use super::PATIENT_IDENTIFIER;
 use super::document_with;
 use super::document_with_entry;
 use super::eps_example;
@@ -206,6 +210,77 @@ fn the_composition_model_is_the_canonical_json() -> Result<(), Box<dyn Error>> {
         serde_json::to_string(received.model())?,
         received.composition(),
         "the typed body the client sends is the composition written out"
+    );
+    Ok(())
+}
+
+/// The provider of every entry of `items` and of their sections, in order.
+fn providers(items: &[ContentItem]) -> Vec<Option<PartyProxy>> {
+    items
+        .iter()
+        .flat_map(|item| match item {
+            ContentItem::Section(section) => {
+                section.items.as_deref().map(providers).unwrap_or_default()
+            }
+            ContentItem::Action(entry) => vec![entry.provider.clone()],
+            ContentItem::AdminEntry(entry) => vec![entry.provider.clone()],
+            ContentItem::Evaluation(entry) => vec![entry.provider.clone()],
+            ContentItem::Instruction(entry) => vec![entry.provider.clone()],
+            ContentItem::Observation(entry) => vec![entry.provider.clone()],
+            ContentItem::GenericEntry(_) => vec![None],
+        })
+        .collect()
+}
+
+// RM Release 1.1.0, EHR IM, ENTRY.provider, and Regulation (EU) 2025/327 Art 5: what a person
+// inserts is marked as provided by the record's subject, a PARTY_SELF naming no identifier.
+#[test]
+fn a_composition_the_subject_inserted_names_the_subject_as_every_entrys_provider()
+-> Result<(), Box<dyn Error>> {
+    let document = ReceivedDocument::read(DOCUMENT)?;
+    let received = mapping()?.to_openehr(&document, &settings())?;
+    let before = received.composition().matches(PATIENT_IDENTIFIER).count();
+    let marked = received.inserted_by_subject()?;
+    let composition: Composition = serde_json::from_str(marked.composition())?;
+    assert_eq!(
+        &composition,
+        marked.model(),
+        "the text is the model written"
+    );
+    let providers = providers(composition.content.as_deref().unwrap_or_default());
+    assert!(!providers.is_empty(), "the composition holds an entry");
+    for provider in &providers {
+        assert_eq!(
+            provider,
+            &Some(PartyProxy::PartySelf(PartySelf { external_ref: None })),
+            "the subject, with no identifier"
+        );
+    }
+    assert_eq!(
+        before,
+        marked.composition().matches(PATIENT_IDENTIFIER).count(),
+        "the mark adds no identifier of the patient"
+    );
+    let audit = composition
+        .feeder_audit
+        .as_ref()
+        .ok_or("the composition carries a feeder audit")?;
+    assert!(
+        audit.original_content.is_some(),
+        "the original is still kept"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_composition_mapped_for_a_professional_names_no_provider() -> Result<(), Box<dyn Error>> {
+    let document = ReceivedDocument::read(DOCUMENT)?;
+    let received = mapping()?.to_openehr(&document, &settings())?;
+    let providers = providers(received.model().content.as_deref().unwrap_or_default());
+    assert!(!providers.is_empty(), "the composition holds an entry");
+    assert!(
+        providers.iter().all(Option::is_none),
+        "no mark unless asked: {providers:?}"
     );
     Ok(())
 }
