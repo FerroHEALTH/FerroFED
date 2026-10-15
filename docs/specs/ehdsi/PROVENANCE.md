@@ -8,21 +8,22 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 2 committed, 2 cache only, 0 needing
+  the pins): `faa5eca9add80f772589e00c43bbe8251a25c54a5d3fb94bc078c7a1b89c1c9a`
+- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 4 committed, 2 cache only, 0 needing
   manual retrieval
-- Files in this directory: 2 besides this one, each verbatim as the
+- Files in this directory: 4 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `ef6c57b14a45763f6418d0b37995164504468b8820e79c7f954e58338e451bc0`
+  `PROVENANCE.md` excluded): `393add45ab4d5615f3bbae313b866ec899060c5971242bfdebfaa624caa3676d`
 - Read by: #488 (the country research into identity resolution,
   localization, consent, addressing and authentication to nodes)
 
-The FHIR package of the NCPeH API implementation guide and its Patient
-Identification page, both CC0-1.0, and the OpenNCP v10.1.0 source, the
-reference NCPeH, pinned by tag and commit and kept in the cache as
-evidence only.
+The FHIR package of the NCPeH API implementation guide and three of its
+rendered pages (the home page, Patient Identification and Document
+Retrieval), all CC0-1.0; the index of the MyHealth@EU FHIR guides, kept in
+the cache only; and the OpenNCP v10.1.0 source, the reference NCPeH, pinned
+by tag and commit and kept in the cache as evidence only.
 
 ## Artefacts
 
@@ -51,6 +52,22 @@ evidence only.
 - sha256: `f7102d0bdaadf3a1b0e7dc98ace7879775e91f9c3282bbc9ccb014dac65cce00`
 - Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
 - Note: The rendered Patient Identification page of the current build; a new build fails the pin loudly.
+
+### `ehdsi-ncp-api-index.html` (committed)
+
+- Source: <https://fhir.ehdsi.eu/ncp-api/index.html>
+- Version: 9.1.0 build
+- sha256: `c558e8a911d45d8fa3d95d61e609374785e5634ba41a556e543c668aa1e8a2bb`
+- Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
+- Note: The rendered home page of the current build, with the guide scope (NCPeH to NCPeH only); a new build fails the pin loudly.
+
+### `ehdsi-ncp-api-sequence-doc.html` (committed)
+
+- Source: <https://fhir.ehdsi.eu/ncp-api/sequence-doc.html>
+- Version: 9.1.0 build
+- sha256: `fb3373e02407af2453742061a17a4e4b76bb35f8ee6848a6826595778b9b855c`
+- Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
+- Note: The rendered Document Retrieval page of the current build; a new build fails the pin loudly.
 
 ### `openncp-v10.1.0.tar.gz` (cache only, not redistributed)
 

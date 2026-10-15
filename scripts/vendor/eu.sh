@@ -17,7 +17,8 @@
 # and each corpus row of docs/VERSIONS.md carries its pin-set digest.
 # OpenNCP is evidence only and is fetched into the git-ignored
 # .vendor-cache/; no line of its code enters this repository. The eHDSI
-# wiki sits behind EU Login and is recorded for manual retrieval.
+# wiki (the requirements catalogue and the interoperability specifications)
+# sits behind EU Login and is recorded for manual retrieval.
 #
 # Usage:
 #   scripts/vendor/eu.sh
@@ -65,14 +66,22 @@ pin commit ehn-guidelines-eprescription.pdf "Release 3.1, November 2024" \
   'https://health.ec.europa.eu/document/download/b744f30b-a05e-4b9c-9630-ad96ebd0b2f0_en?filename=ehn_guidelines_eprescriptions_en.pdf' \
   e0dcb7671e3f5a92707e3bc9f67c38304addb20952da60fea0733c35ae80bbca "$ec_notice" \
   'The eHealth Network guideline on ePrescription and eDispensation, Release 3.1, adopted in Budapest in November 2024, as its title page states.'
+pin commit ehn-guidelines-general.pdf "Release 3.1, November 2024" \
+  'https://health.ec.europa.eu/document/download/d8f7955c-4a2c-4ba2-9aea-25f3044896e8_en?filename=ehealth_health-data_electronic-exchange_general-guidelines_en.pdf' \
+  041ee26c324c47a72564cb040865df2d9a7d7b25a5ed08e2e2568abc54c2198f "$ec_notice" \
+  'The eHealth Network General Guidelines, Release 3.1, to which the Patient Summary and ePrescription guidelines defer.'
 pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D0833), English" \
   https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1 \
   2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982 "$eu_act" \
   'Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents, the reuse terms of the acts and the guidelines here (its Articles 3 and 6), kept as their licence evidence. It replaces the Commission legal notice page, whose bytes changed with every render. Pinned at the Cellar manifestation the CELEX resource resolves to.'
 pin manual ehdsi-interoperability-specifications "not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks' \
-  - 'Unknown: the page could not be read' \
-  'Behind EU Login; the normative eHDSI XCPD, XCA and XUA profiles live here.'
+  - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
+  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles live here.'
+pin manual myhealth-eu-requirements-catalogue "not retrieved" \
+  'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue' \
+  - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
+  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up.'
 pinned_corpus eu-ehds "EU EHDS Regulation and eHealth Network guidelines" \
   "the European Health Data Space Regulation, its adopted implementing acts and eHealth Network guidelines" \
   "Regulation (EU) 2025/327 on the European Health Data Space (the research
@@ -81,16 +90,18 @@ adopted under it that reach the cross-border exchange (Commission
 Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
-eHealth Network guidelines on the Patient Summary and on ePrescription and
-eDispensation, and Commission Decision 2011/833/EU of 12 December 2011 on
-the reuse of Commission documents, which governs the reuse of all of them.
+eHealth Network guidelines on the Patient Summary, on ePrescription and
+eDispensation and the General Guidelines they defer to, and Commission
+Decision 2011/833/EU of 12 December 2011 on the reuse of Commission
+documents, which governs the reuse of all of them.
 The Regulation, the implementing acts, the Recommendation and the Decision
 are official EU legal acts published in the Official Journal. The
 Commission legal notice (https://commission.europa.eu/legal-notice_en)
 licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
-the page's bytes change with every render. The eHDSI
-interoperability specifications are on a wiki behind EU Login and are
-recorded for manual retrieval." "" \
+the page's bytes change with every render. The MyHealth@EU requirements
+catalogue and the eHDSI interoperability specifications are on a wiki behind
+EU Login and are recorded for manual retrieval only: Decision 2011/833/EU
+Art 2(2)(c) leaves privileged-access documents out of its reuse grant." "" \
   $'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes) and\n  #519 (EHDS readiness)'
 
 pin commit reg-eu-2024-2847-en.xhtml "OJ L, 2024/2847, 20.11.2024 (CELEX 32024R2847), English" \
@@ -165,6 +176,16 @@ pin commit ehdsi-ncp-api-sequence-pat.html "9.1.0 build" \
   f7102d0bdaadf3a1b0e7dc98ace7879775e91f9c3282bbc9ccb014dac65cce00 \
   'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
   'The rendered Patient Identification page of the current build; a new build fails the pin loudly.'
+pin commit ehdsi-ncp-api-index.html "9.1.0 build" \
+  https://fhir.ehdsi.eu/ncp-api/index.html \
+  c558e8a911d45d8fa3d95d61e609374785e5634ba41a556e543c668aa1e8a2bb \
+  'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
+  'The rendered home page of the current build, with the guide scope (NCPeH to NCPeH only); a new build fails the pin loudly.'
+pin commit ehdsi-ncp-api-sequence-doc.html "9.1.0 build" \
+  https://fhir.ehdsi.eu/ncp-api/sequence-doc.html \
+  fb3373e02407af2453742061a17a4e4b76bb35f8ee6848a6826595778b9b855c \
+  'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
+  'The rendered Document Retrieval page of the current build; a new build fails the pin loudly.'
 pin cache openncp-v10.1.0.tar.gz "tag v10.1.0, commit bac7cc3ef88fe5dee01287c2dfc01fc00d5c945f (2026-09-29)" \
   https://code.europa.eu/ehdsi/ehealth/-/archive/v10.1.0/ehealth-v10.1.0.tar.gz \
   945dcfc7da3f9aaaa4a0aa57be7ee919be0c3f33a1796fffcffcd24f04fae499 \
@@ -172,9 +193,10 @@ pin cache openncp-v10.1.0.tar.gz "tag v10.1.0, commit bac7cc3ef88fe5dee01287c2df
   'Evidence of the MyHealth@EU transport stack (XCPD, XCA, XDR, SAML assertions, SMP discovery), never an oracle and never a source of code, so it is kept out of the repository by decision.'
 pinned_corpus ehdsi "MyHealth@EU NCPeH API and OpenNCP" \
   "the MyHealth@EU NCPeH API implementation guide and OpenNCP" \
-  "The FHIR package of the NCPeH API implementation guide and its Patient
-Identification page, both CC0-1.0, and the OpenNCP v10.1.0 source, the
-reference NCPeH, pinned by tag and commit and kept in the cache as
-evidence only."
+  "The FHIR package of the NCPeH API implementation guide and three of its
+rendered pages (the home page, Patient Identification and Document
+Retrieval), all CC0-1.0; the index of the MyHealth@EU FHIR guides, kept in
+the cache only; and the OpenNCP v10.1.0 source, the reference NCPeH, pinned
+by tag and commit and kept in the cache as evidence only."
 
 say "done"

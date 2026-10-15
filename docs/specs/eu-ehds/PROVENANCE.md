@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `4af818fc47ead2a2a5120225d68a338ba068bed71c46b4e65b064491ceddf148`
-- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 7 committed, 0 cache only, 1 needing
+  the pins): `b102b6e1db0ec479568a97aa8ca71e2c56403d19ca16f90a1b22c35a911230fb`
+- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 8 committed, 0 cache only, 2 needing
   manual retrieval
-- Files in this directory: 7 besides this one, each verbatim as the
+- Files in this directory: 8 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `9089cd3f65450a29e784426d00632f4f29395d38c6ce6be1e1fa3db26e0c6ccf`
+  `PROVENANCE.md` excluded): `9fd71ce692d52bced1dfba2cd1d6ae520c02dc94eb8f3d8a4ffae92c7a5cecac`
 - Read by: #488 (the country research into identity resolution,
   localization, consent, addressing and authentication to nodes) and
   #519 (EHDS readiness)
@@ -26,16 +26,18 @@ adopted under it that reach the cross-border exchange (Commission
 Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
-eHealth Network guidelines on the Patient Summary and on ePrescription and
-eDispensation, and Commission Decision 2011/833/EU of 12 December 2011 on
-the reuse of Commission documents, which governs the reuse of all of them.
+eHealth Network guidelines on the Patient Summary, on ePrescription and
+eDispensation and the General Guidelines they defer to, and Commission
+Decision 2011/833/EU of 12 December 2011 on the reuse of Commission
+documents, which governs the reuse of all of them.
 The Regulation, the implementing acts, the Recommendation and the Decision
 are official EU legal acts published in the Official Journal. The
 Commission legal notice (https://commission.europa.eu/legal-notice_en)
 licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
-the page's bytes change with every render. The eHDSI
-interoperability specifications are on a wiki behind EU Login and are
-recorded for manual retrieval.
+the page's bytes change with every render. The MyHealth@EU requirements
+catalogue and the eHDSI interoperability specifications are on a wiki behind
+EU Login and are recorded for manual retrieval only: Decision 2011/833/EU
+Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
 
 ## Artefacts
 
@@ -86,6 +88,14 @@ recorded for manual retrieval.
 - Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
 - Note: The eHealth Network guideline on ePrescription and eDispensation, Release 3.1, adopted in Budapest in November 2024, as its title page states.
 
+### `ehn-guidelines-general.pdf` (committed)
+
+- Source: <https://health.ec.europa.eu/document/download/d8f7955c-4a2c-4ba2-9aea-25f3044896e8_en?filename=ehealth_health-data_electronic-exchange_general-guidelines_en.pdf>
+- Version: Release 3.1, November 2024
+- sha256: `041ee26c324c47a72564cb040865df2d9a7d7b25a5ed08e2e2568abc54c2198f`
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Note: The eHealth Network General Guidelines, Release 3.1, to which the Patient Summary and ePrescription guidelines defer.
+
 ### `dec-eu-2011-833-en.xhtml` (committed)
 
 - Source: <https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1>
@@ -99,8 +109,19 @@ recorded for manual retrieval.
 - Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks>
 - Version: not retrieved
 - sha256: none, nothing is fetched
-- Licence: Unknown: the page could not be read
+- Licence: None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant
 - Needs manual retrieval: the source answers an automated client with a
   login or a bot challenge, so the script fetches nothing and this
   repository carries none of its content.
-- Note: Behind EU Login; the normative eHDSI XCPD, XCA and XUA profiles live here.
+- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles live here.
+
+### `myhealth-eu-requirements-catalogue` (needs manual retrieval)
+
+- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue>
+- Version: not retrieved
+- sha256: none, nothing is fetched
+- Licence: None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant
+- Needs manual retrieval: the source answers an automated client with a
+  login or a bot challenge, so the script fetches nothing and this
+  repository carries none of its content.
+- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up.
