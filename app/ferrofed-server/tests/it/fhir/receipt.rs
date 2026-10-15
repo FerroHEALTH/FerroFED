@@ -8,13 +8,9 @@
 //! cannot be stored refused with none of its answer, and the categories the
 //! deployment receives named in its capability statement.
 
-use std::collections::BTreeMap;
 use std::error::Error;
-use std::sync::Arc;
 
 use axum::body::Body;
-use ferrofed_server::config::Config;
-use ferrofed_server::state::AppState;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
@@ -26,12 +22,12 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::receive::{
     EHR_SYSTEM, OTHER, OTHER_A, OTHER_NAMESPACE, SUBSTANCE, bound, creating, document, gateway,
-    gateway_with, issue, post, receiving, rows, untouched,
+    gateway_listing, gateway_with, issue, post, receiving, rows, untouched,
 };
-use super::{FHIR, PUBLIC, TestResult, UNREACHED_SUPPLIER, fhir_tables_with};
+use super::{FHIR, TestResult, UNREACHED_SUPPLIER, fhir_tables_with};
 use crate::auth::{bearing, claims, minted};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, registry, settings_with_room};
-use crate::support::{call, send_as_is, signed};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, settings_with_room};
+use crate::support::{call, send_as_is};
 
 #[tokio::test]
 async fn a_body_that_is_not_utf8_is_refused_with_an_outcome() -> TestResult {
@@ -115,19 +111,16 @@ status = "suspended"
 async fn a_member_with_no_endpoint_in_service_is_refused_with_nothing_sent() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let listed = dir.path().join("registry.toml");
-    std::fs::write(&listed, registry(&a.uri(), &b.uri(), SUSPENDED_C))?;
-    let text = format!(
-        "profile = \"development\"\n\n[server]\npublic_url = \"{PUBLIC}\"\n\n\
-         [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
-         node_selection = \"ask-all\"\n{}{}",
-        toml::Value::String(listed.display().to_string()),
-        rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]),
-        receiving("node-c", &[NAMESPACE])
-    );
-    let settings = Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve()?;
-    let state = Arc::new(AppState::build(&settings)?);
-    let app = ferrofed_server::router(state, &settings_with_room());
+    let app = gateway_listing(
+        dir.path(),
+        (&a, &b),
+        SUSPENDED_C,
+        (
+            &rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]),
+            &receiving("node-c", &[NAMESPACE]),
+        ),
+        &settings_with_room(),
+    )?;
     let (status, text) = call(app, post(&document())?).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status, "{text}");
     let (code, diagnostics) = issue(&text)?;

@@ -532,7 +532,11 @@ managing_organisation = "org-a"
     {
         let dir = tempfile::tempdir()?;
         let state = state(dir.path())?;
-        let response = unprepared(&Unreceived::Check(CheckError::NoComposition), "outbound-1");
+        let unchecked = CheckError::ProfileType {
+            url: String::from("https://example.org/fhir/StructureDefinition/misplaced"),
+            expected: "Composition",
+        };
+        let response = unprepared(&Unreceived::Check(unchecked), "outbound-1");
         assert!(nothing_sent(&response));
         let (status, code, diagnostics) = wire(&state, response).await?;
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status, "{diagnostics}");
