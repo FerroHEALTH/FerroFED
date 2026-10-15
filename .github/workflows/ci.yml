@@ -450,6 +450,27 @@ jobs:
           bash scripts/checks/obligations.sh --self-test
           bash scripts/checks/obligations.sh
 
+  # The technical documentation guard (Regulation (EU) 2025/327 Art 30(2),
+  # Art 37, Annex III): every Annex III element has a row in
+  # conformance/technical-documentation.tsv whose file and heading exist, and
+  # a version whose harmonised components differ from the previous release
+  # tag has its review rows. It reads the tags from origin, so it needs the
+  # network but no token. Its self-test proves each refusal and pass.
+  technical-documentation:
+    name: technical-documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/technical-documentation.sh --self-test
+          bash scripts/checks/technical-documentation.sh
+
   # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
   # an e2e module, the one place the e2e job's filter selects, and that job
   # still runs that filter across the workspace; a journey that checks the
@@ -1360,6 +1381,7 @@ jobs:
       - openehr-classes
       - conformance-matrix
       - obligations
+      - technical-documentation
       - e2e-placement
       - aql-splice
       - site-links

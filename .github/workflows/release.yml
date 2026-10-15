@@ -214,6 +214,14 @@ jobs:
           echo "release notes ($(wc -l < release-notes.md) lines):"
           cat release-notes.md
 
+      - name: The technical documentation reflects the harmonised components
+        # Regulation (EU) 2025/327 Art 30(2): a release whose harmonised
+        # components differ from the previous release tag needs its review
+        # rows in the clinical safety risk file and the technical
+        # documentation, and the Annex III index must be whole. The guard
+        # fetches the previous tag alone into this shallow checkout.
+        run: bash scripts/checks/technical-documentation.sh
+
       - id: targets
         name: Name the binary targets
         # The target set is emitted once, here, and read both by the

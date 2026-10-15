@@ -346,5 +346,7 @@ contact above. An authority may restrict, recall or withdraw an EHR system
 whose manufacturer does not cooperate or gives incomplete information (Art
 43(5)), and a missing technical documentation, declaration of conformity, CE
 marking or registration is a finding of non-compliance in its own right (Art
-45(1)). The technical documentation and the declaration are being built under
+45(1)). The [technical documentation](technical-documentation.md) says how a
+request for it, or for a translation of parts of it, is answered within 30
+days (Art 37(4)); the declaration is planned under
 [#525](https://github.com/FerroHEALTH/FerroFED/issues/525).

@@ -402,7 +402,7 @@ them:
   ones included
   ([The document list](../integrate/patient-summary.md#the-document-list)).
 
-Five of the manufacturer's obligations have a first answer:
+Six of the manufacturer's obligations have a first answer:
 
 - The running system names its manufacturer, with the postal address and the
   single point of contact (Art 30(1)(g)): `GET {base}/`, `OPTIONS {base}/`,
@@ -422,6 +422,10 @@ Five of the manufacturer's obligations have a first answer:
 - The [clinical safety risk file](clinical-safety.md) names each hazard of
   the two harmonised components with its control and the test that holds
   it, for Annex II, point 1.1.
+- The [technical documentation](technical-documentation.md) indexes every
+  element of Annex III, a release that changes a harmonised component is
+  not cut without a review row (Art 30(2)), and each release's
+  documentation is kept for ten years (Art 30(3)).
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining

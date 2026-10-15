@@ -239,7 +239,11 @@ name each open hazard a professional user needs to know (Art 28(b)).
 - **At each release.** The release cut reviews this file when the release
   changes either component, its mapping pins or the query path it rides
   ([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
-  Before the tag), and records the review below. A change to the section
+  Before the tag), and records the review below. A version whose
+  components differ from the previous release is not cut until a row
+  below names it as its release
+  ([Changes to the harmonised components](technical-documentation.md#changes-to-the-harmonised-components)).
+  A change to the section
   catalogue or the mapping pin is not merged without a review of I-01 to
   I-05.
 - **From the field.** Every complaint and every possible serious incident
