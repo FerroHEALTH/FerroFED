@@ -103,6 +103,9 @@ covers every FerroFED release.
   at the electronic notification end-point of the CSIRT designated as
   coordinator in the Member State of Cadasto B.V.'s main establishment, the
   Netherlands, and simultaneously to ENISA (Art 14(1), (3), (7)).
+  Commission Delegated Regulation (EU) 2026/881 (Art 14(9)) sets when that
+  CSIRT may delay passing a notification on; it binds the CSIRT and adds no
+  duty for Cadasto B.V.
 - **When:** an early warning within 24 hours of becoming aware, a
   notification within 72 hours, and a final report. For a vulnerability the
   final report is due no later than 14 days after a corrective or

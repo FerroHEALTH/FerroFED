@@ -62,7 +62,8 @@ EHDS	Art 13(4)"
 
 # One "CELEX<TAB>reason" record per line: an act read and not vendored,
 # because it does not reach an EHR system or has no English version. The
-# languages of each corrigendum are those Cellar listed on 2026-10-06.
+# languages of each corrigendum are those Cellar listed on 2026-10-06, or
+# on the date its record names.
 readonly NOT_VENDORED="\
 32026R0771	Art 92: the EHDS Board's operation, no obligation on an EHR system
 32026R2098	Art 77(4): dataset descriptions for secondary use; FerroFED holds no dataset
@@ -73,6 +74,7 @@ readonly NOT_VENDORED="\
 32024R2847R(05)	no English version: it corrects the Slovak version only
 32024R2847R(06)	no English version: it corrects the French version only
 32024R2847R(07)	no English version: it corrects the German version only
+32024R2847R(08)	no English version (read 2026-10-15): it corrects the Slovenian version only, Art 3(17), Art 14(7) third subparagraph point (c) and the titles of Art 21 and 22
 52026IP0022	a European Parliament resolution on technological sovereignty, not an act adopted under the CRA"
 
 # The initiatives the register listed for the Regulation on 2026-10-05.

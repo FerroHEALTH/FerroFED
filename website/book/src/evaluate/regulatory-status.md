@@ -325,6 +325,17 @@ put into service ([A deployment a health institution runs for
 itself](#a-deployment-a-health-institution-runs-for-itself)). The release
 that was downloaded to run it stays a CRA product.
 
+Two delegated acts are adopted under the CRA, both vendored beside it.
+Commission Delegated Regulation (EU) 2025/1535 excludes from the CRA the
+products within the scope of Regulation (EU) No 168/2013, on two- or
+three-wheel vehicles and quadricycles (its Art 1); FerroFED is not one of
+them, so the act changes nothing here. Commission Delegated Regulation (EU)
+2026/881, adopted under Art 14(9), sets when the CSIRT that first receives a
+notification may delay passing it on (Art 16(2)). It binds that CSIRT and
+puts no duty on the manufacturer; the
+[Complaints and incidents](post-market.md#where-it-goes) page says what it
+means for a notification.
+
 ### The support period
 
 Art 13(8) has the manufacturer handle a product's vulnerabilities for its

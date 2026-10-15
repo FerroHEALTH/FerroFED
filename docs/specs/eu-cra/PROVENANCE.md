@@ -8,20 +8,24 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `e3464e886fbec5bdaf058746e0437d64bde65e8214a520ad0fd7debcc0eecc97`
-- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 7 committed, 0 cache only, 0 needing
+  the pins): `c5641e7937d0a0a9638af933a62143b1a9807fa002a1b3b337632e527e4f655f`
+- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 9 committed, 0 cache only, 0 needing
   manual retrieval
-- Files in this directory: 7 besides this one, each verbatim as the
+- Files in this directory: 9 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `8882d9a4b0f7e8e23280f3c336dcd0407dbabf4c3371f11da8ac0146c2d66569`
-- Read by: #654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release)
+  `PROVENANCE.md` excluded): `7239a6c71f28b2821bf1e4e97998388f83bdf483e592ef87f4119fdd34e795af`
+- Read by: #654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release) and
+  #844 (the delegated acts under the Cyber Resilience Act)
 
 Regulation (EU) 2024/2847, the Cyber Resilience Act, with its three
 corrigenda that have an English version and Commission Implementing
 Regulation (EU) 2025/2392 on the technical description of its important and
-critical product categories; Regulation (EU) 2019/1020 on market
+critical product categories; Commission Delegated Regulations (EU)
+2025/1535, which excludes products within the scope of Regulation (EU) No
+168/2013, and (EU) 2026/881, on when a CSIRT may delay passing on a
+notification; Regulation (EU) 2019/1020 on market
 surveillance and compliance of products, whose Article 3 definitions of
 placing on the market, making available on the market, manufacturer and
 economic operator Regulation (EU) 2025/327 takes in its Article 2(1)(d);
@@ -49,7 +53,7 @@ the research reads.
 - Version: OJ L, 2024/90780, 5.12.2024 (CELEX 32024R2847R(01)), English
 - sha256: `c1bbbc0e2734c7f39b6a1b8d8ea4b44b070d349732a7b89ca349b164e49027ff`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
-- Note: The corrigendum to the title of Regulation (EU) 2024/2847. Cellar records seven corrigenda; this one, the second and the fourth have an English version, and the others correct other language versions only (read 2026-10-06).
+- Note: The corrigendum to the title of Regulation (EU) 2024/2847. Cellar records eight corrigenda; this one, the second and the fourth have an English version, and the others correct other language versions only (read 2026-10-15).
 
 ### `corr-eu-2024-2847-r02-en.xhtml` (committed)
 
@@ -74,6 +78,22 @@ the research reads.
 - sha256: `8dd48c7990527289ea46b5bd2f3c4dbbac95a89d99de2f3aa5388c3bc9398e0e`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
 - Note: Commission Implementing Regulation (EU) 2025/2392 of 28 November 2025 on the technical description of the categories of important and critical products with digital elements, adopted under Article 7(4) of Regulation (EU) 2024/2847. Pinned at the Cellar manifestation the CELEX resource resolves to.
+
+### `del-reg-eu-2025-1535-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/5dd0aa6c-b468-11f0-b37f-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L, 2025/1535, 29.10.2025 (CELEX 32025R1535), English
+- sha256: `28c824d7b817a83a57e9a92a25681af43c0a23be52bb0ac70086571f475b1efc`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Delegated Regulation (EU) 2025/1535 of 29 July 2025, adopted under Article 2(5), second subparagraph, of Regulation (EU) 2024/2847: it excludes from that Regulation the products with digital elements within the scope of Regulation (EU) No 168/2013 on two- or three-wheel vehicles and quadricycles, L1e vehicles designed to pedal excepted (its Article 1). Pinned at the Cellar manifestation the CELEX resource resolves to.
+
+### `del-reg-eu-2026-881-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/e117d914-3c51-11f1-814f-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L, 2026/881, 20.4.2026 (CELEX 32026R0881), English
+- sha256: `87e373481fb6df59f6634f6e9613a58b26d1617ac603c9f1df8258525911c0a9`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Delegated Regulation (EU) 2026/881 of 11 December 2025, adopted under Article 14(9) of Regulation (EU) 2024/2847: the terms on which the CSIRT designated as coordinator that first receives a notification may delay passing it on under Article 16(2) of that Regulation (its Articles 3 to 5). Pinned at the Cellar manifestation the CELEX resource resolves to.
 
 ### `reg-eu-2019-1020-en.xhtml` (committed)
 
