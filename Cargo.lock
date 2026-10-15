@@ -1617,6 +1617,7 @@ dependencies = [
  "ferrofed-testkit",
  "http",
  "http-body-util",
+ "hyper",
  "jiff",
  "jsonwebtoken",
  "leptos",
