@@ -22,8 +22,14 @@
 //!   3.4, Art 10(3)).
 //! - A code of the `local` terminology is rendered from the term definitions
 //!   of the operational template, in the language asked, when a [`Local`]
-//!   context is given: the coding is kept as recorded and displayed with the
-//!   term's text, which also opens the narrative.
+//!   context is given: the coding carries the code under the system of the
+//!   archetype it is defined in, displayed with the term's text, which also
+//!   opens the narrative.
+//! - A coding's system is the FHIR system URI of its terminology id
+//!   ([`fhir_system`]). A code whose terminology has no known system, a
+//!   `local` code with no template context among them, is written as no
+//!   coding: its code goes into the narrative, [`Transcoded::unmapped`]
+//!   names it, and the item follows Art 10(7).
 //! - When no coding is in a preferred system, the information "should, as an
 //!   interim solution, be transferred encoded, preferably displayed in
 //!   English, and/or in narrative form" (Art 10(7)): the original coding is
@@ -41,6 +47,7 @@ use fhir_types::r4::primitives::String as FhirString;
 use fhir_types::r4::primitives::Uri;
 use openehr_base::v1_3::base_types::definitions::definitions_impl::LOCAL_TERMINOLOGY_ID;
 use openehr_base::v1_3::base_types::identification::archetype_id::ArchetypeId;
+use openehr_base::v1_3::base_types::identification::lexical::IdError;
 use openehr_rm::v1_2::data_types::text::code_phrase::CodePhrase;
 use openehr_rm::v1_2::data_types::text::dv_text::DvText;
 
@@ -49,6 +56,7 @@ use crate::terminology::TerminologyError;
 use crate::terminology::ehn;
 use crate::terminology::local::Term;
 use crate::terminology::local::TermDefinitions;
+use crate::terminology::system::fhir_system;
 
 /// The code systems a deployment takes as preferred, by the system URI a
 /// coding carries.
@@ -150,6 +158,29 @@ pub struct Transcoded {
     narrative: Vec<String>,
     untranscoded: bool,
     from_template: bool,
+    unmapped: Vec<Unmapped>,
+}
+
+/// A code written as no coding, because its terminology has no known FHIR
+/// system.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unmapped {
+    terminology: String,
+    code: String,
+}
+
+impl Unmapped {
+    /// Returns the name of the code's openEHR terminology id.
+    #[must_use]
+    pub fn terminology(&self) -> &str {
+        &self.terminology
+    }
+
+    /// Returns the code.
+    #[must_use]
+    pub fn code(&self) -> &str {
+        &self.code
+    }
 }
 
 impl Transcoded {
@@ -171,7 +202,8 @@ impl Transcoded {
     }
 
     /// Returns whether the item is coded and no coding is in a preferred
-    /// system or rendered from the template, so Art 10(7) applied.
+    /// system or rendered from the template, so Art 10(7) applied. An item
+    /// whose every code is unmapped is untranscoded too.
     #[must_use]
     pub const fn untranscoded(&self) -> bool {
         self.untranscoded
@@ -182,6 +214,13 @@ impl Transcoded {
     #[must_use]
     pub const fn is_from_template(&self) -> bool {
         self.from_template
+    }
+
+    /// Returns every code written as no coding because its terminology has
+    /// no known FHIR system: the original first, then each `'='` mapping's.
+    #[must_use]
+    pub fn unmapped(&self) -> &[Unmapped] {
+        &self.unmapped
     }
 }
 
@@ -205,13 +244,23 @@ pub enum TranscodeError {
         /// The code.
         code: String,
     },
+    /// A `local` code is read in an archetype id that is not one, so no
+    /// system URI can name the archetype.
+    #[error("the archetype id {archetype} a local code is read in is not one")]
+    ArchetypeId {
+        /// The archetype id as given.
+        archetype: String,
+        /// Why it is not one.
+        #[source]
+        source: IdError,
+    },
     /// The terminology server gave no answer.
     #[error("the terminology server gave no translation")]
     Terminology(#[from] TerminologyError),
 }
 
 /// Transcodes `text` under `preferred`, with no template context, so a
-/// `local` code follows Art 10(7).
+/// `local` code is unmapped and follows Art 10(7).
 ///
 /// # Errors
 ///
@@ -231,12 +280,15 @@ pub fn transcode(
 ///
 /// A `local` code the archetype defines in the language asked is displayed
 /// with the term's text and is not untranscoded; one it defines in another
-/// language only follows Art 10(7), as [`transcode`] answers it.
+/// language only is a coding under the archetype's system, displayed as
+/// recorded, and follows Art 10(7).
 ///
 /// # Errors
 ///
-/// The errors of [`transcode`], and [`TranscodeError::UndefinedLocalCode`]
-/// for a `local` code the archetype does not define in any language.
+/// The errors of [`transcode`], [`TranscodeError::UndefinedLocalCode`] for a
+/// `local` code the archetype does not define in any language, and
+/// [`TranscodeError::ArchetypeId`] for a context whose archetype id is not
+/// one.
 pub fn transcode_local(
     text: &DvText,
     preferred: &PreferredSystems,
@@ -303,30 +355,36 @@ fn rules(
         ),
         DvText::DvText(plain) => (plain.value.as_str(), None, plain.mappings.as_ref()),
     };
+    let archetype = local.map(|local| local.archetype);
     let mut transcoded = Transcoded {
         narrative: vec![value.to_owned()],
         ..Transcoded::default()
     };
     if let Some(defining) = defining {
-        match rendered(defining, local)? {
-            Some(term) => {
-                transcoded.codings.push(coding(defining, Some(term))?);
-                transcoded.narrative = vec![term.to_owned()];
-                if term != value {
-                    transcoded.narrative.push(value.to_owned());
-                }
-                transcoded.from_template = true;
+        let term = rendered(defining, local)?;
+        if let Some(term) = term {
+            transcoded.narrative = vec![term.to_owned()];
+            if term != value {
+                transcoded.narrative.push(value.to_owned());
             }
-            None => transcoded.codings.push(coding(defining, Some(value))?),
+            transcoded.from_template = true;
         }
+        let display = term.unwrap_or(value);
+        transcoded.place(defining, Some(display), archetype, || {
+            format!(
+                "{value}: {} {}",
+                defining.terminology_id.name(),
+                defining.code_string
+            )
+        })?;
     }
     for mapping in mappings.into_iter().flatten() {
         let relation = match mapping.r#match {
             '=' => {
-                transcoded.codings.push(coding(
-                    &mapping.target,
-                    mapping.target.preferred_term.as_deref(),
-                )?);
+                let target = &mapping.target;
+                transcoded.place(target, target.preferred_term.as_deref(), archetype, || {
+                    narrated(value, "equivalent term", target)
+                })?;
                 continue;
             }
             '>' => Relation::Broader,
@@ -334,22 +392,12 @@ fn rules(
             '?' => Relation::Unknown,
             _ => return Err(TranscodeError::InvalidMatch),
         };
-        let target = &mapping.target;
-        let mut line = format!(
-            "{value}: {} {} {}",
-            relation.words(),
-            target.terminology_id.name(),
-            target.code_string
-        );
-        if let Some(term) = &target.preferred_term {
-            line.push_str(" (");
-            line.push_str(term);
-            line.push(')');
-        }
-        transcoded.narrative.push(line);
+        transcoded
+            .narrative
+            .push(narrated(value, relation.words(), &mapping.target));
     }
     transcoded.untranscoded = !transcoded.from_template
-        && !transcoded.codings.is_empty()
+        && (!transcoded.codings.is_empty() || !transcoded.unmapped.is_empty())
         && !transcoded
             .codings
             .iter()
@@ -424,17 +472,69 @@ async fn translated(
     Ok(transcoded)
 }
 
-/// Returns the coding a code phrase stands for, displayed with `display`.
+impl Transcoded {
+    /// Adds the coding `phrase` stands for, or, when its terminology has no
+    /// known system, records it as unmapped with the narrative line `line`.
+    fn place(
+        &mut self,
+        phrase: &CodePhrase,
+        display: Option<&str>,
+        archetype: Option<&ArchetypeId>,
+        line: impl FnOnce() -> String,
+    ) -> Result<(), TranscodeError> {
+        if let Some(coding) = coding(phrase, display, archetype)? {
+            self.codings.push(coding);
+        } else {
+            self.narrative.push(line());
+            self.unmapped.push(Unmapped {
+                terminology: phrase.terminology_id.name().to_owned(),
+                code: phrase.code_string.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Returns the narrative line naming `target` as `words` of `value`.
+fn narrated(value: &str, words: &str, target: &CodePhrase) -> String {
+    let mut line = format!(
+        "{value}: {words} {} {}",
+        target.terminology_id.name(),
+        target.code_string
+    );
+    if let Some(term) = &target.preferred_term {
+        line.push_str(" (");
+        line.push_str(term);
+        line.push(')');
+    }
+    line
+}
+
+/// Returns the coding a code phrase stands for, displayed with `display`, a
+/// `local` code read in `archetype`, or `None` when the phrase's terminology
+/// has no known FHIR system.
 ///
-/// The terminology id's name is the coding's system and its version the
-/// coding's version (openEHR BASE, `TERMINOLOGY_ID`).
-fn coding(phrase: &CodePhrase, display: Option<&str>) -> Result<Coding, TranscodeError> {
-    let system = phrase.terminology_id.name();
-    if system.is_empty() || phrase.code_string.is_empty() {
+/// The coding's system is the FHIR system URI of the terminology id's name
+/// ([`fhir_system`]), and its version the id's version (openEHR BASE,
+/// `TERMINOLOGY_ID`).
+fn coding(
+    phrase: &CodePhrase,
+    display: Option<&str>,
+    archetype: Option<&ArchetypeId>,
+) -> Result<Option<Coding>, TranscodeError> {
+    let name = phrase.terminology_id.name();
+    if name.is_empty() || phrase.code_string.is_empty() {
         return Err(TranscodeError::Uncoded);
     }
+    let system = fhir_system(name, archetype).map_err(|source| TranscodeError::ArchetypeId {
+        archetype: archetype.map_or_else(String::new, |archetype| archetype.value.clone()),
+        source,
+    })?;
+    let Some(system) = system else {
+        return Ok(None);
+    };
     let version = phrase.terminology_id.version_id();
-    Ok(Coding {
+    Ok(Some(Coding {
         system: Some(Uri::from(system)),
         version: (!version.is_empty()).then(|| FhirString::from(version)),
         code: Some(Code::from(phrase.code_string.as_str())),
@@ -442,7 +542,7 @@ fn coding(phrase: &CodePhrase, display: Option<&str>) -> Result<Coding, Transcod
             .filter(|display| !display.is_empty())
             .map(FhirString::from),
         ..Coding::default()
-    })
+    }))
 }
 
 /// Returns the system a coding carries.

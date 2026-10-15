@@ -42,6 +42,9 @@ const EVALUATION: &str = "openEHR-EHR-EVALUATION.ferrofed_allergy.v1";
 /// The composition archetype of the synthetic template.
 const COMPOSITION: &str = "openEHR-EHR-COMPOSITION.ferrofed_summary.v1";
 
+/// The system of the evaluation archetype's local codes.
+const EVALUATION_SYSTEM: &str = "https://ferrofed.eu/fhir/CodeSystem/archetype-local/openEHR-EHR-EVALUATION.ferrofed_allergy.v1";
+
 /// The term definitions of the synthetic allergy template, written in
 /// English.
 fn terms() -> Result<TermDefinitions, Box<dyn Error>> {
@@ -95,9 +98,10 @@ fn a_local_code_is_rendered_from_the_template_in_the_language_asked() -> TestRes
     )?;
     assert_eq!(
         first(&transcoded),
-        Some(("local", "at0002")),
-        "kept as recorded"
+        Some((EVALUATION_SYSTEM, "at0002")),
+        "the code as recorded, under the system of its archetype"
     );
+    assert!(transcoded.unmapped().is_empty());
     assert_eq!(display(&transcoded), Some("Substance"));
     assert_eq!(transcoded.narrative(), ["Substance"]);
     assert!(transcoded.is_from_template());
@@ -150,12 +154,61 @@ fn a_language_the_template_does_not_carry_follows_article_10_7() -> TestResult {
     let text = coded("local", "at0002", "Substance")?;
     let transcoded = transcode_local(&text, &PreferredSystems::default(), &local)?;
     assert_eq!(
-        transcoded,
-        transcode(&text, &PreferredSystems::default())?,
-        "transferred encoded as recorded"
+        first(&transcoded),
+        Some((EVALUATION_SYSTEM, "at0002")),
+        "transferred encoded, under the system of its archetype"
     );
+    assert_eq!(
+        display(&transcoded),
+        Some("Substance"),
+        "displayed as recorded"
+    );
+    assert_eq!(transcoded.narrative(), ["Substance"]);
+    assert!(transcoded.unmapped().is_empty());
     assert!(transcoded.untranscoded());
     assert!(!transcoded.is_from_template());
+    Ok(())
+}
+
+#[test]
+fn the_same_local_code_of_two_archetypes_is_two_systems() -> TestResult {
+    let terms = terms()?;
+    let evaluation = archetype(EVALUATION);
+    let composition = archetype(COMPOSITION);
+    let text = coded("local", "at0000", "Synthetic")?;
+    let preferred = PreferredSystems::default();
+    let of_evaluation = transcode_local(&text, &preferred, &Local::new(&terms, &evaluation, "en"))?;
+    let of_composition =
+        transcode_local(&text, &preferred, &Local::new(&terms, &composition, "en"))?;
+    assert_eq!(first(&of_evaluation), Some((EVALUATION_SYSTEM, "at0000")));
+    assert_eq!(
+        first(&of_composition),
+        Some((
+            "https://ferrofed.eu/fhir/CodeSystem/archetype-local/openEHR-EHR-COMPOSITION.ferrofed_summary.v1",
+            "at0000"
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_local_code_read_in_an_archetype_id_that_is_not_one_is_refused() -> TestResult {
+    let terms = terms()?;
+    let malformed = archetype("not an archetype");
+    let local = Local::new(&terms, &malformed, "en");
+    let text = r#"{ "_type": "DV_TEXT", "value": "Substance", "mappings": [{ "_type": "TERM_MAPPING", "match": "=", "target": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "local" }, "code_string": "at0002" } }] }"#;
+    let refused = transcode_local(
+        &serde_json::from_str(text)?,
+        &PreferredSystems::default(),
+        &local,
+    );
+    assert!(
+        matches!(
+            &refused,
+            Err(TranscodeError::ArchetypeId { archetype, .. }) if archetype == "not an archetype"
+        ),
+        "no system URI is made of it: {refused:?}"
+    );
     Ok(())
 }
 
@@ -186,6 +239,21 @@ fn without_a_template_a_local_code_follows_article_10_7() -> TestResult {
         &coded("local", "at0002", "Substance")?,
         &PreferredSystems::default(),
     )?;
+    assert!(
+        transcoded.codings().is_empty(),
+        "with no archetype the code has no system, so it is no coding"
+    );
+    assert_eq!(
+        transcoded.narrative(),
+        ["Substance", "Substance: local at0002"],
+        "Art 10(7): in narrative form"
+    );
+    let unmapped: Vec<(&str, &str)> = transcoded
+        .unmapped()
+        .iter()
+        .map(|unmapped| (unmapped.terminology(), unmapped.code()))
+        .collect();
+    assert_eq!(unmapped, [("local", "at0002")], "and reported");
     assert!(transcoded.untranscoded());
     assert!(!transcoded.is_from_template());
     Ok(())
