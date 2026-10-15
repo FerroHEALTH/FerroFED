@@ -32,7 +32,7 @@
 //!
 //! Under `config.ui = "managed"` the file read is first recorded as a
 //! configuration revision when it changed, and the reload applies the
-//! revision the store marks running ([`Revisions::file_reloaded`]), marking
+//! revision the store marks running ([`Revisions::file_loaded`]), marking
 //! a recorded revision running once it applied and never one it refused; an
 //! operator's apply of a revision takes the same path
 //! ([`Reloader::reload_config`]). No specification governs this: our own
@@ -188,7 +188,7 @@ impl Reloader {
     /// Returns this reloader with `revisions`, so a reload under
     /// `config.ui = "managed"` records the file's configuration as a
     /// revision and runs the revision the store marks current
-    /// ([`Revisions::file_reloaded`]).
+    /// ([`Revisions::file_loaded`]).
     #[must_use]
     pub fn with_revisions(mut self, revisions: Option<Arc<Revisions>>) -> Self {
         self.revisions = revisions;
@@ -313,7 +313,7 @@ impl Reloader {
                         );
                     }
                 }
-                Err(error) => file.refused(error),
+                Err(error) => file.refused(error.class(), &error.to_string()),
             }
         }
         outcome
@@ -374,12 +374,12 @@ impl Reloader {
         crate::config::revisions::check_tree(settings.revisions.as_ref(), &tree)
             .map_err(ReloadError::Config)?;
         let loaded = revisions
-            .file_reloaded(&tree)
+            .file_loaded(&tree)
             .map_err(|error| ReloadError::Revisions(Box::new(error)))?;
         let file = loaded.file;
         let settings = loaded.config.resolve().map_err(|error| {
             let error = ReloadError::Config(error);
-            file.refused(&error);
+            file.refused(error.class(), &error.to_string());
             error
         })?;
         Ok((settings, Some(file)))

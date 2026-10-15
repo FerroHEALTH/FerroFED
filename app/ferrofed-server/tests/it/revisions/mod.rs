@@ -189,14 +189,16 @@ impl Gateway {
         let (loaded, tree) = Config::load_with_tree(Some(&config))?;
         let settings = loaded.resolve()?;
         ferrofed_server::config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
-        let (settings, revisions) = match shared {
+        let (settings, booted) = match shared {
             None => {
-                let (settings, revisions) = service::boot(settings, &tree)?;
-                (settings, revisions.ok_or("the configuration is managed")?)
+                let (settings, booted) = service::boot(settings, &tree)?;
+                (settings, booted.ok_or("the configuration is managed")?)
             }
             Some(store) => service::boot_over(store, &tree)?,
         };
         let state = Arc::new(AppState::build(&settings)?);
+        booted.started()?;
+        let revisions = booted.revisions;
         let reloader = Arc::new(
             Reloader::new(Some(config.clone()), settings, Arc::clone(&state))
                 .with_revisions(Some(Arc::clone(&revisions))),
@@ -398,6 +400,8 @@ pub(crate) struct Replicas {
     one: Gateway,
     /// The replica that starts on revision 1, its file being the same.
     two: Gateway,
+    /// The store both share, for a third start over it.
+    shared: Shared,
 }
 
 impl Replicas {
@@ -418,6 +422,7 @@ impl Replicas {
             documents,
             one,
             two,
+            shared,
         })
     }
 

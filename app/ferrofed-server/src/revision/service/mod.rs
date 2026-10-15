@@ -11,8 +11,8 @@
 //! mark from the revision it read and then hands the configuration to the
 //! reload path ([`Reloader::reload_config`]); a reload that refuses it moves
 //! the mark back, so the mark and the running gateway agree. A reload of the
-//! file marks the revision it records running only once the reload path
-//! applied it, so no replica follows one it refused. A rollback saves
+//! file, or a start, marks the revision the file's load records running
+//! only once the gateway runs it, so no replica follows one it refused. A rollback saves
 //! the content of the revision before the current one as a new revision and
 //! applies it. Every call blocks, so it is made where a thread may. No
 //! specification governs this: our own design.
@@ -672,26 +672,6 @@ pub struct FileRevision {
     pub previous: Option<RevisionId>,
 }
 
-impl FileRevision {
-    /// The mark of this revision applied by the file, pending a restart for
-    /// `needs_restart` when any setting waits for one.
-    fn mark(&self, needs_restart: &[&'static str]) -> Current {
-        pending(
-            Current {
-                revision: self.revision,
-                previous: self.previous,
-                outcome: Outcome::Applied,
-                needs_restart: Vec::new(),
-                applied_by: Author::File,
-                applied_at: Timestamp::now(),
-                awaiting: None,
-                confirmed: None,
-            },
-            needs_restart,
-        )
-    }
-}
-
 /// The `event` of the record of a saved revision.
 pub const SAVED: &str = "config-revision-saved";
 
@@ -704,12 +684,24 @@ pub const REFUSED: &str = "config-revision-refused";
 /// The `event` of the record of a rollback.
 pub const ROLLED_BACK: &str = "config-rolled-back";
 
+/// The revisions a managed gateway starts with, and the revision the file's
+/// load gave it to run, which is marked running once the gateway runs it.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct Booted {
+    /// The revisions.
+    pub revisions: std::sync::Arc<Revisions>,
+    /// The revision the gateway starts on.
+    pub file: FileRevision,
+}
+
 /// Opens the revision store `settings` name and records the file's configuration.
 ///
 /// When the configuration is managed, the file's configuration `tree` is
 /// recorded ([`Revisions::file_loaded`]) and the settings to start with are
-/// returned with the revisions; otherwise `settings` are returned unchanged
-/// with none.
+/// returned with the revisions, whose revision is marked running once the
+/// gateway built what it runs ([`Booted::started`]); otherwise `settings`
+/// are returned unchanged with none.
 ///
 /// # Errors
 ///
@@ -718,17 +710,19 @@ pub const ROLLED_BACK: &str = "config-rolled-back";
 pub fn boot(
     settings: Settings,
     tree: &toml::Table,
-) -> Result<(Settings, Option<std::sync::Arc<Revisions>>), RevisionError> {
+) -> Result<(Settings, Option<Booted>), RevisionError> {
     let Some(store) = &settings.revisions else {
         return Ok((settings, None));
     };
-    let (effective, revisions) = boot_over(crate::revision::open(store)?, tree)?;
-    Ok((effective, Some(revisions)))
+    let (effective, booted) = boot_over(crate::revision::open(store)?, tree)?;
+    Ok((effective, Some(booted)))
 }
 
 /// Records the file's configuration `tree` in `store`, as [`boot`] does with
 /// the store the settings name, and returns the settings to start with and
 /// the revisions.
+///
+/// A running revision past its confirmation deadline is rolled back first.
 ///
 /// # Errors
 ///
@@ -737,12 +731,18 @@ pub fn boot(
 pub fn boot_over(
     store: Box<dyn RevisionStore>,
     tree: &toml::Table,
-) -> Result<(Settings, std::sync::Arc<Revisions>), RevisionError> {
+) -> Result<(Settings, Booted), RevisionError> {
     let revisions = Revisions::new(store, split(tree).0);
     revisions.expire_unapplied(Timestamp::now())?;
     let loaded = revisions.file_loaded(tree)?;
     let effective = loaded.config.resolve().map_err(Refused::from)?;
     let revisions = revisions.with_policy(effective.revision_policy.clone());
     revisions.ran(loaded.file.revision);
-    Ok((effective, std::sync::Arc::new(revisions)))
+    Ok((
+        effective,
+        Booted {
+            revisions: std::sync::Arc::new(revisions),
+            file: loaded.file,
+        },
+    ))
 }
