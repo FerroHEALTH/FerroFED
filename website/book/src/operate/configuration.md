@@ -479,24 +479,20 @@ A value reads as TOML syntax when it is one (`9`, `true`) and as the string it
 is otherwise. An override that names no key, or a key the file does not
 define, is refused like any other unknown key.
 
-## Configuring from the console (planned)
+## Configuration revisions
 
-Today the configuration is what this page describes: the TOML file, the
-`FERROFED__` overrides and the `_file` secrets. The operator console
-changes no configuration, and there is no `config.ui` key yet.
+With `[config] ui = "managed"`, every change to the configuration becomes a
+revision: checked as `config check` checks the file, kept in history with a
+diff, applied atomically or marked pending a restart, and rolled back in one
+step. Operators read and save revisions through the admin listener's API;
+[Configuration revisions](configuration-revisions.md) describes it. The
+listen address, the profile, `[server]`, `[metrics]`, `[auth]`, `[config]`
+and `[dev]` stay file-only, and a revision holds only `_file` references,
+never a secret. With `off`, the default, nothing changes.
 
-A design is decided (#575) for configuring the gateway from the console as
-well, and none of it is built. Every change, from the file or from the
-console, is to become a revision checked as `config check` checks the file,
-with a diff, history and a one-step rollback. A resource the file defines
-stays read-only in the console. The listen address, the profile, the
-configuration store, the admin authentication and the transport policy stay
-file-only. A secret can be set but never read back, a risky change rolls
-back unless you confirm it, and nothing writes back to the file. `config.ui = "managed"` is to turn it
-on; `off`, the default, keeps a file-only deployment as it is. The build
-order is the revision store and the switch (#576), members, endpoints and
-stored queries in the console (#577), credentials and bindings (#578), and
-export to and import from TOML (#579).
+Editing these resources in the console is planned: members, endpoints and
+stored queries (#577), then credentials and bindings (#578), and export to
+and import from TOML (#579).
 
 ## The base path
 
