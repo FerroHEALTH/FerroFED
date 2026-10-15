@@ -55,11 +55,21 @@ impl ReceivedDocument {
     /// Checks the document against `bundle`, a profile of `Bundle`, and its
     /// `Composition` against `composition`, a profile of `Composition`.
     ///
+    /// # Panics
+    ///
+    /// Never: every `ReceivedDocument` carries its `Composition` as its first
+    /// entry, because reading one refuses a document that does not.
+    ///
     /// # Errors
     ///
     /// Returns [`CheckError::ProfileType`] when a profile constrains another
     /// resource type, and [`CheckError::NonConformant`] listing every finding
     /// of both profiles when the document breaks one.
+    #[expect(
+        clippy::expect_used,
+        reason = "ReceivedDocument::read and the rebuild after displays are its only constructors, \
+                  and both refuse a document whose first entry is no Composition"
+    )]
     pub fn check(
         &self,
         bundle: &ResourceProfile,
@@ -72,7 +82,7 @@ impl ReceivedDocument {
             .and_then(<[Value]>::first)
             .and_then(|entry| entry.get("resource"))
             .and_then(Value::as_object)
-            .ok_or(CheckError::NoComposition)?;
+            .expect("a received document should carry its Composition as its first entry");
         let mut walk = Walk::default();
         walk.profile(bundle, "Bundle", root)?;
         walk.profile(composition, "Composition", first)?;
@@ -320,9 +330,6 @@ pub enum CheckError {
         /// The resource type it was given for.
         expected: &'static str,
     },
-    /// The document's tree carries no `Composition` as its first entry.
-    #[error("the document carries no Composition to check")]
-    NoComposition,
     /// The document breaks a profile.
     #[error("the document breaks its profiles in {} places: {}", findings.len(), Listed(findings))]
     NonConformant {
