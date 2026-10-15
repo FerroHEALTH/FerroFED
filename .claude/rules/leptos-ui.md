@@ -269,7 +269,7 @@ The bar is **WCAG 2.2 Level AA** (<https://www.w3.org/TR/WCAG22/>), checked
 per slice. Every control is keyboard operable with a visible focus state;
 tables carry real `<th scope=…>` headers; no meaning rides on colour alone,
 so a node status is a word as well as a tint; contrast meets AA in the light
-and the dark theme of `style/main.css`, whose colours are the "Azure & Iron"
+and the dark theme of `style/tailwind.css`, whose colours are the "Azure & Iron"
 tokens of `assets/brand/tokens.css`; motion respects
 `prefers-reduced-motion`.
 
@@ -396,6 +396,17 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   confirmation and the approval are rendered on the server, so the browser
   adds the eight form fields it reads and the zeroing type that holds a
   typed secret.
+- **The console's styling (#1036, #1037) measured 254579 bytes**
+  brotli-compressed (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129,
+  Tailwind CSS 4.3.3). The stylesheet costs the WebAssembly nothing; the
+  shell does. Its first cut, each section of the top bar and the
+  navigation erased with `.into_any()`, measured 261058: an erased section
+  carries its own rendering code, so the shell's shallow sections return
+  their typed views. A wrapper around each table the browser hydrates cost
+  about 260 bytes a table, so a wide table scrolls inside `<main>` instead,
+  and only a table the server renders as HTML gets its own box. The brand
+  mark is a background the stylesheet draws, since an inline SVG brings the
+  SVG rendering (§13). A tinted cell for a state word cost about 1 KB.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

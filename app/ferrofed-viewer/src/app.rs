@@ -11,7 +11,7 @@ use leptos_router::components::{Route, Router, Routes};
 use leptos_router::{SsrMode, path};
 
 use crate::manufacturer::MANUFACTURER;
-use crate::views;
+use crate::{shell, styles, views};
 
 /// The product name as an operator reads it.
 pub const PRODUCT: &str = "FerroFED operator console";
@@ -54,82 +54,60 @@ pub fn App() -> impl IntoView {
     // the hydrating page serialized, so both halves draw the same navigation.
     let administered = *SharedValue::new_str(administered);
     let signed_in = *SharedValue::new_str(signed_in);
-    let navigation = signed_in.then(|| navigation(administered));
+    let sidebar = signed_in.then(|| shell::sidebar(administered));
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
         <Router>
-            {navigation} <main>
-                // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills renders
-                // `Async`, whole in one sweep, so no content waits on a script to be swapped in.
-                <Routes fallback=NotFound>
-                    <Route path=path!("/") view=move || view! { <Landing signed_in /> } />
-                    <Route path=path!("/members") view=views::MembersPage ssr=SsrMode::Async />
-                    <Route path=path!("/integrity") view=views::IntegrityPage ssr=SsrMode::Async />
-                    <Route
-                        path=path!("/stored-queries")
-                        view=views::StoredQueriesPage
-                        ssr=SsrMode::Async
-                    />
-                    <Route
-                        path=path!("/federation")
-                        view=views::FederationPage
-                        ssr=SsrMode::Async
-                    />
-                    <Route path=path!("/query") view=crate::query::QueryPage ssr=SsrMode::Async />
-                    <Route
-                        path=path!("/configuration")
-                        view=crate::configure::ConfigurationPage
-                        ssr=SsrMode::Async
-                    />
-                </Routes>
-            </main> <Footer />
+            <div class=styles::PAGE>
+                {shell::topbar(signed_in)}
+                <div class=styles::BODY>
+                    {sidebar} <main class=styles::MAIN tabindex="0">
+                        <div class=styles::COLUMN>
+                            // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills
+                            // renders `Async`, whole in one sweep, so no content waits on a script.
+                            <Routes fallback=NotFound>
+                                <Route
+                                    path=path!("/")
+                                    view=move || view! { <Landing signed_in /> }
+                                />
+                                <Route
+                                    path=path!("/members")
+                                    view=views::MembersPage
+                                    ssr=SsrMode::Async
+                                />
+                                <Route
+                                    path=path!("/integrity")
+                                    view=views::IntegrityPage
+                                    ssr=SsrMode::Async
+                                />
+                                <Route
+                                    path=path!("/stored-queries")
+                                    view=views::StoredQueriesPage
+                                    ssr=SsrMode::Async
+                                />
+                                <Route
+                                    path=path!("/federation")
+                                    view=views::FederationPage
+                                    ssr=SsrMode::Async
+                                />
+                                <Route
+                                    path=path!("/query")
+                                    view=crate::query::QueryPage
+                                    ssr=SsrMode::Async
+                                />
+                                <Route
+                                    path=path!("/configuration")
+                                    view=crate::configure::ConfigurationPage
+                                    ssr=SsrMode::Async
+                                />
+                            </Routes>
+                        </div>
+                    </main>
+                </div> <Footer />
+            </div>
         </Router>
     }
-}
-
-/// The navigation a signed-in operator reads: a link to every view, the
-/// configuration page when a replica's admin listener is configured, and
-/// the sign-out.
-fn navigation(administered: bool) -> AnyView {
-    let configuration = administered.then(|| {
-        view! {
-            <li>
-                <a href=crate::configure::CONFIGURATION>"Configuration"</a>
-            </li>
-        }
-    });
-    view! {
-        <nav aria-label="Views">
-            <ul>
-                <li>
-                    <a href="/">"Console"</a>
-                </li>
-                <li>
-                    <a href=views::MEMBERS>"Members"</a>
-                </li>
-                <li>
-                    <a href=views::INTEGRITY>"Integrity"</a>
-                </li>
-                <li>
-                    <a href=views::STORED_QUERIES>"Stored queries"</a>
-                </li>
-                <li>
-                    <a href=views::FEDERATION>"Self-description"</a>
-                </li>
-                <li>
-                    <a href=crate::query::QUERY>"Query"</a>
-                </li>
-                {configuration}
-            </ul>
-            // The sign-out route is the server's: a plain form post it
-            // answers with a redirect, which no client router takes.
-            <form method="post" action=SIGN_OUT>
-                <button type="submit">"Sign out"</button>
-            </form>
-        </nav>
-    }
-    .into_any()
 }
 
 /// The footer of every page: the product, its version and its manufacturer,

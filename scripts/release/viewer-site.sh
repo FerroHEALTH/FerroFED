@@ -54,6 +54,12 @@ for dir in "$cargo_home" "$sysroot" "$root"; do
 done
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="--remap-path-prefix=$cargo_home=/cargo --remap-path-prefix=$sysroot=/rustc-sysroot --remap-path-prefix=$root=/ferrofed"
 
+# cargo-leptos builds the stylesheet with the Tailwind standalone CLI, which it
+# downloads at the version this variable names; without it the version would
+# be the default of the cargo-leptos release (no specification governs this:
+# our own design).
+export LEPTOS_TAILWIND_VERSION="v4.3.3"
+
 # cargo-leptos reads its configuration from the crate's own manifest
 # directory, so the build runs from there.
 cd "$viewer"

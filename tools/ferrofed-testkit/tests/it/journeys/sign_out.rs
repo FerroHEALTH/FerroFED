@@ -38,7 +38,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
             .ok_or("the session cookie")?;
 
         browser
-            .element(By::XPath("//nav//form//button[. = 'Sign out']"))
+            .element(By::XPath("//header//form//button[. = 'Sign out']"))
             .await?
             .click()
             .await?;

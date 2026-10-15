@@ -1322,6 +1322,18 @@ if [[ -f Cargo.lock ]] && [[ -n "$want" ]]; then
     note "OK: Cargo.lock locks wasm-bindgen $want"
   fi
 fi
+# The Tailwind standalone CLI cargo-leptos builds the stylesheet with, at the
+# version the site script exports.
+want="$(pin_of "Tailwind CSS standalone CLI" "$matrix")"
+site=scripts/release/viewer-site.sh
+found="$(sed -nE 's|^export LEPTOS_TAILWIND_VERSION="v([^"]+)".*|\1|p' "$site" 2>/dev/null)"
+if [[ -z "$want" ]]; then
+  bad "$matrix has no 'Tailwind CSS standalone CLI' row"
+elif [[ "$found" != "$want" ]]; then
+  bad "Tailwind CSS: $site exports ${found:-nothing}, $matrix pins $want"
+else
+  note "OK: Tailwind CSS standalone CLI $want"
+fi
 # The browser journeys: the WebDriver client against the root Cargo.toml, and
 # the Chrome for Testing release the journeys job installs.
 want="$(pin_of "thirtyfour" "$matrix")"

@@ -137,16 +137,17 @@ fn members_section(view: MembersView) -> AnyView {
         .members
         .into_iter()
         .map(|member| {
+            let state = crate::styles::state(&member.health);
             view! {
                 <tr>
                     <th scope="row">{member.endpoint_id}</th>
                     <td>{member.organisation}</td>
                     <td>{member.status}</td>
-                    <td>{member.health}</td>
+                    <td class=state>{member.health}</td>
                     <td>{member.node_id.unwrap_or_default()}</td>
                     <td>{member.system_id.unwrap_or_default()}</td>
                     <td>{member.product.unwrap_or_default()}</td>
-                    <td>
+                    <td class=crate::styles::NUM>
                         {member
                             .latency_ms_p50
                             .map(|latency| format!("{latency} ms"))
@@ -160,10 +161,11 @@ fn members_section(view: MembersView) -> AnyView {
         .services
         .into_iter()
         .map(|(key, state)| {
+            let class = crate::styles::state(&state);
             view! {
                 <tr>
                     <th scope="row">{key}</th>
-                    <td>{state}</td>
+                    <td class=class>{state}</td>
                 </tr>
             }
         })
@@ -181,7 +183,9 @@ fn members_section(view: MembersView) -> AnyView {
                     <th scope="col">"Node"</th>
                     <th scope="col">"system_id"</th>
                     <th scope="col">"Product"</th>
-                    <th scope="col">"Median latency"</th>
+                    <th scope="col" class=crate::styles::NUM>
+                        "Median latency"
+                    </th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>

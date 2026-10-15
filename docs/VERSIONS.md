@@ -412,6 +412,13 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
+| Tailwind CSS standalone CLI | 4.3.3 | `LEPTOS_TAILWIND_VERSION` in `scripts/release/viewer-site.sh` |
+
+The console's stylesheet is Tailwind CSS 4, configured in
+`app/ferrofed-viewer/style/tailwind.css` with no JavaScript config file, as
+FerroTERM's viewer is. cargo-leptos downloads the official standalone CLI at
+the version `scripts/release/viewer-site.sh` exports, the release FerroTERM's
+viewer builds with, so the build needs no Node.
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only
