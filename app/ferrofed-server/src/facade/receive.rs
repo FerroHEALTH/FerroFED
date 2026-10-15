@@ -31,6 +31,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::response::Response;
+use eehrxf::receive::displays::DisplayError;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::face;
@@ -71,7 +72,11 @@ pub(crate) async fn receive(
         .to_string();
     // NOTE: no specification governs this: our own design; the gateway's face is the
     // system the composition's FEEDER_AUDIT names as having transformed the document.
-    let prepared = match fhir.receivers.receive(text, (&fhir.absolute, &now)) {
+    let prepared = match fhir
+        .receivers
+        .receive(text, (&fhir.absolute, &now), &fhir.terminology)
+        .await
+    {
         Ok(prepared) => prepared,
         Err(unreceived) => return unprepared(&unreceived, &logged),
     };
@@ -530,9 +535,19 @@ fn unprepared(unreceived: &Unreceived, logged: &str) -> Response {
             response.extensions_mut().insert(NoAccess);
             response
         }
-        Unreceived::Mapping(_) => refused(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "processing",
+        Unreceived::Mapping(_)
+        | Unreceived::Display(DisplayError::Missing { .. } | DisplayError::Uncoded { .. }) => {
+            refused(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "processing",
+                &crate::chain(unreceived),
+            )
+        }
+        // NOTE: no specification governs this: our own design; the terminology server is
+        // the gateway's upstream, so its refusal or silence is a 502 naming its status.
+        Unreceived::Display(DisplayError::Lookup { .. }) | Unreceived::Terminology(_) => refused(
+            StatusCode::BAD_GATEWAY,
+            "transient",
             &crate::chain(unreceived),
         ),
         _ => {

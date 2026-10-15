@@ -147,7 +147,9 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
 
 /// Returns a synthetic patient summary document in the exchange format.
 ///
-/// It carries the five sections the EPS `Composition` profile requires, one
+/// It carries the five sections the EPS `Composition` profile requires,
+/// every coding displayed with a synthetic text (the receive path refuses a
+/// coding with no display when no terminology server is configured), one
 /// allergy that claims the `allergyIntolerance-eu-core` profile the fixture
 /// mapping maps, recording `substance`, and the patient, identified by each
 /// `(system, value)` of `identifiers`.
@@ -163,7 +165,7 @@ pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> Strin
     let section = |title: &str, code: &str, text: &str| {
         serde_json::json!({
             "title": title,
-            "code": { "coding": [{ "system": "http://loinc.org", "code": code }] },
+            "code": { "coding": [{ "system": "http://loinc.org", "code": code, "display": title }] },
             "text": {
                 "status": "generated",
                 "div": format!("<div xmlns=\"http://www.w3.org/1999/xhtml\">{text}</div>")
@@ -191,7 +193,7 @@ pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> Strin
                     "meta": { "profile": ["http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"] },
                     "identifier": { "system": "urn:ietf:rfc:3986", "value": "urn:uuid:0c3e1d20-0000-4000-8000-000000000803" },
                     "status": "final",
-                    "type": { "coding": [{ "system": "http://loinc.org", "code": "60591-5" }] },
+                    "type": { "coding": [{ "system": "http://loinc.org", "code": "60591-5", "display": "Synthetic patient summary" }] },
                     "subject": { "reference": "Patient/synthetic-patient" },
                     "date": "2026-10-06T10:00:00Z",
                     "author": [{ "display": "Synthetic author" }],

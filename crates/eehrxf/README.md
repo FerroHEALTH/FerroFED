@@ -47,6 +47,17 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   through FHIRconnect and keeps the document in the composition's
   `FEEDER_AUDIT.original_content`; `ReceivedComposition::model` is the
   composition as the RM model holds it.
+- `terminology` (feature `fhir-r4`): the terminology rules. With `openehr`,
+  `transcode` turns an openEHR text item into FHIR codings and narrative: a
+  code in a preferred system as recorded, a `TERM_MAPPING` of match `=` as a
+  second coding, every other match in the narrative, and a code in no
+  preferred system under eHN PS Art 10(7). `Expansions` reads the value set
+  expansions of a package, and `bindings::check_required` holds the
+  `required` bindings of a profile to them, naming every binding it cannot
+  evaluate. `Terminology` is the optional FHIR terminology server
+  (`$translate`, taking only `equivalent` and `equal`, `$lookup`,
+  `$validate-code`) behind the `TerminologyServer` seam; with none
+  configured every operation fails closed.
 
 The crate authors no mapping language and no profile mapping: the mapping
 files are its input. It depends on no logging component and on no

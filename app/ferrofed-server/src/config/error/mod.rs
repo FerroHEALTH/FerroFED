@@ -707,6 +707,9 @@ pub enum Error {
     /// The `[fhir]` face is refused.
     #[error(transparent)]
     Fhir(#[from] crate::config::fhir::FhirError),
+    /// `[eehrxf.terminology]` is refused.
+    #[error(transparent)]
+    Terminology(#[from] crate::config::eehrxf::TerminologyFault),
     /// `[access_log.retention]` declares a retention the logging component refuses.
     #[error("[access_log.retention] declares a retention that cannot be used")]
     AccessLogRetention(#[source] ehds_logging::retention::RetentionError),

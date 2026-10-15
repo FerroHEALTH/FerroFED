@@ -340,19 +340,24 @@ category (Federation Tier §2.3, N23):
    `Composition.type`: LOINC `60591-5` for a patient summary. A category no
    member receives is a `422` that names it.
 2. It is held to the category's `Bundle` and `Composition` profiles from the
-   package the deployment supplies. A document that breaks them is a `422`
-   with one issue per finding, located by element path. A constraint the
-   check cannot evaluate is listed as a `warning` in the answer, never
+   package the deployment supplies, their `required` terminology bindings
+   included ([Terminology](#terminology)). A document that breaks them is a
+   `422` with one issue per finding, located by element path. A constraint
+   the check cannot evaluate is listed as a `warning` in the answer, never
    passed silently.
-3. It is mapped into one composition by the category's FHIRconnect mapping.
-   The composition keeps the whole document in its
+3. Every coding that carries no `display` is given one by the terminology
+   server's `$lookup`, because the openEHR side needs the text of every
+   coded term. With no terminology server configured, such a coding is a
+   `422` naming where it is.
+4. It is mapped into one composition by the category's FHIRconnect mapping.
+   The composition keeps the whole document, as it was received, in its
    `FEEDER_AUDIT.original_content`.
-4. The patient is resolved from every identifier of the document's `Patient`
+5. The patient is resolved from every identifier of the document's `Patient`
    in a namespace `fhir.receive_namespaces` names, at the receiving member
    alone (§5.2). Every one must name the same `ehr_id` there. A patient the
    member holds no EHR for, or identifiers that name two patients, are a
    `422`, and nothing is sent to any member.
-5. The composition is committed with ITS-REST `composition_create` to the
+6. The composition is committed with ITS-REST `composition_create` to the
    member, located by its own `ehr_id`. No patient identifier is in the path,
    the query string or the headers (§5.4.1, N33). The body carries the
    received document as the clinical content you sent.
@@ -361,7 +366,8 @@ A written document answers `200` with an `OperationOutcome` whose first issue
 names the category, the member, the endpoint and the new version's uid. A
 member that refuses the composition is a `502` that names its status, one
 that does not answer in time is a `504`, and identity services that cannot
-answer give a `424`. None of them is ever a success.
+answer give a `424`. A terminology server that refuses or does not answer
+is a `502` that names its status. None of them is ever a success.
 
 Receiving takes the SMART on openEHR create permission on compositions of
 every template, `user/composition-*.c`, because the template follows from
@@ -369,6 +375,80 @@ the document. A read scope is refused. A `patient/` grant, where the issuer
 is bound to a member, writes only into its own patient's EHR. Every receipt
 that reached the member writes one access record, an action `C` with the
 document's category by construction.
+
+## Terminology
+
+Regulation (EU) 2025/327 Art 2(2)(f) defines interoperability as an
+exchange "without changing the content of the data". The interoperability
+component therefore sends a code as it was recorded, and adds a coding
+beside it only where the coding means the same thing:
+
+- A code in a preferred code system passes as recorded, displayed with the
+  text the record holds.
+- An openEHR `TERM_MAPPING` whose `match` is `=`, an equivalent term, adds a
+  coding after the original.
+- A mapping whose `match` is `>` (broader), `<` (narrower) or `?` (unknown)
+  adds no coding, because a FHIR coding states the concept itself. It is
+  written into the narrative.
+- The text of every coded item is in the narrative, as Art 10(3) of the
+  eHealth Network Guidelines on Patient Summary asks.
+- A code that is in no preferred system follows Art 10(7) of those
+  guidelines: it is "transferred encoded, preferably displayed in English,
+  and/or in narrative form". The original coding is kept with its display,
+  and its text is in the narrative.
+
+The preferred code systems of each data element are those §4 of the
+guidelines names, such as SNOMED CT GPS, ICD-10, LOINC, ATC and the EDQM
+Standard Terms. The rules take the system URIs that name them as an input.
+
+These rules are built into the component. The summary the face writes
+today carries the codings its FHIRconnect mappings write; applying the rules
+to each mapped composition is planned
+([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)).
+
+### The terminology server
+
+A FHIR R4 terminology server is optional. When `[eehrxf.terminology]` names
+one, the component asks it for three operations:
+
+- `ConceptMap/$translate`, for a code in no preferred system. Only a match
+  whose equivalence is `equivalent` or `equal` becomes a coding; a `wider`,
+  `narrower`, `inexact` or other match never does.
+- `CodeSystem/$lookup`, for the display of a received coding that carries
+  none.
+- `ValueSet/$validate-code`, for a `required` binding whose value set no
+  vendored package expands.
+
+With no server configured, nothing is translated and a code in no preferred
+system follows Art 10(7). A received coding with no display is refused, and
+a `required` binding no vendored expansion decides is listed as not
+evaluated. A server that refuses an operation, or does not answer within
+`timeout_ms`, is an error that names the operation and the server's status,
+never a coding left out or a binding taken as held.
+
+FerroTERM is the terminology server of the Ferro family. The gateway reaches
+it, or any other FHIR R4 terminology server, over HTTP, and links no part of
+it. The EDQM Standard Terms are not shipped with FerroFED: a deployment loads
+them into its terminology server under its own licence with the EDQM.
+
+### Required bindings
+
+A `required` binding means the concept "SHALL be from the specified value
+set" (FHIR R4). The receive check holds each `code`, `Coding` and
+`CodeableConcept` that a `required` binding of the category's `Bundle` or
+`Composition` profile covers to the expansion of its value set, read from the
+package the deployment supplies. A concept outside the expansion is a `422`
+finding. A `CodeableConcept` holds when one of its codings is in the
+expansion.
+
+The vendored HL7 Europe Patient Summary package carries no value set
+expansion. Most value sets its `required` bindings name are those of FHIR R4
+itself and of the HL7 terminology, which no package FerroFED vendors carries,
+and the few the HL7 Europe and IPS packages define carry no expansion either.
+Without a terminology server, every such binding is therefore listed as a
+`warning` that names the value set as not evaluated. A binding inside a
+slice, or on an element of a type that carries no code, is listed the same
+way.
 
 ## Configuring the face
 
@@ -407,6 +487,22 @@ language = "en"                              # the composition's language, ISO 6
 territory = "NL"                             # the composition's territory, ISO 3166-1
 ```
 
+The terminology server, when you configure one:
+
+```toml
+[eehrxf.terminology]
+url = "https://terminology.example.org/fhir/"   # the server's FHIR base
+timeout_ms = 2000                               # one operation's budget; 2000 unless set
+
+[eehrxf.terminology.credentials]
+bearer_token_file = "/run/secrets/terminology-token"   # or user and password
+```
+
+`client_identity`, `client_identity_file` and `trust_roots_file` give the
+mutual TLS the server asks for, as for the identity services. Outside
+`profile = "development"` the URL must be `https`, because the server is sent
+the codes of the documents you receive.
+
 For `[[fhir.receive]]`, set `receive_namespaces` under `[fhir]` as well,
 for example `receive_namespaces = ["urn:oid:2.999.1"]`: the identifier
 systems a received document's patient is resolved in.
@@ -435,4 +531,6 @@ systems a received document's patient is resolved in.
   `ferrofed config check` are refused. The package is the vendored HL7
   Europe package whose profiles the category's documents are held to, and
   the mapping compiles when the configuration is read.
-- A change to `[fhir]` takes a restart.
+- `[eehrxf.terminology]` needs `[fhir]`: configuration load refuses it
+  alone, and refuses a URL that carries a user name or a password.
+- A change to `[fhir]` or to `[eehrxf.terminology]` takes a restart.

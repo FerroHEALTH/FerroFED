@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The constraints an element of a profile puts on an instance beyond its
-//! cardinality: a required value and a slicing.
+//! cardinality: a required value, a slicing, an invariant and a terminology
+//! binding.
 //!
 //! A profile names the value an element must carry with `fixed[x]` (the
 //! instance equals it) or `pattern[x]` (the instance carries at least it),
@@ -228,5 +229,59 @@ impl Invariant {
     #[must_use]
     pub fn expression(&self) -> Option<&str> {
         self.expression.as_deref()
+    }
+}
+
+/// The terminology binding of an element: an `ElementDefinition.binding`
+/// (<https://hl7.org/fhir/R4/elementdefinition-definitions.html#ElementDefinition.binding>).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    pub(super) strength: BindingStrength,
+    pub(super) value_set: Option<String>,
+}
+
+impl Binding {
+    /// Returns how strongly the element is bound.
+    #[must_use]
+    pub const fn strength(&self) -> BindingStrength {
+        self.strength
+    }
+
+    /// Returns the canonical URL of the value set the element is bound to,
+    /// without a `|version` suffix, when the binding names one.
+    #[must_use]
+    pub fn value_set(&self) -> Option<&str> {
+        self.value_set
+            .as_deref()
+            .map(|url| url.split_once('|').map_or(url, |(canonical, _)| canonical))
+    }
+}
+
+/// The strength of a binding, a code of the R4 `BindingStrength` value set
+/// (<https://hl7.org/fhir/R4/valueset-binding-strength.html>).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BindingStrength {
+    /// `required`: the concept "SHALL be from the specified value set".
+    Required,
+    /// `extensible`.
+    Extensible,
+    /// `preferred`.
+    Preferred,
+    /// `example`.
+    Example,
+}
+
+impl BindingStrength {
+    /// Returns the strength the R4 code `code` names, or `None` for any
+    /// other code.
+    #[must_use]
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "required" => Some(Self::Required),
+            "extensible" => Some(Self::Extensible),
+            "preferred" => Some(Self::Preferred),
+            "example" => Some(Self::Example),
+            _ => None,
+        }
     }
 }

@@ -589,6 +589,10 @@ const RESTART_KEYS: &[RestartKey] = &[
         boot.fhir.as_ref().map(|fhir| &fhir.written)
             != fresh.fhir.as_ref().map(|fhir| &fhir.written)
     }),
+    ("eehrxf.terminology", |boot, fresh| {
+        boot.fhir.as_ref().map(|fhir| &fhir.terminology_written)
+            != fresh.fhir.as_ref().map(|fhir| &fhir.terminology_written)
+    }),
     ("metrics.listen", |boot, fresh| {
         boot.metrics.listen != fresh.metrics.listen
     }),

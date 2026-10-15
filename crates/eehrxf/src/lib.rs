@@ -30,7 +30,12 @@
 //! - `receive` (feature `fhir-r4`): a document received in the exchange
 //!   format, read under the R4 document rules and checked against the
 //!   profiles of its category; with `openehr`, mapped into one openEHR
-//!   composition that keeps the original document beside the mapped content.
+//!   composition that keeps the original document beside the mapped content;
+//! - `terminology` (feature `fhir-r4`): the terminology rules: a code as
+//!   recorded, an equivalent mapping as a second coding and every other one
+//!   in the narrative (with `openehr`), the `required` bindings held to the
+//!   vendored expansions, and the seam to an optional FHIR terminology
+//!   server, which fails closed when none is configured.
 //!
 //! The feature `fhir-r4` is the FHIR R4 serialisation and compiles no
 //! openEHR crate; only `openehr` brings in the openEHR side the mapping reads.
@@ -64,3 +69,5 @@ pub mod document;
 pub mod mapping;
 #[cfg(feature = "fhir-r4")]
 pub mod receive;
+#[cfg(feature = "fhir-r4")]
+pub mod terminology;

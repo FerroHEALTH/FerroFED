@@ -110,10 +110,21 @@ result:
 - a `fixed[x]` or `pattern[x]` form it does not read, by its key.
 
 A slice such a discriminator tells apart is still held to its lower bound
-over the occurrences the other discriminators admit. Other invariants, terminology
-bindings and the profiles of the other entries are not checked yet
+over the occurrences the other discriminators admit. The `required`
+terminology bindings of the `Bundle` and `Composition` profiles are held to
+the value set expansions the package carries, and to the terminology
+server's `$validate-code` where none does; a binding neither decides is
+listed as not evaluated
+([Terminology](../integrate/patient-summary.md#terminology)). Other
+invariants, the other binding strengths and the profiles of the other
+entries are not checked yet
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The two
 example documents the EPS package publishes pass the check.
+
+A coding that carries no display is given one by the terminology server's
+`$lookup` before the mapping runs, because `DV_CODED_TEXT.value` is
+mandatory in the RM. With no terminology server configured, the document is
+refused. The composition keeps the document as it was received.
 
 ## Mapped into openEHR, with the original kept
 

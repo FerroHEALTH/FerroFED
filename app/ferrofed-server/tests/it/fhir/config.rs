@@ -11,6 +11,7 @@ use std::path::Path;
 
 use ferrofed_eehrxf::summary::mappings::MappingsError;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::eehrxf::TerminologyFault;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::fhir::FhirError;
 use ferrofed_testkit::eps;
@@ -275,5 +276,70 @@ fn a_pmir_feed_route_beside_the_face_is_admitted() -> TestResult {
         let tables = format!("{}{}", fhir_tables(UNREACHED_SUPPLIER), pmir(path));
         resolved(dir.path(), &public(), &tables)?;
     }
+    Ok(())
+}
+
+/// The `[eehrxf.terminology]` table with `keys`.
+fn terminology(keys: &str) -> String {
+    format!("\n[eehrxf.terminology]\n{keys}\n")
+}
+
+/// The `[fhir]` tables with the `[eehrxf.terminology]` table of `keys`.
+fn with_terminology(keys: &str) -> String {
+    format!("{}{}", fhir_tables(UNREACHED_SUPPLIER), terminology(keys))
+}
+
+#[test]
+fn a_terminology_server_beside_the_face_resolves() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let tables = with_terminology("url = \"https://terminology.example.org/fhir\"");
+    resolved(dir.path(), &public(), &tables)?;
+    Ok(())
+}
+
+#[test]
+fn a_terminology_server_with_no_face_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let refused = resolved(
+        dir.path(),
+        &public(),
+        &terminology("url = \"https://terminology.example.org/fhir\""),
+    );
+    assert!(
+        matches!(refused, Err(Error::Terminology(TerminologyFault::Unused))),
+        "nothing asks it: {refused:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let refused = resolved(dir.path(), &public(), &with_terminology("timeout_ms = 100"));
+    assert!(
+        matches!(&refused, Err(Error::Missing { key }) if key == "eehrxf.terminology.url"),
+        "{refused:?}"
+    );
+    let refused = resolved(
+        dir.path(),
+        &public(),
+        &with_terminology("url = \"https://terminology.example.org/fhir\"\ntimeout_ms = 0"),
+    );
+    assert!(
+        matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.timeout_ms"),
+        "{refused:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_terminology_url_that_carries_a_credential_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let tables = with_terminology("url = \"https://user:Qz7pw@terminology.example.org/fhir\"");
+    let refused = resolved(dir.path(), &public(), &tables);
+    assert!(
+        matches!(&refused, Err(Error::UrlCredentials { section, .. }) if section == "eehrxf.terminology.credentials"),
+        "{refused:?}"
+    );
     Ok(())
 }

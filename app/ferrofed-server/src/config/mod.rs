@@ -22,6 +22,7 @@ use crate::telemetry::{DEFAULT_FILTER, Format};
 
 pub mod auth;
 pub mod deprecated;
+pub mod eehrxf;
 pub mod error;
 pub mod fhir;
 pub mod grant;
@@ -113,6 +114,9 @@ pub struct Config {
     /// The FHIR R4 face of the European exchange format (`[fhir]`,
     /// Regulation (EU) 2025/327 Annex II 2.1), off unless the table is set.
     pub fhir: Option<fhir::Fhir>,
+    /// The interoperability component (`[eehrxf]`): the optional FHIR
+    /// terminology server it asks.
+    pub eehrxf: eehrxf::Eehrxf,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
     /// push, both off by default.
     pub metrics: server::Metrics,
@@ -156,6 +160,7 @@ impl Default for Config {
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
             fhir: None,
+            eehrxf: eehrxf::Eehrxf::default(),
             metrics: server::Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),

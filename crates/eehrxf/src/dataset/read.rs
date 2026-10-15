@@ -34,6 +34,8 @@ use super::Obligation;
 use super::ObligationProfile;
 use super::PackageId;
 use super::ResourceProfile;
+use super::constraint::Binding;
+use super::constraint::BindingStrength;
 use super::constraint::CodingPattern;
 use super::constraint::Discriminator;
 use super::constraint::DiscriminatorKind;
@@ -93,8 +95,17 @@ struct ElementDefinition {
     extension: Vec<Extension>,
     slicing: Option<SlicingDefinition>,
     constraint: Vec<ConstraintDefinition>,
+    binding: Option<BindingDefinition>,
     #[serde(skip)]
     pattern: Option<Pattern>,
+}
+
+/// One `ElementDefinition.binding`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct BindingDefinition {
+    strength: String,
+    value_set: Option<String>,
 }
 
 /// One `ElementDefinition.constraint`.
@@ -378,7 +389,22 @@ fn element(url: &str, raw: ElementDefinition) -> Result<Element, DatasetError> {
             expression: constraint.expression.clone(),
         })
         .collect();
+    let binding = raw
+        .binding
+        .map(|binding| {
+            BindingStrength::from_code(&binding.strength)
+                .map(|strength| Binding {
+                    strength,
+                    value_set: binding.value_set,
+                })
+                .ok_or_else(|| DatasetError::Binding {
+                    url: url.to_owned(),
+                    path: id.clone(),
+                })
+        })
+        .transpose()?;
     Ok(Element {
+        binding,
         pattern: raw.pattern,
         slicing,
         invariants,

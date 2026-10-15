@@ -23,6 +23,7 @@ use std::io;
 use std::io::Read;
 
 use crate::category::Root;
+use crate::dataset::constraint::Binding;
 use crate::dataset::constraint::Invariant;
 use crate::dataset::constraint::Pattern;
 use crate::dataset::constraint::Slicing;
@@ -166,6 +167,7 @@ pub struct Element {
     pattern: Option<Pattern>,
     slicing: Option<Slicing>,
     invariants: Vec<Invariant>,
+    binding: Option<Binding>,
 }
 
 impl Element {
@@ -220,6 +222,12 @@ impl Element {
     #[must_use]
     pub fn invariants(&self) -> &[Invariant] {
         &self.invariants
+    }
+
+    /// Returns the element's terminology binding, when it is bound.
+    #[must_use]
+    pub const fn binding(&self) -> Option<&Binding> {
+        self.binding.as_ref()
     }
 }
 
@@ -628,6 +636,14 @@ pub enum DatasetError {
         /// The definition's URL.
         url: String,
         /// The sliced element's id.
+        path: String,
+    },
+    /// An element's binding names a strength outside the R4 value set.
+    #[error("{url} binds {path} with a strength outside the R4 value set")]
+    Binding {
+        /// The definition's URL.
+        url: String,
+        /// The bound element's id.
         path: String,
     },
     /// Two elements of one definition carry one id.

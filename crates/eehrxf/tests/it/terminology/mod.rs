@@ -1,0 +1,137 @@
+// SPDX-FileCopyrightText: Cadasto B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The terminology rules: the transcoding of an openEHR text item, the
+//! `required` bindings held against vendored expansions, the displays of a
+//! received document, and a terminology server that fails closed.
+//!
+//! Every code system and code here is synthetic, under `example.org`
+//! (RFC 6761 §6.5).
+
+mod bindings;
+mod displays;
+mod server;
+#[cfg(feature = "openehr")]
+mod transcode;
+
+use async_trait::async_trait;
+use eehrxf::terminology::Operation;
+use eehrxf::terminology::TerminologyError;
+use eehrxf::terminology::TerminologyServer;
+use fhir_types::r4::coding::Coding;
+use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupRequest;
+use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupResponse;
+use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateRequest;
+use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponse;
+use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponseMatch;
+use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeRequest;
+use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeResponse;
+use fhir_types::r4::primitives::Boolean;
+use fhir_types::r4::primitives::Code;
+use fhir_types::r4::primitives::String as FhirString;
+use fhir_types::r4::primitives::Uri;
+use http::StatusCode;
+
+/// A preferred code system.
+pub(crate) const PREFERRED: &str = "http://example.org/fhir/CodeSystem/preferred";
+
+/// A code system no deployment prefers.
+pub(crate) const LOCAL: &str = "http://example.org/fhir/CodeSystem/local";
+
+/// What the scripted server answers every operation with.
+#[derive(Debug, Clone)]
+pub(crate) enum Script {
+    /// `$translate` answers these matches, each an equivalence, a system
+    /// and a code.
+    Translate(Vec<(&'static str, &'static str, &'static str)>),
+    /// `$lookup` answers this display.
+    Display(&'static str),
+    /// `$validate-code` answers this result.
+    Valid(bool),
+    /// Every operation is refused with this status.
+    Refuse(StatusCode),
+}
+
+/// A terminology server that answers from a script.
+#[derive(Debug, Clone)]
+pub(crate) struct Scripted(pub(crate) Script);
+
+impl Scripted {
+    /// The refusal of `operation` the script gives, for an operation it
+    /// does not answer.
+    fn refusal(&self, operation: Operation) -> TerminologyError {
+        let status = match self.0 {
+            Script::Refuse(status) => status,
+            _ => StatusCode::NOT_IMPLEMENTED,
+        };
+        TerminologyError::Status { operation, status }
+    }
+}
+
+#[async_trait]
+impl TerminologyServer for Scripted {
+    async fn translate(
+        &self,
+        _request: ConceptMapTranslateRequest,
+    ) -> Result<ConceptMapTranslateResponse, TerminologyError> {
+        let Script::Translate(matches) = &self.0 else {
+            return Err(self.refusal(Operation::Translate));
+        };
+        Ok(ConceptMapTranslateResponse {
+            result: Boolean {
+                value: Some(!matches.is_empty()),
+                ..Boolean::default()
+            },
+            r#match: matches
+                .iter()
+                .map(
+                    |(equivalence, system, code)| ConceptMapTranslateResponseMatch {
+                        equivalence: Some(Code::from(*equivalence)),
+                        concept: Some(coding(system, code)),
+                        ..ConceptMapTranslateResponseMatch::default()
+                    },
+                )
+                .collect(),
+            ..ConceptMapTranslateResponse::default()
+        })
+    }
+
+    async fn lookup(
+        &self,
+        _request: CodeSystemLookupRequest,
+    ) -> Result<CodeSystemLookupResponse, TerminologyError> {
+        let Script::Display(display) = self.0 else {
+            return Err(self.refusal(Operation::Lookup));
+        };
+        Ok(CodeSystemLookupResponse {
+            name: FhirString::from("Synthetic"),
+            display: FhirString::from(display),
+            ..CodeSystemLookupResponse::default()
+        })
+    }
+
+    async fn validate_code(
+        &self,
+        _request: ValueSetValidateCodeRequest,
+    ) -> Result<ValueSetValidateCodeResponse, TerminologyError> {
+        let Script::Valid(result) = self.0 else {
+            return Err(self.refusal(Operation::ValidateCode));
+        };
+        Ok(ValueSetValidateCodeResponse {
+            result: Boolean {
+                value: Some(result),
+                ..Boolean::default()
+            },
+            ..ValueSetValidateCodeResponse::default()
+        })
+    }
+}
+
+/// A coding of `system` and `code`.
+pub(crate) fn coding(system: &str, code: &str) -> Coding {
+    Coding {
+        system: Some(Uri::from(system)),
+        code: Some(Code::from(code)),
+        ..Coding::default()
+    }
+}
