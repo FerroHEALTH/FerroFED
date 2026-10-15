@@ -7,6 +7,8 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use ferrofed_registry::error::document::{self, DocumentFault, KeyNames, Reading};
+
 /// Which text a [`ParseFault`] was found in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
@@ -26,10 +28,25 @@ pub enum Problem {
     UnknownKey,
     /// A key is set twice.
     DuplicateKey,
-    /// A value of the wrong type, or outside the values its key admits.
+    /// A value of the wrong type, outside the values its key admits, or
+    /// absent where its table needs one.
     InvalidValue,
     /// Any other refusal of the reader.
     Other,
+}
+
+impl From<&document::Problem> for Problem {
+    fn from(problem: &document::Problem) -> Self {
+        match problem {
+            document::Problem::Syntax => Self::Syntax,
+            document::Problem::UnknownKey => Self::UnknownKey,
+            document::Problem::DuplicateKey => Self::DuplicateKey,
+            document::Problem::MissingKey { .. } | document::Problem::InvalidValue { .. } => {
+                Self::InvalidValue
+            }
+            _ => Self::Other,
+        }
+    }
 }
 
 impl fmt::Display for Problem {
@@ -63,15 +80,18 @@ impl ParseFault {
     /// nothing the reader quoted.
     #[must_use]
     pub fn from_toml(error: &toml::de::Error, text: &str, stage: Stage) -> Self {
-        let offset = error.span().map(|span| span.start);
+        let reading = Reading {
+            written: stage == Stage::File,
+            keys: KeyNames::Schema,
+            opaque: &[],
+            messages: false,
+        };
+        let fault = DocumentFault::read(error, text, &reading);
         Self {
             stage,
-            position: match stage {
-                Stage::File => offset.and_then(|at| line_column(text, at)),
-                Stage::Merged => None,
-            },
-            key: offset.and_then(|at| key_path(text, at)),
-            problem: classify(error.message(), stage),
+            position: fault.position,
+            problem: Problem::from(&fault.problem),
+            key: fault.key,
         }
     }
 }
@@ -92,78 +112,6 @@ impl fmt::Display for ParseFault {
         Ok(())
     }
 }
-
-/// Sorts the reader's message into a [`Problem`]; the message itself is
-/// dropped.
-fn classify(message: &str, stage: Stage) -> Problem {
-    let first = message.lines().next().unwrap_or_default();
-    if first.starts_with("unknown field") {
-        Problem::UnknownKey
-    } else if first.starts_with("duplicate key") || first.starts_with("duplicate field") {
-        Problem::DuplicateKey
-    } else if [
-        "invalid type:",
-        "invalid value:",
-        "invalid length",
-        "unknown variant",
-        "missing field",
-    ]
-    .iter()
-    .any(|prefix| first.starts_with(prefix))
-    {
-        Problem::InvalidValue
-    } else if stage == Stage::File {
-        Problem::Syntax
-    } else {
-        Problem::Other
-    }
-}
-
-/// The 1-based line and column of byte `offset` in `text`.
-fn line_column(text: &str, offset: usize) -> Option<(usize, usize)> {
-    let before = text.get(..offset)?;
-    let line = before.matches('\n').count().saturating_add(1);
-    let column = before
-        .rsplit('\n')
-        .next()
-        .unwrap_or_default()
-        .chars()
-        .count()
-        .saturating_add(1);
-    Some((line, column))
-}
-
-/// The dotted key path of the line holding byte `offset`: its table header
-/// and the key before `=`, kept only when every part reads as a key the
-/// configuration could define, so no stray text is ever echoed.
-fn key_path(text: &str, offset: usize) -> Option<String> {
-    let before = text.get(..offset)?;
-    let start = before.rfind('\n').map_or(0, |at| at.saturating_add(1));
-    let line = text.get(start..)?.lines().next().unwrap_or_default().trim();
-    let path = if let Some(header) = line.strip_prefix('[') {
-        header.trim_end_matches(']').trim().to_owned()
-    } else {
-        let (key, _value) = line.split_once('=')?;
-        let table = text
-            .get(..start)?
-            .lines()
-            .rev()
-            .map(str::trim)
-            .find_map(|candidate| candidate.strip_prefix('['))
-            .map(|header| header.trim_end_matches(']').trim().to_owned());
-        let key = key.trim().trim_matches('"');
-        match table {
-            Some(table) => format!("{table}.{key}"),
-            None => key.to_owned(),
-        }
-    };
-    let schema = !path.is_empty()
-        && path
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.');
-    schema.then_some(path)
-}
-
 /// A configuration the console will not start on.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
