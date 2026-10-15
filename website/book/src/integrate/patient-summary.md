@@ -430,6 +430,25 @@ an HL7 Europe guide or the publisher of EMDN names its system URI. IDMP is
 not shipped either, because §4 lists it for use when available. A caller
 may name its own set instead.
 
+A coding carries the version of its terminology, the part of the openEHR
+terminology id in parentheses, as its `Coding.version` only in the form
+that code system's versions take:
+
+- SNOMED CT names a version by a URI of its edition, such as
+  `http://snomed.info/sct/900000000000207008/version/20260201`, as the
+  vendored HL7 France Core 2.2.0 and HL7 Europe Laboratory Report 2.0.0
+  write it. A version in that form passes as recorded. Any other, such as
+  `SNOMED-CT(20260201)`, names no edition, so the coding carries no
+  version: the edition cannot be inferred without changing the data.
+- HL7 Administrative Gender, RoleClass, RoleCode and
+  ObservationCategoryCodes name a version by dot-separated digits, such as
+  `4.0.0`, as the MyHealth@EU catalogue includes them. A version in that
+  form passes as recorded, and any other is left out.
+- For ICD-10, Orphacode, ATC, the EDQM Standard Terms, UCUM, LOINC, NPU and
+  ISO 3166, no vendored package shows how the system writes a version, so
+  the version passes as recorded. The form of each is added once a
+  vendored source shows it.
+
 These rules are built into the component. The summary the face writes
 today carries the codings its FHIRconnect mappings write; applying the rules
 to each mapped composition is planned

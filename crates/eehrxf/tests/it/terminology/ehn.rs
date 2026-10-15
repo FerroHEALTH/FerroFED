@@ -41,17 +41,21 @@ struct Compose {
 #[derive(Debug, Deserialize)]
 struct Include {
     system: Option<String>,
+    version: Option<String>,
 }
 
 /// The vendored MyHealth@EU catalogue.
-const CATALOGUE: &str = "ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz";
+pub(super) const CATALOGUE: &str = "ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz";
 
 /// The vendored HL7 Europe Laboratory Report guide.
 const LABORATORY: &str = "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.0.0.tgz";
 
-/// The systems each value set of the vendored package `package`, a path
-/// under `docs/specs/`, includes, by the value set's id.
-fn value_sets(package: &str) -> Result<BTreeMap<String, BTreeSet<String>>, Box<dyn Error>> {
+/// The system and version of each include of a value set.
+pub(super) type Included = Vec<(String, Option<String>)>;
+
+/// The includes of each value set of the vendored package `package`, a path
+/// under `docs/specs/`, by the value set's id.
+pub(super) fn includes(package: &str) -> Result<BTreeMap<String, Included>, Box<dyn Error>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../docs/specs")
         .join(package);
@@ -70,16 +74,28 @@ fn value_sets(package: &str) -> Result<BTreeMap<String, BTreeSet<String>>, Box<d
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes)?;
         let value_set: ValueSet = serde_json::from_slice(&bytes)?;
-        let systems = value_set
+        let included = value_set
             .compose
             .map(|compose| compose.include)
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|include| include.system)
+            .filter_map(|include| Some((include.system?, include.version)))
             .collect();
-        sets.insert(set, systems);
+        sets.insert(set, included);
     }
     Ok(sets)
+}
+
+/// The systems each value set of the vendored package `package` includes,
+/// by the value set's id.
+fn value_sets(package: &str) -> Result<BTreeMap<String, BTreeSet<String>>, Box<dyn Error>> {
+    Ok(includes(package)?
+        .into_iter()
+        .map(|(set, included)| {
+            let systems = included.into_iter().map(|(system, _)| system).collect();
+            (set, systems)
+        })
+        .collect())
 }
 
 #[test]

@@ -30,6 +30,10 @@
 //!   `local` code with no template context among them, is written as no
 //!   coding: its code goes into the narrative, [`Transcoded::unmapped`]
 //!   names it, and the item follows Art 10(7).
+//! - A coding's version is the terminology id's version in the form that
+//!   system's versions take ([`fhir_version`]): a SNOMED CT version that
+//!   names no edition, and an HL7 version that is no dotted number, is
+//!   written as none.
 //! - When no coding is in a preferred system, the information "should, as an
 //!   interim solution, be transferred encoded, preferably displayed in
 //!   English, and/or in narrative form" (Art 10(7)): the original coding is
@@ -57,6 +61,7 @@ use crate::terminology::ehn;
 use crate::terminology::local::Term;
 use crate::terminology::local::TermDefinitions;
 use crate::terminology::system::fhir_system;
+use crate::terminology::system::fhir_version;
 
 /// The code systems a deployment takes as preferred, by the system URI a
 /// coding carries.
@@ -515,8 +520,8 @@ fn narrated(value: &str, words: &str, target: &CodePhrase) -> String {
 /// has no known FHIR system.
 ///
 /// The coding's system is the FHIR system URI of the terminology id's name
-/// ([`fhir_system`]), and its version the id's version (openEHR BASE,
-/// `TERMINOLOGY_ID`).
+/// ([`fhir_system`]), and its version the id's version in the form that
+/// system's versions take, or none ([`fhir_version`]).
 fn coding(
     phrase: &CodePhrase,
     display: Option<&str>,
@@ -533,10 +538,10 @@ fn coding(
     let Some(system) = system else {
         return Ok(None);
     };
-    let version = phrase.terminology_id.version_id();
+    let version = fhir_version(&system, phrase.terminology_id.version_id()).map(FhirString::from);
     Ok(Some(Coding {
         system: Some(Uri::from(system)),
-        version: (!version.is_empty()).then(|| FhirString::from(version)),
+        version,
         code: Some(Code::from(phrase.code_string.as_str())),
         display: display
             .filter(|display| !display.is_empty())
