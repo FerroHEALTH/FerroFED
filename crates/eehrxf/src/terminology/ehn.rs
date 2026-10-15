@@ -18,6 +18,14 @@
 //! available". A deployment that needs one adds it with
 //! `PreferredSystems::new` (feature `openehr`).
 
+/// The releases the preferred code systems are read from, each a name and
+/// a version: the guideline's §4 tables and the catalogue that gives each
+/// system's URI.
+pub const RELEASES: [(&str, &str); 2] = [
+    ("ehn-patient-summary-guidelines", "3.4"),
+    ("myhealth-eu-mvc", "9.1.0"),
+];
+
 /// SNOMED CT, listed in §4 as "SNOMED CT GPS".
 ///
 /// §4 lists it for the allergy, problem, procedure, device, vaccination,

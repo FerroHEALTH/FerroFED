@@ -434,5 +434,6 @@ fn accessed(
         }],
         consent_set_aside: std::collections::BTreeSet::new(),
         subject_inserted: at.inserted && written.is_some(),
+        transformations: vec![access::transformation::of(&prepared.transformation)],
     })
 }

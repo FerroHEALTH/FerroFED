@@ -38,8 +38,10 @@ pub mod mappings;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use eehrxf::category::Category;
 use eehrxf::document::{Document, DocumentError, EmptyReason};
 use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::transformation::{Direction, Pin, Report, ReportError};
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use fhir_types::r4::address::Address;
 use fhir_types::r4::bundle::Bundle;
@@ -59,6 +61,7 @@ use fhirconnect::operations::run::Settings;
 
 use crate::patient_summary::Section;
 use crate::summary::mappings::{Mappings, MappingsError, slot_of};
+use crate::transformation::preferred;
 
 /// The extension that says why a required element has no value (FHIR R4
 /// `data-absent-reason`).
@@ -194,6 +197,9 @@ pub struct Assembled {
     /// The compositions no mapping covered in some section, by origin index
     /// and uid.
     pub unmapped: BTreeSet<(usize, String)>,
+    /// What each transformation did: one report per context mapping that
+    /// ran, and one per template no mapping covers, in template order.
+    pub transformations: Vec<Report>,
 }
 
 /// Why the document cannot be assembled.
@@ -220,6 +226,16 @@ pub enum AssemblyError {
     Origin {
         /// The index.
         index: usize,
+    },
+    /// The transformation of a composition a member answered with could not
+    /// be counted.
+    #[error("the transformation of a composition of the template {template} could not be counted")]
+    Report {
+        /// The composition's template id.
+        template: String,
+        /// Why.
+        #[source]
+        source: ReportError,
     },
     /// The header names the patient by no family name, given name or text,
     /// which the HL7 Europe Patient Summary `Patient` requires (`ips-pat-1`).
@@ -270,6 +286,7 @@ pub fn assemble(
         members: BTreeMap::new(),
         mapped: BTreeSet::new(),
         unmapped: BTreeSet::new(),
+        reports: BTreeMap::new(),
     };
     for answers in sections {
         let section = assembly.section(answers, (origins, elsewhere), mappings)?;
@@ -279,6 +296,7 @@ pub fn assemble(
         bundle: assembly.document.into_bundle()?,
         mapped: assembly.mapped,
         unmapped: assembly.unmapped,
+        transformations: assembly.reports.into_values().collect(),
     })
 }
 
@@ -291,6 +309,7 @@ struct Assembly {
     members: BTreeMap<usize, String>,
     mapped: BTreeSet<(usize, String)>,
     unmapped: BTreeSet<(usize, String)>,
+    reports: BTreeMap<(String, Option<String>), Report>,
 }
 
 impl Assembly {
@@ -333,6 +352,7 @@ impl Assembly {
                         .entry((*index, composition.template.clone()))
                         .or_default() += 1;
                     self.unmapped.insert((*index, composition.uid.clone()));
+                    self.uncovered(&composition.template);
                     continue;
                 }
                 let member = self.member(*index, origin)?;
@@ -390,7 +410,64 @@ impl Assembly {
             .iter()
             .filter_map(|entry| entry.resource.clone())
             .collect();
+        self.transformed(mapping, &composition.template, &resources)?;
         Ok(self.document.add(&resources)?.into_iter().next())
+    }
+
+    /// Counts what `mapping` did to a composition of `template`, which it
+    /// mapped to `resources`, into the report of its context.
+    fn transformed(
+        &mut self,
+        mapping: &Mapping,
+        template: &str,
+        resources: &[Resource],
+    ) -> Result<(), AssemblyError> {
+        // NOTE: the mappings are keyed by the template their context maps, so a context
+        // for `template` exists; the template alone is named should it not.
+        let pin = mapping.pin(template).unwrap_or_else(|| Pin {
+            template: template.to_owned(),
+            ..Pin::default()
+        });
+        let key = (template.to_owned(), pin.context.clone());
+        let mut report = Report::new(Direction::Provided, Category::PatientSummary, pin);
+        for resource in resources {
+            match resource {
+                Resource::Provenance(_) => {}
+                Resource::OperationOutcome(outcome) => report.count_losses(outcome),
+                other => {
+                    report.count_coded(other, preferred).map_err(|source| {
+                        AssemblyError::Report {
+                            template: template.to_owned(),
+                            source,
+                        }
+                    })?;
+                }
+            }
+        }
+        self.absorb(key, report);
+        Ok(())
+    }
+
+    /// Counts one composition of `template` no mapping covers as dropped
+    /// whole, in the report of that template.
+    fn uncovered(&mut self, template: &str) {
+        let pin = Pin {
+            template: template.to_owned(),
+            ..Pin::default()
+        };
+        let mut report = Report::new(Direction::Provided, Category::PatientSummary, pin);
+        report.count_uncovered();
+        self.absorb((template.to_owned(), None), report);
+    }
+
+    /// Adds `report` to the report held under `key`, or holds it there.
+    fn absorb(&mut self, key: (String, Option<String>), report: Report) {
+        match self.reports.get_mut(&key) {
+            Some(held) => held.absorb(&report),
+            None => {
+                self.reports.insert(key, report);
+            }
+        }
     }
 
     /// The `fullUrl` of the `Organization` of the origin at `index`, added

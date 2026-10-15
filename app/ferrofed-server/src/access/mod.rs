@@ -38,6 +38,7 @@
 pub mod config;
 pub(crate) mod patient;
 pub(crate) mod routed;
+pub(crate) mod transformation;
 pub(crate) mod version;
 
 use std::collections::BTreeSet;
@@ -58,6 +59,7 @@ use ehds_logging::record::{
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
+use ehds_logging::transformation::Transformation;
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::outbound_id::OutboundId;
@@ -238,6 +240,10 @@ pub(crate) struct Accessed {
     /// That the data subject inserted what the access wrote, marked in the
     /// written data as inserted by them (Regulation (EU) 2025/327 Art 5).
     pub(crate) subject_inserted: bool,
+    /// Each semantic transformation the access applied, recorded on its
+    /// access record (eHealth Network General Guidelines Release 3.1 Art
+    /// 6(3)).
+    pub(crate) transformations: Vec<Transformation>,
 }
 
 impl fmt::Debug for Accessed {
@@ -320,6 +326,7 @@ impl Accessed {
             labels,
             emergency,
             subject_inserted: self.subject_inserted,
+            transformations: self.transformations.clone(),
         }
     }
 }

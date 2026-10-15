@@ -42,6 +42,8 @@ mod labels;
 mod population;
 #[cfg(test)]
 mod relayed;
+#[cfg(test)]
+mod transformation;
 
 /// The synthetic values a record carries, each unlike any other text.
 const PATIENT: &str = "Qz7-patient-41";
@@ -128,6 +130,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         labels,
         emergency: None,
         subject_inserted: false,
+        transformations: Vec::new(),
     }
 }
 

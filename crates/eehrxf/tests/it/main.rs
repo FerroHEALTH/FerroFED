@@ -39,3 +39,6 @@ mod support;
 #[cfg(test)]
 #[cfg(feature = "fhir-r4")]
 mod terminology;
+#[cfg(test)]
+#[cfg(all(feature = "openehr", feature = "patient-summary"))]
+mod transformation;
