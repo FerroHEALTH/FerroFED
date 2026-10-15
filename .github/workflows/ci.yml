@@ -601,8 +601,10 @@ jobs:
   # assembles them. The self-tests prove the check, the assembly and the
   # pull-request guard below over stub repositories, and the withdrawal of a
   # release, which writes an upgrade fragment, over a stub registry (#706),
-  # and the copies of the information sheet and the instructions for use a
-  # release attaches, over a stub tree (#769).
+  # the copies of the information sheet and the instructions for use a
+  # release attaches, over a stub tree (#769), and the EU declaration of
+  # conformity, over a stub tree, with the manufacturer's file read as the
+  # release lane reads it (#940).
   changelog:
     name: changelog
     runs-on: ubuntu-latest
@@ -620,6 +622,8 @@ jobs:
           bash scripts/checks/upgrade-notes.sh --self-test
           bash scripts/release/withdraw.sh --self-test
           bash scripts/release/accompanying-documents.sh --self-test
+          bash scripts/release/declaration-of-conformity.sh --self-test
+          bash scripts/release/declaration-of-conformity.sh status
           bash scripts/release/changelog.sh --check
 
   # The manifest guard (#454), the one tier-1 job with a toolchain: every

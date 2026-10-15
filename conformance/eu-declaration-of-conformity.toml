@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The facts of the EU declaration of conformity (Regulation (EU) 2025/327
+# Art 39 and Annex IV) that only the manufacturer can supply. Every other
+# item of the declaration is read from the repository's own records by
+# scripts/release/declaration-of-conformity.sh, which writes the declaration
+# of a release from this file as it stands at the release's tag.
+#
+# issue = false: the manufacturer has not issued a declaration, and a release
+#   carries none. The release lane says so in a warning and publishes the
+#   release without it.
+# issue = true: the manufacturer issues the declaration of each release cut
+#   from this tree. Every value below must then be filled: an empty value
+#   fails the release lane's plan job, before any release exists, so no
+#   release ever carries a declaration with a blank.
+#
+# Each value is one line in double quotes, with no double quote or backslash
+# inside. No specification governs this file's form: our own design.
+
+issue = false
+
+# Annex IV, point 4: the Union legal acts other than Regulation (EU)
+# 2025/327 that provide for an EU declaration of conformity and that this
+# declaration also covers (Art 39(2)), or the word none.
+other_union_acts = ""
+
+# Annex IV, point 4: the result from the testing environment of Art 40 the
+# declaration is complemented by, as a reference to the result.
+testing_environment_result = ""
+
+# Annex IV, point 5: the relevant harmonised standards used and in relation
+# to which conformity is declared, or the word none.
+harmonised_standards = ""
+
+# Annex IV, point 7: the place of issue.
+place_of_issue = ""
+
+# Annex IV, point 7: the name and the function of the person who signs.
+signatory_name = ""
+signatory_function = ""
+
+# Annex IV, point 7: the person on whose behalf it is signed, or the words
+# not applicable.
+on_behalf_of = ""
+
+# Annex IV, point 7: the signature, or where the signature of each release's
+# declaration is kept.
+signature = ""

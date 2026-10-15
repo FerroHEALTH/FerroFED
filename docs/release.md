@@ -32,7 +32,12 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   generated from the commit range standing in for the changelog. It then
   runs `scripts/checks/technical-documentation.sh`, which refuses a release
   that changes a harmonised component with no review row for it (§ Before
-  the tag, step 6), before any release exists.
+  the tag, step 6), before any release exists. Last it reads the
+  manufacturer's file of the EU declaration of conformity,
+  `conformance/eu-declaration-of-conformity.toml` (§ Before the tag, step
+  7): when it issues the declaration, `plan` writes the declaration once
+  and fails on any value left empty; when it does not, `plan` warns that
+  the release carries none.
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
@@ -55,7 +60,12 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   (`website/book/src/operate/instructions-for-use.md`).
   `scripts/release/accompanying-documents.sh` writes both and refuses an
   information sheet that does not say "FerroFED X.Y.Z, released on", so a
-  sheet left at the previous release fails here. A draft is mutable and
+  sheet left at the previous release fails here. When `plan` found the
+  declaration issued, it attaches the EU declaration of conformity of
+  Regulation (EU) 2025/327 Art 39, with every item of Annex IV,
+  `ferrofed-vX.Y.Z-eu-declaration-of-conformity.md`, which
+  `scripts/release/declaration-of-conformity.sh` writes from the tag's
+  records and the manufacturer's file. A draft is mutable and
   invisible to anyone browsing releases, which is the window the asset
   uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
@@ -69,8 +79,9 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **finalize-release** checks that the draft carries every asset this version
   promises, eight per target, the three compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
-  and alert rules, and the information sheet and instructions for use of
-  the tag, and publishes only then, and only once both images are
+  and alert rules, the information sheet and instructions for use of
+  the tag, and the EU declaration of conformity when `plan` found it
+  issued, and publishes only then, and only once both images are
   pushed. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A pre-release is published with
   `--latest=false`, so it never becomes the repository's latest release.
@@ -263,7 +274,27 @@ slow one.
    workspace version is the last release's, whose rows exist, so a routine
    pull request that changes a component passes and the next bump records
    it.
-7. **The version bump lands as its own pull request** and merges like any
+7. **The EU declaration of conformity is issued, or the release carries
+   none.** Regulation (EU) 2025/327 Art 39 has the manufacturer draw up
+   the declaration with the content of Annex IV. The repository's records
+   fill most of it; the items only the manufacturer can supply are the
+   values of `conformance/eu-declaration-of-conformity.toml`: the place
+   of issue, the name and function of the person who signs, on whose
+   behalf, the signature, the harmonised standards, the other Union acts
+   the declaration covers (Art 39(2)) and the result from the testing
+   environment of Art 40. While the file says `issue = false`, a release
+   carries no declaration, and the lane says so in a warning. Once the
+   owner fills every value and sets `issue = true`, every release cut from
+   that tree carries one, and a value left empty fails the `plan` job
+   before the release exists, so no release ships a declaration with a
+   blank. Read the declaration before the tag with
+
+   ```sh
+   scripts/release/declaration-of-conformity.sh --draft X.Y.Z "$(git rev-parse HEAD)" /tmp/doc
+   ```
+
+   which writes the same document with each missing value marked.
+8. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).
@@ -368,7 +399,9 @@ without a version bump, because a published version is immutable
    [technical documentation](https://ferrofed.eu/docs/evaluate/technical-documentation.html#keeping-it-for-ten-years)
    names, outside GitHub: the tag's bundle, the release assets and the
    conformance and FHIR validation artifacts of the CI run on the release
-   commit, which GitHub deletes when its artifact retention ends.
+   commit, which GitHub deletes when its artifact retention ends. The
+   release assets include the EU declaration of conformity when the
+   release carries one.
 
 ## What is immutable, and what is ours
 

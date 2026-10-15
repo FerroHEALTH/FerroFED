@@ -48,5 +48,6 @@ item	element	target	section	status	issue
 4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/obligations.md	-	partial	#525
 4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/clinical-safety.md	-	partial	#525
 5	A copy of the information sheet referred to in Article 38	website/book/src/evaluate/information-sheet.md	-	documented	-
-6	A copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	planned	#525
+6	A copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	partial	#940
+6	A copy of the EU declaration of conformity	scripts/release/declaration-of-conformity.sh	-	partial	#940
 37(2)	a reference to the results obtained from a European digital testing environment referred to in Article 40	website/book/src/evaluate/technical-documentation.md	The European digital testing environment	planned	#675

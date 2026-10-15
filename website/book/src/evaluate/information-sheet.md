@@ -73,6 +73,13 @@ of the release name the download address of each copy in their labels
 which `docker image inspect` prints. The links inside a copy are relative
 to this book.
 
+Once the manufacturer issues it, a release also carries its EU declaration
+of conformity (Art 39, with the content of Annex IV) as
+`ferrofed-vX.Y.Z-eu-declaration-of-conformity.md`. No release carries one
+yet; the
+[technical documentation](technical-documentation.md#the-eu-declaration-of-conformity)
+says what it holds and what it waits on.
+
 | Release | Date |
 |---|---|
 | 0.0.10 | 2026-10-15 |
