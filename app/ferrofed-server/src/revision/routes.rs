@@ -59,7 +59,7 @@ use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED};
 use crate::revision::tree::diff;
-use ferrofed_registry::revision::{Applied, Author, Diff, Revision, RevisionId, Standing};
+use ferrofed_registry::revision::{Applied, Author, Diff, Origin, Revision, RevisionId, Standing};
 
 /// The running revision's mark and the newest revision.
 pub const CONFIG: &str = "/admin/config";
@@ -240,6 +240,7 @@ fn refused(refusal: &RevisionError, request_id: &str) -> Response {
         RevisionError::Unknown(_) | RevisionError::NotANumber => Code::RevisionUnknown,
         RevisionError::Refused(_) | RevisionError::Reload(_) => Code::ConfigurationInvalid,
         RevisionError::Stale(_) | RevisionError::NoCurrent => Code::RevisionStale,
+        RevisionError::FileOwned(_) => Code::ResourceFileOwned,
         RevisionError::NoPrevious => Code::RollbackUnavailable,
         RevisionError::ApprovalRequired { .. } => Code::ApprovalRequired,
         RevisionError::OwnApproval(_) => Code::ApprovalOwn,
@@ -383,12 +384,17 @@ async fn save(
     let Ok(request) = serde_json::from_slice::<SaveRequest>(&body) else {
         return body_refused(&headers, SAVE_SHAPE);
     };
-    let revisions = Arc::clone(&managed.revisions);
+    let managed = Arc::clone(&managed);
     let author = Author::from(&operator);
-    let answer = blocking(&headers, move || {
-        let saved = revisions.save(request.base, (author, request.reason), &request.toml)?;
+    let answer = answered(&headers, move || {
+        let saved = console::guarded(
+            &managed,
+            (Origin::Operator, request.base),
+            (author, request.reason),
+            &request.toml,
+        )?;
         record(SAVED, saved.id, &operator);
-        Ok(saved)
+        Ok::<_, console::ConsoleError>(saved)
     })
     .await;
     if answer.status() == StatusCode::OK {

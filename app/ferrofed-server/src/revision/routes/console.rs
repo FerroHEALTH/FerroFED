@@ -44,7 +44,7 @@ use crate::request_id;
 use crate::revision::service::{Refused, RevisionError, SAVED, held_table};
 use crate::stored::{self, Inadmissible};
 use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Revision, RevisionId};
+use ferrofed_registry::revision::{Author, Origin, Revision, RevisionId};
 
 use super::sections;
 use crate::revision::resources::SectionFault;
@@ -146,7 +146,7 @@ const QUERY_SHAPE: &str = r#"{"aql": "<text>"}"#;
 
 /// The members `table`, a revision's configuration, holds under
 /// `[[registry.members]]`.
-pub(super) fn members_of(table: &toml::Table) -> Result<Vec<ConsoleMember>, RevisionError> {
+fn members_of(table: &toml::Table) -> Result<Vec<ConsoleMember>, RevisionError> {
     let Some(members) = table
         .get("registry")
         .and_then(toml::Value::as_table)
@@ -171,7 +171,7 @@ fn members_at(
 }
 
 /// Who provides the registry's members that are not the console's.
-pub(super) fn source(managed: &Managed) -> Owner {
+fn source(managed: &Managed) -> Owner {
     if managed.reloader.reads_directory() {
         Owner::Directory
     } else {
@@ -182,7 +182,7 @@ pub(super) fn source(managed: &Managed) -> Owner {
 /// Whether the registry's own part, the members not the console's, holds
 /// an identity `member` names: its organisation id, its `node_id`, its
 /// `system_id`, an `endpoint_id` or an endpoint's base URL.
-pub(super) fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) -> bool {
+fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) -> bool {
     let theirs = |node: &NodeId| !snapshot.is_console(node);
     let organisation = &member.organisation.id;
     let node = snapshot.node(&member.node.id).is_some() && theirs(&member.node.id);
@@ -210,7 +210,7 @@ pub(super) fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) ->
 }
 
 /// The running registry, empty when the gateway federates nothing.
-pub(super) fn snapshot(managed: &Managed) -> Option<RegistrySnapshot> {
+fn snapshot(managed: &Managed) -> Option<RegistrySnapshot> {
     managed
         .reloader
         .state()
@@ -389,11 +389,50 @@ pub(super) fn saved_as(
 ) -> Result<Revision, ConsoleError> {
     let text =
         toml::to_string(table).map_err(|source| Refused::from(Error::Assemble { source }))?;
-    let saved = managed
-        .revisions
-        .save(base, (Author::from(operator), reason), &text)?;
+    let saved = guarded(
+        managed,
+        (Origin::Operator, base),
+        (Author::from(operator), reason),
+        &text,
+    )?;
     record(SAVED, saved.id, operator);
     Ok(saved)
+}
+
+/// Saves `text` as the revision after `base`, from `origin`, by `author`
+/// for `reason`: the one path every save on the admin listener takes.
+///
+/// A member the registry document or a directory provides cannot be set
+/// unless `base` holds it as it is, and [`Revisions::save_from`] refuses a
+/// change to a credential or a binding section the file provides.
+///
+/// [`Revisions::save_from`]: crate::revision::service::Revisions::save_from
+pub(super) fn guarded(
+    managed: &Managed,
+    (origin, base): (Origin, Option<RevisionId>),
+    (author, reason): (Author, String),
+    text: &str,
+) -> Result<Revision, ConsoleError> {
+    // NOTE: no specification governs this: our own design; a TOML or members that do
+    // not read are refused by the save with the errors `config check` reports.
+    if let Ok(table) = toml::from_str::<toml::Table>(text)
+        && let Ok(members) = members_of(&table)
+        && let Some(snapshot) = snapshot(managed)
+    {
+        let held = members_at(managed, base)?;
+        if let Some(member) = members
+            .into_iter()
+            .find(|member| !held.contains(member) && file_holds(&snapshot, member))
+        {
+            return Err(ConsoleError::FileOwned {
+                node: member.node.id,
+                owner: source(managed),
+            });
+        }
+    }
+    Ok(managed
+        .revisions
+        .save_from(origin, base, (author, reason), text)?)
 }
 
 /// `201` for an answer that is `200`, as a save answers.

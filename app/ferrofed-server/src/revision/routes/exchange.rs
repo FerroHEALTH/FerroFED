@@ -26,18 +26,16 @@ use axum::body::Body;
 use axum::extract::rejection::QueryRejection;
 use axum::extract::{Extension, Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use ferrofed_registry::console::ConsoleMember;
 use ferrofed_registry::revision::{Author, Diff, Imported, Origin, Revision, RevisionId};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use serde::Deserialize;
 
-use super::console::{ConsoleError, created, file_holds, members_of, snapshot, source};
+use super::console::{ConsoleError, created, guarded};
 use super::{Managed, answered, held, number, record, refused, table};
 use crate::admin::Operator;
 use crate::error::{self, Code};
 use crate::request_id;
-use crate::revision::resources::value_at;
-use crate::revision::service::{RevisionError, held_table};
+use crate::revision::service::RevisionError;
 use crate::revision::tree::{CORE, diff};
 
 /// The export of one revision as TOML.
@@ -204,9 +202,9 @@ pub(super) async fn import(
     )
 }
 
-/// Saves `text` as a dry-run revision on `base` for `reason` by `operator`,
-/// once it changes no resource the file provides, and returns it with its
-/// changes against the running revision.
+/// Saves `text` as a dry-run revision on `base` for `reason` by `operator`
+/// through [`guarded`], and returns it with its changes against the running
+/// revision.
 fn imported(
     managed: &Managed,
     (base, reason): (Option<RevisionId>, String),
@@ -219,14 +217,9 @@ fn imported(
         .current()
         .map_err(RevisionError::from)?
         .ok_or(RevisionError::NoCurrent)?;
-    // NOTE: no specification governs this: our own design; a TOML that does not
-    // parse is refused by the save below with the errors `config check` reports.
-    if let Ok(table) = toml::from_str::<toml::Table>(text) {
-        file_untouched(managed, base, &table)?;
-    }
-    let saved = managed.revisions.save_from(
-        Origin::Import,
-        base,
+    let saved = guarded(
+        managed,
+        (Origin::Import, base),
         (Author::from(operator), reason),
         text,
     )?;
@@ -239,60 +232,6 @@ fn imported(
         },
         revision: saved,
     })
-}
-
-/// Refuses `table`, an import on `base`, when it sets a credential or a
-/// binding section the file provides otherwise than the file's revision
-/// does, or holds a member that shares an identity with one the file or a
-/// directory provides and that `base` does not hold as it is.
-fn file_untouched(
-    managed: &Managed,
-    base: Option<RevisionId>,
-    table: &toml::Table,
-) -> Result<(), ConsoleError> {
-    let file_owned = managed.revisions.file_owned()?;
-    if !file_owned.is_empty() {
-        let history = managed
-            .revisions
-            .store()
-            .history()
-            .map_err(RevisionError::from)?;
-        let file = history
-            .iter()
-            .rev()
-            .find(|revision| revision.origin == Origin::File)
-            .map(held_table)
-            .transpose()?
-            .unwrap_or_default();
-        if let Some(resource) = file_owned
-            .into_iter()
-            .find(|resource| value_at(table, resource) != value_at(&file, resource))
-        {
-            return Err(ConsoleError::ResourceFileOwned(resource));
-        }
-    }
-    let Some(snapshot) = snapshot(managed) else {
-        return Ok(());
-    };
-    let held_members: Vec<ConsoleMember> = match base {
-        Some(id) => members_of(&held_table(&held(&managed.revisions, id)?)?)?,
-        None => Vec::new(),
-    };
-    // NOTE: no specification governs this: our own design; members that do not
-    // read are refused by the save with the errors `config check` reports.
-    let Ok(members) = members_of(table) else {
-        return Ok(());
-    };
-    match members
-        .into_iter()
-        .find(|member| !held_members.contains(member) && file_holds(&snapshot, member))
-    {
-        Some(member) => Err(ConsoleError::FileOwned {
-            node: member.node.id,
-            owner: source(managed),
-        }),
-        None => Ok(()),
-    }
 }
 
 #[cfg(test)]
