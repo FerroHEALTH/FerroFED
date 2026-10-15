@@ -29,13 +29,13 @@ use http::StatusCode;
 use http::header::{CONTENT_TYPE, COOKIE, LOCATION, SET_COOKIE};
 use serde::Deserialize;
 use testcontainers::core::{CmdWaitFor, ExecCommand, IntoContainerPort};
-use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, CopyTargetOptions, GenericImage, ImageExt};
 use url::Url;
 
 pub mod recipe;
 
 use super::images::{KEYCLOAK, TEMURIN_JRE};
+use super::retry;
 use super::{HarnessError, await_readiness, names};
 use recipe::{Recipe, RecipeError};
 
@@ -159,17 +159,18 @@ pub async fn keycloak() -> Result<Keycloak, KeycloakError> {
         image: KEYCLOAK.repository,
         source,
     };
-    let server = KEYCLOAK
-        .image()
-        .with_exposed_port(PORT.tcp())
-        .with_cmd(["start-dev"])
-        .with_env_var("KC_BOOTSTRAP_ADMIN_USERNAME", ADMIN_USER)
-        .with_env_var("KC_BOOTSTRAP_ADMIN_PASSWORD", ADMIN_PASSWORD)
-        .with_network(network.clone())
-        .with_container_name(host.clone())
-        .start()
-        .await
-        .map_err(container)?;
+    let server = retry::start(|| {
+        KEYCLOAK
+            .image()
+            .with_exposed_port(PORT.tcp())
+            .with_cmd(["start-dev"])
+            .with_env_var("KC_BOOTSTRAP_ADMIN_USERNAME", ADMIN_USER)
+            .with_env_var("KC_BOOTSTRAP_ADMIN_PASSWORD", ADMIN_PASSWORD)
+            .with_network(network.clone())
+            .with_container_name(host.clone())
+    })
+    .await
+    .map_err(container)?;
     let address = server.get_host().await.map_err(container)?;
     let port = server
         .get_host_port_ipv4(PORT.tcp())
@@ -229,25 +230,7 @@ impl Keycloak {
     pub async fn apply(&mut self, recipe: &Recipe) -> Result<Secrets, KeycloakError> {
         let server = format!("http://{}:{PORT}", self.host);
         let commands = recipe.commands_against(&server)?;
-        let mut runner = TEMURIN_JRE
-            .image()
-            .with_entrypoint("sleep")
-            .with_cmd(["infinity"])
-            .with_network(self.network.clone())
-            .with_copy_to(
-                CopyTargetOptions::new(format!("{WORK}/recipe.sh")),
-                script(&commands).into_bytes(),
-            )
-            .with_copy_to(
-                CopyTargetOptions::new(format!("{WORK}/harness.sh")),
-                script(&harness_steps()).into_bytes(),
-            );
-        for file in recipe.files() {
-            runner = runner.with_copy_to(
-                CopyTargetOptions::new(format!("{WORK}/{}", file.name)),
-                file.content.clone().into_bytes(),
-            );
-        }
+        let mut cli = Vec::new();
         for path in self.admin_cli().await? {
             let bytes = self
                 .server
@@ -257,15 +240,41 @@ impl Keycloak {
                     step: "copying the admin CLI out of Keycloak",
                     source,
                 })?;
-            runner = runner.with_copy_to(CopyTargetOptions::new(path).with_mode(0o755), bytes);
+            cli.push((path, bytes));
         }
-        let runner = runner
-            .start()
-            .await
-            .map_err(|source| HarnessError::Container {
-                image: TEMURIN_JRE.repository,
-                source,
-            })?;
+        let runner = retry::start(|| {
+            let mut runner = TEMURIN_JRE
+                .image()
+                .with_entrypoint("sleep")
+                .with_cmd(["infinity"])
+                .with_network(self.network.clone())
+                .with_copy_to(
+                    CopyTargetOptions::new(format!("{WORK}/recipe.sh")),
+                    script(&commands).into_bytes(),
+                )
+                .with_copy_to(
+                    CopyTargetOptions::new(format!("{WORK}/harness.sh")),
+                    script(&harness_steps()).into_bytes(),
+                );
+            for file in recipe.files() {
+                runner = runner.with_copy_to(
+                    CopyTargetOptions::new(format!("{WORK}/{}", file.name)),
+                    file.content.clone().into_bytes(),
+                );
+            }
+            for (path, bytes) in &cli {
+                runner = runner.with_copy_to(
+                    CopyTargetOptions::new(path.clone()).with_mode(0o755),
+                    bytes.clone(),
+                );
+            }
+            runner
+        })
+        .await
+        .map_err(|source| HarnessError::Container {
+            image: TEMURIN_JRE.repository,
+            source,
+        })?;
         run(&runner, "the recipe", "recipe.sh").await?;
         run(&runner, "the harness user and secrets", "harness.sh").await?;
         let secret = async |name: &str| -> Result<String, KeycloakError> {

@@ -29,13 +29,13 @@ use http::StatusCode;
 use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
 use testcontainers::core::{CmdWaitFor, ExecCommand, IntoContainerPort, WaitFor};
-use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use uuid::Uuid;
 
 mod feed;
 
 use super::images::{SANTEMPI, SANTEMPI_POSTGRES};
+use super::retry;
 use super::{HarnessError, POSTGRES_PORT, names, postgres_health_check};
 use crate::seed::{EhrDomain, PatientId};
 use feed::feed_message;
@@ -457,21 +457,22 @@ pub async fn santempi(
     members: &[EhrDomain],
 ) -> Result<SanteMpi, SanteMpiError> {
     let (network, host) = names("santempi");
-    let database = SANTEMPI_POSTGRES
-        .image()
-        .with_exposed_port(POSTGRES_PORT.tcp())
-        .with_wait_for(WaitFor::healthcheck())
-        .with_health_check(postgres_health_check(DATABASE_ROLE, DATABASE_ROLE))
-        .with_env_var("POSTGRES_USER", DATABASE_ROLE)
-        .with_env_var("POSTGRES_PASSWORD", DATABASE_PASSWORD)
-        .with_network(network.clone())
-        .with_container_name(host.clone())
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: SANTEMPI_POSTGRES.repository,
-            source,
-        })?;
+    let database = retry::start(|| {
+        SANTEMPI_POSTGRES
+            .image()
+            .with_exposed_port(POSTGRES_PORT.tcp())
+            .with_wait_for(WaitFor::healthcheck())
+            .with_health_check(postgres_health_check(DATABASE_ROLE, DATABASE_ROLE))
+            .with_env_var("POSTGRES_USER", DATABASE_ROLE)
+            .with_env_var("POSTGRES_PASSWORD", DATABASE_PASSWORD)
+            .with_network(network.clone())
+            .with_container_name(host.clone())
+    })
+    .await
+    .map_err(|source| HarnessError::Container {
+        image: SANTEMPI_POSTGRES.repository,
+        source,
+    })?;
     let connection = |name: &str| {
         format!(
             "server={host};port={POSTGRES_PORT}; database={name}; user id={DATABASE_ROLE}; \
@@ -480,29 +481,30 @@ pub async fn santempi(
         )
     };
     let image = SANTEMPI.repository;
-    let server = SANTEMPI
-        .image()
-        .with_exposed_port(PORT.tcp())
-        .with_network(network)
-        .with_env_var("SDB_FEATURE", FEATURES)
-        .with_env_var("SDB_MATCHING_MODE", "WEIGHTED")
-        .with_env_var(
-            "SDB_MDM_RESOURCE",
-            "Patient=org.santedb.matching.patient.default",
-        )
-        .with_env_var("SDB_MDM_AUTO_MERGE", "false")
-        .with_env_var("SDB_DB_MAIN", connection(DATABASE_ROLE))
-        .with_env_var("SDB_DB_AUDIT", connection(AUDIT_DATABASE))
-        .with_env_var("SDB_DB_MAIN_PROVIDER", "Npgsql")
-        .with_env_var("SDB_DB_AUDIT_PROVIDER", "Npgsql")
-        .with_env_var("SDB_DATA_POLICY_ACTION", "HIDE")
-        // NOTE: santedb/santedb-restsvc@1a9fdb3 OauthDockerFeature: the OPENID feature's
-        // INSECURE_CLIENT_AUTH admits a client-credentials grant with no device credential.
-        .with_env_var("SDB_OPENID_INSECURE_CLIENT_AUTH", "true")
-        .with_env_var("SDB_DELAY_START", "5000")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container { image, source })?;
+    let server = retry::start(|| {
+        SANTEMPI
+            .image()
+            .with_exposed_port(PORT.tcp())
+            .with_network(network.clone())
+            .with_env_var("SDB_FEATURE", FEATURES)
+            .with_env_var("SDB_MATCHING_MODE", "WEIGHTED")
+            .with_env_var(
+                "SDB_MDM_RESOURCE",
+                "Patient=org.santedb.matching.patient.default",
+            )
+            .with_env_var("SDB_MDM_AUTO_MERGE", "false")
+            .with_env_var("SDB_DB_MAIN", connection(DATABASE_ROLE))
+            .with_env_var("SDB_DB_AUDIT", connection(AUDIT_DATABASE))
+            .with_env_var("SDB_DB_MAIN_PROVIDER", "Npgsql")
+            .with_env_var("SDB_DB_AUDIT_PROVIDER", "Npgsql")
+            .with_env_var("SDB_DATA_POLICY_ACTION", "HIDE")
+            // NOTE: santedb/santedb-restsvc@1a9fdb3 OauthDockerFeature: the OPENID feature's
+            // INSECURE_CLIENT_AUTH admits a client-credentials grant with no device credential.
+            .with_env_var("SDB_OPENID_INSECURE_CLIENT_AUTH", "true")
+            .with_env_var("SDB_DELAY_START", "5000")
+    })
+    .await
+    .map_err(|source| HarnessError::Container { image, source })?;
     let host = server
         .get_host()
         .await
