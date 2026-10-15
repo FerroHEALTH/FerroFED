@@ -122,6 +122,8 @@ pub struct SigningSettings {
     pub jwks_uri: Uri,
     /// How long a client assertion is valid.
     pub assertion_lifetime: Duration,
+    /// How long the previous key is published after the process starts.
+    pub rotation_overlap: Duration,
 }
 
 /// The federated query, resolved.

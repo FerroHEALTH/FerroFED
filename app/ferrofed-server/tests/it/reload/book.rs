@@ -3,8 +3,8 @@
 
 //! The reload table of the book's registry page held to the code: its
 //! "Reloaded" column names exactly the sections [`reloadable`] returns, its
-//! count says how many, and every section a binding marks for a restart is in
-//! its "Needs a restart" column. The book documents the default build, which
+//! count says how many, and every section a binding marks for a restart, and
+//! every key the core leaves to a restart, is in its "Needs a restart" column. The book documents the default build, which
 //! compiles every binding. No specification governs reloading: our own
 //! design.
 
@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use ferrofed_server::binding::{Reload, compiled, reloadable};
+use ferrofed_server::reload::restart_keys;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -93,6 +94,23 @@ fn the_reloaded_column_names_exactly_the_reloadable_sections() -> TestResult {
         stated_count(&page)?,
         "the count before the table"
     );
+    Ok(())
+}
+
+#[test]
+fn every_core_key_a_reload_leaves_to_a_restart_is_in_the_restart_column() -> TestResult {
+    let page = std::fs::read_to_string(BOOK_PAGE)?;
+    let (_, restart) = table(&page)?;
+    for key in restart_keys() {
+        let listed = restart.iter().any(|documented| {
+            key.strip_prefix(documented.as_str())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+        });
+        assert!(
+            listed,
+            "{key}, or its section, in the Needs a restart column"
+        );
+    }
     Ok(())
 }
 

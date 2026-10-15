@@ -572,13 +572,13 @@ Nine sections take effect on a reload:
 | Reloaded | Needs a restart |
 |---|---|
 | `[registry]`: the document's contents, its path and its `format` | `[registry.mcsd]`, the directory the registry is read from |
-| `[credentials]`, each endpoint's onward TLS included | `[server]` and `[signing]` |
+| `[credentials]`, each endpoint's onward TLS included | `[server]`, `public_url`, `trusted_proxies`, `forwarded_header` and `replica` included, and `[signing]`, `rotation_overlap_s` included |
 | `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
 | `[pdqm]` | `[pmir]` |
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
-| `[nl_gf]` | `[audit]` |
-| `[access_log]` | `[fhir]` |
+| `[nl_gf]` | `[audit]` and `[config]` |
+| `[access_log]` | `[fhir]` and `[eehrxf]` |
 | `[auth]`: the issuers, how each is verified, its key set read again | `auth.audience`, and a changed `[server.tls]` or `[metrics.tls]` path |
 
 The same reload reads the certificate files of `[server.tls]` and
