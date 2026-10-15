@@ -143,29 +143,29 @@ years = 3                      # Art 9(2): at least three years from each access
 - **The access records to a repository.** Every access to patient data is
   recorded with the verified caller, the patient, the categories and the
   origins, and an access whose record cannot be stored is refused `503
-  access-unrecorded` ([The access log](audit.md#the-access-log)).
+  access-unrecorded` ([The access log](access-log.md)).
 - **A category map.** FerroFED ships none. Author one in `[access_log]`
   from the templates your members hold, or every access is recorded
-  `ehds-unclassified` ([`[access_log]`](audit.md#access_log)).
+  `ehds-unclassified` ([`[access_log]`](access-log.md#access_log)).
 - **The retention periods.** Art 9(2) keeps the information on each access
   "for at least three years from each date of access". Declare in
   `[access_log.retention]` any longer period your national law sets for a
   category or an origin, and keep each record at your repository until its
-  `ehds-retention-ends` ([How long a record is kept](audit.md#how-long-a-record-is-kept)).
+  `ehds-retention-ends` ([How long a record is kept](access-log.md#how-long-a-record-is-kept)).
 - **The patient namespaces.** Art 9(1) gives the person information on
   "any access". Name in `[access_log] patient_namespaces` the namespaces
   your Member State's access service searches the log by, so the record of
   a request addressed by `ehr_id` names the patient
-  ([The patient behind an `ehr_id`](audit.md#the-patient-behind-an-ehr_id)),
+  ([The patient behind an `ehr_id`](access-log.md#the-patient-behind-an-ehr_id)),
   and set `max_named_ehrs` to the most `ehr_id`s the record of a query over
   many patients' data names
-  ([A query over many patients' data](audit.md#a-query-over-many-patients-data)).
+  ([A query over many patients' data](access-log.md#a-query-over-many-patients-data)).
 - **The emergency purposes.** Art 11(5) asks that an access to restricted
   data in the vital interests of the patient be logged "in a clear and
   understandable format". FerroFED names no emergency purpose of use.
   Declare in `[[access_log.emergency_purpose]]` the codes your issuers put
   in the token for it, such as the HL7 v3 `ActReason` code `BTG`, or no
-  access is marked ([Emergency access](audit.md#emergency-access)).
+  access is marked ([Emergency access](access-log.md#emergency-access)).
 - **The receiving members.** Annex II, points 2.2 and 2.3, ask that an EHR
   system "be able to receive" data in the European exchange format.
   Declare in `[[fhir.receive]]` the member that stores each category you
@@ -240,7 +240,7 @@ clinicians who use it. Each one is a control of the
 - **Read a `503 access-unrecorded` after a write as an unknown outcome.**
   The node may have stored the write before the gateway failed to record
   the access. Read the resource before writing it again
-  ([Failing closed](audit.md#failing-closed)).
+  ([Failing closed](access-log.md#failing-closed)).
 
 ## Maintenance and its frequency
 
@@ -254,7 +254,7 @@ event, and its frequency is the event's:
 | Upgrade to the newest release | at each release, and as soon as you can after a security advisory: security fixes go to the latest release only | [Upgrading](upgrading.md), [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md) |
 | Run `config check` | before every start, reload and upgrade | [Running it](configuration.md#running-it) |
 | Re-run `ferrofed admission check` for a member | when the member changes its CDR product, its version, its `system_id` or how it creates `ehr_id`s | [Admitting a node](admission.md) |
-| Update the category map | when a member adds or changes a template | [`[access_log]`](audit.md#access_log) |
+| Update the category map | when a member adds or changes a template | [`[access_log]`](access-log.md#access_log) |
 | Watch the alerts | continuously, on the shipped alert rules | [Dashboard and alert rules](metrics.md#dashboard-and-alert-rules) |
 | Clear a quarantined audit record | when `ferrofed_audit_quarantined` rises, after reading why the repository refused it | [The audit spool](hardening.md#the-audit-spool) |
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
@@ -286,7 +286,7 @@ deployment in the EU must plan for are:
   gateway has no review route of its own: the records are read there with
   ITI-81, and the repository sets who may read them and keeps each for the
   period it states (Annex II, points 3.3 and 3.4;
-  [Reading the log](audit.md#reading-the-log)). A query over many
+  [Reading the log](access-log.md#reading-the-log)). A query over many
   patients' data names no patient in its record, so a search by the
   person's identifier does not find it. Each record carries a security
   label per category and per origin, and the access rights by origin and
@@ -296,7 +296,7 @@ deployment in the EU must plan for are:
   records the professional's identifier and the assurance level when your
   issuer's tokens state them, and an assurance level only for an issuer
   with `[auth.issuer.assurance]`
-  ([The person behind an access](audit.md#the-person-behind-an-access)).
+  ([The person behind an access](access-log.md#the-person-behind-an-access)).
 - **A received document is not yet checked in full.** Its profiles'
   invariants, its bindings and each entry's own profile are not all
   evaluated, and the constraints the check cannot evaluate are listed

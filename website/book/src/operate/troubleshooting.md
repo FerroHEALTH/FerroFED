@@ -202,7 +202,7 @@ patient-data operation carried no access, so it is withheld`.
 (`spool_write_timeout_ms`) ([The spool and the failure
 policy](audit.md#the-spool-and-the-failure-policy)). A write may have
 reached the node before the record failed, so a client reads before writing
-again ([Failing closed](audit.md#failing-closed)).
+again ([Failing closed](access-log.md#failing-closed)).
 
 ### The audit spool grows
 
@@ -408,7 +408,7 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `nl_gf.nvi.namespaces lists …`, `… is not a credential the NVI takes` | Correct `[nl_gf.nvi]` ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)). |
 | `nl_gf.mitz.…`, `the [nl_gf.mitz] consent pre-filter cannot be enabled` | Correct `[nl_gf.mitz]` ([Dutch consent](consent.md#dutch-consent-nl_gfmitz)). |
 | `audit.destination = "off" …`, `… = "log" records no caller and no patient …`, `[audit.repository] applies only under …`, `the [audit] trail cannot start` | Set `[audit]` with `destination = "repository"` outside development, and a spool directory the gateway may write ([`[audit]`](audit.md#audit)). |
-| `no access log: …`, `[access_log] declares a category map that cannot be used`, `[access_log.retention] declares a retention that cannot be used` | Set `[audit] destination = "repository"` and correct `[access_log]` ([`[access_log]`](audit.md#access_log)). |
+| `no access log: …`, `[access_log] declares a category map that cannot be used`, `[access_log.retention] declares a retention that cannot be used` | Set `[audit] destination = "repository"` and correct `[access_log]` ([`[access_log]`](access-log.md#access_log)). |
 | `the public document at … would sit inside the ITS-REST surface`, `two public documents would be served at …` | A document the gateway serves, such as the DID document of a Nuts grant, would sit under the base path's ITS-REST surface or on another document's path; change the DID or the base path ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)). |
 | `the node clients could not be built`, `the HTTP client … could not be built` | The cause after it names the fault, such as a `[credentials]` section for an endpoint the registry document does not declare ([Onward credentials](onward-credentials.md)); report any other with the line ([Complaints and incidents](../evaluate/post-market.md#making-a-complaint)). |
 
@@ -440,7 +440,7 @@ which every row has.
 | `organisation-unknown` | 400 | A directive or header names no registry organisation. | `OPTIONS {base}/` lists the organisations. | The client names an organisation the registry holds ([The registry document](registry.md#the-registry-document)). |
 | `target-required` | 400 | A write, a new EHR or a definition request names no node. | The request line alone. | The client names the endpoint in `openEHR-federation-endpoint` ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `endpoint-several` | 400 | A request routed to one node selects several endpoints. | The request line alone. | The client names one endpoint ([Gateway codes](../integrate/errors.md#gateway-codes)). |
-| `query-parameter-refused` | 400 | A routed request carries a query parameter its operation does not declare. | `query-parameter-refused` at `WARN` under `ferrofed::security`. | The client drops the parameter ([Declared values](configuration.md#declared-values)). |
+| `query-parameter-refused` | 400 | A routed request carries a query parameter its operation does not declare. | `query-parameter-refused` at `WARN` under `ferrofed::security`. | The client drops the parameter ([Declared values](node-requests.md#declared-values)). |
 | `node-timeout` | 504 | The routed node, or a probed member, did not answer in time. | `the routed request failed` at `ERROR`, `code` `node-timeout`; the endpoint's dependency state `down`. | Fix the node, or raise `per_node_timeout_ms` ([Timeouts](queries-and-areas.md#timeouts)). |
 | `node-unreachable` | 504 | The routed node, or a probed member, could not be reached. | `the routed request failed` at `ERROR`, `code` `node-unreachable`; the dependency state `down`. | Correct the endpoint `url` or the network path ([Every node is `offline`](#every-node-is-offline-or-time-out)). |
 | `node-refused` | 424 | The routed node refused the gateway's onward credentials with `401`. | The node's own log shows the `401`; the endpoint's dependency state stays `up`. | Correct `[credentials."<endpoint>"]` ([Nodes answer `401`](#nodes-answer-401)). |
@@ -455,7 +455,7 @@ which every row has.
 | `stored-query-held` | 409 | The name and version are already stored, or a `PUT` with no version lost the race for each version the registry assigned it. | The request line alone. | The client stores a new version, or sends the `PUT` with no version again ([Stored queries](../integrate/stored-queries.md)). |
 | `stored-query-unknown` | 404 | No stored query at that name and version. | `GET {base}/operator/stored-queries` lists what is held. | Store it, or the client names one held ([Stored queries](queries-and-areas.md#stored-queries)). |
 | `preceding-version-invalid` | 400 | A versioned write names no single version it amends. | The request line alone. | The client sends one quoted `OBJECT_VERSION_ID` in `If-Match` ([Gateway codes](../integrate/errors.md#gateway-codes)). |
-| `parameter-value-invalid` | 400 | A routed value does not match what its operation declares. | `parameter-value-refused` at `WARN` under `ferrofed::security`, with the `carrier`. | The client corrects the value ([Declared values](configuration.md#declared-values)). |
+| `parameter-value-invalid` | 400 | A routed value does not match what its operation declares. | `parameter-value-refused` at `WARN` under `ferrofed::security`, with the `carrier`. | The client corrects the value ([Declared values](node-requests.md#declared-values)). |
 | `media-type-not-acceptable` | 406 | `Accept` admits no media type the operation answers in. | The request line alone. | The client accepts a listed type ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `media-type-unsupported` | 415 | `Content-Type` is no media type the operation takes. | The request line alone. | The client sends a listed type ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `subject-several` | 400 | The subject of `GET {base}/v1/ehr` resolves at several members. | The message lists the endpoints. | The client names one endpoint ([Gateway codes](../integrate/errors.md#gateway-codes)). |

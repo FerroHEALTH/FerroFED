@@ -2682,7 +2682,8 @@ Each milestone is a release; the issues are the plan, and the decisions above
 change what some of them carry. v0.0.1 was released on 2026-10-01, and
 v0.0.2 and v0.0.3 shipped together as release 0.0.3 on 2026-10-02, release
 0.0.6 carried the milestones v0.0.4 to v0.0.6 on 2026-10-03, and v0.0.7 was
-released the same day; v0.0.8 is the milestone in progress.
+released the same day; v0.0.8 was released on 2026-10-04, v0.0.9 on
+2026-10-05 and v0.0.10 on 2026-10-15. v0.0.11 and v0.0.12 are planned.
 
 - **v0.0.1, setup and the architecture of record.** The setup issues (#5 to
   #15) and this research program (#16 to #27). It closed with the register
@@ -2741,6 +2742,29 @@ released the same day; v0.0.8 is the milestone in progress.
 - **v0.0.9, conformance** (#89 to #95). The matrix closed (#89), track 10
   (#90), track 11 (#91), tracks 1 to 9 (#92), the node profile (#93, A38), the
   differential run (#94, A42), the conformance statement (#95).
+- **v0.0.10, EHDS readiness and the production gaps** (#519, released
+  2026-10-15). The re-pin to the specification's 1.0.0 release (#17); the
+  logging component's access record for every query, routed read and routed
+  write (#623), with the professional and the assurance level (#742),
+  retention by origin and category (#795) and emergency access (#659); the
+  FHIR face with the patient summary, the document list and the receipt of a
+  document (#809, #810, #802); and the production gaps the end-to-end audit
+  found (#622 to #635, #639 to #641): identity resolution in production,
+  zero-downtime restarts, several replicas, metrics, overload protection, TLS
+  on the listener, the authenticated admin listener, and the production,
+  upgrade, data-protection, threat-model and troubleshooting pages.
+- **v0.0.11, configuration revisions and more of EHDS readiness** (planned).
+  Configuration from the file and from the console as one set of versioned
+  revisions (#575, A88), with the console managing members, endpoints,
+  stored queries, credentials and bindings (#577 to #579); the rest of the log
+  access interface (#660), re-checked against the Art 36(1) common
+  specifications (#799); the rest of the interoperability component and
+  the national contact point's connector (#522 to #524); and the
+  manufacturer's conformity work (#525).
+- **v0.0.12, operations packaging** (planned). Kubernetes packaging (#638),
+  OTLP over TLS (#644), the supported-release policy (#645), and the
+  interoperability component for test results, discharge reports and imaging
+  (#666 to #668).
 
 ## 15. The decision register
 
@@ -2748,8 +2772,10 @@ Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
 A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489,
-A53 on 2026-10-05 (#493), A54 on #551, and A55 on #275; A73 was decided by
-the owner on 2026-10-06 (#654), and A74 on #776. The bracket names the report and its
+A53 on 2026-10-05 (#493), A54 on #551, and A55 to A66 and A88 on
+2026-10-05; A67 to A86 were decided on 2026-10-06, A73 and A76 of them by
+the owner; A87 was decided on 2026-10-14, and A89 to A93 on 2026-10-15. Each
+row's status says who decided it. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 

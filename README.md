@@ -72,7 +72,7 @@ level where the issuer states one, the categories of the data and how long
 the record is kept, as Annex II, point 3.2, asks of the European logging
 component
 ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623),
-[the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log)).
+[the access log](https://ferrofed.eu/docs/operate/access-log.html)).
 With `[fhir]` set, a FHIR face answers the patient summary in the European
 exchange format and receives a patient summary document into the member you
 name for it

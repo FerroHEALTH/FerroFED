@@ -344,7 +344,7 @@ request it would send without it and never overrides a node's refusal.
 
 You name the purposes that mark an access as an emergency access in the
 access log, `[[access_log.emergency_purpose]]`, each a `code` and its
-`system`, matched exactly ([Emergency access](audit.md#emergency-access)).
+`system`, matched exactly ([Emergency access](access-log.md#emergency-access)).
 The HL7 v3 `ActReason` codes a deployment maps are `BTG`, "break the
 glass", whose definition "may include override of subject of care consent
 directive restricting access", and, where your national rules call for it,
@@ -518,7 +518,7 @@ receives the foreign professional in the conveyance (N26, N27).
 **What the record and the node receive.** The access record names the
 foreign professional and provider with their country and issuing
 authorities, marked as asserted by the contact point
-([Audit](audit.md#a-request-a-national-contact-point-relays)), and each node
+([Audit](access-log.md#a-request-a-national-contact-point-relays)), and each node
 is told them in the `national_contact_point` claim of the conveyance
 ([below](#what-a-node-is-told-about-the-caller)). A correlation identifier
 the connector sends in `correlation_header` is recorded with the request,

@@ -211,7 +211,7 @@ proxy's TLS settings.
 - audit and supervision while a member participates;
 - logging and liability after the fact. The gateway logs each request by
   its own request id, route and status, never a body or a header value
-  ([Configuration](configuration.md#request-ids)); each node audits who
+  ([Request ids](node-requests.md#request-ids)); each node audits who
   asked from the conveyed token (N24).
 
 **Bearer-token replay** (§13.4 asks a deployment crossing organisational

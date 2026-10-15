@@ -391,18 +391,18 @@ them:
 - Every access to patient data the gateway intermediates is recorded with
   the verified caller, the patient, each endpoint asked and the categories
   of the data, in the record Annex II, point 3.2, sets for the European
-  logging component ([the access log](../operate/audit.md#the-access-log)).
+  logging component ([the access log](../operate/access-log.md)).
   The library that builds it is `crates/ehds-logging`. The records are
   reviewed at the Audit Record Repository with ITI-81, the connection of
   external software point 3.3 admits, and each states how long it is kept
   by its origins and categories, never under three years (point 3.4, Art
-  9(2); [Reading the log](../operate/audit.md#reading-the-log)). A request
+  9(2); [Reading the log](../operate/access-log.md#reading-the-log)). A request
   addressed by `ehr_id` names the patient the identity binding holds under
   it, so a search by the person's identifier finds it (Art 9(1)); a query
   over many patients' data names the patient behind each `ehr_id` its
   delivered rows project, up to a bound, and otherwise records its scope,
   which a person's search finds through the members that hold their EHR
-  ([A query over many patients' data](../operate/audit.md#a-query-over-many-patients-data)).
+  ([A query over many patients' data](../operate/access-log.md#a-query-over-many-patients-data)).
   Each record carries a security
   label per category and per origin, which the repository applies as
   access rights by origin and category (point 3.4;

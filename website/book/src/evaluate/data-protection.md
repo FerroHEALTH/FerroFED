@@ -54,7 +54,7 @@ name both. Every row of the inventory below names what it carries.
 | Per-caller rate buckets | the caller's issuer and `client_id` | process memory, per replica | until the bucket refills; at most 10 000 callers | none read outside the process | `[server.caller_rate]` |
 | IHE audit spools | the patient identifier inside each ITI-83, ITI-78, ITI-119 and ITI-55 record; the identities a PMIR message names; the caller's `iss`, `sub`, `client_id` and purposes of use on a record made for a caller | a directory on disk, one per replica | until the Audit Record Repository accepts the record; a quarantined record until you remove it | directory `0700`, files `0600`, refused at start when open to other users; bounded by `spool_max_bytes` (64 MiB) and `spool_max_events` (100 000); encryption at rest is the volume's ([The audit trail](../operate/audit.md)) | `[audit.repository]`, `[xcpd.audit_repository]` |
 | The ATNA Audit Record Repository | the same records | your repository | your repository's retention | ITI-20 over TLS: the FHIR Feed over `https`, syslog over TLS | the repository's own |
-| The access records | for each federated query, stored-query execution, routed read and routed write that reached a node: the caller's `iss`, `sub`, `client_id`, organisation, professional identification and purposes of use; the professional's name and identifier (the IHE IUA `subject_name` and `national_provider_identifier`), the assurance level of the authentication when the issuer's mapping established one, and whether a person or a client acted ([The person behind an access](../operate/audit.md#the-person-behind-an-access)); the patient identifier and namespace the request named, and each `ehr_id` reached with its endpoint; the request as the client sent it, which may name the patient; the request id and the address the request came from; each endpoint asked with its node, `system_id`, outcome and row count; the categories of the data | the `[audit]` spool, then the Audit Record Repository | as the IHE audit records above | stored before the answer leaves, and an access whose record cannot be stored is answered `503 access-unrecorded` with none of the data; the spool and transport protections above; no part reaches a node, the log, a span or a metric label ([The access log](../operate/audit.md#the-access-log)) | `[audit]`, `[audit.repository]`, `[access_log]` |
+| The access records | for each federated query, stored-query execution, routed read and routed write that reached a node: the caller's `iss`, `sub`, `client_id`, organisation, professional identification and purposes of use; the professional's name and identifier (the IHE IUA `subject_name` and `national_provider_identifier`), the assurance level of the authentication when the issuer's mapping established one, and whether a person or a client acted ([The person behind an access](../operate/access-log.md#the-person-behind-an-access)); the patient identifier and namespace the request named, and each `ehr_id` reached with its endpoint; the request as the client sent it, which may name the patient; the request id and the address the request came from; each endpoint asked with its node, `system_id`, outcome and row count; the categories of the data | the `[audit]` spool, then the Audit Record Repository | as the IHE audit records above | stored before the answer leaves, and an access whose record cannot be stored is answered `503 access-unrecorded` with none of the data; the spool and transport protections above; no part reaches a node, the log, a span or a metric label ([The access log](../operate/access-log.md)) | `[audit]`, `[audit.repository]`, `[access_log]` |
 | The `log` audit destination | the profile, the action, the outcome, the server of a request the gateway sent, counts of entities, and `on_behalf` as `caller` or `gateway` | the log | your log pipeline's retention | no patient identifier, no request content, no `sub`, `client_id` or issuer of the caller, and no client of a request the gateway received; refused outside development for a gateway with a registry, because it cannot hold the access records | `[audit] destination = "log"`, `[xcpd] audit = "log"` |
 | The request log and every other log line | the method, route template, status, latency and request id; a security event's reason; in the edge mode, keyed HMAC references to the subject and client that change at every start; on an admin listener write action, the operator's issuer and subject | stdout, then your log pipeline | your log pipeline's retention | no request body, AQL text, header value, request path or patient identifier ([What the log records](../operate/configuration.md#what-the-log-records)) | `[telemetry] filter`, `format` |
 | Metrics | none: every label value comes from a closed set or the registry | the admin listener, the OTLP push | your metrics store's retention | [Metrics](../operate/metrics.md) | `[metrics]` |
@@ -83,7 +83,7 @@ gateway stores it in the `[audit]` spool before the answer leaves, and
 answers an access whose record cannot be stored with `503
 access-unrecorded` and none of the data; a write's record is given its
 place before any member is asked, so a write is refused before it is made
-([The access log](../operate/audit.md#the-access-log)). The record follows
+([The access log](../operate/access-log.md)). The record follows
 Annex II, point 3.2, of the EHDS Regulation, and the library that builds it
 is `crates/ehds-logging`.
 
@@ -99,7 +99,7 @@ What the record does not cover:
 - FerroFED offers no interface of its own to review the records (Annex II,
   point 3.3); it is planned ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)). Each record states how long it is
   kept by its origins and categories, at least three years (point 3.4,
-  [How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
+  [How long a record is kept](../operate/access-log.md#how-long-a-record-is-kept)).
   Your Audit Record Repository decides who reads the records and applies
   the period each one states.
 
@@ -133,7 +133,7 @@ belongs to the access service. The gateway's access records are kept as long
 as your Audit Record Repository keeps them, so its retention policy decides
 whether they meet that period. Each record states the period its origins and
 categories call for, never under three years, for the repository to apply
-([How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
+([How long a record is kept](../operate/access-log.md#how-long-a-record-is-kept)).
 
 ## Roles
 

@@ -164,7 +164,7 @@ A routed request reaches the node as you sent it:
   ISO 8601 format. Any other value is a `400` (`parameter-value-invalid`) and
   nothing is sent. A value of free text, such as `If-Match` or a directory
   `path`, travels as you sent it (see
-  [Configuration](../operate/configuration.md#declared-values)).
+  [Declared values](../operate/node-requests.md#declared-values)).
 
 The answer is the node's: its status, its body, and its `Location` and `ETag`
 unmodified, since openEHR uids are never rewritten (N22, N31). Every routed

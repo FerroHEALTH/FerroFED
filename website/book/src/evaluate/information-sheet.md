@@ -132,7 +132,7 @@ The codes are those of HL7 Europe's `EEHRxFDocumentPriorityCategoryCS`
 (`hl7.fhir.eu.health-data-api` 1.0.0-ballot), and the record writes each
 with that system. The categories a deployment declares under national law
 are recorded as well, each in the system its Member State defines
-([Categories](../operate/audit.md#categories)).
+([Categories](../operate/access-log.md#categories)).
 
 ### The categories received
 

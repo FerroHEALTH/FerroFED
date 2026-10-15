@@ -131,7 +131,7 @@ data:
     # request to a node carries the caller's identity signed with it
     # (§13.1, N24). It is the signing-key.pem key of the ferrofed-secrets
     # Secret that statefulset.yaml mounts at /run/secrets/ferrofed.
-    # https://ferrofed.eu/docs/operate/configuration.html#signing-keys-and-the-jwk-set
+    # https://ferrofed.eu/docs/operate/onward-credentials.html#signing-keys-and-the-jwk-set
     [signing]
     key_file = "/run/secrets/ferrofed/signing-key.pem"
     # EDIT: the address the nodes fetch the JWK Set from.
@@ -144,7 +144,7 @@ data:
     # it: "log" names no caller and no patient. Each record is stored in the
     # spool first, on the audit-spool volume claim statefulset.yaml gives
     # each replica at /var/lib/ferrofed.
-    # https://ferrofed.eu/docs/operate/audit.html#the-access-log
+    # https://ferrofed.eu/docs/operate/access-log.html
     [audit]
     destination = "repository"
 
