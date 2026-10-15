@@ -130,7 +130,7 @@ What the mark does and does not say:
   exactly, and never infers it from the query, the data or a node's answer.
 - It changes no request to a node. The purpose reaches every node in the
   `openEHR-federation-client` token as any purpose does
-  ([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)),
+  ([What a node is told about the caller](caller-token.md)),
   and the node decides whether to release restricted data (Federation Tier
   §13, N26). The gateway sends the same request it would send without the
   mark, asks no node again, and answers a node's refusal as it would

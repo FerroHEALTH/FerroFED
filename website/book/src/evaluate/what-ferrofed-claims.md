@@ -126,7 +126,7 @@ Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
   gateway signs for that node and a node verifies against the published JWK
   Set (§13.1, N24, CP-16;
   [#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
-  [What a node is told about the caller](../operate/authentication.md#what-a-node-is-told-about-the-caller)).
+  [What a node is told about the caller](../operate/caller-token.md)).
 - Consent left to the node, with the optional Step-1 pre-filter on every
   patient route, the read of an EHR by subject included, its outage carried
   in `meta.federation`, on the health report and in the metrics, and a

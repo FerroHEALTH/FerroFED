@@ -242,7 +242,7 @@ password_file = "/run/secrets/ferrofed/node-b-password"
 #     -out secrets/signing-key.pem
 # A node under the FAPI 2.0 Security Profile admits ES256 and not ES384
 # (§5.4.1): use ec_paramgen_curve:P-256 for such a federation.
-# https://ferrofed.eu/docs/operate/authentication.html#what-a-node-is-told-about-the-caller
+# https://ferrofed.eu/docs/operate/caller-token.html
 [signing]
 key_file = "/run/secrets/ferrofed/signing-key.pem"
 # EDIT: the address the nodes fetch the JWK Set from.

@@ -19,7 +19,7 @@ The answers rest on three pieces of the gateway:
 [client authentication](authentication.md), OAuth 2.0 from the gateway to
 each node ([Configuration](onward-credentials.md#oauth-20-to-a-node)), and the
 `openEHR-federation-client` token that tells each node who asks
-([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)).
+([What a node is told about the caller](caller-token.md)).
 
 ## 1. Which identity is verified across the trust boundary
 

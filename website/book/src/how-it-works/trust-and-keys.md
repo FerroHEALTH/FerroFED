@@ -164,7 +164,7 @@ gateway's own requests for its operator, the admission check and the
 redistribution of a held stored query, name the gateway itself as `sub`.
 The specification leaves end-user conveyance open (§13.1), so the header
 and its claims are FerroFED's own; a node verifies it as
-[Client authentication](../operate/authentication.md#verifying-it-at-the-node)
+[Verifying it at the node](../operate/caller-token.md#verifying-it-at-the-node)
 describes.
 
 ## The caller's token is never forwarded

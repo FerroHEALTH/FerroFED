@@ -139,7 +139,7 @@ A routed request reaches the node as you sent it:
   `Authorization` never reaches a node: the gateway authenticates to each node
   with that node's own credentials, and tells the node who you are in an
   `openEHR-federation-client` token it signs itself (§13.1, N24,
-  [What a node is told about the caller](../operate/authentication.md#what-a-node-is-told-about-the-caller)).
+  [What a node is told about the caller](../operate/caller-token.md)).
   Neither does your `X-Request-Id`:
   the node receives the gateway's own id for the request. Nor do the
   targeting headers, which mean nothing at a node (§8.4);

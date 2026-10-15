@@ -500,7 +500,7 @@ Set publishes each key with its `alg`. It is required whenever a registry
 is configured, by `registry.document` or by `[registry.mcsd]`: every
 request to a node carries the caller's identity in an
 `openEHR-federation-client` token signed with the current key
-([Client authentication](authentication.md#what-a-node-is-told-about-the-caller);
+([What a node is told about the caller](caller-token.md);
 §13.1, N24), and a federating gateway without the key refuses to start,
 naming it. The current key signs every client assertion of an `oauth2`
 grant too. A key on another curve refuses the configuration, naming the

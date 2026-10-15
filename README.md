@@ -57,7 +57,7 @@ endpoint, and never sends the client's own token.
 Every request to a node carries the verified client in an
 `openEHR-federation-client` token the gateway signs with its own key, which
 each node can verify against the key set the gateway publishes
-([what a node is told about the caller](https://ferrofed.eu/docs/operate/authentication.html#what-a-node-is-told-about-the-caller)).
+([what a node is told about the caller](https://ferrofed.eu/docs/operate/caller-token.html)).
 Localization through XCPD, the PIX Manager or the Dutch NVI, a PDQm step
 ahead of resolution, the identity feed over PMIR, the registry read from an
 mCSD directory, the audit of every IHE transaction to an ATNA repository,
