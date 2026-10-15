@@ -29,6 +29,7 @@
 - [Regulatory status](evaluate/regulatory-status.md)
   - [Information sheet](evaluate/information-sheet.md)
   - [Technical documentation](evaluate/technical-documentation.md)
+    - [Annex II checklist](evaluate/annex-ii.md)
   - [Receiving a document](evaluate/receiving-documents.md)
   - [Clinical safety risk file](evaluate/clinical-safety.md)
   - [Complaints and incidents](evaluate/post-market.md)

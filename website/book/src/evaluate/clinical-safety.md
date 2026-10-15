@@ -15,9 +15,8 @@ hazard, the control that answers it, and the test or code that implements
 the control, by path. A control that is not built is marked planned, with
 its issue.
 
-The Annex II checklist that
-[#525](https://github.com/FerroHEALTH/FerroFED/issues/525) builds cites this
-page for point 1.1, by hazard id. Every quotation of the Regulation is from
+The [Annex II checklist](annex-ii.md) cites this page for point 1.1, with
+the hazards still open. Every quotation of the Regulation is from
 the Official Journal text, vendored at
 [`docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml).
 This page is not legal advice.
