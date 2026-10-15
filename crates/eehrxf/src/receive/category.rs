@@ -40,6 +40,9 @@ pub struct Profiles {
 impl Category {
     /// Returns the `Composition.type` the category's document profile fixes,
     /// when this build receives documents of the category.
+    ///
+    /// A prescription and a dispensation give `None` in every build: HL7
+    /// Europe MPD 1.0.0 has no `Bundle` or `Composition` profile.
     #[must_use]
     pub const fn document_type(self) -> Option<DocumentType> {
         match self {
@@ -60,7 +63,8 @@ impl Category {
                 )),
                 expect(
                     unreachable_patterns,
-                    reason = "every category this build carries is received"
+                    reason = "a build with none of these features carries at most the patient summary, \
+                              which its own arm receives"
                 )
             )]
             _ => None,
@@ -69,6 +73,9 @@ impl Category {
 
     /// Returns the profiles a document of the category is checked against,
     /// when this build receives documents of the category.
+    ///
+    /// A prescription and a dispensation give `None` in every build: HL7
+    /// Europe MPD 1.0.0 has no `Bundle` or `Composition` profile.
     #[must_use]
     pub const fn profiles(self) -> Option<Profiles> {
         match self {
@@ -87,7 +94,8 @@ impl Category {
                 )),
                 expect(
                     unreachable_patterns,
-                    reason = "every category this build carries is received"
+                    reason = "a build with none of these features carries at most the patient summary, \
+                              which its own arm receives"
                 )
             )]
             _ => None,

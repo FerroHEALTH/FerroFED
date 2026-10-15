@@ -612,4 +612,53 @@ mod tests {
         assert!(!shown.contains(pending.state()), "{shown}");
         assert!(!shown.contains(pending.nonce()), "{shown}");
     }
+
+    #[tokio::test]
+    async fn a_poisoned_store_answers_500_with_an_alert_and_neither_a_sign_in_nor_the_views() {
+        use std::collections::BTreeMap;
+        use std::sync::Arc;
+        use tower::ServiceExt as _;
+
+        let settings = crate::config::Config::from_sources(Some(""), &BTreeMap::new())
+            .expect("an empty configuration loads")
+            .resolve()
+            .expect("an empty configuration resolves");
+        let state = crate::server::ViewerState::new(settings).expect("the clients build");
+        let session = state.sessions().establish(signed_in()).expect("room");
+        let store = Arc::clone(&state.sessions().store);
+        let poisoner = std::thread::spawn(move || {
+            let _held = store.lock();
+            panic!("a thread panics holding the session store");
+        });
+        assert!(poisoner.join().is_err(), "the poisoning thread panics");
+        assert!(state.sessions().store.is_poisoned());
+
+        let cookie = format!(
+            "{}={}",
+            state.sessions().cookie_name(super::COOKIE),
+            session.as_str()
+        );
+        let service = crate::server::router(state);
+        for path in ["/", "/no/such/page"] {
+            let request = http::Request::get(path)
+                .header("cookie", &cookie)
+                .body(axum::body::Body::empty())
+                .expect("a request");
+            let response = service.clone().oneshot(request).await.expect("an answer");
+            assert_eq!(
+                http::StatusCode::INTERNAL_SERVER_ERROR,
+                response.status(),
+                "{path}"
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("the body");
+            let body = String::from_utf8(body.to_vec()).expect("UTF-8");
+            assert!(body.contains(r#"<p role="alert">"#), "{path}: {body}");
+            assert!(body.contains("session store"), "{path}: {body}");
+            assert!(!body.contains(r#"href="/login""#), "{path}: {body}");
+            assert!(!body.contains("<nav"), "{path}: {body}");
+            assert!(!body.contains("Sign out"), "{path}: {body}");
+        }
+    }
 }

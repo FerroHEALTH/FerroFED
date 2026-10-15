@@ -72,7 +72,7 @@ const APPLIED: &str = r#"{"revision":{"id":2,"base":1,"origin":"operator","resto
     "applied_at":"2026-10-15T09:06:00Z"}}"#;
 
 /// A stub admin listener answering every route the page takes.
-async fn listener() -> Server {
+pub(crate) async fn listener() -> Server {
     let listener = Server::start().await;
     for (verb, route, status, body) in [
         ("GET", "/admin/config", 200, STANDING),

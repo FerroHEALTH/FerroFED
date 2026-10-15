@@ -228,6 +228,18 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 Europe Hospital Discharge Report | package `hl7.fhir.eu.hdr` 0.1.0-ballot, pin-set digest `2bc6073aedf1a6e4630b3763c2058ed5bbec53c29bc2e74ef5a9c2a60f0af918`, tarball sha256 `458b8ba0edcf22d75d455d6149c9264d486bb8ec052251a90afd8654410482ee` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-hdr/PROVENANCE.md` |
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/eehrxf.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
 
+### FHIR R4 core specification (#1053)
+
+The pages of FHIR R4 4.0.1 that govern an extension the exchange format
+defines: Extensibility, Defining Extensions, the StructureDefinition resource
+and the licence page, each pinned in `scripts/vendor/fhir-r4.sh` by its
+versioned URL and sha256 through `scripts/vendor/lib/pinned.sh`. The
+extension definitions under `crates/eehrxf/src/` are tested against them.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| FHIR R4 core specification pages | `hl7.org/fhir/R4/` 4.0.1, pin-set digest `f83b3f5adeb29f74a8c465292689bbdbbf7c6b609b9d5a643ab6954b483244a7`, the Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition and License and Legal Terms (2.20) pages | `scripts/vendor/fhir-r4.sh`, `docs/specs/fhir-r4/PROVENANCE.md` |
+
 ### openEHR clinical models (#776, #980)
 
 The openEHR International Patient Summary template of the openEHR
@@ -412,6 +424,33 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
+| Tailwind CSS standalone CLI | 4.3.3 | `scripts/release/viewer-tools.sh`, and `LEPTOS_TAILWIND_VERSION` in `scripts/release/viewer-site.sh` |
+| Tailwind CSS standalone CLI, `tailwindcss-linux-x64` SHA-256 | `dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a` | `scripts/release/viewer-tools.sh` |
+| Tailwind CSS standalone CLI, `tailwindcss-macos-arm64` SHA-256 | `cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d` | `scripts/release/viewer-tools.sh` |
+| Binaryen (wasm-opt) | version_123 | `scripts/release/viewer-tools.sh` |
+| Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the x86_64 Linux archive, SHA-256 | `d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/viewer-tools.sh` |
+
+The console's stylesheet is Tailwind CSS 4, configured in
+`app/ferrofed-viewer/style/tailwind.css` with no JavaScript config file, as
+FerroTERM's viewer is, at the release FerroTERM's viewer builds with, so the
+build needs no Node. cargo-leptos runs the Tailwind CSS standalone CLI and
+Binaryen's wasm-opt it finds on `PATH`, and downloads either unchecked when it
+finds none, so `scripts/release/viewer-tools.sh` installs both at these
+releases and checks each against its digest first, and
+`scripts/release/viewer-site.sh` refuses to build without them. Binaryen
+version_123 is the release cargo-leptos 0.3.11 fetches by default. Each digest
+equals the one the upstream release publishes beside its asset
+(`sha256sums.txt` for Tailwind CSS, a `.sha256` file per archive for
+Binaryen), read on 2026-10-15. `scripts/release/viewer-tools.sh --check`,
+which the site script runs before every build, compares the files on `PATH`
+with the pins: the Tailwind CSS CLI is its release asset, and for Binaryen it
+digests the `wasm-opt` inside the verified archive, and on macOS the
+`libbinaryen.dylib` that `wasm-opt` loads, both taken from the archives above
+on 2026-10-15.
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

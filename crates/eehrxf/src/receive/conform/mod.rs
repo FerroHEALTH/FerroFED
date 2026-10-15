@@ -30,9 +30,13 @@
 //! `closed`, or `openAtEnd` and the occurrence comes before a named one, and
 //! admitted where it is `open`. The root invariants
 //! of one form, a reference every entry of listed types carries, are
-//! evaluated. Other invariants and terminology bindings are not checked
-//! here. [`check_resource`] holds any one resource, such as an entry of a
-//! document, to a profile by the same rules.
+//! evaluated, and every other invariant is listed as not evaluated. The
+//! walk holds no terminology binding: [`ReceivedDocument::check_bindings`]
+//! and [`check_required`](crate::terminology::bindings::check_required) hold
+//! the `required` ones, and what they find or cannot evaluate converts into
+//! a [`Finding`] or an [`Unevaluated`] of this module. [`check_resource`]
+//! holds any one resource, such as an entry of a document, to a profile by
+//! the same rules.
 
 mod values;
 mod walk;

@@ -422,20 +422,22 @@ pub mod answer {
         })
         .collect_view();
         view! {
-            <table>
-                <caption>"Every endpoint the gateway reports"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Endpoint"</th>
-                        <th scope="col">"Status"</th>
-                        <th scope="col">"Latency"</th>
-                        <th scope="col">"Rows"</th>
-                        <th scope="col">"Organisation"</th>
-                        <th scope="col">"Error"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>"Every endpoint the gateway reports"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Endpoint"</th>
+                            <th scope="col">"Status"</th>
+                            <th scope="col">"Latency"</th>
+                            <th scope="col">"Rows"</th>
+                            <th scope="col">"Organisation"</th>
+                            <th scope="col">"Error"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         }
         .into_any()
     }
@@ -478,13 +480,15 @@ pub mod answer {
             })
             .collect_view();
         view! {
-            <table>
-                <caption>{counted(answer.rows.len())}</caption>
-                <thead>
-                    <tr>{header}</tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>{counted(answer.rows.len())}</caption>
+                    <thead>
+                        <tr>{header}</tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         }
         .into_any()
     }

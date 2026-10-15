@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "remaining-dispensations",
+  "url": "https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations",
+  "name": "RemainingDispensations",
+  "title": "Remaining dispensations",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-15",
+  "publisher": "FerroFED",
+  "description": "The number of dispensations a prescription item has left, as the member that holds the prescription states it. `MedicationRequest.dispenseRequest.numberOfRepeatsAllowed` is the number authorised; no element of FHIR R4 or of the HL7 Europe Medication Prescription and Dispense profiles carries the number left.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "MedicationRequest.dispenseRequest"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Dispensations left",
+        "definition": "The number of dispensations the prescription item has left, as the member that holds the prescription states it.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "The number of dispensations left",
+        "definition": "The number of dispensations the prescription item has left; zero when none is left.",
+        "min": 1,
+        "type": [
+          {
+            "code": "unsignedInt"
+          }
+        ]
+      }
+    ]
+  }
+}

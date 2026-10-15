@@ -100,18 +100,20 @@ pub(super) fn diff_table(changes: &[Difference], to: RevisionId) -> AnyView {
         })
         .collect_view();
     view! {
-        <table>
-            <caption>{format!("What revision {to} changes, by key")}</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Key"</th>
-                    <th scope="col">"Change"</th>
-                    <th scope="col">"Running value"</th>
-                    <th scope="col">{format!("Value in revision {to}")}</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
+        <div class=crate::styles::TABLE_SCROLL tabindex="0">
+            <table>
+                <caption>{format!("What revision {to} changes, by key")}</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">"Key"</th>
+                        <th scope="col">"Change"</th>
+                        <th scope="col">"Running value"</th>
+                        <th scope="col">{format!("Value in revision {to}")}</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
     }
     .into_any()
 }
@@ -147,20 +149,22 @@ pub(super) fn members_section(members: &[MemberResource]) -> AnyView {
                 "is read-only here: change it in its source. A console member is changed "
                 "through a revision you preview and then apply."
             </p>
-            <table>
-                <caption>"Members and their owners"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Node"</th>
-                        <th scope="col">"Organisation"</th>
-                        <th scope="col">"system_id"</th>
-                        <th scope="col">"Endpoints"</th>
-                        <th scope="col">"Owner"</th>
-                        <th scope="col">"State"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>"Members and their owners"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Node"</th>
+                            <th scope="col">"Organisation"</th>
+                            <th scope="col">"system_id"</th>
+                            <th scope="col">"Endpoints"</th>
+                            <th scope="col">"Owner"</th>
+                            <th scope="col">"State"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         </section>
     }
     .into_any()
@@ -205,17 +209,19 @@ pub(super) fn queries_section(registry: QueryRegistry, queries: &[QueryResource]
                 "none is edited or removed."
             </p>
             {read_only}
-            <table>
-                <caption>"Stored-query versions and their owners"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Name"</th>
-                        <th scope="col">"Version"</th>
-                        <th scope="col">"Owner"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>"Stored-query versions and their owners"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Name"</th>
+                            <th scope="col">"Version"</th>
+                            <th scope="col">"Owner"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         </section>
     }
     .into_any()
@@ -255,20 +261,22 @@ pub(super) fn history_section(history: &Page<Revision>) -> AnyView {
     view! {
         <section aria-labelledby="config-history">
             <h2 id="config-history">"History"</h2>
-            <table>
-                <caption>{shown}</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Revision"</th>
-                        <th scope="col">"Origin"</th>
-                        <th scope="col">"Made by"</th>
-                        <th scope="col">"At"</th>
-                        <th scope="col">"Reason"</th>
-                        <th scope="col">"TOML"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>{shown}</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Revision"</th>
+                            <th scope="col">"Origin"</th>
+                            <th scope="col">"Made by"</th>
+                            <th scope="col">"At"</th>
+                            <th scope="col">"Reason"</th>
+                            <th scope="col">"TOML"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         </section>
     }
     .into_any()

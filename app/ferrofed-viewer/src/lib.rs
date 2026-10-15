@@ -30,6 +30,8 @@ pub mod configure;
 #[path = "../../ferrofed-registry/src/manufacturer.rs"]
 pub mod manufacturer;
 pub mod query;
+pub mod shell;
+pub mod styles;
 pub mod views;
 
 #[cfg(not(target_arch = "wasm32"))]

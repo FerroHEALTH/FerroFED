@@ -57,6 +57,14 @@ use crate::receive::conform::Conformance;
 pub const REMAINING_DISPENSATIONS: &str =
     "https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations";
 
+/// The FHIR R4 `StructureDefinition` of [`REMAINING_DISPENSATIONS`], as JSON.
+///
+/// A simple extension of `MedicationRequest.dispenseRequest`, at most once,
+/// with a `valueUnsignedInt`, defined after FHIR R4 2.5.1 Defining
+/// Extensions. The documentation site serves it at its canonical URL.
+pub const REMAINING_DISPENSATIONS_DEFINITION: &str =
+    include_str!("StructureDefinition-remaining-dispensations.json");
+
 /// The canonical URL of the IHE MPD extension for the overall prescribed
 /// quantity.
 ///

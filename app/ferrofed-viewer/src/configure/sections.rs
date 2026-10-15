@@ -83,19 +83,21 @@ pub fn section_table(resources: &Resources) -> AnyView {
                 "without one. A secret is shown as set, with the file it is read from, and "
                 "never by its value."
             </p>
-            <table>
-                <caption>"Credentials and binding sections and their owners"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Resource"</th>
-                        <th scope="col">"Owner"</th>
-                        <th scope="col">"State"</th>
-                        <th scope="col">"Secrets"</th>
-                        <th scope="col">"Settings"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
+            <div class=crate::styles::TABLE_SCROLL tabindex="0">
+                <table>
+                    <caption>"Credentials and binding sections and their owners"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Resource"</th>
+                            <th scope="col">"Owner"</th>
+                            <th scope="col">"State"</th>
+                            <th scope="col">"Secrets"</th>
+                            <th scope="col">"Settings"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
         </section>
     }
     .into_any()

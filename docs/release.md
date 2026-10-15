@@ -259,7 +259,12 @@ slow one.
    [clinical safety risk file](https://ferrofed.eu/docs/evaluate/clinical-safety.html)
    is reviewed and its review table gets a row. The release attaches both
    pages as they stand at the tag, so what the bump merges is the copy an
-   operator downloads (§ What the lane does).
+   operator downloads (§ What the lane does). The
+   [cybersecurity risk assessment](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
+   is reviewed against what the release changes and gets a line in its
+   revisions table, and the support table of
+   [CRA information to the user](https://ferrofed.eu/docs/evaluate/cra-user-information.html)
+   gets the row `changelog.sh --assemble` adds to `SECURITY.md`.
 6. **A change to a harmonised component is reflected in the technical
    documentation** (Regulation (EU) 2025/327 Art 30(2)). When a file under
    `crates/ehds-logging`, `crates/eehrxf`, `app/ferrofed-eehrxf`,

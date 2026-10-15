@@ -19,7 +19,7 @@ use std::time::Duration;
 use axum::Extension;
 use axum::extract::Request;
 use axum::middleware::Next;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use http::header::SET_COOKIE;
 use http::{HeaderValue, StatusCode};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -133,9 +133,15 @@ pub async fn refresh_session(
             }
             response
         }
+        // NOTE: RFC 9110 §15.6.1: the answer stays a 500, and a page drawn
+        // for it says why in its notice in place of an empty body.
         Err(error) => {
             tracing::error!(%error, "the session store could not be read");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            let mut response = next.run(request).await;
+            if !response.status().is_server_error() {
+                *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            }
+            response
         }
     }
 }
