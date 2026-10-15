@@ -129,7 +129,23 @@ fn document_beside(
     header: PatientHeader,
     elsewhere: &[Elsewhere],
 ) -> Result<Assembled, Box<dyn Error>> {
-    let mappings = Mappings::compile(&[allergies()?])?;
+    document_mapped(
+        sections,
+        header,
+        elsewhere,
+        &Mappings::compile(&[allergies()?])?,
+    )
+}
+
+/// The document the two members' `sections` make, mapped with `mappings`,
+/// about the patient `header` describes, beside the members `elsewhere`
+/// that serve their own.
+fn document_mapped(
+    sections: &[SectionAnswers],
+    header: PatientHeader,
+    elsewhere: &[Elsewhere],
+    mappings: &Mappings,
+) -> Result<Assembled, Box<dyn Error>> {
     let request = Request {
         base: BASE.to_owned(),
         identifier: String::from("urn:uuid:5a6b7c8d-0000-4000-8000-000000000001"),
@@ -148,7 +164,7 @@ fn document_beside(
         &request,
         &author,
         (&origins(), sections, elsewhere),
-        &mappings,
+        mappings,
     )?)
 }
 
@@ -290,6 +306,79 @@ fn a_composition_no_mapping_covers_is_reported_never_dropped() -> Result<(), Box
         ),
         "{div}"
     );
+    Ok(())
+}
+
+/// The allergies mapping with one more mapping that runs only from FHIR to
+/// openEHR, which a run toward FHIR skips and declares as a loss.
+fn lossy() -> Result<Mappings, Box<dyn Error>> {
+    let [model, context] = eps::mapping_files();
+    let mut text = std::fs::read_to_string(model)?;
+    text.push_str(concat!(
+        "\n",
+        "  - name: \"verificationStatus\"\n",
+        "    unidirectional: \"fhir->openehr\"\n",
+        "    with:\n",
+        "      fhir: \"$resource.verificationStatus\"\n",
+        "      openehr: \"$archetype/data[at0001]/items[at0003]\"\n",
+        "      type: \"CODEABLECONCEPT\"\n",
+    ));
+    let lossy = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("ferrofed_allergy_lossy.yml");
+    std::fs::write(&lossy, text)?;
+    let mut source = allergies()?;
+    source.files = vec![lossy, context];
+    Ok(Mappings::compile(&[source])?)
+}
+
+#[test]
+fn a_lossy_mapping_run_reports_its_losses_outside_the_document() -> Result<(), Box<dyn Error>> {
+    let assembled = document_mapped(
+        &answers(
+            &[held(
+                "7c4e1d20-0000-4000-8000-0000000000a3::cdr-a.example.org::1",
+                eps::TEMPLATE,
+            )],
+            &Answer::Answered(Vec::new()),
+        ),
+        header(),
+        &[],
+        &lossy()?,
+    )?;
+    let dropped: usize = assembled
+        .transformations
+        .iter()
+        .map(|report| report.dropped().count())
+        .sum();
+    assert!(
+        dropped > 0,
+        "the run declared a loss: {:?}",
+        assembled.transformations
+    );
+    assert!(
+        assembled.transformations.iter().any(|report| report
+            .dropped()
+            .paths()
+            .keys()
+            .any(|path| path.contains("verificationStatus"))),
+        "the report names the skipped mapping: {:?}",
+        assembled.transformations
+    );
+    let text = serde_json::to_string(&assembled.bundle)?;
+    let bundle: serde_json::Value = serde_json::from_str(&text)?;
+    let kinds: Vec<&str> = bundle["entry"]
+        .as_array()
+        .ok_or("entries")?
+        .iter()
+        .filter_map(|entry| entry["resource"]["resourceType"].as_str())
+        .collect();
+    assert!(
+        !kinds.contains(&"OperationOutcome"),
+        "an OperationOutcome reports on the run, never in the document: {kinds:?}"
+    );
+    assert!(kinds.contains(&"AllergyIntolerance"), "{kinds:?}");
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-lossy", &text)?;
     Ok(())
 }
 

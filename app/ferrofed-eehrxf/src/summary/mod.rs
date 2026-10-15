@@ -17,6 +17,8 @@
 //! - each section is authored by the `Organization` of every member whose
 //!   data it holds, and every mapped run carries one `Provenance` naming the
 //!   source composition and that member;
+//! - the `OperationOutcome` a lossy run returns is counted in that run's
+//!   transformation report and never becomes an entry of the document;
 //! - a member's data are listed as mapped, beside every other member's,
 //!   never merged with them;
 //! - each section's narrative is generated and says that it is not
@@ -411,7 +413,13 @@ impl Assembly {
             .filter_map(|entry| entry.resource.clone())
             .collect();
         self.transformed(mapping, &composition.template, &resources)?;
-        Ok(self.document.add(&resources)?.into_iter().next())
+        // NOTE: HL7 Europe Patient Summary 1.0.0-ballot `bundle-eu-eps` slices `Bundle.entry` by the
+        // document's content and names no `OperationOutcome`; the run's losses go to its report.
+        let entries: Vec<Resource> = resources
+            .into_iter()
+            .filter(|resource| !matches!(resource, Resource::OperationOutcome(_)))
+            .collect();
+        Ok(self.document.add(&entries)?.into_iter().next())
     }
 
     /// Counts what `mapping` did to a composition of `template`, which it
