@@ -66,6 +66,10 @@ pub struct ConfigForm {
     /// `categories=`, `profiles=` and optionally `suspended`, separated by
     /// spaces, each endpoint separated by a semicolon.
     pub fhir_endpoints: String,
+    /// Not empty when the form showed the FHIR endpoints field; a form
+    /// without it, as one drawn before the field existed, keeps the held
+    /// FHIR endpoints whole.
+    pub fhir_shown: String,
     /// The stored query's qualified name.
     pub name: String,
     /// The stored query's version.
@@ -103,6 +107,7 @@ impl fmt::Debug for ConfigForm {
             .field("node", &filled(&self.node))
             .field("endpoints", &filled(&self.endpoints))
             .field("fhir_endpoints", &filled(&self.fhir_endpoints))
+            .field("fhir_shown", &filled(&self.fhir_shown))
             .field("name", &filled(&self.name))
             .field("aql", &filled(&self.aql))
             .field("settings", &filled(&self.settings))

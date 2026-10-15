@@ -90,6 +90,7 @@ fn save_c(fhir: &str) -> String {
         ("system_id", "cdr-c.example.org"),
         ("endpoints", "node-c-pub https://cdr-c.example.org/openehr"),
         ("fhir_endpoints", fhir),
+        ("fhir_shown", "yes"),
         ("reason", "FHIR"),
         ("confirm", "yes"),
     ])
@@ -131,7 +132,23 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
         "{page}"
     );
     assert!(
-        page.contains(r#"<label for="edit-node-c-fhir_endpoints">FHIR endpoints"#),
+        page.contains(r#"<label for="edit-node-c-fhir_endpoints">FHIR endpoints</label>"#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"aria-describedby="edit-node-c-fhir_endpoints-hint""#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"<p id="edit-node-c-fhir_endpoints-hint">"#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"name="form[fhir_shown]" value="yes""#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"name="form[action]" value="add-member""#),
         "{page}"
     );
     Ok(())
@@ -217,15 +234,19 @@ async fn a_fhir_endpoint_that_does_not_read_asks_no_replica() -> Result<(), Box<
     for (fhir, said) in [
         (
             "node-c-fhir https://cdr-c.example.org/fhir categories=A profiles=p",
-            "Each FHIR endpoint is",
+            "FHIR endpoint 1 is not an endpoint_id",
         ),
         (
-            "node-c-fhir https://cdr-c.example.org/fhir system=s categories=A, profiles=p",
-            "A FHIR endpoint names one or more categories",
+            "node-c-x https://x.example.org/fhir system=s categories=A profiles=p; node-c-fhir https://cdr-c.example.org/fhir system=s categories=A, profiles=p",
+            "FHIR endpoint 2 names one or more categories",
         ),
         (
             "node c https://cdr-c.example.org/fhir system=s categories=A profiles=p",
-            "Each FHIR endpoint is",
+            "FHIR endpoint 1 is not an endpoint_id",
+        ),
+        (
+            "node-c-fhir cdr-c.example.org/fhir system=s categories=A profiles=p",
+            "The base URL of FHIR endpoint 1 is not an absolute http or https URL.",
         ),
     ] {
         let html = configured(&service, &session, save_c(fhir)).await?;
@@ -259,4 +280,89 @@ async fn a_hostile_fhir_endpoint_is_escaped_in_the_edit_form() -> Result<(), Box
     );
     assert!(page.contains("&quot; onfocus=&quot;alert(2)"), "{page}");
     Ok(())
+}
+/// The save of console member C a form posts with `action` and `fields`
+/// beside the member's own, which carry no FHIR endpoints field.
+fn posted(action: &str, fields: &[(&str, &str)]) -> String {
+    let mut all = vec![
+        ("action", action),
+        ("base", "2"),
+        ("organisation", "org-c"),
+        ("node", "node-c"),
+        ("system_id", "cdr-c.example.org"),
+        ("endpoints", "node-c-pub https://cdr-c.example.org/openehr"),
+        ("reason", "FHIR"),
+        ("confirm", "yes"),
+    ];
+    all.extend_from_slice(fields);
+    form(&all)
+}
+
+/// Asserts that `listener` received one save that keeps the held FHIR
+/// endpoint whole.
+async fn kept_whole(listener: &Server) -> Result<(), Box<dyn Error>> {
+    let fhir = saved_fhir(listener).await?;
+    let [kept] = fhir.as_slice() else {
+        return Err(format!("one FHIR endpoint, not {}", fhir.len()).into());
+    };
+    assert_eq!("https://cdr-c.example.org/fhir", kept.url, "the url");
+    assert_eq!(EndpointStatus::Suspended, kept.status, "the status");
+    assert_eq!(
+        vec![String::from("Patient-Summaries")],
+        kept.categories,
+        "the categories"
+    );
+    assert_eq!(
+        Some("urn:oid:2.999.1"),
+        kept.ehr_id_system.as_deref(),
+        "the system"
+    );
+    Ok(())
+}
+
+// The form that adds a member refuses a node_id the gateway holds, so it
+// never replaces a member the operator did not open for an edit.
+#[tokio::test]
+async fn the_add_form_refuses_a_node_id_the_gateway_holds() -> Result<(), Box<dyn Error>> {
+    let listener = listener(HELD_FHIR).await;
+    let (service, session) = signed_in_console(&listener)?;
+    let html = configured(
+        &service,
+        &session,
+        posted(
+            "add-member",
+            &[("fhir_endpoints", ""), ("fhir_shown", "yes")],
+        ),
+    )
+    .await?;
+    assert!(html.contains("A member with this node_id exists"), "{html}");
+    assert_eq!(0, changes(&listener).await?);
+    Ok(())
+}
+
+// A tab opened before the FHIR endpoints field existed posts its add form
+// as a save without the field, which keeps the held FHIR endpoints whole.
+#[tokio::test]
+async fn a_form_drawn_before_the_fhir_field_keeps_the_held_fhir_endpoints()
+-> Result<(), Box<dyn Error>> {
+    let listener = listener(HELD_FHIR).await;
+    let (service, session) = signed_in_console(&listener)?;
+    configured(&service, &session, posted("save-member", &[])).await?;
+    kept_whole(&listener).await
+}
+
+// A post that carries FHIR endpoints text but not the form's marker that
+// it showed the field changes no FHIR endpoint: absence is never emptiness.
+#[tokio::test]
+async fn a_post_without_the_fhir_marker_keeps_the_held_fhir_endpoints() -> Result<(), Box<dyn Error>>
+{
+    let listener = listener(HELD_FHIR).await;
+    let (service, session) = signed_in_console(&listener)?;
+    configured(
+        &service,
+        &session,
+        posted("save-member", &[("fhir_endpoints", "")]),
+    )
+    .await?;
+    kept_whole(&listener).await
 }

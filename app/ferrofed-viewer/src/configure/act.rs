@@ -74,6 +74,7 @@ pub mod server {
     use crate::admin::act::server::acted;
     use crate::admin::model::ActionAnswer;
     use crate::config::settings::ReplicaSettings;
+    use crate::configure::member::Shown;
     use crate::configure::model::{ConfigForm, ConfigView};
     use crate::configure::render::{self, SavedLine, StoredLine};
     use crate::configure::sections;
@@ -107,6 +108,8 @@ pub mod server {
             reason: String,
             /// The member as the form gives it.
             member: Box<ConsoleMember>,
+            /// How the member form was drawn.
+            shown: Shown,
         },
         /// Save a revision without the console's member `node`.
         RemoveMember {
@@ -267,11 +270,15 @@ pub mod server {
             return Err(invalid("Tick the confirmation to run this change."));
         }
         match form.action.as_str() {
-            "save-member" => Ok(Plan::SaveMember {
-                base: revision(&form.base, "base revision")?,
-                reason: reason(form)?,
-                member: Box::new(crate::configure::member::member(form)?),
-            }),
+            "add-member" | "save-member" => {
+                let (member, shown) = crate::configure::member::member(form)?;
+                Ok(Plan::SaveMember {
+                    base: revision(&form.base, "base revision")?,
+                    reason: reason(form)?,
+                    member: Box::new(member),
+                    shown,
+                })
+            }
             "remove-member" => Ok(Plan::RemoveMember {
                 base: revision(&form.base, "base revision")?,
                 reason: reason(form)?,
@@ -457,14 +464,13 @@ pub mod server {
                 base,
                 reason,
                 member,
+                shown,
             } => {
                 let change = Change {
                     base,
                     reason: &reason,
                 };
-                let saved = save(gateway, replica, token, (change, *member)).await;
-                let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(config, (name, "member save"), saved, |line| line))
+                save_member(gateway, replica, token, (change, *member, shown)).await
             }
             Plan::RemoveMember { base, reason, node } => {
                 let change = Change {
@@ -546,26 +552,66 @@ pub mod server {
         }
     }
 
+    /// Saves `member` as [`save`] does, and renders the answer with its preview.
+    async fn save_member(
+        gateway: &Gateway,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        (change, member, shown): (Change<'_>, ConsoleMember, Shown),
+    ) -> ActionAnswer {
+        let what = if shown.adding {
+            "member add"
+        } else {
+            "member save"
+        };
+        match save(gateway, replica, token, (change, member, shown)).await {
+            Ok(saved) => {
+                let saved = previewed(gateway, replica, token, saved).await;
+                let at = (replica.name.as_str(), what);
+                render::answers::saved(&acted(ActionKind::Configuration, at, saved, |line| line))
+            }
+            Err(refused) => crate::admin::answer::refused(&refused),
+        }
+    }
+
     /// Saves `member` merged onto the member the newest revision holds of
-    /// its `node_id` ([`merged`](crate::configure::member::merged)); when the resources cannot be read the
-    /// failure is the answer and nothing is sent, since a save without the
-    /// held member would drop the keys the form does not show.
+    /// its `node_id` ([`merged`](crate::configure::member::merged)); when the
+    /// resources cannot be read the failure is the answer and nothing is
+    /// sent, since a save without the held member would drop the keys the
+    /// form does not show.
+    ///
+    /// # Errors
+    /// Returns [`Refusal::Invalid`], asking nothing more, for the form that
+    /// adds a member naming a `node_id` the gateway already holds.
     async fn save(
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        (change, member): (Change<'_>, ConsoleMember),
-    ) -> Result<Revision, GatewayError> {
-        let resources = gateway.config_resources(replica, token).await?;
+        (change, member, shown): (Change<'_>, ConsoleMember, Shown),
+    ) -> Result<Result<Revision, GatewayError>, Refusal> {
+        let resources = match gateway.config_resources(replica, token).await {
+            Ok(resources) => resources,
+            Err(error) => return Ok(Err(error)),
+        };
+        let node = member.node.id.as_str();
+        if shown.adding
+            && resources
+                .members
+                .iter()
+                .any(|resource| resource.node.as_str() == node)
+        {
+            return Err(invalid(
+                "A member with this node_id exists: change it with its own edit form.",
+            ));
+        }
         let held = resources
             .members
             .iter()
             .filter_map(|resource| resource.member.as_ref())
             .find(|held| held.node.id == member.node.id);
-        let member = crate::configure::member::merged(member, held);
-        gateway.save_member(replica, token, change, &member).await
+        let member = crate::configure::member::merged(member, held, shown.fhir);
+        Ok(gateway.save_member(replica, token, change, &member).await)
     }
-
     /// The saved revision `saved` with the preview of what it changes
     /// against the running revision.
     async fn previewed(

@@ -144,6 +144,31 @@ fn fhir_text(member: &ConsoleMember) -> String {
         .join("; ")
 }
 
+/// The FHIR endpoints field of the member form `form`, holding `value`, its
+/// syntax in a hint the field names as its description.
+fn fhir_field(form: &str, value: String) -> impl IntoView {
+    let id = format!("{form}-fhir_endpoints");
+    let hint = format!("{id}-hint");
+    view! {
+        <p>
+            <label for=id.clone()>"FHIR endpoints"</label>
+            " "
+            <input
+                type="text"
+                id=id
+                name="form[fhir_endpoints]"
+                value=value
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby=hint.clone()
+            />
+        </p>
+        <p id=hint>
+            "Each endpoint is its endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service. Separate endpoints with a semicolon."
+        </p>
+    }
+}
+
 /// The save of a console member, `member` filled in for an edit.
 fn member_form(
     id: &str,
@@ -154,7 +179,7 @@ fn member_form(
     let value = |read: fn(&ConsoleMember) -> String| member.map(read).unwrap_or_default();
     let editing = member.is_some();
     let fields = view! {
-        {hidden("action", String::from("save-member"))}
+        {hidden("action", String::from(if editing { "save-member" } else { "add-member" }))}
         {hidden("base", base(head))}
         {field(
             id,
@@ -196,15 +221,8 @@ fn member_form(
             value(endpoints_text),
             (true, false),
         )}
-        {field(
-            id,
-            (
-                "fhir_endpoints",
-                "FHIR endpoints: endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service; separate endpoints with a semicolon",
-            ),
-            value(fhir_text),
-            (false, false),
-        )}
+        {hidden("fhir_shown", String::from("yes"))}
+        {fhir_field(id, value(fhir_text))}
         {field(id, ("reason", "Reason"), String::new(), (true, false))}
         {confirm(id, "I confirm saving this member as a new revision, which I apply separately")}
     };

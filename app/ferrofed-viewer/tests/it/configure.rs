@@ -322,7 +322,7 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
     for (field, value, said) in [
         ("node", "node c", "The node_id is not"),
         ("system_id", "", "The system_id is not"),
-        ("endpoints", "node-c-pub", "Each endpoint is"),
+        ("endpoints", "node-c-pub", "Query API endpoint 1 is not"),
         ("endpoints", "", "Give at least one Query API endpoint."),
         ("reason", " ", "Give the reason"),
     ] {
@@ -500,8 +500,9 @@ async fn a_plain_form_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
 }
 
 // The form shows a Query API endpoint's id, URL and status alone, so a save
-// keeps the consent refusal codes of one it names (§11.1, N27), and the
-// `hl7-fhir-rest` endpoint the edit form shows is saved as it shows it.
+// keeps the consent refusal codes of one it names (§11.1, N27), and a form
+// drawn without the FHIR endpoints field, as a tab opened before it existed,
+// keeps every held `hl7-fhir-rest` endpoint whole.
 #[tokio::test]
 async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
@@ -530,9 +531,7 @@ async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let fhir = "node-c-fhir https://cdr-c.example.org/fhir system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps";
-    let body = format!("{}&{}", save_c(), form(&[("fhir_endpoints", fhir)]));
-    configured(&service, &session, body).await?;
+    configured(&service, &session, save_c()).await?;
     let sent = bodies(&listener, ("PUT", "/admin/config/members/node-c")).await?;
     let [sent] = sent.as_slice() else {
         return Err(format!("one save, not {}", sent.len()).into());

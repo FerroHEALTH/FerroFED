@@ -174,6 +174,7 @@ fn submitted(data: &leptos::web_sys::FormData) -> ConfigForm {
         product_version: field("form[product_version]"),
         endpoints: field("form[endpoints]"),
         fhir_endpoints: field("form[fhir_endpoints]"),
+        fhir_shown: field("form[fhir_shown]"),
         name: field("form[name]"),
         version: field("form[version]"),
         aql: field("form[aql]"),
