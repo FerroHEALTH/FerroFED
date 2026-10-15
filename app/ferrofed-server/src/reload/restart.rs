@@ -23,6 +23,7 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
         signing: boot.signing.clone(),
         audit: boot.audit.clone(),
         revisions: boot.revisions.clone(),
+        revision_poll: boot.revision_poll,
         ..fresh
     };
     for binding in binding::compiled() {
@@ -42,13 +43,14 @@ fn stored_queries_changed(boot: &Settings, fresh: &Settings) -> bool {
 }
 
 /// Whether `fresh` names another configuration revision store than the
-/// process started with, or sets or unsets one.
+/// process started with, sets or unsets one, or reads it at another interval.
 fn revisions_changed(boot: &Settings, fresh: &Settings) -> bool {
-    match (&boot.revisions, &fresh.revisions) {
-        (Some(was), Some(now)) => !was.same_as(now),
-        (None, None) => false,
-        (Some(_), None) | (None, Some(_)) => true,
-    }
+    boot.revision_poll != fresh.revision_poll
+        || match (&boot.revisions, &fresh.revisions) {
+            (Some(was), Some(now)) => !was.same_as(now),
+            (None, None) => false,
+            (Some(_), None) | (None, Some(_)) => true,
+        }
 }
 
 /// Whether `fresh` names other signing keys, another JWK Set location or

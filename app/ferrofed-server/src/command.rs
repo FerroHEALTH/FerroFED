@@ -612,6 +612,7 @@ fn serve_command(
     (config, revisions): (Option<PathBuf>, Option<Arc<Revisions>>),
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
+    let revision_poll = settings.revision_poll;
     let admin = settings
         .metrics
         .listen
@@ -645,6 +646,7 @@ fn serve_command(
                 .with_certificates(listener_certificates)
                 .with_revisions(revisions.clone()),
         );
+        let watch = revision::watch::start(revisions.as_ref(), &reloader, state, revision_poll);
         if let Some((address, access)) = admin {
             let managed = revisions
                 .map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
@@ -691,6 +693,9 @@ fn serve_command(
                 .await
             }
         };
+        if let Some(watch) = watch {
+            watch.stop(server.bindings_drain).await;
+        }
         if running.drain(server.bindings_drain).await == Drained::Abandoned {
             tracing::warn!(
                 budget_ms = server.bindings_drain.as_millis(),

@@ -12,7 +12,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::revision::{Author, Origin, Outcome, RevisionId};
 use http::{Method, StatusCode};
 
-use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Running, TestResult, rest};
+use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Standing, TestResult, rest};
 use crate::support::{ISSUER, error_body};
 
 /// The operator as a revision records them.
@@ -28,7 +28,7 @@ async fn the_file_load_is_the_first_revision_and_runs() -> TestResult {
     let gateway = Gateway::start("")?;
     let (status, text) = gateway.get("/admin/config").await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let running: Running = serde_json::from_str(&text)?;
+    let running: Standing = serde_json::from_str(&text)?;
     assert_eq!("managed", running.ui);
     assert_eq!(Some(1), running.head);
     let current = running.current.ok_or("a revision runs")?;
@@ -404,5 +404,35 @@ async fn a_reload_keeps_the_running_revision_until_the_file_changes() -> TestRes
         .ok_or("held")?;
     assert_eq!(Origin::File, recorded.origin);
     assert_eq!(1, gateway.members()?, "the file's registry runs again");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_file_change_that_needs_a_restart_is_marked_pending_restart_on_sighup() -> TestResult {
+    let gateway = Gateway::start("")?;
+    let text = std::fs::read_to_string(&gateway.config)?;
+    std::fs::write(
+        &gateway.config,
+        text.replace(
+            "id = \"example-federation\"",
+            "id = \"example-federation\"\nbest_effort = false",
+        ),
+    )?;
+    let applied = gateway.reloader.reload()?;
+    assert_eq!(vec!["federation.best_effort"], applied.needs_restart);
+    let current = gateway.revisions.store().current()?.ok_or("a mark")?;
+    assert_eq!(RevisionId::new(2), Some(current.revision));
+    let recorded = gateway
+        .revisions
+        .store()
+        .revision(current.revision)?
+        .ok_or("held")?;
+    assert_eq!(Origin::File, recorded.origin);
+    assert_eq!(Outcome::PendingRestart, current.outcome);
+    assert_eq!(
+        vec![String::from("federation.best_effort")],
+        current.needs_restart
+    );
+    assert_eq!(Author::File, current.applied_by);
     Ok(())
 }

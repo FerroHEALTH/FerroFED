@@ -4,7 +4,8 @@
 //! Configuration revisions under `config.ui = "managed"`: the store, the
 //! revision API on the admin listener behind the operator scope, the file
 //! load recorded as a revision, apply through the reload path, rollback,
-//! optimistic concurrency, no secret value stored or returned, and
+//! optimistic concurrency, no secret value stored or returned, a revision
+//! applied on one replica reaching every replica on the store, and
 //! `config.ui = "off"` changing nothing. No specification governs this: our
 //! own design.
 #![allow(
@@ -14,6 +15,7 @@
 
 mod api;
 mod off;
+mod replicas;
 mod secrets;
 mod store;
 
@@ -29,8 +31,12 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
+use ferrofed_server::revision::embedded::RedbRevisions;
 use ferrofed_server::revision::routes::Managed;
 use ferrofed_server::revision::service::{self, Revisions};
+use ferrofed_server::revision::{
+    Current, Draft, Revision, RevisionId, RevisionStore, Saved, StoreError, Swapped,
+};
 use ferrofed_server::state::AppState;
 use http::{Request, StatusCode, header};
 
@@ -54,7 +60,7 @@ fn operator() -> Result<String, Box<dyn Error>> {
 }
 
 /// One member `name`, at an address nothing listens on.
-fn member(name: &str) -> String {
+pub(crate) fn member(name: &str) -> String {
     format!(
         r#"
 [[organisation]]
@@ -77,7 +83,7 @@ managing_organisation = "org-{name}"
 
 /// The configuration less its bootstrap core over the registry `document`,
 /// with `extra` appended.
-fn rest(document: &Path, extra: &str) -> String {
+pub(crate) fn rest(document: &Path, extra: &str) -> String {
     let document = toml::Value::String(document.display().to_string());
     format!(
         "[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 5000\n\
@@ -101,13 +107,13 @@ fn core(store: &Path) -> Result<String, Box<dyn Error>> {
 
 /// A managed development gateway started over a configuration file in a
 /// temporary directory, with its admin listener's application.
-struct Gateway {
+pub(crate) struct Gateway {
     dir: tempfile::TempDir,
     config: PathBuf,
     store: PathBuf,
-    state: Arc<AppState>,
-    reloader: Arc<Reloader>,
-    revisions: Arc<Revisions>,
+    pub(crate) state: Arc<AppState>,
+    pub(crate) reloader: Arc<Reloader>,
+    pub(crate) revisions: Arc<Revisions>,
     admin: Router,
 }
 
@@ -115,20 +121,38 @@ impl Gateway {
     /// Starts a gateway whose file federates member A alone, with `extra`
     /// appended to the part a revision holds.
     fn start(extra: &str) -> Result<Self, Box<dyn Error>> {
+        Self::build(extra, None)
+    }
+
+    /// Starts a gateway whose file federates member A alone, with `extra`
+    /// appended, over `shared`: the store it shares with other gateways and
+    /// the directory of the registry documents they all read.
+    pub(crate) fn build(
+        extra: &str,
+        shared: Option<(Box<dyn RevisionStore>, &Path)>,
+    ) -> Result<Self, Box<dyn Error>> {
         let dir = tempfile::tempdir()?;
         std::fs::write(dir.path().join("one.toml"), member("a"))?;
         std::fs::write(dir.path().join("two.toml"), member("a") + &member("b"))?;
+        let documents = shared
+            .as_ref()
+            .map_or(dir.path(), |(_, documents)| *documents);
         let store = dir.path().join("revisions.redb");
         let config = dir.path().join("ferrofed.toml");
         std::fs::write(
             &config,
-            core(&store)? + &rest(&dir.path().join("one.toml"), extra),
+            core(&store)? + &rest(&documents.join("one.toml"), extra),
         )?;
         let (loaded, tree) = Config::load_with_tree(Some(&config))?;
         let settings = loaded.resolve()?;
         ferrofed_server::config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
-        let (settings, revisions) = service::boot(settings, &tree)?;
-        let revisions = revisions.ok_or("the configuration is managed")?;
+        let (settings, revisions) = match shared {
+            None => {
+                let (settings, revisions) = service::boot(settings, &tree)?;
+                (settings, revisions.ok_or("the configuration is managed")?)
+            }
+            Some((store, _)) => service::boot_over(store, &tree)?,
+        };
         let state = Arc::new(AppState::build(&settings)?);
         let reloader = Arc::new(
             Reloader::new(Some(config.clone()), settings, Arc::clone(&state))
@@ -160,7 +184,7 @@ impl Gateway {
     }
 
     /// How many members the running registry holds.
-    fn members(&self) -> Result<usize, Box<dyn Error>> {
+    pub(crate) fn members(&self) -> Result<usize, Box<dyn Error>> {
         Ok(self
             .state
             .federation()
@@ -190,13 +214,13 @@ impl Gateway {
     }
 
     /// `GET path` as the operator.
-    async fn get(&self, path: &str) -> Result<(StatusCode, String), Box<dyn Error>> {
+    pub(crate) async fn get(&self, path: &str) -> Result<(StatusCode, String), Box<dyn Error>> {
         self.send((http::Method::GET, path), None, Some(&operator()?))
             .await
     }
 
     /// `POST path` with `body` as the operator.
-    async fn post(
+    pub(crate) async fn post(
         &self,
         path: &str,
         body: Option<String>,
@@ -206,7 +230,7 @@ impl Gateway {
     }
 
     /// Saves `toml` on `base` for `reason` as the operator.
-    async fn save(
+    pub(crate) async fn save(
         &self,
         base: Option<u64>,
         reason: &str,
@@ -232,25 +256,28 @@ struct SaveBody<'a> {
 /// The body of `GET /admin/config`.
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Running {
+pub(crate) struct Standing {
     ui: String,
     head: Option<u64>,
-    current: Option<ferrofed_server::revision::Current>,
+    current: Option<Current>,
+    pub(crate) running: Option<u64>,
+    pub(crate) in_step: bool,
+    pub(crate) refused: Option<u64>,
 }
 
 /// The body of an apply or a rollback.
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Applied {
-    revision: ferrofed_server::revision::Revision,
-    current: ferrofed_server::revision::Current,
+    revision: Revision,
+    current: Current,
 }
 
 /// One page of the history.
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HistoryPage {
-    items: Vec<ferrofed_server::revision::Revision>,
+    items: Vec<Revision>,
     offset: u64,
     total: u64,
 }
@@ -272,4 +299,77 @@ struct Diff {
     from: u64,
     to: u64,
     changes: Vec<Keyed>,
+}
+
+/// A revision store several gateways in one process share, as replicas
+/// share one PostgreSQL database; a `redb` file opens in one place at a time.
+#[derive(Debug, Clone)]
+struct Shared(Arc<RedbRevisions>);
+
+impl RevisionStore for Shared {
+    fn save(&self, base: Option<RevisionId>, draft: Draft) -> Result<Saved, StoreError> {
+        self.0.save(base, draft)
+    }
+
+    fn revision(&self, id: RevisionId) -> Result<Option<Revision>, StoreError> {
+        self.0.revision(id)
+    }
+
+    fn history(&self) -> Result<Vec<Revision>, StoreError> {
+        self.0.history()
+    }
+
+    fn head(&self) -> Result<Option<RevisionId>, StoreError> {
+        self.0.head()
+    }
+
+    fn current(&self) -> Result<Option<Current>, StoreError> {
+        self.0.current()
+    }
+
+    fn swap_current(
+        &self,
+        expected: Option<RevisionId>,
+        next: &Current,
+    ) -> Result<Swapped, StoreError> {
+        self.0.swap_current(expected, next)
+    }
+}
+
+/// Two gateways started from the same configuration over one shared store,
+/// as two replicas of one deployment.
+pub(crate) struct Replicas {
+    /// The registry documents both read, and the shared store's file.
+    documents: tempfile::TempDir,
+    /// The replica that records the file as revision 1.
+    one: Gateway,
+    /// The replica that starts on revision 1, its file being the same.
+    two: Gateway,
+}
+
+impl Replicas {
+    /// Starts both replicas over one store.
+    fn start() -> Result<Self, Box<dyn Error>> {
+        let documents = tempfile::tempdir()?;
+        std::fs::write(documents.path().join("one.toml"), member("a"))?;
+        std::fs::write(
+            documents.path().join("two.toml"),
+            member("a") + &member("b"),
+        )?;
+        let shared = Shared(Arc::new(RedbRevisions::open(
+            &documents.path().join("shared.redb"),
+        )?));
+        let one = Gateway::build("", Some((Box::new(shared.clone()), documents.path())))?;
+        let two = Gateway::build("", Some((Box::new(shared.clone()), documents.path())))?;
+        Ok(Self {
+            documents,
+            one,
+            two,
+        })
+    }
+
+    /// The registry document of members A and B both replicas read.
+    fn two_members(&self) -> PathBuf {
+        self.documents.path().join("two.toml")
+    }
 }
