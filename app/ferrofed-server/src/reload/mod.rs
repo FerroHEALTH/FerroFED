@@ -69,6 +69,16 @@ mod restart;
 
 use restart::{effective, needs_restart};
 
+/// Returns the core's keys a reload leaves to the next start.
+///
+/// Each is a section or a dotted key, in the order a reload names them; a
+/// binding's own sections say whether a reload applies them
+/// ([`Binding::sections`](crate::binding::Binding::sections)).
+#[must_use]
+pub fn restart_keys() -> Vec<&'static str> {
+    restart::keys()
+}
+
 /// Reloads the registry the server started with.
 ///
 /// It holds the settings the process started with, so a reload applies only

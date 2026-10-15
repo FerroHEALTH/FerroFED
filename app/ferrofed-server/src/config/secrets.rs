@@ -454,6 +454,7 @@ pub(crate) fn resolve_signing(
         keys: Arc::new(keys),
         jwks_uri,
         assertion_lifetime: Duration::from_secs(signing.assertion_lifetime_s),
+        rotation_overlap: overlap,
     })
 }
 
