@@ -218,7 +218,9 @@ pub(super) fn attach(response: &mut Response, accessed: Option<Accessed>) {
     }
 }
 
-#[cfg(test)]
+// NOTE: PDQm ITI-78; a received document's patient is looked up through the IHE binding,
+// so these refusals are reached only in a build that carries it.
+#[cfg(all(test, feature = "binding-ihe"))]
 mod tests {
     use std::collections::BTreeMap;
     use std::error::Error;
