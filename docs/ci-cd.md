@@ -145,6 +145,46 @@ uploads `target/conformance/` as the `conformance-report` artifact, feeds
 `conformance-matrix` job runs the script's `--self-test`. Locally: `bash
 scripts/conformance/report.sh --run` with Docker running.
 
+`fhir-validator (EEHRxF documents)` runs HL7's FHIR Validator over every
+patient summary document the tests write (#688). The tests that hold a
+document to the vendored HL7 Europe Patient Summary profiles also write it
+to the directory `FERROFED_EMIT_DIR` names, and do nothing when it is unset;
+the `test` job sets it and uploads the directory as the `eehrxf-documents`
+artifact. This job runs `scripts/checks/fhir-validator.sh` over that
+directory: `validator_cli.jar` at the version `docs/VERSIONS.md` pins,
+checked against the SHA-256 its release publishes, on Temurin 21 from
+`actions/setup-java`. The validator runs offline, with `-tx n/a` and
+`-no-http-access`. It loads `hl7.fhir.eu.eps`, `hl7.fhir.eu.base` and the
+MyHealth@EU Master Value Sets Catalogue from their vendored tarballs with
+`-ig`, so a value set binding such as `eHDSIAllergenNoDrug` is checked
+offline, and reads every package their dependencies name from a package
+cache the script fills first: the vendored tarballs, and the packages the
+repository does not vendor (the R4 core, HL7 Terminology, the HL7 extension
+packages, IPS 1.1.0, IPA, SMART App Launch, DICOM and the validator's own
+`hl7.fhir.xver-extensions`), each fetched from the FHIR package registry at
+the version a manifest names and checked against the SHA-256 the script
+pins. A package it would have to fetch fails the run.
+
+The job fails on an issue of severity error or fatal, on a document with no
+outcome, and on a claimed profile the validator could not find, at whatever
+severity it reports that. Warnings and information never fail it. Those
+include the terminology messages an offline run gives for a code or value
+set no loaded package defines, which only a terminology server could check.
+The test
+documents name their entries under `gateway.example.org`, which RFC 6761
+reserves for examples, so the run admits example URLs. The job writes the
+counts by document and the warnings by message id to its summary, and
+uploads the validator's OperationOutcome output (`validation.json`), its
+HTML rendering, its log, `summary.tsv` with every issue, `summary.md` and
+the documents as the `eehrxf-fhir-validation` artifact, kept 90 days, which
+the technical documentation cites. Its `--self-test` runs first and holds
+the judge to those rules over synthetic outputs. It feeds `conclusion`
+like every other lane. Locally, with Java 17 or
+later: `FERROFED_EMIT_DIR=target/eehrxf-documents cargo nextest run --locked
+--all-features -p eehrxf -p ferrofed-eehrxf -p ferrofed-server`, then the
+script with `FHIR_VALIDATOR_VERSION` and `FHIR_VALIDATOR_SHA256` set as the
+job sets them.
+
 `release compose` holds the compose files every release carries,
 `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`. It builds
 `ferrofed` as a static musl binary and runs
@@ -323,7 +363,8 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | `uses:` references in `.github/workflows/**` and `.github/actions/**`, pinned by full commit SHA | Dependabot, `github-actions` ecosystem |
 | the workspace dependency table in the root `Cargo.toml`, with the `openehr-*` family as one lockstep group | Dependabot, `cargo` ecosystem |
 | a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` |
-| the zizmor, actionlint, shellcheck, hadolint, kubeconform, lychee and promtool versions in `ci.yml` | `pin-freshness.yml`, weekly, and `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows |
+| the zizmor, actionlint, shellcheck, hadolint, kubeconform, lychee, promtool and `validator_cli` versions in `ci.yml` | `pin-freshness.yml`, weekly, and `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows |
+| the FHIR packages the FHIR Validator reads that the repository does not vendor, by version and SHA-256 in `scripts/checks/fhir-validator.sh` | nothing: each is the exact version a vendored manifest, or the validator, names, so a re-pin of either re-derives them |
 | the Kubernetes release and the `yannh/kubernetes-json-schema` commit kubeconform validates against | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change to both |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows, and `pin-freshness.yml`, weekly, against the newest stable tag in each image's registry; a bump is a deliberate change to both |

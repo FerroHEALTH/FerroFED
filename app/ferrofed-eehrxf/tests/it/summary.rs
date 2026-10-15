@@ -172,6 +172,7 @@ fn a_document_from_two_members_meets_the_eps_profiles() -> Result<(), Box<dyn Er
     let text = serde_json::to_string(&assembled.bundle)?;
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-two-members", &text)?;
     let bundle: serde_json::Value = serde_json::from_str(&text)?;
     let allergies = section(&bundle, "48765-2").ok_or("the allergies section")?;
     assert_eq!(allergies["entry"].as_array().map(Vec::len), Some(1));
@@ -353,6 +354,7 @@ fn the_header_is_the_one_the_identity_binding_holds() -> Result<(), Box<dyn Erro
     let text = serde_json::to_string(&assembled.bundle)?;
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-header", &text)?;
     let bundle: serde_json::Value = serde_json::from_str(&text)?;
     let patient = patient(&bundle).ok_or("a Patient")?;
     assert_eq!(
@@ -404,6 +406,7 @@ fn an_element_the_binding_does_not_hold_is_absent_never_invented() -> Result<(),
     let text = serde_json::to_string(&assembled.bundle)?;
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-name-only", &text)?;
     let bundle: serde_json::Value = serde_json::from_str(&text)?;
     let patient = patient(&bundle).ok_or("a Patient")?;
     assert!(
@@ -441,6 +444,7 @@ fn a_member_serving_its_own_summary_is_named_in_every_section_and_mapped_in_none
     let text = serde_json::to_string(&assembled.bundle)?;
     let findings = eps::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
+    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-beside-own-summary", &text)?;
     let bundle: serde_json::Value = serde_json::from_str(&text)?;
     for code in ["48765-2", "11450-4", "10160-0"] {
         let held = section(&bundle, code).ok_or("the section")?;

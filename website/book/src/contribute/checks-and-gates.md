@@ -71,6 +71,16 @@ fails it. Locally, with Docker running, `bash scripts/conformance/report.sh
 --run` runs the whole workspace with the `FERROFED_E2E` gate set and writes
 `target/conformance/report.md`, `report.tsv` and `node-profile.tsv`.
 
+The `fhir-validator (EEHRxF documents)` job runs HL7's FHIR Validator over
+every patient summary document the tests write, offline, against the
+vendored HL7 Europe packages, and fails on an error. The tests write their
+documents only when `FERROFED_EMIT_DIR` names a directory. The job's
+results, the validator's output with every issue listed, are the
+`eehrxf-fhir-validation` artifact. Locally, with Java 17 or later, set
+`FERROFED_EMIT_DIR` for a test run and run
+`scripts/checks/fhir-validator.sh` over that directory with the version and
+checksum the job sets.
+
 The `Docs` workflow builds this book and the landing page on every pull
 request, and publishes them from `main`. A book that does not build fails it.
 The required link check is the `site-links` job of `ci.yml`, because the

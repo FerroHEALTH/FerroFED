@@ -601,6 +601,13 @@ binary, fetched by version and checked against the SHA-256 its release
 publishes, which the job carries beside the version. `promtool`, which the
 `observability` job checks the shipped Prometheus rule file with, comes the
 same way from the Prometheus release tarball of its version.
+`validator_cli`, HL7's FHIR Validator, which the `fhir-validator` job runs
+over the patient summary documents the tests write (#688), is the
+`validator_cli.jar` asset of its `hapifhir/org.hl7.fhir.core` release,
+checked against the SHA-256 the release publishes, which the job carries
+beside the version. The FHIR packages it reads beyond the vendored ones are
+pinned by version and SHA-256 in `scripts/checks/fhir-validator.sh`, at the
+versions the vendored manifests name.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -613,6 +620,7 @@ same way from the Prometheus release tarball of its version.
 | `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
 | `promtool` | 3.15.0 | `.github/workflows/ci.yml` |
+| `validator_cli` | 6.10.4 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).

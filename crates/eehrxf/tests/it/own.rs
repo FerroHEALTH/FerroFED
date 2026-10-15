@@ -24,7 +24,7 @@ use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 
 use super::claimed::eu_mapping;
 use super::document::document_mapped;
-use super::support::eps;
+use super::support::{emit, eps};
 
 /// The canonical URL of the EPS `Composition` profile.
 const EPS_COMPOSITION: &str = "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps";
@@ -43,6 +43,7 @@ fn the_summary_the_component_writes_is_received_by_it() -> Result<(), Box<dyn Er
     let text = serde_json::to_string(&bundle)?;
     let document = ReceivedDocument::read(&text)?;
     document.check(&eps(EPS_BUNDLE)?, &eps(EPS_COMPOSITION)?)?;
+    emit("eehrxf-summary-two-runs", &text)?;
     Ok(())
 }
 

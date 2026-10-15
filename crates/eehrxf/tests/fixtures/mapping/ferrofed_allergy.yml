@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # A synthetic model mapping for the eehrxf tests: the substance of the
-# synthetic allergy evaluation becomes AllergyIntolerance.code, and the
+# synthetic allergy evaluation becomes AllergyIntolerance.code, its coded
+# clinical status AllergyIntolerance.clinicalStatus (R4 ait-1), and the
 # patient is a fixed synthetic reference, because AllergyIntolerance.patient
 # is 1..1 in R4. The archetype is synthetic too; no clinical content.
 grammar: FHIRConnect/v1.0.0
@@ -22,6 +23,12 @@ mappings:
     with:
       fhir: "$resource.code"
       openehr: "$archetype/data[at0001]/items[at0002]"
+      type: "CODEABLECONCEPT"
+
+  - name: "clinicalStatus"
+    with:
+      fhir: "$resource.clinicalStatus"
+      openehr: "$archetype/data[at0001]/items[at0003]"
       type: "CODEABLECONCEPT"
 
   - name: "patient"

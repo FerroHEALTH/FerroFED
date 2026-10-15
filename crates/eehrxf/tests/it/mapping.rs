@@ -88,6 +88,21 @@ pub(crate) const COMPOSITION: &str = r#"{
             "name": { "_type": "DV_TEXT", "value": "Substance" },
             "archetype_node_id": "at0002",
             "value": { "_type": "DV_TEXT", "value": "Synthetic substance one" }
+          },
+          {
+            "_type": "ELEMENT",
+            "name": { "_type": "DV_TEXT", "value": "Clinical status" },
+            "archetype_node_id": "at0003",
+            "value": {
+              "_type": "DV_CODED_TEXT",
+              "value": "Active",
+              "defining_code": {
+                "_type": "CODE_PHRASE",
+                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical" },
+                "code_string": "active",
+                "preferred_term": "Active"
+              }
+            }
           }
         ]
       }
