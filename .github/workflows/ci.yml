@@ -472,6 +472,26 @@ jobs:
           bash scripts/checks/technical-documentation.sh --self-test
           bash scripts/checks/technical-documentation.sh
 
+  # The support-period guard (Regulation (EU) 2024/2847 Art 13(8) and (19),
+  # Annex II point 7): the support table of SECURITY.md and the table of end
+  # dates on the book's CRA information to the user hold the same rows, so
+  # the book never states an end date the record does not. Its self-test
+  # proves each refusal and pass.
+  support-periods:
+    name: support-periods
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/support-periods.sh --self-test
+          bash scripts/checks/support-periods.sh
+
   # The Annex II checklist guard (Regulation (EU) 2025/327 Art 30(1)(a),
   # Art 37(2), Annex II): every point of Annex II has a row in
   # conformance/annex-ii.tsv whose phrase is in that point's text, whose
@@ -1453,6 +1473,7 @@ jobs:
       - conformance-matrix
       - obligations
       - technical-documentation
+      - support-periods
       - annex-ii
       - economic-operators
       - e2e-placement

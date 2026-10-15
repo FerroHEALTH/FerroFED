@@ -224,6 +224,12 @@ jobs:
         # fetches the previous tag alone into this shallow checkout.
         run: bash scripts/checks/technical-documentation.sh
 
+      - name: The book states the support periods SECURITY.md records
+        # Regulation (EU) 2024/2847 Art 13(19) and Annex II point 7: the
+        # release's CRA information to the user lists the same end dates as
+        # the support table of SECURITY.md, the row of this release included.
+        run: bash scripts/checks/support-periods.sh
+
       - name: The Annex II checklist is whole
         # Regulation (EU) 2025/327 Art 30(1)(a), Art 37(2): every point of
         # Annex II has its row with evidence that exists, and the book page

@@ -53,7 +53,9 @@ From v0.0.10 on, the release notes of each release open with its end date,
 and `scripts/release/changelog.sh --assemble` adds its row here when the
 release is cut ([`docs/release.md`](docs/release.md#before-the-tag)). The
 notes of an earlier release cannot be changed, so its end date is stated
-here alone.
+here and in the copy of this table on the book's
+[CRA information to the user](https://ferrofed.eu/docs/evaluate/cra-user-information.html#7-technical-security-support-and-the-support-period),
+which `scripts/checks/support-periods.sh` holds to this one.
 
 | Release | Released | Supported until |
 | ------- | -------- | --------------- |

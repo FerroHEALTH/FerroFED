@@ -160,8 +160,9 @@ dates, as `SECURITY.md` lists them:
 | v0.0.9 | 2026-10-05 | 2031-10-05 |
 | v0.0.10 | 2026-10-15 | 2031-10-15 |
 
-`SECURITY.md` is the record, and the release cut adds each new row to it and
-to this table. A gateway names its own end date in the startup banner and in
+`SECURITY.md` is the record. The release cut adds each new row to it and
+copies the row here, and a guard, `scripts/checks/support-periods.sh`, fails
+every change and every release while the two tables differ. A gateway names its own end date in the startup banner and in
 `OPTIONS {base}/`, and says so once the date has passed.
 
 ## 8. Instructions
