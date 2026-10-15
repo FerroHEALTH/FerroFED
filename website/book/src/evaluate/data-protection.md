@@ -108,7 +108,7 @@ What the record does not cover:
 Each member node still audits who asked: every request carries the verified
 caller in the `openEHR-federation-client` token and the gateway's request
 id (§13.1, N24;
-[Verifying it at the node](../operate/authentication.md#verifying-it-at-the-node)).
+[Verifying it at the node](../operate/caller-token.md#verifying-it-at-the-node)).
 
 ## Retention
 

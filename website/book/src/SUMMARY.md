@@ -58,6 +58,7 @@
     - [Labelling the access records](operate/access-labels.md)
   - [Client authentication](operate/authentication.md)
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)
+    - [What a node is told about the caller](operate/caller-token.md)
   - [Onward credentials](operate/onward-credentials.md)
   - [Queries and API areas](operate/queries-and-areas.md)
   - [Configuration revisions](operate/configuration-revisions.md)

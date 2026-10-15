@@ -208,7 +208,7 @@ so stay within a release or two of the newest.
   `registry.document` or `[registry.mcsd]`: add a P-384 or P-256 signing key
   and the `jwks_uri` it is published at, and make
   `{base}/.well-known/jwks.json` reachable from the nodes' authorization
-  servers ([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)).
+  servers ([What a node is told about the caller](caller-token.md)).
 - **`[audit] destination`** is mandatory for a production gateway with
   `[pixm]`, `[registry.mcsd]` or `[pmir]`. Set `"log"` to keep the
   behaviour of v0.0.7 while you add an Audit Record Repository; `"off"` is

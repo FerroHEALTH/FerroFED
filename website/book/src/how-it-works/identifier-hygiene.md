@@ -87,7 +87,7 @@ flowchart LR
   carries claims about the verified caller. The gate reads each of them
   before it is signed, and a caller claim that would carry the identifier
   refuses the request with nothing sent
-  ([What a node is told about the caller](../operate/authentication.md#what-a-node-is-told-about-the-caller)).
+  ([What a node is told about the caller](../operate/caller-token.md)).
 - A write body is clinical content. A `DV_IDENTIFIER` inside a committed
   `COMPOSITION` reaches the node byte for byte, because the gateway has no
   right to alter it (§5.4 scope note, N22).

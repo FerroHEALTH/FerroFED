@@ -24,7 +24,7 @@ by the gateway: `Accept` and `Content-Type` (`application/json`),
 `Authorization` (the endpoint's configured onward credential, when it has
 one), `openEHR-federation-client` (the verified caller, signed for that node
 with the `[signing]` key;
-[Client authentication](authentication.md#what-a-node-is-told-about-the-caller)),
+[What a node is told about the caller](caller-token.md)),
 and the `Host`, `Content-Length` and `Accept-Encoding` the HTTP client
 writes. None is copied from the client request. `Host` is the authority of
 the endpoint URL in your registry, never a value from a request, so the

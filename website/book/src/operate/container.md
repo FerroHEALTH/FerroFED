@@ -308,7 +308,7 @@ curl http://127.0.0.1:8080/health
 signing key into `docker/quickstart/signing/`, which is never committed, and
 keeps a key that exists. The gateway signs the caller's identity onto every
 request to a node with it, and refuses to start without it
-([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)).
+([What a node is told about the caller](caller-token.md)).
 
 `--wait` returns once every service reports healthy. The gateway service
 runs `ghcr.io/ferrohealth/ferrofed` at the product version, the tag default

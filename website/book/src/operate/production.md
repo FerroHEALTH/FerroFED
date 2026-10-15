@@ -83,7 +83,7 @@ N42a); the rest are what the gateway needs to reach the member.
 - [ ] **The member verifies who asks**, recommended: it reads the
   `openEHR-federation-client` token the gateway signs, with the gateway's
   JWK Set, and records the caller in its own audit trail
-  ([Verifying it at the node](authentication.md#verifying-it-at-the-node)).
+  ([Verifying it at the node](caller-token.md#verifying-it-at-the-node)).
 
 ## 2. Install
 
