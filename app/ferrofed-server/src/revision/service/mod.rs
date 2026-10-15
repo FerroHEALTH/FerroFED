@@ -6,7 +6,7 @@
 //! Every revision, a file load or an operator's save, is checked as `config
 //! check` checks the file: it parses as the configuration with the file's
 //! bootstrap core beside it, [`Config::resolve`] resolves it, and
-//! [`AppState::check`] builds what a start would build, so a revision is
+//! [`AppState::check`](crate::state::AppState::check) builds what a start would build, so a revision is
 //! refused with the errors `config check` reports. An apply moves the current
 //! mark from the revision it read and then hands the configuration to the
 //! reload path ([`Reloader::reload_config`]); a reload that refuses it moves
@@ -15,7 +15,6 @@
 //! applies it. Every call blocks, so it is made where a thread may. No
 //! specification governs this: our own design.
 
-use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
 use jiff::Timestamp;
@@ -26,12 +25,20 @@ use crate::config::error::parse::Stage;
 use crate::config::revisions::RevisionsFault;
 use crate::config::settings::Settings;
 use crate::reload::{ReloadError, Reloader};
-use crate::revision::tree::{
-    console_keys, core_keys, inline_secrets, join, split, with_console_of, without_console,
-};
-use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
-use crate::state::{AppState, StateError};
+use crate::revision::policy::Policy;
+use crate::revision::resources::present;
+use crate::revision::tree::{core_keys, inline_secrets, join, split};
+use crate::revision::{Draft, RevisionStore, StoreError, Swapped};
+use crate::state::StateError;
+use ferrofed_registry::resource::Resource;
 use ferrofed_registry::revision::{Author, Current, Origin, Outcome, Revision, RevisionId};
+
+use checks::{checked, configuration, reason_of, stored};
+use confirm::Reviewed;
+
+mod checks;
+pub mod confirm;
+mod file;
 
 /// The longest reason a revision records, in characters.
 pub const REASON_LIMIT: usize = 1_000;
@@ -133,6 +140,61 @@ pub enum RevisionError {
     /// A path names no revision number.
     #[error("the path names no revision number")]
     NotANumber,
+    /// The revision changes resources that take a second operator's
+    /// approval, and no operator other than its author approved it.
+    #[error(
+        "revision {id} changes {} and takes the approval of an operator other than its author first",
+        resources.join(", ")
+    )]
+    ApprovalRequired {
+        /// The revision.
+        id: RevisionId,
+        /// The resources that take the approval, as their tables are written.
+        resources: Vec<String>,
+    },
+    /// The revision's author approved it, which only another operator may.
+    #[error("revision {0} is approved by an operator other than its author")]
+    OwnApproval(RevisionId),
+    /// The revision changes no resource that takes an approval.
+    #[error("revision {0} changes no resource that takes an approval")]
+    ApprovalNotRequired(RevisionId),
+    /// A confirmation or an approval came from no verified operator.
+    #[error(
+        "a confirmation or an approval names its operator, and a loopback peer with no credential names none"
+    )]
+    Unverified,
+    /// The revision named does not await a confirmation now.
+    #[error(transparent)]
+    Unconfirmable(#[from] Unconfirmable),
+    /// The running revision awaits its confirmation, so no other applies
+    /// until it is confirmed or rolled back.
+    #[error(
+        "revision {0} runs awaiting its confirmation; confirm it or roll it back before another applies"
+    )]
+    AwaitingConfirmation(RevisionId),
+    /// The confirmation deadline does not fit a timestamp.
+    #[error("the confirmation deadline does not fit a timestamp")]
+    Deadline(#[source] jiff::Error),
+}
+
+/// Why a revision cannot be confirmed now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum Unconfirmable {
+    /// Another revision runs.
+    #[error("revision {id} does not run; revision {} does", shown(*.running))]
+    NotRunning {
+        /// The revision named.
+        id: RevisionId,
+        /// The revision that runs.
+        running: Option<RevisionId>,
+    },
+    /// The revision runs and awaits no confirmation.
+    #[error("revision {0} awaits no confirmation")]
+    NotAwaiting(RevisionId),
+    /// The deadline passed, and the gateway rolls it back.
+    #[error("the confirmation of revision {0} is past its deadline; the gateway rolls it back")]
+    Expired(RevisionId),
 }
 
 /// The configuration revisions of a managed gateway: the store, and the
@@ -142,6 +204,7 @@ pub struct Revisions {
     core: Mutex<toml::Table>,
     serial: Mutex<()>,
     replica: Mutex<Replica>,
+    policy: Policy,
 }
 
 /// Where this replica stands against the store's running mark.
@@ -188,7 +251,22 @@ impl Revisions {
             core: Mutex::new(core),
             serial: Mutex::new(()),
             replica: Mutex::new(Replica::default()),
+            policy: Policy::default(),
         }
+    }
+
+    /// Returns these revisions with `policy`, what a revision that changes
+    /// a credential or a binding section takes.
+    #[must_use]
+    pub fn with_policy(mut self, policy: Policy) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// What a revision that changes a credential or a binding section takes.
+    #[must_use]
+    pub fn policy(&self) -> &Policy {
+        &self.policy
     }
 
     /// The store.
@@ -214,7 +292,7 @@ impl Revisions {
     /// [`Refused::Config`] for text that is not TOML, a secret held inline
     /// ([`RevisionsFault::InlineSecret`]) and every refusal of the parse and
     /// of [`Config::resolve`]; [`Refused::Core`] for a key of the bootstrap
-    /// core; [`Refused::State`] for what [`AppState::check`] and the caller
+    /// core; [`Refused::State`] for what [`AppState::check`](crate::state::AppState::check) and the caller
     /// check refuse.
     pub fn validate(&self, text: &str) -> Result<(String, Config), Refused> {
         let table: toml::Table =
@@ -236,6 +314,9 @@ impl Revisions {
     /// `reason`, once it passes [`Revisions::validate`]. The text is stored
     /// as TOML writes it, so no comment is kept.
     ///
+    /// Every credential and binding section it sets that the file does not
+    /// provide is the console's ([`Revisions::file_owned`]).
+    ///
     /// # Errors
     ///
     /// [`RevisionError::Refused`] for a reason or a configuration refused,
@@ -249,6 +330,13 @@ impl Revisions {
     ) -> Result<Revision, RevisionError> {
         let reason = reason_of(&reason)?;
         let (toml, _config) = self.validate(toml)?;
+        let file_owned = self.file_owned()?;
+        let table: toml::Table = toml::from_str(&toml)
+            .map_err(|source| Refused::from(Error::parse(&source, &toml, Stage::File)))?;
+        let console = present(&table)
+            .into_iter()
+            .filter(|resource| !file_owned.contains(resource))
+            .collect();
         let draft = Draft {
             origin: Origin::Operator,
             restores: None,
@@ -256,21 +344,50 @@ impl Revisions {
             at: Timestamp::now(),
             reason,
             toml,
+            console,
         };
         stored(self.store.save(base, draft)?, base)
     }
 
+    /// The credentials and binding sections the configuration file
+    /// provides: those the newest revision the file gave sets as its own.
+    ///
+    /// # Errors
+    ///
+    /// The store's errors.
+    pub fn file_owned(&self) -> Result<Vec<Resource>, RevisionError> {
+        let history = self.store.history()?;
+        let Some(file) = history
+            .iter()
+            .rev()
+            .find(|revision| revision.origin == Origin::File)
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(present(&held_table(file)?)
+            .into_iter()
+            .filter(|resource| !file.console.contains(resource))
+            .collect())
+    }
+
     /// Applies revision `id` for `by` through `reloader`, and returns the
     /// mark the store now holds.
+    ///
+    /// A revision that changes a resource `config.approval` names applies
+    /// only once an operator other than its author approved it; one that
+    /// changes a credential or a binding section runs awaiting its
+    /// confirmation until the deadline `config.confirm_ms` sets.
     ///
     /// # Errors
     ///
     /// [`RevisionError::Unknown`] for a revision not held,
     /// [`RevisionError::Stale`] when it is not the newest revision, is
     /// already running, or the mark moved, [`RevisionError::NoCurrent`] when
-    /// no revision is marked running, [`RevisionError::Refused`] and
-    /// [`RevisionError::Reload`] when its configuration is refused, and the
-    /// store's errors.
+    /// no revision is marked running, [`RevisionError::AwaitingConfirmation`]
+    /// while the running revision awaits its confirmation,
+    /// [`RevisionError::ApprovalRequired`] for one not yet approved,
+    /// [`RevisionError::Refused`] and [`RevisionError::Reload`] when its
+    /// configuration is refused, and the store's errors.
     pub fn apply(
         &self,
         reloader: &Reloader,
@@ -278,7 +395,7 @@ impl Revisions {
         by: Author,
     ) -> Result<Current, RevisionError> {
         let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        self.apply_held(reloader, id, by)
+        self.apply_held(reloader, id, by, Reviewed::Operator)
     }
 
     /// Rolls the running revision, which the caller read as `expected`,
@@ -289,7 +406,8 @@ impl Revisions {
     ///
     /// [`RevisionError::Stale`] when `expected` is not running or another
     /// save came first, [`RevisionError::NoPrevious`] when there is no
-    /// earlier revision, and every error of [`Revisions::apply`].
+    /// earlier revision, and every error of [`Revisions::apply`] but those
+    /// of the approval and the confirmation, which a rollback does not take.
     pub fn rollback(
         &self,
         reloader: &Reloader,
@@ -306,6 +424,29 @@ impl Revisions {
             }
             .into());
         }
+        self.rollback_held(reloader, &current, (author, reason))
+    }
+
+    /// Rolls the running revision `current` back for `author`, the serial
+    /// lock held.
+    fn rollback_held(
+        &self,
+        reloader: &Reloader,
+        current: &Current,
+        (author, reason): (Author, String),
+    ) -> Result<(Revision, Current), RevisionError> {
+        let revision = self.restoring(current, (author.clone(), reason))?;
+        let current = self.apply_held(reloader, revision.id, author, Reviewed::Rollback)?;
+        Ok((revision, current))
+    }
+
+    /// Saves the content of the revision that ran before `current` as a new
+    /// revision by `author` for `reason`, checked, and returns it unapplied.
+    fn restoring(
+        &self,
+        current: &Current,
+        (author, reason): (Author, String),
+    ) -> Result<Revision, RevisionError> {
         let previous = current.previous.ok_or(RevisionError::NoPrevious)?;
         let target = self
             .store
@@ -316,22 +457,24 @@ impl Revisions {
         let draft = Draft {
             origin: Origin::Rollback,
             restores: Some(previous),
-            author: author.clone(),
+            author,
             at: Timestamp::now(),
             reason,
             toml: target.toml,
+            console: target.console,
         };
-        let revision = stored(self.store.save(head, draft)?, head)?;
-        let current = self.apply_held(reloader, revision.id, author)?;
-        Ok((revision, current))
+        stored(self.store.save(head, draft)?, head)
     }
 
-    /// Applies revision `id` for `by`, the serial lock held.
+    /// Applies revision `id` for `by`, the serial lock held; an operator's
+    /// apply is `reviewed` for its approval and its confirmation, and a
+    /// rollback is not.
     fn apply_held(
         &self,
         reloader: &Reloader,
         id: RevisionId,
         by: Author,
+        reviewed: Reviewed,
     ) -> Result<Current, RevisionError> {
         let revision = self.store.revision(id)?.ok_or(RevisionError::Unknown(id))?;
         let head = self.store.head()?;
@@ -342,6 +485,22 @@ impl Revisions {
         if running.revision == id {
             return Err(Stale::Running(id).into());
         }
+        let awaiting = match reviewed {
+            Reviewed::Operator => {
+                if running.awaiting.is_some() {
+                    return Err(RevisionError::AwaitingConfirmation(running.revision));
+                }
+                let review = self.review_against(&revision, &running)?;
+                if !review.approved {
+                    return Err(RevisionError::ApprovalRequired {
+                        id,
+                        resources: review.approval,
+                    });
+                }
+                self.awaiting(review.confirms)?
+            }
+            Reviewed::Rollback => None,
+        };
         let (_, config) = self.validate(&revision.toml)?;
         let mark = Current {
             revision: id,
@@ -350,6 +509,8 @@ impl Revisions {
             needs_restart: Vec::new(),
             applied_by: by,
             applied_at: Timestamp::now(),
+            awaiting,
+            confirmed: None,
         };
         if let Swapped::Stale { current } =
             self.store.swap_current(Some(running.revision), &mark)?
@@ -374,7 +535,6 @@ impl Revisions {
             }
         }
     }
-
     /// Where this replica stands: the revision it runs, and one it refused.
     #[must_use]
     pub fn replica(&self) -> Replica {
@@ -491,140 +651,6 @@ impl Revisions {
         }
         Ok(())
     }
-
-    /// Records the configuration the file gave, `tree`, as a revision when it
-    /// differs from the newest one the file gave, marking it running, and
-    /// returns the configuration to run: the file's when it changed, and the
-    /// running revision's beside the file's core when it did not.
-    ///
-    /// A changed file's revision carries the resources the operator console
-    /// owns over from the running revision ([`with_console_of`]), so a
-    /// console member survives a reload of the file; one the file now
-    /// provides too is the file's, and the registry names the console's
-    /// copy as shadowed. The core is taken from `tree` for every later
-    /// revision.
-    ///
-    /// # Errors
-    ///
-    /// [`RevisionError::Refused`] when the file's configuration, or the
-    /// running revision beside the file's core, is refused, and the store's
-    /// errors.
-    pub fn file_loaded(&self, tree: &toml::Table) -> Result<Loaded, RevisionError> {
-        let (core, rest) = split(tree);
-        *self.core.lock().unwrap_or_else(PoisonError::into_inner) = core;
-        let text =
-            toml::to_string(&rest).map_err(|source| Refused::from(Error::Assemble { source }))?;
-        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        for _ in 0..FILE_ATTEMPTS {
-            let history = self.store.history()?;
-            let current = self.store.current()?;
-            let newest_file = history
-                .iter()
-                .rev()
-                .find(|revision| revision.origin == Origin::File);
-            let unchanged = match newest_file {
-                Some(revision) => without_console(&held_table(revision)?) == rest,
-                None => false,
-            };
-            if unchanged && let Some(current) = &current {
-                let running = self
-                    .store
-                    .revision(current.revision)?
-                    .ok_or(RevisionError::Unknown(current.revision))?;
-                return Ok(Loaded {
-                    config: self.validate(&running.toml)?.1,
-                    revision: running.id,
-                    recorded: false,
-                });
-            }
-            let (toml, config) = self.carried(&rest, current.as_ref(), &text)?;
-            let head = history.last().map(|revision| revision.id);
-            let draft = Draft {
-                origin: Origin::File,
-                restores: None,
-                author: Author::File,
-                at: Timestamp::now(),
-                reason: String::from("the configuration file was loaded"),
-                toml,
-            };
-            let revision = match self.store.save(head, draft)? {
-                Saved::Stored(revision) => revision,
-                Saved::Stale { .. } => continue,
-                Saved::Exhausted => return Err(RevisionError::Exhausted),
-            };
-            let running = current.map(|current| current.revision);
-            let mark = Current {
-                revision: revision.id,
-                previous: running,
-                outcome: Outcome::Applied,
-                needs_restart: Vec::new(),
-                applied_by: Author::File,
-                applied_at: Timestamp::now(),
-            };
-            if self.store.swap_current(running, &mark)? == Swapped::Swapped {
-                tracing::info!(
-                    target: crate::facade::security::TARGET,
-                    event = SAVED,
-                    revision = %revision.id,
-                    origin = "file",
-                    "the configuration file was recorded as a revision"
-                );
-                return Ok(Loaded {
-                    config,
-                    revision: revision.id,
-                    recorded: true,
-                });
-            }
-        }
-        Err(Stale::Current {
-            expected: None,
-            current: self.store.current()?.map(|current| current.revision),
-        }
-        .into())
-    }
-}
-
-impl Revisions {
-    /// Checks the file's configuration `rest`, written as `text`, with the
-    /// resources the operator console owns carried over from the running
-    /// revision `current`, and returns it as [`Revisions::validate`] does.
-    ///
-    /// When the console's resources are refused beside the file's, as when
-    /// the file drops the registry document they join, the file's
-    /// configuration is checked alone and the resources left out are logged
-    /// by key: the revision before it keeps them.
-    fn carried(
-        &self,
-        rest: &toml::Table,
-        current: Option<&Current>,
-        text: &str,
-    ) -> Result<(String, Config), RevisionError> {
-        let running = match current {
-            Some(mark) => self.store.revision(mark.revision)?,
-            None => None,
-        };
-        let Some(running) = running else {
-            return Ok(self.validate(text)?);
-        };
-        let carried = with_console_of(rest, &held_table(&running)?);
-        if carried == *rest {
-            return Ok(self.validate(text)?);
-        }
-        let written = toml::to_string(&carried)
-            .map_err(|source| Refused::from(Error::Assemble { source }))?;
-        match self.validate(&written) {
-            Ok(validated) => Ok(validated),
-            Err(refused) => {
-                tracing::warn!(
-                    keys = console_keys(&carried).join(","),
-                    revision = %running.id,
-                    error = crate::chain(&refused),
-                    "the console's resources are refused beside the file's configuration and left out of its revision; the running revision still holds them"
-                );
-                Ok(self.validate(text)?)
-            }
-        }
-    }
 }
 
 /// The configuration `revision` holds, as a table.
@@ -657,37 +683,6 @@ pub const APPLIED: &str = "config-revision-applied";
 
 /// The `event` of the record of a rollback.
 pub const ROLLED_BACK: &str = "config-rolled-back";
-
-/// `reason`, trimmed, when it is 1 to [`REASON_LIMIT`] characters.
-fn reason_of(reason: &str) -> Result<String, Refused> {
-    let trimmed = reason.trim();
-    if trimmed.is_empty() || trimmed.chars().count() > REASON_LIMIT {
-        return Err(Refused::Reason);
-    }
-    Ok(trimmed.to_owned())
-}
-
-/// The revision `saved` stored over `base`.
-fn stored(saved: Saved, base: Option<RevisionId>) -> Result<Revision, RevisionError> {
-    match saved {
-        Saved::Stored(revision) => Ok(revision),
-        Saved::Stale { head } => Err(Stale::Base { named: base, head }.into()),
-        Saved::Exhausted => Err(RevisionError::Exhausted),
-    }
-}
-
-/// The configuration `tree` writes, read as the file is read with no
-/// environment beside it.
-fn configuration(tree: &toml::Table) -> Result<Config, Error> {
-    let text = toml::to_string(tree).map_err(|source| Error::Assemble { source })?;
-    Config::from_sources(Some(&text), &BTreeMap::new())
-}
-
-/// Checks `settings` as `config check` does past resolving them.
-fn checked(settings: &Settings) -> Result<(), StateError> {
-    AppState::check(settings)?;
-    crate::state::admits_callers(settings, settings.federates())
-}
 
 /// Opens the revision store `settings` name and records the file's configuration.
 ///
@@ -724,8 +719,10 @@ pub fn boot_over(
     tree: &toml::Table,
 ) -> Result<(Settings, std::sync::Arc<Revisions>), RevisionError> {
     let revisions = Revisions::new(store, split(tree).0);
+    revisions.expire_unapplied(Timestamp::now())?;
     let loaded = revisions.file_loaded(tree)?;
     let effective = loaded.config.resolve().map_err(Refused::from)?;
+    let revisions = revisions.with_policy(effective.revision_policy.clone());
     revisions.ran(loaded.revision);
     Ok((effective, std::sync::Arc::new(revisions)))
 }

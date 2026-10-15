@@ -116,7 +116,7 @@ type Case<'a> = (&'a str, String, Vec<(&'a str, &'a str)>);
 
 /// A writer every clone of which appends to one buffer.
 #[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
+pub(crate) struct Captured(pub(crate) Arc<Mutex<Vec<u8>>>);
 
 impl std::io::Write for Captured {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {

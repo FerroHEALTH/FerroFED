@@ -17,6 +17,7 @@ mod admin;
 mod config;
 #[cfg(test)]
 mod configure;
+mod configure_sections;
 #[cfg(test)]
 mod exchange;
 #[cfg(test)]

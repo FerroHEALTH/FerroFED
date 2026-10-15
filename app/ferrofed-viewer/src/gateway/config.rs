@@ -15,7 +15,8 @@
 
 use ferrofed_registry::console::{ConsoleMember, Resources};
 use ferrofed_registry::operator::{Page, PageRequest};
-use ferrofed_registry::revision::{Applied, Diff, Revision, RevisionId, Standing};
+use ferrofed_registry::resource::{Resource, SectionRequest};
+use ferrofed_registry::revision::{Applied, Current, Diff, Review, Revision, RevisionId, Standing};
 use http::{Method, StatusCode};
 use openehr_its::rest::client::{Request, path_segment};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -68,6 +69,18 @@ impl std::fmt::Debug for Change<'_> {
             .field("base", &self.base)
             .field("reason", &!self.reason.trim().is_empty())
             .finish()
+    }
+}
+
+/// The admin route of `resource`.
+fn section_path(resource: &Resource) -> String {
+    match resource {
+        Resource::Credentials(endpoint) => format!(
+            "/admin/config/credentials/{}",
+            path_segment(&endpoint.as_str())
+        ),
+        Resource::Binding(section) => format!("/admin/config/bindings/{}", section.as_str()),
+        _ => String::from("/admin/config/resources/unknown"),
     }
 }
 
@@ -266,6 +279,95 @@ impl Gateway {
             .map_err(|source| GatewayError::Call { source })?;
         self.admin(replica, token, request, StatusCode::CREATED)
             .await
+    }
+
+    /// Saves a revision with `resource`, a credential or a binding section,
+    /// as `request` gives it, `PUT {admin}/admin/config/credentials/{id}` or
+    /// `PUT {admin}/admin/config/bindings/{section}` on `replica`; it is not
+    /// applied. A secret value in `request` travels in this body alone.
+    ///
+    /// # Errors
+    /// As [`Gateway::save_member`].
+    pub async fn save_section(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        resource: &Resource,
+        request: &SectionRequest,
+    ) -> Result<Revision, GatewayError> {
+        let mut call = Request::new(Method::PUT, section_path(resource));
+        call.json_body(request, None)
+            .map_err(|source| GatewayError::Call { source })?;
+        self.admin(replica, token, call, StatusCode::CREATED).await
+    }
+
+    /// Saves a revision without `resource`, `POST …/remove` of its route on
+    /// `replica`; it is not applied.
+    ///
+    /// # Errors
+    /// As [`Gateway::save_member`].
+    pub async fn remove_section(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        change: Change<'_>,
+        resource: &Resource,
+    ) -> Result<Revision, GatewayError> {
+        let path = format!("{}/remove", section_path(resource));
+        let mut request = Request::new(Method::POST, path);
+        request
+            .json_body(
+                &RemoveBody {
+                    base: change.base,
+                    reason: change.reason,
+                },
+                None,
+            )
+            .map_err(|source| GatewayError::Call { source })?;
+        self.admin(replica, token, request, StatusCode::CREATED)
+            .await
+    }
+
+    /// Confirms the running revision `id`, which awaits its confirmation,
+    /// `POST {admin}/admin/config/revisions/{id}/confirm` on `replica`.
+    ///
+    /// # Errors
+    /// As [`Gateway::config_standing`].
+    pub async fn confirm_revision(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        id: RevisionId,
+    ) -> Result<Current, GatewayError> {
+        let path = format!("/admin/config/revisions/{id}/confirm");
+        self.admin(
+            replica,
+            token,
+            Request::new(Method::POST, path),
+            StatusCode::OK,
+        )
+        .await
+    }
+
+    /// Approves revision `id` as an operator other than its author,
+    /// `POST {admin}/admin/config/revisions/{id}/approve` on `replica`.
+    ///
+    /// # Errors
+    /// As [`Gateway::config_standing`].
+    pub async fn approve_revision(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        id: RevisionId,
+    ) -> Result<Review, GatewayError> {
+        let path = format!("/admin/config/revisions/{id}/approve");
+        self.admin(
+            replica,
+            token,
+            Request::new(Method::POST, path),
+            StatusCode::OK,
+        )
+        .await
     }
 
     /// Sends `request` to `replica`'s admin listener as the operator and

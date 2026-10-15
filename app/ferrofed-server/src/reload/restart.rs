@@ -3,7 +3,9 @@
 
 //! What a reload applies and what waits for a restart: the settings a
 //! reload builds the federation from, and the changed keys it leaves to the
-//! next start. No specification governs this: our own design.
+//! next start. Of `[federation]`, a reload applies the localization policy
+//! (`[federation.localization]`) and the consent reporting
+//! (`[federation.consent]`). No specification governs this: our own design.
 
 use crate::binding;
 use crate::config::settings::Settings;
@@ -12,11 +14,21 @@ use crate::config::settings::Settings;
 /// a reload applies, and every other setting as the process started, each
 /// binding keeping the boot's value of what it does not reload.
 pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
+    let mut federation = boot.federation.clone();
+    // NOTE: no specification governs this: our own design; the localization policy
+    // applies only beside the node selection and budget it was checked with (§14.1).
+    if fresh.federation.node_selection == boot.federation.node_selection
+        && fresh.federation.budget == boot.federation.budget
+    {
+        federation.localization = fresh.federation.localization;
+    }
+    federation.consent_disclosure = fresh.federation.consent_disclosure;
+    federation.consent_emergency = fresh.federation.consent_emergency;
     let mut effective = Settings {
         profile: boot.profile,
         server: boot.server.clone(),
         telemetry: boot.telemetry.clone(),
-        federation: boot.federation.clone(),
+        federation,
         stored_queries: boot.stored_queries.clone(),
         fhir: boot.fhir.clone(),
         metrics: boot.metrics.clone(),
@@ -24,6 +36,7 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
         audit: boot.audit.clone(),
         revisions: boot.revisions.clone(),
         revision_poll: boot.revision_poll,
+        revision_policy: boot.revision_policy.clone(),
         ..fresh
     };
     for binding in binding::compiled() {
@@ -46,6 +59,7 @@ fn stored_queries_changed(boot: &Settings, fresh: &Settings) -> bool {
 /// process started with, sets or unsets one, or reads it at another interval.
 fn revisions_changed(boot: &Settings, fresh: &Settings) -> bool {
     boot.revision_poll != fresh.revision_poll
+        || boot.revision_policy != fresh.revision_policy
         || match (&boot.revisions, &fresh.revisions) {
             (Some(was), Some(now)) => !was.same_as(now),
             (None, None) => false,

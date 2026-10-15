@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::{Document, EndpointDoc, NodeDoc, OrganisationDoc};
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use crate::resource::{BindingSection, SectionResource};
 use crate::revision::RevisionId;
 use crate::secret::SecretUrl;
 use crate::snapshot::{ConnectionType, EndpointStatus};
@@ -263,6 +264,14 @@ pub struct Resources {
     pub stored_query_registry: QueryRegistry,
     /// Every stored-query version the gateway holds, by name and version.
     pub stored_queries: Vec<QueryResource>,
+    /// Every onward credential and binding section, the file's and the
+    /// newest revision's, with its owner.
+    #[serde(default)]
+    pub sections: Vec<SectionResource>,
+    /// The binding sections this gateway is built with, which the console
+    /// may add.
+    #[serde(default)]
+    pub bindings: Vec<BindingSection>,
 }
 
 /// The stored-query registry a gateway offers (§12.7, N44).

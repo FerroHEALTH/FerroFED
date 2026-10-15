@@ -7,7 +7,8 @@
 //! the revisions, the members and stored queries with their owners, the
 //! history, and each form's fields. Its forms cross to the server in a
 //! `POST` body alone, and a form's `Debug` output names which fields are
-//! filled, never what they hold.
+//! filled, never what they hold: a secret's value among them, which the
+//! page never renders.
 
 use std::fmt;
 
@@ -30,8 +31,9 @@ pub struct ConfigView {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConfigForm {
-    /// The action: `save-member`, `remove-member`, `apply`, `rollback` or
-    /// `store-query`.
+    /// The action: `save-member`, `remove-member`, `apply`, `rollback`,
+    /// `store-query`, `save-credentials`, `save-binding`, `remove-section`,
+    /// `confirm` or `approve`.
     pub action: String,
     /// The revision a change is based on.
     pub base: String,
@@ -65,6 +67,25 @@ pub struct ConfigForm {
     pub version: String,
     /// The stored query's AQL.
     pub aql: String,
+    /// The endpoint whose onward credentials a form saves.
+    pub endpoint: String,
+    /// The binding section a form saves, as its route names it.
+    pub section: String,
+    /// The credential or binding section a removal names, as
+    /// `credentials:<endpoint id>` or `binding:<section>`.
+    pub resource: String,
+    /// The settings of a credential or a binding section less its secrets,
+    /// as one TOML inline table.
+    pub settings: String,
+    /// The dotted key of the secret a form sets or clears.
+    pub secret_key: String,
+    /// The secret's value, which the gateway writes to a file of its own;
+    /// never rendered or logged.
+    pub secret_value: String,
+    /// The file the gateway reads the secret from.
+    pub secret_file: String,
+    /// Not empty when the operator clears the secret.
+    pub secret_clear: String,
 }
 
 impl fmt::Debug for ConfigForm {
@@ -78,6 +99,10 @@ impl fmt::Debug for ConfigForm {
             .field("endpoints", &filled(&self.endpoints))
             .field("name", &filled(&self.name))
             .field("aql", &filled(&self.aql))
+            .field("settings", &filled(&self.settings))
+            .field("secret_key", &filled(&self.secret_key))
+            .field("secret_value", &filled(&self.secret_value))
+            .field("secret_file", &filled(&self.secret_file))
             .finish_non_exhaustive()
     }
 }

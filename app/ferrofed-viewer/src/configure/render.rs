@@ -23,6 +23,7 @@ use crate::admin::model::ActionAnswer;
 use crate::config::settings::ReplicaSettings;
 use crate::configure::act::Configure;
 use crate::configure::model::ConfigView;
+use crate::configure::sections::{owner, state};
 use ferrofed_registry::revision::{
     Applied, Author, Current, Difference, Origin, Outcome, Revision, RevisionId, Standing,
 };
@@ -73,12 +74,14 @@ pub fn page(
 ) -> ConfigView {
     let revisions = revisions_section(replica, standing, pending);
     let members = members_section(&resources.members);
+    let sections = crate::configure::sections::section_table(resources);
     let queries = queries_section(resources.stored_query_registry, &resources.stored_queries);
     let history = history_section(history);
     ConfigView {
         html: view! {
             {revisions}
             {members}
+            {sections}
             {queries}
             {history}
         }
@@ -88,13 +91,14 @@ pub fn page(
 }
 
 /// Who `author` is, in words.
-fn author(author: &Author) -> String {
+pub(super) fn author(author: &Author) -> String {
     match author {
         Author::File => String::from("the configuration file"),
         Author::Operator { subject, .. } => format!("operator {subject}"),
         Author::DevelopmentLoopback => {
             String::from("a loopback peer under the development profile")
         }
+        Author::Gateway => String::from("the gateway, as no operator confirmed in time"),
         _ => String::from("an author this console does not know"),
     }
 }
@@ -110,7 +114,7 @@ fn origin(origin: Origin) -> &'static str {
 }
 
 /// The running revision's mark, in words.
-fn mark_said(mark: &Current) -> String {
+pub(super) fn mark_said(mark: &Current) -> String {
     let outcome = if mark.outcome == Outcome::PendingRestart {
         format!(
             " Some of its settings take effect only at a restart: {}.",
@@ -171,6 +175,7 @@ fn revisions_section(
             <p>{running}</p>
             <p>{newest}</p>
             {preview}
+            {crate::configure::sections::notices(standing)}
             <p>{goes}</p>
         </section>
     }
@@ -216,29 +221,6 @@ fn diff_table(changes: &[Difference], to: RevisionId) -> AnyView {
         </table>
     }
     .into_any()
-}
-
-/// Who owns a resource, in words that say whether the console changes it.
-fn owner(owner: Owner) -> &'static str {
-    match owner {
-        Owner::File => "file (read-only)",
-        Owner::Directory => "care services directory (read-only)",
-        Owner::Console => "console",
-        Owner::Gateway => "gateway (read-only)",
-        Owner::Store => "stored-query store (versions are immutable)",
-        _ => "another source (read-only)",
-    }
-}
-
-/// Where a console member stands, in words.
-fn state(state: Option<ConsoleState>) -> &'static str {
-    match state {
-        None | Some(ConsoleState::Running) => "running",
-        Some(ConsoleState::Pending) => "saved, not applied",
-        Some(ConsoleState::Removing) => "removed in the newest revision, not applied",
-        Some(ConsoleState::Shadowed) => "shadowed: the registry document provides it",
-        Some(_) => "unknown",
-    }
 }
 
 /// The members, each with its owner.
@@ -394,15 +376,15 @@ fn history_section(history: &Page<Revision>) -> AnyView {
 }
 
 /// One form of the page, before it is rendered.
-struct FormView {
+pub(super) struct FormView {
     /// The id of the form's heading, unique on the page.
-    id: String,
+    pub(super) id: String,
     /// The form's heading.
-    heading: String,
+    pub(super) heading: String,
     /// Its submit button's label.
-    label: String,
+    pub(super) label: String,
     /// Its fields, rendered as HTML.
-    fields: String,
+    pub(super) fields: String,
 }
 
 /// `form` rendered whole: its heading, and a form posting its fields to the
@@ -422,7 +404,7 @@ fn form_html(form: &FormView) -> String {
 
 /// The forms the page offers for `standing` and `resources`.
 fn forms(standing: &Standing, resources: &Resources) -> Vec<FormView> {
-    let mut forms = Vec::new();
+    let mut forms = crate::configure::sections::decisions(standing);
     let running = standing.current.as_ref().map(|mark| mark.revision);
     if let Some(head) = standing.head.filter(|head| Some(*head) != running) {
         forms.push(apply_form(head));
@@ -468,16 +450,17 @@ fn forms(standing: &Standing, resources: &Resources) -> Vec<FormView> {
     if resources.stored_query_registry == QueryRegistry::Writable {
         forms.push(query_form());
     }
+    forms.extend(crate::configure::sections::forms(standing, resources));
     forms
 }
 
 /// A hidden field `name` of the form, holding `value`.
-fn hidden(name: &'static str, value: String) -> impl IntoView {
+pub(super) fn hidden(name: &'static str, value: String) -> impl IntoView {
     view! { <input type="hidden" name=format!("form[{name}]") value=value /> }
 }
 
 /// A labelled one-line field `name` of the form `form`, holding `value`.
-fn field(
+pub(super) fn field(
     form: &str,
     (name, label): (&'static str, &'static str),
     value: String,
@@ -503,7 +486,7 @@ fn field(
 }
 
 /// The confirmation checkbox of the form `form`, labelled `label`.
-fn confirm(form: &str, label: &'static str) -> impl IntoView {
+pub(super) fn confirm(form: &str, label: &'static str) -> impl IntoView {
     let id = format!("{form}-confirm");
     view! {
         <p>
@@ -514,7 +497,7 @@ fn confirm(form: &str, label: &'static str) -> impl IntoView {
 }
 
 /// The base a change is saved on, `""` for none.
-fn base(head: Option<RevisionId>) -> String {
+pub(super) fn base(head: Option<RevisionId>) -> String {
     head.map(|head| head.to_string()).unwrap_or_default()
 }
 

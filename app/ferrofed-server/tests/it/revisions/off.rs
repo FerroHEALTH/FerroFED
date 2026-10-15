@@ -55,6 +55,9 @@ fn a_store_key_under_off_is_refused() -> TestResult {
         "backend = \"redb\"",
         "path = \"revisions.redb\"",
         "url_file = \"/run/secrets/url\"",
+        "confirm_ms = 60000",
+        "approval = [\"consent\"]",
+        "secrets_dir = \"/run/ferrofed/secrets\"",
     ] {
         let refused = resolved(&format!("[config]\n{key}\n"))?;
         assert!(

@@ -267,6 +267,27 @@ pub enum Code {
     /// A configuration route on the admin listener of a gateway whose
     /// configuration is not managed (`config.ui = "off"`).
     ConfigurationUnmanaged,
+    /// An apply names a configuration revision that changes a resource
+    /// `config.approval` names, and no operator other than its author
+    /// approved it.
+    ApprovalRequired,
+    /// The author of a configuration revision approves it, which only
+    /// another operator may.
+    ApprovalOwn,
+    /// An approval names a configuration revision that changes no resource
+    /// `config.approval` names.
+    ApprovalNotRequired,
+    /// A confirmation or an approval comes from a caller that is no verified
+    /// operator, such as a loopback peer with no credential.
+    OperatorUnverified,
+    /// A confirmation names a configuration revision that does not run
+    /// awaiting one, or whose deadline passed.
+    ConfirmationUnavailable,
+    /// An apply while the running configuration revision awaits its
+    /// confirmation.
+    ConfirmationPending,
+    /// A secret value is sent while `config.secrets_dir` is unset.
+    SecretStoreUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind

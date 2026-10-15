@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 66] = [
+    pub const GATEWAY: [Self; 73] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -78,6 +78,13 @@ impl Code {
         Self::ResourceFileOwned,
         Self::ResourceUnknown,
         Self::ConfigurationUnmanaged,
+        Self::ApprovalRequired,
+        Self::ApprovalOwn,
+        Self::ApprovalNotRequired,
+        Self::OperatorUnverified,
+        Self::ConfirmationUnavailable,
+        Self::ConfirmationPending,
+        Self::SecretStoreUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -177,6 +184,13 @@ impl Code {
             Self::ResourceFileOwned => "resource-file-owned",
             Self::ResourceUnknown => "resource-unknown",
             Self::ConfigurationUnmanaged => "configuration-unmanaged",
+            Self::ApprovalRequired => "approval-required",
+            Self::ApprovalOwn => "approval-own-revision",
+            Self::ApprovalNotRequired => "approval-not-required",
+            Self::OperatorUnverified => "operator-unverified",
+            Self::ConfirmationUnavailable => "confirmation-unavailable",
+            Self::ConfirmationPending => "confirmation-pending",
+            Self::SecretStoreUnavailable => "secret-store-unavailable",
         }
     }
 
@@ -223,7 +237,12 @@ impl Code {
             | Self::EhrIdHeld
             | Self::RevisionStale
             | Self::RollbackUnavailable
-            | Self::ResourceFileOwned => StatusCode::CONFLICT,
+            | Self::ResourceFileOwned
+            | Self::ApprovalRequired
+            | Self::ApprovalNotRequired
+            | Self::ConfirmationUnavailable
+            | Self::ConfirmationPending
+            | Self::SecretStoreUnavailable => StatusCode::CONFLICT,
             Self::ConfigurationInvalid => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
@@ -245,7 +264,9 @@ impl Code {
             | Self::OperationRefused
             | Self::PatientContextMissing
             | Self::PatientConfinement
-            | Self::ContactPointAttributesRequired => StatusCode::FORBIDDEN,
+            | Self::ContactPointAttributesRequired
+            | Self::ApprovalOwn
+            | Self::OperatorUnverified => StatusCode::FORBIDDEN,
             Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
                 StatusCode::SERVICE_UNAVAILABLE
             }
@@ -419,6 +440,27 @@ impl Code {
             Self::ConfigurationUnmanaged => {
                 "the gateway's configuration is not managed (config.ui = \"off\"), so it serves no configuration revisions"
             }
+            Self::ApprovalRequired => {
+                "the configuration revision changes a resource that takes the approval of an operator other than its author, and none approved it"
+            }
+            Self::ApprovalOwn => {
+                "the author of a configuration revision cannot approve it; another operator does"
+            }
+            Self::ApprovalNotRequired => {
+                "the configuration revision changes no resource that takes an approval"
+            }
+            Self::OperatorUnverified => {
+                "a confirmation or an approval names its operator, and the caller is no verified operator"
+            }
+            Self::ConfirmationUnavailable => {
+                "the configuration revision does not run awaiting a confirmation, or its deadline passed"
+            }
+            Self::ConfirmationPending => {
+                "the running configuration revision awaits its confirmation; confirm it or roll it back first"
+            }
+            Self::SecretStoreUnavailable => {
+                "a secret value is sent and config.secrets_dir is unset, so the gateway writes no secret file; set the secret by a reference to a file"
+            }
         }
     }
 }
@@ -503,6 +545,13 @@ mod tests {
             Code::ResourceFileOwned => Some(63),
             Code::ResourceUnknown => Some(64),
             Code::ConfigurationUnmanaged => Some(65),
+            Code::ApprovalRequired => Some(66),
+            Code::ApprovalOwn => Some(67),
+            Code::ApprovalNotRequired => Some(68),
+            Code::OperatorUnverified => Some(69),
+            Code::ConfirmationUnavailable => Some(70),
+            Code::ConfirmationPending => Some(71),
+            Code::SecretStoreUnavailable => Some(72),
         }
     }
 
@@ -642,6 +691,13 @@ mod tests {
             (Code::ResourceFileOwned, StatusCode::CONFLICT),
             (Code::ResourceUnknown, StatusCode::NOT_FOUND),
             (Code::ConfigurationUnmanaged, StatusCode::NOT_FOUND),
+            (Code::ApprovalRequired, StatusCode::CONFLICT),
+            (Code::ApprovalOwn, StatusCode::FORBIDDEN),
+            (Code::ApprovalNotRequired, StatusCode::CONFLICT),
+            (Code::OperatorUnverified, StatusCode::FORBIDDEN),
+            (Code::ConfirmationUnavailable, StatusCode::CONFLICT),
+            (Code::ConfirmationPending, StatusCode::CONFLICT),
+            (Code::SecretStoreUnavailable, StatusCode::CONFLICT),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

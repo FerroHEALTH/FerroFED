@@ -9,7 +9,8 @@
 //! run, and the watch applies it through the same reload path an apply takes
 //! ([`Revisions::follow`]). A revision this replica refuses is logged and
 //! counted, and the replica keeps its running configuration, which
-//! `GET /admin/config` then reports as out of step. Under `config.ui =
+//! `GET /admin/config` then reports as out of step. Each read first rolls
+//! back a running revision whose confirmation is past its deadline. Under `config.ui =
 //! "off"` no watch runs. No specification governs this: our own design.
 
 use std::sync::Arc;
@@ -92,7 +93,11 @@ async fn watch(
             () = stop.notified() => return,
         }
         let (revisions, reloader) = (Arc::clone(&revisions), Arc::clone(&reloader));
-        let followed = tokio::task::spawn_blocking(move || revisions.follow(&reloader)).await;
+        let followed = tokio::task::spawn_blocking(move || {
+            expire(&revisions, &reloader);
+            revisions.follow(&reloader)
+        })
+        .await;
         let metrics = state.metrics();
         match followed {
             Ok(Ok(Followed::InStep)) => metrics.in_step(true),
@@ -122,5 +127,22 @@ async fn watch(
                 "the configuration revision read did not finish"
             ),
         }
+    }
+}
+
+/// Rolls the running revision back when it awaits a confirmation past its
+/// deadline ([`Revisions::expire`]), logging a rollback the store or the
+/// reload refused; the next read tries again.
+fn expire(revisions: &Revisions, reloader: &Reloader) {
+    match revisions.expire(reloader, jiff::Timestamp::now()) {
+        Ok(Some((revision, _mark))) => tracing::warn!(
+            revision = %revision.id,
+            "the running revision was not confirmed by its deadline and is rolled back"
+        ),
+        Ok(None) => {}
+        Err(error) => tracing::error!(
+            error = crate::chain(&error),
+            "a revision past its confirmation deadline could not be rolled back; it keeps running until the next read"
+        ),
     }
 }

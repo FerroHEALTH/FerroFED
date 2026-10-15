@@ -69,6 +69,8 @@
 //! [`console`] holds a member the operator console manages beside the
 //! document's, owned whole, and the report of who owns each configured
 //! resource.
+//! [`resource`] holds the credentials and binding sections the console
+//! manages whole, with their secrets as references.
 //! [`revision`] holds the gateway's configuration revisions as its admin
 //! listener writes them and the console reads them.
 //!
@@ -89,6 +91,7 @@ pub mod incident;
 pub mod manufacturer;
 pub mod native;
 pub mod operator;
+pub mod resource;
 pub mod revision;
 pub mod secret;
 pub mod snapshot;

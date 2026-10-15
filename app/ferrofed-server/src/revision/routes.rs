@@ -17,17 +17,24 @@
 //! | `GET` [`REVISION`] | one revision |
 //! | `GET` [`DIFF`] | the keys that differ from one revision to another |
 //! | `POST` [`APPLY`] | the mark once the revision is applied |
+//! | `POST` [`CONFIRM`] | the mark once the running revision is confirmed |
+//! | `POST` [`APPROVE`] | what the revision takes once approved |
 //! | `POST` [`ROLLBACK`] | the revision a rollback saved, and its mark |
-//! | `GET` [`RESOURCES`] | every member and stored query, with its owner ([`console`]) |
+//! | `GET` [`RESOURCES`] | every member, stored query, credential and binding section, with its owner ([`console`]) |
 //! | `PUT` [`MEMBER`] | `201` with the revision saved with the console member in place |
 //! | `POST` [`MEMBER_REMOVE`] | `201` with the revision saved without the console member |
 //! | `PUT` [`STORED_QUERY`] | `201` with the stored-query version stored (§12.7, N44) |
+//! | `PUT` [`sections::CREDENTIALS`], [`sections::BINDING`] | `201` with the revision saved with the credential or binding section in place ([`sections`]) |
+//! | `POST` [`sections::CREDENTIALS_REMOVE`], [`sections::BINDING_REMOVE`] | `201` with the revision saved without it |
 //!
 //! A refusal is an error body: `400` (`body-invalid`) for a body that does
 //! not read, `404` (`revision-unknown`), `409` (`revision-stale`) when
 //! another save, apply or rollback came first, `409`
 //! (`rollback-unavailable`), `409` (`resource-file-owned`) for a change to a
-//! resource the file provides, `404` (`resource-unknown`), `422`
+//! resource the file provides, `404` (`resource-unknown`), `409`
+//! (`approval-required`, `approval-not-required`, `confirmation-unavailable`,
+//! `confirmation-pending`, `secret-store-unavailable`), `403`
+//! (`approval-own-revision`, `operator-unverified`), `422`
 //! (`configuration-invalid`) with the errors `config check` reports, and
 //! `500` (`internal`) when the store fails. No specification governs this:
 //! our own design.
@@ -47,6 +54,7 @@ use crate::admin::Operator;
 use crate::error::{self, Code};
 use crate::reload::Reloader;
 use crate::request_id;
+use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED};
 use crate::revision::tree::diff;
 use ferrofed_registry::revision::{Applied, Author, Diff, Revision, RevisionId, Standing};
@@ -66,6 +74,12 @@ pub const DIFF: &str = "/admin/config/revisions/{id}/diff/{other}";
 /// The apply of one revision.
 pub const APPLY: &str = "/admin/config/revisions/{id}/apply";
 
+/// The confirmation of the running revision.
+pub const CONFIRM: &str = "/admin/config/revisions/{id}/confirm";
+
+/// The approval of one revision by an operator other than its author.
+pub const APPROVE: &str = "/admin/config/revisions/{id}/approve";
+
 /// The rollback of the running revision.
 pub const ROLLBACK: &str = "/admin/config/rollback";
 
@@ -82,6 +96,7 @@ pub const MEMBER_REMOVE: &str = "/admin/config/members/{node_id}/remove";
 pub const STORED_QUERY: &str = "/admin/config/stored-queries/{qualified_query_name}/{version}";
 
 pub mod console;
+pub mod sections;
 
 /// The revisions and the reload path they are applied through.
 #[derive(Debug)]
@@ -120,6 +135,15 @@ pub fn writes(managed: Arc<Managed>) -> Router {
         .route(ROLLBACK, post(rollback))
         .route(MEMBER, put(console::save_member))
         .route(MEMBER_REMOVE, post(console::remove_member))
+        .route(CONFIRM, post(confirm))
+        .route(APPROVE, post(approve))
+        .route(sections::CREDENTIALS, put(sections::save_credentials))
+        .route(
+            sections::CREDENTIALS_REMOVE,
+            post(sections::remove_credentials),
+        )
+        .route(sections::BINDING, put(sections::save_binding))
+        .route(sections::BINDING_REMOVE, post(sections::remove_binding))
         .route(STORED_QUERY, put(console::store_query))
         .with_state(managed)
 }
@@ -201,7 +225,7 @@ impl<T: Serialize> Answer for Result<T, RevisionError> {
 /// The answer to `refusal`.
 fn refused(refusal: &RevisionError, request_id: &str) -> Response {
     let code = match refusal {
-        RevisionError::Store(_) | RevisionError::Exhausted => {
+        RevisionError::Store(_) | RevisionError::Exhausted | RevisionError::Deadline(_) => {
             tracing::error!(
                 error = crate::chain(refusal),
                 "the configuration revision store failed"
@@ -212,6 +236,12 @@ fn refused(refusal: &RevisionError, request_id: &str) -> Response {
         RevisionError::Refused(_) | RevisionError::Reload(_) => Code::ConfigurationInvalid,
         RevisionError::Stale(_) | RevisionError::NoCurrent => Code::RevisionStale,
         RevisionError::NoPrevious => Code::RollbackUnavailable,
+        RevisionError::ApprovalRequired { .. } => Code::ApprovalRequired,
+        RevisionError::OwnApproval(_) => Code::ApprovalOwn,
+        RevisionError::ApprovalNotRequired(_) => Code::ApprovalNotRequired,
+        RevisionError::Unverified => Code::OperatorUnverified,
+        RevisionError::Unconfirmable(_) => Code::ConfirmationUnavailable,
+        RevisionError::AwaitingConfirmation(_) => Code::ConfirmationPending,
     };
     error::response(code, crate::chain(refusal), request_id)
 }
@@ -223,9 +253,15 @@ async fn config(State(managed): State<Arc<Managed>>, headers: HeaderMap) -> Resp
         let store = revisions.store();
         let current = store.current()?;
         let replica = revisions.replica();
+        let head = store.head()?;
+        let review = match (head, &current) {
+            (Some(head), Some(mark)) if head != mark.revision => Some(revisions.review(head)?),
+            _ => None,
+        };
         Ok(Standing {
+            review,
             ui: crate::config::revisions::Ui::Managed.as_str().to_owned(),
-            head: store.head()?,
+            head,
             in_step: replica.running == current.as_ref().map(|mark| mark.revision),
             running: replica.running,
             refused: replica.refused,
@@ -409,6 +445,62 @@ async fn rollback(
         )?;
         record(ROLLED_BACK, revision.id, &operator);
         Ok(Applied { revision, current })
+    })
+    .await
+}
+
+/// The message of a confirmation or an approval that carries a body.
+const TAKES_NO_BODY: &str =
+    "a confirmation or an approval takes no body: it names the revision in the path alone";
+
+/// `POST` [`CONFIRM`]: confirms the running revision, which awaits its
+/// confirmation, as the operator.
+async fn confirm(
+    State(managed): State<Arc<Managed>>,
+    Extension(operator): Extension<Operator>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !body.is_empty() {
+        return error::response(
+            Code::BodyInvalid,
+            TAKES_NO_BODY,
+            request_id::of(&headers).unwrap_or_default(),
+        );
+    }
+    let revisions = Arc::clone(&managed.revisions);
+    blocking(&headers, move || {
+        let id = number(&id)?;
+        let current = revisions.confirm(id, Author::from(&operator), jiff::Timestamp::now())?;
+        record(CONFIRMED, id, &operator);
+        Ok(current)
+    })
+    .await
+}
+
+/// `POST` [`APPROVE`]: approves a revision as an operator other than its
+/// author.
+async fn approve(
+    State(managed): State<Arc<Managed>>,
+    Extension(operator): Extension<Operator>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !body.is_empty() {
+        return error::response(
+            Code::BodyInvalid,
+            TAKES_NO_BODY,
+            request_id::of(&headers).unwrap_or_default(),
+        );
+    }
+    let revisions = Arc::clone(&managed.revisions);
+    blocking(&headers, move || {
+        let id = number(&id)?;
+        let review = revisions.approve(id, Author::from(&operator))?;
+        record(APPROVED, id, &operator);
+        Ok(review)
     })
     .await
 }

@@ -23,15 +23,18 @@
 use std::error::Error;
 use std::fmt;
 
-use ferrofed_registry::revision::{Author, Current, Origin, Revision, RevisionId};
+use ferrofed_registry::resource::Resource;
+use ferrofed_registry::revision::{Author, Current, Origin, Revision, RevisionId, Signed};
 use jiff::Timestamp;
 
 use crate::admin::Operator;
 use crate::config::revisions::Store;
 
 pub mod embedded;
+pub mod policy;
 #[cfg(feature = "postgres")]
 pub mod postgres;
+pub mod resources;
 pub mod routes;
 pub mod service;
 pub mod tree;
@@ -64,6 +67,8 @@ pub struct Draft {
     pub reason: String,
     /// The configuration less its bootstrap core, as TOML text.
     pub toml: String,
+    /// The credentials and binding sections the console owns in it.
+    pub console: Vec<Resource>,
 }
 
 impl Draft {
@@ -80,6 +85,7 @@ impl Draft {
             at: self.at,
             reason: self.reason,
             toml: self.toml,
+            console: self.console,
         }
     }
 }
@@ -189,6 +195,21 @@ pub trait RevisionStore: fmt::Debug + Send + Sync {
         expected: Option<RevisionId>,
         next: &Current,
     ) -> Result<Swapped, StoreError>;
+
+    /// The approvals revision `id` holds, each operator once.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError`] when the store cannot be read or holds a damaged row.
+    fn approvals(&self, id: RevisionId) -> Result<Vec<Signed>, StoreError>;
+
+    /// Records `approval` of revision `id`, once per operator: a second
+    /// approval by the same operator changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError`] when the store cannot be read or written.
+    fn approve(&self, id: RevisionId, approval: &Signed) -> Result<(), StoreError>;
 }
 
 /// Opens the store `store` names.

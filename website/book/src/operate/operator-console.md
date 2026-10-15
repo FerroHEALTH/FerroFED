@@ -172,7 +172,16 @@ service worker or a URL.
   marked read-only and offers no edit. A console member is added, edited or
   removed as a new revision, which you then apply with its own form, and
   the running revision rolls back in one step; a stored-query version is
-  stored once and never edited. Each form asks for a confirmation, which
+  stored once and never edited. Each onward credential and binding section
+  is shown with its owner and its secrets as set, with the file each is
+  read from, never by value; a console one is added, edited or removed as a
+  new revision, its settings as one TOML inline table and a secret by its
+  value, in a password field the page never fills, or by a file. When the
+  running revision awaits its confirmation, the page shows its deadline and
+  a form to confirm it; when the newest revision takes a second operator's
+  approval, it shows who made it, who approved it, and a form to approve it
+  ([Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
+  Each form asks for a confirmation, which
   the console checks again, and runs once the page has loaded. A replica
   whose configuration is not managed answers `404`, and the page says so
   and offers no form ([Console-managed resources](configuration-revisions.md#console-managed-resources)).

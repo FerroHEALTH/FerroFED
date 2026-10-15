@@ -4,8 +4,8 @@
 //! The embedded revision store, over `redb`, for one gateway process.
 //!
 //! One table maps a revision number to the revision as JSON, a second holds
-//! the current mark as JSON, and a third records the schema version of the
-//! layout. A save reads the newest number and writes the next in one write
+//! the current mark as JSON, a third the approvals of each revision, and a
+//! fourth records the schema version of the layout. A save reads the newest number and writes the next in one write
 //! transaction, and a move of the current mark reads the mark and writes it
 //! in one, so neither races; `redb` is an ACID embedded store
 //! (<https://docs.rs/redb/4.3.0/redb/>). The file holds configuration text
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
-use ferrofed_registry::revision::{Current, Revision, RevisionId};
+use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 
 use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 
@@ -26,6 +26,9 @@ const REVISIONS: TableDefinition<'static, u64, &str> = TableDefinition::new("con
 /// The one key [`MARK`] holds, to the current mark, as JSON.
 const CURRENT: TableDefinition<'static, &str, &str> = TableDefinition::new("config_current");
 
+/// The revision number to the approvals it holds, as a JSON array.
+const APPROVALS: TableDefinition<'static, u64, &str> = TableDefinition::new("config_approvals");
+
 /// The schema version of each layout the file holds, by name.
 const SCHEMA: TableDefinition<'static, &str, u32> = TableDefinition::new("ferrofed_schema");
 
@@ -33,7 +36,7 @@ const SCHEMA: TableDefinition<'static, &str, u32> = TableDefinition::new("ferrof
 pub const LAYOUT: &str = "config_revisions";
 
 /// The schema version of the layout this binary writes and reads.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// The key of the current mark.
 const MARK: &str = "current";
@@ -94,6 +97,7 @@ fn prepare(write: &WriteTransaction) -> Result<(), StoreError> {
     }
     write.open_table(REVISIONS).map(drop).map_err(backend)?;
     write.open_table(CURRENT).map(drop).map_err(backend)?;
+    write.open_table(APPROVALS).map(drop).map_err(backend)?;
     versions.insert(LAYOUT, VERSION).map_err(backend)?;
     Ok(())
 }
@@ -200,6 +204,34 @@ impl RevisionStore for RedbRevisions {
             Swapped::Stale { .. } => write.abort().map_err(backend)?,
         }
         Ok(swapped)
+    }
+
+    fn approvals(&self, id: RevisionId) -> Result<Vec<Signed>, StoreError> {
+        let read = self.database.begin_read().map_err(backend)?;
+        let table = read.open_table(APPROVALS).map_err(backend)?;
+        let held = table.get(id.get()).map_err(backend)?;
+        held.map(|json| serde_json::from_str(json.value()).map_err(corrupt))
+            .transpose()
+            .map(Option::unwrap_or_default)
+    }
+
+    fn approve(&self, id: RevisionId, approval: &Signed) -> Result<(), StoreError> {
+        let write = self.database.begin_write().map_err(backend)?;
+        {
+            let mut table = write.open_table(APPROVALS).map_err(backend)?;
+            let mut approvals: Vec<Signed> = table
+                .get(id.get())
+                .map_err(backend)?
+                .map(|json| serde_json::from_str(json.value()).map_err(corrupt))
+                .transpose()?
+                .unwrap_or_default();
+            if !approvals.iter().any(|held| held.by == approval.by) {
+                approvals.push(approval.clone());
+                let json = serde_json::to_string(&approvals).map_err(backend)?;
+                table.insert(id.get(), json.as_str()).map_err(backend)?;
+            }
+        }
+        write.commit().map_err(backend)
     }
 }
 

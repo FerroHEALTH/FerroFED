@@ -59,7 +59,12 @@ const SAVED: &str = r#"{"id":2,"base":1,"origin":"operator","restores":null,
 
 /// Mounts on `listener` an answer of `status` with `body` to `verb` of
 /// `route` that carries the operator's own token.
-async fn answers(listener: &Server, (verb, route): (&str, &str), status: u16, body: &str) {
+pub(crate) async fn answers(
+    listener: &Server,
+    (verb, route): (&str, &str),
+    status: u16,
+    body: &str,
+) {
     Mock::given(method(verb))
         .and(path(route))
         .and(header(
@@ -98,7 +103,9 @@ async fn listener() -> Server {
 }
 
 /// A console with `listener` as its one replica, and a signed-in operator.
-fn signed_in_console(listener: &Server) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+pub(crate) fn signed_in_console(
+    listener: &Server,
+) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n\n\
          [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{}\"\n",
@@ -109,7 +116,7 @@ fn signed_in_console(listener: &Server) -> Result<(axum::Router, SessionId), Box
 }
 
 /// The form body of a configuration form with `fields`.
-fn form(fields: &[(&str, &str)]) -> String {
+pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
         form.append_pair(&format!("form[{name}]"), value);
@@ -119,7 +126,7 @@ fn form(fields: &[(&str, &str)]) -> String {
 
 /// Runs the configuration form `body` as the hydrated page sends it, and
 /// reads its rendered answer.
-async fn configured(
+pub(crate) async fn configured(
     service: &axum::Router,
     session: &SessionId,
     body: String,
@@ -138,7 +145,7 @@ async fn configured(
 }
 
 /// The requests `listener` received with `verb` to `route`, by body.
-async fn bodies(
+pub(crate) async fn bodies(
     listener: &Server,
     (verb, route): (&str, &str),
 ) -> Result<Vec<String>, Box<dyn Error>> {
@@ -153,7 +160,7 @@ async fn bodies(
 }
 
 /// How many requests other than reads `listener` received.
-async fn changes(listener: &Server) -> Result<usize, Box<dyn Error>> {
+pub(crate) async fn changes(listener: &Server) -> Result<usize, Box<dyn Error>> {
     Ok(listener
         .received_requests()
         .await

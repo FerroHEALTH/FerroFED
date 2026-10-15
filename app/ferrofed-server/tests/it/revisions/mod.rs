@@ -15,7 +15,9 @@
 
 mod api;
 mod console;
+mod credentials;
 mod off;
+mod policy;
 mod replicas;
 mod secrets;
 mod store;
@@ -29,7 +31,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::dev::Profile;
-use ferrofed_registry::revision::{Current, Revision, RevisionId};
+use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
@@ -52,8 +54,13 @@ const REMOTE: ([u8; 4], u16) = ([192, 0, 2, 10], 40_000);
 
 /// The `Authorization` value of the operator [`OPERATOR`].
 fn operator() -> Result<String, Box<dyn Error>> {
+    operator_as(OPERATOR)
+}
+
+/// The `Authorization` value of the operator whose subject is `subject`.
+pub(crate) fn operator_as(subject: &str) -> Result<String, Box<dyn Error>> {
     let mut claims = support::claims();
-    OPERATOR.clone_into(&mut claims.sub);
+    subject.clone_into(&mut claims.sub);
     let scope = claims.scope.take().unwrap_or_default();
     claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
     Ok(format!("Bearer {}", support::issuer().mint(&claims)?))
@@ -95,12 +102,12 @@ pub(crate) fn rest(document: &Path, extra: &str) -> String {
 }
 
 /// The bootstrap core of a managed development gateway whose revisions are
-/// kept at `store`.
-fn core(store: &Path) -> Result<String, Box<dyn Error>> {
+/// kept at `store`, with `config` appended to its `[config]` table.
+fn core(store: &Path, config: &str) -> Result<String, Box<dyn Error>> {
     let store = toml::Value::String(store.display().to_string());
     Ok(format!(
         "profile = \"development\"\n\n[metrics]\nlisten = \"127.0.0.1:9\"\n\n\
-         [config]\nui = \"managed\"\npath = {store}\n{}\n",
+         [config]\nui = \"managed\"\npath = {store}\n{config}\n{}\n",
         support::auth_toml()?
     ))
 }
@@ -131,6 +138,16 @@ impl Gateway {
         extra: &str,
         shared: Option<(Box<dyn RevisionStore>, &Path)>,
     ) -> Result<Self, Box<dyn Error>> {
+        Self::configured(("", extra), shared)
+    }
+
+    /// Starts a gateway whose file federates member A alone, with `config`
+    /// appended to its `[config]` table and `extra` to the part a revision
+    /// holds, over `shared` as [`Gateway::build`] takes it.
+    pub(crate) fn configured(
+        (config_extra, extra): (&str, &str),
+        shared: Option<(Box<dyn RevisionStore>, &Path)>,
+    ) -> Result<Self, Box<dyn Error>> {
         let dir = tempfile::tempdir()?;
         std::fs::write(dir.path().join("one.toml"), member("a"))?;
         std::fs::write(dir.path().join("two.toml"), member("a") + &member("b"))?;
@@ -141,8 +158,33 @@ impl Gateway {
         let config = dir.path().join("ferrofed.toml");
         std::fs::write(
             &config,
-            core(&store)? + &rest(&documents.join("one.toml"), extra),
+            core(&store, config_extra)? + &rest(&documents.join("one.toml"), extra),
         )?;
+        Self::boot(dir, (config, store), shared.map(|(store, _)| store))
+    }
+
+    /// Stops this gateway and starts it again over the same files and store.
+    pub(crate) fn restart(self) -> Result<Self, Box<dyn Error>> {
+        let Self {
+            dir,
+            config,
+            store,
+            state,
+            reloader,
+            revisions,
+            admin,
+        } = self;
+        drop((admin, reloader, revisions, state));
+        Self::boot(dir, (config, store), None)
+    }
+
+    /// Boots a gateway from the configuration file `config` in `dir`, its
+    /// revisions at `store` or in `shared`.
+    fn boot(
+        dir: tempfile::TempDir,
+        (config, store): (PathBuf, PathBuf),
+        shared: Option<Box<dyn RevisionStore>>,
+    ) -> Result<Self, Box<dyn Error>> {
         let (loaded, tree) = Config::load_with_tree(Some(&config))?;
         let settings = loaded.resolve()?;
         ferrofed_server::config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
@@ -151,7 +193,7 @@ impl Gateway {
                 let (settings, revisions) = service::boot(settings, &tree)?;
                 (settings, revisions.ok_or("the configuration is managed")?)
             }
-            Some((store, _)) => service::boot_over(store, &tree)?,
+            Some(store) => service::boot_over(store, &tree)?,
         };
         let state = Arc::new(AppState::build(&settings)?);
         let reloader = Arc::new(
@@ -263,6 +305,8 @@ pub(crate) struct Standing {
     pub(crate) running: Option<u64>,
     pub(crate) in_step: bool,
     pub(crate) refused: Option<u64>,
+    #[serde(default)]
+    pub(crate) review: Option<ferrofed_registry::revision::Review>,
 }
 
 /// The body of an apply or a rollback.
@@ -333,6 +377,14 @@ impl RevisionStore for Shared {
         next: &Current,
     ) -> Result<Swapped, StoreError> {
         self.0.swap_current(expected, next)
+    }
+
+    fn approvals(&self, id: RevisionId) -> Result<Vec<Signed>, StoreError> {
+        self.0.approvals(id)
+    }
+
+    fn approve(&self, id: RevisionId, approval: &Signed) -> Result<(), StoreError> {
+        self.0.approve(id, approval)
     }
 }
 

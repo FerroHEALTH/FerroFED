@@ -11,10 +11,13 @@ environment alone, opens no store, and serves no revision route. No
 specification governs this page: our own design.
 
 What is built is the revision store and its API on the admin listener
-(#576), and the members and stored queries the operator console manages,
-with their owners (#577, [Console-managed resources](#console-managed-resources)).
-Credentials and bindings with a confirmation step and a second operator's
-approval are planned (#578), then export to and import from TOML (#579).
+(#576), the members and stored queries the operator console manages, with
+their owners (#577, [Console-managed resources](#console-managed-resources)),
+and the onward credentials and binding sections it manages, with write-only
+secrets, a confirmation after a change applies and a second operator's
+approval before it applies (#578,
+[Credentials and binding sections](#credentials-and-binding-sections)).
+Export to and import from TOML is planned (#579).
 
 ## Turning it on
 
@@ -104,7 +107,7 @@ with the revision number as `config-revision-saved`,
 
 | Route | Answer |
 |---|---|
-| `GET /admin/config` | the newest revision's number as `head`, and the running revision's mark as `current`: its number, the one before it, whether it is `applied` or `pending-restart` with the keys a restart applies, who applied it and when; and this replica's own `running`, `in_step` and `refused` ([Several replicas](#several-replicas)) |
+| `GET /admin/config` | the newest revision's number as `head`, and the running revision's mark as `current`: its number, the one before it, whether it is `applied` or `pending-restart` with the keys a restart applies, who applied it and when, and the confirmation it awaits (`awaiting`) or received (`confirmed`); what the newest revision takes when it does not run, as `review` ([Commit-confirm](#commit-confirm), [Second-operator approval](#second-operator-approval)); and this replica's own `running`, `in_step` and `refused` ([Several replicas](#several-replicas)) |
 | `GET /admin/config/revisions?offset=&limit=` | one page of the history, newest first, at most 100 |
 | `GET /admin/config/revisions/{id}` | one revision |
 | `GET /admin/config/revisions/{id}/diff/{other}` | each dotted key that differs from `id` to `other`: `added`, `removed` or `changed`, with both values |
@@ -205,6 +208,161 @@ stored-query version ([The operator console](operator-console.md#configuration))
 writes `openehr-rest-query` endpoints; a member's `hl7-fhir-rest`
 endpoints are saved through the API and kept by the console's saves.
 
+## Credentials and binding sections
+
+Each onward credential and each binding section is a resource owned whole,
+as a member is:
+
+| Resource | Table | `config.approval` kinds |
+|---|---|---|
+| the onward credentials of one endpoint | `[credentials."<endpoint id>"]` | `onward-credentials` |
+| the PIXm resolver | `[pixm]` | `identity-services` |
+| the PDQm demographics step | `[pdqm]` | `identity-services` |
+| the XCPD localizer | `[xcpd]` | `identity-services`, `localization` |
+| the Dutch Generic Functions, the NVI localizer and the Mitz pre-filter | `[nl_gf]` | `identity-services`, `localization`, `consent` |
+| the localization failure policy | `[federation.localization]` | `localization` |
+| consent disclosure | `[federation.consent]` | `consent` |
+
+The binding sections a build lacks, by its `binding-ihe` and `binding-nl`
+features, are not offered. A resource the configuration file sets is the
+file's: `GET /admin/config/resources` names its `owner` as `file`, and a
+change to it is refused with `409 resource-file-owned`. Every other one a
+revision sets is the console's, and the revision records it in its
+`console` list. Client authentication (`[auth]`), the transport policy the
+`profile` sets and the rest of the bootstrap core stay in the file alone,
+so the console cannot lock you out or lower the security floor.
+
+| Route | Answer |
+|---|---|
+| `PUT /admin/config/credentials/{endpoint_id}` | `{"base": <newest>, "reason": "…", "settings": "…", "secrets": [{"key": "…", "value" \| "file": "…" \| "clear": true}]}`: saves a revision with the endpoint's credentials as given, `201` with the revision |
+| `PUT /admin/config/bindings/{section}` | the same body, for `pixm`, `pdqm`, `xcpd`, `nl_gf`, `localization` or `consent` |
+| `POST /admin/config/credentials/{endpoint_id}/remove`, `POST /admin/config/bindings/{section}/remove` | `{"base": <newest>, "reason": "…"}`: saves a revision without it, `201` with the revision |
+
+`settings` holds the resource's keys less its secrets, as the table's own
+keys or as one TOML inline table: `{ oauth2 = { grant = "client_credentials", client_auth = "private_key_jwt", token_endpoint = "https://as.example.org/token", client_id = "ferrofed", scope = "system/aql-*.s" } }`.
+Settings that name a secret or its `_file` reference are refused with
+`400 body-invalid`, naming the key. `GET /admin/config/resources` lists
+each credential and binding section under `sections`, with its `owner`,
+its `state` for a console one (`running`, `pending` or `removing`), its
+`settings` as one inline table for a console one, and its `secrets`, each
+a `key` and the `reference` it is read from; and the binding sections this
+gateway is built with under `bindings`.
+
+At a `SIGHUP` reload whose file changed, the file's revision carries the
+console's credentials and binding sections over from the running revision.
+A credential or a section the file now sets is the file's from then on:
+its console copy is left out of the file's revision, and the gateway logs
+its table.
+
+A reload applies the credentials, the binding sections whose reload
+applies (`[pixm]`, `[pdqm]`, `[xcpd]`, `[nl_gf]`), the consent reporting
+of `[federation.consent]`, and the localization policy of
+`[federation.localization]` while `node_selection` and the budgets are
+those the process started with; a change to XCPD's audit takes a restart,
+as before.
+
+## Secrets are write-only
+
+A revision never holds a secret value, only the `_file` reference to the
+file it is read from. A secret change names the secret's dotted key inside
+the resource, such as `bearer_token` or `oauth2.client_secret`, and one of:
+
+- `file`: the absolute path of a file the gateway reads, which the revision
+  references as it is;
+- `value`: the secret itself, which the gateway writes to a new file in
+  `config.secrets_dir`, readable and writable by the gateway's user alone
+  (mode `0600`), and references. Each value gets a file of its own, never
+  one that exists, so an earlier revision that references the previous
+  file still reads it after a rollback. The gateway never logs the value,
+  never echoes it, and never returns it in a revision, a diff, an export or
+  an error;
+- `clear`: the secret and its reference are removed.
+
+A secret the change does not name keeps its reference. Without
+`config.secrets_dir`, a value is refused with `409 secret-store-unavailable`
+and nothing is saved; a reference still works. A save the gateway refuses
+removes the files it wrote for it. The files of earlier values stay in the
+directory for the revisions that reference them; remove one once no
+revision you may roll back to references it.
+
+```toml
+[config]
+ui = "managed"
+path = "/var/lib/ferrofed/config-revisions.redb"
+secrets_dir = "/var/lib/ferrofed/secrets"   # an existing directory, on a volume every replica shares
+```
+
+## Commit-confirm
+
+An operator's apply of a revision that changes an onward credential or a
+binding section runs it awaiting a confirmation. `GET /admin/config`
+shows the deadline and the resources it changed under `current.awaiting`.
+Confirm it within `config.confirm_ms`, 120000 ms by default, once the
+gateway works with it:
+
+| Route | Answer |
+|---|---|
+| `POST /admin/config/revisions/{id}/confirm` | with no body: the mark with the confirmation, its operator and time under `current.confirmed` |
+
+Unless an operator confirms it by the deadline, the gateway rolls it back:
+it saves the revision that ran before as a new revision, made by the
+gateway with the reason `revision N was not confirmed by its deadline`,
+applies it, and records `config-unconfirmed-rolled-back` under
+`ferrofed::security`. Each replica reads the deadline from the store's
+running mark with every `config.poll_ms` read, so the first replica past
+the deadline rolls it back and the others follow the rollback as any
+applied revision. A gateway that starts with a revision past its deadline
+rolls it back before it runs, and one that starts within the deadline keeps
+waiting for the confirmation. A `SIGHUP` whose file changed while a
+revision awaits its confirmation rolls that revision back first.
+
+While a revision awaits its confirmation, another apply is refused with
+`409 confirmation-pending`; confirm it or roll it back first. A
+confirmation of a revision that does not await one, or past its deadline,
+is refused with `409 confirmation-unavailable`, and one from a caller with
+no verified token, such as a loopback peer under the development profile,
+with `403 operator-unverified`. A rollback awaits no confirmation and takes
+no approval: it restores what ran before. `GET /admin/config` shows what
+the newest revision takes under `review`: the resources whose change awaits
+a confirmation once it applies (`confirms`).
+
+## Second-operator approval
+
+`config.approval` names the resources a revision changes only once an
+operator other than its author approved it: a kind of the table above, or
+one resource (`credentials.<endpoint id>`, `pixm`, `pdqm`, `xcpd`, `nl_gf`,
+`federation.localization`, `federation.consent`).
+
+```toml
+[config]
+approval = ["onward-credentials", "consent"]
+```
+
+| Route | Answer |
+|---|---|
+| `POST /admin/config/revisions/{id}/approve` | with no body: what the revision takes, its `approval` resources and the `approvals` it holds, each with its operator and time, and whether it is `approved` |
+
+An apply of a revision that changes such a resource is refused with
+`409 approval-required` until an operator with another subject, at the
+same or another accepted issuer, approved it. Its author's approval is
+refused with `403 approval-own-revision`, the approval of a revision that
+needs none with `409 approval-not-required`, and one from a caller with no
+verified token with `403 operator-unverified`. The revision records its
+author and the store records each approval with its operator, and both
+are logged under `ferrofed::security` (`config-revision-approved`).
+`GET /admin/config` shows the newest revision's `review`, with its
+`author`, its `approval` resources, its `approvals` and whether it is
+`approved`.
+
+| Key | Default | What it sets |
+|---|---|---|
+| `config.confirm_ms` | `120000` | how long an applied change to a credential or a binding section awaits its confirmation, from 1000 to 3600000 ms |
+| `config.approval` | none | the resource kinds and resources a revision changes only with a second operator's approval |
+| `config.secrets_dir` | none | the existing directory a secret value is written to; without it the console sets a secret by a reference alone |
+
+Each is read only under `managed`, refused under `off`, and takes a
+restart to change.
+
 ## Several replicas
 
 With `backend = "postgres"`, the replicas share the history and the
@@ -244,3 +402,10 @@ current revision and `0` while it does not, and the alert
 | `config.poll_ms` | `5000` | how often each replica reads the running mark, from 100 to 600000 ms; read only under `managed`, and a change takes a restart |
 
 Under `config.ui = "off"` nothing is read: no store, no watch.
+
+With several replicas, `config.secrets_dir` must be one volume every
+replica mounts at the same path, since a revision names the file a secret
+value was written to and every replica reads it when it follows the
+revision. A replica that cannot read a file a revision references refuses
+that revision, keeps its running configuration and reports it as
+`refused`, as above.
