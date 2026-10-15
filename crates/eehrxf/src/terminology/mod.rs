@@ -15,6 +15,10 @@
 //!   unknown match adds no coding and is written into the narrative; a code
 //!   no preferred system carries follows Art 10(7) of the eHealth Network
 //!   Guidelines on Patient Summary;
+//! - [`ehn`]: the preferred code systems of that guideline's §4, the
+//!   systems the rules prefer by default;
+//! - `local` (feature `openehr`): the archetype-local terms of an
+//!   operational template, by which a `local` code is rendered;
 //! - [`expansion`]: the value set expansions a FHIR package carries;
 //! - [`bindings`]: the `required` bindings of a profile checked against
 //!   those expansions, every binding with no expansion named as not
@@ -28,7 +32,10 @@
 //! system that reaches one implements.
 
 pub mod bindings;
+pub mod ehn;
 pub mod expansion;
+#[cfg(feature = "openehr")]
+pub mod local;
 #[cfg(feature = "openehr")]
 pub mod transcode;
 pub(crate) mod walk;

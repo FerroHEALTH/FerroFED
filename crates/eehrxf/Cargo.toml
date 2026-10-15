@@ -5,7 +5,7 @@ name = "eehrxf"
 description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, mapped from openEHR by FHIRconnect"
 # The name is not reserved on crates.io yet, and it must be claimed before the
 # `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.13"
+version = "0.0.14"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -56,6 +56,8 @@ fhir-r4 = [
 openehr = [
   "fhir-r4",
   "dep:fhirconnect",
+  "dep:openehr-base",
+  "dep:openehr-its",
   "dep:openehr-mapping-core",
   "dep:openehr-rm",
 ]
@@ -69,6 +71,10 @@ fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 fhirconnect = { workspace = true, optional = true }
 flate2.workspace = true
+# The `local` terminology id, and the archetype id a local code is read in.
+openehr-base = { workspace = true, optional = true }
+# The OPT 1.4 model whose term definitions render an archetype-local code.
+openehr-its = { workspace = true, optional = true, features = ["opt14"] }
 openehr-mapping-core = { workspace = true, optional = true }
 openehr-rm = { workspace = true, optional = true }
 serde.workspace = true

@@ -15,7 +15,7 @@
 //! Each time the store connects, one transaction under the stored-query
 //! store's advisory lock creates the tables when absent and records the
 //! layout's schema version, and a newer one is refused. It runs on a
-//! connection of its own ([`Connection`]), on a thread with a runtime of its
+//! connection of its own (`stored::postgres::Connection`), on a thread with a runtime of its
 //! own, because [`RevisionStore`] is called where a thread may block. No
 //! specification governs the storage: our own design.
 

@@ -20,6 +20,10 @@
 //!   information in coded elements must also be included and visible in a
 //!   narrative part" (eHealth Network Guidelines on Patient Summary, Release
 //!   3.4, Art 10(3)).
+//! - A code of the `local` terminology is rendered from the term definitions
+//!   of the operational template, in the language asked, when a [`Local`]
+//!   context is given: the coding is kept as recorded and displayed with the
+//!   term's text, which also opens the narrative.
 //! - When no coding is in a preferred system, the information "should, as an
 //!   interim solution, be transferred encoded, preferably displayed in
 //!   English, and/or in narrative form" (Art 10(7)): the original coding is
@@ -29,29 +33,38 @@
 //! [`transcode_with`] asks a configured terminology server's `$translate`
 //! for each preferred system before Art 10(7) applies, and takes only an
 //! `equivalent` or `equal` match.
-
 use std::collections::BTreeSet;
 
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives::Code;
 use fhir_types::r4::primitives::String as FhirString;
 use fhir_types::r4::primitives::Uri;
+use openehr_base::v1_3::base_types::definitions::definitions_impl::LOCAL_TERMINOLOGY_ID;
+use openehr_base::v1_3::base_types::identification::archetype_id::ArchetypeId;
 use openehr_rm::v1_2::data_types::text::code_phrase::CodePhrase;
 use openehr_rm::v1_2::data_types::text::dv_text::DvText;
 
 use crate::terminology::Terminology;
 use crate::terminology::TerminologyError;
+use crate::terminology::ehn;
+use crate::terminology::local::Term;
+use crate::terminology::local::TermDefinitions;
 
 /// The code systems a deployment takes as preferred, by the system URI a
 /// coding carries.
 ///
-/// The eHealth Network Guidelines on Patient Summary name the preferred code
-/// systems of each data element in their §4 by name; the URIs that name them
-/// in a coding are the deployment's to give.
-// TODO(#927): ship the eHN §4 preferred systems by element and take archetype-local codes from the OPT.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// The default is every system of the eHealth Network Guidelines on Patient
+/// Summary §4 that [`ehn::PATIENT_SUMMARY`] ships; [`PreferredSystems::new`]
+/// names another set.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreferredSystems {
     systems: BTreeSet<String>,
+}
+
+impl Default for PreferredSystems {
+    fn default() -> Self {
+        Self::new(ehn::PATIENT_SUMMARY)
+    }
 }
 
 impl PreferredSystems {
@@ -76,6 +89,33 @@ impl PreferredSystems {
     /// Returns every preferred system, in order.
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         self.systems.iter().map(String::as_str)
+    }
+}
+
+/// The template context a `local` code is read in: the operational
+/// template's term definitions, the archetype the item sits in, and the
+/// language asked.
+#[derive(Debug, Clone, Copy)]
+pub struct Local<'a> {
+    terms: &'a TermDefinitions,
+    archetype: &'a ArchetypeId,
+    language: &'a str,
+}
+
+impl<'a> Local<'a> {
+    /// Returns the context of an item of `archetype`, read from `terms` in
+    /// `language`, an ISO 639-1 code as the template states its own.
+    #[must_use]
+    pub const fn new(
+        terms: &'a TermDefinitions,
+        archetype: &'a ArchetypeId,
+        language: &'a str,
+    ) -> Self {
+        Self {
+            terms,
+            archetype,
+            language,
+        }
     }
 }
 
@@ -109,6 +149,7 @@ pub struct Transcoded {
     codings: Vec<Coding>,
     narrative: Vec<String>,
     untranscoded: bool,
+    from_template: bool,
 }
 
 impl Transcoded {
@@ -121,16 +162,26 @@ impl Transcoded {
 
     /// Returns the narrative lines: the item's text, then one line per
     /// mapping no coding carries.
+    ///
+    /// For a `local` code rendered from the template, the first line is the
+    /// term's text, followed by the recorded text when it differs.
     #[must_use]
     pub fn narrative(&self) -> &[String] {
         &self.narrative
     }
 
     /// Returns whether the item is coded and no coding is in a preferred
-    /// system, so Art 10(7) applied.
+    /// system or rendered from the template, so Art 10(7) applied.
     #[must_use]
     pub const fn untranscoded(&self) -> bool {
         self.untranscoded
+    }
+
+    /// Returns whether the item's `local` code was rendered from the
+    /// template's term definitions.
+    #[must_use]
+    pub const fn is_from_template(&self) -> bool {
+        self.from_template
     }
 }
 
@@ -145,12 +196,22 @@ pub enum TranscodeError {
     /// A code phrase names no terminology or no code.
     #[error("a CODE_PHRASE names no terminology or no code")]
     Uncoded,
+    /// A `local` code the archetype the item sits in does not define in any
+    /// language, so the item does not conform to its template.
+    #[error("the archetype {archetype} defines no local code {code}")]
+    UndefinedLocalCode {
+        /// The archetype the item sits in.
+        archetype: String,
+        /// The code.
+        code: String,
+    },
     /// The terminology server gave no answer.
     #[error("the terminology server gave no translation")]
     Terminology(#[from] TerminologyError),
 }
 
-/// Transcodes `text` under `preferred`.
+/// Transcodes `text` under `preferred`, with no template context, so a
+/// `local` code follows Art 10(7).
 ///
 /// # Errors
 ///
@@ -161,6 +222,78 @@ pub enum TranscodeError {
 pub fn transcode(
     text: &DvText,
     preferred: &PreferredSystems,
+) -> Result<Transcoded, TranscodeError> {
+    rules(text, preferred, None)
+}
+
+/// Transcodes `text` under `preferred`, rendering a `local` code from the
+/// template context `local`.
+///
+/// A `local` code the archetype defines in the language asked is displayed
+/// with the term's text and is not untranscoded; one it defines in another
+/// language only follows Art 10(7), as [`transcode`] answers it.
+///
+/// # Errors
+///
+/// The errors of [`transcode`], and [`TranscodeError::UndefinedLocalCode`]
+/// for a `local` code the archetype does not define in any language.
+pub fn transcode_local(
+    text: &DvText,
+    preferred: &PreferredSystems,
+    local: &Local<'_>,
+) -> Result<Transcoded, TranscodeError> {
+    rules(text, preferred, Some(local))
+}
+
+/// Transcodes `text` under `preferred`, asking `terminology` to translate an
+/// item no coding of which is in a preferred system.
+///
+/// Each original coding is asked of `$translate` into each preferred
+/// system, and every `equivalent` or `equal` match is added after the
+/// codings the item carries. With no server configured, or no accepted
+/// match, the item follows Art 10(7) as [`transcode`] answers it.
+///
+/// # Errors
+///
+/// The errors of [`transcode`], and [`TranscodeError::Terminology`] for a
+/// `$translate` that gives no answer: a failed call is never taken as no
+/// translation.
+pub async fn transcode_with(
+    text: &DvText,
+    preferred: &PreferredSystems,
+    terminology: &Terminology,
+) -> Result<Transcoded, TranscodeError> {
+    translated(transcode(text, preferred)?, preferred, terminology).await
+}
+
+/// Transcodes `text` under `preferred` and the template context `local`,
+/// asking `terminology` to translate an item no coding of which is in a
+/// preferred system or rendered from the template.
+///
+/// # Errors
+///
+/// The errors of [`transcode_local`], and [`TranscodeError::Terminology`]
+/// for a `$translate` that gives no answer.
+pub async fn transcode_local_with(
+    text: &DvText,
+    preferred: &PreferredSystems,
+    local: &Local<'_>,
+    terminology: &Terminology,
+) -> Result<Transcoded, TranscodeError> {
+    translated(
+        transcode_local(text, preferred, local)?,
+        preferred,
+        terminology,
+    )
+    .await
+}
+
+/// Applies the rules to `text`, reading a `local` code in `local` when
+/// given.
+fn rules(
+    text: &DvText,
+    preferred: &PreferredSystems,
+    local: Option<&Local<'_>>,
 ) -> Result<Transcoded, TranscodeError> {
     let (value, defining, mappings) = match text {
         DvText::DvCodedText(coded) => (
@@ -175,7 +308,17 @@ pub fn transcode(
         ..Transcoded::default()
     };
     if let Some(defining) = defining {
-        transcoded.codings.push(coding(defining, Some(value))?);
+        match rendered(defining, local)? {
+            Some(term) => {
+                transcoded.codings.push(coding(defining, Some(term))?);
+                transcoded.narrative = vec![term.to_owned()];
+                if term != value {
+                    transcoded.narrative.push(value.to_owned());
+                }
+                transcoded.from_template = true;
+            }
+            None => transcoded.codings.push(coding(defining, Some(value))?),
+        }
     }
     for mapping in mappings.into_iter().flatten() {
         let relation = match mapping.r#match {
@@ -205,7 +348,8 @@ pub fn transcode(
         }
         transcoded.narrative.push(line);
     }
-    transcoded.untranscoded = !transcoded.codings.is_empty()
+    transcoded.untranscoded = !transcoded.from_template
+        && !transcoded.codings.is_empty()
         && !transcoded
             .codings
             .iter()
@@ -213,25 +357,40 @@ pub fn transcode(
     Ok(transcoded)
 }
 
-/// Transcodes `text` under `preferred`, asking `terminology` to translate an
-/// item no coding of which is in a preferred system.
-///
-/// Each original coding is asked of `$translate` into each preferred
-/// system, and every `equivalent` or `equal` match is added after the
-/// codings the item carries. With no server configured, or no accepted
-/// match, the item follows Art 10(7) as [`transcode`] answers it.
-///
-/// # Errors
-///
-/// The errors of [`transcode`], and [`TranscodeError::Terminology`] for a
-/// `$translate` that gives no answer: a failed call is never taken as no
-/// translation.
-pub async fn transcode_with(
-    text: &DvText,
+/// Returns the template's text for `defining` when it is a `local` code the
+/// archetype of `local` defines in the language asked.
+fn rendered<'a>(
+    defining: &CodePhrase,
+    local: Option<&Local<'a>>,
+) -> Result<Option<&'a str>, TranscodeError> {
+    let Some(local) = local else {
+        return Ok(None);
+    };
+    if defining.terminology_id.name() != LOCAL_TERMINOLOGY_ID {
+        return Ok(None);
+    }
+    match local
+        .terms
+        .term(local.language, local.archetype, &defining.code_string)
+    {
+        Term::Defined(text) => Ok(Some(text)),
+        // NOTE: eHN PS Art 10(7): a term the template holds in another language only is
+        // transferred encoded and displayed as recorded, with no language substituted.
+        Term::OtherLanguage => Ok(None),
+        Term::Undefined => Err(TranscodeError::UndefinedLocalCode {
+            archetype: local.archetype.value.clone(),
+            code: defining.code_string.clone(),
+        }),
+    }
+}
+
+/// Adds to `transcoded` every `equivalent` or `equal` translation
+/// `terminology` gives of an untranscoded item into a preferred system.
+async fn translated(
+    mut transcoded: Transcoded,
     preferred: &PreferredSystems,
     terminology: &Terminology,
 ) -> Result<Transcoded, TranscodeError> {
-    let mut transcoded = transcode(text, preferred)?;
     // NOTE: eHN PS Art 10(7) is the rule when no transcoding exists, and the server is
     // optional, so with none configured the item is transferred encoded with its narrative.
     if !transcoded.untranscoded || !terminology.is_configured() {
