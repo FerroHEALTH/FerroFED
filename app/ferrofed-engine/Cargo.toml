@@ -95,6 +95,8 @@ nl-generic-functions = { workspace = true, features = ["nuts-auth", "nvi"] }
 # The HTTP client the Nuts grant's tests hand its client (#88).
 reqwest.workspace = true
 serde_json.workspace = true
+# The private cargo home the architecture tests' child cargo runs in (#920).
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "net", "time"] }
 wiremock.workspace = true
 
