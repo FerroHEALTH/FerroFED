@@ -33,11 +33,9 @@ use std::time::Instant;
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::record::{
-    Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
+    Action, DataSubject, EhrAt, Insertion, PatientIdentifier, PatientLookup, WrittenVersion,
 };
 use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Written};
-use ferrofed_engine::conveyance::Conveyance;
-use ferrofed_engine::conveyance::caller::{Acting, Principal};
 use ferrofed_engine::dispatch::{Contact, DispatchOptions};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
@@ -49,6 +47,7 @@ use openehr_federation::status::EndpointStatus;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::access::{self, Accessed, Asked};
+use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::demographics::{self, Identified};
 use crate::facade::receive::refusal::{Unresolved, attach, failed, refused, unprepared};
@@ -57,18 +56,19 @@ use crate::facade::route::Deadlines;
 use crate::facade::{confined, security};
 use crate::federation::Federation;
 
+mod inserted;
 mod refusal;
 
 /// The operation an access record names for a received document: the FHIR
 /// `create` interaction on `Bundle` (FHIR R4 documents §3.3.4).
 pub(crate) const OPERATION: &str = "create Bundle";
 
-/// Receives `text`, a document in the exchange format, for the caller
+/// Receives `text`, a document in the exchange format, for `caller`, whom
 /// `arrived` names, and answers with what happened.
 pub(crate) async fn receive(
     federation: &Federation,
     fhir: &FhirSettings,
-    arrived: Arrived<'_>,
+    (arrived, caller): (Arrived<'_>, &Caller),
     text: &str,
 ) -> Response {
     let logged = arrived.outbound.to_string();
@@ -124,16 +124,17 @@ pub(crate) async fn receive(
     if !confined::admits(arrived.conveyance, endpoint.id(), &resolved.ehr_id) {
         return confined::refused("receive", arrived.request_id, &logged);
     }
-    let mut prepared = prepared;
-    let inserted = in_person(arrived.conveyance);
-    // NOTE: Regulation (EU) 2025/327 Art 5, RM Release 1.1.0 ENTRY.provider: what a person
-    // inserts under their own grant names the record's subject as each entry's provider.
-    if inserted {
-        prepared.composition = match prepared.composition.inserted_by_subject() {
-            Ok(marked) => marked,
-            Err(unmarked) => return refusal::unmarked(&unmarked, &logged),
-        };
-    }
+    // NOTE: Regulation (EU) 2025/327 Art 4(2), Art 5, RM Release 1.1.0 ENTRY.provider: what a
+    // person or their representative inserts names who inserted it as each entry's provider.
+    let (prepared, inserted) = match inserted::mark(
+        prepared,
+        (arrived.conveyance, caller),
+        &resolved.withheld,
+        &logged,
+    ) {
+        Ok(marked) => marked,
+        Err(refused) => return refused,
+    };
     write(
         federation,
         &arrived,
@@ -142,17 +143,6 @@ pub(crate) async fn receive(
         &deadlines,
     )
     .await
-}
-
-/// Whether the caller under `conveyance` is a natural person whose grant is
-/// confined to their own record: the grant a person inserts information in
-/// their own EHR with (Regulation (EU) 2025/327 Art 5).
-fn in_person(conveyance: &Conveyance) -> bool {
-    conveyance.confinement().is_some()
-        && matches!(
-            conveyance.principal(),
-            Principal::Caller(caller) if caller.acting == Acting::Person
-        )
 }
 
 /// The patient of a prepared document, resolved at its member.
@@ -279,12 +269,12 @@ async fn resolve(
 
 /// Commits the composition of `prepared` into `resolved`'s EHR at
 /// `endpoint`, within the per-node deadline of `deadlines`; `inserted` says
-/// the composition is marked as inserted by its subject.
+/// who the composition is marked as inserted by.
 async fn write(
     federation: &Federation,
     arrived: &Arrived<'_>,
     (prepared, endpoint): (&Prepared, &Endpoint),
-    (resolved, inserted): (Resolved, bool),
+    (resolved, inserted): (Resolved, Option<Insertion>),
     deadlines: &Deadlines,
 ) -> Response {
     let logged = arrived.outbound.to_string();
@@ -366,8 +356,8 @@ struct Origin<'a> {
     ehr_id: &'a EhrId,
     /// The identifier the patient was named by.
     named: PatientIdentifier,
-    /// That the composition is marked as inserted by its subject.
-    inserted: bool,
+    /// Who the composition is marked as inserted by, when it is.
+    inserted: Option<Insertion>,
 }
 
 /// The access record's facts of a write of `prepared` sent to `at`, which
@@ -433,7 +423,7 @@ fn accessed(
             evidence: written.is_some().then_some(evidence),
         }],
         consent_set_aside: std::collections::BTreeSet::new(),
-        subject_inserted: at.inserted && written.is_some(),
+        inserted: at.inserted.filter(|_| written.is_some()),
         transformations: vec![access::transformation::of(&prepared.transformation)],
     })
 }

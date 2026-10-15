@@ -459,7 +459,7 @@ managing_organisation = "org-a"
                 namespace: NAMESPACE.to_owned(),
                 value: SecretString::from(PATIENT),
             },
-            inserted: false,
+            inserted: None,
         };
         Ok(failed(&federation, &prepared, &at, error, "outbound-1"))
     }

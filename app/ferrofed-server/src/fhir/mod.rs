@@ -310,7 +310,13 @@ async fn bundle_post(
         Err(refused) => return refused,
     };
     let arrived = admitted.arrived(&confined);
-    crate::facade::receive::receive(&admitted.federation, admitted.fhir, arrived, text).await
+    crate::facade::receive::receive(
+        &admitted.federation,
+        admitted.fhir,
+        (arrived, admitted.caller),
+        text,
+    )
+    .await
 }
 
 /// Whether `headers` declare a FHIR JSON body.

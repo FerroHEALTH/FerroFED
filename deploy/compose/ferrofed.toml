@@ -116,6 +116,9 @@ jwks_uri = "https://idp.example.org/jwks"
 # [auth.issuer.patient]
 # endpoint = "node-a-query"
 # ehr_id_system = "urn:oid:2.999.9.1"
+# Whether the RFC 8693 act claim of these tokens names the patient's
+# representative (Regulation (EU) 2025/327 Art 4(2)).
+# act_is_representative = false
 #
 # The claim and the values that carry the authentication assurance of its
 # tokens, and the least level patient data needs; without it, no level is

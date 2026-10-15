@@ -554,6 +554,7 @@ fn confined_gateway(text: &str) -> Result<(Router, String), Box<dyn Error>> {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
             ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
+            act_is_representative: false,
         });
     }
     let mut claims = crate::support::claims();

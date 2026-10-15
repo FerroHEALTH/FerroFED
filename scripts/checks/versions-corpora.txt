@@ -77,6 +77,7 @@ docs/specs/ietf-oauth|IETF RFC 7521
 docs/specs/ietf-oauth|IETF RFC 7523
 docs/specs/ietf-oauth|IETF RFC 7662
 docs/specs/ietf-oauth|IETF RFC 8414
+docs/specs/ietf-oauth|IETF RFC 8693
 docs/specs/ietf-oauth|IETF RFC 8705
 docs/specs/ietf-oauth|IETF RFC 9126
 docs/specs/ietf-oauth|IETF RFC 9396

@@ -88,6 +88,7 @@ demographic_clients = []
 | `auth.issuer[].operator_scope` | none | The scope value that admits a caller of this issuer to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves), one scope token. Without it, no caller of this issuer reaches either. |
 | `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
 | `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
+| `auth.issuer[].patient.act_is_representative` | `false` | Whether the RFC 8693 `act` claim of this issuer's patient tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative ([Patient grants](#patient-grants)). |
 | `auth.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. `[auth.issuer.requester]` names all four claims or none. |
 | `auth.issuer[].requester.role` | none | The claim carrying the professional's UZI role code. |
 | `auth.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
@@ -260,6 +261,18 @@ person, with a `patient/` scope that creates compositions
 receiving member, every entry naming the record's subject as its provider,
 and its access record says the person inserted it ([Inserted by the
 person](../evaluate/receiving-documents.md#inserted-by-the-person)).
+
+A proxy or a legal representative (Art 4(2)) who inserts for the person is
+told apart only when the token says so. RFC 8693 §4.1 names any delegate
+in the `act` claim, a client service as well as a person, so set
+`act_is_representative = true` in `[auth.issuer.patient]` only for an
+issuer whose patient tokens name the representative there. Every entry of
+a document such a token inserts then names the representative, a
+`PARTY_IDENTIFIED` holding the `act` `sub`, and its access record says a
+representative inserted it ([Inserted by the
+person](../evaluate/receiving-documents.md#inserted-by-the-person)). An
+issuer that declares nothing cannot say a representative acts, so what its
+tokens insert is marked as the person's own.
 
 Over ITS-REST the gateway routes a person's write as it routes any
 caller's. Under a patient grant whose scopes cover a composition update or

@@ -648,13 +648,26 @@ pub struct AccessRecord {
     /// use, as made to protect the vital interests of the data subject (Art
     /// 11(5)), when it did.
     pub emergency: Option<Emergency>,
-    /// That the data subject inserted the information the access wrote,
-    /// which the written data marks as inserted by them (Art 5).
-    pub subject_inserted: bool,
+    /// Who inserted the information the access wrote under the data
+    /// subject's own grant, which the written data marks as inserted by
+    /// them (Art 5), when it did.
+    pub inserted: Option<Insertion>,
     /// Each semantic transformation the access applied between openEHR and
     /// the exchange format (eHealth Network General Guidelines Release 3.1
     /// Art 6(3)), in the order it applied them.
     pub transformations: Vec<Transformation>,
+}
+
+/// Who inserted the information a write carried under the data subject's
+/// own grant, as the written data marks it (Art 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Insertion {
+    /// The data subject, in person.
+    Subject,
+    /// A natural person who acts for the data subject, a proxy or a legal
+    /// representative (Art 4(2)), whom the written data names.
+    Representative,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -672,7 +685,7 @@ impl fmt::Debug for AccessRecord {
             .field("retention", &self.retention)
             .field("labels", &self.labels)
             .field("emergency", &self.emergency)
-            .field("subject_inserted", &self.subject_inserted)
+            .field("inserted", &self.inserted)
             .field("transformations", &self.transformations)
             .finish()
     }

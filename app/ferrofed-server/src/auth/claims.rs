@@ -22,8 +22,11 @@
 //! default `acr` (RFC 9068 §2.2.1). For an issuer declared a national contact
 //! point, the IUA `subject_organization` and `subject_role` and the string
 //! claims its `[auth.issuer.national_contact_point]` names are read as the
-//! Implementing Regulation (EU) 2026/2099 Annex attributes. Every other claim
-//! is passed over, and the
+//! Implementing Regulation (EU) 2026/2099 Annex attributes. The `iss` and
+//! `sub` of the RFC 8693 §4.1 `act` claim are read as the current actor,
+//! which a patient token of an issuer that declares `act_is_representative`
+//! names as the patient's representative. Every other claim is passed over,
+//! and the
 //! IUA `person_id`, a patient identifier, is never read (§5.4.1, N33).
 //!
 //! IUA is cited from the Revision 2.5 Trial Implementation supplement
@@ -37,7 +40,8 @@ use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
-use crate::auth::caller::{Professional, PurposeOfUse, Stated};
+use crate::auth::caller::{Actor, Professional, PurposeOfUse, Stated};
+use crate::config::auth::IssuerSettings;
 use crate::config::auth::requester::RequesterClaims;
 
 /// The claims of an RFC 9068 access token, as read after its signature, its
@@ -100,6 +104,12 @@ impl AccessToken {
     /// every one of them as a string.
     pub(super) fn requester(&self, named: Option<&RequesterClaims>) -> Option<Requester> {
         named.and_then(|named| self.others.requester(named))
+    }
+
+    /// Returns the representative of the patient the token names, as
+    /// [`Declared::representative`] reads it.
+    pub(super) fn representative(&self, issuer: &IssuerSettings) -> Option<Actor> {
+        self.declared.representative(issuer)
     }
 
     /// Returns what the IUA extension states that the 2026/2099 Annex also
@@ -233,6 +243,21 @@ pub(super) struct Declared {
     /// RFC 9396 `authorization_details`.
     #[serde(default)]
     authorization_details: Option<Vec<AuthorizationDetail>>,
+    /// The RFC 8693 §4.1 `act` claim, the current actor.
+    #[serde(default)]
+    act: Option<ActClaim>,
+}
+
+/// The RFC 8693 §4.1 `act` claim: a JSON object whose members are claims
+/// that identify the actor, or a value that is no object and identifies no
+/// one.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ActClaim {
+    /// An object of claims about the actor.
+    Claims(Others),
+    /// Any other value.
+    Other(IgnoredAny),
 }
 
 /// The `extensions` claim of IHE IUA.
@@ -365,6 +390,36 @@ impl Declared {
         purposes
     }
 
+    /// The representative of the patient the token names, when `issuer`'s
+    /// binding of its patient tokens declares their `act` claim one and the
+    /// token carries it.
+    pub(super) fn representative(&self, issuer: &IssuerSettings) -> Option<Actor> {
+        // NOTE: Regulation (EU) 2025/327 Art 4(2), RFC 8693 §4.1: an actor is any delegate,
+        // so only the issuer's declaration makes it a representative, never the gateway.
+        issuer
+            .patient
+            .as_ref()
+            .filter(|patient| patient.act_is_representative)
+            .and_then(|_| self.actor())
+    }
+
+    /// The current actor the RFC 8693 §4.1 `act` claim names, when the
+    /// token carries one: its `iss` and `sub`, each when it is a string and
+    /// not empty, and neither for an `act` that is no object.
+    ///
+    /// A nested `act`, a prior actor, is not read: RFC 8693 §4.1 has the
+    /// consumer "only consider the token's top-level claims and the party
+    /// identified as the current actor".
+    fn actor(&self) -> Option<Actor> {
+        match self.act.as_ref()? {
+            ActClaim::Claims(claims) => Some(Actor {
+                issuer: claims.text("iss"),
+                subject: claims.text("sub"),
+            }),
+            ActClaim::Other(_) => Some(Actor::default()),
+        }
+    }
+
     /// The `ihe_iua` extension, when the token carries one.
     fn iua(&self) -> Option<&IheIua> {
         self.extensions.as_ref()?.ihe_iua.as_ref()
@@ -401,7 +456,7 @@ fn token(text: &str) -> Option<PurposeOfUse> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Declared, PurposeOfUse, token};
+    use super::{Actor, Declared, PurposeOfUse, token};
 
     const ACT_REASON: &str = "http://terminology.hl7.org/CodeSystem/v3-ActReason";
 
@@ -429,6 +484,30 @@ mod tests {
             ],
             declared.purposes()
         );
+    }
+
+    // RFC 8693 §4.1: the outermost `act` is the current actor; a nested one is a prior actor.
+    #[test]
+    fn the_current_actor_is_read_from_the_outermost_act_claim() {
+        let declared: Declared = serde_json::from_str(
+            r#"{"act":{"sub":"synthetic-actor","iss":"https://actor.example.test","act":{"sub":"prior"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            Some(Actor {
+                issuer: Some(String::from("https://actor.example.test")),
+                subject: Some(String::from("synthetic-actor")),
+            }),
+            declared.actor()
+        );
+        let unnamed: Declared = serde_json::from_str(r#"{"act":"synthetic-actor"}"#).unwrap();
+        assert_eq!(
+            Some(Actor::default()),
+            unnamed.actor(),
+            "an act that is no object names no one"
+        );
+        let none: Declared = serde_json::from_str("{}").unwrap();
+        assert_eq!(None, none.actor());
     }
 
     #[test]

@@ -199,6 +199,14 @@ The entity names no identifier of the person; the record names the person
 as the caller and as the data subject, as any record does. A receipt the
 member refused, and a professional's receipt, carry no such entity.
 
+A document a representative inserts for the person under the person's
+grant, whose token's issuer declares the `act` claim a representative
+([Patient grants](authentication.md#patient-grants)), carries the entity
+`ehds-representative-inserted` in place of `ehds-subject-inserted`, with
+the same `type`, a `description` citing Art 4(2) and Art 5, and the
+`detail` `ehds-representative-inserted` set to `true`. It names no
+identifier of the representative.
+
 ## Categories
 
 A record names the categories of the data accessed: the six priority

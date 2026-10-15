@@ -409,9 +409,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if let Some(emergency) = &record.emergency {
         entities.push(emergency_entity(emergency));
     }
-    if record.subject_inserted {
-        entities.push(inserted::entity());
-    }
+    entities.extend(record.inserted.map(inserted::entity));
     entities.extend(record.transformations.iter().map(transformation::entity));
     entities
 }
