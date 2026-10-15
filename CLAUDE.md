@@ -20,9 +20,9 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.10
+## Status: building v0.0.11
 
-v0.0.9 is released (2026-10-05), and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+v0.0.10 is released (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
 membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
@@ -76,16 +76,25 @@ country research (#488); FerroFED's intended
 purpose and EHDS classification (#520); changelog fragments (#598); and
 Cadasto B.V. as the Licensor (#602). The re-pin to the specification's 1.0
 release moved to v0.0.10 (#17, #354).
-v0.0.10, being built, is EHDS readiness (#519): FerroFED is an EHR system
-under Regulation (EU) 2025/327, and its harmonised components, the logging
-of every access, the exchange format, the national contact point face and
-the conformity file are due before the dates the Regulation applies. It
-also carries the production gaps the end-to-end audit found (#622 to #634,
+v0.0.10 is the first half of EHDS readiness (#519): FerroFED is an EHR
+system under Regulation (EU) 2025/327. It carries the re-pin to the
+specification's 1.0.0 text (#17, #354); the logging component, the access
+record of every access with the professional, the assurance level, the
+client's address, emergency access and retention (#623, #742, #722, #659);
+the Annex II 2.1 FHIR face serving the patient summary in the European
+exchange format and receiving a document (#689, #809, #803), with its
+terminology rules (#687) and the HL7 validator lane in CI (#688); the
+information sheet and instructions for use attached to every release
+(#769); and the production gaps the end-to-end audit found (#622 to #634,
 #639 to #641): identity resolution in production, zero-downtime restarts,
 several replicas, metrics, overload protection, TLS on the listener, and the
-production, upgrade, data-protection and threat-model pages. v0.0.12 plans
-operations packaging (#638, #644, #645). v0.0.11 plans configuration from the file and from the
-console as one set of versioned revisions (#575). Each crate gets the rest of
+production, upgrade, data-protection and threat-model pages.
+v0.0.11, being built, carries the rest of EHDS readiness: a received
+document validated in full and handed to one chosen member (#665, #808),
+the log access interface (#660), the national contact point face (#524),
+electronic prescriptions (#523) and the conformity file (#525); and
+configuration from the file and from the console as one set of versioned
+revisions (#575). v0.0.12 plans operations packaging (#638, #644, #645). Each crate gets the rest of
 its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
