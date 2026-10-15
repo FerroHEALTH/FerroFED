@@ -374,6 +374,12 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   (`admin::fields`) and the page shows that HTML inside the one form
   section both actions share, under the `inner_html` obligation above
   (`tests/it/admin.rs`). The second action costs 1287 bytes of the total.
+- **The configuration page (#577) measured 244788 bytes** brotli-compressed
+  (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129), 9043 more than
+  the admin actions and 972 under the 240 KiB budget. Its forms are drawn on
+  the server as the admin actions' are and posted to one server function, so
+  the bytes are that function's typed outcome and the page's hydration. The
+  next browser-side slice raises the budget with its own measurement here.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it
