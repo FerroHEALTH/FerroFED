@@ -23,7 +23,7 @@ use ehds_logging::record::{
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
-use ihe_iti::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress, Observer};
+use ihe_iti::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress, Observer, Reserved};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde_json::Value;
 use url::Url;
@@ -585,4 +585,41 @@ async fn the_sink_hands_the_record_to_the_recorder_and_reports_its_refusal() {
             .is_err(),
         "a record the recorder refuses is an error, never a success"
     );
+}
+
+/// A recorder whose bounded store has no room left.
+struct NoPlace;
+
+#[async_trait::async_trait]
+impl AuditRecorder for NoPlace {
+    async fn record(&self, _exchange: Exchange) -> Result<(), AuditError> {
+        Ok(())
+    }
+
+    async fn reserve(&self) -> Result<Option<Box<dyn Reserved>>, AuditError> {
+        Err(AuditError(Box::new(Full)))
+    }
+}
+
+#[tokio::test]
+async fn a_reservation_is_refused_when_the_recorder_has_no_place_and_filled_otherwise() {
+    assert!(
+        BalpSink::new(Arc::new(NoPlace), gateway())
+            .reserve()
+            .await
+            .is_err(),
+        "a sink with no place refuses before the access is made"
+    );
+    let kept = Arc::new(Kept::default());
+    let recorder: Arc<dyn AuditRecorder> = kept.clone();
+    let reserved = BalpSink::new(recorder, gateway())
+        .reserve()
+        .await
+        .expect("a recorder with no bounded store reserves nothing and takes the record");
+    assert_eq!(kept.kept.lock().expect("kept").len(), 0);
+    reserved
+        .store(record(Action::Create, Outcome::Success))
+        .await
+        .expect("stored");
+    assert_eq!(kept.kept.lock().expect("kept").len(), 1);
 }

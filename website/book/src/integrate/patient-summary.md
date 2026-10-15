@@ -375,9 +375,9 @@ every template, `user/composition-*.c`, because the template follows from
 the document. A read scope is refused. A `patient/` grant, where the issuer
 is bound to a member, writes only into its own patient's EHR. Every receipt
 that reached the member writes one access record, an action `C` with the
-document's category by construction. A receipt whose record cannot be stored
-is refused `503`, as every access is
-([Failing closed](../operate/audit.md#failing-closed)).
+document's category by construction. A receipt whose record has no place in
+the spool is refused `503` before the member is asked, so sending it again
+writes it once ([Failing closed](../operate/audit.md#failing-closed)).
 
 The capability statement, `GET {fhir-base}/metadata`, declares the
 `create` on `Bundle`. Its documentation names the categories the deployment

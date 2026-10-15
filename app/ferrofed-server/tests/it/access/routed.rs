@@ -320,6 +320,69 @@ async fn every_access_whose_record_the_spool_cannot_take_is_refused_with_no_data
     Ok(())
 }
 
+/// The compositions `node` was asked to create.
+async fn writes_at(node: &Server) -> Result<usize, Box<dyn std::error::Error>> {
+    let target = format!("/v1/ehr/{EHR_A}/composition");
+    Ok(node
+        .received_requests()
+        .await
+        .ok_or("recording is on")?
+        .iter()
+        .filter(|request| request.method == http::Method::POST && request.url.path() == target)
+        .count())
+}
+
+#[tokio::test]
+async fn a_routed_write_whose_record_has_no_place_never_reaches_the_node() -> TestResult {
+    let node = node().await;
+    let dir = tempfile::tempdir()?;
+    let (app, _repository) = full(dir.path(), &node).await?;
+    withheld(
+        call(
+            app,
+            write("application/json", composition(LAB_REPORT, UID))?,
+        )
+        .await?,
+    );
+    assert_eq!(
+        0,
+        writes_at(&node).await?,
+        "the refused write is never asked of the node, so a retry cannot write it twice"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn concurrent_routed_writes_against_one_free_place_write_once() -> TestResult {
+    let node = node().await;
+    let repository = FeedRepository::start().await;
+    repository.set_up(false);
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), &node, &repository, "spool_max_events = 1")?;
+    let (first, second) = tokio::join!(
+        call(
+            app.clone(),
+            write("application/json", composition(LAB_REPORT, UID))?
+        ),
+        call(
+            app,
+            write("application/json", composition(LAB_REPORT, UID))?
+        )
+    );
+    let mut statuses = [first?.0, second?.0];
+    statuses.sort_unstable();
+    assert_eq!(
+        [StatusCode::CREATED, StatusCode::SERVICE_UNAVAILABLE],
+        statuses
+    );
+    assert_eq!(
+        1,
+        writes_at(&node).await?,
+        "only the write that took the place"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_stored_query_whose_record_the_spool_cannot_take_is_refused_with_no_data() -> TestResult {
     let node = node().await;

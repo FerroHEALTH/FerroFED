@@ -81,7 +81,8 @@ included. Each record names the verified caller, the patient and every
 `ehr_id` reached, each endpoint asked and the categories of the data. The
 gateway stores it in the `[audit]` spool before the answer leaves, and
 answers an access whose record cannot be stored with `503
-access-unrecorded` and none of the data
+access-unrecorded` and none of the data; a write's record is given its
+place before any member is asked, so a write is refused before it is made
 ([The access log](../operate/audit.md#the-access-log)). The record follows
 Annex II, point 3.2, of the EHDS Regulation, and the library that builds it
 is `crates/ehds-logging`.

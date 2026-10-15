@@ -392,7 +392,8 @@ These are the ones to know before you deploy FerroFED; the
   federated query, stored-query execution, routed read and routed write
   that reaches a node, a query from the operator console included, is
   recorded with the verified caller and the patient, and an access whose
-  record cannot be stored is refused `503 access-unrecorded`
+  record cannot be stored is refused `503 access-unrecorded`, a write
+  before any member is asked
   ([The access log](../operate/audit.md#the-access-log)). The gateway keeps
   no copy, so who reads the records is the repository's, and it keeps each
   for the period the record states from `[access_log.retention]`, at least

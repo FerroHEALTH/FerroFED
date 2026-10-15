@@ -141,6 +141,17 @@ groups:
             Nothing was sent, and the event under ferrofed::security names the
             endpoint and the part of the request. A stop is a defect in the
             gateway or a hostile request: raise it with the maintainers.
+      - alert: FerroFEDWriteUnrecorded
+        expr: increase(ferrofed_security_events_total{event="write-unrecorded"}[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: A write a member was asked to make has no access record
+          description: >-
+            Its record had a place in the audit spool but could not be stored
+            there, so the write stands unrecorded. The event under
+            ferrofed::security names the request id; check the audit spool's
+            disk and record the access from the member's own log.
       - alert: FerroFEDCallerRefusals
         expr: sum by (reason) (rate(ferrofed_security_events_total{event="caller-refused"}[5m])) > 1
         for: 10m
