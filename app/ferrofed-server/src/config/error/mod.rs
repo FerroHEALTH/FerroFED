@@ -3,14 +3,14 @@
 
 //! The refusals of a configuration the server does not start on.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use ferrofed_registry::error::IdError;
 use openehr_its::rest::client::InvalidCredentials;
 
 use crate::config::ENV_PREFIX;
 use crate::config::error::basic::BasicFault;
-use crate::config::error::parse::{ParseFault, Stage};
+use crate::config::error::parse::ParseFault;
 use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, TrustAnchorError};
 
@@ -732,27 +732,4 @@ pub enum Error {
     /// `[federation.consent] emergency = "pass-to-node"` with no emergency purpose declared.
     #[error("[federation.consent] pass-to-node needs an [[access_log.emergency_purpose]]")]
     EmergencyWithoutPurpose,
-}
-
-impl Error {
-    /// Builds an [`Error::Parse`] from what the TOML reader reported about
-    /// `text`, keeping positions and key names and dropping the quoted source.
-    pub(crate) fn parse(error: &toml::de::Error, text: &str, stage: Stage) -> Self {
-        Self::Parse {
-            fault: ParseFault::from_toml(error, text, stage),
-        }
-    }
-
-    /// Names `path` as the file a parse fault sits in; any other error is
-    /// returned unchanged.
-    #[must_use]
-    pub(crate) fn in_file(self, path: &Path) -> Self {
-        match self {
-            Self::Parse { mut fault } => {
-                fault.file = Some(path.to_path_buf());
-                Self::Parse { fault }
-            }
-            other => other,
-        }
-    }
 }
