@@ -251,6 +251,15 @@ vendored with Regulation (EU) 2019/1020 at
 [`docs/specs/eu-cra/`](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs/eu-cra),
 and Art 104 of the EHDS Regulation amends three of its articles.
 
+The manufacturer's side of the CRA is the same for every FerroHEALTH product
+and is in the family book: who the manufacturer is, which duties apply from
+when, the vulnerability-handling policy, the Annex II information every
+product shares, and the conformity route of each product
+([The Cyber Resilience Act](https://ferrohealth.eu/docs/cra.html),
+[the manufacturer](https://ferrohealth.eu/docs/manufacturer.html)). This
+section is FerroFED's own reading: why a FerroFED release is a CRA product,
+what that asks of it, and its support period.
+
 ### Why the CRA reaches a release
 
 - **A commercial activity.** Art 3(22) defines making available on the

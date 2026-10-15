@@ -40,6 +40,9 @@ at which the manufacturer can be contacted". The running gateway shows them
 in `GET {base}/`, in `OPTIONS {base}/` under `manufacturer`, in its startup
 banner and in `ferrofed --version`; the operator console shows them in the
 footer of every page, and both container images carry them as labels.
+The family book's
+[manufacturer](https://ferrohealth.eu/docs/manufacturer.html) page says what
+being the manufacturer of every FerroHEALTH product covers.
 
 ## Making a complaint
 
@@ -241,16 +244,13 @@ this heading.
 
 ### Where it goes
 
-Each notification goes through the single reporting platform, which ENISA
-establishes and runs (Art 16(1)), at "the electronic notification end-point
-of the CSIRT designated as coordinator of the Member State where the
-manufacturers have their main establishment in the Union", and is
-"simultaneously accessible to ENISA" (Art 14(7)). Art 14(7) places the main
-establishment where "the decisions related to the cybersecurity of its
-products with digital elements are predominantly taken". For Cadasto B.V.
-that is the Netherlands, so the notifications go to the Dutch CSIRT
-designated as coordinator. That CSIRT passes each notification on to the
-CSIRTs of the other Member States the manufacturer names (Art 16(2)).
+Each notification goes through ENISA's single reporting platform (Art
+16(1)) to the CSIRT designated as coordinator in the Netherlands, where
+Cadasto B.V. has its main establishment, and is visible to ENISA at the same
+time (Art 14(7)). That CSIRT passes it on to the CSIRTs of the other Member
+States the manufacturer names (Art 16(2)). The family book has the
+manufacturer's procedure, the same for every FerroHEALTH product
+([actively exploited vulnerabilities and severe incidents](https://ferrohealth.eu/docs/post-market.html#actively-exploited-vulnerabilities-and-severe-incidents-cra-art-14)).
 
 Commission Delegated Regulation (EU) 2026/881, adopted under Art 14(9), sets
 when that CSIRT may delay passing a notification on. It binds the CSIRT and
@@ -268,18 +268,13 @@ fix or the mitigation is expected, and the CSIRT decides on any delay.
 ### The three reports
 
 The clock starts when the manufacturer becomes aware of the vulnerability or
-the incident.
-
-| Report | Due | Content |
-|---|---|---|
-| Early warning | "without undue delay and in any event within 24 hours" (Art 14(2)(a), (4)(a)) | the Member States where the manufacturer knows FerroFED has been made available; for an incident, also whether it is suspected of being caused by unlawful or malicious acts |
-| Notification | "without undue delay and in any event within 72 hours" (Art 14(2)(b), (4)(b)) | general information about the release concerned, the nature of the exploit and the vulnerability, or an initial assessment of the incident; the corrective or mitigating measures taken and those users can take; how sensitive the manufacturer considers the information |
-| Final report, vulnerability | "no later than 14 days after a corrective or mitigating measure is available" (Art 14(2)(c)) | the vulnerability with its severity and impact; where available, the malicious actor; the security update or other corrective measures made available |
-| Final report, incident | "within one month after the submission of the incident notification" (Art 14(4)(c)) | the incident with its severity and impact; the type of threat or root cause; the mitigation measures applied and ongoing |
-
-A later report is left out "unless the relevant information has already been
-provided" in an earlier one. The CSIRT may ask for an intermediate report on
-status updates (Art 14(6)), and the manufacturer answers it.
+the incident: an early warning within 24 hours, a notification within 72
+hours, and a final report (Art 14(2), (4)). The deadlines and the content of
+each report are the same for every FerroHEALTH product, and the family
+book's
+[Security](https://ferrohealth.eu/docs/security.html#what-cadasto-bv-reports-to-the-authorities)
+page lists them. The CSIRT may ask for an intermediate report on status
+updates (Art 14(6)), and the manufacturer answers it.
 
 ### Telling the users
 
