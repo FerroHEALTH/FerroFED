@@ -189,6 +189,8 @@ struct Session {
     access_token: SecretString,
     /// When the access token expires, when the provider said.
     expires: Option<Instant>,
+    /// How long the access token lasts in all, when the provider said.
+    lifetime: Option<Duration>,
     /// The refresh token the provider issued, which never leaves the server
     /// (RFC 6749 §10.4).
     refresh_token: Option<SecretString>,
@@ -359,6 +361,7 @@ impl Sessions {
                 expires: signed_in
                     .expires_in
                     .and_then(|lifetime| now.checked_add(lifetime)),
+                lifetime: signed_in.expires_in,
                 refresh_token: signed_in.refresh_token,
                 refresh_gate: Arc::default(),
                 id_token: signed_in.id_token,

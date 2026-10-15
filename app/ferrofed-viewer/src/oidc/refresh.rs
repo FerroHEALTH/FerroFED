@@ -4,7 +4,8 @@
 //! The refresh of the operator's access token on the console's server.
 //!
 //! Before a request is served, a session whose access token expires within
-//! [`MARGIN`] and that holds a refresh token sends it to the provider's
+//! [`MARGIN`], or within half its lifetime when that is shorter, and that
+//! holds a refresh token sends it to the provider's
 //! token endpoint (RFC 6749 §6). A rotated refresh token replaces the old
 //! one, which is discarded. A refresh that fails for any reason, an
 //! `invalid_grant` refusal among them, ends the session, and the operator
@@ -113,7 +114,7 @@ pub async fn refresh_session(
     request: Request,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
+    let path = request.uri().path().trim_end_matches('/');
     if [super::LOGIN, super::CALLBACK, super::logout::LOGOUT].contains(&path) {
         return next.run(request).await;
     }

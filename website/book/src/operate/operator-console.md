@@ -41,7 +41,8 @@ service worker or a URL.
   provider answers the sign-in with a refresh token, the session keeps it
   on the server beside the access token; it never reaches a cookie, a page,
   the browser or a log line (RFC 6749 §10.4). A request that arrives
-  within 60 seconds of the access token's `expires_in` first sends the
+  within 60 seconds of the access token's expiry, or in the second half of
+  a lifetime shorter than two minutes, first sends the
   refresh token to the token endpoint (RFC 6749 §6), with the client secret
   as HTTP Basic for a confidential client, and the session goes on with the
   new access token. A rotated refresh token replaces the old one, which is

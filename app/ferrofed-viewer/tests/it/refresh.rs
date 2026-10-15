@@ -140,6 +140,72 @@ async fn a_rotated_refresh_token_is_the_one_sent_next() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
+-> Result<(), Box<dyn Error>> {
+    let server = Server::start().await;
+    let (state, service) = console(&server, None)?;
+    let id = session(&state, Duration::ZERO)?;
+    let second = "synthetic-refresh-second";
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .and(body_string_contains(format!("refresh_token={FIRST}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_delay(Duration::from_millis(200))
+                .set_body_string(format!(
+                    r#"{{"access_token":"synthetic-access-second","token_type":"Bearer","expires_in":2,"refresh_token":"{second}"}}"#
+                )),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut requests = Vec::new();
+    for _ in 0..8 {
+        let service = service.clone();
+        let request = get_as("/health", &id)?;
+        requests.push(tokio::spawn(async move {
+            send(&service, request)
+                .await
+                .map(|(response, _body)| response.status())
+                .map_err(|error| error.to_string())
+        }));
+    }
+    for request in requests {
+        assert_eq!(StatusCode::OK, request.await??);
+    }
+    assert_eq!("synthetic-access-second", held(&state, &id)?);
+    // The refreshed token lasts 2 s, so it is due again after its first half.
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    let grant = state
+        .sessions()
+        .refresh_grant(&id, Duration::from_secs(60))?
+        .ok_or("a refresh token")?;
+    assert_eq!(second, grant.expose_secret());
+    assert_eq!(1, state.sessions().occupancy()?.sessions);
+    server.verify().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn sign_out_with_a_trailing_slash_sends_no_refresh() -> Result<(), Box<dyn Error>> {
+    let server = Server::start().await;
+    let (state, service) = console(&server, None)?;
+    let id = session(&state, Duration::ZERO)?;
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+    for page in ["/logout/", "/login/"] {
+        send(&service, get_as(page, &id)?).await?;
+    }
+    server.verify().await;
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
 -> Result<(), Box<dyn Error>> {

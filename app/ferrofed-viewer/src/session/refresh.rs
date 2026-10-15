@@ -37,7 +37,13 @@ impl fmt::Debug for Refreshed {
 impl Session {
     /// Whether the access token expires within `margin` of `now` and a
     /// refresh token is held to replace it.
+    ///
+    /// The margin is at most half the token's lifetime, so a token that
+    /// lasts no longer than the margin is not refreshed on every request.
     fn refresh_due(&self, margin: Duration, now: Instant) -> bool {
+        let margin = self
+            .lifetime
+            .map_or(margin, |lifetime| margin.min(lifetime / 2));
         self.refresh_token.is_some()
             && self
                 .expires
@@ -110,6 +116,7 @@ impl Sessions {
         session.expires = refreshed
             .expires_in
             .and_then(|lifetime| now.checked_add(lifetime));
+        session.lifetime = refreshed.expires_in;
         if let Some(rotated) = refreshed.refresh_token {
             session.refresh_token = Some(rotated);
         }
@@ -238,6 +245,27 @@ mod tests {
             .expect("room");
         assert!(sessions.refresh_due(&id, MARGIN).expect("usable").is_none());
         assert!(sessions.access_token(&id).expect("usable").is_some());
+    }
+
+    #[test]
+    fn a_short_lived_token_is_refreshed_in_the_second_half_of_its_lifetime_only() {
+        let sessions = Sessions::new(settings());
+        let id = sessions
+            .establish(SignedIn {
+                expires_in: Some(Duration::from_secs(30)),
+                refresh_token: Some(SecretString::from("synthetic-refresh-1")),
+                ..signed_in()
+            })
+            .expect("room");
+        assert!(sessions.refresh_due(&id, MARGIN).expect("usable").is_none());
+        assert!(sessions.access_token(&id).expect("usable").is_some());
+        let refreshed = Refreshed {
+            access_token: SecretString::from("synthetic-access-2"),
+            expires_in: Some(Duration::from_secs(10)),
+            refresh_token: None,
+        };
+        assert!(sessions.refreshed(&id, refreshed).expect("usable"));
+        assert!(sessions.refresh_due(&id, MARGIN).expect("usable").is_none());
     }
 
     #[test]
