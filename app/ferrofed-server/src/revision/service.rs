@@ -333,28 +333,7 @@ impl Revisions {
             .into());
         }
         match reloader.reload_config(&config) {
-            Ok(applied) => {
-                if applied.needs_restart.is_empty() {
-                    return Ok(mark);
-                }
-                let settled = Current {
-                    outcome: Outcome::PendingRestart,
-                    needs_restart: applied
-                        .needs_restart
-                        .iter()
-                        .map(|key| (*key).to_owned())
-                        .collect(),
-                    ..mark
-                };
-                if let Swapped::Stale { current } = self.store.swap_current(Some(id), &settled)? {
-                    tracing::warn!(
-                        revision = %id,
-                        current = shown(current),
-                        "the running revision moved before its pending restart was recorded"
-                    );
-                }
-                Ok(settled)
-            }
+            Ok(applied) => self.settle_held(mark, &applied.needs_restart),
             Err(error) => {
                 if let Swapped::Stale { current } = self.store.swap_current(Some(id), &running)? {
                     tracing::warn!(
@@ -366,6 +345,59 @@ impl Revisions {
                 Err(RevisionError::Reload(error))
             }
         }
+    }
+
+    /// Records on `mark`, the mark of a revision the reload path applied,
+    /// the changed settings that take effect only at a restart, marking it
+    /// pending a restart when there are any, and returns the mark held.
+    fn settle_held(
+        &self,
+        mark: Current,
+        needs_restart: &[&'static str],
+    ) -> Result<Current, RevisionError> {
+        if needs_restart.is_empty() {
+            return Ok(mark);
+        }
+        let id = mark.revision;
+        let settled = Current {
+            outcome: Outcome::PendingRestart,
+            needs_restart: needs_restart.iter().map(|key| (*key).to_owned()).collect(),
+            ..mark
+        };
+        if let Swapped::Stale { current } = self.store.swap_current(Some(id), &settled)? {
+            tracing::warn!(
+                revision = %id,
+                current = shown(current),
+                "the running revision moved before its pending restart was recorded"
+            );
+        }
+        Ok(settled)
+    }
+
+    /// Records that a reload of the file applied revision `id`, which the
+    /// file load recorded, leaving `needs_restart` for the next start: the
+    /// mark is then pending a restart, as an applied revision's is.
+    ///
+    /// # Errors
+    ///
+    /// The store's errors.
+    pub fn file_applied(
+        &self,
+        id: RevisionId,
+        needs_restart: &[&'static str],
+    ) -> Result<(), RevisionError> {
+        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
+        match self.store.current()? {
+            Some(mark) if mark.revision == id => {
+                self.settle_held(mark, needs_restart)?;
+            }
+            current => tracing::warn!(
+                revision = %id,
+                current = shown(current.map(|current| current.revision)),
+                "the running revision moved before the file's pending restart was recorded"
+            ),
+        }
+        Ok(())
     }
 
     /// Records the configuration the file gave, `tree`, as a revision when it
@@ -380,7 +412,7 @@ impl Revisions {
     /// [`RevisionError::Refused`] when the file's configuration, or the
     /// running revision beside the file's core, is refused, and the store's
     /// errors.
-    pub fn file_loaded(&self, tree: &toml::Table) -> Result<Config, RevisionError> {
+    pub fn file_loaded(&self, tree: &toml::Table) -> Result<Loaded, RevisionError> {
         let (core, rest) = split(tree);
         *self.core.lock().unwrap_or_else(PoisonError::into_inner) = core;
         let text =
@@ -399,7 +431,11 @@ impl Revisions {
                     .store
                     .revision(current.revision)?
                     .ok_or(RevisionError::Unknown(current.revision))?;
-                return Ok(self.validate(&running.toml)?.1);
+                return Ok(Loaded {
+                    config: self.validate(&running.toml)?.1,
+                    revision: running.id,
+                    recorded: false,
+                });
             }
             let (toml, config) = self.validate(&text)?;
             let head = history.last().map(|revision| revision.id);
@@ -433,7 +469,11 @@ impl Revisions {
                     origin = "file",
                     "the configuration file was recorded as a revision"
                 );
-                return Ok(config);
+                return Ok(Loaded {
+                    config,
+                    revision: revision.id,
+                    recorded: true,
+                });
             }
         }
         Err(Stale::Current {
@@ -442,6 +482,18 @@ impl Revisions {
         }
         .into())
     }
+}
+
+/// The configuration a file load gives the gateway to run.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct Loaded {
+    /// The configuration, the revision beside the file's bootstrap core.
+    pub config: Config,
+    /// The revision it is.
+    pub revision: RevisionId,
+    /// Whether the load recorded it as a new revision by the file.
+    pub recorded: bool,
 }
 
 /// The `event` of the record of a saved revision.
@@ -503,7 +555,7 @@ pub fn boot(
         return Ok((settings, None));
     };
     let revisions = Revisions::new(crate::revision::open(store)?, split(tree).0);
-    let config = revisions.file_loaded(tree)?;
-    let effective = config.resolve().map_err(Refused::from)?;
+    let loaded = revisions.file_loaded(tree)?;
+    let effective = loaded.config.resolve().map_err(Refused::from)?;
     Ok((effective, Some(std::sync::Arc::new(revisions))))
 }

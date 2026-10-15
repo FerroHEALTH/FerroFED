@@ -53,6 +53,7 @@ use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::listener::certificates::Certificates;
 use crate::metrics::ReloadResult;
+use crate::revision::RevisionId;
 use crate::revision::service::{RevisionError, Revisions};
 use crate::state::AppState;
 
@@ -265,15 +266,28 @@ impl Reloader {
         // before the reload lock, which an apply of a revision takes inside its own.
         let fresh = self.fresh();
         let mut applied = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        let outcome =
-            fresh
-                .and_then(|fresh| self.apply_settings(fresh))
-                .map(|(outcome, effective)| {
-                    *applied = Some(effective);
-                    outcome
-                });
+        let mut recorded = None;
+        let outcome = fresh
+            .and_then(|(fresh, revision)| {
+                recorded = revision;
+                self.apply_settings(fresh)
+            })
+            .map(|(outcome, effective)| {
+                *applied = Some(effective);
+                outcome
+            });
         drop(applied);
         self.log(&outcome);
+        if let (Ok(applied), Some(revision), Some(revisions)) =
+            (&outcome, recorded, &self.revisions)
+            && let Err(error) = revisions.file_applied(revision, &applied.needs_restart)
+        {
+            tracing::error!(
+                revision = %revision,
+                error = crate::chain(&error),
+                "the file's revision could not be marked pending a restart"
+            );
+        }
         outcome
     }
 
@@ -310,11 +324,13 @@ impl Reloader {
 
     /// Reads the configuration again: the file's, or under
     /// `config.ui = "managed"` the revision the store marks current once
-    /// the file's has been recorded.
-    fn fresh(&self) -> Result<Settings, ReloadError> {
+    /// the file's has been recorded, with the revision the file's load
+    /// recorded, when it recorded one.
+    fn fresh(&self) -> Result<(Settings, Option<RevisionId>), ReloadError> {
         let Some(revisions) = &self.revisions else {
             return Config::load(self.config.as_deref())
                 .and_then(|config| config.resolve())
+                .map(|settings| (settings, None))
                 .map_err(ReloadError::Config);
         };
         let (config, tree) =
@@ -322,11 +338,11 @@ impl Reloader {
         let settings = config.resolve().map_err(ReloadError::Config)?;
         crate::config::revisions::check_tree(settings.revisions.as_ref(), &tree)
             .map_err(ReloadError::Config)?;
-        revisions
+        let loaded = revisions
             .file_loaded(&tree)
-            .map_err(|error| ReloadError::Revisions(Box::new(error)))?
-            .resolve()
-            .map_err(ReloadError::Config)
+            .map_err(|error| ReloadError::Revisions(Box::new(error)))?;
+        let settings = loaded.config.resolve().map_err(ReloadError::Config)?;
+        Ok((settings, loaded.recorded.then_some(loaded.revision)))
     }
 
     /// Swaps in the registry `fresh` describes, returning what changed and

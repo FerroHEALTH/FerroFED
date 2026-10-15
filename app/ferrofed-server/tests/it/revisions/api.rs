@@ -406,3 +406,33 @@ async fn a_reload_keeps_the_running_revision_until_the_file_changes() -> TestRes
     assert_eq!(1, gateway.members()?, "the file's registry runs again");
     Ok(())
 }
+
+#[tokio::test]
+async fn a_file_change_that_needs_a_restart_is_marked_pending_restart_on_sighup() -> TestResult {
+    let gateway = Gateway::start("")?;
+    let text = std::fs::read_to_string(&gateway.config)?;
+    std::fs::write(
+        &gateway.config,
+        text.replace(
+            "id = \"example-federation\"",
+            "id = \"example-federation\"\nbest_effort = false",
+        ),
+    )?;
+    let applied = gateway.reloader.reload()?;
+    assert_eq!(vec!["federation.best_effort"], applied.needs_restart);
+    let current = gateway.revisions.store().current()?.ok_or("a mark")?;
+    assert_eq!(RevisionId::new(2), Some(current.revision));
+    let recorded = gateway
+        .revisions
+        .store()
+        .revision(current.revision)?
+        .ok_or("held")?;
+    assert_eq!(Origin::File, recorded.origin);
+    assert_eq!(Outcome::PendingRestart, current.outcome);
+    assert_eq!(
+        vec![String::from("federation.best_effort")],
+        current.needs_restart
+    );
+    assert_eq!(Author::File, current.applied_by);
+    Ok(())
+}
