@@ -31,7 +31,7 @@ the caller.
 | (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, the professional the token names, the assurance level of the authentication, who acts, `altId` the professional identification the requester claims state, and every purpose of use: see [The person behind an access](#the-person-behind-an-access) |
 | (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories); each category's security label is on it and in `meta.security` ([Labelling the access records](access-labels.md)) |
 | (d) the time and date | `recorded` |
-| (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (`active`, `node-error`, `time-out`, and so on, or the node's HTTP status for a routed request) and the rows it sent |
+| (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (the Federation Tier §11.1 status: `active`, `node-error`, `time-out`, and so on, for a query, a routed request and a received document alike), the rows it sent, and for a write the version it left: `written-version`, the `OBJECT_VERSION_ID` the member's `ETag` or `Location` named, or `written-version-unread`, `unnamed` or `malformed`, when its answer named none or no version id |
 
 Beside them, a record names the data subject: the patient by the
 identifier and namespace the request named (`entity:patient`, as the ITI-83

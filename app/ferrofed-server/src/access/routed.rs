@@ -16,13 +16,20 @@
 //! other resource, a body in another format, and a deleted object the
 //! access did not read are unclassified, with the reason. No specification
 //! governs which bodies are read: our own design.
+//!
+//! The origin's status is the §11.1 status of the node's answer, the set
+//! every other record's origins are named in (N16), and a successful
+//! write records the version its answer named ([`super::version`]), which
+//! is also the `version_uid` of the `COMPOSITION` it wrote.
 
 use std::sync::Arc;
 
 use axum::body::Body;
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject, Unreadable};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
+use ehds_logging::record::{
+    Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
+};
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
 use openehr_base::prelude::UidBasedId;
@@ -32,7 +39,7 @@ use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use openehr_rm::v1_2::common::change_control::original_version::OriginalVersion;
 use openehr_rm::v1_2::composition::composition::Composition;
 
-use super::{AccessLog, Accessed, Asked, ConsentSetAside};
+use super::{AccessLog, Accessed, Asked, ConsentSetAside, Reached, version};
 use crate::error::{self, Code};
 use crate::facade::route::{self, Arrived};
 use crate::facade::subject;
@@ -77,7 +84,7 @@ pub(crate) struct Routed {
     resource: String,
     ehr_id: Option<EhrId>,
     patient: Option<PatientIdentifier>,
-    written: Option<Evidence>,
+    written: Option<Sent>,
     /// Whether the path `ehr_id` or the subject the route is served by
     /// could not be read, so no record of an access it made could name whose
     /// data it reached.
@@ -158,16 +165,24 @@ impl Routed {
             );
             return error::fixed(Code::AccessUnrecorded, &self.request_id);
         }
-        let system_id = acting(response.headers(), headers::SYSTEM_ID);
-        let status = response.status();
-        let (response, evidence) = match self.written {
-            Some(written) => (response, written),
-            None => match read(self.operation, response).await {
-                Some(read) => read,
-                None => return error::fixed(Code::Internal, &self.request_id),
-            },
+        let reached = response.extensions_mut().remove::<Reached>();
+        let status = match (&endpoint, reached) {
+            (_, Some(Reached(status))) => Some(status),
+            (None, None) => None,
+            (Some(_), None) => {
+                tracing::error!(
+                    operation = self.operation,
+                    "an endpoint acted for a routed request whose answer names no status"
+                );
+                return error::fixed(Code::Internal, &self.request_id);
+            }
         };
-        let mut response = response;
+        let system_id = acting(response.headers(), headers::SYSTEM_ID);
+        let Some((mut response, evidence, version)) =
+            shown((self.operation, self.action), self.written, response).await
+        else {
+            return error::fixed(Code::Internal, &self.request_id);
+        };
         let lookup = if self.patient.is_some() {
             PatientLookup::RequestNamed
         } else {
@@ -190,7 +205,8 @@ impl Routed {
             population: None,
         };
         let origins = endpoint
-            .map(|endpoint| {
+            .zip(status)
+            .map(|(endpoint, status)| {
                 let node = federation
                     .snapshot()
                     .endpoints()
@@ -202,6 +218,7 @@ impl Routed {
                     system_id,
                     status: status.as_str().to_owned(),
                     rows: None,
+                    version,
                     contributed: true,
                     evidence: None,
                 }
@@ -223,6 +240,38 @@ impl Routed {
         });
         response
     }
+}
+
+/// The answer `response` to the request of `action` and `operation`,
+/// rebuilt, what the access showed of the data, and the version a write
+/// left; `None` when its body cannot be read back, which an in-memory body
+/// never is.
+///
+/// A write that `written` read before it was sent is shown by what it sent,
+/// the version its successful answer named as the version of the
+/// `COMPOSITION` it wrote; a failed write left none.
+async fn shown(
+    (operation, action): (&str, Action),
+    written: Option<Sent>,
+    response: Response,
+) -> Option<(Response, Evidence, Option<WrittenVersion>)> {
+    // NOTE: ITS-REST 1.1.0 EHR API `ETag`; a write records the version its successful
+    // answer named, and a failed one left none.
+    let writes = matches!(action, Action::Create | Action::Update | Action::Delete);
+    let version = (writes && response.status().is_success())
+        .then(|| version::answered(operation, response.headers()));
+    let (response, evidence) = match written {
+        Some(Sent::Object(mut object)) => {
+            object.version_uid = version
+                .as_ref()
+                .and_then(WrittenVersion::named)
+                .map(str::to_owned);
+            (response, Evidence::reached(Basis::Written, vec![object]))
+        }
+        Some(Sent::Evidence(evidence)) => (response, evidence),
+        None => read(operation, response).await?,
+    };
+    Some((response, evidence, version))
 }
 
 /// The value of the provenance header `name`, when the answer names one
@@ -252,21 +301,31 @@ fn resource(matched: &RouteMatch) -> String {
     parts.join("/")
 }
 
+/// What a write sent, read before it is sent.
+#[derive(Debug)]
+enum Sent {
+    /// The root object of the `COMPOSITION` it sent, whose version the
+    /// node's answer names.
+    Object(RootObject),
+    /// What it showed of data that holds no root object it could read.
+    Evidence(Evidence),
+}
+
 /// What a write of `operation` with `body` sent: the root object of a
 /// `COMPOSITION` in canonical JSON.
-fn written(operation: &str, headers: &HeaderMap, body: &[u8]) -> Evidence {
+fn written(operation: &str, headers: &HeaderMap, body: &[u8]) -> Sent {
     if NO_CATEGORY.contains(&operation) {
-        return Evidence::no_category();
+        return Sent::Evidence(Evidence::no_category());
     }
     if !matches!(operation, "composition_create" | "composition_update") {
-        return Evidence::unreadable(Unreadable::Operation);
+        return Sent::Evidence(Evidence::unreadable(Unreadable::Operation));
     }
     if !is_json(headers) {
-        return Evidence::unreadable(Unreadable::Format);
+        return Sent::Evidence(Evidence::unreadable(Unreadable::Format));
     }
     composition(body).map_or_else(
-        || Evidence::unreadable(Unreadable::Body),
-        |object| Evidence::reached(Basis::Written, vec![object]),
+        || Sent::Evidence(Evidence::unreadable(Unreadable::Body)),
+        Sent::Object,
     )
 }
 

@@ -120,7 +120,11 @@ async fn a_routed_read_names_the_endpoint_and_the_category_of_what_it_read() -> 
     let origins = named(record, "origin");
     assert_eq!(1, origins.len());
     assert_eq!(origins[0]["what"]["identifier"]["value"], "node-a-pub");
-    assert_eq!(vec!["200"], details(record, "origin", "status"));
+    assert_eq!(
+        vec!["active"],
+        details(record, "origin", "status"),
+        "§11.1, N16: a routed read names its origin in the status set a query does"
+    );
     assert_eq!(
         vec![LAB_CATEGORY],
         details(record, "origin", "ehds-category"),

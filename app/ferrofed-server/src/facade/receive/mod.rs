@@ -32,7 +32,9 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
+use ehds_logging::record::{
+    Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
+};
 use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Written};
 use ferrofed_engine::dispatch::{Contact, DispatchOptions};
 use ferrofed_engine::hygiene::Withheld;
@@ -41,9 +43,10 @@ use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::Endpoint;
 use http::StatusCode;
+use openehr_federation::status::EndpointStatus;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::access::{Accessed, Asked};
+use crate::access::{self, Accessed, Asked};
 use crate::config::fhir::FhirSettings;
 use crate::facade::demographics::{self, Identified};
 use crate::facade::receive::refusal::{Unresolved, attach, failed, refused, unprepared};
@@ -313,7 +316,15 @@ async fn write(
                 crate::fhir::fhir_json(StatusCode::OK, &receive::written(prepared, written));
             attach(
                 &mut response,
-                accessed(federation, prepared, &at, (Some(&version), "active")),
+                accessed(
+                    federation,
+                    prepared,
+                    &at,
+                    (
+                        Some(&access::version::named(&version)),
+                        EndpointStatus::Active,
+                    ),
+                ),
             );
             response
         }
@@ -333,20 +344,24 @@ struct Origin<'a> {
 }
 
 /// The access record's facts of a write of `prepared` sent to `at`, which
-/// created `version` when it did and ended `status`, or `None` when the
-/// federation keeps no access log (Annex II 3.2).
+/// left `written` when the member took it and whose member answered as the
+/// §11.1 `status` names, or `None` when the federation keeps no access log
+/// (Annex II 3.2).
+///
+/// The origin's status and the version are named as a routed write's are,
+/// so both kinds of write read alike in the log.
 fn accessed(
     federation: &Federation,
     prepared: &Prepared,
     at: &Origin<'_>,
-    (version, status): (Option<&String>, &str),
+    (written, status): (Option<&WrittenVersion>, EndpointStatus),
 ) -> Option<Accessed> {
     let log = federation.access_log()?;
     let model = prepared.composition.model();
     let object = RootObject {
         template_id: Some(prepared.composition.template_id().to_owned()),
         archetype_id: Some(model.archetype_node_id.clone()),
-        version_uid: version.cloned(),
+        version_uid: written.and_then(WrittenVersion::named).map(str::to_owned),
     };
     let category = ehds_logging::category::Category::priority(prepared.category.code());
     let mut evidence = Evidence::reached(Basis::Written, vec![object]);
@@ -378,15 +393,16 @@ fn accessed(
             population: None,
         },
         evidence: evidence.clone(),
-        delivered: Some(usize::from(version.is_some())),
+        delivered: Some(usize::from(written.is_some())),
         origins: vec![Asked {
             endpoint,
             node: Some(at.endpoint.node().as_str().to_owned()),
             system_id,
-            status: status.to_owned(),
-            rows: Some(usize::from(version.is_some())),
-            contributed: version.is_some(),
-            evidence: version.is_some().then_some(evidence),
+            status: status.as_str().to_owned(),
+            rows: Some(usize::from(written.is_some())),
+            version: written.cloned(),
+            contributed: written.is_some(),
+            evidence: written.is_some().then_some(evidence),
         }],
         consent_set_aside: std::collections::BTreeSet::new(),
     })

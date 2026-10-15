@@ -70,9 +70,11 @@ use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, Method, StatusCode, Uri};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::outcome::ErrorDetail;
+use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::ITS_REST_PREFIX;
+use crate::access::Reached;
 use crate::auth::caller::Caller;
 use crate::conveyed;
 use crate::error::{self, Code};
@@ -491,10 +493,51 @@ pub(crate) fn passed(
     forwarded: Forwarded,
     ids: (&str, &str),
 ) -> Response {
-    provenance.stamp(
+    let status = reached(endpoint, &forwarded);
+    let mut response = provenance.stamp(
         withheld((federation, conveyance), endpoint, &forwarded, ids)
             .unwrap_or_else(|| answered(forwarded)),
-    )
+    );
+    response.extensions_mut().insert(Reached(status));
+    response
+}
+
+/// The node's answer `forwarded` as the client's response ([`answered`]),
+/// with the §11.1 status of the node at `endpoint` for its access record.
+pub(crate) fn answered_by(endpoint: &Endpoint, forwarded: Forwarded) -> Response {
+    let status = reached(endpoint, &forwarded);
+    let mut response = answered(forwarded);
+    response.extensions_mut().insert(Reached(status));
+    response
+}
+
+/// The §11.1 status of the node at `endpoint` that answered `forwarded`:
+/// `consent-denied` for a refusal on consent grounds, `active` for a
+/// success and `node-error` for any other failure it answered with.
+// NOTE: §11.1, N16, N27: a node reached that answered with a failure is `node-error`, never
+// `active`, and one that refused on consent grounds is `consent-denied`.
+fn reached(endpoint: &Endpoint, forwarded: &Forwarded) -> EndpointStatus {
+    if is_consent_refusal(forwarded, endpoint.consent_refusal_codes()) {
+        EndpointStatus::ConsentDenied
+    } else if forwarded.status().is_success() {
+        EndpointStatus::Active
+    } else {
+        EndpointStatus::NodeError
+    }
+}
+
+/// The §11.1 status of a node that gave no answer of its own to a routed
+/// request that ended in `failure`: `time-out` when no answer came in time
+/// or the request never got a slot before its deadline, `offline` when the
+/// node could not be reached, and `node-error` otherwise.
+fn unanswered(failure: &ForwardError) -> EndpointStatus {
+    match failure {
+        ForwardError::TimeOut { .. } | ForwardError::Expired { .. } | ForwardError::Capped(_) => {
+            EndpointStatus::TimeOut
+        }
+        ForwardError::Unreachable { .. } => EndpointStatus::Offline,
+        _ => EndpointStatus::NodeError,
+    }
 }
 
 /// The answer to a routed request in place of `forwarded`, the node's own,
@@ -589,7 +632,11 @@ pub(crate) fn failed(
         } => format!("endpoint {endpoint}: {text}"),
         other => other.to_string(),
     };
-    provenance.stamp(error::response(code, message, request_id))
+    let mut response = provenance.stamp(error::response(code, message, request_id));
+    response
+        .extensions_mut()
+        .insert(Reached(unanswered(failure)));
+    response
 }
 
 #[cfg(test)]

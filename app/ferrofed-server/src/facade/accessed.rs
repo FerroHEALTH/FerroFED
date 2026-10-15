@@ -126,6 +126,7 @@ pub(super) fn query(
                 system_id: record.system_id().map(str::to_owned),
                 status: record.status().as_str().to_owned(),
                 rows,
+                version: None,
                 contributed,
                 evidence: answered
                     .reached

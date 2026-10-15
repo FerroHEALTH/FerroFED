@@ -31,6 +31,7 @@ mod retention;
 mod routed;
 mod search;
 mod unbound;
+mod written;
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -226,7 +227,7 @@ async fn node_with_rows(cells: &[String]) -> Server {
 }
 
 /// The access records among `records`, each read as JSON.
-fn accesses(records: &[String]) -> Result<Vec<Value>, Box<dyn Error>> {
+pub(crate) fn accesses(records: &[String]) -> Result<Vec<Value>, Box<dyn Error>> {
     records
         .iter()
         .filter(|record| record.contains("ehds-categories"))
@@ -235,7 +236,7 @@ fn accesses(records: &[String]) -> Result<Vec<Value>, Box<dyn Error>> {
 }
 
 /// The entities of `record` named `name`.
-fn named<'a>(record: &'a Value, name: &str) -> Vec<&'a Value> {
+pub(crate) fn named<'a>(record: &'a Value, name: &str) -> Vec<&'a Value> {
     record["entity"]
         .as_array()
         .map(|entities| {
@@ -248,7 +249,7 @@ fn named<'a>(record: &'a Value, name: &str) -> Vec<&'a Value> {
 }
 
 /// The `detail` values of `kind` in the entity named `name` of `record`.
-fn details(record: &Value, name: &str, kind: &str) -> Vec<String> {
+pub(crate) fn details(record: &Value, name: &str, kind: &str) -> Vec<String> {
     named(record, name)
         .iter()
         .flat_map(|entity| {

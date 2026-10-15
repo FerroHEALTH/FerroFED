@@ -451,10 +451,14 @@ pub struct Origin {
     pub node: Option<String>,
     /// The node's openEHR `system_id`.
     pub system_id: Option<String>,
-    /// How the endpoint answered, such as `active` or `node-error`.
+    /// How the endpoint answered, as the Federation Tier §11.1 status set
+    /// spells it, such as `active` or `node-error`.
     pub status: String,
     /// The rows or objects it contributed, when counted.
     pub rows: Option<usize>,
+    /// The version a write left at the endpoint, as its answer named it, or
+    /// `None` for an access that wrote nothing there.
+    pub version: Option<WrittenVersion>,
     /// The categories of what it contributed, when told apart from the
     /// other origins'.
     pub categories: Option<Classification>,
@@ -467,8 +471,60 @@ impl fmt::Debug for Origin {
             .field("node", &self.node)
             .field("status", &self.status)
             .field("rows", &self.rows)
+            .field("version", &self.version)
             .field("categories", &self.categories)
             .finish_non_exhaustive()
+    }
+}
+
+/// The version a write left at its origin, which is the data a write
+/// accessed (Annex II 3.2), as the origin's answer named it.
+///
+/// The recording system holds the version id to the `OBJECT_VERSION_ID`
+/// form before it is recorded, so a value the answer carried in its place,
+/// whatever it holds, never reaches the record.
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum WrittenVersion {
+    /// The answer named this `OBJECT_VERSION_ID`.
+    Named(String),
+    /// The answer named no version, so the record cannot tell which one the
+    /// write left.
+    Unnamed,
+    /// The answer named a version that is no `OBJECT_VERSION_ID`, so the
+    /// record cannot tell which one the write left.
+    Malformed,
+}
+
+impl WrittenVersion {
+    /// The version id, when the answer named one.
+    #[must_use]
+    pub fn named(&self) -> Option<&str> {
+        match self {
+            Self::Named(version) => Some(version),
+            Self::Unnamed | Self::Malformed => None,
+        }
+    }
+
+    /// Why the record cannot tell the version, as a record writes it:
+    /// `unnamed` or `malformed`, or `None` when the answer named it.
+    #[must_use]
+    pub fn unread(&self) -> Option<&'static str> {
+        match self {
+            Self::Named(_) => None,
+            Self::Unnamed => Some("unnamed"),
+            Self::Malformed => Some("malformed"),
+        }
+    }
+}
+
+impl fmt::Debug for WrittenVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(_) => f.write_str("Named(..)"),
+            Self::Unnamed => f.write_str("Unnamed"),
+            Self::Malformed => f.write_str("Malformed"),
+        }
     }
 }
 

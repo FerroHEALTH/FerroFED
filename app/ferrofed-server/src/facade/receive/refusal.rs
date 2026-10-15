@@ -7,11 +7,13 @@
 
 use axum::response::Response;
 use eehrxf::receive::displays::DisplayError;
+use ehds_logging::record::WrittenVersion;
 use ferrofed_eehrxf::face;
 use ferrofed_eehrxf::receive::{self, Prepared, Unreceived};
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::single_node::ehr::EhrCallError;
 use http::StatusCode;
+use openehr_federation::status::EndpointStatus;
 
 use super::{Origin, accessed};
 use crate::access::{Accessed, NoAccess};
@@ -135,13 +137,34 @@ pub(super) fn failed(
         }
     };
     let mut response = refused(status, code, &diagnostics);
-    let contact = Contact::of_ehr_call_error(error);
-    let accessed = contact
-        .left()
-        .then(|| accessed(federation, prepared, at, (None, "failed")))
-        .flatten();
+    let accessed = reached(error)
+        .and_then(|reached| accessed(federation, prepared, at, (reached.0.as_ref(), reached.1)));
     attach(&mut response, accessed);
     response
+}
+
+/// What a write that ended in `error` left at its member and the §11.1
+/// status of the member's answer, or `None` when the request never left the
+/// gateway.
+///
+/// A member that took the write but named no version of it left one the
+/// record cannot tell; every other failure left none.
+// NOTE: §11.1, N16: a member reached that answered with a failure is `node-error`, and one
+// that gave no answer in time is `time-out`, as for a routed write.
+fn reached(error: &EhrCallError) -> Option<(Option<WrittenVersion>, EndpointStatus)> {
+    let status = match error {
+        EhrCallError::Unversioned { .. } => {
+            return Some((Some(WrittenVersion::Unnamed), EndpointStatus::Active));
+        }
+        EhrCallError::TimeOut { .. } => EndpointStatus::TimeOut,
+        EhrCallError::Unreachable { .. } => EndpointStatus::Offline,
+        other => match Contact::of_ehr_call_error(other) {
+            Contact::Answered(_) => EndpointStatus::NodeError,
+            Contact::Silent => EndpointStatus::TimeOut,
+            Contact::Unsent | Contact::Capped => return None,
+        },
+    };
+    Some((None, status))
 }
 
 /// The answer to a document the component did not prepare, with nothing
@@ -233,7 +256,7 @@ mod tests {
     use axum::routing::post;
     use eehrxf::receive::conform::CheckError;
     use eehrxf::receive::openehr::ReceiveMappingError;
-    use ehds_logging::record::PatientIdentifier;
+    use ehds_logging::record::{PatientIdentifier, WrittenVersion};
     use ferrofed_eehrxf::receive::{Prepared, Unreceived};
     use ferrofed_engine::dispatch::cap::Capped;
     use ferrofed_engine::hygiene::Part;
@@ -242,11 +265,12 @@ mod tests {
     use ferrofed_testkit::eps;
     use fhir_types::r4::operation_outcome::OperationOutcome;
     use http::{Method, Request, StatusCode};
-    use openehr_its::rest::client::ClientError;
+    use openehr_federation::status::EndpointStatus;
+    use openehr_its::rest::client::{ClientError, ErrorBody};
     use secrecy::SecretString;
     use tower::ServiceExt as _;
 
-    use super::{Unresolved, failed, unprepared};
+    use super::{Unresolved, failed, reached, unprepared};
     use crate::access::{Accessed, NoAccess};
     use crate::config::Config;
     use crate::facade::confined::Unconfined;
@@ -572,6 +596,50 @@ managing_organisation = "org-a"
                 format!("patient-context-unavailable: {expected}"),
                 diagnostics
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    fn a_failed_write_names_its_member_in_the_status_set_of_a_routed_write() -> TestResult {
+        let endpoint = || EndpointId::new("node-a-pub");
+        let cases = [
+            (
+                EhrCallError::Rejected {
+                    endpoint: endpoint()?,
+                    status: StatusCode::UNPROCESSABLE_ENTITY,
+                    body: ErrorBody::from_bytes(Vec::new()),
+                },
+                Some((None, EndpointStatus::NodeError)),
+            ),
+            (
+                EhrCallError::TimeOut {
+                    endpoint: endpoint()?,
+                    source: Box::new(elapsed()),
+                },
+                Some((None, EndpointStatus::TimeOut)),
+            ),
+            (
+                EhrCallError::Unversioned {
+                    endpoint: endpoint()?,
+                    status: StatusCode::CREATED,
+                },
+                Some((Some(WrittenVersion::Unnamed), EndpointStatus::Active)),
+            ),
+            (
+                EhrCallError::Expired {
+                    endpoint: endpoint()?,
+                    source: Box::new(elapsed()),
+                },
+                None,
+            ),
+        ];
+        for (error, expected) in cases {
+            assert_eq!(expected, reached(&error), "§11.1, N16: {error}");
         }
         Ok(())
     }

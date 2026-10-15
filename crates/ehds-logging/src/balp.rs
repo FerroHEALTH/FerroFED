@@ -120,6 +120,13 @@ pub mod detail {
     pub const STATUS: &str = "status";
     /// The rows an origin contributed.
     pub const ROWS: &str = "rows";
+    /// The `OBJECT_VERSION_ID` of the version a write left at an origin, as
+    /// its answer named it.
+    pub const WRITTEN_VERSION: &str = "written-version";
+    /// Why the version a write left at an origin cannot be told: `unnamed`
+    /// when its answer named none, `malformed` when it named no
+    /// `OBJECT_VERSION_ID`.
+    pub const WRITTEN_VERSION_UNREAD: &str = "written-version-unread";
     /// The endpoint an `ehr_id` is held at.
     pub const ENDPOINT: &str = "endpoint";
     /// Whether the patient behind an `ehr_id` is named: `request-named`,
@@ -500,7 +507,8 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
 }
 
 /// The entity of `origin`, labelled `labels`: how it answered, its node, its
-/// `system_id`, its rows and its categories.
+/// `system_id`, its rows, the version a write left there and its
+/// categories.
 fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
     let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];
     details.extend(
@@ -520,6 +528,18 @@ fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
             .rows
             .map(|rows| Detail::new(detail::ROWS, rows.to_string())),
     );
+    if let Some(version) = &origin.version {
+        details.extend(
+            version
+                .named()
+                .map(|named| Detail::new(detail::WRITTEN_VERSION, named)),
+        );
+        details.extend(
+            version
+                .unread()
+                .map(|why| Detail::new(detail::WRITTEN_VERSION_UNREAD, why)),
+        );
+    }
     details.extend(origin.categories.iter().flat_map(categories));
     other(Some(origin.endpoint.clone()), "origin", details, labels)
 }
