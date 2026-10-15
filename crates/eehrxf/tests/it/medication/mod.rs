@@ -8,6 +8,8 @@
 mod crosswalk;
 #[cfg(all(feature = "fhir-r4", feature = "dispensation"))]
 mod dispensation;
+#[cfg(all(feature = "fhir-r4", feature = "prescription"))]
+mod extension;
 #[cfg(feature = "fhir-r4")]
 mod fixtures;
 #[cfg(all(feature = "fhir-r4", feature = "prescription"))]
