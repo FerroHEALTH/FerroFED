@@ -190,9 +190,19 @@ fn Landing(
 /// The page for a path the console does not serve.
 #[component]
 fn NotFound() -> impl IntoView {
+    // NOTE: RFC 9110 §15.6: an unreadable session store is the server's own
+    // fault, so the 5xx the shell set outranks the 404 of an unknown path.
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
-        response.set_status(http::StatusCode::NOT_FOUND);
+        let failed = response
+            .0
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .status
+            .is_some_and(|status| status.is_server_error());
+        if !failed {
+            response.set_status(http::StatusCode::NOT_FOUND);
+        }
     }
     view! {
         <Title text=format!("Not found · {PRODUCT}") />
