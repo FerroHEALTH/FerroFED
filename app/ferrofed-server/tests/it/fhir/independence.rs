@@ -536,8 +536,8 @@ async fn a_received_document_is_written_the_same_whatever_the_access_log_sink_do
     let [_, refused_write] = compositions.as_slice() else {
         return Err(format!("two writes, got {}", compositions.len()).into());
     };
-    // NOTE: Annex II 3.2; the record follows the write, so the member holds a composition
-    // whose answer the caller was refused, and it is the same composition.
+    // TODO(#945): refuse the write before the member is asked when its record cannot be
+    // stored; today the member holds a composition whose answer the caller was refused.
     written.push((
         String::from("Refusing"),
         received_at_any_time(refused_write)?,
