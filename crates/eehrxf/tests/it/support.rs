@@ -42,6 +42,22 @@ pub(crate) fn eps(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     )?)
 }
 
+/// The vendored `hl7.fhir.eu.mpd` 1.0.0 package, as the registry serves it.
+#[cfg(any(feature = "prescription", feature = "dispensation"))]
+pub(crate) fn mpd_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/eu-hl7-mpd/hl7.fhir.eu.mpd-1.0.0.tgz")
+}
+
+/// Reads the profile at `url` from the vendored MPD package.
+#[cfg(any(feature = "prescription", feature = "dispensation"))]
+pub(crate) fn mpd(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    Ok(ResourceProfile::read(
+        std::fs::File::open(mpd_package())?,
+        url,
+    )?)
+}
+
 /// The vendored `hl7.fhir.eu.base` 2.0.1 package, which holds the EU core
 /// profiles the EPS profiles build on and the entries of a section claim.
 #[cfg(all(feature = "openehr", feature = "patient-summary"))]

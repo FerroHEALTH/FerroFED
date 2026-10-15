@@ -114,20 +114,19 @@ impl Category {
     }
 
     /// Returns the crosswalk of the category's dataset, when this build
-    /// carries one; only the patient summary has one.
+    /// carries one: the patient summary, the electronic prescription and the
+    /// electronic dispensation have one.
     #[must_use]
     pub const fn crosswalk(self) -> Option<&'static Crosswalk<'static>> {
         match self {
             #[cfg(feature = "patient-summary")]
             Self::PatientSummary => Some(&crate::crosswalk::patient_summary::PATIENT_SUMMARY),
+            #[cfg(feature = "prescription")]
+            Self::Prescription => Some(&crate::crosswalk::prescription::PRESCRIPTION),
+            #[cfg(feature = "dispensation")]
+            Self::Dispensation => Some(&crate::crosswalk::dispensation::DISPENSATION),
             #[cfg_attr(
-                not(any(
-                    feature = "prescription",
-                    feature = "dispensation",
-                    feature = "imaging",
-                    feature = "laboratory",
-                    feature = "discharge",
-                )),
+                not(any(feature = "imaging", feature = "laboratory", feature = "discharge",)),
                 expect(
                     unreachable_patterns,
                     reason = "every category this build carries has a crosswalk"

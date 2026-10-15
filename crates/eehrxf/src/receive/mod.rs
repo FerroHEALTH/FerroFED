@@ -40,7 +40,7 @@ mod entries;
 pub mod openehr;
 pub mod reference;
 mod references;
-mod strict;
+pub(crate) mod strict;
 
 use fhir_types::codec::DecodeError;
 use fhir_types::codec::EncodeError;

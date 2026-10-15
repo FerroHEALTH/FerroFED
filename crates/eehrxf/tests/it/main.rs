@@ -23,6 +23,9 @@ mod document;
 #[cfg(feature = "openehr")]
 mod mapping;
 #[cfg(test)]
+#[cfg(any(feature = "prescription", feature = "dispensation"))]
+mod medication;
+#[cfg(test)]
 #[cfg(all(feature = "openehr", feature = "patient-summary"))]
 mod own;
 #[cfg(test)]

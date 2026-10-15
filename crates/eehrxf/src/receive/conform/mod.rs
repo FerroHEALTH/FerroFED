@@ -140,6 +140,16 @@ impl Conformance {
     pub fn unevaluated(&self) -> &[Unevaluated] {
         &self.unevaluated
     }
+
+    /// Returns the conformance of two checks that both passed: what either
+    /// could not evaluate, ordered by profile and element, each once.
+    #[cfg(any(feature = "prescription", feature = "dispensation"))]
+    pub(crate) fn join(mut self, other: Self) -> Self {
+        self.unevaluated.extend(other.unevaluated);
+        self.unevaluated.sort();
+        self.unevaluated.dedup();
+        self
+    }
 }
 
 /// One constraint of a profile the check did not evaluate.

@@ -14,8 +14,12 @@
 //! packages they name, so a re-pinned package that moves an element, a slice
 //! or an obligation fails the check.
 
+#[cfg(feature = "dispensation")]
+pub mod dispensation;
 #[cfg(feature = "patient-summary")]
 pub mod patient_summary;
+#[cfg(feature = "prescription")]
+pub mod prescription;
 
 use std::collections::BTreeSet;
 

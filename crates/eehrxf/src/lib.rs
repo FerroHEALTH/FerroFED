@@ -27,6 +27,10 @@
 //!   1.0.0 mapping, compiled once against an operational template and run in
 //!   process over a canonical-JSON composition, answering FHIR R4 resources
 //!   with their `Provenance`;
+//! - `medication` (feature `fhir-r4` with `prescription` or
+//!   `dispensation`): the electronic prescription and dispensation datasets,
+//!   read from and written as the HL7 Europe Medication Prescription and
+//!   Dispense resources, and checked against those profiles;
 //! - `receive` (feature `fhir-r4`): a document received in the exchange
 //!   format, read under the R4 document rules and checked against the
 //!   profiles of its category; with `openehr`, mapped into one openEHR
@@ -72,6 +76,11 @@ pub mod dataset;
 pub mod document;
 #[cfg(feature = "openehr")]
 pub mod mapping;
+#[cfg(all(
+    feature = "fhir-r4",
+    any(feature = "prescription", feature = "dispensation")
+))]
+pub mod medication;
 #[cfg(feature = "fhir-r4")]
 pub mod receive;
 #[cfg(feature = "fhir-r4")]
