@@ -215,6 +215,62 @@ async fn a_routed_read_counts_and_times_the_probe_of_each_member_and_the_read() 
 }
 
 #[tokio::test]
+async fn a_routed_read_the_node_answers_with_a_4xx_is_a_node_error() -> TestResult {
+    let a = holder().await;
+    let b = stranger().await;
+    let dir = tempfile::tempdir()?;
+    let gateway = Metered::start(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        ("", ""),
+        (2_000, 3_000),
+    )?;
+    let unknown = "0e2c2f4b-5b0a-4f4e-9d1a-2f7d1c0b9a11::cdr-a.example.org::1";
+    let read = Request::get(format!("/v1/ehr/{EHR_A}/composition/{unknown}")).body(Body::empty())?;
+    let (status, text) = call(gateway.app.clone(), read).await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
+
+    let samples = gateway.scraped()?;
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            REQUESTS,
+            &[
+                ("endpoint", "node-a-pub"),
+                ("outcome", "node-error"),
+                ("class", "client-error")
+            ]
+        ),
+        "§11.1, N16: the read the node answered 404, as its access record names it, \
+         a client's mistake the member answered correctly: {samples:?}"
+    );
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            REQUESTS,
+            &[
+                ("endpoint", "node-a-pub"),
+                ("outcome", "active"),
+                ("class", "member")
+            ]
+        ),
+        "the probe the node answered with its EHR: {samples:?}"
+    );
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            REQUESTS,
+            &[("endpoint", "node-b-pub"), ("outcome", "active")]
+        ),
+        "a probed member's 404 says it holds no such EHR: {samples:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_probe_past_its_deadline_is_a_time_out_timed_to_the_deadline() -> TestResult {
     let bound = Duration::from_millis(PER_NODE_MS) + SLACK;
     let a = holder().await;

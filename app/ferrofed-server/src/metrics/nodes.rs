@@ -8,13 +8,18 @@
 //! it: `active`, `offline`, `time-out`, `node-error` or `consent-denied`, the
 //! statuses that carry a `latency_ms` because a request was sent (§9.5). A
 //! request routed to one node and an ask-all probe have no per-endpoint
-//! report, so their outcome is read the same way from the node's answer: a
-//! server error or a refusal of the gateway's onward credentials is
-//! `node-error`, and a consent refusal in a code the registry lists is
-//! `consent-denied`, also where the client's answer withholds it. Every request counted is timed, and a request that never
-//! left the gateway is neither counted nor timed, whatever its §11.1 record
-//! says of it. The `endpoint` label is an endpoint id of the registry snapshot the
-//! request ran on, never anything a request carries.
+//! report, so their outcome is read from the node's answer by the one rule
+//! the access record of a routed request also follows: any answer that is no
+//! success, a `4xx` included, or a refusal of the gateway's onward
+//! credentials is `node-error`, and a consent refusal in a code the registry
+//! lists is `consent-denied`, also where the client's answer withholds it. A
+//! probed member's `404`, which says it holds no such EHR, is `active`. The
+//! `class` label tells a member's own answer or failure, `member`, from a
+//! `4xx` it answered a routed request with, `client-error`.
+//! Every request counted is timed, and a request that never left the gateway
+//! is neither counted nor timed, whatever its §11.1 record says of it. The
+//! `endpoint` label is an endpoint id of the registry snapshot the request
+//! ran on, never anything a request carries.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -33,6 +38,7 @@ use openehr_federation::status::EndpointStatus;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
+use crate::facade::route::status::{answered, unanswered};
 use crate::metrics::{
     CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUEST_DURATION, DEMOGRAPHICS_REQUESTS,
     LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
@@ -221,7 +227,7 @@ impl NodeRequests {
         if let Some(latency_ms) = outcome.latency_ms() {
             self.count(
                 endpoint,
-                outcome.status(),
+                (outcome.status(), Class::Member),
                 Duration::from_millis(latency_ms),
             );
         }
@@ -243,14 +249,14 @@ impl NodeRequests {
         if !contact.sent() {
             return;
         }
-        let status = match outcome {
-            Ok(_) if refused => Some(EndpointStatus::ConsentDenied),
-            Ok(answer) => Some(answered(answer.status())),
-            Err(error) => failed(error),
+        let (status, class) = match outcome {
+            Ok(answer) if !refused && answer.status().is_client_error() => {
+                (answered(answer.status(), refused), Class::ClientError)
+            }
+            Ok(answer) => (answered(answer.status(), refused), Class::Member),
+            Err(error) => (unanswered(error), Class::Member),
         };
-        if let Some(status) = status {
-            self.count(endpoint, status, elapsed);
-        }
+        self.count(endpoint, (status, class), elapsed);
     }
 
     /// Records an ask-all probe of `endpoint` and its latency, when the
@@ -266,16 +272,16 @@ impl NodeRequests {
             return;
         }
         let status = match &probed.answer {
-            Answer::Holds(forwarded) => Some(answered(forwarded.status())),
-            Answer::Absent => Some(EndpointStatus::Active),
-            Answer::Erred(status) => Some(answered(*status)),
-            Answer::ConsentRefused => Some(EndpointStatus::ConsentDenied),
-            Answer::Failed(error) => failed(error),
-            Answer::Abandoned => Some(EndpointStatus::TimeOut),
+            Answer::Holds(forwarded) => answered(forwarded.status(), false),
+            // NOTE: §12.5.1 step 4, ITS-REST 1.1.0 EHR API `404_unknown_ehr_id`: a probed member's
+            // `404` answers what the probe asks, that it holds no such EHR, so it is `active`.
+            Answer::Absent => EndpointStatus::Active,
+            Answer::Erred(status) => answered(*status, false),
+            Answer::ConsentRefused => answered(StatusCode::FORBIDDEN, true),
+            Answer::Failed(error) => unanswered(error),
+            Answer::Abandoned => EndpointStatus::TimeOut,
         };
-        if let Some(status) = status {
-            self.count(endpoint, status, probed.latency);
-        }
+        self.count(endpoint, (status, Class::Member), probed.latency);
     }
 
     /// Counts one call to the consent pre-filter that ended in `decision`, in
@@ -386,9 +392,14 @@ impl NodeRequests {
         );
     }
 
-    /// Counts one request to `endpoint` that ended as `status` after
-    /// `elapsed`; an endpoint outside the snapshot is not recorded.
-    fn count(&self, endpoint: &EndpointId, status: EndpointStatus, elapsed: Duration) {
+    /// Counts one request to `endpoint` that ended as `status`, of `class`,
+    /// after `elapsed`; an endpoint outside the snapshot is not recorded.
+    fn count(
+        &self,
+        endpoint: &EndpointId,
+        (status, class): (EndpointStatus, Class),
+        elapsed: Duration,
+    ) {
         let Some(instruments) = &self.instruments else {
             return;
         };
@@ -400,31 +411,37 @@ impl NodeRequests {
         let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
         instruments.requests.add(
             1,
-            &[label.clone(), KeyValue::new("outcome", status.as_str())],
+            &[
+                label.clone(),
+                KeyValue::new("outcome", status.as_str()),
+                KeyValue::new("class", class.as_str()),
+            ],
         );
         instruments.duration.record(elapsed.as_secs_f64(), &[label]);
     }
 }
 
-/// The outcome of a request the node answered with `status`: a server error
-/// is `node-error`, and any other answer is an answer.
-fn answered(status: StatusCode) -> EndpointStatus {
-    if status.is_server_error() {
-        EndpointStatus::NodeError
-    } else {
-        EndpointStatus::Active
-    }
+/// Whose doing a node request's outcome is, the `class` label of
+/// [`NODE_REQUESTS`], so an alert on a member's failures leaves out a
+/// client's mistakes the member answered correctly.
+// NOTE: no specification governs this: our own design; §11.1 calls both `node-error`, and
+// the label tells them apart without changing the status the access record also names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Class {
+    /// The member's own answer or failure: every request the gateway
+    /// composed, and a routed request's answer that is no `4xx`.
+    Member,
+    /// A `4xx` other than a consent refusal, with which the member answered
+    /// a request routed to it on the client's behalf.
+    ClientError,
 }
 
-/// The outcome of a request that got no answer of the node's, or `None` when
-/// the gateway sent nothing.
-fn failed(error: &ForwardError) -> Option<EndpointStatus> {
-    match error {
-        ForwardError::TimeOut { .. } => Some(EndpointStatus::TimeOut),
-        ForwardError::Unreachable { .. } => Some(EndpointStatus::Offline),
-        ForwardError::Refused { .. } | ForwardError::Oversized { .. } => {
-            Some(EndpointStatus::NodeError)
+impl Class {
+    /// The label value.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Member => "member",
+            Self::ClientError => "client-error",
         }
-        _ => None,
     }
 }

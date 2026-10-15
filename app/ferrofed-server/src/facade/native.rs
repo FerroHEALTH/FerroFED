@@ -208,6 +208,7 @@ pub(crate) fn origins<'a>(
                 status: native.answer.status().as_str().to_owned(),
                 rows: None,
                 version: None,
+                created_ehr: None,
                 contributed,
                 evidence: contributed.then(|| {
                     Evidence::reached(Basis::Returned, Vec::new())

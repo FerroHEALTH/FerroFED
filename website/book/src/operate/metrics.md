@@ -138,7 +138,7 @@ the unit after a histogram.
 | Prometheus name | Instrument | Type | Labels | Counts |
 |---|---|---|---|---|
 | `ferrofed_integrity_incidents_total` | `ferrofed.integrity.incidents` | counter | `kind` | the [integrity incidents](registry.md#integrity-incidents) the gateway emitted, one per incident line under `ferrofed::integrity` |
-| `ferrofed_node_requests_total` | `ferrofed.node.requests` | counter | `endpoint`, `outcome` | the requests the gateway sent to a member endpoint |
+| `ferrofed_node_requests_total` | `ferrofed.node.requests` | counter | `endpoint`, `outcome`, `class` | the requests the gateway sent to a member endpoint |
 | `ferrofed_node_request_duration_seconds` | `ferrofed.node.request.duration` (unit `s`) | histogram | `endpoint` | the time a member endpoint took to answer, with the series `_bucket` (and `le`), `_sum` and `_count` |
 | `ferrofed_consent_prefilter_requests_total` | `ferrofed.consent.prefilter.requests` | counter | `outcome`, `reason` | the calls to the [consent pre-filter](consent.md), by `denied`, `no-signal`, `not-asked`, `unavailable` or `partial`; a `not-asked` call, one that never reached the consent service, also carries a `reason`: `namespace` (the patient is named in a namespace the service is not asked by, such as a pseudonymised BSN for Mitz) `caller-claims` (the caller's token does not state the claims the service is asked on behalf of), `caller-claims-invalid` (the token states them in a form the service's question does not take) or `patient-value` (the patient's value is not one the identifier the service is asked by takes) |
 | `ferrofed_localizer_requests_total` | `ferrofed.localizer.requests` | counter | `outcome` | the calls to the [localizer](registry.md#node-selection), by `candidates`, `no-records`, `not-configured`, `unavailable`, or `audit-failed` for an XCPD exchange whose audit message could not be recorded |
@@ -173,6 +173,7 @@ path reaches the surface:
 | `kind` | `EhrIdCollision`, `IndexInsertCollision`, `LearnedCreatingSystemConflict`, `RegisteredCreatingSystemConflict` |
 | `endpoint` | an endpoint `id` of the registry document |
 | `outcome` | `active`, `node-error`, `time-out`, `offline`, `consent-denied` |
+| `class` | `member` (the member's own answer or failure), `client-error` (a `4xx`, other than a consent refusal, the member answered a request routed to it with) |
 | `result` | `applied`, `refused` |
 | `http_route` | a route template of the gateway, such as `/v1/query/aql` or `/v1/ehr/{ehr_id}/composition`, under the base path, or `<unmatched>` for a path no route names; a path identifier is written as its parameter name, never its value |
 | `http_request_method` | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`, `PATCH`, `CONNECT`, `TRACE`, or `_OTHER` for any other method |
@@ -222,12 +223,14 @@ The per-member record a federated query, a template upload, a
 distribution and a drift check write is the one the client reads in
 `meta.federation`, and the counter follows it exactly. A routed request and
 a probe have no such record, so their `outcome` is read from the node's
-answer by the same rules. Each outcome therefore covers these calls:
+answer by the same rules, the ones the [access record](access-log.md) of a
+routed request names its origin's status by, so the two never read one
+answer apart. Each outcome therefore covers these calls:
 
 | `outcome` | Covers |
 |---|---|
-| `active` | a member that answered with success; for a routed request or a probe, any answer below `500`, a `404` included, so a probe that finds no EHR at a member is `active` |
-| `node-error` | in a member record, any answer that is not a success, a `4xx` included (except a consent refusal the registry names), and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
+| `active` | a member that answered with success, and a probed member that answered `404`, which says it holds no such EHR |
+| `node-error` | in every call, any answer that is not a success, a `4xx` included (except a consent refusal the registry names, and a probed member's `404`), and a node that refused the gateway's onward credentials; in a drift check, a copy that differs from the registry's definition or is missing. A `4xx` a member answered a routed request with also carries `class="client-error"`, so you can tell a client's mistake from the member's failure |
 | `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
 | `offline` | a member the gateway sent a request to and could not reach |
 | `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](consent.md)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
@@ -250,7 +253,7 @@ Operator. Its alerts carry `severity: page` or `severity: ticket`:
 | `FerroFEDSlowAnswers` | the 95th percentile answer takes over 20 seconds for 10 minutes |
 | `FerroFEDOverloaded` | the concurrency limit refuses requests for 5 minutes |
 | `FerroFEDCallerRateLimited` | a caller is rate limited for 15 minutes |
-| `FerroFEDMemberFailing` | a member endpoint fails over 10% of its requests for 10 minutes |
+| `FerroFEDMemberFailing` | a member endpoint fails over 10% of its requests for 10 minutes, a `4xx` it answered a routed request with (`class="client-error"`) left out |
 | `FerroFEDMemberCapSaturated` | a member's in-flight cap stays full for 5 minutes |
 | `FerroFEDResolverFailing`, `FerroFEDLocalizerFailing` | the resolver or the localizer does not answer for 5 minutes |
 | `FerroFEDIntegrityIncident` | an integrity incident is raised |

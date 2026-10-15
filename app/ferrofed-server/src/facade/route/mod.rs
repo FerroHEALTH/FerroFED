@@ -89,6 +89,7 @@ use crate::state::AppState;
 mod chosen;
 pub(crate) mod ehr;
 pub(crate) mod fan_out;
+pub(crate) mod status;
 
 /// The API group of the EHR area (§7a.1).
 pub(crate) const EHR_GROUP: &str = "ehr";
@@ -511,33 +512,13 @@ pub(crate) fn answered_by(endpoint: &Endpoint, forwarded: Forwarded) -> Response
     response
 }
 
-/// The §11.1 status of the node at `endpoint` that answered `forwarded`:
-/// `consent-denied` for a refusal on consent grounds, `active` for a
-/// success and `node-error` for any other failure it answered with.
-// NOTE: §11.1, N16, N27: a node reached that answered with a failure is `node-error`, never
-// `active`, and one that refused on consent grounds is `consent-denied`.
+/// The §11.1 status of the node at `endpoint` that answered `forwarded`
+/// ([`status::answered`]).
 fn reached(endpoint: &Endpoint, forwarded: &Forwarded) -> EndpointStatus {
-    if is_consent_refusal(forwarded, endpoint.consent_refusal_codes()) {
-        EndpointStatus::ConsentDenied
-    } else if forwarded.status().is_success() {
-        EndpointStatus::Active
-    } else {
-        EndpointStatus::NodeError
-    }
-}
-
-/// The §11.1 status of a node that gave no answer of its own to a routed
-/// request that ended in `failure`: `time-out` when no answer came in time
-/// or the request never got a slot before its deadline, `offline` when the
-/// node could not be reached, and `node-error` otherwise.
-fn unanswered(failure: &ForwardError) -> EndpointStatus {
-    match failure {
-        ForwardError::TimeOut { .. } | ForwardError::Expired { .. } | ForwardError::Capped(_) => {
-            EndpointStatus::TimeOut
-        }
-        ForwardError::Unreachable { .. } => EndpointStatus::Offline,
-        _ => EndpointStatus::NodeError,
-    }
+    status::answered(
+        forwarded.status(),
+        is_consent_refusal(forwarded, endpoint.consent_refusal_codes()),
+    )
 }
 
 /// The answer to a routed request in place of `forwarded`, the node's own,
@@ -635,7 +616,7 @@ pub(crate) fn failed(
     let mut response = provenance.stamp(error::response(code, message, request_id));
     response
         .extensions_mut()
-        .insert(Reached(unanswered(failure)));
+        .insert(Reached(status::unanswered(failure)));
     response
 }
 

@@ -16,6 +16,7 @@
 
 mod accessor;
 mod address;
+mod created;
 mod emergency;
 mod emergency_consent;
 mod gate;

@@ -53,8 +53,8 @@ use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
-    AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
-    RelayedProfessional, RelayedProvider, WrittenVersion,
+    AccessRecord, Accessor, Action, Coded, CreatedEhr, DataSubject, Origin, Outcome, Professional,
+    Purpose, RelayedProfessional, RelayedProvider, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
@@ -199,6 +199,9 @@ pub(crate) struct Asked {
     /// The version a write left there, as its answer named it, or `None`
     /// when the access wrote nothing there.
     pub(crate) version: Option<WrittenVersion>,
+    /// The `ehr_id` an EHR create left there, as its answer named it, or
+    /// `None` when the access created no EHR there.
+    pub(crate) created_ehr: Option<CreatedEhr>,
     /// Whether it contributed what the access delivered.
     pub(crate) contributed: bool,
     /// What its own answer showed of its data, read before a merge with
@@ -270,6 +273,7 @@ impl Accessed {
                 status: asked.status.clone(),
                 rows: asked.rows,
                 version: asked.version.clone(),
+                created_ehr: asked.created_ehr.clone(),
                 categories: per_origin(&self.log.map, asked, contributing, &categories),
             })
             .collect();

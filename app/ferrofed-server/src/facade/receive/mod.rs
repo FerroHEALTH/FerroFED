@@ -401,6 +401,7 @@ fn accessed(
             status: status.as_str().to_owned(),
             rows: Some(usize::from(written.is_some())),
             version: written.cloned(),
+            created_ehr: None,
             contributed: written.is_some(),
             evidence: written.is_some().then_some(evidence),
         }],

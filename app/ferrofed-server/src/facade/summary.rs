@@ -651,6 +651,7 @@ pub(crate) fn accessed(
                 status: reached.status.as_str().to_owned(),
                 rows: Some(reached.compositions),
                 version: None,
+                created_ehr: None,
                 contributed,
                 evidence: contributed.then(|| evidence(reached.objects.clone())),
             }

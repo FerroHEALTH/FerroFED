@@ -127,6 +127,7 @@ pub(super) fn query(
                 status: record.status().as_str().to_owned(),
                 rows,
                 version: None,
+                created_ehr: None,
                 contributed,
                 evidence: answered
                     .reached

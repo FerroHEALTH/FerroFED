@@ -243,7 +243,7 @@ async fn a_demographic_create_records_the_new_version() -> TestResult {
 }
 
 #[tokio::test]
-async fn an_ehr_create_names_its_ehr_id_and_no_version() -> TestResult {
+async fn an_ehr_create_names_no_version() -> TestResult {
     let at = "/v1/ehr";
     let sent = request(&Method::POST, at, false, String::new())?;
     let answer = Answer {
