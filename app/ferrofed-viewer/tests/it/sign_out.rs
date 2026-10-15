@@ -198,8 +198,9 @@ fn an_end_session_endpoint_over_plain_http_off_loopback_is_refused() {
 
 #[tokio::test]
 async fn the_console_offers_sign_out_as_a_post_form() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
-    let (response, body) = send(&service, crate::support::get("/")?).await?;
+    let (state, service) = console(WITH_OIDC)?;
+    let session = state.sessions().establish(signed_in())?;
+    let (response, body) = send(&service, crate::support::get_as("/", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status());
     assert!(
         body.contains(r#"<form method="post" action="/logout""#),

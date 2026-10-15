@@ -32,8 +32,8 @@ use leptos_router::hooks::use_query_map;
 
 use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::views::model::{
-    ClearedRow, FederationView, IntegrityView, MembersView, Outcome, PAGE_SIZE, Refusal,
-    StoredView, ViewError,
+    ClearedRow, FederationView, IncidentRow, IntegrityView, MembersView, Outcome, PAGE_SIZE,
+    Refusal, StoredView, ViewError,
 };
 
 /// The path of the members view.
@@ -137,16 +137,17 @@ fn members_section(view: MembersView) -> AnyView {
         .members
         .into_iter()
         .map(|member| {
+            let state = crate::styles::state(&member.health);
             view! {
                 <tr>
                     <th scope="row">{member.endpoint_id}</th>
                     <td>{member.organisation}</td>
                     <td>{member.status}</td>
-                    <td>{member.health}</td>
+                    <td class=state>{member.health}</td>
                     <td>{member.node_id.unwrap_or_default()}</td>
                     <td>{member.system_id.unwrap_or_default()}</td>
                     <td>{member.product.unwrap_or_default()}</td>
-                    <td>
+                    <td class=crate::styles::NUM>
                         {member
                             .latency_ms_p50
                             .map(|latency| format!("{latency} ms"))
@@ -160,42 +161,55 @@ fn members_section(view: MembersView) -> AnyView {
         .services
         .into_iter()
         .map(|(key, state)| {
+            let class = crate::styles::state(&state);
             view! {
                 <tr>
                     <th scope="row">{key}</th>
-                    <td>{state}</td>
+                    <td class=class>{state}</td>
                 </tr>
             }
         })
         .collect_view();
     view! {
         {answered_by}
-        <table>
-            <caption>"Member endpoints"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Endpoint"</th>
-                    <th scope="col">"Organisation"</th>
-                    <th scope="col">"Membership"</th>
-                    <th scope="col">"Health"</th>
-                    <th scope="col">"Node"</th>
-                    <th scope="col">"system_id"</th>
-                    <th scope="col">"Product"</th>
-                    <th scope="col">"Median latency"</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-        <table>
-            <caption>"Other dependencies"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Dependency"</th>
-                    <th scope="col">"State"</th>
-                </tr>
-            </thead>
-            <tbody>{services}</tbody>
-        </table>
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"Member endpoints"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Endpoint"</th>
+                            <th scope="col">"Organisation"</th>
+                            <th scope="col">"Membership"</th>
+                            <th scope="col">"Health"</th>
+                            <th scope="col">"Node"</th>
+                            <th scope="col">"system_id"</th>
+                            <th scope="col">"Product"</th>
+                            <th scope="col" class=crate::styles::NUM>
+                                "Median latency"
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"Other dependencies"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Dependency"</th>
+                            <th scope="col">"State"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{services}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
     }
     .into_any()
 }
@@ -234,37 +248,7 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
         })
         .collect_view();
     let clear = crate::admin::clear_section(clear, view.clear_form);
-    let recent = if view.recent.is_empty() {
-        view! { <p>"No incident since the gateway started."</p> }.into_any()
-    } else {
-        let rows = view
-            .recent
-            .into_iter()
-            .map(|incident| {
-                view! {
-                    <tr>
-                        <td>{incident.at}</td>
-                        <th scope="row">{incident.kind}</th>
-                        <td>{incident.description}</td>
-                    </tr>
-                }
-            })
-            .collect_view();
-        view! {
-            <table>
-                <caption>"Recent incidents, newest first"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"At"</th>
-                        <th scope="col">"Kind"</th>
-                        <th scope="col">"Description"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        }
-        .into_any()
-    };
+    let recent = recent_section(view.recent);
     let cleared = cleared_section(view.cleared);
     let routes_pager = pager(
         INTEGRITY,
@@ -288,34 +272,79 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
         .collect_view();
     view! {
         {answered_by}
-        <table>
-            <caption>"Incidents since the gateway started"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Kind"</th>
-                    <th scope="col">"Count"</th>
-                </tr>
-            </thead>
-            <tbody>{counts}</tbody>
-        </table>
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"Incidents since the gateway started"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Kind"</th>
+                            <th scope="col">"Count"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{counts}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
         {recent}
         {cleared}
         {clear}
-        <table>
-            <caption>"The creating_system_id routing table"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"creating_system_id"</th>
-                    <th scope="col">"Source"</th>
-                    <th scope="col">"Node"</th>
-                    <th scope="col">"Endpoint"</th>
-                </tr>
-            </thead>
-            <tbody>{routes}</tbody>
-        </table>
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"The creating_system_id routing table"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"creating_system_id"</th>
+                            <th scope="col">"Source"</th>
+                            <th scope="col">"Node"</th>
+                            <th scope="col">"Endpoint"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{routes}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
         {routes_pager}
     }
     .into_any()
+}
+
+/// The incidents since the gateway started, newest first.
+fn recent_section(recent: Vec<IncidentRow>) -> AnyView {
+    if recent.is_empty() {
+        return view! { <p>"No incident since the gateway started."</p> }.into_any();
+    }
+    let rows = recent
+        .into_iter()
+        .map(|incident| {
+            view! {
+                <tr>
+                    <td>{incident.at}</td>
+                    <th scope="row">{incident.kind}</th>
+                    <td>{incident.description}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+    scrolled(
+        view! {
+            <table>
+                <caption>"Recent incidents, newest first"</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">"At"</th>
+                        <th scope="col">"Kind"</th>
+                        <th scope="col">"Description"</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        }
+        .into_any(),
+    )
 }
 
 /// The collisions the operator cleared recently, newest first.
@@ -338,17 +367,22 @@ fn cleared_section(cleared: Vec<ClearedRow>) -> AnyView {
         })
         .collect_view();
     view! {
-        <table>
-            <caption>"Collisions cleared recently, newest first"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Cleared at"</th>
-                    <th scope="col">"ehr_id"</th>
-                    <th scope="col">"Members that claimed it"</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"Collisions cleared recently, newest first"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Cleared at"</th>
+                            <th scope="col">"ehr_id"</th>
+                            <th scope="col">"Members that claimed it"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
     }
     .into_any()
 }
@@ -406,20 +440,36 @@ fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyVie
         .collect_view();
     view! {
         {answered_by}
-        <table>
-            <caption>"Held versions"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Name"</th>
-                    <th scope="col">"Version"</th>
-                    <th scope="col">"Stored"</th>
-                    <th scope="col">"AQL"</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
+        {scrolled(
+            view! {
+                <table>
+                    <caption>"Held versions"</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">"Name"</th>
+                            <th scope="col">"Version"</th>
+                            <th scope="col">"Stored"</th>
+                            <th scope="col">"AQL"</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            }
+                .into_any(),
+        )}
         {stored_pager}
         {repair}
+    }
+    .into_any()
+}
+
+/// The table `table` in the box it scrolls sideways in, which takes the
+/// keyboard focus so a keyboard can scroll it.
+fn scrolled(table: AnyView) -> AnyView {
+    view! {
+        <div class=crate::styles::TABLE_SCROLL tabindex="0">
+            {table}
+        </div>
     }
     .into_any()
 }

@@ -22,14 +22,21 @@ incidents and the `creating_system_id` routing table, the stored queries, and
 the self-description. The query console runs an AQL or a stored query through
 the gateway and shows every node's status beside the rows.
 
-Build it with cargo-leptos, from this directory:
+Build it with cargo-leptos, from the repository root:
 
 ```sh
-cargo leptos build --release
+scripts/release/viewer-tools.sh "$HOME/.cache/ferrofed-viewer-tools"
+export PATH="$HOME/.cache/ferrofed-viewer-tools/bin:$PATH"
+scripts/release/viewer-site.sh --release
+cargo build --release -p ferrofed-viewer
 ```
 
-That writes the site bundle under `target/site` and the server binary under
-`target/release`. `ferrofed-viewer --config viewer.toml serve` runs it,
+The first line installs the Tailwind CSS CLI and wasm-opt at their pinned
+releases, each checked against its SHA-256, and the site script refuses to
+run cargo-leptos unless the ones on `PATH` match those digests, so it never
+downloads either itself. That writes the site bundle under `target/site`
+and the server binary under `target/release`.
+`ferrofed-viewer --config viewer.toml serve` runs it,
 `config check` checks a configuration without binding a socket, and
 `healthcheck` is the container probe.
 

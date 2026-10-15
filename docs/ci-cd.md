@@ -251,7 +251,11 @@ lanes build, lint and test its server half on the host; this job runs
 `cargo clippy -p ferrofed-viewer --lib --target wasm32-unknown-unknown` at
 `-D warnings`, so a dependency that cannot compile for the browser fails here,
 and then builds the release site bundle with `scripts/release/viewer-site.sh
---release`, which freezes `Cargo.lock` around cargo-leptos and checks the
+--release`, after `scripts/release/viewer-tools.sh` has put the Tailwind CSS
+CLI and wasm-opt on `PATH`, each checked against the SHA-256 `docs/VERSIONS.md`
+pins, so cargo-leptos downloads neither (the journeys job and the release
+lane's site job do the same). The site script refuses to start without
+them, freezes `Cargo.lock` around cargo-leptos and checks the
 WebAssembly, its JavaScript glue, the stylesheet and the favicon are all written.
 `scripts/checks/viewer-bundle.sh` then writes the WebAssembly and JavaScript
 sizes, raw and compressed with gzip and brotli, to the job summary, and fails

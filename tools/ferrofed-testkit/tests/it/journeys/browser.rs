@@ -84,15 +84,21 @@ impl Browser {
         Ok(())
     }
 
-    /// Fails on any `SEVERE` entry the browser logged since the last call,
-    /// naming `step` and every entry.
-    pub(crate) async fn console_clean(&self, step: &str) -> Result<(), Box<dyn Error>> {
+    /// Drains the browser log and returns every `SEVERE` entry it held since
+    /// the last call, each as its level and message.
+    pub(crate) async fn console_errors(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let entries = self.driver.browser_log().await?;
-        let errors: Vec<String> = entries
+        Ok(entries
             .iter()
             .filter(|entry| entry.level == SEVERE)
             .map(|entry| format!("{} {}", entry.level, entry.message))
-            .collect();
+            .collect())
+    }
+
+    /// Fails on any `SEVERE` entry the browser logged since the last call,
+    /// naming `step` and every entry.
+    pub(crate) async fn console_clean(&self, step: &str) -> Result<(), Box<dyn Error>> {
+        let errors = self.console_errors().await?;
         if errors.is_empty() {
             return Ok(());
         }

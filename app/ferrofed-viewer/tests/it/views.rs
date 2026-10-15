@@ -178,9 +178,15 @@ async fn the_members_view_lists_every_endpoint_with_its_health() -> Result<(), B
             "{id}: {body}"
         );
     }
-    assert!(body.contains("<td>up</td>"), "{body}");
+    assert!(
+        body.contains(r#"<td class="state state-up">up</td>"#),
+        "{body}"
+    );
     assert!(body.contains("resolver"), "{body}");
-    assert!(body.contains("<td>failing</td>"), "{body}");
+    assert!(
+        body.contains(r#"<td class="state state-failing">failing</td>"#),
+        "{body}"
+    );
     Ok(())
 }
 

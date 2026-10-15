@@ -18,7 +18,7 @@ use thirtyfour::By;
 use crate::journeys::browser::{until, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::provider::{CLIENT_ID, END_SESSION};
-use crate::journeys::sign_in::sign_in;
+use crate::journeys::sign_in::{sign_in, signed_out_shell};
 use crate::journeys::stack::Stack;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -38,7 +38,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
             .ok_or("the session cookie")?;
 
         browser
-            .element(By::XPath("//nav//form//button[. = 'Sign out']"))
+            .element(By::XPath("//header//form//button[. = 'Sign out']"))
             .await?
             .click()
             .await?;
@@ -48,7 +48,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
         .await?;
         browser.at(&stack.url("/")).await?;
         browser.titled(PRODUCT).await?;
-        browser.element(By::LinkText("Sign in")).await?;
+        signed_out_shell(browser).await?;
 
         let ended = stack.provider().requests_at(END_SESSION).await?;
         let [request] = ended.as_slice() else {
