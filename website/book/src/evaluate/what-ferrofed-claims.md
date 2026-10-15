@@ -346,8 +346,8 @@ release, and every issue in it names the sections it answers.
 
 v0.0.11: FerroFED's choices revisited where the upstream reports bear on
 them ([#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and more of EHDS readiness
-([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's review, retention and export
-([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the
+([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's log access interface against the Art 36(1)
+common specifications ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the
 interoperability component ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523)), the national contact
 point's connector ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), and the manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)). It also brings

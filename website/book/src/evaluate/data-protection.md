@@ -96,8 +96,10 @@ What the record does not cover:
   gateway with a registry refuses every destination but `repository`.
 - Every build records accesses, with the IHE binding, the Dutch binding,
   both or neither: the access log needs no regional binding.
-- FerroFED offers no interface of its own to review the records (Annex II,
-  point 3.3); it is planned ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)). Each record states how long it is
+- The records are reviewed at the Audit Record Repository, which a person
+  and an operator search with ITI-81, the external software Annex II point
+  3.3 admits ([Reading the log](../operate/access-log.md#reading-the-log)).
+  FerroFED offers no review interface of its own. Each record states how long it is
   kept by its origins and categories, at least three years (point 3.4,
   [How long a record is kept](../operate/access-log.md#how-long-a-record-is-kept)).
   Your Audit Record Repository decides who reads the records and applies
