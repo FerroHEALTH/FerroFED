@@ -353,8 +353,9 @@ These are the ones to know before you deploy FerroFED; the
   no patient in its record, so a search by the person's identifier does
   not find it, and access rights by origin and category are planned
   ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)). The
-  European interoperability software component is a library the gateway
-  does not serve yet
+  European interoperability software component writes the patient
+  summary and receives a document in the exchange format on the gateway's
+  FHIR face; the other priority categories are planned
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking

@@ -17,8 +17,10 @@ checks it against its profiles and maps it into openEHR. The gateway takes
 the document at `POST {fhir-base}/Bundle` and writes the composition to the
 declared member, with an access record of each receipt
 ([The patient summary over FHIR](../integrate/patient-summary.md#receiving-a-document)).
-The information sheet's list of the categories received is planned
-([#803](https://github.com/FerroHEALTH/FerroFED/issues/803)).
+The information sheet lists the categories a release can receive, and each
+deployment's `GET {fhir-base}/metadata` the ones it receives and the ones
+it has no receiving member for
+([The categories received](information-sheet.md#the-categories-received)).
 
 ## What the component accepts
 

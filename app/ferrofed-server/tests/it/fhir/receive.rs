@@ -39,24 +39,24 @@ use crate::facade::{
 use crate::support::call;
 
 /// The version node A creates for the composition.
-const VERSION_A: &str = "7c4e1d20-0000-4000-8000-0000000008a1::cdr-a.example.org::1";
+pub(super) const VERSION_A: &str = "7c4e1d20-0000-4000-8000-0000000008a1::cdr-a.example.org::1";
 
 /// A second synthetic patient, and its `ehr_id` at node A.
-const OTHER: &str = "SENTINEL-OTHER-71xw";
-const OTHER_A: &str = "4444dddd-4444-4444-8444-444444444444";
+pub(super) const OTHER: &str = "SENTINEL-OTHER-71xw";
+pub(super) const OTHER_A: &str = "4444dddd-4444-4444-8444-444444444444";
 
 /// A second identifier system of the example OID arc, which names
 /// [`OTHER`].
-const OTHER_NAMESPACE: &str = "urn:oid:2.999.2";
+pub(super) const OTHER_NAMESPACE: &str = "urn:oid:2.999.2";
 
 /// The identifier system of node A's `ehr_id`s at the cross-reference.
-const EHR_SYSTEM: &str = "urn:oid:2.999.9.1";
+pub(super) const EHR_SYSTEM: &str = "urn:oid:2.999.9.1";
 
 /// The synthetic substance the document records.
-const SUBSTANCE: &str = "Synthetic substance one";
+pub(super) const SUBSTANCE: &str = "Synthetic substance one";
 
 /// The `[[dev.crossref]]` rows, each `(namespace, value, member, ehr_id)`.
-fn rows(rows: &[(&str, &str, &str, &str)]) -> String {
+pub(super) fn rows(rows: &[(&str, &str, &str, &str)]) -> String {
     rows.iter()
         .fold(String::new(), |mut text, (namespace, value, member, ehr_id)| {
             // NOTE: writing to a String cannot fail, so the result is dropped.
@@ -70,7 +70,7 @@ fn rows(rows: &[(&str, &str, &str, &str)]) -> String {
 
 /// The `[fhir]` tables of a face that receives patient summaries at
 /// `member`, resolving their patient in `namespaces`.
-fn receiving(member: &str, namespaces: &[&str]) -> String {
+pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string());
     let [model, context] = eps::mapping_files();
     let namespaces = namespaces
@@ -114,7 +114,7 @@ fn text(
 }
 
 /// The gateway of [`text`], driven with `server`.
-fn gateway_with(
+pub(super) fn gateway_with(
     dir: &Path,
     nodes: (&Server, &Server),
     (crossref, fhir): (&str, &str),
@@ -129,7 +129,7 @@ fn gateway_with(
 
 /// The gateway receiving patient summaries at node A, the patient known at
 /// both nodes.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
+pub(super) fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     let crossref = rows(&[
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
@@ -143,7 +143,7 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>>
 }
 
 /// A member that creates every composition as [`VERSION_A`].
-async fn creating() -> Server {
+pub(super) async fn creating() -> Server {
     let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path(format!("/v1/ehr/{EHR_A}/composition")))
@@ -162,20 +162,20 @@ async fn creating() -> Server {
 }
 
 /// `POST {fhir-base}/Bundle` carrying `document`.
-fn post(document: &str) -> Result<Request<Body>, http::Error> {
+pub(super) fn post(document: &str) -> Result<Request<Body>, http::Error> {
     Request::post(format!("{FHIR}/Bundle"))
         .header(header::CONTENT_TYPE, "application/fhir+json")
         .body(Body::from(document.to_owned()))
 }
 
 /// The patient summary of [`PATIENT`].
-fn document() -> String {
+pub(super) fn document() -> String {
     eps::received_document(&[(NAMESPACE, PATIENT)], SUBSTANCE)
 }
 
 /// The issue type and the diagnostics of the first issue of the
 /// `OperationOutcome` `text` holds.
-fn issue(text: &str) -> Result<(String, String), Box<dyn Error>> {
+pub(super) fn issue(text: &str) -> Result<(String, String), Box<dyn Error>> {
     let outcome: Value = serde_json::from_str(text)?;
     if outcome.get("resourceType") != Some(&Value::from("OperationOutcome")) {
         return Err(format!("no OperationOutcome: {text}").into());
@@ -205,7 +205,7 @@ async fn composed(server: &Server) -> Result<String, Box<dyn Error>> {
 }
 
 /// Whether neither node received anything.
-async fn untouched(a: &Server, b: &Server) -> Result<bool, Box<dyn Error>> {
+pub(super) async fn untouched(a: &Server, b: &Server) -> Result<bool, Box<dyn Error>> {
     Ok(received(a).await?.is_empty() && received(b).await?.is_empty())
 }
 
@@ -360,7 +360,7 @@ async fn a_patient_named_in_no_resolved_namespace_is_refused() -> TestResult {
 
 /// The suite's server settings, its issuer's patient tokens bound to node
 /// A, whose `ehr_id`s the cross-reference knows under [`EHR_SYSTEM`].
-fn bound() -> Result<ServerSettings, Box<dyn Error>> {
+pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
     let mut server = settings_with_room();
     for issuer in &mut server.auth.issuers {
         issuer.patient = Some(PatientBinding {

@@ -19,6 +19,7 @@
 
 use std::fmt;
 
+use eehrxf::category::Category;
 use fhir_types::r4::capability_statement::{
     CapabilityStatement, CapabilityStatementRest, CapabilityStatementRestResource,
     CapabilityStatementRestResourceInteraction, CapabilityStatementRestResourceOperation,
@@ -26,6 +27,8 @@ use fhir_types::r4::capability_statement::{
 };
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::parameters::{Parameters, ParametersParameterValue};
+
+use crate::receive::Receivers;
 
 /// The canonical URL of the International Patient Summary `$summary`
 /// operation.
@@ -173,13 +176,20 @@ impl SummaryRequest {
 }
 
 /// Returns the face's `CapabilityStatement`, written at `date`, for the
-/// product `product` at `version`.
+/// product `product` at `version`, receiving documents as `receivers`
+/// declares.
 ///
-/// It describes a server that serves `$summary` on `Patient` and the
-/// `DocumentReference` search of the document list ([`crate::list`]), with
-/// the `Binary` read of a member's document, in FHIR JSON.
+/// It describes a server that serves `$summary` on `Patient`, the
+/// `DocumentReference` search of the document list ([`crate::list`]), the
+/// `Binary` read of a member's document and the `create` of a received
+/// document on `Bundle` ([`bundle`]), in FHIR JSON.
 #[must_use]
-pub fn capability(product: &str, version: &str, date: &str) -> CapabilityStatement {
+pub fn capability(
+    product: &str,
+    version: &str,
+    date: &str,
+    receivers: &Receivers,
+) -> CapabilityStatement {
     CapabilityStatement {
         status: "active".into(),
         date: date.into(),
@@ -205,6 +215,7 @@ pub fn capability(product: &str, version: &str, date: &str) -> CapabilityStateme
                 },
                 documents(),
                 binary(),
+                bundle(receivers),
             ],
             ..CapabilityStatementRest::default()
         }],
@@ -221,6 +232,55 @@ fn binary() -> CapabilityStatementRestResource {
             code: "read".into(),
             documentation: Some(
                 "A member's own document, at the attachment URL the document list names; the URL is valid for a short time and for the caller it was listed for.".into(),
+            ),
+            ..CapabilityStatementRestResourceInteraction::default()
+        }],
+        ..CapabilityStatementRestResource::default()
+    }
+}
+
+/// The `Bundle` resource of the capability statement: the `create` of a
+/// document in the exchange format, at the end-point FHIR R4 documents
+/// §3.3.4 names.
+///
+/// Its documentation names, by their code in HL7 Europe's
+/// `EEHRxFDocumentPriorityCategoryCS`, the Art 14(1) categories the
+/// deployment declares a receiving member for, and every other category
+/// this build carries, which no member receives; its supported profiles are
+/// the `Bundle` profiles of the received categories. It names no member.
+#[must_use]
+pub fn bundle(receivers: &Receivers) -> CapabilityStatementRestResource {
+    let received: Vec<Category> = receivers.members().map(|(category, _)| category).collect();
+    let codes = |categories: &mut dyn Iterator<Item = Category>| {
+        let codes: Vec<&str> = categories.map(Category::code).collect();
+        if codes.is_empty() {
+            String::from("none")
+        } else {
+            codes.join(", ")
+        }
+    };
+    let unreceived = codes(
+        &mut Category::ENABLED
+            .iter()
+            .copied()
+            .filter(|category| !received.contains(category)),
+    );
+    let documentation = format!(
+        "Receives a document in the European electronic health record exchange format and writes it to the one member the deployment declares for its Art 14(1) category. Categories received: {}. Categories with no receiving member: {unreceived}; a document of one of them, or of any other category, is refused with an OperationOutcome that names its category.",
+        codes(&mut received.iter().copied()),
+    );
+    CapabilityStatementRestResource {
+        r#type: "Bundle".into(),
+        supported_profile: received
+            .iter()
+            .filter_map(|category| category.profiles())
+            .map(|profiles| profiles.bundle.into())
+            .collect(),
+        documentation: Some(documentation.into()),
+        interaction: vec![CapabilityStatementRestResourceInteraction {
+            code: "create".into(),
+            documentation: Some(
+                "POST of a document Bundle as application/fhir+json; the answer is an OperationOutcome naming the member that holds it.".into(),
             ),
             ..CapabilityStatementRestResourceInteraction::default()
         }],
@@ -348,5 +408,28 @@ mod tests {
     fn no_debug_shows_the_identifier() {
         let read = SummaryRequest::from_query(Some("identifier=a%7Csynthetic-77q")).unwrap();
         assert!(!format!("{read:?}").contains("77q"));
+    }
+
+    #[test]
+    fn a_deployment_that_receives_nothing_names_every_category_unreceived() {
+        let resource = super::bundle(&crate::receive::Receivers::default());
+        assert_eq!(
+            resource.r#type.value.as_deref().unwrap_or_default(),
+            "Bundle"
+        );
+        let interactions: Vec<&str> = resource
+            .interaction
+            .iter()
+            .map(|interaction| interaction.code.value.as_deref().unwrap_or_default())
+            .collect();
+        assert_eq!(interactions, ["create"]);
+        assert!(resource.supported_profile.is_empty());
+        let documentation = resource.documentation.unwrap().value.unwrap();
+        assert!(
+            documentation.contains(
+                "Categories received: none. Categories with no receiving member: Patient-Summaries"
+            ),
+            "{documentation:?}"
+        );
     }
 }

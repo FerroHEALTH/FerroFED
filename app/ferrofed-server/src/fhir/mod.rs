@@ -41,6 +41,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, Refusal, SummaryRequest};
+use ferrofed_eehrxf::receive::Receivers;
 use ferrofed_eehrxf::summary::{self, Author, Request as SummaryDocument};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
@@ -204,12 +205,15 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
     }
 }
 
-/// `GET {fhir-base}/metadata`: the face's `CapabilityStatement`.
-async fn metadata() -> Response {
+/// `GET {fhir-base}/metadata`: the face's `CapabilityStatement`, with the
+/// categories the deployment receives documents of.
+async fn metadata(State(state): State<Arc<AppState>>) -> Response {
     let date = jiff::Timestamp::now().strftime("%Y-%m-%d").to_string();
+    let none = Receivers::default();
+    let receivers = state.fhir().map_or(&none, |fhir| fhir.receivers.as_ref());
     fhir_json(
         StatusCode::OK,
-        &face::capability(PRODUCT, env!("CARGO_PKG_VERSION"), &date),
+        &face::capability(PRODUCT, env!("CARGO_PKG_VERSION"), &date, receivers),
     )
 }
 

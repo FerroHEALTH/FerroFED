@@ -126,6 +126,41 @@ with that system. The categories a deployment declares under national law
 are recorded as well, each in the system its Member State defines
 ([Categories](../operate/audit.md#categories)).
 
+### The categories received
+
+Annex II, points 2.2 and 2.3, ask that an EHR system "be able to receive
+personal electronic health data in the European electronic health record
+exchange format". A client sends such a document to
+`POST {fhir-base}/Bundle`, and FerroFED writes it to the one member the
+deployment declares for its category
+([Receiving a document](receiving-documents.md)). This release can receive
+documents of one category:
+
+| Art 14(1) | Code | Received in the exchange format |
+|---|---|---|
+| (a) | `Patient-Summaries` | yes |
+| (b) | `Electronic-Prescriptions` | no |
+| (c) | `Electronic-Dispensations` | no |
+| (d) | `Medical-Imaging` | no |
+| (e) | `Laboratory-Reports` | no |
+| (f) | `Discharge-Reports` | no |
+
+Which of these a deployment receives is its operator's choice: each
+`[[fhir.receive]]` table of the configuration names the one member that
+stores a category's documents
+([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
+A category with no such table has no receiving member, and a document of it
+is refused with a `422` `OperationOutcome` that names the category, with
+nothing sent to any member. Every receipt that reached a member writes one
+access record carrying the document's category and the member.
+
+This sheet is the same for every deployment of a release, so it cannot
+list one deployment's receiving members. Each deployment states its own:
+`GET {fhir-base}/metadata` answers a `CapabilityStatement` whose `Bundle`
+resource names, by the codes above, the categories the deployment receives
+and those it has no receiving member for, and lists the `Bundle` profile of
+each category received.
+
 ## (e) Standards, formats and specifications
 
 Art 38(2)(e): "the standards, formats and specifications supported by the
@@ -169,10 +204,11 @@ Beside them:
 - **SMART on openEHR**, the scope grammar of ITS-REST 1.1.0, for the scopes
   each route requires.
 
-The European electronic health record exchange format of Art 15 is not
-supported by this release. Its implementing act is not adopted, the
-interoperability component that will produce the format is a library the
-gateway does not serve, and no receive path exists
+The European electronic health record exchange format of Art 15 has no
+adopted implementing act. The gateway serves the patient summary in the
+FHIR R4 form of HL7 Europe's packages and receives patient summaries in the
+same form ([The categories received](#the-categories-received)); no other
+category is produced or received
 ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
 The instructions for use list this and the other
 [limitations](../operate/instructions-for-use.md#limitations).

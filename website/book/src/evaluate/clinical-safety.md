@@ -27,10 +27,10 @@ This page is not legal advice.
 | Component | Where it is | What it does in this release |
 |---|---|---|
 | Logging (Art 2(2)(o)) | `crates/ehds-logging`, with the record built in `app/ferrofed-server/src/access/` | records every access to patient data the gateway intermediates ([The access log](../operate/audit.md#the-access-log)) |
-| Interoperability (Art 2(2)(n)) | `crates/eehrxf` | a library: the EHDS dataset model and the mapping of one openEHR composition to a FHIR R4 `Bundle`; the gateway does not serve it |
+| Interoperability (Art 2(2)(n)) | `crates/eehrxf` | the EHDS dataset model and the mapping between openEHR and FHIR R4; the gateway serves it on its FHIR face, writing the patient summary and receiving a document in the exchange format ([Receiving documents](receiving-documents.md)) |
 
 Both components ride on the federated query path: the logging component
-records what that path did, and the interoperability component will build
+records what that path did, and the interoperability component builds
 its documents from what that path returns. The federation hazards the
 interoperability component inherits are therefore assessed here with it,
 and their controls on the query path are named.
