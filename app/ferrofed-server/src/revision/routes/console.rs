@@ -146,7 +146,7 @@ const QUERY_SHAPE: &str = r#"{"aql": "<text>"}"#;
 
 /// The members `table`, a revision's configuration, holds under
 /// `[[registry.members]]`.
-fn members_of(table: &toml::Table) -> Result<Vec<ConsoleMember>, RevisionError> {
+pub(super) fn members_of(table: &toml::Table) -> Result<Vec<ConsoleMember>, RevisionError> {
     let Some(members) = table
         .get("registry")
         .and_then(toml::Value::as_table)
@@ -171,7 +171,7 @@ fn members_at(
 }
 
 /// Who provides the registry's members that are not the console's.
-fn source(managed: &Managed) -> Owner {
+pub(super) fn source(managed: &Managed) -> Owner {
     if managed.reloader.reads_directory() {
         Owner::Directory
     } else {
@@ -182,7 +182,7 @@ fn source(managed: &Managed) -> Owner {
 /// Whether the registry's own part, the members not the console's, holds
 /// an identity `member` names: its organisation id, its `node_id`, its
 /// `system_id`, an `endpoint_id` or an endpoint's base URL.
-fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) -> bool {
+pub(super) fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) -> bool {
     let theirs = |node: &NodeId| !snapshot.is_console(node);
     let organisation = &member.organisation.id;
     let node = snapshot.node(&member.node.id).is_some() && theirs(&member.node.id);
@@ -210,7 +210,7 @@ fn file_holds(snapshot: &RegistrySnapshot, member: &ConsoleMember) -> bool {
 }
 
 /// The running registry, empty when the gateway federates nothing.
-fn snapshot(managed: &Managed) -> Option<RegistrySnapshot> {
+pub(super) fn snapshot(managed: &Managed) -> Option<RegistrySnapshot> {
     managed
         .reloader
         .state()

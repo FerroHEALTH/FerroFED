@@ -16,6 +16,8 @@
 //! | `POST` [`REVISIONS`] | `201` with the revision saved |
 //! | `GET` [`REVISION`] | one revision |
 //! | `GET` [`DIFF`] | the keys that differ from one revision to another |
+//! | `GET` [`exchange::EXPORT`] | one revision as TOML, an attachment ([`exchange`]) |
+//! | `POST` [`exchange::IMPORT`] | `201` with the TOML body saved as a dry-run revision and its changes against the running one |
 //! | `POST` [`APPLY`] | the mark once the revision is applied |
 //! | `POST` [`CONFIRM`] | the mark once the running revision is confirmed |
 //! | `POST` [`APPROVE`] | what the revision takes once approved |
@@ -28,7 +30,7 @@
 //! | `POST` [`sections::CREDENTIALS_REMOVE`], [`sections::BINDING_REMOVE`] | `201` with the revision saved without it |
 //!
 //! A refusal is an error body: `400` (`body-invalid`) for a body that does
-//! not read, `404` (`revision-unknown`), `409` (`revision-stale`) when
+//! not read, `415` (`media-type-unsupported`) for an import that is not TOML, `404` (`revision-unknown`), `409` (`revision-stale`) when
 //! another save, apply or rollback came first, `409`
 //! (`rollback-unavailable`), `409` (`resource-file-owned`) for a change to a
 //! resource the file provides, `404` (`resource-unknown`), `409`
@@ -96,6 +98,7 @@ pub const MEMBER_REMOVE: &str = "/admin/config/members/{node_id}/remove";
 pub const STORED_QUERY: &str = "/admin/config/stored-queries/{qualified_query_name}/{version}";
 
 pub mod console;
+pub mod exchange;
 pub mod sections;
 
 /// The revisions and the reload path they are applied through.
@@ -123,6 +126,7 @@ pub fn reads(managed: Arc<Managed>) -> Router {
         .route(REVISIONS, get(history))
         .route(REVISION, get(revision))
         .route(DIFF, get(difference))
+        .route(exchange::EXPORT, get(exchange::export))
         .route(RESOURCES, get(console::resources))
         .with_state(managed)
 }
@@ -145,6 +149,7 @@ pub fn writes(managed: Arc<Managed>) -> Router {
         .route(sections::BINDING, put(sections::save_binding))
         .route(sections::BINDING_REMOVE, post(sections::remove_binding))
         .route(STORED_QUERY, put(console::store_query))
+        .route(exchange::IMPORT, post(exchange::import))
         .with_state(managed)
 }
 

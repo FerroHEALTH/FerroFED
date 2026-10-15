@@ -18,6 +18,7 @@ mod config;
 #[cfg(test)]
 mod configure;
 mod configure_fhir;
+mod configure_revisions;
 mod configure_sections;
 #[cfg(test)]
 mod exchange;

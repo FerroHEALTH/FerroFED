@@ -19,6 +19,7 @@ fn origin(origin: Origin) -> &'static str {
         Origin::File => "file",
         Origin::Operator => "operator",
         Origin::Rollback => "rollback",
+        Origin::Import => "import, a dry run until applied",
         _ => "another origin",
     }
 }
@@ -237,6 +238,11 @@ pub(super) fn history_section(history: &Page<Revision>) -> AnyView {
                     <td>{author(&revision.author)}</td>
                     <td>{revision.at.to_string()}</td>
                     <td>{revision.reason.clone()}</td>
+                    <td>
+                        <a href=crate::configure::export::href(revision.id) rel="external">
+                            {format!("Export revision {} as TOML", revision.id)}
+                        </a>
+                    </td>
                 </tr>
             }
         })
@@ -258,6 +264,7 @@ pub(super) fn history_section(history: &Page<Revision>) -> AnyView {
                         <th scope="col">"Made by"</th>
                         <th scope="col">"At"</th>
                         <th scope="col">"Reason"</th>
+                        <th scope="col">"TOML"</th>
                     </tr>
                 </thead>
                 <tbody>{rows}</tbody>

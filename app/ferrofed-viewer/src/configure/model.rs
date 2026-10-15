@@ -34,7 +34,7 @@ pub struct ConfigView {
 pub struct ConfigForm {
     /// The action: `save-member`, `remove-member`, `apply`, `rollback`,
     /// `store-query`, `save-credentials`, `save-binding`, `remove-section`,
-    /// `confirm` or `approve`.
+    /// `confirm`, `approve` or `import`.
     pub action: String,
     /// The revision a change is based on.
     pub base: String,
@@ -95,6 +95,8 @@ pub struct ConfigForm {
     pub secret_file: String,
     /// Not empty when the operator clears the secret.
     pub secret_clear: String,
+    /// The TOML an import saves as a dry-run revision.
+    pub toml: String,
 }
 
 impl fmt::Debug for ConfigForm {
@@ -114,6 +116,7 @@ impl fmt::Debug for ConfigForm {
             .field("secret_key", &filled(&self.secret_key))
             .field("secret_value", &!self.secret_value.is_empty())
             .field("secret_file", &filled(&self.secret_file))
+            .field("toml", &filled(&self.toml))
             .finish_non_exhaustive()
     }
 }

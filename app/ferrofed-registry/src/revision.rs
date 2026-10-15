@@ -8,7 +8,8 @@
 //! console reads cannot drift apart: a revision ([`Revision`]), the mark of
 //! the running one ([`Current`]), the standing of the store and this
 //! replica ([`Standing`]), the keys two revisions differ by ([`Diff`]), and
-//! the answer to an apply or a rollback ([`Applied`]). No specification
+//! the answer to an apply or a rollback ([`Applied`]), and the answer to an
+//! import ([`Imported`]). No specification
 //! governs this: our own design.
 
 use std::fmt;
@@ -81,6 +82,9 @@ pub enum Origin {
     Operator,
     /// An operator's rollback, restoring an earlier revision's content.
     Rollback,
+    /// An operator's import of a TOML file: a dry run, which takes effect
+    /// only once an operator applies it as any revision.
+    Import,
 }
 
 /// Who made a revision, or applied one.
@@ -297,6 +301,17 @@ pub struct Diff {
     pub to: RevisionId,
     /// The keys that differ, in key order.
     pub changes: Vec<Difference>,
+}
+
+/// The body of `POST /admin/config/import`: the revision the import saved,
+/// not applied, and the keys it changes against the running revision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Imported {
+    /// The revision saved, a dry run until an operator applies it.
+    pub revision: Revision,
+    /// The keys it changes, from the running revision to it.
+    pub diff: Diff,
 }
 
 /// The body of `GET /admin/config`: the store's standing and this

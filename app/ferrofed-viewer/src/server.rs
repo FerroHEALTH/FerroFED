@@ -124,6 +124,10 @@ pub fn router(state: ViewerState) -> axum::Router {
     };
     let pages = axum::Router::new()
         .route(HEALTH, get(health))
+        .route(
+            crate::configure::export::EXPORT,
+            get(crate::configure::export::export),
+        )
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
         .route(

@@ -330,6 +330,22 @@ impl Revisions {
         (author, reason): (Author, String),
         toml: &str,
     ) -> Result<Revision, RevisionError> {
+        self.save_from(Origin::Operator, base, (author, reason), toml)
+    }
+
+    /// Saves `toml` as [`Revisions::save`] does, recording `origin` as
+    /// where it comes from: an operator's save or an import.
+    ///
+    /// # Errors
+    ///
+    /// As [`Revisions::save`].
+    pub fn save_from(
+        &self,
+        origin: Origin,
+        base: Option<RevisionId>,
+        (author, reason): (Author, String),
+        toml: &str,
+    ) -> Result<Revision, RevisionError> {
         let reason = reason_of(&reason)?;
         let (toml, _config) = self.validate(toml)?;
         let file_owned = self.file_owned()?;
@@ -340,7 +356,7 @@ impl Revisions {
             .filter(|resource| !file_owned.contains(resource))
             .collect();
         let draft = Draft {
-            origin: Origin::Operator,
+            origin,
             restores: None,
             author,
             at: Timestamp::now(),

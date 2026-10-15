@@ -15,7 +15,9 @@
 //! and never edited (§12.7, N44). An onward credential or a binding section
 //! is owned whole as a member is, its secrets shown as set by reference and
 //! never by value ([`sections`]); the confirmation the running revision
-//! awaits and the approval the newest one takes are forms of their own. Every form posts to one server function,
+//! awaits and the approval the newest one takes are forms of their own. A
+//! revision downloads as TOML ([`export`]), and TOML imports as a dry-run
+//! revision ([`import`]). Every form posts to one server function,
 //! which checks the confirmation again; the forms sit in one fieldset that
 //! stays disabled until the page has hydrated, and its one listener hands
 //! the form submitted to the server function. No specification governs the
@@ -31,6 +33,10 @@
     )
 )]
 pub mod act;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod export;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod import;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod member;
 pub mod model;
@@ -186,5 +192,6 @@ fn submitted(data: &leptos::web_sys::FormData) -> ConfigForm {
         secret_value: Typed::new(field("form[secret_value]")),
         secret_file: field("form[secret_file]"),
         secret_clear: field("form[secret_clear]"),
+        toml: field("form[toml]"),
     }
 }
