@@ -1807,6 +1807,43 @@ document) is reported `excluded` with an operator-policy reason (§11.1) and is
 not contacted. §12b.3 leaves revocation open, so these rules are FerroFED's
 own, held on #17 as the behaviour to put to the working group.
 
+**Configuration from the file and from the console** (#575, decision A88).
+Today the gateway reads one TOML file with `FERROFED__` environment
+overrides and `_file` secrets, checked by `config check` and by
+`Config::resolve` at start, and a `SIGHUP` reload re-reads the registry and
+the sections it names. The planned design keeps that file and adds the
+operator console as a second author without a second source of truth. Every
+change, a file load or a console save, becomes a complete configuration
+revision, validated by the same `Config::resolve`, transport checks and
+`config check` the file goes through, so the console accepts nothing the
+file would refuse. A revision carries its diff against the running one,
+applies atomically through the reload path (or waits for a restart when a
+setting takes one), is kept in history, rolls back in one step, and is saved
+with optimistic concurrency so two operators cannot overwrite each other.
+Each resource (a member, an endpoint's credentials, a binding section, a
+stored query) has one owner. A resource the file defines is provisioned by
+the file and read-only in the console; every other resource is owned by the
+console and held in the gateway's own store, shared across replicas.
+Ownership never splits inside a resource, and nothing writes back to the
+TOML file. A bootstrap core stays file-only: the listen address, the
+profile, the configuration store, the admin authentication and the
+transport policy, so the console can neither lock the operator out nor
+lower the security floor. A change to client authentication, onward
+credentials, the localization failure policy or consent disclosure applies
+under commit-confirm and rolls back unless the operator confirms it within
+a configured window. A secret is write-only in the console: it can be set
+or rotated, is stored as a reference to a secret file or store, and is never
+read back or rendered. Any revision exports as TOML, and an import is a
+dry-run revision that shows its diff before it applies. Every revision
+records who, when and why as an audit event (and in the access log of
+#521 where it applies), and a resource can require a second operator's
+approval. One switch, `config.ui = "off" | "managed"`, `off` by default,
+leaves a file-only deployment as it is. The build order is the revision
+store with the switch (#576), console-managed members, endpoints and stored
+queries (#577), credentials and bindings with commit-confirm and approval
+(#578), and export and import (#579). None of it is built. No specification
+governs this: our own design.
+
 ## 9. Fan-out, completeness, timeouts and the merge
 
 Research: #21.
@@ -2775,6 +2812,7 @@ R4 is #23, #25 and #27).
 | A85 | Receiving a document on the FHIR face [#802] | `POST {fhir-base}/Bundle` with `application/fhir+json` takes a document `Bundle`; the gate classifies the one exact path, refuses every variant and every other method on it, and records every answer that reached a member; a written document answers `200` with an `OperationOutcome` whose first issue (`information`, `informational`) names the category, the member, the endpoint and the new version's uid, followed by one `warning` per profile constraint the check did not evaluate and each loss the mapping declared; a refusal is an `OperationOutcome` error: `400` for a text that is no document, `415` for another media type, `422` for a category no member receives (naming it), a document that breaks its profiles (one issue per finding, located by element path), a mapping refusal and a patient that does not resolve to one `ehr_id` at the member, `424` when the identity services could not answer, `502` for a member that refused or failed (naming its status), `503` when the write could not leave in time and `504` when the member did not answer | FHIR R4 documents §3.3.4 names `POST [base]/Bundle` as the end-point that receives "whole document bundles", and says documents "may be transferred between systems using any method desired"; R4 `http.html` `create` answers `201` with a `Location` of a resource the server holds, and the face holds none, so it answers `200` with the outcome (`Prefer: return=OperationOutcome` is the R4 form of such an answer); the issue types are the R4 `issue-type` codes; the status mapping is our own design | decided on #802 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 | A86 | The consent pre-filter under an emergency purpose [#833] | `[federation.consent] emergency`, `"apply"` by default, applies the Step-1 pre-filter's exclusion to every request, an emergency one included; `"pass-to-node"` leaves a request whose verified token declares an `[[access_log.emergency_purpose]]` (A80) to each node: the pre-filter is still asked, every member it denies is asked all the same, and the access record names each such member as an `ehds-consent-set-aside` `detail` of its `ehds-emergency-access` entity, whatever the answer, and a record that cannot be stored refuses the request; the set-aside holds for that one request: no resolution binding and no `ehr_id` index entry is learned from it, so the next request is filtered again; nothing of it reaches the answer, the status or a log value; a request without the purpose is filtered as before; `"pass-to-node"` with no emergency purpose declared is refused at load; `config check` notes `"pass-to-node"` beside `[nl_gf.mitz]`; `OPTIONS {base}/` declares the setting as `federation.consent.emergency`; the gateway never sets a consent decision aside on its own judgement; the Mitz question keeps the configured `TREAT` or `COC`, never the caller's purpose | Regulation (EU) 2025/327 Art 8, Art 10(2), Art 11(5) and recitals 17 and 18 leave whether vital interests override a restriction or an opt-out to the Member State; Federation Tier N26 and N27 keep release and consent at the node, and N27a makes the pre-filter a MAY; §13.4 forbids inferring the purpose; Mitz 3.8.2 §3.2.4.2 admits only `TREAT` and `COC` and 3.8.0 removed the emergency consultation situation; Wabvpz Art 15a binds the data holder and has no emergency exception; Art 11(5) asks that such cases "shall be logged"; the setting's name, its stricter default, the load refusal, the note and the record's `detail`: no specification governs them, our own design | decided on #833 (2026-10-06, by the orchestrator under the owner's standing delegation) |
 | A87 | What the receive check admits beyond the slices and the entries [#842] | the receive check reads `slicing.rules` from the vendored profile: an entry of a type no slice of a type-discriminated slicing names is admitted under `open`, admitted under `openAtEnd` only after every entry of a named type, and refused under `closed`; a reference by `identifier` alone outside a subject element still needs a declared `type` other than `Patient`, except at `Provenance.entity.what`, the one element where the writer names a source composition by identifier, where an untyped one is admitted too and a `Patient`-typed one is still refused, because an untyped identifier elsewhere could name another patient; a `reference` that does not resolve in the document is still refused (A79); an admitted entry no context maps, such as each `Provenance` of A65, becomes no openEHR content and stays only in the original the composition keeps (A78), so the component reads back every document it writes | FHIR R4 profiling, slicing rules: under `open` "additional content is allowed anywhere in the list", and `bundle-eu-eps` 1.0.0-ballot slices `Bundle.entry` open with no `Provenance` slice; FHIR R4 References, logical references: a reference with only an `identifier` is valid and need not resolve inside the Bundle; FHIR R4 Bundle, "Resolving references in Bundles", for a literal reference | decided on #842 (2026-10-14, by the orchestrator under the owner's standing delegation) |
+| A88 | Configuration from the file and from the console [#575] | every change, a file load or a console save, is a complete revision validated by the same `Config::resolve`, transport checks and `config check`, with a diff, atomic apply through the reload path (or pending restart), history, one-step rollback and optimistic concurrency; one owner per whole resource (member, endpoint credentials, binding section, stored query): the file's resources are read-only in the console, the rest live in the gateway's shared store, and nothing writes back to the TOML file; a bootstrap core (listen address, profile, configuration store, admin authentication, transport policy) is file-only; commit-confirm with rollback for client authentication, onward credentials, the localization failure policy and consent disclosure; secrets write-only, stored as references, never rendered; export as TOML and import as a dry-run revision; `config.ui = "off" \| "managed"`, `off` by default; every revision audited with who, when and why, and optional second-operator approval per resource; built in the order #576 (store and switch), #577 (console-managed resources), #578 (credentials), #579 (export and import) | no specification governs this: our own design; operators who keep configuration as code keep the file unchanged, and the console cannot accept what the file refuses or lower the floor the file sets; prior art: provisioned resources read-only in the UI (Grafana provisioning), whole-resource ownership (Kubernetes field managers, simplified), commit-confirm (network equipment configuration) | decided on #575 (2026-10-05, by the orchestrator under the owner's standing delegation, with the owner's agreement) |
 
 ## 16. Regulatory status
 
