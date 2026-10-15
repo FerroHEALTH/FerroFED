@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 
+use ferrofed_testkit::unreachable;
 use http::{StatusCode, header};
 use wiremock::ResponseTemplate;
 
@@ -15,10 +16,7 @@ use super::{TestResult, failed_at, names_node_a, node};
 
 #[tokio::test]
 async fn an_unreachable_node_is_a_504_naming_the_endpoint() -> TestResult {
-    let closed = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let port = closed.local_addr()?.port();
-    drop(closed);
-    let (status, code, headers) = failed_at(&format!("http://127.0.0.1:{port}")).await?;
+    let (status, code, headers) = failed_at(unreachable::BASE).await?;
     assert_eq!(
         (StatusCode::GATEWAY_TIMEOUT, "node-unreachable"),
         (status, code.as_str()),
