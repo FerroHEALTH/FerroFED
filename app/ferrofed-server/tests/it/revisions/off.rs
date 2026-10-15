@@ -137,6 +137,14 @@ async fn off_serves_no_revision_route() -> TestResult {
             .body(axum::body::Body::empty())?;
         let response = send_as_is(app.clone(), request).await?;
         assert_eq!(StatusCode::NOT_FOUND, response.status(), "{method} {path}");
+        if path == "/admin/config" {
+            let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+            let text = String::from_utf8(bytes.to_vec())?;
+            assert_eq!(
+                "configuration-unmanaged",
+                crate::support::error_body(&text)?.code
+            );
+        }
     }
     Ok(())
 }

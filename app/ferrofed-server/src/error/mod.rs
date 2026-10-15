@@ -257,6 +257,16 @@ pub enum Code {
     /// The running configuration revision has no earlier one to roll back
     /// to.
     RollbackUnavailable,
+    /// A change in the operator console names a resource the configuration
+    /// file, its registry document or a care services directory provides,
+    /// which only that source changes.
+    ResourceFileOwned,
+    /// A change in the operator console names a resource the newest
+    /// configuration revision does not hold.
+    ResourceUnknown,
+    /// A configuration route on the admin listener of a gateway whose
+    /// configuration is not managed (`config.ui = "off"`).
+    ConfigurationUnmanaged,
 }
 
 /// The code of a refused query: the refusal's stable kind

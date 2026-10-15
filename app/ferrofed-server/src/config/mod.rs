@@ -29,6 +29,7 @@ pub mod grant;
 pub mod limits;
 mod load;
 pub mod public_url;
+pub mod registry;
 pub(crate) mod resolve;
 pub mod revisions;
 pub(crate) mod secrets;
@@ -76,7 +77,7 @@ pub struct Config {
     /// The console.
     pub telemetry: Telemetry,
     /// The federation's membership.
-    pub registry: Registry,
+    pub registry: registry::Registry,
     /// The federated query: the budgets and the default issuing namespace.
     pub federation: Federation,
     /// The outbound credentials, one section per endpoint id
@@ -148,7 +149,7 @@ impl Default for Config {
             profile: Profile::Production,
             server: server::Server::default(),
             telemetry: Telemetry::default(),
-            registry: Registry::default(),
+            registry: registry::Registry::default(),
             federation: Federation::default(),
             credentials: BTreeMap::new(),
             dev: None,
@@ -174,49 +175,6 @@ impl Default for Config {
             deprecated: Vec::new(),
         }
     }
-}
-
-/// The federation's membership.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Registry {
-    /// The reviewed registry document naming the organisations, nodes and
-    /// endpoints (§12b.1). Without it the gateway
-    /// federates nothing, and the ITS-REST surface stays unserved.
-    pub document: Option<PathBuf>,
-    /// The form the document is written in.
-    pub format: RegistryFormat,
-    /// The mCSD care services directory the registry is read from and kept
-    /// in step with (`[registry.mcsd]`, §15.1, Annex A.5), in place of a
-    /// document.
-    #[cfg(feature = "binding-ihe")]
-    pub mcsd: Option<crate::binding::ihe::mcsd::McsdDirectory>,
-}
-
-impl Registry {
-    /// Whether a registry is configured, as a document or as a directory.
-    #[must_use]
-    pub fn configured(&self) -> bool {
-        #[cfg(feature = "binding-ihe")]
-        if self.mcsd.is_some() {
-            return true;
-        }
-        self.document.is_some()
-    }
-}
-
-/// The form of the registry document.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RegistryFormat {
-    /// The native TOML form: `[[organisation]]`, `[[node]]`, `[[endpoint]]`
-    /// and `[[creating_system]]` tables.
-    #[default]
-    Toml,
-    /// A FHIR R4 JSON `Bundle` of `Organization` and `Endpoint` resources, the
-    /// form N19 recommends, read with the IHE binding's mCSD reader.
-    #[cfg(feature = "binding-ihe")]
-    Fhir,
 }
 
 /// The federated query.

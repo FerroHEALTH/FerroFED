@@ -53,6 +53,10 @@ pub enum FederationError {
         #[source]
         source: Box<FhirFormError>,
     },
+    /// The members the operator console manages could not be joined to the
+    /// registry document (`[[registry.members]]`).
+    #[error("the members the operator console manages could not be joined to the registry")]
+    ConsoleMembers(#[source] Box<LoadError>),
     /// The registry could not be read from the directory of `[registry.mcsd]`
     /// (§15.1, §15.2, N19, N20).
     #[error("the registry could not be read from the care services directory")]

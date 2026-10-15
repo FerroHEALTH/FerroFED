@@ -11,10 +11,10 @@ environment alone, opens no store, and serves no revision route. No
 specification governs this page: our own design.
 
 What is built is the revision store and its API on the admin listener
-(#576). The operator console does not edit the configuration yet; editing
-members, endpoints and stored queries there is planned (#577), then
-credentials and bindings with a confirmation step and a second operator's
-approval (#578), then export to and import from TOML (#579).
+(#576), and the members and stored queries the operator console manages,
+with their owners (#577, [Console-managed resources](#console-managed-resources)).
+Credentials and bindings with a confirmation step and a second operator's
+approval are planned (#578), then export to and import from TOML (#579).
 
 ## Turning it on
 
@@ -36,7 +36,8 @@ path = "/var/lib/ferrofed/config-revisions.redb"   # redb: the store file
 | `config.path` | none | the `redb` store file, created when it does not exist |
 | `config.url`, `config.url_file` | none | the PostgreSQL connection string of the `postgres` backend, a URL or libpq key/value pairs; a secret, never logged, and its `sslmode` must be `require` when it carries a password over a network outside the development profile |
 
-Under `off`, any other key of `[config]` refuses to start, so a store you
+Under `off`, `GET /admin/config` answers `404 configuration-unmanaged`, so a
+client tells an unmanaged gateway from a wrong admin URL. Under `off`, any other key of `[config]` refuses to start, so a store you
 meant to use is never silently ignored. Under `managed`, `[metrics] listen`
 must be set, since the revision API is served on the admin listener.
 
@@ -130,6 +131,79 @@ with `409 rollback-unavailable`.
 The other refusals are `400 body-invalid` for a body that does not read,
 whose parser message is never echoed, and `404 revision-unknown`
 ([Gateway codes](../integrate/errors.md#gateway-codes)).
+
+## Console-managed resources
+
+Each member of the federation, with its organisation and its endpoints, and
+each stored-query version has one owner, which `GET /admin/config/resources`
+names:
+
+| Owner | Resource | Changed by |
+|---|---|---|
+| `file` | a member the registry document provides; a stored query of the read-only definition files | the file alone, read-only in the console |
+| `directory` | a member the care services directory of `[registry.mcsd]` provides | the directory alone, read-only in the console |
+| `console` | a member a revision holds under `[[registry.members]]` | the console, through a revision |
+| `gateway` | a stored query of the reserved namespace `eu.ferrofed.eehrxf` | nobody |
+| `store` | a stored-query version in the stored-query store | nobody: a held version is immutable (§12.7, N44) |
+
+A member is owned whole. A console member is held in the revisions as one
+`[[registry.members]]` entry and joined to the registry document's members,
+so a revision stays the whole configuration and nothing is written back to
+the file. The configuration file and the environment never set
+`registry.members`: a file that does refuses to start. Console members join
+a registry document; with a care services directory, which is the whole
+registry, they are refused.
+
+```toml
+[[registry.members]]
+organisation = { id = "org-c", name = "Hospital C" }
+node = { id = "node-c", system_id = "cdr-c.example.org", product = "FerroEHR", version = "4.3.3" }
+endpoints = [
+  { id = "node-c-pub", url = "https://cdr-c.example.org/openehr", connection_type = "openehr-rest-query" },
+]
+```
+
+| Route | Answer |
+|---|---|
+| `GET /admin/config/resources` | `running` and `head`, `stored_query_registry` (`absent`, `read-only` or `writable`), every member with its `node`, `organisation`, `system_id`, `endpoints`, `owner`, and for a console member its `state` and the `member` itself, and every stored-query version with its `owner` |
+| `PUT /admin/config/members/{node_id}` | `{"base": <newest>, "reason": "…", "member": {…}}`: saves a revision with the member in place of the console member of that `node_id`, or beside the others, `201` with the revision |
+| `POST /admin/config/members/{node_id}/remove` | `{"base": <newest>, "reason": "…"}`: saves a revision without that console member, `201` with the revision |
+| `PUT /admin/config/stored-queries/{name}/{version}` | `{"aql": "…"}`: stores the version in the stored-query store at once, `201` with it as an ITS-REST `StoredQuery` |
+
+A member save or removal is not applied: preview the revision with
+`GET /admin/config/revisions/{running}/diff/{new}`, then apply it, and roll
+it back in one step like any revision. A console member's `state` is
+`running`, `pending` (saved, not applied), `removing` (the newest revision
+removes it), or `shadowed`.
+
+A change that names a member the file or the directory provides, by its
+`node_id`, its organisation id, its `system_id`, an `endpoint_id` or an
+endpoint's base URL, is refused with `409 resource-file-owned`, and the
+removal of a `node_id` no console member has with `404 resource-unknown`.
+A stored-query version is admitted as a `PUT` to the ITS-REST definition
+API is: a held version is `409 stored-query-held`, the reserved namespace
+`409 stored-query-reserved`, and the read-only definition files
+`409 resource-file-owned`. A version is never edited or removed, so a
+change is a new version.
+
+At a `SIGHUP` reload whose file changed, the file's new revision carries
+the console members over from the running revision, so a console member
+survives the reload. When the file later provides a member that shares an
+identity with a console member, the file's member runs, and the console's
+copy stays in the revision, reported as `shadowed` and logged by `node_id`;
+remove it, or give it identities of its own. When the console members are
+refused beside the file's configuration, as when the file drops the
+registry document they join, the file's revision is recorded without them,
+the refusal is logged by key, and the revision before it still holds them.
+
+The operator console's Configuration page shows all of this through the
+first replica it is configured with: the running and the newest revision
+with the newest one's changes, the members and stored queries with their
+owners, and the history, with a form, behind a confirmation, to save or
+remove a console member, apply the newest revision, roll back, and store a
+stored-query version ([The operator console](operator-console.md#configuration)). Its member form
+writes `openehr-rest-query` endpoints; a member's `hl7-fhir-rest`
+endpoints are saved through the API and kept by the console's saves.
 
 ## Several replicas
 

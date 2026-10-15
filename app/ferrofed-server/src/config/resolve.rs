@@ -141,6 +141,7 @@ impl Config {
             telemetry,
             registry_document: self.registry.document.clone(),
             registry_format: self.registry.format,
+            registry_members: self.registry.console_members()?,
             #[cfg(feature = "binding-ihe")]
             registry_directory: None,
             federation,

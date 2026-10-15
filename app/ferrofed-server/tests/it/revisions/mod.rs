@@ -14,6 +14,7 @@
 )]
 
 mod api;
+mod console;
 mod off;
 mod replicas;
 mod secrets;
@@ -28,15 +29,14 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::dev::Profile;
+use ferrofed_registry::revision::{Current, Revision, RevisionId};
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::revision::embedded::RedbRevisions;
 use ferrofed_server::revision::routes::Managed;
 use ferrofed_server::revision::service::{self, Revisions};
-use ferrofed_server::revision::{
-    Current, Draft, Revision, RevisionId, RevisionStore, Saved, StoreError, Swapped,
-};
+use ferrofed_server::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 use ferrofed_server::state::AppState;
 use http::{Request, StatusCode, header};
 

@@ -8,8 +8,8 @@
 //! configuration `config check` refuses. No specification governs this: our
 //! own design.
 
+use ferrofed_registry::revision::{Author, Origin, Outcome, RevisionId};
 use ferrofed_server::config::Config;
-use ferrofed_server::revision::{Author, Origin, Outcome, RevisionId};
 use http::{Method, StatusCode};
 
 use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Standing, TestResult, rest};
@@ -59,7 +59,7 @@ async fn a_save_records_who_when_and_why_and_a_stale_base_is_refused() -> TestRe
     let before = jiff::Timestamp::now();
     let (status, text) = gateway.save(Some(1), "add member B", &toml).await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
-    let saved: ferrofed_server::revision::Revision = serde_json::from_str(&text)?;
+    let saved: ferrofed_registry::revision::Revision = serde_json::from_str(&text)?;
     assert_eq!(RevisionId::new(2), Some(saved.id));
     assert_eq!(Some(RevisionId::FIRST), saved.base);
     assert_eq!(Origin::Operator, saved.origin);

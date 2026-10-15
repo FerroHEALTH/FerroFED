@@ -51,7 +51,7 @@ use std::str::FromStr;
 
 use openehr_base::prelude::{HierObjectId, ObjectVersionId, Uid};
 use openehr_base::v1_3::base_types::identification::lexical::composite_id_key;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::error::{IdError, IdKind};
 
@@ -87,7 +87,7 @@ fn validate_registry_id(kind: IdKind, value: &str) -> Result<(), IdError> {
 ///
 /// The form is 1 to 64 ASCII letters, digits, `.`, `-` and `_`, starting with
 /// a letter or digit, because the value travels in headers and directives.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct NodeId(String);
 
@@ -97,7 +97,7 @@ pub struct NodeId(String);
 /// It is the identifier of the `FROM ENDPOINT` directive, the endpoint header
 /// and the `endpoint_id` row attribute (§8, §9.3), and re-addressing a node
 /// never changes it. The form is the one [`NodeId`] has.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct EndpointId(String);
 
@@ -105,7 +105,7 @@ pub struct EndpointId(String);
 /// or the managing organisation of an endpoint (N20).
 ///
 /// The form is the one [`NodeId`] has.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 pub struct OrganisationId(String);
 
@@ -257,6 +257,12 @@ impl TryFrom<String> for SystemId {
 impl fmt::Display for SystemId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.value)
+    }
+}
+
+impl Serialize for SystemId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.value)
     }
 }
 

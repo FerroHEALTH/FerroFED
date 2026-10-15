@@ -24,6 +24,7 @@
 
 pub mod admin;
 pub mod app;
+pub mod configure;
 // NOTE: Regulation (EU) 2025/327 Art 30(1)(g): the browser half links no FerroFED crate,
 // so the console compiles the registry's own file (the Rust reference, the `path` attribute).
 #[path = "../../ferrofed-registry/src/manufacturer.rs"]

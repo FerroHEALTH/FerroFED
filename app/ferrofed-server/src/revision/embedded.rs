@@ -16,9 +16,9 @@ use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
-use crate::revision::{
-    Current, Draft, Revision, RevisionId, RevisionStore, Saved, StoreError, Swapped,
-};
+use ferrofed_registry::revision::{Current, Revision, RevisionId};
+
+use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 
 /// The revision number to the revision, as JSON.
 const REVISIONS: TableDefinition<'static, u64, &str> = TableDefinition::new("config_revisions");

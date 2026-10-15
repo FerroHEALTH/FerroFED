@@ -216,6 +216,9 @@ and its set is closed, so the code says which.
 | `revision-stale` | 409 | A save on the admin listener names a base that is not the newest revision, an apply names a revision a later one supersedes or the one already running, or a rollback names a running revision that is no longer running. Another operator or replica changed the revisions first, and nothing changed; read them again ([Configuration revisions](../operate/configuration-revisions.md)). |
 | `revision-unknown` | 404 | A configuration revision route on the admin listener names a number the store holds no revision under ([Configuration revisions](../operate/configuration-revisions.md)). |
 | `rollback-unavailable` | 409 | A rollback on the admin listener asks for the revision before the running one, and none ran before it ([Configuration revisions](../operate/configuration-revisions.md)). |
+| `resource-file-owned` | 409 | A change on the admin listener names a member the registry document provides, or a care services directory, or a stored-query version the read-only definition files provide. Only that source changes it, and nothing is saved ([Console-managed resources](../operate/configuration-revisions.md#console-managed-resources)). |
+| `resource-unknown` | 404 | The removal of a member on the admin listener names a `node_id` the newest configuration revision holds no console member under ([Console-managed resources](../operate/configuration-revisions.md#console-managed-resources)). |
+| `configuration-unmanaged` | 404 | `GET /admin/config` on the admin listener of a gateway whose configuration is not managed (`config.ui = "off"`): it serves no configuration revisions, and the file alone configures it ([Configuration revisions](../operate/configuration-revisions.md)). |
 
 On the client listener the gateway answers `409` with five codes, and none
 of them sends anything to a node:

@@ -16,6 +16,8 @@ mod admin;
 #[cfg(test)]
 mod config;
 #[cfg(test)]
+mod configure;
+#[cfg(test)]
 mod exchange;
 #[cfg(test)]
 mod gateway;

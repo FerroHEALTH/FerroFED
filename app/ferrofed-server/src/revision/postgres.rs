@@ -23,9 +23,9 @@ use ferrofed_registry::definition::store;
 use ferrofed_registry::secret::SecretUrl;
 use tokio_postgres::Client;
 
-use crate::revision::{
-    Current, Draft, Revision, RevisionId, RevisionStore, Saved, StoreError, Swapped,
-};
+use ferrofed_registry::revision::{Current, Revision, RevisionId};
+
+use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::stored::postgres::{Connection, Statement, lock};
 
 /// The table of revisions, qualified by its schema.

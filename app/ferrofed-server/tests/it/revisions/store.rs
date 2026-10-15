@@ -6,10 +6,9 @@
 //! writer read it, everything held across a reopen, and a file a newer
 //! FerroFED wrote refused. No specification governs this: our own design.
 
+use ferrofed_registry::revision::{Author, Current, Origin, Outcome, RevisionId};
 use ferrofed_server::revision::embedded::{LAYOUT, RedbRevisions, VERSION};
-use ferrofed_server::revision::{
-    Author, Current, Draft, Origin, Outcome, RevisionId, RevisionStore, Saved, StoreError, Swapped,
-};
+use ferrofed_server::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 use jiff::Timestamp;
 
 use super::TestResult;

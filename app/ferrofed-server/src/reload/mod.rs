@@ -53,9 +53,9 @@ use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::listener::certificates::Certificates;
 use crate::metrics::ReloadResult;
-use crate::revision::RevisionId;
 use crate::revision::service::{RevisionError, Revisions};
 use crate::state::AppState;
+use ferrofed_registry::revision::RevisionId;
 
 mod restart;
 
@@ -221,6 +221,20 @@ impl Reloader {
         drop(applied);
         self.log(&outcome);
         outcome
+    }
+
+    /// Returns the state whose federation a reload replaces.
+    #[must_use]
+    pub fn state(&self) -> &Arc<AppState> {
+        &self.state
+    }
+
+    /// Whether the registry is read from a binding's source, such as a care
+    /// services directory, rather than a document; a restart alone changes
+    /// it.
+    #[must_use]
+    pub fn reads_directory(&self) -> bool {
+        binding::sources_registry(&self.boot)
     }
 
     /// Returns this reloader with `certificates`, the TLS of the listeners,

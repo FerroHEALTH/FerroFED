@@ -22,3 +22,8 @@ Confirmed hazards worth checking on every console review. Verify each still appl
 - Redacted `Debug` on the request types (`QueryForm`, `QueryCall`) does not cover the answer: check every view model that holds rows, node errors or rendered HTML for a derived `Debug` (leptos-ui.md §0, N33; PR #607).
 - `same_origin_only` exempts safe methods, so a `#[server(input = GetUrl)]` would be CSRF-able under a `SameSite=Lax` cookie. Flag any GET server fn (leptos-ui.md §0).
 - A compression "never compressed" test whose sample answer is under the `SizeAbove` threshold proves nothing about the media-type predicate. Require a server-function answer over the threshold (leptos-ui.md §12).
+- A `Resource` sourced on `ServerAction::version()` refetches after every completion, refusals included; a page of server-rendered `inner_html` forms is then rebuilt, wiping what the operator typed and the focus (WCAG 2.2 3.3.7, 2.4.3; leptos-ui.md §5, §10; #577).
+- A transport fault after a mutating POST (`ViewError::Unreachable`) is rendered "did not run there", but a timed-out answer may follow a completed action: say the outcome is unknown (reliability.md, leptos-ui.md §4; #909).
+- A console edit form that round-trips only some fields of a registry type (`ConsoleEndpoint`) silently drops the rest on a PUT; check every field the form omits (reliability.md; #577).
+- Admin-listener read types hand-written in the console (`gateway/config.rs`) drift from the server's; shared wire types belong in `ferrofed-registry` beside `console`/`operator` (leptos-ui.md §7; #577).
+- Check every new screen and action for its browser journey in `tools/ferrofed-testkit/tests/it/journeys/`; #909 and #577 shipped none (leptos-ui.md §11).

@@ -19,6 +19,7 @@
 //! design.
 
 mod browser;
+mod configure;
 mod provider;
 mod query;
 mod sign_in;
