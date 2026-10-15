@@ -35,7 +35,11 @@ each node's provenance. It holds no clinical data of its own.
 
 FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The
 documentation is at <https://ferrofed.eu/docs/>, and the design of record is
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/architecture.md`](docs/architecture.md). The
+[family book](https://ferrohealth.eu/docs/) holds what every product shares:
+[how the products fit together](https://ferrohealth.eu/docs/architecture.html),
+[the manufacturer](https://ferrohealth.eu/docs/manufacturer.html), and
+[licensing and trademarks](https://ferrohealth.eu/docs/licensing.html).
 
 ## Status
 
@@ -97,6 +101,9 @@ the market under the Cyber Resilience Act, with a support period of five
 years from its release date
 ([SECURITY.md](SECURITY.md#supported-versions),
 [regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
+The manufacturer's side of the CRA, the same for every FerroHEALTH product,
+is in the family book
+([the Cyber Resilience Act](https://ferrohealth.eu/docs/cra.html)).
 Planned: the logging component's review tools and export
 ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the rest of the
 European interoperability component
@@ -265,11 +272,12 @@ FerroFED is source-available under the Business Source License 1.1. The
 parameters that apply, the Licensor, the Licensed Work, the Additional Use
 Grant and the Change Date, are in [LICENSE](LICENSE): free for non-commercial
 production use, a commercial licence for any other production use, and Apache
-2.0 four years after each version is published. A commercial licence is
-arranged with Cadasto B.V., the Licensor, which handles the business side of
-FerroFED: write to [info@cadasto.com](mailto:info@cadasto.com) or use
-<https://www.cadasto.com/contact/>. Technical questions go to the maintainer
-named in [MAINTAINERS.md](MAINTAINERS.md).
+2.0 four years after each version is published. The terms every FerroHEALTH
+product shares, how to arrange a commercial licence with Cadasto B.V., and
+the brand terms of the FerroHEALTH names and marks are in the family book
+([licensing and trademarks](https://ferrohealth.eu/docs/licensing.html)).
+Technical questions go to the maintainer named in
+[MAINTAINERS.md](MAINTAINERS.md).
 
 The brand assets under `assets/brand/` are part of the Licensed Work.
 

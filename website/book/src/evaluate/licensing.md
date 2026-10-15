@@ -3,50 +3,39 @@
 
 # Licensing
 
-FerroFED is source-available under the Business Source License 1.1. The
-authoritative text is
+FerroFED is source-available under the Business Source License 1.1: free for
+every non-production use and for non-commercial production use, with a
+commercial licence from Cadasto B.V., the Licensor, for any other production
+use. The authoritative text is
 [`LICENSE`](https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE), with
 the notice in
-[`NOTICE`](https://github.com/FerroHEALTH/FerroFED/blob/main/NOTICE). This
-page summarises it; where the two differ, the licence text wins.
+[`NOTICE`](https://github.com/FerroHEALTH/FerroFED/blob/main/NOTICE).
 
-## What you may do without asking
+Every FerroHEALTH product shares these terms, and the family book's
+[Licensing and trademarks](https://ferrohealth.eu/docs/licensing.html) page
+states them once: what is free, when you need a commercial licence, how to
+arrange one, the brand terms of the FerroHEALTH names and marks, and the
+terms under which contributions are accepted. Where that page and `LICENSE`
+differ, `LICENSE` wins.
 
-Read, build, modify and redistribute the source, with no fee and no
-conversation. That covers every non-production use: development, testing,
-evaluation and prototyping.
+## What is particular to FerroFED
 
-Production use is free for Non-Commercial Purposes, which the licence defines
-as personal use, academic or scientific research, teaching, and use by a
-non-profit organisation or public body that is not acting in the course of a
-business, does not deliver a service for payment, and is not seeking
-commercial advantage.
+- **The hosted service.** The Additional Use Grant excludes offering
+  FerroFED, or a work derived from it, to third parties as a hosted, managed
+  or embedded service through which others discover, query or exchange
+  health records across organisations. That needs a commercial licence in
+  every case
+  ([what counts as a hosted service](https://ferrohealth.eu/docs/licensing.html#what-counts-as-a-hosted-service)).
+- **The change date.** Each version becomes available under the Apache
+  License 2.0 four years after that version is published. The licence calls
+  that the Change License.
+- **Contributions.** A contribution is licensed under the same licence. You
+  keep your copyright, and you grant the Licensor the relicensing right in
+  CONTRIBUTING.md § Licensing of contributions, recorded by a checkbox in
+  the pull request.
+- **Third-party material.** Vendored specifications and third-party material
+  keep their upstream terms, recorded in a `PROVENANCE.md` beside each
+  vendored tree.
 
-## What needs a commercial licence
-
-Any other production use, including the delivery of health care or any other
-service for payment. Offering FerroFED, or a work derived from it, to third
-parties as a hosted, managed or embedded service through which others
-discover, query or exchange health records across organisations needs one in
-every case. So does selling, sublicensing or distributing it for a fee, on its
-own or inside another product.
-
-A commercial licence is arranged with Cadasto B.V., the Licensor, which
-handles the business side of FerroFED: write to
-[info@cadasto.com](mailto:info@cadasto.com) or use
-<https://www.cadasto.com/contact/>. Technical questions go to the maintainer
-named in
+Technical questions go to the maintainer named in
 [`MAINTAINERS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md).
-
-## The change date
-
-Each version becomes available under the Apache License 2.0 four years after
-that version is published. The licence calls that the Change License.
-
-## Contributions and third-party material
-
-A contribution is licensed under the same licence. You keep your copyright,
-and you grant the Licensor the relicensing right in CONTRIBUTING.md §
-Licensing of contributions, recorded by a checkbox in the pull request.
-Vendored specifications and third-party material keep their upstream terms,
-recorded in a `PROVENANCE.md` beside each vendored tree.

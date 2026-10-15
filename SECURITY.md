@@ -3,14 +3,21 @@
 
 # Security Policy
 
-This document says how long each release is supported, how to report a
-vulnerability privately, and what FerroFED's manufacturer reports to the
-authorities. FerroFED's manufacturer is Cadasto B.V. It places each tagged
-release on the market as one product: the source tag, the binary tarballs
-and the gateway and console images of that version. The obligations come
-from Regulation (EU) 2024/2847, the Cyber Resilience Act (CRA), and from
-Regulation (EU) 2025/327 on the European Health Data Space (EHDS). This page
-is not legal advice.
+This file holds what is particular to FerroFED: which releases are supported
+and until when, where to report a vulnerability in FerroFED, and the
+versions withdrawn. The vulnerability-handling policy of Cadasto B.V., the
+manufacturer of every FerroHEALTH product, is on the family book's
+[Security](https://ferrohealth.eu/docs/security.html) page: what happens
+after a report, how a fix and its advisory reach you, how to hear of an
+update, and what the manufacturer reports to the authorities. This page is
+not legal advice.
+
+One FerroFED release is the source tag, the binary tarballs and the gateway
+and console images of one version. Cadasto B.V. places each tagged release on
+the market as one product under Regulation (EU) 2024/2847, the Cyber
+Resilience Act (CRA), and as an EHR system under Regulation (EU) 2025/327 on
+the European Health Data Space (EHDS)
+([regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
 
 ## Supported versions
 
@@ -22,24 +29,11 @@ vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
   from that rule. If Cadasto B.V. sets a longer period, this page states
   it.
 - **Where fixes ship:** a security fix ships in a new release, never as a
-  back-port into an older one, because a published release cannot be
-  changed. Art 13(10) lets a manufacturer remediate vulnerabilities only in
-  the version it placed on the market last, "provided that the users of the
-  versions that were previously placed on the market have access to the
-  version last placed on the market free of charge and do not incur
-  additional costs to adjust the hardware and software environment". A user
-  of an older release within its support period moves to the latest
-  release to get the fix.
-- **For whom that holds:** under [`LICENSE`](LICENSE), every release is
-  free of charge for non-production use and for non-commercial production
-  use. For a commercial licensee it depends on the terms of the commercial
-  licence, and on whether the configuration changes a release's upgrade
-  notes ask for count as costs to adjust the software environment. Both
-  questions are with Cadasto B.V.'s counsel, and until they are answered
-  this page does not claim that Art 13(10) holds for commercial licensees.
-- **Updates stay available:** every security update stays available for at
-  least 10 years after it is issued, or for the rest of the support period
-  if that is longer (Art 13(9)). A published release, its tag and its image
+  back-port into an older one, so a user of an older release within its
+  support period moves to the latest release to get the fix. The family
+  book says why, and for whom CRA Art 13(10) allows it
+  ([how a fix reaches you](https://ferrohealth.eu/docs/security.html#how-a-fix-reaches-you)).
+- **Updates stay available:** a published release, its tag and its image
   digest are never deleted ([`docs/release.md`](docs/release.md)).
 - **After the end date:** a release past its end date is unsupported. The
   releases page keeps every version available, and running one past its
@@ -82,7 +76,14 @@ release to move to.
 privately through GitHub's private vulnerability reporting:
 <https://github.com/FerroHEALTH/FerroFED/security/advisories/new>. You will get
 an acknowledgement within seven days. If that window passes with no response,
-public disclosure to protect other users is your call.
+public disclosure to protect other users is your call. Without a GitHub
+account, use the manufacturer's email route on the family book's
+[Security](https://ferrohealth.eu/docs/security.html#reporting-a-vulnerability)
+page.
+
+A patient identifier reaching a node is a vulnerability in FerroFED: the
+gateway's central safety property is that no request it composes for a node
+carries one. Report it here, privately.
 
 If you have evidence that someone is exploiting the vulnerability, say so in
 the report: an actively exploited vulnerability starts the 24-hour clock
@@ -90,35 +91,15 @@ below.
 
 ## Actively exploited vulnerabilities and severe incidents
 
-CRA Art 14 applies from 11 September 2026 (Art 71(2)), including to every
-release placed on the market before 11 December 2027 (Art 69(3)), so it
-covers every FerroFED release.
-
-- **What is reported:** an actively exploited vulnerability, one "for which
-  there is reliable evidence that a malicious actor has exploited it in a
-  system without permission of the system owner" (Art 3(42), Art 14(1)), and
-  a severe incident having an impact on the security of FerroFED (Art 14(3),
-  (5)).
-- **Where:** through the single reporting platform ENISA runs (Art 16(1)),
-  at the electronic notification end-point of the CSIRT designated as
-  coordinator in the Member State of Cadasto B.V.'s main establishment, the
-  Netherlands, and simultaneously to ENISA (Art 14(1), (3), (7)).
-  Commission Delegated Regulation (EU) 2026/881 (Art 14(9)) sets when that
-  CSIRT may delay passing a notification on; it binds the CSIRT and adds no
-  duty for Cadasto B.V.
-- **When:** an early warning within 24 hours of becoming aware, a
-  notification within 72 hours, and a final report. For a vulnerability the
-  final report is due no later than 14 days after a corrective or
-  mitigating measure is available (Art 14(2)); for a severe incident, within
-  one month after the incident notification (Art 14(4)).
-- **Telling users:** Cadasto B.V. tells the impacted users, and where
-  appropriate all users, of the vulnerability or incident and of the
-  measures they can take (Art 14(8)). The channel is a
-  [GitHub security advisory](https://github.com/FerroHEALTH/FerroFED/security/advisories)
-  on this repository, with a direct message to every user Cadasto B.V.
-  knows from a contract.
-
-The procedure is on the book's
+CRA Art 14 covers every FerroFED release. Cadasto B.V. notifies an actively
+exploited vulnerability or a severe incident through ENISA's single
+reporting platform, with an early warning within 24 hours, as the family
+book's
+[Security](https://ferrohealth.eu/docs/security.html#what-cadasto-bv-reports-to-the-authorities)
+page describes. FerroFED tells its users through a
+[GitHub security advisory](https://github.com/FerroHEALTH/FerroFED/security/advisories)
+on this repository, with a direct message to every user Cadasto B.V. knows
+from a contract. FerroFED's own procedure is on the book's
 [Complaints and incidents](https://ferrofed.eu/docs/evaluate/post-market.html#actively-exploited-vulnerabilities-and-severe-incidents)
 page and in [`docs/post-market.md`](docs/post-market.md).
 

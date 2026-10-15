@@ -6,7 +6,11 @@
 FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The
 design of record is [`docs/architecture.md`](docs/architecture.md), the build
 is tracked on the issues of this repository, and the working discipline is
-[`CLAUDE.md`](CLAUDE.md). Read both before making a change.
+[`CLAUDE.md`](CLAUDE.md). Read both before making a change. This file holds
+what is particular to FerroFED; the contribution terms every FerroHEALTH
+product shares, and how the products fit together, are in the family book
+([licensing and trademarks](https://ferrohealth.eu/docs/licensing.html#contributions),
+[how the products fit together](https://ferrohealth.eu/docs/architecture.html)).
 
 ## What helps most
 
@@ -151,7 +155,9 @@ transfer of the project can then cover every line, not only the maintainer's own
 There is no separate agreement to sign: the pull request template carries a
 checkbox recording your acceptance of these terms, and a pull request from a
 person does not merge without it (the `contribution-licence-guard` check, backed
-by `scripts/checks/contribution-licence.sh`).
+by `scripts/checks/contribution-licence.sh`). The same terms hold for every
+FerroHEALTH product
+([contributions](https://ferrohealth.eu/docs/licensing.html#contributions)).
 
 ## Security
 

@@ -20,6 +20,15 @@ FerroFED implements the openEHR Federation Working Group's
 specification, release 1.0.0, and reaches every node over openEHR
 ITS-REST 1.1.0.
 
+This book covers FerroFED alone. What every FerroHEALTH product shares is in
+the [family book](https://ferrohealth.eu/docs/):
+[how the products fit together](https://ferrohealth.eu/docs/architecture.html),
+[the manufacturer](https://ferrohealth.eu/docs/manufacturer.html), Cadasto
+B.V., with its [security policy](https://ferrohealth.eu/docs/security.html)
+and the [Cyber Resilience Act](https://ferrohealth.eu/docs/cra.html) from the
+manufacturer's side, and
+[licensing and trademarks](https://ferrohealth.eu/docs/licensing.html).
+
 See how it works: [the gateway in diagrams](how-it-works/overview.md).
 
 ## What it does today
