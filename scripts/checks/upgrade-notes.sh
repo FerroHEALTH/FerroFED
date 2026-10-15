@@ -11,7 +11,9 @@
 # registry.toml at that tag), with a synthetic file for each `_file` secret
 # and a synthetic ES384 key for each `key_file`, the mount paths rewritten to
 # a temporary directory. When the check refuses it, at least one upgrade
-# fragment must be pending.
+# fragment must be pending, or, on a version bump whose `--assemble` has moved
+# the fragments, a CHANGELOG.md section newer than that tag must hold an
+# "Upgrade notes" entry.
 #
 # The last release is the newest tag vX.Y.Z with no pre-release part. When no
 # such tag is local, as in a shallow CI checkout, it is read from origin and
@@ -45,6 +47,22 @@ last_release() {
     git fetch --quiet --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
   fi
   printf '%s' "$tag"
+}
+
+# assembled_notes TAG: each CHANGELOG.md version newer than TAG whose
+# "Upgrade notes" hold an entry, as a version bump's `--assemble` leaves them.
+assembled_notes() {
+  local since="${1#v}" version
+  [[ -f CHANGELOG.md ]] || return 0
+  while IFS= read -r version; do
+    [[ "$version" != "$since" ]] || continue
+    [[ "$(printf '%s\n%s\n' "$since" "$version" | sort -V | tail -n1)" == "$version" ]] || continue
+    printf 'CHANGELOG.md [%s] ' "$version"
+  done < <(awk '
+    /^## \[/ { v = $0; sub(/^## \[/, "", v); sub(/\].*/, "", v); notes = 0; next }
+    /^### / { notes = ($0 == "### Upgrade notes"); next }
+    notes && /^- / && v != "Unreleased" { print v; notes = 0 }
+  ' CHANGELOG.md)
 }
 
 # check BINARY TAG: the guard itself.
@@ -84,6 +102,12 @@ check() {
     [[ -e "$file" ]] && notes+=("$file")
   done
   if [[ "${#notes[@]}" -eq 0 ]]; then
+    local assembled
+    assembled="$(assembled_notes "$tag")"
+    if [[ -n "$assembled" ]]; then
+      echo "upgrade-notes: this build refuses the $tag example configuration ($out); the upgrade notes are in ${assembled% }."
+      return 0
+    fi
     echo "::error::this build refuses the configuration $tag attached, so a gateway that upgrades stops: $out" >&2
     echo "upgrade-notes: add $FRAGMENT_DIR/<issue>-<slug>.upgrade.md saying what an operator must change (changelog.d/README.md)." >&2
     return 1
@@ -144,6 +168,18 @@ EOF
   printf -- '- Remove retired_key.\n' > "$work/repo/$FRAGMENT_DIR/1-retired.upgrade.md"
   expect "a refused example with an upgrade note" 0
   grep -q '1-retired.upgrade.md' "$work/out" || flunk "the upgrade note was not named."
+
+  # A version bump: --assemble moved the fragment into CHANGELOG.md.
+  rm "$work/repo/$FRAGMENT_DIR/1-retired.upgrade.md"
+  printf '## [Unreleased]\n\n## [0.0.1] - 2026-01-01\n\n### Upgrade notes\n\n- An older note.\n' \
+    > "$work/repo/CHANGELOG.md"
+  expect "a refused example whose only notes are the compared release's own" 1
+  printf '## [Unreleased]\n\n## [0.0.2] - 2026-02-01\n\n### Upgrade notes\n\n- Remove retired_key.\n\n### Added\n\n- A thing.\n\n## [0.0.1] - 2026-01-01\n' \
+    > "$work/repo/CHANGELOG.md"
+  expect "a refused example with assembled upgrade notes" 0
+  grep -q 'CHANGELOG.md \[0.0.2\]' "$work/out" || flunk "the assembled section was not named."
+  printf '## [Unreleased]\n\n## [0.0.2] - 2026-02-01\n\n### Added\n\n- A thing.\n' > "$work/repo/CHANGELOG.md"
+  expect "a refused example whose newer section has no upgrade notes" 1
   echo "upgrade-notes: self-test passed."
 }
 
