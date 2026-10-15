@@ -14,9 +14,22 @@
 //! the vendored tree at `docs/specs/federation-ref/`, which is the upstream
 //! commit [`REFERENCE_COMMIT`] less its Maven manifest; the manifest is
 //! fetched from the same commit and held to [`POM_SHA256`], the digest the
-//! vendored provenance records. The build runs in the digest-pinned
-//! [`MAVEN`] image and the gateway in the digest-pinned [`TEMURIN_JRE`]
-//! image, so no published image of the upstream is needed.
+//! vendored provenance records. Maven runs in a container of the
+//! digest-pinned [`MAVEN`] image, and the jar it packages is copied into an
+//! image on the digest-pinned [`TEMURIN_JRE`] image, so no published image of
+//! the upstream is needed. A failed build returns the end of Maven's own
+//! output as [`ReferenceError::Build`].
+//!
+//! Maven fetches the build's dependencies into a local repository. When
+//! [`MAVEN_REPOSITORY_VARIABLE`] names a host directory, that directory is
+//! the repository, so a run whose directory a CI cache restored needs no
+//! download, and Maven retries a download that fails
+//! ([`MAVEN_RETRIES`] times).
+//!
+//! The image is built at most once per process, and under an advisory lock
+//! file, so two test processes never run Maven at once; a process that finds
+//! the image's tag in the local Docker daemon reuses it without running
+//! Maven.
 //!
 //! The reference container reaches the nodes and its database through the
 //! Docker host gateway, as [`CONTAINER_HOST`]: each node sits behind a
@@ -27,16 +40,20 @@
 //! No specification governs the harness; it is FerroFED's own design.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::fs::{File, OpenOptions, TryLockError};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use testcontainers::core::{Host, IntoContainerPort};
-use testcontainers::runners::{AsyncBuilder, AsyncRunner};
+use http::StatusCode;
+use testcontainers::bollard::Docker;
+use testcontainers::bollard::errors::Error;
+use testcontainers::core::wait::ExitWaitStrategy;
+use testcontainers::core::{Host, IntoContainerPort, Mount, WaitFor};
 use testcontainers::{ContainerAsync, GenericBuildableImage, GenericImage, ImageExt};
 
 use crate::containers::database::{self, Postgres};
 use crate::containers::images::{MAVEN, TEMURIN_JRE};
-use crate::containers::{self, HarnessError};
+use crate::containers::{self, HarnessError, retry};
 
 /// The upstream commit the vendored reference implementation is.
 pub const REFERENCE_COMMIT: &str = "92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5";
@@ -76,6 +93,42 @@ const SETTINGS_TARGET: &str = "/app/differential.yml";
 /// How many bytes of the container's output a startup failure carries.
 const LOG_TAIL: usize = 6_000;
 
+/// The environment variable naming the host directory Maven keeps its local
+/// repository in; unset, the repository lives and dies with the build
+/// container.
+pub const MAVEN_REPOSITORY_VARIABLE: &str = "FERROFED_E2E_MAVEN_REPOSITORY";
+
+/// How many times Maven retries a download that fails, the Maven Resolver
+/// setting `aether.transport.http.retryHandler.count`
+/// (<https://maven.apache.org/resolver/configuration.html>).
+pub const MAVEN_RETRIES: u32 = 6;
+
+/// Where the build container holds the sources and Maven writes the jar.
+const BUILD_DIRECTORY: &str = "/build";
+
+/// Where the build container holds Maven's local repository.
+const REPOSITORY_TARGET: &str = "/maven-repository";
+
+/// The jar Maven packages, under [`BUILD_DIRECTORY`].
+const JAR: &str = "target/openehr-federation-ref-0.9.0-SNAPSHOT.jar";
+
+/// How long the Maven build may run, downloads included.
+const BUILD_BUDGET: Duration = Duration::from_mins(15);
+
+/// The advisory lock file one image build at a time holds, in the Maven
+/// repository directory or, without one, in the temporary directory.
+const LOCK_FILE: &str = "ferrofed-reference-build.lock";
+
+/// How long a process waits for another's build: the build's own budget and
+/// five minutes for the image around the jar.
+const LOCK_WAIT: Duration = BUILD_BUDGET.saturating_add(Duration::from_mins(5));
+
+/// How long the wait for the build lock sleeps between two tries.
+const LOCK_POLL: Duration = Duration::from_secs(1);
+
+/// The gateway's image once this process has built or found it.
+static BUILT: tokio::sync::OnceCell<GenericImage> = tokio::sync::OnceCell::const_new();
+
 /// The reference implementation could not be built or started.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -88,6 +141,47 @@ pub enum ReferenceError {
     Digest {
         /// The digest of what was fetched.
         found: String,
+    },
+    /// The host directory [`MAVEN_REPOSITORY_VARIABLE`] names could not be
+    /// created.
+    #[error("the Maven repository directory {path} could not be created")]
+    Repository {
+        /// The directory.
+        path: String,
+        /// What the file system reported.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The build lock file could not be opened or locked.
+    #[error("the build lock {path} could not be taken")]
+    Lock {
+        /// The lock file.
+        path: String,
+        /// What the file system reported.
+        #[source]
+        source: std::io::Error,
+    },
+    /// Another process held the build lock for longer than the wait allows.
+    #[error("the build lock {path} was still held after {}s", waited.as_secs())]
+    Locked {
+        /// The lock file.
+        path: String,
+        /// How long the wait lasted.
+        waited: Duration,
+    },
+    /// Docker could not say whether the image is already built.
+    #[error("Docker could not be asked for the reference implementation's image")]
+    Inspect(#[source] Error),
+    /// Maven ran and did not package the reference implementation.
+    #[error(
+        "the reference implementation's Maven build exited with {}; its output ends:\n{log}",
+        code.map_or_else(|| "no exit code".to_owned(), |code| format!("code {code}"))
+    )]
+    Build {
+        /// Maven's exit code, when Docker reports one.
+        code: Option<i64>,
+        /// The tail of Maven's standard output and error.
+        log: String,
     },
     /// Docker could not build the image or start the container.
     #[error("the reference implementation's {stage} failed")]
@@ -138,8 +232,11 @@ impl Reference {
     /// # Errors
     ///
     /// Returns [`ReferenceError::Fetch`] or [`ReferenceError::Digest`] when
-    /// the manifest cannot be had at its pin, [`ReferenceError::Container`]
-    /// when Docker refuses the build or the container,
+    /// the manifest cannot be had at its pin, [`ReferenceError::Repository`]
+    /// when Maven's repository directory cannot be created,
+    /// [`ReferenceError::Build`] when Maven fails,
+    /// [`ReferenceError::Container`] when Docker refuses the build or the
+    /// container,
     /// [`ReferenceError::Harness`] when the database cannot be started, and
     /// [`ReferenceError::NotReady`] when the gateway never answers.
     pub async fn start(registry: &str, settings: &str) -> Result<Self, ReferenceError> {
@@ -147,37 +244,39 @@ impl Reference {
         let database = database::postgres(DATABASE, &[])
             .await
             .map_err(|error| ReferenceError::Harness(Box::new(error)))?;
-        let server = image
-            .with_exposed_port(PORT.tcp())
-            .with_host(CONTAINER_HOST, Host::HostGateway)
-            .with_env_var(
-                "SPRING_DATASOURCE_URL",
-                format!(
-                    "jdbc:postgresql://{CONTAINER_HOST}:{}/{DATABASE}",
-                    database.port()
-                ),
-            )
-            .with_env_var("SPRING_DATASOURCE_USERNAME", DATABASE)
-            .with_env_var(
-                "SPRING_DATASOURCE_PASSWORD",
-                containers::role_password(DATABASE),
-            )
-            .with_env_var(
-                "FEDERATION_REGISTRY_BOOTSTRAP_FILE",
-                format!("file:{REGISTRY_TARGET}"),
-            )
-            .with_env_var(
-                "SPRING_CONFIG_ADDITIONAL_LOCATION",
-                format!("file:{SETTINGS_TARGET}"),
-            )
-            .with_copy_to(REGISTRY_TARGET, registry.as_bytes().to_vec())
-            .with_copy_to(SETTINGS_TARGET, settings.as_bytes().to_vec())
-            .start()
-            .await
-            .map_err(|source| ReferenceError::Container {
-                stage: "container",
-                source,
-            })?;
+        let server = retry::start(|| {
+            image
+                .clone()
+                .with_exposed_port(PORT.tcp())
+                .with_host(CONTAINER_HOST, Host::HostGateway)
+                .with_env_var(
+                    "SPRING_DATASOURCE_URL",
+                    format!(
+                        "jdbc:postgresql://{CONTAINER_HOST}:{}/{DATABASE}",
+                        database.port()
+                    ),
+                )
+                .with_env_var("SPRING_DATASOURCE_USERNAME", DATABASE)
+                .with_env_var(
+                    "SPRING_DATASOURCE_PASSWORD",
+                    containers::role_password(DATABASE),
+                )
+                .with_env_var(
+                    "FEDERATION_REGISTRY_BOOTSTRAP_FILE",
+                    format!("file:{REGISTRY_TARGET}"),
+                )
+                .with_env_var(
+                    "SPRING_CONFIG_ADDITIONAL_LOCATION",
+                    format!("file:{SETTINGS_TARGET}"),
+                )
+                .with_copy_to(REGISTRY_TARGET, registry.as_bytes().to_vec())
+                .with_copy_to(SETTINGS_TARGET, settings.as_bytes().to_vec())
+        })
+        .await
+        .map_err(|source| ReferenceError::Container {
+            stage: "container",
+            source,
+        })?;
         let origin = origin(&server).await?;
         if let Err(source) = containers::await_readiness(&format!("{origin}{READINESS_PATH}")).await
         {
@@ -224,35 +323,181 @@ pub fn container_origin(port: u16) -> String {
     format!("http://{CONTAINER_HOST}:{port}")
 }
 
-/// Builds the image from the vendored source and the pinned manifest.
-///
-/// The build is cached by the Docker builder, so every call after the first
-/// with the same inputs reuses its layers.
+/// Returns the gateway's image, built at most once per process and reused
+/// across processes while its tag is in the local Docker daemon.
 async fn build() -> Result<GenericImage, ReferenceError> {
-    let pom = manifest().await?;
-    let dockerfile = format!(
-        "FROM {maven} AS build\n\
-         WORKDIR /build\n\
-         COPY pom.xml .\n\
-         COPY src ./src\n\
-         RUN mvn -B -q package -DskipTests\n\
-         FROM {jre}\n\
-         COPY --from=build /build/target/openehr-federation-ref-0.9.0-SNAPSHOT.jar /app/gateway.jar\n\
+    BUILT.get_or_try_init(build_once).await.cloned()
+}
+
+/// Packages the vendored source with the pinned manifest and builds the
+/// gateway's image around the jar, unless the image is already built.
+///
+/// The build holds an advisory lock on [`LOCK_FILE`] beside Maven's
+/// repository, so two test processes never run Maven at once, and the second
+/// finds the first one's image.
+async fn build_once() -> Result<GenericImage, ReferenceError> {
+    let dockerfile = dockerfile();
+    let tag = tag(&dockerfile);
+    let repository = repository()?;
+    let directory = repository
+        .as_deref()
+        .map_or_else(std::env::temp_dir, PathBuf::from);
+    let _held = lock(&directory.join(LOCK_FILE), LOCK_WAIT).await?;
+    if exists(&tag).await? {
+        return Ok(GenericImage::new(IMAGE.to_owned(), tag));
+    }
+    let jar = package(manifest().await?, repository.as_deref()).await?;
+    retry::build(|| {
+        GenericBuildableImage::new(IMAGE, tag.clone())
+            .with_dockerfile_string(dockerfile.clone())
+            .with_data(jar.clone(), "./gateway.jar")
+    })
+    .await
+    .map_err(|source| ReferenceError::Container {
+        stage: "image build",
+        source,
+    })
+}
+
+/// Returns the Dockerfile of the gateway's image around `gateway.jar`.
+fn dockerfile() -> String {
+    format!(
+        "FROM {jre}\n\
+         COPY gateway.jar /app/gateway.jar\n\
          EXPOSE {PORT}\n\
          ENTRYPOINT [\"java\", \"-jar\", \"/app/gateway.jar\"]\n",
-        maven = MAVEN.reference(),
         jre = TEMURIN_JRE.reference(),
-    );
-    GenericBuildableImage::new(IMAGE, REFERENCE_COMMIT)
-        .with_dockerfile_string(dockerfile)
-        .with_data(pom, "./pom.xml")
-        .with_file(Path::new(SOURCE), "./src")
-        .build_image()
-        .await
-        .map_err(|source| ReferenceError::Container {
-            stage: "image build",
+    )
+}
+
+/// Returns the image tag for `dockerfile`: [`REFERENCE_COMMIT`] and the first
+/// 12 hexadecimal digits of the Dockerfile's sha256, so a new runtime image
+/// pin is a new tag.
+fn tag(dockerfile: &str) -> String {
+    let digest =
+        hex(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, dockerfile.as_bytes()).as_ref());
+    let short = digest.get(..12).unwrap_or(&digest);
+    format!("{REFERENCE_COMMIT}-{short}")
+}
+
+/// Returns whether the local Docker daemon holds the image `IMAGE:tag`.
+async fn exists(tag: &str) -> Result<bool, ReferenceError> {
+    let docker = Docker::connect_with_defaults().map_err(ReferenceError::Inspect)?;
+    match docker.inspect_image(&format!("{IMAGE}:{tag}")).await {
+        Ok(_) => Ok(true),
+        Err(Error::DockerResponseServerError { status_code, .. })
+            if StatusCode::from_u16(status_code)
+                .is_ok_and(|status| status == StatusCode::NOT_FOUND) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(ReferenceError::Inspect(error)),
+    }
+}
+
+/// Takes the advisory lock on the file `path`, polling until it is free or
+/// `wait` has passed; the lock is released when the returned file drops.
+async fn lock(path: &Path, wait: Duration) -> Result<File, ReferenceError> {
+    let shown = || path.to_string_lossy().into_owned();
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .map_err(|source| ReferenceError::Lock {
+            path: shown(),
             source,
-        })
+        })?;
+    let started = tokio::time::Instant::now();
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(TryLockError::WouldBlock) if started.elapsed() < wait => {
+                tokio::time::sleep(LOCK_POLL).await;
+            }
+            Err(TryLockError::WouldBlock) => {
+                return Err(ReferenceError::Locked {
+                    path: shown(),
+                    waited: wait,
+                });
+            }
+            Err(TryLockError::Error(source)) => {
+                return Err(ReferenceError::Lock {
+                    path: shown(),
+                    source,
+                });
+            }
+        }
+    }
+}
+
+/// Runs Maven over the vendored source and the manifest `pom` in a
+/// container, with the host directory `repository` as its local repository
+/// when one is given, and returns the jar it packages.
+async fn package(pom: Vec<u8>, repository: Option<&str>) -> Result<Vec<u8>, ReferenceError> {
+    let stage = "Maven build";
+    let build = retry::start(|| {
+        let request = MAVEN
+            .image()
+            .with_wait_for(WaitFor::exit(ExitWaitStrategy::new()))
+            .with_working_dir(BUILD_DIRECTORY)
+            .with_copy_to(format!("{BUILD_DIRECTORY}/pom.xml"), pom.clone())
+            .with_copy_to(format!("{BUILD_DIRECTORY}/src"), Path::new(SOURCE))
+            .with_cmd(maven_command())
+            .with_startup_timeout(BUILD_BUDGET);
+        match repository {
+            Some(path) => request.with_mount(Mount::bind_mount(path, REPOSITORY_TARGET)),
+            None => request,
+        }
+    })
+    .await
+    .map_err(|source| ReferenceError::Container { stage, source })?;
+    let code = build
+        .exit_code()
+        .await
+        .map_err(|source| ReferenceError::Container { stage, source })?;
+    if code != Some(0) {
+        return Err(ReferenceError::Build {
+            code,
+            log: tail(&build).await,
+        });
+    }
+    build
+        .copy_file_from(format!("{BUILD_DIRECTORY}/{JAR}"), Vec::new())
+        .await
+        .map_err(|source| ReferenceError::Container { stage, source })
+}
+
+/// Returns the arguments Maven packages the reference implementation with.
+///
+/// Maven runs in batch mode without its download progress, so a failure's
+/// tail shows Maven's own error.
+fn maven_command() -> [String; 7] {
+    [
+        "mvn".to_owned(),
+        "--batch-mode".to_owned(),
+        "--no-transfer-progress".to_owned(),
+        format!("-Dmaven.repo.local={REPOSITORY_TARGET}"),
+        format!("-Daether.transport.http.retryHandler.count={MAVEN_RETRIES}"),
+        "package".to_owned(),
+        "-DskipTests".to_owned(),
+    ]
+}
+
+/// Returns the host directory [`MAVEN_REPOSITORY_VARIABLE`] names, created
+/// if it is missing, or `None` when the variable is unset or empty.
+fn repository() -> Result<Option<String>, ReferenceError> {
+    let Some(path) = std::env::var_os(MAVEN_REPOSITORY_VARIABLE).filter(|path| !path.is_empty())
+    else {
+        return Ok(None);
+    };
+    let failed = |source| ReferenceError::Repository {
+        path: path.to_string_lossy().into_owned(),
+        source,
+    };
+    std::fs::create_dir_all(&path).map_err(failed)?;
+    let absolute = std::fs::canonicalize(&path).map_err(failed)?;
+    Ok(Some(absolute.to_string_lossy().into_owned()))
 }
 
 /// Fetches the Maven manifest at [`REFERENCE_COMMIT`] and checks it against
@@ -316,4 +561,47 @@ async fn tail(server: &ContainerAsync<GenericImage>) -> String {
     }
     let start = out.len().saturating_sub(LOG_TAIL);
     String::from_utf8_lossy(out.get(start..).unwrap_or(&out)).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_tag_names_the_commit_and_the_dockerfile() {
+        let first = tag(&dockerfile());
+        assert_eq!(first, tag(&dockerfile()));
+        assert!(first.starts_with(&format!("{REFERENCE_COMMIT}-")));
+        assert_eq!(first.len(), REFERENCE_COMMIT.len() + 13);
+        assert_ne!(first, tag("FROM another-runtime\n"));
+    }
+
+    #[tokio::test]
+    #[expect(clippy::panic_in_result_fn, reason = "test assertions")]
+    async fn a_held_build_lock_keeps_a_second_taker_out() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join(LOCK_FILE);
+        let held = lock(&path, Duration::ZERO).await?;
+        let refused = lock(&path, Duration::ZERO).await;
+        assert!(matches!(refused, Err(ReferenceError::Locked { .. })));
+        drop(held);
+        lock(&path, Duration::ZERO).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_waiting_taker_gets_the_lock_once_it_is_released()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join(LOCK_FILE);
+        let held = lock(&path, Duration::ZERO).await?;
+        let release = async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            drop(held);
+        };
+        let (taken, ()) = tokio::join!(lock(&path, Duration::from_secs(10)), release);
+        taken?;
+        Ok(())
+    }
 }
