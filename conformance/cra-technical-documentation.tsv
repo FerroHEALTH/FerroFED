@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The Cyber Resilience Act's part of the technical documentation: for every
+# point of Annex VII of Regulation (EU) 2024/2847, the places FerroFED
+# documents it. One row per place; a point may have several. The book page
+# website/book/src/evaluate/technical-documentation.md lists every point
+# under "The Cyber Resilience Act's part".
+#
+# Columns: item (the Annex VII point); element (a phrase of the vendored
+# Regulation that names the point); target (a file of this repository);
+# section (a heading of that file, or - for the whole file); status
+# (documented, partial, planned, or not-applicable when the point does not
+# apply and the target says why); issue (#N, required for partial and
+# planned, or -).
+#
+# scripts/checks/technical-documentation.sh holds every row to the vendored
+# text and the tree. No specification governs the index form: our own design.
+item	element	target	section	status	issue
+1(a)	its intended purpose	website/book/src/evaluate/regulatory-status.md	Intended purpose	documented	-
+1(b)	versions of software affecting compliance with essential cybersecurity requirements	website/book/src/evaluate/versions.md	-	documented	-
+1(b)	versions of software affecting compliance with essential cybersecurity requirements	docs/VERSIONS.md	-	documented	-
+1(c)	where the product with digital elements is a hardware product, photographs or illustrations showing external features, marking and internal layout	website/book/src/evaluate/cra-user-information.md	3. Identification	not-applicable	-
+1(d)	user information and instructions as set out in Annex II	website/book/src/evaluate/cra-user-information.md	-	documented	-
+2(a)	necessary information on the design and development of the product with digital elements	website/book/src/how-it-works/overview.md	The parts of the gateway	documented	-
+2(a)	necessary information on the design and development of the product with digital elements	docs/architecture.md	-	documented	-
+2(b)	necessary information and specifications of the vulnerability handling processes put in place by the manufacturer	SECURITY.md	Reporting a vulnerability	documented	-
+2(b)	necessary information and specifications of the vulnerability handling processes put in place by the manufacturer	SECURITY.md	Supported versions	documented	-
+2(b)	necessary information and specifications of the vulnerability handling processes put in place by the manufacturer	website/book/src/operate/container.md	The release binaries	documented	-
+2(b)	necessary information and specifications of the vulnerability handling processes put in place by the manufacturer	website/book/src/operate/container.md	The image	documented	-
+2(b)	necessary information and specifications of the vulnerability handling processes put in place by the manufacturer	docs/post-market.md	An actively exploited vulnerability or a severe incident (CRA Art 14)	documented	-
+2(c)	necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes	docs/release.md	What the lane does	documented	-
+2(c)	necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes	docs/ci-cd.md	The two tiers of `ci.yml`	documented	-
+2(c)	necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes	docs/post-market.md	Who does what	documented	-
+3	an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13	website/book/src/evaluate/cra-risk-assessment.md	-	documented	-
+4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	SECURITY.md	Supported versions	partial	#525
+4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	website/book/src/evaluate/regulatory-status.md	The support period	partial	#525
+5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	Annex I, Part I, point (2), point by point	partial	#525
+5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	partial	#525
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	partial	#525
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance.md	-	partial	#525
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/threat-model.md	-	partial	#525
+7	a copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	partial	#940
+8	where applicable, the software bill of materials	website/book/src/operate/container.md	The release binaries	documented	-

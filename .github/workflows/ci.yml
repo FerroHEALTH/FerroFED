@@ -452,10 +452,11 @@ jobs:
           bash scripts/checks/obligations.sh
 
   # The technical documentation guard (Regulation (EU) 2025/327 Art 30(2),
-  # Art 37, Annex III): every Annex III element has a row in
-  # conformance/technical-documentation.tsv whose file and heading exist, and
-  # a version whose harmonised components differ from the previous release
-  # tag has its review rows. It reads the tags from origin, so it needs the
+  # Art 37, Annex III, and Regulation (EU) 2024/2847 Annex VII): every Annex
+  # III element has a row in conformance/technical-documentation.tsv, and
+  # every Annex VII point one in conformance/cra-technical-documentation.tsv,
+  # whose file and heading exist, and a version whose harmonised components
+  # differ from the previous release tag has its review rows. It reads the tags from origin, so it needs the
   # network but no token. Its self-test proves each refusal and pass.
   technical-documentation:
     name: technical-documentation
