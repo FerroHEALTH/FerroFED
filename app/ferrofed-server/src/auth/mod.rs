@@ -34,6 +34,10 @@
 //! each endpoint its own onward credentials and copies no client header
 //! without a rule naming it.
 //!
+//! The [`Gate`] in place is held by a [`trust::Trust`], which a reload of
+//! the configuration replaces whole; each request takes it once at the
+//! [`guard`](guard::guard) and is admitted against that gate alone.
+//!
 //! The health family and `GET {base}/` stay open: they describe the process
 //! and the product, no patient and no member (no specification governs this:
 //! our own design). The JSON Web Key Set the gateway will publish for its
@@ -44,28 +48,24 @@ pub mod caller;
 mod claims;
 pub mod contact_point;
 pub mod fetch;
+pub mod guard;
 pub mod keys;
 pub mod permission;
 mod reference;
 pub mod refusal;
+pub mod trust;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{OriginalUri, Request, State};
-use axum::middleware::Next;
-use axum::response::Response;
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
-use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EhrId;
-use http::{HeaderMap, Method, header};
+use http::{HeaderMap, header};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, Validation};
-use openehr_its::rest::routes::{self, Lookup};
 use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::SecretString;
 
-use crate::ITS_REST_PREFIX;
 use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::{AccessToken, Introspected};
 use crate::auth::fetch::{FetchError, Fetcher};
@@ -73,12 +73,10 @@ use crate::auth::keys::{KeyError, KeySet};
 use crate::auth::permission::grant;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::Refusal;
-use crate::base_path::BasePath;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
+use crate::facade::options::ContactPoints;
 use crate::facade::security::TARGET;
 use crate::metrics::security::Event;
-use crate::request_id;
-use crate::state::AppState;
 
 /// The signature algorithms a token may be signed with (RFC 8725 §3.1,
 /// §3.2): ECDSA and RSA, never `none` and never an HMAC.
@@ -104,8 +102,12 @@ pub struct Gate {
     issuers: Vec<Trusted>,
     /// The HTTP client of key set fetches and introspection.
     fetcher: Fetcher,
-    /// The key the security log's caller references are made under.
-    references: reference::References,
+    /// The key the security log's caller references are made under, kept
+    /// by every gate that succeeds this one, so a reference stays stable for
+    /// the life of the process.
+    references: Arc<reference::References>,
+    /// The national contact points `OPTIONS {base}/` declares.
+    contact_points: Arc<ContactPoints>,
 }
 
 /// One issuer on the trust list, with its key set when it has one.
@@ -121,6 +123,27 @@ impl Gate {
     /// Returns the gate `settings` describe; no key set is read yet.
     #[must_use]
     pub fn new(settings: &AuthSettings) -> Self {
+        Self::keyed(settings, Arc::new(reference::References::fresh()))
+    }
+
+    /// Returns the gate `settings` describe in place of this one, with the
+    /// same caller references; no key set is read yet, so each issuer's key
+    /// set is fetched or read from its file again.
+    #[must_use]
+    pub fn succeeding(&self, settings: &AuthSettings) -> Self {
+        Self::keyed(settings, Arc::clone(&self.references))
+    }
+
+    /// Returns the national contact points the gate's issuers declare, as
+    /// `OPTIONS {base}/` declares them.
+    #[must_use]
+    pub fn contact_points(&self) -> &Arc<ContactPoints> {
+        &self.contact_points
+    }
+
+    /// Returns the gate `settings` describe, its caller references made
+    /// under `references`.
+    fn keyed(settings: &AuthSettings, references: Arc<reference::References>) -> Self {
         let issuers = settings
             .issuers
             .iter()
@@ -143,7 +166,8 @@ impl Gate {
             purpose_required: settings.purpose_required,
             issuers,
             fetcher: Fetcher::new(settings.fetch_timeout),
-            references: reference::References::fresh(),
+            references,
+            contact_points: Arc::new(ContactPoints::of(settings)),
         }
     }
 
@@ -617,129 +641,5 @@ fn refusal_of(kind: &ErrorKind) -> Refusal {
         | ErrorKind::InvalidRsaKey(_)
         | ErrorKind::InvalidKeyFormat => Refusal::Signature,
         _ => Refusal::Malformed,
-    }
-}
-
-/// The gate and where it stands: the middleware's state.
-#[derive(Debug)]
-pub struct Guard {
-    /// The verifier.
-    gate: Gate,
-    /// The base path every guarded route sits under.
-    base: BasePath,
-    /// The state whose running federation says whether any node exchanges
-    /// a caller's token.
-    state: Arc<AppState>,
-}
-
-impl Guard {
-    /// Returns the guard of the surface under `base`, verifying with `gate`,
-    /// keeping a caller's token only while `state`'s federation exchanges
-    /// tokens at some node.
-    #[must_use]
-    pub fn new(gate: Gate, base: BasePath, state: Arc<AppState>) -> Self {
-        Self { gate, base, state }
-    }
-
-    /// Whether the running federation exchanges a caller's token at any
-    /// node (RFC 8693), so the gate keeps the token it verified.
-    fn exchanging(&self) -> bool {
-        self.state
-            .federation()
-            .is_some_and(|federation| federation.clients().exchanging())
-    }
-
-    /// What a request of `method` to `path` requires, with the resource its
-    /// path names, or `None` for a path outside the gate.
-    #[must_use]
-    pub fn requirement(
-        &self,
-        method: &Method,
-        path: &str,
-    ) -> Option<(Requirement, Option<String>)> {
-        if let Some(face) = self
-            .state
-            .fhir()
-            .and_then(|fhir| crate::fhir::classify(fhir, path))
-        {
-            return Some((crate::fhir::requirement(face, method), None));
-        }
-        let root = path == self.base.as_str() || path == self.base.join("/");
-        if root && method == Method::OPTIONS {
-            return Some((Requirement::Caller, None));
-        }
-        if crate::operator::addresses(&self.base, path) {
-            return Some((Requirement::Operator, None));
-        }
-        let prefix = self.base.join(ITS_REST_PREFIX.trim_end_matches('/'));
-        let relative = path
-            .strip_prefix(prefix.as_str())
-            .filter(|relative| relative.starts_with('/'))?;
-        if method == Method::OPTIONS {
-            return Some((Requirement::Caller, None));
-        }
-        let Lookup::Matched(matched) = routes::lookup(method, relative) else {
-            return Some((Requirement::Caller, None));
-        };
-        // NOTE: no specification governs this: our own design; the table lists
-        // every operation (a test holds it so), and an unlisted one is refused.
-        let requirement = permission::of(&matched).unwrap_or(Requirement::Refused);
-        let named = match requirement {
-            Requirement::Scope {
-                resource: Resource::Path(name),
-                ..
-            } => matched
-                .path_param(name)
-                .and_then(|param| param.decoded().ok()),
-            _ => None,
-        };
-        Some((requirement, named))
-    }
-}
-
-/// The middleware every route of the gateway passes: a request inside the
-/// gate is admitted with its [`Caller`] in its extensions, or refused.
-pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: Next) -> Response {
-    let path = request
-        .extensions()
-        .get::<OriginalUri>()
-        .map_or_else(|| request.uri().path(), |original| original.path())
-        .to_owned();
-    let Some((requirement, named)) = guard.requirement(request.method(), &path) else {
-        return next.run(request).await;
-    };
-    let outbound = request_id::outbound(request.extensions()).map(|id: OutboundId| id.to_string());
-    match guard
-        .gate
-        .admit(
-            request.headers(),
-            (requirement, named.as_deref()),
-            guard.exchanging(),
-        )
-        .await
-    {
-        Ok(caller) => {
-            if caller.verified_by() == VerifiedBy::Edge {
-                guard
-                    .gate
-                    .references
-                    .edge_asserted(&caller, outbound.as_deref());
-            }
-            request.extensions_mut().insert(caller);
-            next.run(request).await
-        }
-        Err(refusal) => {
-            crate::metrics::security::refused(refusal);
-            tracing::warn!(
-                target: TARGET,
-                event = "caller-refused",
-                reason = refusal.reason(),
-                status = refusal.code().status().as_u16(),
-                request_id = outbound,
-                "a request was refused at client authentication"
-            );
-            let request_id = request_id::of(request.headers()).unwrap_or_default();
-            refusal.response(request_id)
-        }
     }
 }

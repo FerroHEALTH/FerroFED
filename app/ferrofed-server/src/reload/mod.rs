@@ -17,13 +17,18 @@
 //! entries and resolution bindings naming a member that left are dropped.
 //! A configuration that does not load leaves the running registry in place.
 //!
-//! The same signal reads the certificate, the key and the client CA of each
-//! listener that serves TLS again from its files
-//! ([`Reloader::reload_certificates`]); a changed path takes a restart.
+//! The same reload reads the certificate, the key and the client CA of each
+//! listener that serves TLS again from its files, and puts `[auth]` in
+//! place, its issuers and their key sets, for every request that arrives
+//! afterwards ([`Trust`]); a changed listener path, and a changed
+//! `auth.audience`, take a restart. Every file and every check is read and
+//! passed before anything changes: one that fails refuses the reload as a
+//! whole, and the running registry, gate and certificates stay. The admin
+//! listener runs the same reload at `POST /admin/reload` ([`action`]).
 //!
 //! The sections [`reloadable`](crate::binding::reloadable) names take effect
-//! on a reload: the registry, the onward credentials, and each section a
-//! binding declares as one a reload applies
+//! on a reload: the registry, the onward credentials, `[auth]`, and each
+//! section a binding declares as one a reload applies
 //! ([`Binding::sections`](crate::binding::Binding::sections)). A changed
 //! `profile` refuses the reload, so every decision the development profile
 //! admits reads the profile the process started with. Every other setting is
@@ -47,17 +52,19 @@ use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::auth::trust::Trust;
 use crate::binding::{self, Role, RoleConflict};
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
-use crate::listener::certificates::Certificates;
+use crate::listener::certificates::{CertificateError, Certificates, Staged};
 use crate::metrics::ReloadResult;
 use crate::revision::service::{FileRevision, RevisionError, Revisions};
-use crate::state::AppState;
+use crate::state::{AppState, StateError};
 use ferrofed_registry::revision::RevisionId;
 
+pub mod action;
 mod restart;
 
 use restart::{effective, needs_restart};
@@ -77,6 +84,7 @@ pub struct Reloader {
     serial: Mutex<Option<Settings>>,
     certificates: Vec<Arc<Certificates>>,
     revisions: Option<Arc<Revisions>>,
+    trust: Option<Arc<Trust>>,
 }
 
 /// What an applied reload changed.
@@ -99,6 +107,13 @@ pub struct Applied {
     /// The credentials that travel unencrypted, which only the
     /// development profile allows ([`transport::check`]).
     pub cleartext: Vec<ProtectedSite>,
+    /// Whether `[auth]` differs from the one that ran before the reload; the
+    /// gate is put in place again either way, so each issuer's key set is
+    /// fetched or read from its file again.
+    pub auth_changed: bool,
+    /// The listener tables, `server.tls` and `metrics.tls`, whose
+    /// certificate files were read again and put in place.
+    pub certificates: Vec<&'static str>,
 }
 
 /// A reload that was refused, leaving the running registry in place.
@@ -139,6 +154,19 @@ pub enum ReloadError {
     /// recorded as a revision, or the running revision is refused beside it.
     #[error("the configuration revisions refused the reload")]
     Revisions(#[source] Box<RevisionError>),
+    /// The new `[auth]` would admit no caller of a gateway that federates.
+    #[error("[auth] trusts no issuer, so no caller would be admitted")]
+    Auth(#[source] Box<StateError>),
+    /// A listener's certificate files do not form a TLS server
+    /// configuration.
+    #[error("the {table} certificate files could not be read")]
+    Certificate {
+        /// The table the files are named in.
+        table: &'static str,
+        /// What reading them reported.
+        #[source]
+        source: Box<CertificateError>,
+    },
 }
 
 impl ReloadError {
@@ -152,6 +180,18 @@ impl ReloadError {
             Self::Profile => "profile",
             Self::Cleartext(_) => "cleartext",
             Self::Revisions(_) => "revisions",
+            Self::Auth(_) => "auth",
+            Self::Certificate { .. } => "listener-certificate",
+        }
+    }
+
+    /// The listener table whose certificate files the refusal is about,
+    /// when it is about one.
+    #[must_use]
+    pub fn table(&self) -> Option<&'static str> {
+        match self {
+            Self::Certificate { table, .. } => Some(table),
+            _ => None,
         }
     }
 
@@ -164,7 +204,9 @@ impl ReloadError {
             | Self::RegistryPresence
             | Self::Profile
             | Self::Cleartext(_)
-            | Self::Revisions(_) => None,
+            | Self::Revisions(_)
+            | Self::Auth(_)
+            | Self::Certificate { .. } => None,
         }
     }
 }
@@ -182,7 +224,17 @@ impl Reloader {
             serial: Mutex::new(None),
             certificates: Vec::new(),
             revisions: None,
+            trust: None,
         }
+    }
+
+    /// Returns this reloader with `trust`, the gate the client and the admin
+    /// listener verify callers with, which a reload puts in place again from
+    /// the reloaded `[auth]`.
+    #[must_use]
+    pub fn with_trust(mut self, trust: Arc<Trust>) -> Self {
+        self.trust = Some(trust);
+        self
     }
 
     /// Returns this reloader with `revisions`, so a reload under
@@ -214,7 +266,9 @@ impl Reloader {
             .resolve()
             .map_err(ReloadError::Config)
             .and_then(|fresh| self.apply_settings(fresh))
-            .map(|(outcome, effective)| {
+            .map(|(mut outcome, effective)| {
+                outcome.auth_changed =
+                    self.put_auth(applied.as_ref().unwrap_or(&self.boot), &effective);
                 *applied = Some(effective);
                 self.ran(revision);
                 outcome
@@ -239,61 +293,55 @@ impl Reloader {
     }
 
     /// Returns this reloader with `certificates`, the TLS of the listeners,
-    /// which [`Reloader::reload_certificates`] reads again from their files.
+    /// which [`Reloader::reload`] reads again from their files.
     #[must_use]
     pub fn with_certificates(mut self, certificates: Vec<Arc<Certificates>>) -> Self {
         self.certificates = certificates;
         self
     }
 
-    /// Reads the certificate, the key and the client CA of every listener
-    /// that serves TLS again from the files it started with, logs each
-    /// outcome, and returns the tables whose files were refused.
+    /// Reloads the configuration, `[auth]` and the certificate of every
+    /// listener that serves TLS, logs the outcome, and returns it.
     ///
-    /// A listener whose files read puts them in place for every handshake
-    /// that starts afterwards; one whose files do not keeps the certificate it
-    /// serves. No connection already open changes.
-    pub fn reload_certificates(&self) -> Vec<&'static str> {
-        let mut refused = Vec::new();
-        for certificates in &self.certificates {
-            let table = certificates.files().table;
-            match certificates.reload() {
-                Ok(()) => tracing::info!(table, "listener certificate reloaded"),
-                Err(error) => {
-                    tracing::error!(
-                        table,
-                        error = crate::chain(&error),
-                        "listener certificate reload refused, the running certificate stays"
-                    );
-                    refused.push(table);
-                }
-            }
-        }
-        refused
-    }
-
-    /// Reloads the registry, logs the outcome, and returns it.
-    ///
-    /// The signal handler calls this; one reload runs at a time. A registry
-    /// read from a care services directory stays the one in place, and the
-    /// federation is rebuilt over it with the reloaded sections.
+    /// The signal handler and `POST /admin/reload` call this; one reload runs
+    /// at a time. Every listener's certificate files are read first, then
+    /// the configuration is read and checked; only once all of it passes
+    /// does the new registry, gate and certificate replace the running ones.
+    /// A request that already took the running registry or gate finishes on
+    /// it, and no connection already open changes its certificate. A
+    /// registry read from a care services directory stays the one in place,
+    /// and the federation is rebuilt over it with the reloaded sections.
     ///
     /// # Errors
-    /// Returns a [`ReloadError`] when the configuration or the registry does
-    /// not load, or the registry's source was set, unset or changed between
-    /// a document and a directory; the running registry then stays in place.
+    /// Returns a [`ReloadError`] when a listener's certificate files, the
+    /// configuration or the registry do not load, `[auth]` admits no caller
+    /// of a federating gateway, or the registry's source was set, unset or
+    /// changed between a document and a directory; the running registry,
+    /// gate and certificates then stay in place.
     pub fn reload(&self) -> Result<Applied, ReloadError> {
         // NOTE: no specification governs this: our own design; the configuration is read
         // before the reload lock, which an apply of a revision takes inside its own.
-        let fresh = self.fresh();
+        let prepared = self
+            .staged()
+            .and_then(|staged| self.fresh().map(|fresh| (fresh, staged)));
         let mut applied = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
         let mut loaded = None;
-        let outcome = fresh
-            .and_then(|(fresh, file)| {
+        let outcome = prepared
+            .and_then(|((fresh, file), staged)| {
                 loaded = file;
                 self.apply_settings(fresh)
+                    .map(|(outcome, effective)| (outcome, effective, staged))
             })
-            .map(|(outcome, effective)| {
+            .map(|(mut outcome, effective, staged)| {
+                outcome.auth_changed =
+                    self.put_auth(applied.as_ref().unwrap_or(&self.boot), &effective);
+                outcome.certificates = staged
+                    .into_iter()
+                    .map(|(certificates, config)| {
+                        certificates.install(config);
+                        certificates.files().table
+                    })
+                    .collect();
                 *applied = Some(effective);
                 if let Some(file) = loaded {
                     self.ran(file.revision);
@@ -317,6 +365,32 @@ impl Reloader {
             }
         }
         outcome
+    }
+
+    /// Reads every listener's certificate files into a configuration not yet
+    /// in place.
+    fn staged(&self) -> Result<Vec<(&Arc<Certificates>, Staged)>, ReloadError> {
+        self.certificates
+            .iter()
+            .map(|certificates| {
+                certificates
+                    .read()
+                    .map(|staged| (certificates, staged))
+                    .map_err(|source| ReloadError::Certificate {
+                        table: certificates.files().table,
+                        source: Box::new(source),
+                    })
+            })
+            .collect()
+    }
+
+    /// Puts the gate `effective`'s `[auth]` describes in place, and returns
+    /// whether that `[auth]` differs from `running`'s.
+    fn put_auth(&self, running: &Settings, effective: &Settings) -> bool {
+        if let Some(trust) = &self.trust {
+            trust.replace(&effective.server.auth);
+        }
+        running.server.auth != effective.server.auth
     }
 
     /// Records, under the reload lock, that the gateway runs `revision`.
@@ -396,6 +470,12 @@ impl Reloader {
         if fresh.profile != self.boot.profile {
             return Err(ReloadError::Profile);
         }
+        // NOTE: §13.1, N25: a federating gateway admits only verified callers, so a gate
+        // put in place from an `[auth]` that trusts no issuer is refused as at start.
+        if self.trust.is_some() {
+            crate::state::admits_callers(&fresh, fresh.federates())
+                .map_err(|refused| ReloadError::Auth(Box::new(refused)))?;
+        }
         // NOTE: no specification governs this: our own design; a setting that
         // waits for a restart is held now, so the restart cannot stop on it.
         transport::check(&fresh, None).map_err(ReloadError::Cleartext)?;
@@ -467,6 +547,7 @@ impl Reloader {
             reconciled,
             needs_restart,
             cleartext,
+            ..Applied::default()
         })
     }
 
@@ -485,6 +566,8 @@ impl Reloader {
                     incidents = applied.reconciled.incidents.len(),
                     index_dropped = applied.reconciled.index_dropped,
                     bindings_dropped = applied.reconciled.bindings_dropped,
+                    auth_changed = applied.auth_changed,
+                    certificates = applied.certificates.join(","),
                     "registry reloaded"
                 );
                 transport::warn(&applied.cleartext);
@@ -506,6 +589,7 @@ impl Reloader {
             class = error.class(),
             config = self.source().map(|path| path.display().to_string()),
             document = error.document().map(|path| path.display().to_string()),
+            table = error.table(),
             "registry reload refused, the running registry stays; `ferrofed config check` names the fault"
         );
     }
@@ -535,8 +619,8 @@ impl std::fmt::Debug for Reloader {
     }
 }
 
-/// Reloads the registry, and the certificate of every listener that serves
-/// TLS, each time the process receives `SIGHUP`.
+/// Reloads the registry, `[auth]` and the certificate of every listener that
+/// serves TLS, each time the process receives `SIGHUP` ([`Reloader::reload`]).
 ///
 /// The reload reads files, so it runs on the blocking pool. A failure to
 /// install the handler is logged, and the registry then changes only on a
@@ -554,13 +638,11 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
         }
     };
     while hangup.recv().await.is_some() {
-        tracing::info!("SIGHUP received, reloading the registry and the listener certificates");
+        tracing::info!(
+            "SIGHUP received, reloading the registry, [auth] and the listener certificates"
+        );
         let reloader = Arc::clone(&reloader);
-        let outcome = tokio::task::spawn_blocking(move || {
-            let registry = reloader.reload();
-            reloader.reload_certificates();
-            registry
-        });
+        let outcome = tokio::task::spawn_blocking(move || reloader.reload());
         if let Err(error) = outcome.await {
             tracing::error!(
                 panicked = error.is_panic(),

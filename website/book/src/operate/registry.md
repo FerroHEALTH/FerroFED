@@ -567,7 +567,7 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Eight sections take effect on a reload:
+Nine sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
@@ -579,6 +579,15 @@ Eight sections take effect on a reload:
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | `[audit]` |
 | `[access_log]` | `[fhir]` |
+| `[auth]`: the issuers, how each is verified, its key set read again | `auth.audience`, and a changed `[server.tls]` or `[metrics.tls]` path |
+
+The same reload reads the certificate files of `[server.tls]` and
+`[metrics.tls]` again ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+A request admitted before the reload finishes as admitted, and every request
+that arrives after it is verified against the new `[auth]`, on the client
+face and the admin listener alike. Every file and check is read before
+anything changes, so a reload whose `[auth]`, certificate files or registry
+fails is refused as a whole.
 
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that
@@ -639,11 +648,14 @@ the same file to see the fault. The classes are:
 | `registry-presence` | `registry.document` or `[registry.mcsd]` was set, unset or swapped for the other, which takes a restart |
 | `profile` | `profile` was changed, which takes a restart |
 | `cleartext` | a credential or a patient identifier would travel over a URL that is not `https`, outside the development profile the process started with |
+| `auth` | the gateway federates and `[auth]` trusts no issuer |
+| `listener-certificate` | the certificate files of the listener named in `table` do not form a pair |
 
-Reloading uses a Unix signal, and FerroFED runs on Unix only
-([Supported platforms](deployment-shape.md#supported-platforms)). Each
-reload is counted by `result` on the [metrics](metrics.md) surface, and the
-log lines record what it changed.
+Where no signal reaches the process, as in a container with no shell,
+`POST /admin/reload` on the admin listener runs the same reload
+([Reloading over the admin listener](metrics.md#reloading-over-the-admin-listener)).
+Each reload is counted by `result` on the [metrics](metrics.md) surface, and
+the log lines record what it changed.
 
 ## Integrity incidents
 

@@ -240,11 +240,11 @@ restart applies.
 `ferrofed_registry_reloads_total{result="refused"}`. A changed setting a
 reload does not apply logs `changed settings take effect only on a restart;
 the running values stay` at `WARN`, naming the keys in `settings`. A listener
-certificate that does not read logs `listener certificate reload refused,
-the running certificate stays` at `ERROR`.
+certificate that does not read refuses the whole reload with the class
+`listener-certificate` and its `table`.
 
 **Fix.** Run `ferrofed config check` against the same file, which prints the
-key at fault, correct it, and send `SIGHUP` again
+key at fault, correct it, and send `SIGHUP` or `POST /admin/reload` again
 ([Reloading the registry](registry.md#reloading-the-registry)).
 
 ### A request is refused `409 ehr-id-collision`

@@ -5,10 +5,12 @@
 //! reload builds the federation from, and the changed keys it leaves to the
 //! next start. Of `[federation]`, a reload applies the localization policy
 //! (`[federation.localization]`) and the consent reporting
-//! (`[federation.consent]`). No specification governs this: our own design.
+//! (`[federation.consent]`); of `[server]`, `[auth]` less its audience. No
+//! specification governs this: our own design.
 
 use crate::binding;
-use crate::config::settings::Settings;
+use crate::config::auth::AuthSettings;
+use crate::config::settings::{ServerSettings, Settings};
 
 /// The settings a reload builds the federation from: the sections of `fresh`
 /// a reload applies, and every other setting as the process started, each
@@ -24,9 +26,18 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
     }
     federation.consent_disclosure = fresh.federation.consent_disclosure;
     federation.consent_emergency = fresh.federation.consent_emergency;
+    // NOTE: no specification governs this: our own design; the audience also names the
+    // gateway in its access records, read once at start, so it keeps the boot's value.
+    let auth = AuthSettings {
+        audience: boot.server.auth.audience.clone(),
+        ..fresh.server.auth.clone()
+    };
     let mut effective = Settings {
         profile: boot.profile,
-        server: boot.server.clone(),
+        server: ServerSettings {
+            auth,
+            ..boot.server.clone()
+        },
         telemetry: boot.telemetry.clone(),
         federation,
         stored_queries: boot.stored_queries.clone(),
@@ -95,6 +106,9 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("config", revisions_changed),
     ("signing", signing_changed),
     ("audit", |boot, fresh| boot.audit != fresh.audit),
+    ("auth.audience", |boot, fresh| {
+        boot.server.auth.audience != fresh.server.auth.audience
+    }),
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),

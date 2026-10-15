@@ -117,6 +117,8 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
 
+use crate::auth::guard::Guard;
+use crate::auth::trust::Trust;
 use crate::config::settings::ServerSettings;
 use crate::health::lifecycle::{Lifecycle, drain_on};
 use crate::state::AppState;
@@ -197,6 +199,15 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// connection is named by the address it came from, its peer or the client
 /// a trusted proxy names ([`client_address`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
+    trusted_router(state, server, Arc::new(Trust::new(&server.auth)))
+}
+
+/// Builds the HTTP application over `state` as [`router`] does, its callers
+/// verified by the gate `trust` holds.
+///
+/// Each request takes the gate in place when it arrives, so a reload that
+/// replaces the gate ([`reload`]) reaches the requests that arrive after it.
+pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<Trust>) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
@@ -230,8 +241,8 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         Some(fhir) => routes.nest(fhir.base.as_str(), fhir::routes()),
         None => routes,
     };
-    let guard = Arc::new(auth::Guard::new(
-        auth::Gate::new(&server.auth),
+    let guard = Arc::new(Guard::new(
+        trust,
         server.base_path.clone(),
         Arc::clone(&state),
     ));
@@ -239,10 +250,8 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let fhir_state = Arc::clone(&state);
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
     // and the caller rate, so a record names the verified caller and a refusal writes none.
-    let contact_points = Arc::new(facade::options::ContactPoints::of(&server.auth));
     let routes = routes
         .with_state(Arc::clone(&state))
-        .layer(axum::Extension(contact_points))
         .layer(axum::middleware::from_fn_with_state(
             Arc::new(access::Gate::new(
                 Arc::clone(&state),
@@ -263,7 +272,10 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         Arc::clone(&metrics),
     ));
     let guarded = rated
-        .layer(axum::middleware::from_fn_with_state(guard, auth::guard))
+        .layer(axum::middleware::from_fn_with_state(
+            guard,
+            auth::guard::guard,
+        ))
         // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
         // binding's documents are answered outside the client authentication gate.
         .layer(axum::middleware::from_fn_with_state(

@@ -33,7 +33,9 @@ The admin listener serves `GET /metrics` and the operator's
 [clear of a held `ehr_id` collision](registry.md#clearing-a-held-collision)
 (`POST /admin/ehr-ids/{ehr_id}/clear`),
 [export of the identity state](identity-state-export.md)
-(`POST /admin/identity-state/export`), and under `config.ui = "managed"`
+(`POST /admin/identity-state/export`), the
+[reload](#reloading-over-the-admin-listener) `SIGHUP` asks for
+(`POST /admin/reload`), and under `config.ui = "managed"`
 the [configuration revisions](configuration-revisions.md#the-routes) under
 `/admin/config`. It answers every other path `404`, the revision routes
 too under `config.ui = "off"`, and never sits under the base path. It is never the
@@ -128,6 +130,51 @@ more after the drain.
 
 `[metrics]` takes effect on a restart only: a [reload](registry.md#reloading-the-registry)
 that changes it logs the key as needing a restart, like `[server]`.
+
+### Reloading over the admin listener
+
+`POST /admin/reload` runs the reload `SIGHUP` runs
+([Reloading the registry](registry.md#reloading-the-registry)): the
+configuration file, `[auth]` and the listeners' certificate files are read
+again, checked as a whole, and applied together or not at all. It is a
+write action, admitted for the operator scope and recorded with its
+operator, and it takes no body:
+
+```http
+POST /admin/reload
+Authorization: Bearer <an access token with the operator scope>
+```
+
+It answers `200` with what it applied, the same facts the `registry
+reloaded` log line carries, and `scope` `replica`, since each process
+reloads alone:
+
+```json
+{
+  "members": 2,
+  "endpoints_added": [],
+  "endpoints_removed": [],
+  "members_removed": [],
+  "auth_changed": true,
+  "certificates": ["server.tls"],
+  "needs_restart": [],
+  "scope": "replica"
+}
+```
+
+A refused reload answers `422` (`configuration-invalid`) with the refusal's
+`class` in its message, and the running configuration stays.
+
+A container runtime that cannot send a signal into the container, such as
+Kubernetes with the distroless image, which has no shell, reloads this way.
+In the Kubernetes example, apply the changed ConfigMap, wait until the
+kubelet has updated the mounted files (a ConfigMap mounted as a volume is
+updated on the kubelet's periodic sync,
+<https://kubernetes.io/docs/concepts/configuration/configmap/#mounted-configmaps-are-updated-automatically>),
+then send the reload to each pod, for example through
+`kubectl port-forward pod/ferrofed-0 9464:9464`. A rolling restart of the
+StatefulSet applies the same change, and also every setting a reload
+leaves for a restart.
 
 ## The metrics
 

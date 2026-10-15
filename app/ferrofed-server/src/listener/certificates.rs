@@ -122,6 +122,11 @@ impl TlsFiles {
     }
 }
 
+/// A listener's TLS server configuration read from its files and not yet in
+/// place ([`Certificates::read`], [`Certificates::install`]).
+#[derive(Debug)]
+pub struct Staged(Arc<ServerConfig>);
+
 /// One listener's TLS server configuration, replaced as a whole on a reload.
 #[derive(Debug)]
 pub struct Certificates {
@@ -153,9 +158,24 @@ impl Certificates {
     /// A [`CertificateError`] as [`Certificates::load`] gives one; the
     /// running configuration then stays.
     pub fn reload(&self) -> Result<(), CertificateError> {
-        let config = Arc::new(server_config(&self.files)?);
-        *self.current.write().unwrap_or_else(PoisonError::into_inner) = config;
+        let staged = self.read()?;
+        self.install(staged);
         Ok(())
+    }
+
+    /// Reads the files again into a configuration that is not yet in place,
+    /// so a reload can check every listener before it changes any.
+    ///
+    /// # Errors
+    ///
+    /// A [`CertificateError`] as [`Certificates::load`] gives one.
+    pub fn read(&self) -> Result<Staged, CertificateError> {
+        server_config(&self.files).map(|config| Staged(Arc::new(config)))
+    }
+
+    /// Puts `staged` in place for every handshake that starts afterwards.
+    pub fn install(&self, staged: Staged) {
+        *self.current.write().unwrap_or_else(PoisonError::into_inner) = staged.0;
     }
 
     /// Returns the files the configuration is read from.
