@@ -224,6 +224,15 @@ pub struct StoredView {
     pub answered_by: String,
 }
 
+/// What the top bar says of the gateway that answered the console.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GatewayView {
+    /// The specification version the gateway implements, `major.minor`.
+    pub spec_version: String,
+    /// The federation's identifier.
+    pub federation: String,
+}
+
 /// The self-description view, `OPTIONS {base}/`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FederationView {

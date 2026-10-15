@@ -26,7 +26,7 @@ use crate::journeys::stack::Stack;
 /// nor the sign-out, and the signed-in operator both.
 pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn Error>> {
     browser.goto(&stack.url("/")).await?;
-    browser.titled(PRODUCT).await?;
+    browser.titled(&format!("Sign in · {PRODUCT}")).await?;
     browser.console_clean("the landing page").await?;
     signed_out_shell(browser).await?;
     browser.follow("Sign in").await?;
@@ -35,12 +35,14 @@ pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<
     })
     .await?;
     browser.at(&stack.url("/")).await?;
-    browser.titled(PRODUCT).await?;
+    browser.titled(&format!("Dashboard · {PRODUCT}")).await?;
     browser
-        .element(By::XPath("//nav[@aria-label = 'Views']//a[. = 'Members']"))
+        .element(By::XPath(
+            "//nav[@aria-label = 'Views']//a[normalize-space(.) = 'Members']",
+        ))
         .await?;
     browser
-        .element(By::XPath("//form//button[. = 'Sign out']"))
+        .element(By::XPath("//form//button[normalize-space(.) = 'Sign out']"))
         .await?;
     browser.console_clean("the sign-in").await
 }
@@ -54,7 +56,7 @@ pub(crate) async fn signed_out_shell(browser: &Browser) -> Result<(), Box<dyn Er
     }
     let sign_out = browser
         .driver()
-        .find_all(By::XPath("//button[. = 'Sign out']"))
+        .find_all(By::XPath("//button[normalize-space(.) = 'Sign out']"))
         .await?;
     if !sign_out.is_empty() {
         return Err("a visitor's page offers the sign-out".into());

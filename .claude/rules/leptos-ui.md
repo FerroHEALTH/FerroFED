@@ -415,6 +415,17 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   the bundle to 254426 bytes, 578 below the tree without the boxes. The brand
   mark is a background the stylesheet draws, since an inline SVG brings the
   SVG rendering (§13). A tinted cell for a state word cost about 1 KB.
+- **The redesign's shell (#1075) measured 311315 bytes** brotli-compressed
+  (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Tailwind CSS
+  4.3.3), 56889 more than the 254426 of the tree it was built on. The
+  Lucide icons cost about 5.7 KB of it. The rest is the shell's own browser
+  code: the router's links that mark the current page, the theme switch
+  and its server function, the gateway's status loaded once per page, and
+  the new pages. The drawer and the operator's menu are HTML popovers, so
+  the browser opens and closes them and the bundle carries only the focus
+  move and the close on a followed link. The About page's cards are drawn
+  from data by one function, each card erased, since a page typed all the
+  way down overflows rustc's query depth in the release build.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

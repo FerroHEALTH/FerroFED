@@ -501,7 +501,7 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
     let (response, page) = send(&service, get_as("/query", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{page}");
     assert!(
-        page.contains("<title>Query · FerroFED operator console</title>"),
+        page.contains("<title>Query · FerroFED Console</title>"),
         "{page}"
     );
     assert!(page.contains("Declared: node_1, node_2"), "{page}");

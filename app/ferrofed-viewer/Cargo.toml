@@ -41,6 +41,11 @@ thiserror.workspace = true
 # A secret the operator types into a form, zeroed when dropped on either
 # half.
 secrecy.workspace = true
+# The Lucide icons beside the navigation's and the shell's words: the server
+# renders them and the browser hydrates them.
+leptos_icons.workspace = true
+icondata_lu.workspace = true
+icondata_core.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }

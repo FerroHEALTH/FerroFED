@@ -440,8 +440,9 @@ Seven of the manufacturer's obligations have a first answer:
 
 - The running system names its manufacturer, with the postal address and the
   single point of contact (Art 30(1)(g)): `GET {base}/`, `OPTIONS {base}/`,
-  the startup banner, `ferrofed --version`, the operator console's footer and
-  the image labels.
+  the startup banner, `ferrofed --version`, the operator console's About
+  page, which the footer of every console page links to, and the image
+  labels.
 - The complaint channels, the two registers, corrective action and the
   serious-incident report (Art 30(1)(i) to (o), Art 44(7)) are written
   procedures ([Complaints and incidents](post-market.md)).

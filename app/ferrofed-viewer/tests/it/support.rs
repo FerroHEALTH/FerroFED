@@ -80,6 +80,9 @@ pub(crate) const OPERATOR_TOKEN: &str = "synthetic-operator-token";
 /// The synthetic ID Token every test operator's sign-in leaves.
 pub(crate) const OPERATOR_ID_TOKEN: &str = "synthetic.operator.id-token";
 
+/// The synthetic name every test operator signs in under.
+pub(crate) const OPERATOR_NAME: &str = "Synthetic Operator";
+
 /// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`] and
 /// [`OPERATOR_ID_TOKEN`].
 pub(crate) fn signed_in() -> SignedIn {
@@ -88,6 +91,7 @@ pub(crate) fn signed_in() -> SignedIn {
         expires_in: None,
         refresh_token: None,
         id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
+        operator: Some(String::from(OPERATOR_NAME)),
     }
 }
 

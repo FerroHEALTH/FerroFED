@@ -38,8 +38,9 @@ FerroFED's manufacturer is Cadasto B.V., the Licensor named in
 Art 30(1)(g) asks for these details "in the EHR system", with "a single point
 at which the manufacturer can be contacted". The running gateway shows them
 in `GET {base}/`, in `OPTIONS {base}/` under `manufacturer`, in its startup
-banner and in `ferrofed --version`; the operator console shows them in the
-footer of every page, and both container images carry them as labels.
+banner and in `ferrofed --version`; the operator console shows them on its
+About page, which the footer of every page names the manufacturer and links
+to, and both container images carry them as labels.
 The family book's
 [manufacturer](https://ferrohealth.eu/docs/manufacturer.html) page says what
 being the manufacturer of every FerroHEALTH product covers.

@@ -5,7 +5,7 @@
 
 use cookie::{Cookie, SameSite};
 
-use crate::session::{COOKIE, HOST_PREFIX, SIGN_IN_COOKIE, SessionId, Sessions};
+use crate::session::{COOKIE, HOST_PREFIX, SIGN_IN_COOKIE, SessionId, Sessions, THEME_COOKIE};
 
 impl Sessions {
     /// The name `base` takes on this console: [`HOST_PREFIX`] and `base` when
@@ -52,6 +52,16 @@ impl Sessions {
             .build()
     }
 
+    /// The `Set-Cookie` value that keeps the operator's theme choice `theme`
+    /// for 400 days, the longest a browser keeps a cookie (RFC 6265bis
+    /// §5.6.2).
+    #[must_use]
+    pub fn theme_cookie(&self, theme: &str) -> Cookie<'static> {
+        self.cookie(THEME_COOKIE, theme)
+            .max_age(cookie::time::Duration::days(400))
+            .build()
+    }
+
     /// A cookie that no script reads (`HttpOnly`), that a cross-site
     /// subrequest does not carry while the provider's redirect back does
     /// (`SameSite=Lax`), and that is `Secure` unless the configuration turns
@@ -88,6 +98,15 @@ mod tests {
                 .sign_in_cookie_removal()
                 .to_string()
                 .contains("Max-Age=0")
+        );
+    }
+
+    #[test]
+    fn the_theme_cookie_is_host_bound_http_only_lax_secure_and_kept_400_days() {
+        let sessions = Sessions::new(settings());
+        assert_eq!(
+            "__Host-ferrofed_viewer_theme=dark; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=34560000",
+            sessions.theme_cookie("dark").to_string()
         );
     }
 

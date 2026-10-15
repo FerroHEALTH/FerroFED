@@ -175,7 +175,7 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
         // The query console's submit is enabled once the bundle has run, so
         // the navigation there ends the journey on a hydrated page, and the
         // console check after it reads what the bundle logged on the way.
-        browser.follow("Query").await?;
+        browser.follow("Query console").await?;
         hydrated(browser).await?;
         browser
             .console_clean("the way back to the query console")

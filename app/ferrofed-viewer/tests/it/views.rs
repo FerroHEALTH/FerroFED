@@ -24,7 +24,7 @@ const REST_FACADE: &str = concat!(
 );
 
 /// The one `[source,json]` example of the §7a.2 page.
-fn options_example() -> Result<String, Box<dyn Error>> {
+pub(crate) fn options_example() -> Result<String, Box<dyn Error>> {
     let page = std::fs::read_to_string(REST_FACADE)?;
     let mut lines = page.lines();
     while let Some(line) = lines.next() {
@@ -169,7 +169,7 @@ async fn the_members_view_lists_every_endpoint_with_its_health() -> Result<(), B
     let (response, body) = send(&service, get_as("/members", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
-        body.contains("<title>Members · FerroFED operator console</title>"),
+        body.contains("<title>Members · FerroFED Console</title>"),
         "{body}"
     );
     for id in example_endpoints()? {
@@ -359,9 +359,11 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
     Ok(())
 }
 
-/// Every server function a view loads through or an admin action posts to,
+/// Every server function a view or the shell loads through or an admin action posts to,
 /// with the form body it takes.
-const SERVER_FUNCTIONS: [(&str, &str); 8] = [
+const SERVER_FUNCTIONS: [(&str, &str); 10] = [
+    ("/api/gateway", ""),
+    ("/api/theme", "theme=dark"),
     ("/api/members", ""),
     ("/api/integrity", "offset=0"),
     ("/api/stored-queries", "offset=0"),
@@ -652,6 +654,7 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
         let gateway = gateway_after(delay).await?;
         let (_state, service, session) = signed_in_console(&gateway)?;
         for (page, content) in [
+            ("/", "Gateway UP"),
             ("/members", "<caption>Member endpoints</caption>"),
             (
                 "/integrity",

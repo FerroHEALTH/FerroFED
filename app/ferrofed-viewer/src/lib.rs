@@ -11,8 +11,10 @@
 //! ([`session`], [`oidc`]), so the browser carries an opaque cookie and never
 //! a token, and it holds no clinical data. [`admin`] runs the operator's
 //! admin actions on the replicas' admin listeners its configuration names.
-//! [`app`] is the page tree both
-//! halves share, with [`manufacturer`] named in its footer; [`server`] serves it with the health route and the sign-in
+//! [`app`] is the page tree both halves share, drawn in the [`shell`] from
+//! the [`components`] and [`styles`] in the operator's [`theme`], with
+//! [`manufacturer`] named in full on the [`about`] page every footer links
+//! to; [`server`] serves it with the health route and the sign-in
 //! routes, [`config`] reads the TOML configuration, [`cli`] and [`command`]
 //! run the binary, and [`healthcheck`] is the job a container runtime runs
 //! beside it. No specification governs the viewer: our own design.
@@ -22,9 +24,12 @@
 //! between them.
 #![doc(test(attr(deny(warnings))))]
 
+pub mod about;
 pub mod admin;
 pub mod app;
+pub mod components;
 pub mod configure;
+pub mod home;
 // NOTE: Regulation (EU) 2025/327 Art 30(1)(g): the browser half links no FerroFED crate,
 // so the console compiles the registry's own file (the Rust reference, the `path` attribute).
 #[path = "../../ferrofed-registry/src/manufacturer.rs"]
@@ -32,6 +37,16 @@ pub mod manufacturer;
 pub mod query;
 pub mod shell;
 pub mod styles;
+// The browser half of the server function, which the server macro writes, is
+// a network call that awaits nothing, and the lint names the macro alone.
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        clippy::unused_async_trait_impl,
+        reason = "written by the server_fn #[server] macro for the browser half, whose call awaits nothing here (https://docs.rs/server_fn/0.8/server_fn/attr.server.html)"
+    )
+)]
+pub mod theme;
 pub mod views;
 
 #[cfg(not(target_arch = "wasm32"))]

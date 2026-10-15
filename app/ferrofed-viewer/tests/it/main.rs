@@ -37,6 +37,8 @@ mod secrets;
 #[cfg(test)]
 mod server;
 #[cfg(test)]
+mod shell;
+#[cfg(test)]
 mod sign_in;
 #[cfg(test)]
 mod sign_out;

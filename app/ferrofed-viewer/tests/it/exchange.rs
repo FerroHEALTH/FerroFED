@@ -193,6 +193,57 @@ async fn a_verified_sign_in_begins_a_session_and_returns_to_the_console()
     Ok(())
 }
 
+/// The session id of the cookie a completed sign-in `response` sets.
+fn session_of(
+    response: &http::Response<()>,
+) -> Result<ferrofed_viewer::session::SessionId, Box<dyn Error>> {
+    response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(|cookie| cookie.strip_prefix("ferrofed_viewer_session="))
+        .and_then(|rest| rest.split(';').next())
+        .map(ferrofed_viewer::session::SessionId::from_cookie)
+        .ok_or_else(|| "a session cookie".into())
+}
+
+#[tokio::test]
+async fn the_session_holds_the_operator_name_the_id_token_gives() -> Result<(), Box<dyn Error>> {
+    // OpenID Connect Core 1.0 §5.1: `name`, else `preferred_username`.
+    for (mut claims, expected) in [
+        (
+            vec![
+                ("name", String::from("\"Synthetic Operator\"")),
+                ("preferred_username", String::from("\"s.operator\"")),
+            ],
+            Some("Synthetic Operator"),
+        ),
+        (
+            vec![("preferred_username", String::from("\"s.operator\""))],
+            Some("s.operator"),
+        ),
+        (vec![("name", String::from("\"  \""))], None),
+        (vec![], None),
+    ] {
+        let provider = Provider::start().await?;
+        let (state, service) = console(&provider.configuration(None))?;
+        let begun = begin(&service).await?;
+        claims.push(("nonce", format!("\"{}\"", begun.nonce)));
+        let token = Provider::id_token(&provider.issuer, &claims)?;
+        provider.answers(&token).await;
+        let response = complete(&service, &begun).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{claims:?}");
+        let id = session_of(&response)?;
+        assert_eq!(
+            expected,
+            state.sessions().operator(&id)?.as_deref(),
+            "{claims:?}"
+        );
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn the_token_request_carries_the_code_and_the_pkce_verifier() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;

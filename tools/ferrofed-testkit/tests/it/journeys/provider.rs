@@ -34,6 +34,9 @@ use crate::console::{AUDIENCE, ISSUER, OPERATOR_SCOPE};
 /// The console's client id at the provider.
 pub(crate) const CLIENT_ID: &str = "ferrofed-viewer";
 
+/// The name the operator signs in under, which the top bar shows.
+pub(crate) const OPERATOR: &str = "synthetic.operator";
+
 /// The path of the authorization endpoint.
 const AUTHORIZE: &str = "/authorize";
 
@@ -170,6 +173,7 @@ fn id_token(issuer: &Issuer, name: &str, nonce: &str) -> Result<String, Box<dyn 
         "iss": name,
         "aud": CLIENT_ID,
         "sub": "synthetic-operator",
+        "preferred_username": OPERATOR,
         "iat": now,
         "exp": now.saturating_add(300),
         "nonce": nonce,

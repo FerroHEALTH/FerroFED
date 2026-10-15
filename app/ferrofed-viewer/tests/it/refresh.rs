@@ -65,6 +65,7 @@ fn session(state: &ViewerState, lifetime: Duration) -> Result<SessionId, Box<dyn
         expires_in: Some(lifetime),
         refresh_token: Some(SecretString::from(FIRST)),
         id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
+        operator: None,
     })?)
 }
 

@@ -30,12 +30,12 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
         "{response:?}"
     );
     assert!(
-        body.contains("<title>FerroFED operator console</title>"),
+        body.contains("<title>Sign in · FerroFED Console</title>"),
         "{body}"
     );
-    assert!(body.contains("<h1>FerroFED operator console"), "{body}");
+    assert!(body.contains(">Sign in to the console</h1>"), "{body}");
     assert!(
-        body.contains(r#"<a href="/login" rel="external">"#),
+        body.contains(r#"<a href="/login" rel="external""#),
         "{body}"
     );
     Ok(())
@@ -45,7 +45,7 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
 async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console("[session]\nsecure_cookie = false\n")?;
-    for path in ["/", "/no/such/page"] {
+    for path in ["/", "/no/such/page", "/about"] {
         let (_response, body) = send(&service, get(path)?).await?;
         assert!(!body.contains("<nav"), "{path}: {body}");
         assert!(!body.contains("Sign out"), "{path}: {body}");
@@ -53,17 +53,14 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
     }
     let (_response, body) = send(&service, get("/")?).await?;
     assert!(
-        body.contains(r#"<a href="/login" rel="external">"#),
+        body.contains(r#"<a href="/login" rel="external""#),
         "{body}"
     );
 
     let session = state.sessions().establish(signed_in())?;
-    for path in ["/", "/no/such/page"] {
+    for path in ["/", "/no/such/page", "/about"] {
         let (_response, body) = send(&service, get_as(path, &session)?).await?;
-        assert!(
-            body.contains(r#"<nav aria-label="Views""#),
-            "{path}: {body}"
-        );
+        assert!(body.contains(r#"aria-label="Views""#), "{path}: {body}");
         assert!(body.contains("Sign out"), "{path}: {body}");
         assert!(body.contains(r#"href="/members""#), "{path}: {body}");
     }
@@ -77,27 +74,63 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
     Ok(())
 }
 
+/// What the `<footer>` of `body`, the page at `path`, holds.
+fn footer<'a>(path: &str, body: &'a str) -> Result<&'a str, String> {
+    body.split_once("<footer")
+        .and_then(|(_, rest)| rest.split_once("</footer>"))
+        .map(|(inside, _)| inside)
+        .ok_or_else(|| format!("{path} has no footer: {body}"))
+}
+
+// Regulation (EU) 2025/327 Art 30(1)(g): the manufacturer's name, postal
+// address and single point of contact, in the system. Every page names the
+// manufacturer and links the About page, which names it in full.
 #[tokio::test]
-async fn every_page_names_the_manufacturer_in_its_footer() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
-    for path in ["/", "/no/such/page"] {
-        let (_response, body) = send(&service, get(path)?).await?;
-        let footer = body
-            .split_once("<footer>")
-            .and_then(|(_, rest)| rest.split_once("</footer>"))
-            .map(|(inside, _)| inside)
-            .ok_or_else(|| format!("{path} has no footer: {body}"))?;
-        // Regulation (EU) 2025/327 Art 30(1)(g): the name, the postal address
-        // and the single point of contact, in the system.
+async fn every_page_links_the_about_page_which_names_the_manufacturer_in_full()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
+    let session = state.sessions().establish(signed_in())?;
+    for (path, signed) in [
+        ("/", false),
+        ("/no/such/page", false),
+        ("/about", false),
+        ("/", true),
+        ("/no/such/page", true),
+        ("/about", true),
+        ("/members", true),
+    ] {
+        let request = if signed {
+            get_as(path, &session)?
+        } else {
+            get(path)?
+        };
+        let (_response, body) = send(&service, request).await?;
+        let footer = footer(path, &body)?;
         for text in [
-            "FerroFED operator console",
+            "FerroFED Console",
+            env!("CARGO_PKG_VERSION"),
+            "Cadasto B.V.",
+            r#"<a href="/about">About</a>"#,
+        ] {
+            assert!(footer.contains(text), "{path} {signed}: {text}: {footer}");
+        }
+    }
+    for request in [get("/about")?, get_as("/about", &session)?] {
+        let (response, body) = send(&service, request).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{body}");
+        assert!(
+            body.contains("<title>About · FerroFED Console</title>"),
+            "{body}"
+        );
+        for text in [
+            "FerroFED Console",
             env!("CARGO_PKG_VERSION"),
             "Cadasto B.V.",
             "Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands",
             r#"<a href="mailto:info@cadasto.com">info@cadasto.com</a>"#,
             r#"<a href="https://www.cadasto.com/contact/">https://www.cadasto.com/contact/</a>"#,
         ] {
-            assert!(footer.contains(text), "{path}: {text}: {footer}");
+            assert!(body.contains(text), "{text}: {body}");
         }
     }
     Ok(())
