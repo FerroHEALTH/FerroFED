@@ -82,7 +82,7 @@ pub mod server {
     use crate::configure::sections;
     use crate::gateway::config::Change;
     use crate::gateway::{AccessToken, Gateway, GatewayError};
-    use crate::views::load::server::Stop;
+    use crate::views::load::server::{ActionKind, Stop};
     use crate::views::model::Refusal;
 
     /// How many revisions the history shows.
@@ -556,6 +556,7 @@ pub mod server {
         plan: Plan,
     ) -> ActionAnswer {
         let name = replica.name.as_str();
+        let config = ActionKind::Configuration;
         match plan {
             Plan::SaveMember {
                 base,
@@ -568,7 +569,7 @@ pub mod server {
                 };
                 let saved = save(gateway, replica, token, (change, *member)).await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "member save"), saved, |line| line))
             }
             Plan::RemoveMember { base, reason, node } => {
                 let change = Change {
@@ -577,15 +578,21 @@ pub mod server {
                 };
                 let saved = gateway.remove_member(replica, token, change, &node).await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "member removal"), saved, |line| line))
             }
             Plan::Apply { revision } => {
                 let applied = gateway.apply_revision(replica, token, revision).await;
-                render::answers::applied(&acted(name, "apply", applied, |line| line), "apply")
+                render::answers::applied(
+                    &acted(config, (name, "apply"), applied, |line| line),
+                    "apply",
+                )
             }
             Plan::Rollback { current, reason } => {
                 let applied = gateway.rollback(replica, token, current, &reason).await;
-                render::answers::applied(&acted(name, "rollback", applied, |line| line), "rollback")
+                render::answers::applied(
+                    &acted(config, (name, "rollback"), applied, |line| line),
+                    "rollback",
+                )
             }
             Plan::StoreQuery {
                 name: query,
@@ -595,17 +602,22 @@ pub mod server {
                 let stored = gateway
                     .store_query(replica, token, (&query, &version), &aql)
                     .await;
-                render::answers::stored(&acted(name, "store", stored, |stored| StoredLine {
-                    name: stored.name,
-                    version: stored.version,
-                }))
+                render::answers::stored(&acted(
+                    config,
+                    (name, "stored-query store"),
+                    stored,
+                    |stored| StoredLine {
+                        name: stored.name,
+                        version: stored.version,
+                    },
+                ))
             }
             Plan::SaveSection { resource, request } => {
                 let saved = gateway
                     .save_section(replica, token, &resource, &request)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "section save"), saved, |line| line))
             }
             Plan::RemoveSection {
                 base,
@@ -620,15 +632,21 @@ pub mod server {
                     .remove_section(replica, token, change, &resource)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "section removal"), saved, |line| {
+                    line
+                }))
             }
             Plan::Confirm { revision } => {
                 let confirmed = gateway.confirm_revision(replica, token, revision).await;
-                sections::confirmed(&acted(name, "confirmation", confirmed, |mark| mark))
+                sections::confirmed(&acted(config, (name, "confirmation"), confirmed, |mark| {
+                    mark
+                }))
             }
             Plan::Approve { revision } => {
                 let approved = gateway.approve_revision(replica, token, revision).await;
-                sections::approved(&acted(name, "approval", approved, |review| review))
+                sections::approved(&acted(config, (name, "approval"), approved, |review| {
+                    review
+                }))
             }
         }
     }

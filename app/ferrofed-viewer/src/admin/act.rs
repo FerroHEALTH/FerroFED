@@ -42,8 +42,8 @@ pub async fn clear_ehr_id(
             .clear_ehr_id(replica, &token, &planned.ehr_id)
             .await;
         answers.push(server::acted(
-            &replica.name,
-            "clear",
+            crate::views::load::server::ActionKind::Admin,
+            (&replica.name, "clear"),
             answered,
             server::cleared,
         ));
@@ -69,7 +69,12 @@ pub async fn repair_drift(
         Err(refused) => return Ok(crate::admin::answer::refused(&refused)),
     };
     let answered = state.gateway().repair_drift(replica, &token, &sent).await;
-    let answer = server::acted(&replica.name, "drift repair", answered, server::repaired);
+    let answer = server::acted(
+        crate::views::load::server::ActionKind::Admin,
+        (&replica.name, "drift repair"),
+        answered,
+        server::repaired,
+    );
     Ok(crate::admin::answer::repaired(&answer))
 }
 
@@ -85,7 +90,7 @@ pub mod server {
     use crate::gateway::GatewayError;
     use crate::gateway::admin::{Distribution, Redistribution};
     use crate::query::model::EndpointLine;
-    use crate::views::load::server::{Asked, Stop, stopped};
+    use crate::views::load::server::{ActionKind, Asked, Stop, stopped};
     use crate::views::model::{Refusal, ViewError};
 
     /// The value of the replica field that names every replica.
@@ -245,20 +250,28 @@ pub mod server {
         ))
     }
 
-    /// What `replica` did with the action `what`, `answered` read by `read`,
-    /// logged by replica, status and code, never by what the action named.
+    /// What `replica` did with the action `what` of `kind`, `answered` read
+    /// by `read`, logged by replica, status and code, never by what the
+    /// action named.
     pub fn acted<A, T>(
-        replica: &str,
-        what: &str,
+        kind: ActionKind,
+        (replica, what): (&str, &str),
         answered: Result<A, GatewayError>,
         read: fn(A) -> T,
     ) -> ReplicaAnswer<T> {
         let acted = match answered {
             Ok(report) => {
-                tracing::info!(replica, action = what, "an operator's admin action ran");
+                tracing::info!(replica, action = what, "an operator's {} ran", kind.noun());
                 Acted::Done(read(report))
             }
-            Err(error) => match stopped(&error, Asked::Action { what, replica }) {
+            Err(error) => match stopped(
+                &error,
+                Asked::Action {
+                    kind,
+                    what,
+                    replica,
+                },
+            ) {
                 Stop::Refused(refusal) => Acted::Refused(refusal),
                 Stop::Fault(fault) => Acted::Fault(fault),
             },

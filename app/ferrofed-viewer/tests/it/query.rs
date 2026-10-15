@@ -484,10 +484,13 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
     }
     let logged = captured.text();
     assert!(
-        logged.contains("the gateway refused a view"),
+        logged.contains(r#"the gateway refused a query status=400 Bad Request code="aql-invalid""#),
         "the capture saw the refusal: {logged}"
     );
-    assert!(!logged.contains(PATIENT), "{logged}");
+    assert!(!logged.contains("refused a view"), "{logged}");
+    for named in [PATIENT, "SELECT c/uid/value", "$patient", OPERATOR_TOKEN] {
+        assert!(!logged.contains(named), "{named}: {logged}");
+    }
     Ok(())
 }
 

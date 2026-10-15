@@ -49,7 +49,7 @@ pub async fn run_query(
     /// The query console's form.
     form: QueryForm,
 ) -> Result<RenderedAnswer, ViewError> {
-    use crate::views::load::server::Stop;
+    use crate::views::load::server::{Asked, Stop, stopped};
 
     let (state, token) = crate::views::load::server::signed_in()?;
     server::from_the_hydrated_page()?;
@@ -60,7 +60,7 @@ pub async fn run_query(
     let answer = match state.gateway().query(&token, &call).await {
         Ok(answer) => answer,
         Err(error) => {
-            return match crate::views::load::server::refused(&error) {
+            return match stopped(&error, Asked::Query) {
                 Stop::Refused(refused) => Ok(crate::query::answer::refused(&refused)),
                 Stop::Fault(error) => Err(error),
             };
