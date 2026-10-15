@@ -70,12 +70,13 @@ struct RemoveRequest {
 pub fn available() -> Vec<BindingSection> {
     BindingSection::ALL
         .into_iter()
-        .filter(|section| match section {
-            BindingSection::Pixm | BindingSection::Pdqm | BindingSection::Xcpd => {
-                cfg!(feature = "binding-ihe")
-            }
-            BindingSection::NlGf => cfg!(feature = "binding-nl"),
-            _ => true,
+        .filter(|section| {
+            let ihe = matches!(
+                section,
+                BindingSection::Pixm | BindingSection::Pdqm | BindingSection::Xcpd
+            );
+            let nl = matches!(section, BindingSection::NlGf);
+            (!ihe || cfg!(feature = "binding-ihe")) && (!nl || cfg!(feature = "binding-nl"))
         })
         .collect()
 }
