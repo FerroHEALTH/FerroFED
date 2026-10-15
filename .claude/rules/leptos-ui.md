@@ -307,17 +307,20 @@ changes here and nowhere else.
 
 | Measure | Budget |
 |---|---|
-| WebAssembly, brotli-compressed | 245760 bytes |
+| WebAssembly, brotli-compressed | 256000 bytes |
 
 - **The gating number is the brotli-compressed WebAssembly.** The book's
   `deployment/binary_size` chapter has a site serve its WebAssembly
   compressed, every current browser accepts brotli, and the compressed size
   is the download. The raw and gzip sizes are reported beside it, ungated.
-- **The budget is 240 KiB**, raised once from 220 KiB (25% over the
+- **The budget is 250 KiB.** It was set at 220 KiB (25% over the
   measured 180057 bytes of the operator views of #276, 2026-10-05,
-  cargo-leptos 0.3.7, wasm-bindgen 0.2.129, Rust 1.98.1) by the refusal
-  contract of §7 (#608). The headroom takes ordinary growth and toolchain
-  drift. A slice
+  cargo-leptos 0.3.7, wasm-bindgen 0.2.129, Rust 1.98.1), raised to 240 KiB
+  by the refusal contract of §7 (#608), and to 250 KiB by the configuration
+  page (#577), which measured 246193 bytes: its focus move to the outcome
+  after a refused form, which WCAG 2.2 2.4.3 asks for (§10), and the
+  navigation link hidden without an admin replica. The headroom takes ordinary
+  growth and toolchain drift. A slice
   that needs more raises the budget in this table in its own pull request,
   with the measured size and the reason, after checking that what it adds
   belongs in the browser at all (§1).
