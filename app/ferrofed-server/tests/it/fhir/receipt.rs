@@ -8,9 +8,13 @@
 //! cannot be stored refused with none of its answer, and the categories the
 //! deployment receives named in its capability statement.
 
+use std::collections::BTreeMap;
 use std::error::Error;
+use std::sync::Arc;
 
 use axum::body::Body;
+use ferrofed_server::config::Config;
+use ferrofed_server::state::AppState;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
@@ -24,10 +28,10 @@ use super::receive::{
     EHR_SYSTEM, OTHER, OTHER_A, OTHER_NAMESPACE, SUBSTANCE, bound, creating, document, gateway,
     gateway_with, issue, post, receiving, rows, untouched,
 };
-use super::{FHIR, TestResult, UNREACHED_SUPPLIER, fhir_tables_with};
+use super::{FHIR, PUBLIC, TestResult, UNREACHED_SUPPLIER, fhir_tables_with};
 use crate::auth::{bearing, claims, minted};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, settings_with_room};
-use crate::support::{call, send_as_is};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, registry, settings_with_room};
+use crate::support::{call, send_as_is, signed};
 
 #[tokio::test]
 async fn a_body_that_is_not_utf8_is_refused_with_an_outcome() -> TestResult {
@@ -85,6 +89,54 @@ async fn a_write_beyond_a_confined_grant_is_refused_with_an_outcome() -> TestRes
     assert_eq!("forbidden", code);
     assert!(!diagnostics.contains(OTHER), "§5.4.3: {diagnostics}");
     assert!(untouched(&a, &b).await?);
+    Ok(())
+}
+
+/// Node C, whose one endpoint the operator has taken out of service.
+const SUSPENDED_C: &str = r#"
+[[organisation]]
+id = "org-c"
+
+[[node]]
+id = "node-c"
+organisation = "org-c"
+system_id = "cdr-c.example.org"
+
+[[endpoint]]
+id = "node-c-pub"
+node = "node-c"
+url = "http://127.0.0.1:9"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-c"
+status = "suspended"
+"#;
+
+#[tokio::test]
+async fn a_member_with_no_endpoint_in_service_is_refused_with_nothing_sent() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let listed = dir.path().join("registry.toml");
+    std::fs::write(&listed, registry(&a.uri(), &b.uri(), SUSPENDED_C))?;
+    let text = format!(
+        "profile = \"development\"\n\n[server]\npublic_url = \"{PUBLIC}\"\n\n\
+         [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
+         node_selection = \"ask-all\"\n{}{}",
+        toml::Value::String(listed.display().to_string()),
+        rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]),
+        receiving("node-c", &[NAMESPACE])
+    );
+    let settings = Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve()?;
+    let state = Arc::new(AppState::build(&settings)?);
+    let app = ferrofed_server::router(state, &settings_with_room());
+    let (status, text) = call(app, post(&document())?).await?;
+    assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status, "{text}");
+    let (code, diagnostics) = issue(&text)?;
+    assert_eq!("transient", code);
+    assert_eq!(
+        "member node-c of the category Patient-Summaries has no endpoint it is reached through",
+        diagnostics
+    );
+    assert!(untouched(&a, &b).await?, "N23: no member is asked");
     Ok(())
 }
 

@@ -31,14 +31,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::response::Response;
-use eehrxf::receive::displays::DisplayError;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
-use ferrofed_eehrxf::face;
-use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Unreceived, Written};
+use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Written};
 use ferrofed_engine::dispatch::{Contact, DispatchOptions};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::single_node::ehr::EhrCallError;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -46,13 +43,16 @@ use ferrofed_registry::snapshot::Endpoint;
 use http::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::access::{Accessed, Asked, NoAccess};
+use crate::access::{Accessed, Asked};
 use crate::config::fhir::FhirSettings;
 use crate::facade::demographics::{self, Identified};
+use crate::facade::receive::refusal::{Unresolved, attach, failed, refused, unprepared};
 use crate::facade::request::Arrived;
 use crate::facade::route::Deadlines;
 use crate::facade::{confined, security};
 use crate::federation::Federation;
+
+mod refusal;
 
 /// The operation an access record names for a received document: the FHIR
 /// `create` interaction on `Bundle` (FHIR R4 documents §3.3.4).
@@ -138,65 +138,6 @@ struct Resolved {
     /// Every value the outbound gate withholds: each identifier of the
     /// document's patient, and each master identity found for one.
     withheld: Vec<SecretString>,
-}
-
-/// Why the patient of a prepared document names no one `ehr_id` at its
-/// member, with nothing sent to any member.
-#[derive(Debug)]
-enum Unresolved {
-    /// No identifier of the patient is in a namespace the face resolves.
-    NoIdentifier,
-    /// The member holds no EHR for the patient.
-    NoEhr,
-    /// The identifiers name different patients, or one names none.
-    Disagree,
-    /// No resolver is configured.
-    NoResolver,
-    /// The demographics step or the resolver could not answer.
-    Unavailable,
-    /// The caller's grant is confined to another patient.
-    OtherPatient,
-    /// The patient of the caller's confined grant could not be resolved.
-    Unconfined(confined::Unconfined),
-}
-
-impl Unresolved {
-    /// The answer to a document `prepared` whose patient did not resolve,
-    /// under the client's `request_id` and the gateway's `logged` id.
-    fn respond(&self, prepared: &Prepared, (request_id, logged): (&str, &str)) -> Response {
-        let member = &prepared.member;
-        match self {
-            Self::NoIdentifier => refused(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "required",
-                "the document's Patient carries no identifier in a namespace the gateway resolves",
-            ),
-            Self::NoEhr => refused(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "not-found",
-                &format!("member {member} holds no EHR for the document's patient"),
-            ),
-            Self::Disagree => refused(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "business-rule",
-                &format!(
-                    "the identifiers of the document's Patient do not name one patient at member {member}"
-                ),
-            ),
-            Self::NoResolver => refused(
-                StatusCode::NOT_IMPLEMENTED,
-                "not-supported",
-                "no cross-reference resolver is configured to resolve the document's patient (§5.2)",
-            ),
-            Self::Unavailable => refused(
-                StatusCode::FAILED_DEPENDENCY,
-                "transient",
-                &format!("the document's patient could not be resolved at member {member}"),
-            ),
-            Self::OtherPatient => confined::refused("receive", request_id, logged),
-            Self::Unconfined(unconfined) => unconfined.respond(request_id, logged),
-        }
-    }
 }
 
 /// Resolves the patient of `prepared` at `endpoint`'s member, in the
@@ -391,69 +332,6 @@ struct Origin<'a> {
     named: PatientIdentifier,
 }
 
-/// The answer to a write `error` ended, with its access record when the
-/// request left the gateway.
-fn failed(
-    federation: &Federation,
-    prepared: &Prepared,
-    at: &Origin<'_>,
-    error: &EhrCallError,
-    logged: &str,
-) -> Response {
-    let endpoint = at.endpoint.id();
-    let member = &prepared.member;
-    let (status, code, diagnostics) = match error {
-        EhrCallError::Withheld { endpoint, part } => {
-            security::gate_stopped(endpoint, part, logged);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "security",
-                String::from(
-                    "the write would have carried a patient identifier outside its body, so it was not sent (§5.4.1, N33)",
-                ),
-            )
-        }
-        EhrCallError::Rejected { status, .. } => (
-            StatusCode::BAD_GATEWAY,
-            "processing",
-            format!(
-                "member {member} refused the composition at endpoint {endpoint} with {}",
-                status.as_u16()
-            ),
-        ),
-        EhrCallError::TimeOut { .. } => (
-            StatusCode::GATEWAY_TIMEOUT,
-            "timeout",
-            format!("member {member} did not answer at endpoint {endpoint} before the deadline"),
-        ),
-        EhrCallError::Capped(_) | EhrCallError::Expired { .. } => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "transient",
-            format!("the write to member {member} could not be sent before the deadline"),
-        ),
-        other => {
-            tracing::warn!(
-                error = %crate::chain(other),
-                request_id = logged,
-                "a received document's composition was not written"
-            );
-            (
-                StatusCode::BAD_GATEWAY,
-                "exception",
-                format!("the write to member {member} at endpoint {endpoint} failed"),
-            )
-        }
-    };
-    let mut response = refused(status, code, &diagnostics);
-    let contact = Contact::of_ehr_call_error(error);
-    let accessed = contact
-        .left()
-        .then(|| accessed(federation, prepared, at, (None, "failed")))
-        .flatten();
-    attach(&mut response, accessed);
-    response
-}
-
 /// The access record's facts of a write of `prepared` sent to `at`, which
 /// created `version` when it did and ended `status`, or `None` when the
 /// federation keeps no access log (Annex II 3.2).
@@ -511,78 +389,4 @@ fn accessed(
         }],
         consent_set_aside: std::collections::BTreeSet::new(),
     })
-}
-
-/// The answer to a document the component did not prepare, with nothing
-/// sent to any member.
-fn unprepared(unreceived: &Unreceived, logged: &str) -> Response {
-    match unreceived {
-        Unreceived::Read(_) => refused(
-            StatusCode::BAD_REQUEST,
-            "invalid",
-            &crate::chain(unreceived),
-        ),
-        Unreceived::Category(_) | Unreceived::NoMember { .. } => refused(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "not-supported",
-            &unreceived.to_string(),
-        ),
-        Unreceived::NonConformant { findings } => {
-            let mut response = crate::fhir::fhir_json(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                &receive::nonconformant(findings),
-            );
-            response.extensions_mut().insert(NoAccess);
-            response
-        }
-        Unreceived::Mapping(_)
-        | Unreceived::Display(DisplayError::Missing { .. } | DisplayError::Uncoded { .. }) => {
-            refused(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "processing",
-                &crate::chain(unreceived),
-            )
-        }
-        // NOTE: no specification governs this: our own design; the terminology server is
-        // the gateway's upstream, so its refusal or silence is a 502 naming its status.
-        Unreceived::Display(DisplayError::Lookup { .. }) | Unreceived::Terminology(_) => refused(
-            StatusCode::BAD_GATEWAY,
-            "transient",
-            &crate::chain(unreceived),
-        ),
-        _ => {
-            tracing::error!(
-                error = %crate::chain(unreceived),
-                request_id = logged,
-                "a received document could not be prepared"
-            );
-            refused(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "exception",
-                "the document could not be checked against its profiles",
-            )
-        }
-    }
-}
-
-/// An `OperationOutcome` of one error, answered with `status`, stating that
-/// no member was sent anything.
-fn refused(status: StatusCode, code: &str, diagnostics: &str) -> Response {
-    let mut response = crate::fhir::fhir_json(status, &face::outcome(code, diagnostics));
-    response.extensions_mut().insert(NoAccess);
-    response
-}
-
-/// Attaches `accessed` to `response` for the access log, or the statement
-/// that no member was sent anything.
-fn attach(response: &mut Response, accessed: Option<Accessed>) {
-    response.extensions_mut().remove::<NoAccess>();
-    match accessed {
-        Some(accessed) => {
-            response.extensions_mut().insert(accessed);
-        }
-        None => {
-            response.extensions_mut().insert(NoAccess);
-        }
-    }
 }

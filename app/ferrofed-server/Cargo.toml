@@ -152,6 +152,9 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# The OperationOutcome a refusal of the receive path answers, read back by
+# its unit tests (#929).
+fhir-types = { workspace = true, features = ["r4", "resources"] }
 # The query an Audit Log Used record carries, base64, read back by the
 # ITI-81 search test (#818).
 ferrofed-testkit.workspace = true

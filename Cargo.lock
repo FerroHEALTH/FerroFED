@@ -1509,6 +1509,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "fhir-types",
  "governor",
  "http",
  "ihe-iti",
