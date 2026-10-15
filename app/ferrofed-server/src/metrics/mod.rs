@@ -9,8 +9,9 @@
 //! surface and not the other. Every label value is drawn from a closed set
 //! or from the registry: `kind` from the integrity incident kinds, `outcome`
 //! from the §11.1 statuses or, for the consent pre-filter's calls, from its
-//! three decisions, `result` from the reload outcomes, `endpoint` from the
-//! registry's endpoint ids, the inbound request labels from the method set
+//! three decisions, `result` from the reload outcomes and from what a
+//! replica did with a revision another one marked running, `endpoint` from
+//! the registry's endpoint ids, the inbound request labels from the method set
 //! and the route templates ([`inbound`]), `event` and `reason` from the
 //! security events and the refusal reasons ([`security`]), and `limit` from
 //! the overload limits ([`nodes::Limit`]). Nothing a request carries becomes
@@ -43,7 +44,7 @@ use axum::routing::get;
 use ferrofed_registry::incident::Kind;
 use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter};
+use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _, ObservableCounter};
 use opentelemetry_otlp::WithExportConfig as _;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
@@ -112,6 +113,16 @@ pub const OVERLOAD_REFUSALS: &str = "ferrofed.overload.refusals";
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";
 
+/// Under `config.ui = "managed"`, the revisions another replica marked
+/// running that this replica applied or refused, by `result`; Prometheus
+/// `ferrofed_config_revision_follows_total`.
+pub const CONFIG_REVISION_FOLLOWS: &str = "ferrofed.config.revision.follows";
+
+/// Under `config.ui = "managed"`, `1` while this replica runs the revision
+/// the store marks running and `0` while it does not; Prometheus
+/// `ferrofed_config_revision_in_step`.
+pub const CONFIG_REVISION_IN_STEP: &str = "ferrofed.config.revision.in_step";
+
 /// The upper bounds of the node request duration buckets, in seconds: 5 ms
 /// to 30 s, past the default per-node timeout of 10 s.
 pub const NODE_DURATION_BUCKETS: [f64; 12] = [
@@ -136,6 +147,27 @@ impl ReloadResult {
     /// Every result, in declaration order.
     pub const ALL: [Self; 2] = [Self::Applied, Self::Refused];
 
+    /// The label value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Applied => "applied",
+            Self::Refused => "refused",
+        }
+    }
+}
+
+/// What this replica did with a revision another replica marked running,
+/// the `result` label of [`CONFIG_REVISION_FOLLOWS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FollowResult {
+    /// The replica applied the revision.
+    Applied,
+    /// The replica refused the revision and kept its running configuration.
+    Refused,
+}
+
+impl FollowResult {
     /// The label value.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -175,6 +207,8 @@ pub struct Metrics {
     nodes: Instruments,
     inbound: inbound::Instruments,
     reloads: Counter<u64>,
+    follows: Counter<u64>,
+    in_step: Gauge<u64>,
     /// Kept for the life of the provider: its callback reads the security
     /// event counts at each collection.
     _security: ObservableCounter<u64>,
@@ -262,6 +296,21 @@ impl Metrics {
         for result in ReloadResult::ALL {
             reloads.add(0, &[KeyValue::new("result", result.as_str())]);
         }
+        let follows = meter
+            .u64_counter(CONFIG_REVISION_FOLLOWS)
+            .with_description(
+                "Configuration revisions another replica marked running, applied or refused here",
+            )
+            .build();
+        for result in [FollowResult::Applied, FollowResult::Refused] {
+            follows.add(0, &[KeyValue::new("result", result.as_str())]);
+        }
+        let in_step = meter
+            .u64_gauge(CONFIG_REVISION_IN_STEP)
+            .with_description(
+                "Whether this replica runs the configuration revision the store marks running",
+            )
+            .build();
         let nodes = Instruments::new(&meter);
         let inbound = inbound::Instruments::new(&meter);
         let security = security::observe(&meter);
@@ -272,6 +321,8 @@ impl Metrics {
             nodes,
             inbound,
             reloads,
+            follows,
+            in_step,
             _security: security,
             _incidents: incidents,
             _audit: crate::audit::metrics::Instruments::new(&meter),
@@ -301,6 +352,19 @@ impl Metrics {
     pub fn reloaded(&self, result: ReloadResult) {
         self.reloads
             .add(1, &[KeyValue::new("result", result.as_str())]);
+    }
+
+    /// Counts a revision another replica marked running that this replica
+    /// handled as `result`.
+    pub fn followed(&self, result: FollowResult) {
+        self.follows
+            .add(1, &[KeyValue::new("result", result.as_str())]);
+    }
+
+    /// Records whether this replica runs the revision the store marks
+    /// running.
+    pub fn in_step(&self, in_step: bool) {
+        self.in_step.record(u64::from(in_step), &[]);
     }
 
     /// Returns the instruments the bindings record through.

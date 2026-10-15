@@ -15,12 +15,16 @@
 //!   connection string `url` or `url_file` holds, a secret; only a build with
 //!   the `postgres` feature offers it.
 //!
+//! Under `managed`, `poll_ms` sets how often each gateway reads the running
+//! mark, to apply a revision another replica marked running ([`poll`]).
+//!
 //! The table is part of the bootstrap core, which a revision never holds
 //! ([`crate::revision::tree::CORE`]). No specification governs this: our own
 //! design.
 
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use ferrofed_registry::secret::SecretUrl;
 use serde::Deserialize;
@@ -98,6 +102,10 @@ pub struct Revisions {
     pub url: Option<SecretUrl>,
     /// A file holding [`Revisions::url`], read at boot.
     pub url_file: Option<PathBuf>,
+    /// How often, in milliseconds, the gateway reads the store's running
+    /// mark, to apply a revision another replica marked running; 5000 when
+    /// the table sets none.
+    pub poll_ms: Option<u64>,
 }
 
 /// The store the revisions are kept in, resolved.
@@ -161,6 +169,14 @@ pub enum RevisionsFault {
         /// The backend chosen.
         backend: Backend,
     },
+    /// `config.poll_ms` is outside the bounds it is read within.
+    #[error(
+        "config.poll_ms is {value}; it must be from {POLL_MIN_MS} to {POLL_MAX_MS} milliseconds"
+    )]
+    Poll {
+        /// The value set.
+        value: u64,
+    },
     /// The PostgreSQL connection string does not parse; the parser's message
     /// is not kept, since it may quote the password.
     #[error("{key} is not a PostgreSQL connection string, a URL or libpq key/value pairs")]
@@ -210,6 +226,10 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
         // nothing of the store is read, so a key that would configure it is refused.
         return match keys.iter().find(|(_, set)| *set) {
             Some((key, _)) => Err(RevisionsFault::Off { key }.into()),
+            None if section.poll_ms.is_some() => Err(RevisionsFault::Off {
+                key: "config.poll_ms",
+            }
+            .into()),
             None => Ok(None),
         };
     }
@@ -235,6 +255,29 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
         }
     };
     Ok(Some(store))
+}
+
+/// The shortest `config.poll_ms` read, in milliseconds.
+pub const POLL_MIN_MS: u64 = 100;
+
+/// The longest `config.poll_ms` read, in milliseconds: ten minutes.
+pub const POLL_MAX_MS: u64 = 600_000;
+
+/// How often the gateway reads the store's running mark, `config.poll_ms`:
+/// 5000 ms when the table sets none.
+///
+/// # Errors
+///
+/// [`RevisionsFault::Poll`] for a value under [`POLL_MIN_MS`] or over
+/// [`POLL_MAX_MS`].
+pub fn poll(section: &Revisions) -> Result<Duration, Error> {
+    // NOTE: no specification governs this: our own design; five seconds keeps a
+    // replica out of step briefly at one small read of the mark per replica.
+    let value = section.poll_ms.unwrap_or(5_000);
+    if !(POLL_MIN_MS..=POLL_MAX_MS).contains(&value) {
+        return Err(RevisionsFault::Poll { value }.into());
+    }
+    Ok(Duration::from_millis(value))
 }
 
 /// Refuses the first of `keys` that is set, which `backend` does not read.

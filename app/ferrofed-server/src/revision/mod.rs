@@ -16,8 +16,9 @@
 //! The embedded `redb` file serves one gateway process ([`embedded`]); a
 //! PostgreSQL database serves replicas that share it (`postgres`, behind the
 //! `postgres` feature). [`service::Revisions`] validates, applies and rolls
-//! back, and [`routes`] serves them on the admin listener. No specification
-//! governs this: our own design.
+//! back, [`routes`] serves them on the admin listener, and [`watch`] applies
+//! on each replica the revision another one marked running. No
+//! specification governs this: our own design.
 
 use std::error::Error;
 use std::fmt;
@@ -36,6 +37,7 @@ pub mod postgres;
 pub mod routes;
 pub mod service;
 pub mod tree;
+pub mod watch;
 
 /// The number of a revision: `1` for the first one a store holds, and one
 /// more than its base for every later one.

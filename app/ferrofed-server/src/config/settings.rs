@@ -98,6 +98,9 @@ pub struct Settings {
     pub audit: crate::audit::config::AuditSettings,
     /// The store of the configuration revisions, under `config.ui = "managed"`.
     pub revisions: Option<crate::config::revisions::Store>,
+    /// How often the running mark of the revision store is read, under
+    /// `config.ui = "managed"`.
+    pub revision_poll: Duration,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
     pub deprecated: Vec<crate::config::deprecated::Deprecated>,

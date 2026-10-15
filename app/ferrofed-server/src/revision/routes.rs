@@ -11,7 +11,7 @@
 //!
 //! | Route | Answer |
 //! |---|---|
-//! | `GET` [`CONFIG`] | the running revision's mark and the newest revision |
+//! | `GET` [`CONFIG`] | the running revision's mark, the newest revision, and the revision this replica runs |
 //! | `GET` [`REVISIONS`] | one page of the history, newest first |
 //! | `POST` [`REVISIONS`] | `201` with the revision saved |
 //! | `GET` [`REVISION`] | one revision |
@@ -102,13 +102,20 @@ pub fn writes(managed: Arc<Managed>) -> Router {
 
 /// The body of `GET` [`CONFIG`].
 #[derive(Debug, Serialize)]
-struct Running {
+struct Standing {
     /// Always `managed`: the routes exist only then.
     ui: &'static str,
     /// The newest revision.
     head: Option<RevisionId>,
     /// The mark of the running revision.
     current: Option<Current>,
+    /// The revision this replica runs, once it runs one.
+    running: Option<RevisionId>,
+    /// Whether this replica runs the revision the store marks running.
+    in_step: bool,
+    /// The revision marked running that this replica refused, while it
+    /// does not run it.
+    refused: Option<RevisionId>,
 }
 
 /// The body of a save.
@@ -219,10 +226,15 @@ async fn config(State(managed): State<Arc<Managed>>, headers: HeaderMap) -> Resp
     let revisions = Arc::clone(&managed.revisions);
     blocking(&headers, move || {
         let store = revisions.store();
-        Ok(Running {
+        let current = store.current()?;
+        let replica = revisions.replica();
+        Ok(Standing {
             ui: crate::config::revisions::Ui::Managed.as_str(),
             head: store.head()?,
-            current: store.current()?,
+            in_step: replica.running == current.as_ref().map(|mark| mark.revision),
+            running: replica.running,
+            refused: replica.refused,
+            current,
         })
     })
     .await

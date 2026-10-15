@@ -103,7 +103,7 @@ with the revision number as `config-revision-saved`,
 
 | Route | Answer |
 |---|---|
-| `GET /admin/config` | the newest revision's number as `head`, and the running revision's mark as `current`: its number, the one before it, whether it is `applied` or `pending-restart` with the keys a restart applies, who applied it and when |
+| `GET /admin/config` | the newest revision's number as `head`, and the running revision's mark as `current`: its number, the one before it, whether it is `applied` or `pending-restart` with the keys a restart applies, who applied it and when; and this replica's own `running`, `in_step` and `refused` ([Several replicas](#several-replicas)) |
 | `GET /admin/config/revisions?offset=&limit=` | one page of the history, newest first, at most 100 |
 | `GET /admin/config/revisions/{id}` | one revision |
 | `GET /admin/config/revisions/{id}/diff/{other}` | each dotted key that differs from `id` to `other`: `added`, `removed` or `changed`, with both values |
@@ -135,7 +135,38 @@ whose parser message is never echoed, and `404 revision-unknown`
 
 With `backend = "postgres"`, the replicas share the history and the
 running mark, and a save or an apply on one replica is checked against
-what every other replica wrote. An apply takes effect on the replica that
-served it; each other replica runs it at its next `SIGHUP` reload or
-restart, so send `SIGHUP` to each replica after an apply, as you do after
-a file change.
+what every other replica wrote.
+
+Each replica reads the running mark every `config.poll_ms`, 5000 ms by
+default. When the mark names a revision the replica does not run, because
+another replica applied or rolled back a revision, or recorded its changed
+file at a `SIGHUP`, the replica applies that revision through the same
+reload path an apply takes. Within one `poll_ms` of an apply, every replica
+runs the revision. The watch reads the mark with an ordinary query; it does
+not use PostgreSQL `LISTEN`/`NOTIFY`.
+
+A replica can refuse a revision another replica applied, for example when
+a file the revision names, such as the registry document, is missing or
+invalid on that replica. The replica then logs the refusal, counts it in
+`ferrofed_config_revision_follows_total{result="refused"}`, and keeps its
+running configuration. It does not try the same revision again. Fix the
+cause, then send it `SIGHUP` or apply a newer revision.
+
+`GET /admin/config` on each replica says where that replica stands:
+
+| Member | Meaning |
+|---|---|
+| `running` | the revision this replica runs, or `null` before the first one |
+| `in_step` | whether `running` is the revision the store marks current |
+| `refused` | the revision this replica refused, while it does not run it |
+
+`ferrofed_config_revision_in_step` is `1` while the replica runs the
+current revision and `0` while it does not, and the alert
+`FerroFEDConfigurationDrift` fires after 10 minutes at `0`
+([Metrics](metrics.md)).
+
+| Key | Default | What it sets |
+|---|---|---|
+| `config.poll_ms` | `5000` | how often each replica reads the running mark, from 100 to 600000 ms; read only under `managed`, and a change takes a restart |
+
+Under `config.ui = "off"` nothing is read: no store, no watch.

@@ -12,7 +12,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::revision::{Author, Origin, Outcome, RevisionId};
 use http::{Method, StatusCode};
 
-use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Running, TestResult, rest};
+use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Standing, TestResult, rest};
 use crate::support::{ISSUER, error_body};
 
 /// The operator as a revision records them.
@@ -28,7 +28,7 @@ async fn the_file_load_is_the_first_revision_and_runs() -> TestResult {
     let gateway = Gateway::start("")?;
     let (status, text) = gateway.get("/admin/config").await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let running: Running = serde_json::from_str(&text)?;
+    let running: Standing = serde_json::from_str(&text)?;
     assert_eq!("managed", running.ui);
     assert_eq!(Some(1), running.head);
     let current = running.current.ok_or("a revision runs")?;

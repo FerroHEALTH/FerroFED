@@ -116,6 +116,13 @@ groups:
           severity: ticket
         annotations:
           summary: A registry reload was refused, and the gateway runs the previous registry
+      - alert: FerroFEDConfigurationDrift
+        expr: ferrofed_config_revision_in_step == 0
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: A replica does not run the configuration revision the store marks running
       - alert: FerroFEDAuditSpoolBacklog
         expr: ferrofed_audit_spool_events > 1000
         for: 15m

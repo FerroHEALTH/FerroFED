@@ -141,6 +141,33 @@ pub struct Revisions {
     store: Box<dyn RevisionStore>,
     core: Mutex<toml::Table>,
     serial: Mutex<()>,
+    replica: Mutex<Replica>,
+}
+
+/// Where this replica stands against the store's running mark.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Replica {
+    /// The revision this replica runs, once it runs one.
+    pub running: Option<RevisionId>,
+    /// The revision another replica marked running that this replica
+    /// refused, while it does not run it.
+    pub refused: Option<RevisionId>,
+}
+
+/// What a read of the running mark did on this replica.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+#[non_exhaustive]
+pub enum Followed {
+    /// This replica runs the revision marked running, or none is marked.
+    InStep,
+    /// This replica applied the revision marked running, which another
+    /// replica applied.
+    Applied(RevisionId),
+    /// This replica refused the revision marked running before, and keeps
+    /// its running configuration.
+    Drifting(RevisionId),
 }
 
 impl std::fmt::Debug for Revisions {
@@ -160,6 +187,7 @@ impl Revisions {
             store,
             core: Mutex::new(core),
             serial: Mutex::new(()),
+            replica: Mutex::new(Replica::default()),
         }
     }
 
@@ -332,7 +360,7 @@ impl Revisions {
             }
             .into());
         }
-        match reloader.reload_config(&config) {
+        match reloader.reload_config(&config, id) {
             Ok(applied) => self.settle_held(mark, &applied.needs_restart),
             Err(error) => {
                 if let Swapped::Stale { current } = self.store.swap_current(Some(id), &running)? {
@@ -343,6 +371,70 @@ impl Revisions {
                     );
                 }
                 Err(RevisionError::Reload(error))
+            }
+        }
+    }
+
+    /// Where this replica stands: the revision it runs, and one it refused.
+    #[must_use]
+    pub fn replica(&self) -> Replica {
+        *self.replica.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Records that this replica runs revision `id`.
+    pub fn ran(&self, id: RevisionId) {
+        *self.replica.lock().unwrap_or_else(PoisonError::into_inner) = Replica {
+            running: Some(id),
+            refused: None,
+        };
+    }
+
+    /// Reads the store's running mark and, when it names a revision this
+    /// replica neither runs nor refused before, applies it through
+    /// `reloader`, so a revision another replica applied runs here too.
+    ///
+    /// A revision this replica refuses is recorded as refused and not tried
+    /// again; the replica keeps its running configuration until it runs
+    /// another revision, by a later apply or a `SIGHUP` reload.
+    ///
+    /// # Errors
+    ///
+    /// [`RevisionError::Store`] when the store cannot be read, and, with the
+    /// revision recorded as refused, [`RevisionError::Unknown`] for a mark
+    /// that names no revision held, [`RevisionError::Refused`] and
+    /// [`RevisionError::Reload`] when its configuration is refused here.
+    pub fn follow(&self, reloader: &Reloader) -> Result<Followed, RevisionError> {
+        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(current) = self.store.current()? else {
+            return Ok(Followed::InStep);
+        };
+        let id = current.revision;
+        let replica = self.replica();
+        if replica.running == Some(id) {
+            return Ok(Followed::InStep);
+        }
+        if replica.refused == Some(id) {
+            return Ok(Followed::Drifting(id));
+        }
+        let outcome = self
+            .store
+            .revision(id)?
+            .ok_or(RevisionError::Unknown(id))
+            .and_then(|revision| Ok(self.validate(&revision.toml)?.1))
+            .and_then(|config| {
+                reloader
+                    .reload_config(&config, id)
+                    .map_err(RevisionError::Reload)
+            });
+        match outcome {
+            Ok(_applied) => Ok(Followed::Applied(id)),
+            Err(error @ RevisionError::Store(_)) => Err(error),
+            Err(refusal) => {
+                self.replica
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .refused = Some(id);
+                Err(refusal)
             }
         }
     }
@@ -554,8 +646,25 @@ pub fn boot(
     let Some(store) = &settings.revisions else {
         return Ok((settings, None));
     };
-    let revisions = Revisions::new(crate::revision::open(store)?, split(tree).0);
+    let (effective, revisions) = boot_over(crate::revision::open(store)?, tree)?;
+    Ok((effective, Some(revisions)))
+}
+
+/// Records the file's configuration `tree` in `store`, as [`boot`] does with
+/// the store the settings name, and returns the settings to start with and
+/// the revisions.
+///
+/// # Errors
+///
+/// Every error of [`Revisions::file_loaded`], and [`RevisionError::Refused`]
+/// when the configuration to run does not resolve.
+pub fn boot_over(
+    store: Box<dyn RevisionStore>,
+    tree: &toml::Table,
+) -> Result<(Settings, std::sync::Arc<Revisions>), RevisionError> {
+    let revisions = Revisions::new(store, split(tree).0);
     let loaded = revisions.file_loaded(tree)?;
     let effective = loaded.config.resolve().map_err(Refused::from)?;
-    Ok((effective, Some(std::sync::Arc::new(revisions))))
+    revisions.ran(loaded.revision);
+    Ok((effective, std::sync::Arc::new(revisions)))
 }
