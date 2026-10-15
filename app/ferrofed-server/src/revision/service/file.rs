@@ -8,21 +8,26 @@
 use std::sync::PoisonError;
 
 use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Current, Origin, Outcome, Revision};
+use ferrofed_registry::revision::{Author, Current, Origin, Revision};
 use jiff::Timestamp;
 
-use super::{FILE_ATTEMPTS, Loaded, Refused, RevisionError, Revisions, SAVED, Stale, held_table};
+use super::{
+    APPLIED, FILE_ATTEMPTS, FileRevision, Loaded, REFUSED, Refused, RevisionError, Revisions,
+    SAVED, Stale, held_table, shown,
+};
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::reload::ReloadError;
 use crate::revision::resources::{remove, set, value_at};
 use crate::revision::tree::{console_keys, split, with_console_of, without_console};
 use crate::revision::{Draft, Saved, Swapped};
 
 impl Revisions {
-    /// Records the configuration the file gave, `tree`, as a revision when it
-    /// differs from the newest one the file gave, marking it running, and
-    /// returns the configuration to run: the file's when it changed, and the
-    /// running revision's beside the file's core when it did not.
+    /// Records the configuration the file gave at a start, `tree`, as a
+    /// revision when it differs from the newest one the file gave that ran,
+    /// marking it running, and returns the configuration to run: the file's
+    /// when it changed, and the running revision's beside the file's core
+    /// when it did not.
     ///
     /// A changed file's revision carries the resources the operator console
     /// owns over from the running revision ([`with_console_of`]), so a
@@ -41,6 +46,25 @@ impl Revisions {
     /// running revision beside the file's core, is refused, and the store's
     /// errors.
     pub fn file_loaded(&self, tree: &toml::Table) -> Result<Loaded, RevisionError> {
+        self.file_read(tree, Marking::Now)
+    }
+
+    /// Records the configuration the file gave at a reload, `tree`, as
+    /// [`Revisions::file_loaded`] does, without marking it running: the
+    /// reload path marks it once it applied it ([`Revisions::file_applied`]),
+    /// so a revision the reload refuses never becomes the one every replica
+    /// follows ([`FileRevision::refused`]).
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`Revisions::file_loaded`].
+    pub fn file_reloaded(&self, tree: &toml::Table) -> Result<Loaded, RevisionError> {
+        self.file_read(tree, Marking::Applied)
+    }
+
+    /// Records `tree` as a file revision, marking it running when `marking`
+    /// says.
+    fn file_read(&self, tree: &toml::Table, marking: Marking) -> Result<Loaded, RevisionError> {
         let (core, rest) = split(tree);
         *self.core.lock().unwrap_or_else(PoisonError::into_inner) = core;
         let text =
@@ -53,9 +77,13 @@ impl Revisions {
                 .iter()
                 .rev()
                 .find(|revision| revision.origin == Origin::File);
-            let unchanged = match newest_file {
-                Some(revision) => file_part(revision)? == rest,
-                None => false,
+            // NOTE: no specification governs this: our own design; a file revision numbered past
+            // the mark never ran, as a reload refused it, so the same file is recorded again.
+            let unchanged = match (newest_file, &current) {
+                (Some(revision), Some(mark)) if revision.id <= mark.revision => {
+                    file_part(revision)? == rest
+                }
+                _ => false,
             };
             if unchanged && let Some(current) = &current {
                 let running = self
@@ -64,8 +92,11 @@ impl Revisions {
                     .ok_or(RevisionError::Unknown(current.revision))?;
                 return Ok(Loaded {
                     config: self.validate(&running.toml)?.1,
-                    revision: running.id,
-                    recorded: false,
+                    file: FileRevision {
+                        revision: running.id,
+                        recorded: false,
+                        previous: Some(running.id),
+                    },
                 });
             }
             if let Some(mark) = &current
@@ -95,29 +126,22 @@ impl Revisions {
                 Saved::Exhausted => return Err(RevisionError::Exhausted),
             };
             let running = current.map(|current| current.revision);
-            let mark = Current {
+            tracing::info!(
+                target: crate::facade::security::TARGET,
+                event = SAVED,
+                revision = %revision.id,
+                origin = "file",
+                "the configuration file was recorded as a revision"
+            );
+            let file = FileRevision {
                 revision: revision.id,
+                recorded: true,
                 previous: running,
-                outcome: Outcome::Applied,
-                needs_restart: Vec::new(),
-                applied_by: Author::File,
-                applied_at: Timestamp::now(),
-                awaiting: None,
-                confirmed: None,
             };
-            if self.store.swap_current(running, &mark)? == Swapped::Swapped {
-                tracing::info!(
-                    target: crate::facade::security::TARGET,
-                    event = SAVED,
-                    revision = %revision.id,
-                    origin = "file",
-                    "the configuration file was recorded as a revision"
-                );
-                return Ok(Loaded {
-                    config,
-                    revision: revision.id,
-                    recorded: true,
-                });
+            if marking == Marking::Applied
+                || self.store.swap_current(running, &file.mark(&[]))? == Swapped::Swapped
+            {
+                return Ok(Loaded { config, file });
             }
         }
         Err(Stale::Current {
@@ -125,6 +149,43 @@ impl Revisions {
             current: self.store.current()?.map(|current| current.revision),
         }
         .into())
+    }
+
+    /// Records that a reload of the file applied `file`, leaving
+    /// `needs_restart` for the next start: a revision the load recorded is
+    /// marked running from the mark the load read, pending a restart when
+    /// anything waits for one, as an applied revision's is.
+    ///
+    /// # Errors
+    ///
+    /// The store's errors.
+    pub fn file_applied(
+        &self,
+        file: FileRevision,
+        needs_restart: &[&'static str],
+    ) -> Result<(), RevisionError> {
+        if !file.recorded {
+            return Ok(());
+        }
+        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
+        match self
+            .store
+            .swap_current(file.previous, &file.mark(needs_restart))?
+        {
+            Swapped::Swapped => tracing::info!(
+                target: crate::facade::security::TARGET,
+                event = APPLIED,
+                revision = %file.revision,
+                origin = "file",
+                "the configuration file's revision was applied by a reload"
+            ),
+            Swapped::Stale { current } => tracing::warn!(
+                revision = %file.revision,
+                current = shown(current),
+                "the running revision moved before the file's revision was marked running"
+            ),
+        }
+        Ok(())
     }
 
     /// Checks the file's configuration `rest`, written as `text`, with the
@@ -189,6 +250,36 @@ impl Revisions {
             }
         }
     }
+}
+
+impl FileRevision {
+    /// Records that a reload of the file refused this revision for `error`:
+    /// the running mark stays where the load read it, so no replica follows
+    /// it. The record names the class of the refusal, never a value.
+    pub fn refused(&self, error: &ReloadError) {
+        if !self.recorded {
+            return;
+        }
+        tracing::warn!(
+            target: crate::facade::security::TARGET,
+            event = REFUSED,
+            revision = %self.revision,
+            origin = "file",
+            class = error.class(),
+            reason = %error,
+            current = shown(self.previous),
+            "the reload refused the configuration file's revision, and the running revision stays"
+        );
+    }
+}
+
+/// When a file load marks the revision it records running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Marking {
+    /// At once: a start runs it or does not start.
+    Now,
+    /// Once the reload path applied it.
+    Applied,
 }
 
 /// The part of `revision`, one the file gave, that the file wrote: without

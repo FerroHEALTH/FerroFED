@@ -16,6 +16,7 @@
 mod api;
 mod console;
 mod credentials;
+mod file_reload;
 mod off;
 mod policy;
 mod replicas;

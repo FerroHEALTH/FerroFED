@@ -10,7 +10,9 @@
 //! refused with the errors `config check` reports. An apply moves the current
 //! mark from the revision it read and then hands the configuration to the
 //! reload path ([`Reloader::reload_config`]); a reload that refuses it moves
-//! the mark back, so the mark and the running gateway agree. A rollback saves
+//! the mark back, so the mark and the running gateway agree. A reload of the
+//! file marks the revision it records running only once the reload path
+//! applied it, so no replica follows one it refused. A rollback saves
 //! the content of the revision before the current one as a new revision and
 //! applies it. Every call blocks, so it is made where a thread may. No
 //! specification governs this: our own design.
@@ -611,11 +613,7 @@ impl Revisions {
             return Ok(mark);
         }
         let id = mark.revision;
-        let settled = Current {
-            outcome: Outcome::PendingRestart,
-            needs_restart: needs_restart.iter().map(|key| (*key).to_owned()).collect(),
-            ..mark
-        };
+        let settled = pending(mark, needs_restart);
         if let Swapped::Stale { current } = self.store.swap_current(Some(id), &settled)? {
             tracing::warn!(
                 revision = %id,
@@ -625,31 +623,18 @@ impl Revisions {
         }
         Ok(settled)
     }
+}
 
-    /// Records that a reload of the file applied revision `id`, which the
-    /// file load recorded, leaving `needs_restart` for the next start: the
-    /// mark is then pending a restart, as an applied revision's is.
-    ///
-    /// # Errors
-    ///
-    /// The store's errors.
-    pub fn file_applied(
-        &self,
-        id: RevisionId,
-        needs_restart: &[&'static str],
-    ) -> Result<(), RevisionError> {
-        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        match self.store.current()? {
-            Some(mark) if mark.revision == id => {
-                self.settle_held(mark, needs_restart)?;
-            }
-            current => tracing::warn!(
-                revision = %id,
-                current = shown(current.map(|current| current.revision)),
-                "the running revision moved before the file's pending restart was recorded"
-            ),
-        }
-        Ok(())
+/// `mark` pending a restart for `needs_restart`, when any setting waits for
+/// one.
+fn pending(mark: Current, needs_restart: &[&'static str]) -> Current {
+    if needs_restart.is_empty() {
+        return mark;
+    }
+    Current {
+        outcome: Outcome::PendingRestart,
+        needs_restart: needs_restart.iter().map(|key| (*key).to_owned()).collect(),
+        ..mark
     }
 }
 
@@ -669,10 +654,42 @@ pub fn held_table(revision: &Revision) -> Result<toml::Table, RevisionError> {
 pub struct Loaded {
     /// The configuration, the revision beside the file's bootstrap core.
     pub config: Config,
-    /// The revision it is.
+    /// The revision it is, and whether the load recorded it.
+    pub file: FileRevision,
+}
+
+/// The revision a file load gives the gateway to run, and the mark the load
+/// read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FileRevision {
+    /// The revision.
     pub revision: RevisionId,
     /// Whether the load recorded it as a new revision by the file.
     pub recorded: bool,
+    /// The revision the store marked running when the load read it, from
+    /// which a reload that applies a recorded revision moves the mark.
+    pub previous: Option<RevisionId>,
+}
+
+impl FileRevision {
+    /// The mark of this revision applied by the file, pending a restart for
+    /// `needs_restart` when any setting waits for one.
+    fn mark(&self, needs_restart: &[&'static str]) -> Current {
+        pending(
+            Current {
+                revision: self.revision,
+                previous: self.previous,
+                outcome: Outcome::Applied,
+                needs_restart: Vec::new(),
+                applied_by: Author::File,
+                applied_at: Timestamp::now(),
+                awaiting: None,
+                confirmed: None,
+            },
+            needs_restart,
+        )
+    }
 }
 
 /// The `event` of the record of a saved revision.
@@ -680,6 +697,9 @@ pub const SAVED: &str = "config-revision-saved";
 
 /// The `event` of the record of an applied revision.
 pub const APPLIED: &str = "config-revision-applied";
+
+/// The `event` of the record of a file's revision a reload refused.
+pub const REFUSED: &str = "config-revision-refused";
 
 /// The `event` of the record of a rollback.
 pub const ROLLED_BACK: &str = "config-rolled-back";
@@ -723,6 +743,6 @@ pub fn boot_over(
     let loaded = revisions.file_loaded(tree)?;
     let effective = loaded.config.resolve().map_err(Refused::from)?;
     let revisions = revisions.with_policy(effective.revision_policy.clone());
-    revisions.ran(loaded.revision);
+    revisions.ran(loaded.file.revision);
     Ok((effective, std::sync::Arc::new(revisions)))
 }
