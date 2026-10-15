@@ -54,7 +54,7 @@ partial or planned names the issue that completes it.
 | 3 | "The references to any common specification used in accordance with Article 36" | none is adopted yet ([The obligations and their dates](regulatory-status.md#the-obligations-and-their-dates)) | planned, [#526](https://github.com/FerroHEALTH/FerroFED/issues/526) |
 | 4 | "The results and critical analyses of all verifications and validation tests" | the [conformance statement](conformance-statement.md), the [conformance matrix](conformance.md), the [obligations checklist](obligations.md) and the [clinical safety risk file](clinical-safety.md); the checklist of the Annex II essential requirements is not built | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
 | 5 | "A copy of the information sheet referred to in Article 38" | the [information sheet](information-sheet.md), attached to each release | documented |
-| 6 | "A copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity) | planned, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| 6 | "A copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity), attached to each release as `ferrofed-vX.Y.Z-eu-declaration-of-conformity.md` once the manufacturer issues it; the generator [`scripts/release/declaration-of-conformity.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/release/declaration-of-conformity.sh) | partial, [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) |
 | 37(2) | "a reference to the results obtained from a European digital testing environment referred to in Article 40" | [The European digital testing environment](#the-european-digital-testing-environment) | planned, [#675](https://github.com/FerroHEALTH/FerroFED/issues/675) |
 
 ## Forms placed on the market
@@ -80,8 +80,9 @@ from the same signed tag `vX.Y.Z` on
 - **The files attached to the release:** the gateway compose file with its
   example `ferrofed.toml` and `registry.toml`, the nginx reverse proxy
   configuration, the conformance seed data, the Grafana dashboard and the
-  Prometheus alert rules, and the copies of the information sheet and the
-  instructions for use.
+  Prometheus alert rules, the copies of the information sheet and the
+  instructions for use, and the EU declaration of conformity once the
+  manufacturer issues it.
 
 The library crates under `crates/`, `ehds-logging` and `eehrxf` among them,
 are not published to crates.io; each reaches a user only inside the forms
@@ -183,11 +184,11 @@ gh run download <run id> --repo FerroHEALTH/FerroFED \
   --name conformance-report --name eehrxf-fhir-validation --dir ferrofed-vX.Y.Z/ci
 ```
 
-The archive also holds the release's EU declaration of conformity once one
-exists. Where Cadasto B.V. publishes the archived declaration again, if the
-repository stops serving a release within those ten years, is the
-manufacturer's decision. It is not recorded yet; it is decided with the
-declaration itself.
+The release download also holds the release's EU declaration of
+conformity when the release carries one. Where Cadasto B.V. publishes the
+archived declaration again, if the repository stops serving a release
+within those ten years, is the manufacturer's decision and is still open
+([Decisions open to the manufacturer](#decisions-open-to-the-manufacturer)).
 
 Art 30(3) also asks the manufacturer to make the source code available to
 the relevant authorities "upon a reasoned request". The source of every
@@ -200,12 +201,66 @@ format, it shall be made accessible online for the expected lifetime of the
 EHR system and, in any event, for at least 10 years from the placing on the
 market or the putting into service of the EHR system."
 
-No EU declaration of conformity has been drawn up, and no release carries
-one. [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) plans it,
-with the content of Annex IV: a declaration per release, attached to that
-release on the releases page beside the information sheet, where the
-immutable-releases setting keeps it unchanged and online, and linked from
-this page. Annex III, point 6, then has its copy.
+Art 39(1) has the declaration "state that the manufacturer of an EHR system
+has demonstrated that the essential requirements laid down in Annex II have
+been fulfilled", and Art 39(3) has it "contain the information set out in
+Annex IV". FerroFED's declaration is drawn up per release, as a Markdown
+document attached to that release beside the information sheet:
+
+```text
+https://github.com/FerroHEALTH/FerroFED/releases/download/vX.Y.Z/ferrofed-vX.Y.Z-eu-declaration-of-conformity.md
+```
+
+The immutable-releases setting keeps each attached declaration unchanged
+and online, and the archive copy of [Keeping it for ten
+years](#keeping-it-for-ten-years) holds it too. Annex III, point 6, has
+its copy there.
+
+`scripts/release/declaration-of-conformity.sh` writes it at the release's
+tag, with every item of Annex IV in its order. The release lane's `plan`
+job writes it before the release exists, `github-release` attaches it, and
+`finalize-release` then publishes no release that misses it
+([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
+Before the tag, step 7). Each item comes from a record of the repository at
+the tag, or from the manufacturer:
+
+| Annex IV | What it asks | Where the value comes from |
+|---|---|---|
+| 1 | "The name of the EHR system, version and any additional unambiguous reference allowing identification of the EHR system" | the name and version of `CITATION.cff`, held to `docs/VERSIONS.md`; the tag and its commit; the versions of the two harmonised components, `ehds-logging` and `eehrxf` |
+| 2 | "Name and address of the manufacturer or, where applicable, its authorised representative" | the manufacturer the running gateway names ([Complaints and incidents](post-market.md#the-manufacturer)); the authorised representative row of the [information sheet](information-sheet.md#a-the-manufacturer) |
+| 3 | "A statement that the EU declaration of conformity is issued under the sole responsibility of the manufacturer" | the statement, as Annex IV words it |
+| 4 | the statement of conformity with Chapter III and other relevant Union law, "complemented by the result from the testing environment mentioned in Article 40" | the statement; the other Union acts (Art 39(2)) and the testing environment's result from the manufacturer |
+| 5 | "References to any relevant harmonised standards used and in relation to which conformity is declared" | the manufacturer |
+| 6 | "References to any common specifications used and in relation to which conformity is declared" | the Annex III, point 3 row of the index above: none is adopted yet |
+| 7 | "Place and date of issue of the declaration, signature plus name and function of the person who signed and, if applicable, an indication of the person on whose behalf it was signed" | the date of the release in `CHANGELOG.md`; the place, the signatory, the signature and on whose behalf from the manufacturer |
+| 8 | "Where applicable, additional information" | the technical documentation at the tag, the attached information sheet and instructions for use, and the standards table of the [information sheet](information-sheet.md#e-standards-formats-and-specifications) |
+
+The manufacturer supplies its values in
+[`conformance/eu-declaration-of-conformity.toml`](https://github.com/FerroHEALTH/FerroFED/blob/main/conformance/eu-declaration-of-conformity.toml).
+It also says whether the manufacturer issues a declaration at all. While it
+says it does not, a release carries none and the release lane warns so.
+Once it says it does, every value must be filled: the script refuses a
+declaration that still holds an item marked for the manufacturer, and the
+`plan` job then fails before the release exists, so no release carries a
+declaration with a blank.
+
+No EU declaration of conformity has been issued yet, and no release carries
+one: the manufacturer's file says `issue = false` and its values are empty.
+
+### Decisions open to the manufacturer
+
+- **Where the declaration is published again.** Art 39(4) asks for the
+  declaration to stay "accessible online for the expected lifetime of the
+  EHR system and, in any event, for at least 10 years". The releases page
+  serves it while the repository does. Where Cadasto B.V. publishes the
+  archived declaration if the repository stops serving a release within
+  those ten years is not decided yet
+  ([#940](https://github.com/FerroHEALTH/FerroFED/issues/940)).
+- **The values of the manufacturer's file**, listed above.
+- **The languages.** Art 39(3) has the declaration "translated into one or
+  more official Union languages determined by the Member States in which
+  the EHR system is made available". The declaration is drawn up in
+  English; which translations a Member State asks for is not recorded yet.
 
 ## The European digital testing environment
 

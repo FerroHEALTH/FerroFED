@@ -13,7 +13,8 @@
 #
 # The release is created as a DRAFT, the gateway compose files, the nginx
 # reverse proxy configuration, the conformance seed data, the information
-# sheet and instructions for use, the binaries, SBOMs and attestation bundles
+# sheet and instructions for use, the EU declaration of conformity once the
+# manufacturer issues it, the binaries, SBOMs and attestation bundles
 # are attached to it, the gateway and operator console images are pushed to
 # GHCR, and only once the expected asset set is complete is it PUBLISHED.
 # Publishing last means a half-assembled release is never visible.
@@ -62,6 +63,7 @@ jobs:
       version: ${{ steps.tag.outputs.version }}
       is-prerelease: ${{ steps.tag.outputs.is_prerelease }}
       targets: ${{ steps.targets.outputs.targets }}
+      declaration: ${{ steps.declaration.outputs.issued }}
     steps:
       - id: tag
         name: Resolve and validate the release tag
@@ -221,6 +223,33 @@ jobs:
         # documentation, and the Annex III index must be whole. The guard
         # fetches the previous tag alone into this shallow checkout.
         run: bash scripts/checks/technical-documentation.sh
+
+      - id: declaration
+        name: The EU declaration of conformity is issued whole, or not at all
+        # Regulation (EU) 2025/327 Art 39 and Annex IV. The manufacturer's
+        # file says whether this tree issues a declaration. When it does,
+        # every value must be filled and the declaration is written here once,
+        # so a blank fails the release before it exists; when it does not,
+        # the release carries none and says so in a warning.
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          issued="$(scripts/release/declaration-of-conformity.sh status)"
+          case "$issued" in
+            true)
+              scripts/release/declaration-of-conformity.sh "$VERSION" "$COMMIT" "$RUNNER_TEMP/declaration"
+              ;;
+            false)
+              echo "::warning::the manufacturer issues no EU declaration of conformity from this tree (issue = false in conformance/eu-declaration-of-conformity.toml), so this release carries none."
+              ;;
+            *)
+              echo "::error::the declaration status is '$issued', neither true nor false." >&2
+              exit 1
+              ;;
+          esac
+          echo "issued=$issued" >> "$GITHUB_OUTPUT"
 
       - id: targets
         name: Name the binary targets
@@ -396,6 +425,23 @@ jobs:
             "accompanying/ferrofed-${TAG}-instructions-for-use.md" \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+      # The EU declaration of conformity (Regulation (EU) 2025/327 Art 39,
+      # with the content of Annex IV), written from the tag's records and the
+      # manufacturer's file, attached only when plan found the manufacturer
+      # issues it. The script refuses a declaration with a blank.
+      - name: Attach the EU declaration of conformity
+        if: needs.plan.outputs.declaration == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          scripts/release/declaration-of-conformity.sh "$TAG" "$COMMIT" declaration
+          gh release upload "$TAG" \
+            "declaration/ferrofed-${TAG}-eu-declaration-of-conformity.md" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
   # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
 
   # A call and nothing else. The isolation is what makes the provenance
@@ -473,6 +519,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
           TARGETS: ${{ needs.plan.outputs.targets }}
+          DECLARATION: ${{ needs.plan.outputs.declaration }}
         run: |
           set -euo pipefail
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
@@ -500,14 +547,25 @@ jobs:
           # compose file, the two example files it mounts, the nginx reverse
           # proxy configuration with its SHA-256, the conformance seed data
           # with its SHA-256, the dashboard and alert rules, and the
-          # information sheet and instructions for use of this tag.
+          # information sheet and instructions for use of this tag, and the
+          # EU declaration of conformity when plan found it issued.
+          declaration=""
+          case "$DECLARATION" in
+            true) declaration="ferrofed-${TAG}-eu-declaration-of-conformity.md" ;;
+            false) echo "::warning::$TAG carries no EU declaration of conformity: the manufacturer does not issue one from this tree." ;;
+            *)
+              echo "::error::the declaration output of plan is '$DECLARATION', neither true nor false." >&2
+              exit 1
+              ;;
+          esac
           for asset in compose.yaml ferrofed.toml registry.toml \
             ferrofed.conf ferrofed.conf.sha256sum \
             ferrofed-conformance-seed-data.json \
             ferrofed-conformance-seed-data.json.sha256sum \
             ferrofed-dashboard.json ferrofed-alerts.yaml \
             "ferrofed-${TAG}-information-sheet.md" \
-            "ferrofed-${TAG}-instructions-for-use.md"; do
+            "ferrofed-${TAG}-instructions-for-use.md" \
+            ${declaration:+"$declaration"}; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done
           if [ -n "$missing" ]; then
