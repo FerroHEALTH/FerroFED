@@ -19,6 +19,9 @@
 //!   the model ids of what it reached;
 //! - [`retention`]: how long a record is kept, by its categories and its
 //!   origins, never under the three years of Art 9(2);
+//! - [`label`]: the security labels a record carries for its categories and
+//!   its origins, so the store that holds it can limit who reads it
+//!   (Annex II 3.4);
 //! - [`emergency`]: the purposes of use a deployment declares as asserting
 //!   an access in the vital interests of the data subject (Art 11(5)), and
 //!   the mark of a record whose accessor declared one;
@@ -61,6 +64,7 @@ pub mod balp;
 pub mod category;
 pub mod classify;
 pub mod emergency;
+pub mod label;
 pub mod map;
 pub mod record;
 pub mod retention;

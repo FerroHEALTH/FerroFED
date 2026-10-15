@@ -716,6 +716,9 @@ pub enum Error {
     /// `[access_log.retention]` declares a retention the logging component refuses.
     #[error("[access_log.retention] declares a retention that cannot be used")]
     AccessLogRetention(#[source] ehds_logging::retention::RetentionError),
+    /// `[access_log.labels]` declares a label the logging component refuses.
+    #[error("[access_log.labels] declares a label that cannot be used")]
+    AccessLogLabels(#[source] ehds_logging::label::LabelError),
     /// `[[access_log.emergency_purpose]]` declares a purpose the logging
     /// component refuses.
     #[error("[[access_log.emergency_purpose]] declares a purpose that cannot be used")]

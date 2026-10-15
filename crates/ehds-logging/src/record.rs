@@ -25,6 +25,7 @@ use secrecy::SecretString;
 
 use crate::classify::Classification;
 use crate::emergency::Emergency;
+use crate::label::Labels;
 use crate::retention::Retention;
 
 /// What the access did to the data.
@@ -459,6 +460,10 @@ pub struct AccessRecord {
     pub request: Request,
     /// How long the record is kept (Art 9(2), Annex II 3.4).
     pub retention: Retention,
+    /// The security labels the record carries for its categories and its
+    /// origins, so the store that holds it can limit who reads it (Annex II
+    /// 3.4).
+    pub labels: Labels,
     /// The mark of an access the accessor declared, through its purpose of
     /// use, as made to protect the vital interests of the data subject (Art
     /// 11(5)), when it did.
@@ -478,6 +483,7 @@ impl fmt::Debug for AccessRecord {
             .field("origins", &self.origins)
             .field("request", &self.request)
             .field("retention", &self.retention)
+            .field("labels", &self.labels)
             .field("emergency", &self.emergency)
             .finish()
     }

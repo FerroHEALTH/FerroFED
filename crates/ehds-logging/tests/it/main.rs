@@ -17,6 +17,8 @@ mod classify;
 #[cfg(test)]
 mod emergency;
 #[cfg(test)]
+mod label;
+#[cfg(test)]
 mod map;
 #[cfg(test)]
 mod property;

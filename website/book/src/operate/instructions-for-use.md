@@ -285,9 +285,10 @@ deployment in the EU must plan for are:
   period it states (Annex II, points 3.3 and 3.4;
   [Reading the log](audit.md#reading-the-log)). A query over many
   patients' data names no patient in its record, so a search by the
-  person's identifier does not find it, and the records carry no label for
-  access rights by origin and category
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
+  person's identifier does not find it. Each record carries a security
+  label per category and per origin, and the access rights by origin and
+  category hold only once you configure your repository to apply them
+  ([Labelling the access records](access-labels.md)).
 - **The access record names the professional only as the token does.** It
   records the professional's identifier and the assurance level when your
   issuer's tokens state them, and an assurance level only for an issuer

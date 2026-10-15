@@ -39,6 +39,14 @@
 //! and a correlation identifier the client sent is a `detail` of the request
 //! id's entity.
 //!
+//! The record's security labels ([`crate::label`], Annex II 3.4) are its
+//! `meta.security`, which a FHIR repository can limit access by, and each is
+//! also the `securityLabel` of the entity it belongs to: the categories' on
+//! the `ehds-categories` entity and each origin's on its `origin` entity,
+//! which the `RESTful` ATNA mapping keeps as the DICOM
+//! `ParticipantObjectSensitivity` (`RESTful` ATNA Rev. 3.6
+//! Table 3.20.4.2.2.1-1).
+//!
 //! An emergency access (Regulation (EU) 2025/327 Art 11(5)) keeps its
 //! purposes of use where every purpose is written, in `agent:user`
 //! `purposeOfUse` and in `purposeOfEvent`, and is marked in one entity of
@@ -53,7 +61,7 @@ use std::sync::Arc;
 use ihe_iti::balp::{
     APPLICATION, AuditRecorder, CREATE, CUSTODIAN, DELETE, DESTINATION_ROLE, DOMAIN_RESOURCE,
     Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Peer, READ,
-    REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, UPDATE, What,
+    REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, SecurityLabel, UPDATE, What,
 };
 use ihe_iti::user::{Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -61,7 +69,10 @@ use url::Url;
 
 use crate::classify::Classification;
 use crate::emergency::Emergency;
-use crate::record::{AccessRecord, Action, Outcome, PatientIdentifier, PatientLookup, Relayed};
+use crate::label::Label;
+use crate::record::{
+    AccessRecord, Action, Origin, Outcome, PatientIdentifier, PatientLookup, Relayed,
+};
 use crate::sink::{AccessSink, Reservation, SinkError};
 
 /// The names of the `detail` entries a record's added entities carry.
@@ -283,6 +294,7 @@ pub fn exchange(record: &AccessRecord, gateway: &Url) -> Exchange {
         },
         on_behalf: OnBehalfOf::User(user),
         entities: entities(record),
+        security: security(&record.labels.all()),
     }
 }
 
@@ -381,6 +393,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
             .iter()
             .map(|correlation| Detail::new(detail::CORRELATION, correlation.clone()))
             .collect(),
+        security_labels: Vec::new(),
     })];
     match record.action {
         Action::Query => entities.push(Entity::Query(
@@ -403,6 +416,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
                 name: Some(request.operation.clone()),
                 description: None,
                 details: Vec::new(),
+                security_labels: Vec::new(),
             }));
         }
     }
@@ -420,6 +434,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
                 Detail::new(detail::ENDPOINT, ehr.endpoint.clone()),
                 Detail::new(detail::PATIENT_LOOKUP, ehr.patient.code()),
             ],
+            &[],
         ));
     }
     let mut details = categories(&record.categories);
@@ -435,36 +450,50 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         Detail::new(detail::RETENTION_ENDS, retention.ends().to_string()),
         Detail::new(detail::RETENTION_GROUND, retention.ground().code()),
     ]);
-    entities.push(other(None, "ehds-categories", details));
+    entities.push(other(
+        None,
+        "ehds-categories",
+        details,
+        record.labels.categories(),
+    ));
     for origin in &record.origins {
-        let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];
-        details.extend(
-            origin
-                .node
-                .iter()
-                .map(|node| Detail::new(detail::NODE, node.clone())),
-        );
-        details.extend(
-            origin
-                .system_id
-                .iter()
-                .map(|system_id| Detail::new(detail::SYSTEM_ID, system_id.clone())),
-        );
-        details.extend(
-            origin
-                .rows
-                .map(|rows| Detail::new(detail::ROWS, rows.to_string())),
-        );
-        details.extend(origin.categories.iter().flat_map(categories));
-        entities.push(other(Some(origin.endpoint.clone()), "origin", details));
+        entities.push(origin_entity(
+            origin,
+            record.labels.origin(&origin.endpoint),
+        ));
     }
     if let Some(relayed) = &record.accessor.relayed {
-        entities.push(other(None, "ehds-relayed", relayed_details(relayed)));
+        entities.push(other(None, "ehds-relayed", relayed_details(relayed), &[]));
     }
     if let Some(emergency) = &record.emergency {
         entities.push(emergency_entity(emergency));
     }
     entities
+}
+
+/// The entity of `origin`, labelled `labels`: how it answered, its node, its
+/// `system_id`, its rows and its categories.
+fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
+    let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];
+    details.extend(
+        origin
+            .node
+            .iter()
+            .map(|node| Detail::new(detail::NODE, node.clone())),
+    );
+    details.extend(
+        origin
+            .system_id
+            .iter()
+            .map(|system_id| Detail::new(detail::SYSTEM_ID, system_id.clone())),
+    );
+    details.extend(
+        origin
+            .rows
+            .map(|rows| Detail::new(detail::ROWS, rows.to_string())),
+    );
+    details.extend(origin.categories.iter().flat_map(categories));
+    other(Some(origin.endpoint.clone()), "origin", details, labels)
 }
 
 /// The entity that marks an emergency access, naming the purposes that
@@ -490,7 +519,20 @@ fn emergency_entity(emergency: &Emergency) -> Entity {
         name: Some(EMERGENCY_ENTITY.to_owned()),
         description: Some(EMERGENCY_DESCRIPTION.to_owned()),
         details,
+        security_labels: Vec::new(),
     })
+}
+
+/// The security labels `labels` are written as.
+fn security(labels: &[Label]) -> Vec<SecurityLabel> {
+    labels
+        .iter()
+        .map(|label| SecurityLabel {
+            system: label.system().to_owned(),
+            version: label.version().map(str::to_owned),
+            code: label.code().to_owned(),
+        })
+        .collect()
 }
 
 /// `<system>|<code>`, or `<code>` when no system is named.
@@ -561,8 +603,9 @@ fn patients(record: &AccessRecord) -> Vec<&PatientIdentifier> {
     named
 }
 
-/// An entity of type `4` named `name`, identified by `value` when given.
-fn other(value: Option<String>, name: &str, details: Vec<Detail>) -> Entity {
+/// An entity of type `4` named `name`, identified by `value` when given,
+/// labelled `labels`.
+fn other(value: Option<String>, name: &str, details: Vec<Detail>, labels: &[Label]) -> Entity {
     Entity::Described(Described {
         what: value.map(|value| What::Identifier {
             system: None,
@@ -573,6 +616,7 @@ fn other(value: Option<String>, name: &str, details: Vec<Detail>) -> Entity {
         name: Some(name.to_owned()),
         description: None,
         details,
+        security_labels: security(labels),
     })
 }
 

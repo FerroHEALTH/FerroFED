@@ -259,6 +259,13 @@ pub enum FederationError {
         /// The endpoint id that was given.
         endpoint: String,
     },
+    /// `[access_log.labels.origins]` names an endpoint the registry does not
+    /// hold, so no record would ever carry its labels.
+    #[error("access_log.labels.origins names {endpoint}, which is no endpoint of the registry")]
+    LabelEndpointUnknown {
+        /// The endpoint id that was given.
+        endpoint: String,
+    },
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]

@@ -25,6 +25,15 @@
 //! [access_log.retention.origins]
 //! "node-a" = 15
 //!
+//! [access_log.labels]
+//! origin_system = "https://example.org/fhir/CodeSystem/access-log-origin"
+//!
+//! [access_log.labels.categories]
+//! "Laboratory-Reports" = [{ system = "https://example.org/fhir/CodeSystem/access-class", code = "lab" }]
+//!
+//! [access_log.labels.origins]
+//! "node-a" = [{ system = "https://example.org/fhir/CodeSystem/access-class", code = "hospital-a" }]
+//!
 //! [[access_log.emergency_purpose]]
 //! system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
 //! code = "BTG"
@@ -45,6 +54,14 @@
 //! Annex II 3.4). Each record states its period for the Audit Record
 //! Repository that holds it.
 //!
+//! `[access_log.labels]` gives each record a security label per category of
+//! the data it reached and per origin of the data (Annex II 3.4): a category
+//! carries the labels its table names or its own code, an origin the labels
+//! its table names or its endpoint id as a code in `origin_system`, and an
+//! unclassified access the labels of every category. The Audit Record
+//! Repository limits who reads a record by them (no specification governs
+//! the labels: our own design).
+//!
 //! Each `[[access_log.emergency_purpose]]` is a purpose of use, a code and
 //! the system that defines it, that asserts an access in the vital interests
 //! of the data subject (Art 11(5)). A record whose verified token declares
@@ -59,6 +76,7 @@
 use std::collections::BTreeMap;
 
 use ehds_logging::emergency::EmergencyPurposes;
+use ehds_logging::label::{DeclaredLabel, LabelPolicy};
 use ehds_logging::map::{CategoryMap, Declared};
 use ehds_logging::record::Purpose;
 use ehds_logging::retention::{FLOOR_YEARS, RetentionPolicy};
@@ -80,6 +98,8 @@ pub struct AccessLog {
     pub archetypes: BTreeMap<String, Declared>,
     /// How long each record is kept.
     pub retention: Retention,
+    /// The security labels of each record.
+    pub labels: Labels,
     /// The purposes of use that mark an access an emergency access.
     pub emergency_purpose: Vec<EmergencyPurpose>,
     /// The namespaces the patient behind an `ehr_id` is named in, when the
@@ -110,6 +130,32 @@ impl Default for Retention {
     }
 }
 
+/// `[access_log.labels]`, as the configuration writes it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Labels {
+    /// The code system an origin with no labels of its own is labelled in,
+    /// its endpoint id the code: FerroFED's
+    /// `https://ferrofed.eu/fhir/CodeSystem/access-log-origin` unless set.
+    pub origin_system: String,
+    /// The labels of each category, by its code.
+    pub categories: BTreeMap<String, Vec<DeclaredLabel>>,
+    /// The labels of each origin, by its endpoint id.
+    pub origins: BTreeMap<String, Vec<DeclaredLabel>>,
+}
+
+impl Default for Labels {
+    fn default() -> Self {
+        Self {
+            // NOTE: no specification governs an origin label: our own design, a code system
+            // FerroFED owns whose codes are the deployment's endpoint ids.
+            origin_system: "https://ferrofed.eu/fhir/CodeSystem/access-log-origin".to_owned(),
+            categories: BTreeMap::new(),
+            origins: BTreeMap::new(),
+        }
+    }
+}
+
 /// One `[[access_log.emergency_purpose]]`, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -129,6 +175,8 @@ pub struct AccessLogSettings {
     pub map: CategoryMap,
     /// How long every record is kept.
     pub retention: RetentionPolicy,
+    /// The security labels of every record.
+    pub labels: LabelPolicy,
     /// The purposes of use that mark an access an emergency access.
     pub emergency: EmergencyPurposes,
     /// The namespaces the patient behind an `ehr_id` is named in.
@@ -157,7 +205,8 @@ impl AccessLogSettings {
 /// # Errors
 ///
 /// [`Error::AccessLogMap`] for a map the logging component refuses,
-/// [`Error::AccessLogRetention`] for a retention it refuses, and
+/// [`Error::AccessLogRetention`] for a retention it refuses,
+/// [`Error::AccessLogLabels`] for labels it refuses,
 /// [`Error::AccessLogEmergency`] for an emergency purpose it refuses, and
 /// [`Error::AccessLogNamespace`] for an empty patient namespace.
 pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
@@ -176,6 +225,13 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         &map,
     )
     .map_err(Error::AccessLogRetention)?;
+    let labels = LabelPolicy::declare(
+        Some(table.labels.origin_system.as_str()),
+        &table.labels.categories,
+        &table.labels.origins,
+        &map,
+    )
+    .map_err(Error::AccessLogLabels)?;
     let purposes: Vec<Purpose> = table
         .emergency_purpose
         .iter()
@@ -194,6 +250,7 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
     Ok(AccessLogSettings {
         map,
         retention,
+        labels,
         emergency,
         patient_namespaces,
     })

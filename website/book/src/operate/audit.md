@@ -127,7 +127,7 @@ the caller.
 |---|---|
 | (a) the provider or other individuals who accessed the data | an agent whose `who` is an `Organization` by its identifier: the requester's organisation where the issuer states one ([Consent](consent.md)), the IHE IUA `subject_organization_id` otherwise; and the Application agent (DICOM `110150`) with the token's `client_id` |
 | (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, the professional the token names, the assurance level of the authentication, who acts, `altId` the professional identification the requester claims state, and every purpose of use: see [The person behind an access](#the-person-behind-an-access) |
-| (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories) |
+| (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories); each category's security label is on it and in `meta.security` ([Labelling the access records](access-labels.md)) |
 | (d) the time and date | `recorded` |
 | (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (`active`, `node-error`, `time-out`, and so on, or the node's HTTP status for a routed request) and the rows it sent |
 
@@ -508,8 +508,10 @@ A query over many patients' data, one that names no patient and is scoped
 to no `ehr_id`, records neither: the gateway does not know whose rows it
 returned, so a search by the person's identifier does not find it.
 
-Labelling each record so a repository can limit access to it by category
-and origin is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
+Each record carries a security label per category and per origin, in
+`meta.security` and on its `ehds-categories` and `origin` entities, so your
+repository can limit who reads it by category and origin: see [Labelling
+the access records](access-labels.md) and `[access_log.labels]` there.
 
 ### `[access_log]`
 
@@ -537,6 +539,9 @@ years = 5                      # every record, at least 3 (Art 9(2)); 3 when uns
 
 [access_log.retention.origins]
 "node-a" = 15                  # an endpoint id of the registry
+
+[access_log.labels.categories]  # see Labelling the access records
+"Laboratory-Reports" = [{ system = "https://example.org/fhir/CodeSystem/access-class", code = "lab" }]
 
 [[access_log.emergency_purpose]]
 system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
@@ -590,7 +595,7 @@ the configuration loads ([Emergency access](#emergency-access)).
 | 3.2(e) | the origin or origins of the data | one `origin` entity per endpoint the query was sent to, with its node, its outcome and its categories |
 | Art 11(5) | an access to restricted data in the vital interests "logged in a clear and understandable format" | the `ehds-emergency-access` entity of a record whose token declares a purpose you name: see [Emergency access](#emergency-access) |
 | 3.3 | tools to review and analyse the log data, or the connection of external software | the records go to your ATNA Audit Record Repository and are read there with ITI-81 by any Audit Consumer, your Member State's access service included: see [Reading the log](#reading-the-log) |
-| 3.4 | retention periods and access rights by origin and category | each record states the period its categories and origins call for, never under three years (Art 9(2)): see [How long a record is kept](#how-long-a-record-is-kept); access rights are set at your repository, and labelling the records for them is planned ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)) |
+| 3.4 | retention periods and access rights by origin and category | each record states the period its categories and origins call for, never under three years (Art 9(2)): see [How long a record is kept](#how-long-a-record-is-kept); access rights are set at your repository, by the security labels each record carries for its categories and its origins: see [Labelling the access records](access-labels.md) |
 
 ## `[audit]`
 

@@ -194,6 +194,14 @@ impl CategoryMap {
         named(reference, &self.national)
     }
 
+    /// Every category the map can name: the six priority categories of Art
+    /// 14(1) in their order, then each national category it declares.
+    pub fn categories(&self) -> impl Iterator<Item = Category> + '_ {
+        Category::PRIORITY
+            .into_iter()
+            .chain(self.national.iter().cloned().map(Category::National))
+    }
+
     /// Whether the map holds no key.
     #[must_use]
     pub fn is_empty(&self) -> bool {

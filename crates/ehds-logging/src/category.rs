@@ -259,7 +259,7 @@ impl<'a> Reference<'a> {
 
 /// Whether `system` is an absolute URI with no `|` and no whitespace: a
 /// scheme of RFC 3986 §3.1 followed by `:` and at least one character.
-fn is_absolute_uri(system: &str) -> bool {
+pub(crate) fn is_absolute_uri(system: &str) -> bool {
     let Some((scheme, rest)) = system.split_once(':') else {
         return false;
     };
@@ -277,7 +277,7 @@ fn is_absolute_uri(system: &str) -> bool {
 
 /// Whether `code` is a FHIR R4 `code` (`[^\s]+(\s[^\s]+)*`, the whitespace a
 /// single space) with no character below U+0020.
-fn is_fhir_code(code: &str) -> bool {
+pub(crate) fn is_fhir_code(code: &str) -> bool {
     !code.is_empty()
         && !code.starts_with(' ')
         && !code.ends_with(' ')

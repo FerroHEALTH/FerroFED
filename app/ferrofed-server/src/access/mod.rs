@@ -49,6 +49,7 @@ use axum::middleware::Next;
 use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
 use ehds_logging::emergency::EmergencyPurposes;
+use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
     AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
@@ -78,6 +79,7 @@ use crate::state::AppState;
 pub struct AccessLog {
     map: CategoryMap,
     retention: RetentionPolicy,
+    labels: LabelPolicy,
     emergency: EmergencyPurposes,
     patient_namespaces: Vec<IdentifierNamespace>,
     sink: Arc<dyn AccessSink>,
@@ -100,6 +102,7 @@ impl AccessLog {
         Self {
             map,
             retention: RetentionPolicy::default(),
+            labels: LabelPolicy::default(),
             emergency: EmergencyPurposes::default(),
             patient_namespaces: Vec::new(),
             sink,
@@ -118,6 +121,14 @@ impl AccessLog {
     #[must_use]
     pub fn with_retention(mut self, retention: RetentionPolicy) -> Self {
         self.retention = retention;
+        self
+    }
+
+    /// This log, each record labelled as `labels` says (Regulation (EU)
+    /// 2025/327 Annex II 3.4).
+    #[must_use]
+    pub fn with_labels(mut self, labels: LabelPolicy) -> Self {
+        self.labels = labels;
         self
     }
 
@@ -239,6 +250,10 @@ impl Accessed {
             &categories,
             self.origins.iter().map(|asked| asked.endpoint.as_str()),
         );
+        let labels = self.log.labels.label(
+            &categories,
+            self.origins.iter().map(|asked| asked.endpoint.as_str()),
+        );
         let accessor = accessor(caller);
         // NOTE: Regulation (EU) 2025/327 Art 11(5); the mark is read from the purposes the
         // verified token declares alone, never inferred from the query or a node's answer.
@@ -266,6 +281,7 @@ impl Accessed {
                 correlation: caller.correlation().map(str::to_owned),
             },
             retention,
+            labels,
             emergency,
         }
     }

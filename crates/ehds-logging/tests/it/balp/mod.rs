@@ -11,12 +11,14 @@
     reason = "the test seam: the written record is read as a JSON value"
 )]
 
+use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 
 use ehds_logging::balp::{BalpSink, exchange};
 use ehds_logging::category::PRIORITY_SYSTEM;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
+use ehds_logging::label::LabelPolicy;
 use ehds_logging::record::{
     AccessRecord, Accessor, Acting, Action, AssuranceLevel, DataSubject, EhrAt, Origin, Outcome,
     PatientIdentifier, PatientLookup, Professional, Purpose, Request,
@@ -33,6 +35,8 @@ use super::support::{LAB_REPORT, map};
 #[cfg(test)]
 mod emergency;
 #[cfg(test)]
+mod labels;
+#[cfg(test)]
 mod relayed;
 
 /// The synthetic values a record carries, each unlike any other text.
@@ -43,6 +47,8 @@ const PROVIDER: &str = "Qz7-provider-44";
 const PROFESSIONAL: &str = "Qz7-professional-45";
 const NAME: &str = "Qz7-name-47";
 const IDENTIFIER: &str = "Qz7-identifier-48";
+/// The code system the test records label an origin in.
+const ORIGIN_SYSTEM: &str = "https://example.org/fhir/CodeSystem/access-log-origin";
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 const QUERY: &str = "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE \
                      e/ehr_status/subject/external_ref/id/value = 'Qz7-patient-41'";
@@ -57,6 +63,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
     ));
     let retention =
         RetentionPolicy::default().retain(jiff::Timestamp::UNIX_EPOCH, &categories, ["node-a"]);
+    let labels = labels().label(&categories, ["node-a"]);
     AccessRecord {
         action,
         recorded: jiff::Timestamp::UNIX_EPOCH,
@@ -111,8 +118,21 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             correlation: None,
         },
         retention,
+        labels,
         emergency: None,
     }
+}
+
+/// The labels of the test records: each category by its own code, each origin
+/// by its endpoint in [`ORIGIN_SYSTEM`].
+fn labels() -> LabelPolicy {
+    LabelPolicy::declare(
+        Some(ORIGIN_SYSTEM),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &map(),
+    )
+    .expect("the test labels")
 }
 
 fn gateway() -> Url {
@@ -211,7 +231,7 @@ fn each_action_is_written_as_its_pattern() {
 fn a_failed_delete_claims_no_pattern() {
     let written = written(&record(Action::Delete, Outcome::MinorFailure));
     assert!(
-        written.get("meta").is_none(),
+        written.pointer("/meta/profile").is_none(),
         "the Delete pattern fixes outcome 0"
     );
     assert_eq!(written["outcome"], "4");
