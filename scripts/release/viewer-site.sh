@@ -57,10 +57,13 @@ export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="--remap-path-prefix=$cargo
 # cargo-leptos runs the Tailwind CSS standalone CLI and wasm-opt it finds on
 # PATH and downloads either one unchecked when it finds none, so the build
 # refuses to start until PATH holds both at their pinned, verified releases
-# (scripts/release/viewer-tools.sh installs them). The variable tells
-# cargo-leptos which Tailwind major version the configuration is written for
-# (no specification governs this: our own design).
+# (scripts/release/viewer-tools.sh installs them; no specification governs
+# this: our own design).
 bash "$root/scripts/release/viewer-tools.sh" --check
+# The variable never picks the binary, which is the one on PATH. cargo-leptos
+# 0.3.11 reads it for one decision (src/config/tailwind.rs): a version that
+# starts with v4 takes the configuration from the CSS input alone and looks
+# for no tailwind.config.js. It names the pinned release so both agree.
 export LEPTOS_TAILWIND_VERSION="v4.3.3"
 
 # cargo-leptos reads its configuration from the crate's own manifest
