@@ -40,7 +40,7 @@ impl PinnedImage {
 
     /// Returns the image with the digest in the tag position, which is how
     /// `testcontainers` spells a reference (`name:tag`).
-    pub(super) fn image(&self) -> GenericImage {
+    pub(crate) fn image(&self) -> GenericImage {
         GenericImage::new(
             self.repository.to_owned(),
             format!("{}@{}", self.tag, self.digest),

@@ -18,11 +18,11 @@
 use std::sync::Arc;
 
 use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerRequest, GenericImage, ImageExt};
 use uuid::Uuid;
 
 use super::images::{EHRBASE, EHRBASE_POSTGRES};
+use super::retry;
 use super::{
     CDR_PORT, DatabaseServer, HarnessError, HarnessUser, Node, POSTGRES_PORT, Product, names,
     postgres_health_check, ready, role_password,
@@ -73,14 +73,13 @@ pub const RESTRICTED_USER: HarnessUser = HarnessUser {
 /// [`HarnessError::NotReady`] when the CDR does not become ready in time.
 pub async fn ehrbase(system_id: &'static str) -> Result<Node, HarnessError> {
     let database = Arc::new(database_server().await?);
-    let server = request(&database, system_id)
-        .with_env_var("SECURITY_AUTHTYPE", "NONE")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: EHRBASE.repository,
-            source,
-        })?;
+    let server =
+        retry::start(|| request(&database, system_id).with_env_var("SECURITY_AUTHTYPE", "NONE"))
+            .await
+            .map_err(|source| HarnessError::Container {
+                image: EHRBASE.repository,
+                source,
+            })?;
     ready(EHRBASE_PRODUCT, system_id, server, database).await
 }
 
@@ -111,23 +110,24 @@ pub async fn ehrbase_restricted(
     withheld: Uuid,
 ) -> Result<Node, HarnessError> {
     let database = Arc::new(database_server().await?);
-    let server = request(&database, system_id)
-        .with_env_var("SECURITY_AUTHTYPE", "BASIC")
-        .with_env_var("SECURITY_AUTHADMINUSER", RESTRICTED_ADMIN.user)
-        .with_env_var("SECURITY_AUTHADMINPASSWORD", RESTRICTED_ADMIN.password)
-        .with_env_var("SECURITY_AUTHUSER", RESTRICTED_USER.user)
-        .with_env_var("SECURITY_AUTHPASSWORD", RESTRICTED_USER.password)
-        .with_env_var(
-            "SECURITY_ADDITIONALAUTHORIZATIONS_0_PATHPATTERN",
-            withheld_path(withheld),
-        )
-        .with_env_var("SECURITY_ADDITIONALAUTHORIZATIONS_0_ROLES_0", "ADMIN")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: EHRBASE.repository,
-            source,
-        })?;
+    let server = retry::start(|| {
+        request(&database, system_id)
+            .with_env_var("SECURITY_AUTHTYPE", "BASIC")
+            .with_env_var("SECURITY_AUTHADMINUSER", RESTRICTED_ADMIN.user)
+            .with_env_var("SECURITY_AUTHADMINPASSWORD", RESTRICTED_ADMIN.password)
+            .with_env_var("SECURITY_AUTHUSER", RESTRICTED_USER.user)
+            .with_env_var("SECURITY_AUTHPASSWORD", RESTRICTED_USER.password)
+            .with_env_var(
+                "SECURITY_ADDITIONALAUTHORIZATIONS_0_PATHPATTERN",
+                withheld_path(withheld),
+            )
+            .with_env_var("SECURITY_ADDITIONALAUTHORIZATIONS_0_ROLES_0", "ADMIN")
+    })
+    .await
+    .map_err(|source| HarnessError::Container {
+        image: EHRBASE.repository,
+        source,
+    })?;
     ready(EHRBASE_PRODUCT, system_id, server, database).await
 }
 
@@ -160,24 +160,25 @@ fn request(database: &DatabaseServer, system_id: &'static str) -> ContainerReque
 /// password [`role_password`] gives it.
 async fn database_server() -> Result<DatabaseServer, HarnessError> {
     let (network, host) = names("ehrbase");
-    let container = EHRBASE_POSTGRES
-        .image()
-        .with_exposed_port(POSTGRES_PORT.tcp())
-        .with_wait_for(WaitFor::healthcheck())
-        .with_health_check(postgres_health_check(OWNER_ROLE, DATABASE))
-        .with_env_var("POSTGRES_PASSWORD", "postgres")
-        .with_env_var("EHRBASE_USER_ADMIN", OWNER_ROLE)
-        .with_env_var("EHRBASE_PASSWORD_ADMIN", role_password(OWNER_ROLE))
-        .with_env_var("EHRBASE_USER", RESTRICTED_ROLE)
-        .with_env_var("EHRBASE_PASSWORD", role_password(RESTRICTED_ROLE))
-        .with_network(network.clone())
-        .with_container_name(host.clone())
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: EHRBASE_POSTGRES.repository,
-            source,
-        })?;
+    let container = retry::start(|| {
+        EHRBASE_POSTGRES
+            .image()
+            .with_exposed_port(POSTGRES_PORT.tcp())
+            .with_wait_for(WaitFor::healthcheck())
+            .with_health_check(postgres_health_check(OWNER_ROLE, DATABASE))
+            .with_env_var("POSTGRES_PASSWORD", "postgres")
+            .with_env_var("EHRBASE_USER_ADMIN", OWNER_ROLE)
+            .with_env_var("EHRBASE_PASSWORD_ADMIN", role_password(OWNER_ROLE))
+            .with_env_var("EHRBASE_USER", RESTRICTED_ROLE)
+            .with_env_var("EHRBASE_PASSWORD", role_password(RESTRICTED_ROLE))
+            .with_network(network.clone())
+            .with_container_name(host.clone())
+    })
+    .await
+    .map_err(|source| HarnessError::Container {
+        image: EHRBASE_POSTGRES.repository,
+        source,
+    })?;
     Ok(DatabaseServer {
         container,
         network,
