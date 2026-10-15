@@ -568,7 +568,7 @@ pub mod server {
                 };
                 let saved = save(gateway, replica, token, (change, *member)).await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(name, "save", saved, |line| line))
             }
             Plan::RemoveMember { base, reason, node } => {
                 let change = Change {
@@ -577,15 +577,15 @@ pub mod server {
                 };
                 let saved = gateway.remove_member(replica, token, change, &node).await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(name, "save", saved, |line| line))
             }
             Plan::Apply { revision } => {
                 let applied = gateway.apply_revision(replica, token, revision).await;
-                render::applied(&acted(name, "apply", applied, |line| line), "apply")
+                render::answers::applied(&acted(name, "apply", applied, |line| line), "apply")
             }
             Plan::Rollback { current, reason } => {
                 let applied = gateway.rollback(replica, token, current, &reason).await;
-                render::applied(&acted(name, "rollback", applied, |line| line), "rollback")
+                render::answers::applied(&acted(name, "rollback", applied, |line| line), "rollback")
             }
             Plan::StoreQuery {
                 name: query,
@@ -595,7 +595,7 @@ pub mod server {
                 let stored = gateway
                     .store_query(replica, token, (&query, &version), &aql)
                     .await;
-                render::stored(&acted(name, "store", stored, |stored| StoredLine {
+                render::answers::stored(&acted(name, "store", stored, |stored| StoredLine {
                     name: stored.name,
                     version: stored.version,
                 }))
@@ -605,7 +605,7 @@ pub mod server {
                     .save_section(replica, token, &resource, &request)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(name, "save", saved, |line| line))
             }
             Plan::RemoveSection {
                 base,
@@ -620,7 +620,7 @@ pub mod server {
                     .remove_section(replica, token, change, &resource)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(name, "save", saved, |line| line))
             }
             Plan::Confirm { revision } => {
                 let confirmed = gateway.confirm_revision(replica, token, revision).await;
