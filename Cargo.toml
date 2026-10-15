@@ -30,29 +30,30 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family at the latest published release, moved together by the
 # dependency sweep and checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. The pin is 0.0.84, whose ITS-REST client says
-# whether a request had left when no DPoP proof could be made (FerroEHR #3565);
-# 0.0.83 said so when a deadline passed (FerroEHR #3560), and 0.0.82 printed a
-# scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound token with
-# a proof from a prover (FerroEHR #3558).
-openehr-base = "0.0.84"
-openehr-rm = "0.0.84"
-openehr-query = { version = "0.0.84", features = ["federation"] }
-openehr-its = { version = "0.0.84", default-features = false }
+# scripts/checks/versions.sh. The pin is 0.0.86, which changes only the
+# Licensor its licence files name (FerroEHR #3567). 0.0.84's ITS-REST client
+# says whether a request had left when no DPoP proof could be made (FerroEHR
+# #3565); 0.0.83 said so when a deadline passed (FerroEHR #3560), and 0.0.82
+# printed a scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound
+# token with a proof from a prover (FerroEHR #3558).
+openehr-base = "0.0.86"
+openehr-rm = "0.0.86"
+openehr-query = { version = "0.0.86", features = ["federation"] }
+openehr-its = { version = "0.0.86", default-features = false }
 # The SMART on openEHR scope grammar alone, with no default feature: the
 # scope an onward token is requested with is written and checked with it
 # (#81), and every caller's scope claim is read with it (#80).
-openehr-sdt = { version = "0.0.84", default-features = false }
+openehr-sdt = { version = "0.0.86", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.49" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.50" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.36" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.22" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 ehds-logging = { path = "crates/ehds-logging", version = "0.0.24" }
-eehrxf = { path = "crates/eehrxf", version = "0.0.19" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.20" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -178,9 +179,10 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 fhir-types = { version = "0.1.108", default-features = false }
 # The FHIRconnect 1.0.0 mapping engine the European interoperability component
 # runs in process (#684), and the template index and mapping-file loader it
-# takes, both from FerroBRIDGE on the openehr-* 0.0.84 line. Pinned exactly,
-# because FerroBRIDGE's crate line moves by patch. Verified against crates.io
-# on 2026-10-06.
+# takes, both from FerroBRIDGE on the openehr-* 0.0.84 line, so the build
+# carries that family beside the workspace pin until FerroBRIDGE moves (#1028).
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
+# against crates.io on 2026-10-15.
 fhirconnect = "=0.1.108"
 openehr-mapping-core = "=0.1.108"
 # The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
