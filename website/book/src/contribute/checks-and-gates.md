@@ -40,6 +40,7 @@ manifest check installs the toolchain only to read the manifests):
 | e2e-placement | every test that checks the `FERROFED_E2E` gate lives in its crate's `e2e` test module, and the CI end-to-end job still sets the gate and selects `test(/^e2e::/)` |
 | aql-splice | no Rust source outside the tests builds AQL text with `format!`, `concat!`, `push_str` or `+`: a query is a template `openehr-query` parses, its values bound or sent as query parameters |
 | obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
+| technical-documentation | every element of Annex III of Regulation (EU) 2025/327 has a row in the [technical documentation](../evaluate/technical-documentation.md) index whose file and heading exist, and a version whose harmonised components differ from the previous release has its review rows (Art 30(2)) |
 | site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
@@ -103,6 +104,8 @@ bash scripts/checks/aql-splice.sh --self-test
 bash scripts/checks/aql-splice.sh
 bash scripts/checks/obligations.sh --self-test
 bash scripts/checks/obligations.sh
+bash scripts/checks/technical-documentation.sh --self-test
+bash scripts/checks/technical-documentation.sh
 bash scripts/checks/site-links.sh --self-test
 bash scripts/checks/site-links.sh
 bash scripts/checks/crate-version-guard.sh --self-test

@@ -1,0 +1,237 @@
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# Technical documentation
+
+Art 30(1)(c) of Regulation (EU) 2025/327 on the European Health Data Space
+(the EHDS Regulation) has the manufacturer "draw up the technical
+documentation of their EHR systems in accordance with Article 37 before
+placing those EHR systems on the market, and subsequently keep it up to
+date". Art 37(2) says what it is for: it "shall demonstrate that the EHR
+system complies with the essential requirements laid down in Annex II and
+provide market surveillance authorities with all the necessary information
+to assess the conformity of the EHR system with those requirements", and
+"shall contain, as a minimum, the elements set out in Annex III and a
+reference to the results obtained from a European digital testing
+environment referred to in Article 40".
+
+This page is the index of FerroFED's technical documentation. Each element
+of Annex III is documented on the page or file the index names, and the
+technical documentation of a release is those pages and files as they stand
+at the release's tag. The index is kept as
+[`conformance/technical-documentation.tsv`](https://github.com/FerroHEALTH/FerroFED/blob/main/conformance/technical-documentation.tsv),
+and `scripts/checks/technical-documentation.sh` fails a change that leaves
+an element without a row, a row whose file or heading does not exist, or an
+element phrase the vendored Regulation does not hold. CI runs it on every
+change and the release lane runs it before a release is created.
+
+Every quotation of the Regulation is from the Official Journal text, vendored
+at
+[`docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml).
+The dates the obligations apply from are on the
+[regulatory status](regulatory-status.md#the-obligations-and-their-dates)
+page. This page is not legal advice.
+
+## The Annex III index
+
+Annex III asks for these elements "as applicable to the harmonised software
+components of an EHR system in the relevant EHR system". A status of
+partial or planned names the issue that completes it.
+
+| Item | What Annex III asks | Where FerroFED documents it | Status |
+|---|---|---|---|
+| 1(a) | "its intended purpose, and the date and version of the EHR system" | [Intended purpose](regulatory-status.md#intended-purpose); the information sheet, [(b) Name, version and date of release](information-sheet.md#b-name-version-and-date-of-release) | documented |
+| 1(b) | "the categories of personal electronic health data that the EHR system has been designed to process" | the information sheet, [(d) The categories of data](information-sheet.md#d-the-categories-of-data) | documented |
+| 1(c) | how it "interacts or can be used to interact with hardware or software that is not part of the EHR system itself" | [The services a gateway consumes](../operate/deployment-shape.md#the-services-a-gateway-consumes); [the client contract](../integrate/client-contract.md) | documented |
+| 1(d) | "the versions of relevant software or firmware and any requirement related to version update" | [Pinned versions](versions.md) and [`docs/VERSIONS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/VERSIONS.md); [the compatibility policy](../operate/upgrading.md#the-compatibility-policy) | documented |
+| 1(e) | "the description of all forms in which the EHR system is placed on the market or put into service" | [Forms placed on the market](#forms-placed-on-the-market) | documented |
+| 1(f) | "the description of hardware on which the EHR system is intended to run" | [The hardware it runs on](#the-hardware-it-runs-on); [Supported platforms](../operate/deployment-shape.md#supported-platforms) | documented |
+| 1(g) | "a description of the system architecture explaining how software components build on or feed into each other", with labelled diagrams | [The parts of the gateway](../how-it-works/overview.md#the-parts-of-the-gateway), with its diagrams; the design of record, [`docs/architecture.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/architecture.md) | documented |
+| 1(h) | the technical specifications, "including a detailed description of the data structures, storage and input/output of data" | the standards, [(e) Standards, formats and specifications](information-sheet.md#e-standards-formats-and-specifications); [what a client gets back](../integrate/client-contract.md#what-a-client-gets-back); [what the gateway keeps](../operate/deployment-shape.md#what-the-gateway-keeps); [Configuration](../operate/configuration.md); [Sizing](../operate/instructions-for-use.md#sizing) | documented |
+| 1(i) | "a description of any change made to the system throughout its lifecycle" | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md); [Changes to the harmonised components](#changes-to-the-harmonised-components); the clinical safety [review table](clinical-safety.md#review-and-change) | documented |
+| 1(j) | "the instructions for use for the user and, where applicable, installation instructions" | [Instructions for use](../operate/instructions-for-use.md); [A production deployment](../operate/production.md) | documented |
+| 2 | "A detailed description of the system in place to evaluate the EHR system performance, where applicable" | [Metrics](../operate/metrics.md); [Scoring a deployment](../operate/conformance-run.md); the [clinical safety method](clinical-safety.md#method) | documented |
+| 3 | "The references to any common specification used in accordance with Article 36" | none is adopted yet ([The obligations and their dates](regulatory-status.md#the-obligations-and-their-dates)) | planned, [#526](https://github.com/FerroHEALTH/FerroFED/issues/526) |
+| 4 | "The results and critical analyses of all verifications and validation tests" | the [conformance statement](conformance-statement.md), the [conformance matrix](conformance.md), the [obligations checklist](obligations.md) and the [clinical safety risk file](clinical-safety.md); the checklist of the Annex II essential requirements is not built | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| 5 | "A copy of the information sheet referred to in Article 38" | the [information sheet](information-sheet.md), attached to each release | documented |
+| 6 | "A copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity) | planned, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| 37(2) | "a reference to the results obtained from a European digital testing environment referred to in Article 40" | [The European digital testing environment](#the-european-digital-testing-environment) | planned, [#675](https://github.com/FerroHEALTH/FerroFED/issues/675) |
+
+## Forms placed on the market
+
+Each release is placed on the market by Cadasto B.V. in these forms, all
+from the same signed tag `vX.Y.Z` on
+[the releases page](https://github.com/FerroHEALTH/FerroFED/releases):
+
+- **The source code** at the tag, under the Business Source License 1.1
+  ([Licensing](licensing.md)).
+- **The gateway binary** `ferrofed`, as one tarball per target:
+  `x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`,
+  `aarch64-unknown-linux-gnu` and `aarch64-unknown-linux-musl`. Each carries
+  its checksum, two SBOMs and its signed provenance
+  ([The release binaries](../operate/container.md#the-release-binaries)).
+- **The gateway image** `ghcr.io/ferrohealth/ferrofed`, for `linux/amd64`
+  and `linux/arm64`, tagged with the version and, for a release that is not
+  a pre-release, `<major>.<minor>` and `latest`
+  ([The image](../operate/container.md#the-image)).
+- **The operator console image** `ghcr.io/ferrohealth/ferrofed-viewer`, for
+  the same two platforms ([The operator console](../operate/operator-console.md)).
+  The console holds neither harmonised component.
+- **The files attached to the release:** the gateway compose file with its
+  example `ferrofed.toml` and `registry.toml`, the nginx reverse proxy
+  configuration, the conformance seed data, the Grafana dashboard and the
+  Prometheus alert rules, and the copies of the information sheet and the
+  instructions for use.
+
+The library crates under `crates/`, `ehds-logging` and `eehrxf` among them,
+are not published to crates.io; each reaches a user only inside the forms
+above.
+
+An EHR system is also "put into service" when someone else hosts FerroFED
+as a service or a health institution builds and runs it for itself (Art
+26(2)); [A deployment a health institution runs for
+itself](regulatory-status.md#a-deployment-a-health-institution-runs-for-itself)
+says what that means for the release it was built from.
+
+## The hardware it runs on
+
+FerroFED runs on Linux on `x86_64` and `aarch64` processors, as the binary
+on glibc or musl, or as the container image under a container runtime such
+as Docker or Kubernetes. It runs on Unix only, and nothing is built or
+tested for Windows ([Supported platforms](../operate/deployment-shape.md#supported-platforms)).
+Its signing keys and secrets are files, and it writes to local disk only
+the embedded stored-query file and the audit spools, where a deployment
+configures them ([The audit spool](../operate/container.md#the-audit-spool)).
+
+The release sets no minimum processor or memory. The
+[measured footprint](../operate/container.md#memory-footprint) of the
+quickstart is a few MiB of memory for the gateway, and the
+[sizing guidance](../operate/instructions-for-use.md#sizing) bounds the
+concurrent work from what you measure. Several replicas that accept stored
+queries share one PostgreSQL database
+([Running several replicas](../operate/deployment-shape.md#running-several-replicas)).
+
+## Changes to the harmonised components
+
+Art 30(2) has the manufacturer "ensure that procedures are in place to
+ensure that the design, development and deployment of the harmonised
+software components of an EHR system continue to comply with the essential
+requirements laid down in Annex II", and says that "changes in EHR system
+design or characteristics with regard to the harmonised software components
+of an EHR system shall be adequately taken into account and reflected in the
+technical documentation".
+
+The harmonised software components (Art 25(1)) and the code that serves them
+are these paths:
+
+- `crates/ehds-logging`, the European logging software component;
+- `app/ferrofed-server/src/access`, which builds its access record;
+- `crates/eehrxf`, the European interoperability software component;
+- `app/ferrofed-eehrxf`, its stored section queries and its documents;
+- `app/ferrofed-server/src/fhir`, the FHIR face that serves it.
+
+A release that changes any of them since the previous release cannot be
+cut until it is reviewed. `scripts/checks/technical-documentation.sh`
+compares the version being built with the newest release tag below it, and
+when a file under these paths differs, it fails unless the
+[clinical safety review table](clinical-safety.md#review-and-change) has a
+row whose release is that version and the table below has a row for it. A
+routine pull request keeps the version of the last release, whose rows
+exist, so it is not held up; the version-bump pull request and the `plan`
+job of the release lane are where the check stops a release
+([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
+Before the tag).
+
+| Release | Date | What changed in the harmonised components | Review |
+|---|---|---|---|
+| 0.0.10 | 2026-10-15 | first released: the logging component and the access log, the interoperability component with the patient summary on the FHIR face, the document list, the receipt of a document, the section queries and the terminology rules | the clinical safety review of 2026-10-15 and the [claims review](claims-review.md) findings of 2026-10-15 |
+
+## Keeping it for ten years
+
+Art 30(3) has the manufacturer "keep the technical documentation referred to
+in Article 37 and the EU declaration of conformity referred to in Article 39
+for 10 years after the EHR system covered by the EU declaration of
+conformity has been placed on the market". FerroFED keeps every release from
+0.0.10 on this way, from the date of the release in the changelog.
+
+The repository keeps most of it:
+
+- **The tag.** The `release-tags` ruleset blocks the deletion and the moving
+  of a `v*` tag, so the source, this book's pages, `docs/`, `conformance/`
+  and `CHANGELOG.md` stay as they were at the release.
+- **The release.** GitHub's immutable-releases setting freezes a published
+  release's notes and assets, the information sheet and instructions for
+  use among them, and the lane never reopens one
+  ([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
+  What is immutable).
+- **The images,** by digest in the GitHub Container Registry, with their
+  attestations. A withdrawal moves tags and deletes no image.
+
+Two parts are not covered by those settings. The CI run of the release
+commit holds the conformance report and the FHIR validation results as
+workflow artifacts, which GitHub deletes when the repository's artifact
+retention period ends. And no setting of the repository guarantees that
+GitHub serves it for ten years. So at each release Cadasto B.V. keeps an
+archive copy outside GitHub, for ten years from the release date:
+
+```sh
+git bundle create ferrofed-vX.Y.Z.bundle vX.Y.Z
+gh release download vX.Y.Z --repo FerroHEALTH/FerroFED --dir ferrofed-vX.Y.Z
+gh run list --repo FerroHEALTH/FerroFED --workflow ci.yml \
+  --commit "$(git rev-list -n1 vX.Y.Z)" --event push
+gh run download <run id> --repo FerroHEALTH/FerroFED \
+  --name conformance-report --name eehrxf-fhir-validation --dir ferrofed-vX.Y.Z/ci
+```
+
+The archive also holds the release's EU declaration of conformity once one
+exists. Where Cadasto B.V. publishes the archived declaration again, if the
+repository stops serving a release within those ten years, is the
+manufacturer's decision. It is not recorded yet; it is decided with the
+declaration itself.
+
+Art 30(3) also asks the manufacturer to make the source code available to
+the relevant authorities "upon a reasoned request". The source of every
+release is public at its tag, and the archive keeps it.
+
+## The EU declaration of conformity
+
+Art 39(4): "Where an EU declaration of conformity is drawn up in a digital
+format, it shall be made accessible online for the expected lifetime of the
+EHR system and, in any event, for at least 10 years from the placing on the
+market or the putting into service of the EHR system."
+
+No EU declaration of conformity has been drawn up, and no release carries
+one. [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) plans it,
+with the content of Annex IV: a declaration per release, attached to that
+release on the releases page beside the information sheet, where the
+immutable-releases setting keeps it unchanged and online, and linked from
+this page. Annex III, point 6, then has its copy.
+
+## The European digital testing environment
+
+Art 40(1) has the Commission develop "a European digital testing
+environment for the assessment of harmonised software components of EHR
+systems". FerroFED has not run it yet;
+[#675](https://github.com/FerroHEALTH/FerroFED/issues/675) plans the run,
+and its results are referenced here when it is done.
+
+## Language and translation on request
+
+Art 37(3): the technical documentation "shall be drawn up in an official
+language of the Member State concerned or a language that is easily
+understandable in that Member State", and "following a reasoned request
+from the market surveillance authority of a Member State, the manufacturer
+shall provide a translation of the relevant parts of the technical
+documentation into an official language of that Member State".
+
+FerroFED's technical documentation is written in English. A market
+surveillance authority that needs it, or a translation of parts of it,
+sends its reasoned request to the single point of contact on the
+[Complaints and incidents](post-market.md#the-manufacturer) page, naming
+the release, the parts and the language. Art 37(4) sets the deadline:
+Cadasto B.V. provides the documentation or the translation "within 30 days
+of the date of the request, unless a shorter deadline is justified because
+of a serious and immediate risk", and then within the deadline the request
+sets. Cadasto B.V. records the date of each request and of its answer, so
+the deadline can be shown to have been met. The translation is of the
+documentation at the tag of the release the request names.

@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The technical documentation index: for every element of Annex III of
+# Regulation (EU) 2025/327, and the Art 37(2) reference to the results of the
+# European digital testing environment, the places FerroFED documents it. One
+# row per place; an element may have several. The book page
+# website/book/src/evaluate/technical-documentation.md lists every item.
+#
+# Columns: item (the Annex III point, or 37(2)); element (a phrase of the
+# vendored Regulation that names the element); target (a file of this
+# repository); section (a heading of that file, or - for the whole file);
+# status (documented, partial or planned); issue (#N, required unless
+# documented, or -).
+#
+# scripts/checks/technical-documentation.sh holds every row to the vendored
+# text and the tree. No specification governs the index form: our own design.
+item	element	target	section	status	issue
+1(a)	its intended purpose, and the date and version of the EHR system	website/book/src/evaluate/regulatory-status.md	Intended purpose	documented	-
+1(a)	its intended purpose, and the date and version of the EHR system	website/book/src/evaluate/information-sheet.md	(b) Name, version and date of release	documented	-
+1(b)	the categories of personal electronic health data that the EHR system has been designed to process	website/book/src/evaluate/information-sheet.md	(d) The categories of data	documented	-
+1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/operate/deployment-shape.md	The services a gateway consumes	documented	-
+1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/integrate/client-contract.md	-	documented	-
+1(d)	the versions of relevant software or firmware and any requirement related to version update	website/book/src/evaluate/versions.md	-	documented	-
+1(d)	the versions of relevant software or firmware and any requirement related to version update	docs/VERSIONS.md	-	documented	-
+1(d)	the versions of relevant software or firmware and any requirement related to version update	website/book/src/operate/upgrading.md	The compatibility policy	documented	-
+1(e)	the description of all forms in which the EHR system is placed on the market or put into service	website/book/src/evaluate/technical-documentation.md	Forms placed on the market	documented	-
+1(f)	the description of hardware on which the EHR system is intended to run	website/book/src/evaluate/technical-documentation.md	The hardware it runs on	documented	-
+1(f)	the description of hardware on which the EHR system is intended to run	website/book/src/operate/deployment-shape.md	Supported platforms	documented	-
+1(g)	a description of the system architecture explaining how software components build on or feed into each other	website/book/src/how-it-works/overview.md	The parts of the gateway	documented	-
+1(g)	a description of the system architecture explaining how software components build on or feed into each other	docs/architecture.md	-	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/integrate/client-contract.md	What a client gets back	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/deployment-shape.md	What the gateway keeps	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/configuration.md	-	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/instructions-for-use.md	Sizing	documented	-
+1(i)	a description of any change made to the system throughout its lifecycle	CHANGELOG.md	-	documented	-
+1(i)	a description of any change made to the system throughout its lifecycle	website/book/src/evaluate/technical-documentation.md	Changes to the harmonised components	documented	-
+1(i)	a description of any change made to the system throughout its lifecycle	website/book/src/evaluate/clinical-safety.md	Review and change	documented	-
+1(j)	the instructions for use for the user and, where applicable, installation instructions	website/book/src/operate/instructions-for-use.md	-	documented	-
+1(j)	the instructions for use for the user and, where applicable, installation instructions	website/book/src/operate/production.md	-	documented	-
+2	A detailed description of the system in place to evaluate the EHR system performance, where applicable	website/book/src/operate/metrics.md	-	documented	-
+2	A detailed description of the system in place to evaluate the EHR system performance, where applicable	website/book/src/operate/conformance-run.md	-	documented	-
+2	A detailed description of the system in place to evaluate the EHR system performance, where applicable	website/book/src/evaluate/clinical-safety.md	Method	documented	-
+3	The references to any common specification used in accordance with Article 36	website/book/src/evaluate/regulatory-status.md	The obligations and their dates	planned	#526
+4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/conformance-statement.md	-	partial	#525
+4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/conformance.md	-	partial	#525
+4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/obligations.md	-	partial	#525
+4	The results and critical analyses of all verifications and validation tests	website/book/src/evaluate/clinical-safety.md	-	partial	#525
+5	A copy of the information sheet referred to in Article 38	website/book/src/evaluate/information-sheet.md	-	documented	-
+6	A copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	planned	#525
+37(2)	a reference to the results obtained from a European digital testing environment referred to in Article 40	website/book/src/evaluate/technical-documentation.md	The European digital testing environment	planned	#675

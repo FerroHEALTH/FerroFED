@@ -29,7 +29,10 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   release notes. A tag whose tree has no root `Cargo.toml` fails here, since
   the tag cannot be checked against the workspace version. A missing or empty
   changelog section fails the release, so a cut can never ship with notes
-  generated from the commit range standing in for the changelog.
+  generated from the commit range standing in for the changelog. It then
+  runs `scripts/checks/technical-documentation.sh`, which refuses a release
+  that changes a harmonised component with no review row for it (§ Before
+  the tag, step 6), before any release exists.
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
@@ -244,7 +247,23 @@ slow one.
    is reviewed and its review table gets a row. The release attaches both
    pages as they stand at the tag, so what the bump merges is the copy an
    operator downloads (§ What the lane does).
-6. **The version bump lands as its own pull request** and merges like any
+6. **A change to a harmonised component is reflected in the technical
+   documentation** (Regulation (EU) 2025/327 Art 30(2)). When a file under
+   `crates/ehds-logging`, `crates/eehrxf`, `app/ferrofed-eehrxf`,
+   `app/ferrofed-server/src/access` or `app/ferrofed-server/src/fhir`
+   differs from the previous release tag, the version-bump pull request
+   adds a row whose release is the new version to the clinical safety
+   review table and a row for it to "Changes to the harmonised components"
+   of the
+   [technical documentation](https://ferrofed.eu/docs/evaluate/technical-documentation.html)
+   (`website/book/src/evaluate/technical-documentation.md`), and brings its
+   Annex III index (`conformance/technical-documentation.tsv`) up to date.
+   `scripts/checks/technical-documentation.sh` fails the bump, and the
+   `plan` job at the tag, while either row is missing. Between releases the
+   workspace version is the last release's, whose rows exist, so a routine
+   pull request that changes a component passes and the next bump records
+   it.
+7. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).
@@ -273,7 +292,9 @@ next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
    `scripts/release/changelog.sh --assemble 0.0.1-rc.1 <date>` writes, and
    `CITATION.cff` and the product row of `docs/VERSIONS.md` must say
    `0.0.1-rc.1`, because the `plan` job checks the tag against them. The rehearsal therefore goes through its
-   own version-bump pull request, exactly like a cut.
+   own version-bump pull request, exactly like a cut, with review rows for
+   `0.0.1-rc.1` when it changes a harmonised component (§ Before the tag,
+   step 6).
 2. Push the signed `v0.0.1-rc.1` tag as above and read the run: the draft must
    carry the section as its notes, no assets, and then publish as a
    pre-release.
@@ -340,6 +361,14 @@ without a version bump, because a published version is immutable
 4. **Bring the standing instructions up to date.** `CLAUDE.md`'s status names
    the released version and the milestone now being built, in a pull request
    of its own, never inside the version bump.
+5. **Archive the release for ten years.** Regulation (EU) 2025/327 Art 30(3)
+   keeps the technical documentation and the EU declaration of conformity
+   for 10 years after the release is placed on the market. The owner keeps
+   the archive copy the
+   [technical documentation](https://ferrofed.eu/docs/evaluate/technical-documentation.html#keeping-it-for-ten-years)
+   names, outside GitHub: the tag's bundle, the release assets and the
+   conformance and FHIR validation artifacts of the CI run on the release
+   commit, which GitHub deletes when its artifact retention ends.
 
 ## What is immutable, and what is ours
 
