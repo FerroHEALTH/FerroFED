@@ -35,14 +35,14 @@ publish = false
 # 0.0.83 said so when a deadline passed (FerroEHR #3560), and 0.0.82 printed a
 # scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound token with
 # a proof from a prover (FerroEHR #3558).
-openehr-base = "0.0.84"
-openehr-rm = "0.0.84"
-openehr-query = { version = "0.0.84", features = ["federation"] }
-openehr-its = { version = "0.0.84", default-features = false }
+openehr-base = "0.0.86"
+openehr-rm = "0.0.86"
+openehr-query = { version = "0.0.86", features = ["federation"] }
+openehr-its = { version = "0.0.86", default-features = false }
 # The SMART on openEHR scope grammar alone, with no default feature: the
 # scope an onward token is requested with is written and checked with it
 # (#81), and every caller's scope claim is read with it (#80).
-openehr-sdt = { version = "0.0.84", default-features = false }
+openehr-sdt = { version = "0.0.86", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
