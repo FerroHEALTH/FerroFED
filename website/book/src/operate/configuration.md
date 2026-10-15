@@ -87,7 +87,7 @@ ferrofed: note: [[fhir.receive]] Patient-Summaries: the FHIR face receives docum
 A face with no `[[fhir.receive]]` entry prints this line instead:
 
 ```text
-ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries, Electronic-Prescriptions, Electronic-Dispensations: the FHIR face refuses a document of any of these Art 14(1) categories
+ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category
 ```
 
 It also prints a line for each category served resource by resource,

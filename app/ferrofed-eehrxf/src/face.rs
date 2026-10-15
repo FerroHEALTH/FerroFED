@@ -432,4 +432,26 @@ mod tests {
             "{documentation:?}"
         );
     }
+
+    #[test]
+    fn a_category_with_no_document_profile_is_never_named_unreceived() {
+        let receivers = crate::receive::Receivers::default();
+        let unreceived: Vec<&str> = receivers
+            .unreceived()
+            .map(eehrxf::category::Category::code)
+            .collect();
+        assert_eq!(unreceived, ["Patient-Summaries"]);
+        let documentation = super::bundle(&receivers)
+            .documentation
+            .unwrap()
+            .value
+            .unwrap();
+        assert!(
+            documentation.contains("Categories with no receiving member: Patient-Summaries;"),
+            "{documentation:?}"
+        );
+        for code in ["Electronic-Prescriptions", "Electronic-Dispensations"] {
+            assert!(!documentation.contains(code), "{documentation:?}");
+        }
+    }
 }

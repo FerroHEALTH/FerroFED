@@ -32,7 +32,7 @@
 //! `issue-type` codes.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use axum::Extension;
@@ -40,11 +40,11 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{MethodRouter, get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, Refusal, SummaryRequest};
 use ferrofed_eehrxf::receive::Receivers;
 use ferrofed_eehrxf::serving::Serving;
-use ferrofed_eehrxf::summary::{self, Author, Request as SummaryDocument};
+use ferrofed_eehrxf::summary::{self, Author};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::header::PatientHeader;
@@ -87,17 +87,38 @@ pub const DOCUMENTS: &str = "/DocumentReference";
 /// statement carry.
 const PRODUCT: &str = "FerroFED";
 
+/// The text of the `404` every other path answers, naming each path
+/// [`table`] routes.
+static UNSERVED: LazyLock<String> = LazyLock::new(|| {
+    let paths: Vec<&str> = table()
+        .iter()
+        .map(|(path, _)| path.trim_start_matches('/'))
+        .collect();
+    format!("the FHIR face serves {} alone", paths.join(", "))
+});
+
+/// Every path of the face with its handlers, the one list the router is
+/// built from and the `404` of any other path names.
+fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 8] {
+    [
+        (METADATA, get(metadata)),
+        (SUMMARY, get(summary_get).post(summary_post)),
+        (BUNDLE, post(bundle_post)),
+        (DOCUMENTS, get(list::documents)),
+        (binary::ROUTE, get(binary::read)),
+        (medication::PRESCRIPTIONS, get(medication::search)),
+        (medication::PRESCRIPTION, get(medication::read)),
+        (medication::DISPENSATIONS, post(medication::dispense)),
+    ]
+}
+
 /// The routes of the face, which the router nests under `{fhir-base}`.
 pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route(METADATA, get(metadata))
-        .route(SUMMARY, get(summary_get).post(summary_post))
-        .route(BUNDLE, post(bundle_post))
-        .route(DOCUMENTS, get(list::documents))
-        .route("/Binary/{token}", get(binary::read))
-        .route(medication::PRESCRIPTIONS, get(medication::search))
-        .route(medication::PRESCRIPTION, get(medication::read))
-        .route(medication::DISPENSATIONS, post(medication::dispense))
+    table()
+        .into_iter()
+        .fold(Router::new(), |router, (path, handlers)| {
+            router.route(path, handlers)
+        })
         .fallback(unserved)
 }
 
@@ -236,13 +257,10 @@ async fn metadata(State(state): State<Arc<AppState>>) -> Response {
     )
 }
 
-/// Every other path under `{fhir-base}`: a `404` naming no path.
+/// Every other path under `{fhir-base}`: a `404` naming the paths the face
+/// serves, never the path asked for.
 async fn unserved() -> Response {
-    outcome(
-        StatusCode::NOT_FOUND,
-        "not-found",
-        "the FHIR face serves metadata, Patient/$summary, DocumentReference and Bundle alone",
-    )
+    outcome(StatusCode::NOT_FOUND, "not-found", &UNSERVED)
 }
 
 /// `GET {fhir-base}/Patient/$summary`.
@@ -516,7 +534,7 @@ fn document(
     ((system, value), header): ((&str, &str), PatientHeader),
     logged: &str,
 ) -> Response {
-    let request = SummaryDocument {
+    let request = summary::Request {
         base: fhir.absolute.clone(),
         identifier: format!("urn:uuid:{}", uuid::Uuid::new_v4()),
         patient_id: uuid::Uuid::new_v4().to_string(),
@@ -675,4 +693,18 @@ pub(crate) fn fhir_json(status: StatusCode, resource: &impl Serialize) -> Respon
 /// with `status`.
 fn outcome(status: StatusCode, code: &str, diagnostics: &str) -> Response {
     fhir_json(status, &face::outcome(code, diagnostics))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UNSERVED;
+
+    #[test]
+    fn the_404_names_every_path_the_router_serves() {
+        assert_eq!(
+            UNSERVED.as_str(),
+            "the FHIR face serves metadata, Patient/$summary, Bundle, DocumentReference, \
+             Binary/{token}, MedicationRequest, MedicationRequest/{id}, MedicationDispense alone"
+        );
+    }
 }
