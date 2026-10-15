@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# The technical documentation guard (#671), for Regulation (EU) 2025/327 Art
-# 30(1)(c), Art 30(2), Art 37 and Annex III. How it checks is our own design:
-# no specification governs it. It holds two things.
+# The technical documentation guard (#671, #1065), for Regulation (EU)
+# 2025/327 Art 30(1)(c), Art 30(2), Art 37 and Annex III, and for Annex VII
+# of Regulation (EU) 2024/2847, whose part the same set holds (EHDS Art
+# 104(2)). How it checks is our own design: no specification governs it. It
+# holds three things.
 #
 #   index    conformance/technical-documentation.tsv names, for every element
 #            of Annex III and the Art 37(2) reference to the testing
@@ -12,6 +14,10 @@
 #            is a file of the tree, its section is a heading of that file, a
 #            partial or planned row names its issue, and the book page lists
 #            every item.
+#   cra      conformance/cra-technical-documentation.tsv does the same for
+#            every point of CRA Annex VII, against the vendored CRA, and may
+#            also mark a point not-applicable, with a target that says why;
+#            the book page lists every point as `point <item>`.
 #   changes  a version whose harmonised components differ from the previous
 #            release has a row for that version in the review table of the
 #            clinical safety risk file and in the change table of the book
@@ -35,6 +41,9 @@ readonly PAGE=website/book/src/evaluate/technical-documentation.md
 readonly SAFETY=website/book/src/evaluate/clinical-safety.md
 readonly REGULATION=docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml
 readonly ITEMS='1(a) 1(b) 1(c) 1(d) 1(e) 1(f) 1(g) 1(h) 1(i) 1(j) 2 3 4 5 6 37(2)'
+readonly CRA_INDEX=conformance/cra-technical-documentation.tsv
+readonly CRA_REGULATION=docs/specs/eu-cra/reg-eu-2024-2847-en.xhtml
+readonly CRA_ITEMS='1(a) 1(b) 1(c) 1(d) 2(a) 2(b) 2(c) 3 4 5 6 7 8'
 readonly CHANGES_HEADING='Changes to the harmonised components'
 readonly REVIEW_HEADING='Review and change'
 # The harmonised software components (Art 25(1)) and the code that serves them.
@@ -58,13 +67,13 @@ usage() {
   exit 2
 }
 
-# regulation_text OUT: the vendored Regulation as one line of plain text, the
-# markup and the no-break spaces turned into single spaces.
+# regulation_text IN OUT: the vendored Regulation IN as one line of plain
+# text, the markup and the no-break spaces turned into single spaces.
 regulation_text() {
   local nbsp
   nbsp="$(printf '\302\240')"
-  tr '\n\r\t' '   ' < "$REGULATION" |
-    sed -e 's/<[^>]*>/ /g' -e "s/$nbsp/ /g" -e 's/&amp;/\&/g' -e 's/  */ /g' > "$1"
+  tr '\n\r\t' '   ' < "$1" |
+    sed -e 's/<[^>]*>/ /g' -e "s/$nbsp/ /g" -e 's/&amp;/\&/g' -e 's/  */ /g' > "$2"
 }
 
 # has_heading FILE TEXT: FILE has a Markdown heading reading TEXT, outside a
@@ -95,61 +104,71 @@ table_has() {
   ' "$1"
 }
 
+# check_index INDEX REGULATION ITEMS PREFIX WHAT NA: every row of INDEX held
+# to REGULATION and the tree, every item of ITEMS with a row, and the book
+# page listing each as `| PREFIX<item> |`. WHAT names an item in a refusal;
+# NA is yes when a row may be not-applicable.
 check_index() {
-  local text item element target section status issue line=0 seen
-  for f in "$INDEX" "$PAGE" "$REGULATION"; do
+  local index="$1" regulation="$2" items="$3" prefix="$4" what="$5" na="$6"
+  local text item element target section status issue line=0 seen statuses
+  for f in "$index" "$PAGE" "$regulation"; do
     [[ -f "$f" ]] || {
       fail "$f is missing."
       return
     }
   done
+  statuses="documented, partial or planned"
+  [[ "$na" != yes ]] || statuses="documented, partial, planned or not-applicable"
   text="$(mktemp)"
-  regulation_text "$text"
+  regulation_text "$regulation" "$text"
   seen=" "
   while IFS= read -r row; do
     line=$((line + 1))
     case "$row" in '#'* | '') continue ;; esac
     if [[ "$(printf '%s\n' "$row" | awk -F'\t' '{ print NF }')" != 6 ]]; then
-      fail "$INDEX line $line has not six tab-separated columns."
+      fail "$index line $line has not six tab-separated columns."
       continue
     fi
     IFS=$'\t' read -r item element target section status issue <<< "$row"
     if [[ "$item" == item ]]; then
       [[ "$row" == $'item\telement\ttarget\tsection\tstatus\tissue' ]] ||
-        fail "$INDEX header is not item, element, target, section, status, issue."
+        fail "$index header is not item, element, target, section, status, issue."
       continue
     fi
-    case " $ITEMS " in
+    case " $items " in
     *" $item "*) seen="$seen$item " ;;
-    *) fail "$INDEX line $line: $item is not an element of Annex III or Art 37(2)." ;;
+    *) fail "$index line $line: $item is not $what." ;;
     esac
     grep -Fq -- "$element" "$text" ||
-      fail "$INDEX line $line: \"$element\" is not a phrase of $REGULATION."
+      fail "$index line $line: \"$element\" is not a phrase of $regulation."
     case "$target" in
-    /* | *..*) fail "$INDEX line $line: $target is not a path inside the tree." ;;
+    /* | *..*) fail "$index line $line: $target is not a path inside the tree." ;;
     *)
       if [[ ! -f "$target" ]]; then
-        fail "$INDEX line $line: $target does not exist."
+        fail "$index line $line: $target does not exist."
       elif [[ "$section" != - ]] && ! has_heading "$target" "$section"; then
-        fail "$INDEX line $line: $target has no heading \"$section\"."
+        fail "$index line $line: $target has no heading \"$section\"."
       fi
       ;;
     esac
     case "$status" in
     documented) [[ "$issue" == - || "$issue" =~ ^#[0-9]+$ ]] ||
-      fail "$INDEX line $line: issue \"$issue\" is neither - nor #N." ;;
+      fail "$index line $line: issue \"$issue\" is neither - nor #N." ;;
     partial | planned) [[ "$issue" =~ ^#[0-9]+$ ]] ||
-      fail "$INDEX line $line: a $status row names its issue as #N." ;;
-    *) fail "$INDEX line $line: status \"$status\" is not documented, partial or planned." ;;
+      fail "$index line $line: a $status row names its issue as #N." ;;
+    not-applicable) [[ "$na" == yes ]] ||
+      fail "$index line $line: status \"$status\" is not $statuses."
+      [[ "$issue" == - ]] || fail "$index line $line: a not-applicable row names no issue." ;;
+    *) fail "$index line $line: status \"$status\" is not $statuses." ;;
     esac
-  done < "$INDEX"
+  done < "$index"
   rm -f -- "$text"
-  for item in $ITEMS; do
+  for item in $items; do
     case "$seen" in
     *" $item "*) ;;
-    *) fail "$INDEX has no row for $item." ;;
+    *) fail "$index has no row for $item." ;;
     esac
-    grep -Fq -- "| $item |" "$PAGE" || fail "$PAGE lists no row for $item."
+    grep -Fq -- "| $prefix$item |" "$PAGE" || fail "$PAGE lists no row for $prefix$item."
   done
 }
 
@@ -214,13 +233,14 @@ check_changes() {
 }
 
 run() {
-  check_index
+  check_index "$INDEX" "$REGULATION" "$ITEMS" "" "an element of Annex III or Art 37(2)" no
+  check_index "$CRA_INDEX" "$CRA_REGULATION" "$CRA_ITEMS" "point " "a point of CRA Annex VII" yes
   check_changes
   if [[ "$failures" -gt 0 ]]; then
     echo "technical-documentation: $failures refusals." >&2
     return 1
   fi
-  echo "technical-documentation: the index covers Annex III and the change record is complete."
+  echo "technical-documentation: the indexes cover Annex III and CRA Annex VII, and the change record is complete."
 }
 
 self_test() {
@@ -230,7 +250,7 @@ self_test() {
   trap 'rm -rf -- "$work"' EXIT
   script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   repo="$work/repo"
-  mkdir -p "$repo/scripts/checks" "$repo/conformance" "$repo/docs/specs/eu-ehds" \
+  mkdir -p "$repo/scripts/checks" "$repo/conformance" "$repo/docs/specs/eu-ehds" "$repo/docs/specs/eu-cra" \
     "$repo/website/book/src/evaluate" "$repo/crates/ehds-logging"
   cp "$script" "$repo/scripts/checks/technical-documentation.sh"
   stub_git() {
@@ -250,9 +270,11 @@ self_test() {
     [[ -z "$pattern" ]] || grep -Fq -- "$pattern" "$work/out" || flunk "$name did not say \"$pattern\"."
   }
   # The fixture: a Regulation whose phrase is split by markup and a no-break
-  # space, one index row per item, and the two pages.
+  # space, and the CRA's own, one index row per item of each, and the two
+  # pages.
   fixture() {
     printf '<p>a phrase</p>\n<p>of the\302\240<span>Regulation</span></p>\n' > "$repo/$REGULATION"
+    printf '<p>a phrase of the <span>Act</span></p>\n' > "$repo/$CRA_REGULATION"
     {
       printf '# a comment\n'
       printf 'item\telement\ttarget\tsection\tstatus\tissue\n'
@@ -261,8 +283,16 @@ self_test() {
       done
     } > "$repo/$INDEX"
     {
+      printf 'item\telement\ttarget\tsection\tstatus\tissue\n'
+      for item in $CRA_ITEMS; do
+        printf '%s\tphrase of the Act\t%s\tThe forms\tdocumented\t-\n' "$item" "$PAGE"
+      done
+    } > "$repo/$CRA_INDEX"
+    {
       printf '# Technical documentation\n\n## The forms\n\n| Item | Where |\n|---|---|\n'
       for item in $ITEMS; do printf '| %s | here |\n' "$item"; done
+      printf '\n| Annex VII | Where |\n|---|---|\n'
+      for item in $CRA_ITEMS; do printf '| point %s | here |\n' "$item"; done
       printf '\n## %s\n\n' "$CHANGES_HEADING"
       for component in "${COMPONENTS[@]}"; do printf -- '- \140%s\140\n' "$component"; done
       printf '\n| Release | Date |\n|---|---|\n| 0.0.1 | 2026-01-01 |\n'
@@ -271,14 +301,17 @@ self_test() {
       "$REVIEW_HEADING" > "$repo/$SAFETY"
     printf '[workspace.package]\nversion = "0.0.1"\n' > "$repo/Cargo.toml"
   }
-  # row ITEM FIELD VALUE: set one field of ITEM's row; a FIELD of 0 drops it.
-  row() {
-    awk -F'\t' -v OFS='\t' -v item="$1" -v field="$2" -v value="${3:-}" '
+  # row_in INDEX ITEM FIELD VALUE: set one field of ITEM's row of INDEX; a
+  # FIELD of 0 drops it. row and cra_row name the index.
+  row_in() {
+    awk -F'\t' -v OFS='\t' -v item="$2" -v field="$3" -v value="${4:-}" '
       $1 == item && field == 0 { next }
       $1 == item { $field = value }
       { print }
-    ' "$repo/$INDEX" > "$work/index" && mv "$work/index" "$repo/$INDEX"
+    ' "$repo/$1" > "$work/index" && mv "$work/index" "$repo/$1"
   }
+  row() { row_in "$INDEX" "$@"; }
+  cra_row() { row_in "$CRA_INDEX" "$@"; }
 
   fixture
   printf 'one\n' > "$repo/crates/ehds-logging/lib.rs"
@@ -310,7 +343,7 @@ self_test() {
   row 5 6 '#12'
   expect "a planned row with its issue" 0
   fixture
-  row 6 5 done
+  row 6 5 'done'
   expect "an unknown status" 1 "status \"done\""
   fixture
   sed -i.orig '/^| 37(2) |/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
@@ -318,6 +351,29 @@ self_test() {
   fixture
   sed -i.orig '/crates\/eehrxf/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
   expect "a page that drops a component path" 1 "component path crates/eehrxf"
+  fixture
+  row 3 5 not-applicable
+  expect "a not-applicable Annex III row" 1 "status \"not-applicable\" is not documented, partial or planned"
+  fixture
+  cra_row '2(b)' 0
+  expect "a CRA point with no row" 1 "cra-technical-documentation.tsv has no row for 2(b)"
+  fixture
+  cra_row 8 1 9
+  expect "an unknown CRA point" 1 "9 is not a point of CRA Annex VII"
+  fixture
+  cra_row 4 2 'phrase of the Regulation'
+  expect "an element the CRA does not hold" 1 "is not a phrase of $CRA_REGULATION"
+  fixture
+  cra_row '1(c)' 5 not-applicable
+  expect "a not-applicable CRA row" 0
+  cra_row '1(c)' 6 '#7'
+  expect "a not-applicable CRA row with an issue" 1 "a not-applicable row names no issue"
+  fixture
+  cra_row 7 5 partial
+  expect "a partial CRA row with no issue" 1 "a partial row names its issue"
+  fixture
+  sed -i.orig '/^| point 2(c) |/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
+  expect "a page that lists no row for a CRA point" 1 "lists no row for point 2(c)"
   fixture
 
   # Change control: the release v0.0.1, then a bump to 0.0.2.

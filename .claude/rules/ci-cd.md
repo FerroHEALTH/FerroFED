@@ -35,6 +35,8 @@ Fourteen workflows:
   technical documentation guard (`scripts/checks/technical-documentation.sh`,
   which `release.yml`'s `plan` job runs too), the Annex II checklist guard
   (`scripts/checks/annex-ii.sh`, which the `plan` job runs too), the
+  support-period guard (`scripts/checks/support-periods.sh`, which the
+  `plan` job runs too), the
   register of economic operators guard
   (`scripts/checks/economic-operators.sh`), the
   e2e-placement guard, the tracker-helper self-tests, the crate-version

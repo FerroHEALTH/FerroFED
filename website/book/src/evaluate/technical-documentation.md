@@ -65,16 +65,32 @@ FerroFED is also a product with digital elements under Regulation (EU)
 Art 104(2) of the EHDS Regulation replaces that Act's Art 31(3), so for an
 EHR system "a single set of technical documentation shall be drawn up
 containing the information referred to in Annex VII and the information
-required by those Union legal acts". These pages are that Act's part of
-this set:
+required by those Union legal acts". The index below is that Act's part of
+this set. It is kept as
+[`conformance/cra-technical-documentation.tsv`](https://github.com/FerroHEALTH/FerroFED/blob/main/conformance/cra-technical-documentation.tsv),
+and `scripts/checks/technical-documentation.sh` holds it as it holds the
+Annex III index, against the vendored Act at
+[`docs/specs/eu-cra/reg-eu-2024-2847-en.xhtml`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/eu-cra/reg-eu-2024-2847-en.xhtml).
+Annex VII asks for each point "as applicable to the relevant product with
+digital elements". A status of partial names the issue that completes it.
 
-| Annex VII | What it asks | Where FerroFED documents it |
-|---|---|---|
-| point 1(d) | "user information and instructions as set out in Annex II" | [CRA information to the user](cra-user-information.md) |
-| point 3 | "an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13" | [Cybersecurity risk assessment](cra-risk-assessment.md) |
+| Annex VII | What it asks | Where FerroFED documents it | Status |
+|---|---|---|---|
+| point 1(a) | "its intended purpose" | [Intended purpose](regulatory-status.md#intended-purpose) | documented |
+| point 1(b) | "versions of software affecting compliance with essential cybersecurity requirements" | [Pinned versions](versions.md) and [`docs/VERSIONS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/VERSIONS.md) | documented |
+| point 1(c) | photographs or illustrations, "where the product with digital elements is a hardware product" | FerroFED is software ([3. Identification](cra-user-information.md#3-identification)) | not applicable |
+| point 1(d) | "user information and instructions as set out in Annex II" | [CRA information to the user](cra-user-information.md) | documented |
+| point 2(a) | "necessary information on the design and development of the product with digital elements", with the system architecture | [The parts of the gateway](../how-it-works/overview.md#the-parts-of-the-gateway); the design of record, [`docs/architecture.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/architecture.md) | documented |
+| point 2(b) | "necessary information and specifications of the vulnerability handling processes put in place by the manufacturer", with the SBOM, the disclosure policy, the contact address and the secure distribution of updates | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md), with the family book's [Security](https://ferrohealth.eu/docs/security.html); [The release binaries](../operate/container.md#the-release-binaries); [The image](../operate/container.md#the-image); the CRA Art 14 procedure of [`docs/post-market.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-market.md) | documented |
+| point 2(c) | "necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes" | the release lane, [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md); the required checks, [`docs/ci-cd.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/ci-cd.md); post-market monitoring, [`docs/post-market.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-market.md) | documented |
+| point 3 | "an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13" | [Cybersecurity risk assessment](cra-risk-assessment.md) | documented |
+| point 4 | "relevant information that was taken into account to determine the support period pursuant to Article 13(8)" | [The support period](regulatory-status.md#the-support-period) and [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) state the period and its five-year minimum; the expected time in use and the other matters Art 13(8) names are not recorded | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| point 5 | "a list of the harmonised standards applied in full or in part", or the solutions adopted where none is applied | the solutions, point by point, in the [cybersecurity risk assessment](cra-risk-assessment.md#annex-i-part-i-point-2-point-by-point); the specifications applied, [(e) Standards, formats and specifications](information-sheet.md#e-standards-formats-and-specifications); no list of harmonised standards | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| point 6 | "reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes" | the [conformance statement](conformance-statement.md), the [conformance matrix](conformance.md) and the tests the [threat model](threat-model.md) names; no report against Annex I | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
+| point 7 | "a copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity); none is issued yet | partial, [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) |
+| point 8 | "where applicable, the software bill of materials", on a reasoned request of a market surveillance authority | [The release binaries](../operate/container.md#the-release-binaries): every release attaches its SBOMs | documented |
 
-The other points of Annex VII are not indexed here yet; the single set of
-technical documentation for both acts is planned under
+The single set of technical documentation for both acts is planned under
 [#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
 
 ## Forms placed on the market

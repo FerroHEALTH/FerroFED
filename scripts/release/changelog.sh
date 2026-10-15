@@ -218,7 +218,7 @@ assemble() {
     sed -n "1,${start}p" CHANGELOG.md
     printf '\n## [%s] - %s\n' "$version" "$date"
     if [[ -n "$support_end_date" ]]; then
-      printf '\nSupported until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
+      printf '\nSupported until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
         "$support_end_date" "$SUPPORT_YEARS" "$base"
     fi
     for section in "${SECTIONS[@]}"; do
@@ -416,7 +416,7 @@ EOF
 
 ## [0.0.2] - 2026-10-10
 
-Supported until 2031-10-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](https://example.org/r/blob/main/SECURITY.md#supported-versions) says.
+Supported until 2031-10-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](https://example.org/r/blob/main/SECURITY.md#supported-versions) says.
 
 ### Upgrade notes
 

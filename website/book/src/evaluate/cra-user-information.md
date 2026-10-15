@@ -143,8 +143,10 @@ vulnerabilities to be handled and to receive security updates;"
 
 The type of support is the manufacturer's, described on the family book's
 [How a fix reaches you](https://ferrohealth.eu/docs/security.html#how-a-fix-reaches-you).
-For FerroFED, a security fix ships in a new release, and a user of an older
-release within its support period moves to the latest release to get it
+For FerroFED, a security fix ships as its own patch release on each
+supported line, the releases that share a `<major>.<minor>` version, with
+no feature changes in it. A user of an older release within its support
+period moves to the security patch release of its line to get the fix
 ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
 Each release is supported for five years from its release date. The end
@@ -160,8 +162,9 @@ dates, as `SECURITY.md` lists them:
 | v0.0.9 | 2026-10-05 | 2031-10-05 |
 | v0.0.10 | 2026-10-15 | 2031-10-15 |
 
-`SECURITY.md` is the record, and the release cut adds each new row to it and
-to this table. A gateway names its own end date in the startup banner and in
+`SECURITY.md` is the record. The release cut adds each new row to it and
+copies the row here, and a guard, `scripts/checks/support-periods.sh`, fails
+every change and every release while the two tables differ. A gateway names its own end date in the startup banner and in
 `OPTIONS {base}/`, and says so once the date has passed.
 
 ## 8. Instructions
@@ -225,31 +228,11 @@ says how to go back.
 "the secure decommissioning of the product with digital elements, including
 information on how user data can be securely removed;"
 
-The gateway holds no clinical data. What it keeps is listed on
-[What the gateway keeps](../operate/deployment-shape.md#what-the-gateway-keeps)
-and [Retention](data-protection.md#retention). To take it out of service:
-
-1. Stop sending it traffic, and stop it so it drains
-   ([Stopping without dropping a request](../operate/health.md#stopping-without-dropping-a-request)).
-   With `[pmir]`, set `on_drain = "unsubscribe"` first, or delete the
-   subscription at the Registry ([Several replicas](../operate/identity.md#several-replicas)).
-2. Before you remove an audit spool, let it deliver: the dependency report
-   shows `audit_repository` and `audit_feed` as `up` once it is empty
-   ([Losing a spool](../operate/container.md#losing-a-spool)).
-3. To move the learned routes to a replacement, export them first
-   ([Exporting the identity state](../operate/identity-state-export.md)).
-4. Remove the stored-query store: the `redb` file, or the `ferrofed` schema
-   of the PostgreSQL database
-   ([Before you upgrade](../operate/upgrading.md#before-you-upgrade) names
-   both).
-5. Remove the configuration, the registry document and every secret file,
-   the signing keys among them, and revoke the onward credentials each
-   member issued to the gateway
-   ([Onward credentials](../operate/onward-credentials.md)).
-
-The access and audit records stay at your Audit Record Repository, which
-keeps each for the period it states
-([How long a record is kept](../operate/access-log.md#how-long-a-record-is-kept)).
+[Decommissioning](../operate/decommissioning.md) takes a deployment out of
+service step by step: it lists what a deployment holds and where, moves what
+a replacement needs, lets the audit spools deliver, stops the replicas,
+keeps the access records for their retention period, retires the signing
+keys and the credentials, and removes the stores and the volumes.
 
 ### 8(e) Turning off automatic security updates
 

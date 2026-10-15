@@ -452,10 +452,11 @@ jobs:
           bash scripts/checks/obligations.sh
 
   # The technical documentation guard (Regulation (EU) 2025/327 Art 30(2),
-  # Art 37, Annex III): every Annex III element has a row in
-  # conformance/technical-documentation.tsv whose file and heading exist, and
-  # a version whose harmonised components differ from the previous release
-  # tag has its review rows. It reads the tags from origin, so it needs the
+  # Art 37, Annex III, and Regulation (EU) 2024/2847 Annex VII): every Annex
+  # III element has a row in conformance/technical-documentation.tsv, and
+  # every Annex VII point one in conformance/cra-technical-documentation.tsv,
+  # whose file and heading exist, and a version whose harmonised components
+  # differ from the previous release tag has its review rows. It reads the tags from origin, so it needs the
   # network but no token. Its self-test proves each refusal and pass.
   technical-documentation:
     name: technical-documentation
@@ -471,6 +472,26 @@ jobs:
           set -euo pipefail
           bash scripts/checks/technical-documentation.sh --self-test
           bash scripts/checks/technical-documentation.sh
+
+  # The support-period guard (Regulation (EU) 2024/2847 Art 13(8) and (19),
+  # Annex II point 7): the support table of SECURITY.md and the table of end
+  # dates on the book's CRA information to the user hold the same rows, so
+  # the book never states an end date the record does not. Its self-test
+  # proves each refusal and pass.
+  support-periods:
+    name: support-periods
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/support-periods.sh --self-test
+          bash scripts/checks/support-periods.sh
 
   # The Annex II checklist guard (Regulation (EU) 2025/327 Art 30(1)(a),
   # Art 37(2), Annex II): every point of Annex II has a row in
@@ -1453,6 +1474,7 @@ jobs:
       - conformance-matrix
       - obligations
       - technical-documentation
+      - support-periods
       - annex-ii
       - economic-operators
       - e2e-placement
