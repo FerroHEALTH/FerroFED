@@ -169,8 +169,9 @@ pub const CONFIGURE_BODY_LIMIT: usize = 3 * crate::configure::import::IMPORT_LIM
 ///
 /// A server function reads its body whole before it checks the session,
 /// so the limit holds for a caller with no session too. The body is read
-/// here, up to the limit, and handed on whole; a body that breaks off is
-/// `400`. Axum's own default limit is raised to [`CONFIGURE_BODY_LIMIT`]
+/// here, up to the limit and within [`BODY_READ_TIMEOUT`], and handed on
+/// whole; a body that breaks off is `400`, and one still unread at the
+/// deadline is `408`. Axum's own default limit is raised to [`CONFIGURE_BODY_LIMIT`]
 /// beside it, so an import at its limit is read whole.
 async fn limit_body(request: Request, next: Next) -> Response {
     use http_body_util::BodyExt as _;
@@ -188,17 +189,23 @@ async fn limit_body(request: Request, next: Next) -> Response {
     if declared.is_some_and(|length| u64::try_from(limit).is_ok_and(|limit| length > limit)) {
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
     }
-    match http_body_util::Limited::new(body, limit).collect().await {
-        Ok(read) => {
+    let read = http_body_util::Limited::new(body, limit).collect();
+    match tokio::time::timeout(BODY_READ_TIMEOUT, read).await {
+        Ok(Ok(read)) => {
             let body = axum::body::Body::from(read.to_bytes());
             next.run(Request::from_parts(parts, body)).await
         }
-        Err(error) if error.is::<http_body_util::LengthLimitError>() => {
+        Ok(Err(error)) if error.is::<http_body_util::LengthLimitError>() => {
             StatusCode::PAYLOAD_TOO_LARGE.into_response()
         }
-        Err(_broken) => StatusCode::BAD_REQUEST.into_response(),
+        Ok(Err(_broken)) => StatusCode::BAD_REQUEST.into_response(),
+        Err(_elapsed) => StatusCode::REQUEST_TIMEOUT.into_response(),
     }
 }
+
+/// How long the console waits for a request's whole body before it answers
+/// `408` (RFC 9110 §15.5.9), so a body sent slowly holds no task for long.
+pub const BODY_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Sends a request for an operator view that carries no live signed-in
 /// session to sign-in, before anything is rendered or asked of the gateway.

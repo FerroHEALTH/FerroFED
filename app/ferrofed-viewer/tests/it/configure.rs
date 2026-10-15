@@ -337,6 +337,40 @@ async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
     Ok(())
 }
 
+// NOTE: no specification governs this: our own design; only a
+// configuration-invalid refusal shows the gateway's message.
+#[tokio::test]
+async fn another_refusal_shows_its_code_and_not_the_gateway_message() -> Result<(), Box<dyn Error>>
+{
+    for (status, code, said) in [
+        (
+            409,
+            "revision-stale",
+            "Replica gateway-0 refused the save: 409 (revision-stale).",
+        ),
+        (
+            403,
+            "scope-insufficient",
+            "Replica gateway-0 refused the save: 403 (scope-insufficient). Your access token may carry no operator scope.",
+        ),
+    ] {
+        let listener = listener().await;
+        let body = format!(r#"{{"message":"the hidden text","code":"{code}"}}"#);
+        answers(
+            &listener,
+            ("PUT", "/admin/config/members/node-c"),
+            status,
+            &body,
+        )
+        .await;
+        let (service, session) = signed_in_console(&listener)?;
+        let html = configured(&service, &session, save_c()).await?;
+        assert!(html.contains(said), "{html}");
+        assert!(!html.contains("the hidden text"), "{html}");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;

@@ -108,7 +108,7 @@ impl RegistrySnapshot {
         for (url, second) in member.addressed() {
             if let Some((_, first)) = self.addressed().find(|(held, _)| *held == url) {
                 return Err(LoadError::DuplicateEndpointUrl {
-                    url: url.to_string(),
+                    url: crate::error::shown_url(url),
                     first: first.clone(),
                     second: second.clone(),
                 });

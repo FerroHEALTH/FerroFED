@@ -170,7 +170,7 @@ fn fhir_field(form: &str, value: String) -> impl IntoView {
             />
         </p>
         <p id=hint>
-            "Each endpoint is its endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service. Separate endpoints with a semicolon, and write a semicolon inside an endpoint as %3B."
+            "Each endpoint is its endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service. Separate endpoints with a semicolon, and write a semicolon inside an endpoint as %3B and a literal %3B as %253B."
         </p>
     }
 }
@@ -222,7 +222,7 @@ fn member_form(
             id,
             (
                 "endpoints",
-                "Query API endpoints: endpoint_id and base URL, then suspended if it is out of service; separate endpoints with a semicolon, and write one inside an endpoint as %3B",
+                "Query API endpoints: endpoint_id and base URL, then suspended if it is out of service; separate endpoints with a semicolon, and write one inside an endpoint as %3B and a literal %3B as %253B",
             ),
             value(endpoints_text),
             (true, false),

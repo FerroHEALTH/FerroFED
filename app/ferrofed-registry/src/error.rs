@@ -10,7 +10,10 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::error::document::DocumentFault;
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+
+pub mod document;
 
 /// The registry-owned namespace an [`IdError`] is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +105,18 @@ impl fmt::Display for Referrer {
     }
 }
 
+/// Returns `url` as an error shows it: its scheme, host, port and path, with
+/// no userinfo, query or fragment, any of which may carry a credential.
+#[must_use]
+pub fn shown_url(url: &url::Url) -> String {
+    let port = url
+        .port()
+        .map(|port| format!(":{port}"))
+        .unwrap_or_default();
+    let host = url.host_str().unwrap_or_default();
+    format!("{}://{host}{port}{}", url.scheme(), url.path())
+}
+
 /// Why an endpoint's base URL was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -138,7 +153,7 @@ pub enum LoadError {
     /// unknown or missing field, a value of the wrong type, or an identifier
     /// that breaks its form.
     #[error("the registry document does not have the registry's shape")]
-    Parse(#[source] Box<toml::de::Error>),
+    Parse(#[source] DocumentFault),
     /// The document admits no node.
     #[error("the registry document admits no node")]
     NoNode,
@@ -217,7 +232,8 @@ pub enum LoadError {
     /// two ids.
     #[error("endpoint {first} and endpoint {second} share the base URL {url}")]
     DuplicateEndpointUrl {
-        /// The shared base URL, as normalised.
+        /// The shared base URL, as normalised and shown by [`shown_url`]:
+        /// its scheme, host, port and path alone.
         url: String,
         /// The endpoint declared first.
         first: EndpointId,

@@ -150,7 +150,7 @@ pub(super) fn endpoints(
         match url_owner.entry(url.clone()) {
             Entry::Occupied(entry) => {
                 return Err(LoadError::DuplicateEndpointUrl {
-                    url: url.into(),
+                    url: crate::error::shown_url(&url),
                     first: entry.get().clone(),
                     second: doc.id,
                 });

@@ -96,7 +96,10 @@ jiff.workspace = true
 jsonwebtoken.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
+# A request body that stalls is timed out on a paused clock.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "test-util"] }
+# The frames of a request body a test sends chunked, breaking off or stalling.
+hyper.workspace = true
 tower.workspace = true
 wiremock.workspace = true
 

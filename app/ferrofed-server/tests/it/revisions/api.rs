@@ -247,6 +247,29 @@ async fn a_rollback_with_nothing_before_it_is_refused() -> TestResult {
     Ok(())
 }
 
+// NOTE: no specification governs this: our own design; the operator console
+// shows this message, so a broken line of the registry document is never quoted.
+#[tokio::test]
+async fn a_registry_document_that_does_not_parse_is_refused_without_its_text() -> TestResult {
+    let gateway = Gateway::start("")?;
+    let broken = gateway.one().with_file_name("broken.toml");
+    let text = std::fs::read_to_string(gateway.one())?.replacen(
+        "url = \"",
+        "url = \"https://cdr.example.org/x?key=synthetic-secret-7\n",
+        1,
+    );
+    std::fs::write(&broken, &text)?;
+    let (status, body) = gateway
+        .save(Some(1), "a broken document", &rest(&broken, ""))
+        .await?;
+    assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{body}");
+    let refused = error_body(&body)?;
+    assert_eq!("configuration-invalid", refused.code);
+    assert!(!body.contains("synthetic-secret-7"), "{body}");
+    assert!(refused.message.contains("(line "), "{}", refused.message);
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_configuration_config_check_refuses_is_refused_with_its_error() -> TestResult {
     let gateway = Gateway::start("")?;

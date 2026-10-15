@@ -3,17 +3,22 @@
 
 //! Every request body is held to a limit before anything reads it: a body
 //! over the limit is `413` with or without a session, and no server
-//! function runs, while an import of TOML at its own limit still runs.
+//! function runs, a body that breaks off is `400` and one never finished
+//! is `408`, while an import of TOML at its own limit still runs.
 
+use std::collections::VecDeque;
 use std::error::Error;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use axum::body::{Body, Bytes, HttpBody as _};
+use axum::body::{Body, Bytes, HttpBody};
 use ferrofed_testkit::mock::Server;
 use ferrofed_viewer::configure::import::IMPORT_LIMIT;
-use ferrofed_viewer::server::{BODY_LIMIT, CONFIGURE_BODY_LIMIT};
+use ferrofed_viewer::server::{BODY_LIMIT, BODY_READ_TIMEOUT, CONFIGURE_BODY_LIMIT};
 use ferrofed_viewer::session::COOKIE;
 use http::{Request, StatusCode};
 use http_body_util::{BodyExt as _, Full};
+use hyper::body::Frame;
 
 use crate::configure::{answers, form, signed_in_console};
 use crate::support::send;
@@ -132,6 +137,118 @@ async fn a_chunked_body_over_the_limit_is_413_and_runs_no_function() -> Result<(
         let (response, _) = send(&service, request).await?;
         assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status(), "{path}");
     }
+    assert_eq!(0, asked(&listener).await?, "no replica is asked");
+    Ok(())
+}
+
+/// How a [`Chunked`] body ends after its chunks.
+#[derive(Clone, Copy)]
+enum End {
+    /// The body breaks off, as when the client goes away.
+    Broken,
+    /// The body never ends, as one sent too slowly.
+    Stalled,
+}
+
+/// A request body sent chunked: its `chunks`, then its `end`.
+struct Chunked {
+    chunks: VecDeque<Bytes>,
+    end: End,
+}
+
+impl HttpBody for Chunked {
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+        let body = self.get_mut();
+        if let Some(chunk) = body.chunks.pop_front() {
+            return Poll::Ready(Some(Ok(Frame::data(chunk))));
+        }
+        match body.end {
+            End::Broken => Poll::Ready(Some(Err(std::io::Error::other("the client went away")))),
+            End::Stalled => Poll::Pending,
+        }
+    }
+}
+
+/// A form post to `/api/configure` of `body`, as the session `session`.
+fn chunked_post(session: &str, body: Chunked) -> Result<Request<Body>, Box<dyn Error>> {
+    Ok(Request::post("/api/configure")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("accept", "application/json")
+        .header("sec-fetch-site", "same-origin")
+        .header("cookie", format!("{COOKIE}={session}"))
+        .body(Body::new(body))?)
+}
+
+/// The start of a confirmed import form, which the body never finishes.
+fn started() -> VecDeque<Bytes> {
+    VecDeque::from([Bytes::from(form(&[
+        ("action", "import"),
+        ("base", "1"),
+        ("reason", "r"),
+        ("confirm", "yes"),
+    ]))])
+}
+
+// NOTE: RFC 9110 §15.5.9; a body still unread at the deadline is 408, so a
+// body sent slowly holds the task no longer than the deadline.
+#[tokio::test(start_paused = true)]
+async fn a_body_that_never_ends_is_408_and_runs_no_function() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let stalled = Chunked {
+        chunks: started(),
+        end: End::Stalled,
+    };
+    let began = tokio::time::Instant::now();
+    let (response, _) = send(&service, chunked_post(session.as_str(), stalled)?).await?;
+    assert_eq!(StatusCode::REQUEST_TIMEOUT, response.status());
+    assert!(
+        began.elapsed() >= BODY_READ_TIMEOUT,
+        "{:?}",
+        began.elapsed()
+    );
+    assert_eq!(0, asked(&listener).await?, "no replica is asked");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_body_that_breaks_off_is_400_and_runs_no_function() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let broken = Chunked {
+        chunks: started(),
+        end: End::Broken,
+    };
+    let (response, _) = send(&service, chunked_post(session.as_str(), broken)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, response.status());
+    assert_eq!(0, asked(&listener).await?, "no replica is asked");
+    Ok(())
+}
+
+// NOTE: RFC 9110 §15.5.14; a body that runs past the limit is 413 even when
+// its Content-Length declares less, since the limit is held as it is read.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_body_longer_than_its_declared_length_is_413() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let mut chunks = started();
+    chunks.push_back(Bytes::from("x".repeat(CONFIGURE_BODY_LIMIT)));
+    let long = Chunked {
+        chunks,
+        end: End::Broken,
+    };
+    let mut request = chunked_post(session.as_str(), long)?;
+    request
+        .headers_mut()
+        .insert("content-length", http::HeaderValue::from_static("64"));
+    let (response, _) = send(&service, request).await?;
+    assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, response.status());
     assert_eq!(0, asked(&listener).await?, "no replica is asked");
     Ok(())
 }

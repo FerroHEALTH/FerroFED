@@ -306,6 +306,23 @@ fn a_base_url_shared_by_two_endpoints_is_refused() {
 }
 
 #[test]
+fn an_error_shows_a_url_without_userinfo_query_or_fragment() -> Result<(), url::ParseError> {
+    for (url, shown) in [
+        (
+            "https://op:s3cret@cdr.example.org:8443/openehr?token=s3cret#s3cret",
+            "https://cdr.example.org:8443/openehr",
+        ),
+        ("http://[::1]/a;b", "http://[::1]/a;b"),
+    ] {
+        assert_eq!(
+            shown,
+            ferrofed_registry::error::shown_url(&url::Url::parse(url)?)
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_node_without_an_endpoint_is_refused() {
     let document = one_node_with(
         "[[node]]\nid = \"node-b\"\norganisation = \"org-a\"\nsystem_id = \"cdr-b.example.org\"\n",
