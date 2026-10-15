@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The parse faults of a configuration: where the TOML reader refused it and
-//! why, with no text the reader quoted (§5.4.1, N33).
+//! why, with no text the reader quoted (§5.4.1, N33), and the constructors
+//! that carry one into an [`Error`].
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use crate::config::error::Error;
 
 /// Which text a [`ParseFault`] was found in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +113,29 @@ impl fmt::Display for ParseFault {
             write!(f, " (line {line}, column {column})")?;
         }
         Ok(())
+    }
+}
+
+impl Error {
+    /// Builds an [`Error::Parse`] from what the TOML reader reported about
+    /// `text`, keeping positions and key names and dropping the quoted source.
+    pub(crate) fn parse(error: &toml::de::Error, text: &str, stage: Stage) -> Self {
+        Self::Parse {
+            fault: ParseFault::from_toml(error, text, stage),
+        }
+    }
+
+    /// Names `path` as the file a parse fault sits in; any other error is
+    /// returned unchanged.
+    #[must_use]
+    pub(crate) fn in_file(self, path: &Path) -> Self {
+        match self {
+            Self::Parse { mut fault } => {
+                fault.file = Some(path.to_path_buf());
+                Self::Parse { fault }
+            }
+            other => other,
+        }
     }
 }
 
