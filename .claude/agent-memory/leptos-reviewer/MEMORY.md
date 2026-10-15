@@ -1,1 +1,1 @@
-- [Review hazards](review_hazards.md): confirmed Leptos, OIDC and operator-surface hazards from the console reviews (PR #580, #607)
+- [Review hazards](review_hazards.md): confirmed Leptos, OIDC and operator-surface hazards from the console reviews (PR #580, #607, #909, #577)
