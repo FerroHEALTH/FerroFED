@@ -238,8 +238,8 @@ async fn a_receipt_records_its_transformation_by_path_with_the_loss_it_declared(
     );
     assert_eq!(
         detail(record, "ehds-dropped-path"),
-        ["patient=1"],
-        "named by the mapping that did not run"
+        ["AllergyIntolerance.patient=1"],
+        "at the R4 element the loss's expression locates"
     );
     Ok(())
 }

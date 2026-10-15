@@ -20,7 +20,7 @@ use eehrxf::terminology::ehn;
 use eehrxf::transformation::{Direction, Pin, Report};
 use fhir_types::codec::{Json as _, Path, Value};
 use fhir_types::r4::resource::Resource;
-use fhirconnect::engine::outcome::{SkipReason, Warning};
+use fhirconnect::engine::outcome::{Location, Loss, SkipReason, Warning};
 use fhirconnect::operations::issues;
 
 /// A code value no path may carry.
@@ -28,6 +28,10 @@ const CODE: &str = "Qz7-code-91";
 
 /// A text value no path may carry.
 const TEXT: &str = "Qz7-text-92";
+
+/// The archetype path of the openEHR node a loss is located at, which is no
+/// R4 element path and so is never counted as one.
+const OPENEHR_PATH: &str = "/content[openEHR-EHR-EVALUATION.adverse_reaction_risk.v1]/data[at0001]";
 
 /// A reference a declared loss names, which no path may carry.
 const REFERENCE: &str = "Patient?identifier=urn:oid:2.999.1|Qz7-patient-93";
@@ -123,29 +127,55 @@ fn a_report_carries_no_code_value_or_text() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The outcome of a run that declared each kind of loss once.
+/// The outcome of a run that declared each kind of loss once, each located
+/// as the engine locates it, and a skipped mapping with no FHIR element.
 fn losses() -> Option<fhir_types::r4::operation_outcome::OperationOutcome> {
     issues::of_warnings(&[
-        Warning::LastOfMany {
-            path: "AllergyIntolerance.note".to_owned(),
-            dropped: 2,
-        },
-        Warning::Skipped {
-            mapping: "allergy.reaction".to_owned(),
-            reason: SkipReason::UnresolvedReference {
+        Warning::new(
+            Loss::LastOfMany {
+                path: "AllergyIntolerance.note".to_owned(),
+                dropped: 2,
+            },
+            Location::default().with_fhir("AllergyIntolerance.note"),
+        ),
+        Warning::new(
+            Loss::Skipped {
+                mapping: "allergy.reaction".to_owned(),
+                reason: SkipReason::UnresolvedReference {
+                    reference: REFERENCE.to_owned(),
+                },
+            },
+            Location::default()
+                .with_fhir("AllergyIntolerance.reaction[0]")
+                .with_openehr(OPENEHR_PATH),
+        ),
+        Warning::new(
+            Loss::OneWayFallback {
+                cell: "DV_QUANTITY".to_owned(),
+                field: "precision".to_owned(),
+            },
+            Location::default()
+                .with_fhir("AllergyIntolerance.reaction[1].manifestation[0].coding[2].code"),
+        ),
+        Warning::new(
+            Loss::DeferredReference {
                 reference: REFERENCE.to_owned(),
             },
-        },
-        Warning::OneWayFallback {
-            cell: "DV_QUANTITY".to_owned(),
-            field: "precision".to_owned(),
-        },
-        Warning::DeferredReference {
-            reference: REFERENCE.to_owned(),
-        },
-        Warning::Defaulted {
-            field: "/language".to_owned(),
-        },
+            Location::default().with_fhir("AllergyIntolerance.recorder"),
+        ),
+        Warning::new(
+            Loss::Skipped {
+                mapping: "allergy.category".to_owned(),
+                reason: SkipReason::Unidirectional,
+            },
+            Location::default().with_openehr(OPENEHR_PATH),
+        ),
+        Warning::new(
+            Loss::Defaulted {
+                field: "/language".to_owned(),
+            },
+            Location::default().with_openehr("/language"),
+        ),
     ])
 }
 
@@ -156,17 +186,22 @@ fn each_declared_loss_is_dropped_at_the_path_it_names_without_a_value() -> Resul
     report.count_losses(&losses().ok_or("an outcome")?);
     assert_eq!(
         report.dropped().count(),
-        4,
+        5,
         "every warning is a loss; a defaulted field is information"
     );
     assert_eq!(
         report.dropped().paths(),
         &BTreeMap::from([
             ("AllergyIntolerance.note".to_owned(), 1),
-            ("DV_QUANTITY".to_owned(), 1),
-            ("allergy.reaction".to_owned(), 1),
+            ("AllergyIntolerance.reaction".to_owned(), 1),
+            (
+                "AllergyIntolerance.reaction.manifestation.coding.code".to_owned(),
+                1
+            ),
+            ("AllergyIntolerance.recorder".to_owned(), 1),
         ]),
-        "a reference is a value, so its loss is counted with no path"
+        "each loss at the element its expression locates, without the index; \
+         a loss with no FHIR element is counted with no path"
     );
     Ok(())
 }

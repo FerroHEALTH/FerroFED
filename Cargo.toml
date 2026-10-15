@@ -49,11 +49,11 @@ openehr-sdt = { version = "0.0.86", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.50" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.36" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.22" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.37" }
+nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.23" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.24" }
-eehrxf = { path = "crates/eehrxf", version = "0.0.20" }
+ehds-logging = { path = "crates/ehds-logging", version = "0.0.25" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.21" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -174,17 +174,17 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the root
 # set it reads: `terminology` for PIXm (#42), `resources` for the PDQm Patient
 # (#119) and the mCSD Organization and Endpoint (#74); the testkit's Manager
-# adds `resources` for the ITI-104 Patient (#47). 0.1.108 is the release
+# adds `resources` for the ITI-104 Patient (#47). 0.1.109 is the release
 # fhirconnect builds on, so the build carries one fhir-types (#684).
-fhir-types = { version = "0.1.108", default-features = false }
+fhir-types = { version = "0.1.109", default-features = false }
 # The FHIRconnect 1.0.0 mapping engine the European interoperability component
 # runs in process (#684), and the template index and mapping-file loader it
-# takes, both from FerroBRIDGE on the openehr-* 0.0.84 line, so the build
-# carries that family beside the workspace pin until FerroBRIDGE moves (#1028).
+# takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
+# carries one copy of that family (#1028).
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
 # against crates.io on 2026-10-15.
-fhirconnect = "=0.1.108"
-openehr-mapping-core = "=0.1.108"
+fhirconnect = "=0.1.111"
+openehr-mapping-core = "=0.1.109"
 # The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
 # crates/eehrxf is read from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
