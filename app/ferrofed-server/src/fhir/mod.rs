@@ -373,12 +373,30 @@ async fn summarised(
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
-    // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any member
-    // is asked, so no member is reached for a summary that could name no patient.
-    let header = match headed(federation, (patient, arrived.on_behalf), started).await {
+    let header = async {
+        let named = named(patient).map_err(Headless::Unheaded)?;
+        // NOTE: Regulation (EU) 2025/327 Art 3(1), Federation Tier §5.2: a grant confined to one
+        // patient is held to it before the demographics supplier is asked about anyone.
+        let conveyed = (arrived.conveyance, arrived.on_behalf);
+        let ids = (request_id, logged.as_str());
+        if let Some(refused) =
+            crate::facade::other_patient(federation, conveyed, (&named, started), ids).await
+        {
+            return Err(Headless::Refused(refused));
+        }
+        // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any
+        // member is asked, so no member is reached for a summary that could name no patient.
+        headed(federation, (&named, arrived.on_behalf), started)
+            .await
+            .map_err(Headless::Unheaded)
+    };
+    let header = match header.await {
         Ok(header) => header,
-        Err(unheaded) => {
-            let mut response = unheaded_outcome(unheaded);
+        Err(headless) => {
+            let mut response = match headless {
+                Headless::Refused(refused) => refused,
+                Headless::Unheaded(unheaded) => unheaded_outcome(unheaded),
+            };
             response.extensions_mut().insert(NoAccess);
             return response;
         }
@@ -394,24 +412,37 @@ async fn summarised(
     }
 }
 
-/// The summary header the identity binding holds of the patient
-/// `system`|`value`, asked on behalf of `on_behalf` within the budget of a
-/// request that started at `started`, or the [`Unheaded`] that says why
-/// there is none.
-async fn headed(
-    federation: &crate::federation::Federation,
-    ((system, value), on_behalf): ((&str, &str), &OnBehalfOf),
-    started: Instant,
-) -> Result<PatientHeader, Unheaded> {
+/// Why a summary request gets no header, so nothing is sent to a member.
+enum Headless {
+    /// The caller is confined to another patient, or its patient could not
+    /// be checked: the answer.
+    Refused(Response),
+    /// The identity binding gives no header.
+    Unheaded(Unheaded),
+}
+
+/// The patient reference of the identifier `system`|`value` a summary
+/// request names.
+fn named((system, value): (&str, &str)) -> Result<PatientRef, Unheaded> {
     // NOTE: the request reader refuses an empty system or value, so a reference that cannot
     // be built names no identifier the binding is asked about.
-    let patient = IdentifierNamespace::new(system)
+    IdentifierNamespace::new(system)
         .and_then(|namespace| PatientRef::new(namespace, SecretString::from(value)))
-        .map_err(|_empty| Unheaded::NoBinding)?;
+        .map_err(|_empty| Unheaded::NoBinding)
+}
+
+/// The summary header the identity binding holds of `patient`, asked on
+/// behalf of `on_behalf` within the budget of a request that started at
+/// `started`, or the [`Unheaded`] that says why there is none.
+async fn headed(
+    federation: &crate::federation::Federation,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
+    started: Instant,
+) -> Result<PatientHeader, Unheaded> {
     let deadline = started
         .checked_add(federation.budget().overall())
         .unwrap_or(started);
-    demographics::header(federation, (&patient, on_behalf), deadline).await
+    demographics::header(federation, (patient, on_behalf), deadline).await
 }
 
 /// The `OperationOutcome` of a summary request whose header `unheaded` says

@@ -288,6 +288,19 @@ before any member is asked.
 The document list takes the same scopes as a summary: it names the summary
 and carries the members' own documents.
 
+A person reads their own summary through an electronic health data access
+service (Regulation (EU) 2025/327 Art 3(1), Art 4). The service holds a
+token confined to the person
+([Patient grants](../operate/authentication.md#patient-grants)), with the
+scope `patient/aql-eu.ferrofed.eehrxf::*.s`, and asks for the summary by the
+person's identifier as any caller does. The gateway resolves that
+identifier at the member the token's issuer is bound to and compares it
+with the token's patient before the PDQm Supplier or any member is asked.
+The person's own identifier gets the summary from every member that holds
+them; another patient's is `403` (`patient-confinement`), an
+`OperationOutcome` of type `forbidden`, with nothing sent. A professional's
+request is unchanged.
+
 Every summary that reached a member writes one access record (Annex II 3.2),
 naming the verified caller, the patient, every endpoint asked and the
 `ehr_id` at each, and the categories: `Patient-Summaries` by construction
@@ -296,7 +309,10 @@ compositions the members answered with. A document list that asked a
 member's own endpoint writes one record too, naming every such endpoint
 and the `ehr_id` it was asked by, and the members whose document it
 carries; a list that asked no member, because none is in the `native`
-mode, sends nothing to a member and writes none.
+mode, sends nothing to a member and writes none. The record of a person's
+own summary names the person twice under Art 9: as the caller, the token's
+`sub` acting in person with the purpose it states, and as the data subject,
+by the identifier the service asked with and the `ehr_id` at each member.
 
 ## Errors
 

@@ -88,6 +88,8 @@ use axum::extract::State;
 use axum::response::Response;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_identity::session::SessionKey;
 use http::{HeaderMap, Method, Uri};
 use openehr_its::rest::routes::{self, Lookup};
@@ -253,4 +255,29 @@ pub(crate) async fn confined_by(
             None => conveyance,
         },
     )
+}
+
+/// The refusal of a request whose caller, under `conveyance`, is confined to
+/// one patient and names `patient`, another one, or `None` to go on.
+///
+/// The named patient is resolved at the bound member alone, on behalf of
+/// `on_behalf`, within the overall budget of a request that arrived at
+/// `started`, ahead of any demographics supplier, localizer, consent
+/// pre-filter or other member (§5.2); the refusal is the `403` every other
+/// confined route answers.
+pub(crate) async fn other_patient(
+    federation: &Federation,
+    (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
+    (patient, started): (&PatientRef, Instant),
+    (request_id, logged): (&str, &str),
+) -> Option<Response> {
+    let confinement = conveyance.confinement()?;
+    let Some(deadline) = started.checked_add(federation.budget().overall()) else {
+        return Some(confined::Unconfined::Clock.respond(request_id, logged));
+    };
+    match confined::names_own(federation, confinement, patient, on_behalf, deadline).await {
+        Ok(true) => None,
+        Ok(false) => Some(confined::refused("patient", request_id, logged)),
+        Err(unconfined) => Some(unconfined.respond(request_id, logged)),
+    }
 }
