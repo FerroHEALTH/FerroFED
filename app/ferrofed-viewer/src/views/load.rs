@@ -192,13 +192,38 @@ pub mod server {
     pub enum Asked<'a> {
         /// A view's read of the gateway.
         View,
-        /// An operator's admin action at a replica's admin listener.
+        /// An operator's AQL or stored query through the gateway.
+        Query,
+        /// An operator's action at a replica's admin listener.
         Action {
-            /// The action, `clear` or `drift repair`.
+            /// Which page's action it is.
+            kind: ActionKind,
+            /// The action, such as `clear` or `member save`.
             what: &'a str,
             /// The replica's name.
             replica: &'a str,
         },
+    }
+
+    /// Which page an operator's action at a replica's admin listener comes
+    /// from.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ActionKind {
+        /// An admin action: a collision clear or a drift repair.
+        Admin,
+        /// A change of the gateway's configuration.
+        Configuration,
+    }
+
+    impl ActionKind {
+        /// The action's kind, as a log line names it.
+        #[must_use]
+        pub const fn noun(self) -> &'static str {
+            match self {
+                Self::Admin => "admin action",
+                Self::Configuration => "configuration action",
+            }
+        }
     }
 
     /// What stopped a view's gateway call that failed, as [`stopped`] logs
@@ -221,11 +246,20 @@ pub mod server {
                     %status,
                     "the gateway answered a view with a body this console cannot read"
                 ),
-                Asked::Action { what, replica } => tracing::error!(
+                Asked::Query => tracing::error!(
+                    %status,
+                    "the gateway answered a query with a body this console cannot read"
+                ),
+                Asked::Action {
+                    kind,
+                    what,
+                    replica,
+                } => tracing::error!(
                     %status,
                     replica,
                     action = what,
-                    "a replica answered an operator's admin action with a body this console cannot read"
+                    "a replica answered an operator's {} with a body this console cannot read",
+                    kind.noun()
                 ),
             }
             return Stop::Fault(ViewError::Unreadable {
@@ -237,12 +271,20 @@ pub mod server {
                 Asked::View => {
                     tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
                 }
-                Asked::Action { what, replica } => tracing::warn!(
+                Asked::Query => {
+                    tracing::warn!(%status, code = code.as_deref(), "the gateway refused a query");
+                }
+                Asked::Action {
+                    kind,
+                    what,
+                    replica,
+                } => tracing::warn!(
                     %status,
                     code = code.as_deref(),
                     replica,
                     action = what,
-                    "a replica refused an operator's admin action"
+                    "a replica refused an operator's {}",
+                    kind.noun()
                 ),
             }
             if status == http::StatusCode::UNAUTHORIZED {
@@ -257,17 +299,24 @@ pub mod server {
                 Asked::View => {
                     tracing::error!(error = %error, "the gateway could not be reached for a view");
                 }
-                Asked::Action { what, replica } => tracing::error!(
+                Asked::Query => {
+                    tracing::error!(error = %error, "the gateway could not be reached for a query");
+                }
+                Asked::Action {
+                    kind,
+                    what,
+                    replica,
+                } => tracing::error!(
                     error = %error,
                     replica,
                     action = what,
-                    "a replica's admin listener could not be reached for an operator's admin action"
+                    "a replica's admin listener could not be reached for an operator's {}",
+                    kind.noun()
                 ),
             }
             Stop::Fault(ViewError::Unreachable)
         }
     }
-
     /// The members view of `description` and `dependencies`.
     #[must_use]
     pub fn members(description: &OptionsRoot, dependencies: &DependencyReport) -> MembersView {

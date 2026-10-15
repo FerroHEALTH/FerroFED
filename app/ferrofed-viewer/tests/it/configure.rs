@@ -19,7 +19,7 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{OPERATOR_TOKEN, console, get_as, send, signed_in};
+use crate::support::{Captured, OPERATOR_TOKEN, console, get_as, send, signed_in};
 
 /// The running revision 1, applied by the file, and revision 2 saved.
 const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"previous":null,
@@ -322,7 +322,7 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
     for (field, value, said) in [
         ("node", "node c", "The node_id is not"),
         ("system_id", "", "The system_id is not"),
-        ("endpoints", "node-c-pub", "Each endpoint is"),
+        ("endpoints", "node-c-pub", "Query API endpoint 1 is not"),
         ("endpoints", "", "Give at least one Query API endpoint."),
         ("reason", " ", "Give the reason"),
     ] {
@@ -499,9 +499,10 @@ async fn a_plain_form_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// The form shows an endpoint's id, URL and status alone, so a save keeps
-// what it does not show of the held member (§11.1, N27): the consent refusal
-// codes of an endpoint it names, and an `hl7-fhir-rest` endpoint it does not.
+// The form shows a Query API endpoint's id, URL and status alone, so a save
+// keeps the consent refusal codes of one it names (§11.1, N27), and a form
+// drawn without the FHIR endpoints field, as a tab opened before it existed,
+// keeps every held `hl7-fhir-rest` endpoint whole.
 #[tokio::test]
 async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
@@ -611,5 +612,63 @@ async fn a_console_with_no_admin_listener_offers_no_configuration_link()
     let (service, session) = signed_in_console(&listener)?;
     let (_response, body) = send(&service, get_as("/members", &session)?).await?;
     assert!(body.contains(r#"href="/configuration""#), "{body}");
+    Ok(())
+}
+// A refused configuration action is logged as one, naming the action and the
+// replica, with no member, reason, AQL text or token.
+#[tokio::test]
+async fn a_refused_configuration_action_is_logged_as_what_it_is() -> Result<(), Box<dyn Error>> {
+    let captured = Captured::default();
+    let _logging = captured.logging();
+    let listener = listener().await;
+    let refused = r#"{"message":"refused","code":"revision-conflict"}"#;
+    for route in [
+        ("PUT", "/admin/config/members/node-c"),
+        ("POST", "/admin/config/revisions/2/apply"),
+        ("POST", "/admin/config/rollback"),
+        ("PUT", "/admin/config/stored-queries/org.example::q/1.0.1"),
+    ] {
+        answers(&listener, route, 409, refused).await;
+    }
+    let (service, session) = signed_in_console(&listener)?;
+    for body in [
+        save_c(),
+        form(&[("action", "apply"), ("revision", "2"), ("confirm", "yes")]),
+        form(&[
+            ("action", "rollback"),
+            ("current", "2"),
+            ("reason", "C was premature"),
+            ("confirm", "yes"),
+        ]),
+        form(&[
+            ("action", "store-query"),
+            ("name", "org.example::q"),
+            ("version", "1.0.1"),
+            ("aql", "SELECT c FROM EHR e CONTAINS COMPOSITION c"),
+            ("confirm", "yes"),
+        ]),
+    ] {
+        configured(&service, &session, body).await?;
+    }
+
+    let logged = captured.text();
+    for action in ["member save", "apply", "rollback", "stored-query store"] {
+        let line = format!(
+            r#"a replica refused an operator's configuration action status=409 Conflict code="revision-conflict" replica="gateway-0" action="{action}""#
+        );
+        assert!(logged.contains(&line), "{line}: {logged}");
+    }
+    for elsewhere in ["refused a view", "admin action"] {
+        assert!(!logged.contains(elsewhere), "{elsewhere}: {logged}");
+    }
+    for named in [
+        "node-c",
+        "add C",
+        "C was premature",
+        "SELECT c FROM",
+        OPERATOR_TOKEN,
+    ] {
+        assert!(!logged.contains(named), "{named}: {logged}");
+    }
     Ok(())
 }

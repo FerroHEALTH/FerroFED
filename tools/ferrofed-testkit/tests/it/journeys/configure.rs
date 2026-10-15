@@ -3,8 +3,9 @@
 
 //! The configuration page in the browser, against a stub admin listener:
 //! its forms disabled until the page has hydrated, the save of a console
-//! member answered with the preview of what the saved revision changes, and
-//! the apply of the newest revision, each without a console error.
+//! member answered with the preview of what the saved revision changes, the
+//! edit of a console member's FHIR endpoint, and the apply of the newest
+//! revision, each without a console error.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -28,9 +29,16 @@ const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"prev
     "outcome":"applied","needs_restart":[],"applied_by":{"kind":"file"},
     "applied_at":"2026-10-15T08:00:00Z"},"running":1,"in_step":true,"refused":null}"#;
 
-/// Member A the file provides, and a writable stored-query registry.
+/// Member A the file provides, console member B with a FHIR endpoint, and
+/// a writable stored-query registry.
 const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
-    {"node":"node-a","organisation":"org-a","system_id":"cdr-a.example.org","endpoints":["node-a-pub"],"owner":"file"}],
+    {"node":"node-a","organisation":"org-a","system_id":"cdr-a.example.org","endpoints":["node-a-pub"],"owner":"file"},
+    {"node":"node-b","organisation":"org-b","system_id":"cdr-b.example.org","endpoints":["node-b-pub","node-b-fhir"],
+     "owner":"console","state":"pending",
+     "member":{"organisation":{"id":"org-b"},"node":{"id":"node-b","system_id":"cdr-b.example.org"},
+       "endpoints":[{"id":"node-b-pub","url":"https://cdr-b.example.org/openehr","connection_type":"openehr-rest-query"},
+         {"id":"node-b-fhir","url":"https://cdr-b.example.org/fhir","connection_type":"hl7-fhir-rest",
+          "categories":["Patient-Summaries"],"profiles":["http://example.org/ps"],"ehr_id_system":"urn:oid:2.999.1"}]}}],
     "stored_query_registry":"writable","stored_queries":[]}"#;
 
 /// The history of revisions 1 and 2.
@@ -73,6 +81,7 @@ async fn listener() -> Server {
         ("GET", "/admin/config/revisions/1/diff/2", 200, DIFF_2),
         ("GET", "/admin/config/revisions/1/diff/3", 200, DIFF_3),
         ("PUT", "/admin/config/members/node-c", 201, SAVED),
+        ("PUT", "/admin/config/members/node-b", 201, SAVED),
         ("POST", "/admin/config/revisions/2/apply", 200, APPLIED),
     ] {
         Mock::given(method(verb))
@@ -112,6 +121,64 @@ async fn hydrated(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn Error>
         .enabled(submit("Add a console member"))
         .await
         .map_err(|error| format!("the configuration page never hydrated: {error}").into())
+}
+
+/// Edits console member B's FHIR endpoint: the edit form shows it with
+/// every key, and a save sends it as the operator changed it.
+async fn edit_fhir_endpoint(
+    browser: &Browser,
+    stack: &Stack,
+    admin: &Server,
+) -> Result<(), Box<dyn Error>> {
+    hydrated(browser, stack).await?;
+    let shown = browser
+        .element(By::Id("edit-node-b-fhir_endpoints"))
+        .await?
+        .value()
+        .await?;
+    assert_eq!(
+        Some(
+            "node-b-fhir https://cdr-b.example.org/fhir system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps"
+        ),
+        shown.as_deref(),
+        "the edit form shows the held FHIR endpoint"
+    );
+    fill(
+        browser,
+        "edit-node-b-fhir_endpoints",
+        "node-b-fhir https://fhir.example.org/r4 system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps",
+    )
+    .await?;
+    fill(browser, "edit-node-b-reason", "move B's FHIR endpoint").await?;
+    browser
+        .element(By::Id("edit-node-b-confirm"))
+        .await?
+        .click()
+        .await?;
+    browser
+        .element(submit("Edit console member node-b"))
+        .await?
+        .click()
+        .await?;
+    browser
+        .text("strong", "Replica gateway-0 saved revision 3.")
+        .await?;
+    let saved = admin
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?
+        .into_iter()
+        .filter(|request| request.url.path() == "/admin/config/members/node-b")
+        .map(|request| String::from_utf8_lossy(&request.body).into_owned())
+        .collect::<Vec<_>>();
+    let [saved] = saved.as_slice() else {
+        return Err(format!("one save of member B, not {}", saved.len()).into());
+    };
+    assert!(
+        saved.contains(r#""url":"https://fhir.example.org/r4","connection_type":"hl7-fhir-rest""#),
+        "{saved}"
+    );
+    browser.console_clean("an edited FHIR endpoint").await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -193,6 +260,8 @@ async fn a_console_member_is_saved_previewed_and_applied() -> Result<(), Box<dyn
             .text("caption", "What revision 3 changes, by key")
             .await?;
         browser.console_clean("a saved revision").await?;
+
+        edit_fhir_endpoint(browser, &stack, &admin).await?;
 
         // The apply of the newest revision the page offers.
         hydrated(browser, &stack).await?;

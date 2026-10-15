@@ -64,25 +64,23 @@ pub async fn configure(
 pub mod server {
     use std::fmt;
 
-    use ferrofed_registry::console::{
-        ConsoleEndpoint, ConsoleMember, ConsoleNode, ConsoleOrganisation,
-    };
-    use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
+    use ferrofed_registry::console::ConsoleMember;
+    use ferrofed_registry::id::EndpointId;
     use ferrofed_registry::operator::PageRequest;
     use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
     use ferrofed_registry::revision::{Revision, RevisionId};
     use ferrofed_registry::secret::WriteOnly;
-    use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
     use crate::admin::act::server::acted;
     use crate::admin::model::ActionAnswer;
     use crate::config::settings::ReplicaSettings;
+    use crate::configure::member::Shown;
     use crate::configure::model::{ConfigForm, ConfigView};
     use crate::configure::render::{self, SavedLine, StoredLine};
     use crate::configure::sections;
     use crate::gateway::config::Change;
     use crate::gateway::{AccessToken, Gateway, GatewayError};
-    use crate::views::load::server::Stop;
+    use crate::views::load::server::{ActionKind, Stop};
     use crate::views::model::Refusal;
 
     /// How many revisions the history shows.
@@ -110,6 +108,8 @@ pub mod server {
             reason: String,
             /// The member as the form gives it.
             member: Box<ConsoleMember>,
+            /// How the member form was drawn.
+            shown: Shown,
         },
         /// Save a revision without the console's member `node`.
         RemoveMember {
@@ -212,14 +212,14 @@ pub mod server {
     }
 
     /// A refusal of the form, naming the field and never its value.
-    fn invalid(reason: &str) -> Refusal {
+    pub(crate) fn invalid(reason: &str) -> Refusal {
         Refusal::Invalid {
             reason: reason.to_owned(),
         }
     }
 
     /// The text of `field`, trimmed, or `None` when it is empty.
-    fn given(field: &str) -> Option<&str> {
+    pub(crate) fn given(field: &str) -> Option<&str> {
         let text = field.trim();
         (!text.is_empty()).then_some(text)
     }
@@ -270,11 +270,15 @@ pub mod server {
             return Err(invalid("Tick the confirmation to run this change."));
         }
         match form.action.as_str() {
-            "save-member" => Ok(Plan::SaveMember {
-                base: revision(&form.base, "base revision")?,
-                reason: reason(form)?,
-                member: Box::new(member(form)?),
-            }),
+            "add-member" | "save-member" => {
+                let (member, shown) = crate::configure::member::member(form)?;
+                Ok(Plan::SaveMember {
+                    base: revision(&form.base, "base revision")?,
+                    reason: reason(form)?,
+                    member: Box::new(member),
+                    shown,
+                })
+            }
             "remove-member" => Ok(Plan::RemoveMember {
                 base: revision(&form.base, "base revision")?,
                 reason: reason(form)?,
@@ -393,108 +397,6 @@ pub mod server {
         })
     }
 
-    /// The member the form describes.
-    fn member(form: &ConfigForm) -> Result<ConsoleMember, Refusal> {
-        let id_form = "1 to 64 letters, digits, '.', '-' or '_', starting with a letter or digit";
-        let organisation =
-            OrganisationId::new(form.organisation.trim()).map_err(|_bad| Refusal::Invalid {
-                reason: format!("The organisation id is not {id_form}."),
-            })?;
-        let node = NodeId::new(form.node.trim()).map_err(|_bad| Refusal::Invalid {
-            reason: format!("The node_id is not {id_form}."),
-        })?;
-        let system_id = SystemId::new(form.system_id.trim())
-            .map_err(|_bad| invalid("The system_id is not an openEHR UID."))?;
-        let mut endpoints = Vec::new();
-        for line in form
-            .endpoints
-            .split(';')
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-        {
-            endpoints.push(endpoint(line)?);
-        }
-        if endpoints.is_empty() {
-            return Err(invalid("Give at least one Query API endpoint."));
-        }
-        Ok(ConsoleMember {
-            organisation: ConsoleOrganisation {
-                id: organisation,
-                name: given(&form.organisation_name).map(str::to_owned),
-            },
-            node: ConsoleNode {
-                id: node,
-                system_id,
-                product: given(&form.product).map(str::to_owned),
-                version: given(&form.product_version).map(str::to_owned),
-            },
-            endpoints,
-        })
-    }
-
-    /// One Query API endpoint: its `endpoint_id`, its base URL and
-    /// optionally `suspended`.
-    fn endpoint(line: &str) -> Result<ConsoleEndpoint, Refusal> {
-        let shape = "Each endpoint is an endpoint_id and a base URL, then suspended if it is out of service.";
-        let mut words = line.split_whitespace();
-        let (Some(id), Some(url)) = (words.next(), words.next()) else {
-            return Err(invalid(shape));
-        };
-        let status = match words.next() {
-            None => EndpointStatus::Active,
-            Some("suspended") => EndpointStatus::Suspended,
-            Some(_) => return Err(invalid(shape)),
-        };
-        if words.next().is_some() {
-            return Err(invalid(shape));
-        }
-        let id = EndpointId::new(id).map_err(|_bad| {
-            invalid("An endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.")
-        })?;
-        Ok(ConsoleEndpoint {
-            id,
-            url: url.to_owned(),
-            connection_type: ConnectionType::OpenehrRestQuery,
-            status,
-            consent_refusal_codes: Vec::new(),
-            categories: Vec::new(),
-            profiles: Vec::new(),
-            ehr_id_system: None,
-        })
-    }
-
-    /// Returns `form`, the member the page's form gives, merged onto `held`.
-    ///
-    /// `held` is the member the newest revision holds of its `node_id`:
-    /// each endpoint the form names keeps every key the form does not show (its consent
-    /// refusal codes, categories, profiles and `ehr_id` system), and each
-    /// `hl7-fhir-rest` endpoint the form does not name is kept whole.
-    #[must_use]
-    pub fn merged(mut form: ConsoleMember, held: Option<&ConsoleMember>) -> ConsoleMember {
-        let Some(held) = held else {
-            return form;
-        };
-        for endpoint in &mut form.endpoints {
-            if let Some(kept) = held.endpoints.iter().find(|kept| kept.id == endpoint.id) {
-                *endpoint = ConsoleEndpoint {
-                    id: endpoint.id.clone(),
-                    url: endpoint.url.clone(),
-                    status: endpoint.status,
-                    ..kept.clone()
-                };
-            }
-        }
-        let natives: Vec<ConsoleEndpoint> = held
-            .endpoints
-            .iter()
-            .filter(|kept| kept.connection_type == ConnectionType::Hl7FhirRest)
-            .filter(|kept| !form.endpoints.iter().any(|named| named.id == kept.id))
-            .cloned()
-            .collect();
-        form.endpoints.extend(natives);
-        form
-    }
-
     /// The configuration page `replica` answers, or the page saying its
     /// configuration is not managed.
     ///
@@ -556,19 +458,19 @@ pub mod server {
         plan: Plan,
     ) -> ActionAnswer {
         let name = replica.name.as_str();
+        let config = ActionKind::Configuration;
         match plan {
             Plan::SaveMember {
                 base,
                 reason,
                 member,
+                shown,
             } => {
                 let change = Change {
                     base,
                     reason: &reason,
                 };
-                let saved = save(gateway, replica, token, (change, *member)).await;
-                let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                save_member(gateway, replica, token, (change, *member, shown)).await
             }
             Plan::RemoveMember { base, reason, node } => {
                 let change = Change {
@@ -577,15 +479,21 @@ pub mod server {
                 };
                 let saved = gateway.remove_member(replica, token, change, &node).await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "member removal"), saved, |line| line))
             }
             Plan::Apply { revision } => {
                 let applied = gateway.apply_revision(replica, token, revision).await;
-                render::applied(&acted(name, "apply", applied, |line| line), "apply")
+                render::answers::applied(
+                    &acted(config, (name, "apply"), applied, |line| line),
+                    "apply",
+                )
             }
             Plan::Rollback { current, reason } => {
                 let applied = gateway.rollback(replica, token, current, &reason).await;
-                render::applied(&acted(name, "rollback", applied, |line| line), "rollback")
+                render::answers::applied(
+                    &acted(config, (name, "rollback"), applied, |line| line),
+                    "rollback",
+                )
             }
             Plan::StoreQuery {
                 name: query,
@@ -595,17 +503,22 @@ pub mod server {
                 let stored = gateway
                     .store_query(replica, token, (&query, &version), &aql)
                     .await;
-                render::stored(&acted(name, "store", stored, |stored| StoredLine {
-                    name: stored.name,
-                    version: stored.version,
-                }))
+                render::answers::stored(&acted(
+                    config,
+                    (name, "stored-query store"),
+                    stored,
+                    |stored| StoredLine {
+                        name: stored.name,
+                        version: stored.version,
+                    },
+                ))
             }
             Plan::SaveSection { resource, request } => {
                 let saved = gateway
                     .save_section(replica, token, &resource, &request)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "section save"), saved, |line| line))
             }
             Plan::RemoveSection {
                 base,
@@ -620,39 +533,85 @@ pub mod server {
                     .remove_section(replica, token, change, &resource)
                     .await;
                 let saved = previewed(gateway, replica, token, saved).await;
-                render::saved(&acted(name, "save", saved, |line| line))
+                render::answers::saved(&acted(config, (name, "section removal"), saved, |line| {
+                    line
+                }))
             }
             Plan::Confirm { revision } => {
                 let confirmed = gateway.confirm_revision(replica, token, revision).await;
-                sections::confirmed(&acted(name, "confirmation", confirmed, |mark| mark))
+                sections::confirmed(&acted(config, (name, "confirmation"), confirmed, |mark| {
+                    mark
+                }))
             }
             Plan::Approve { revision } => {
                 let approved = gateway.approve_revision(replica, token, revision).await;
-                sections::approved(&acted(name, "approval", approved, |review| review))
+                sections::approved(&acted(config, (name, "approval"), approved, |review| {
+                    review
+                }))
             }
         }
     }
 
+    /// Saves `member` as [`save`] does, and renders the answer with its preview.
+    async fn save_member(
+        gateway: &Gateway,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        (change, member, shown): (Change<'_>, ConsoleMember, Shown),
+    ) -> ActionAnswer {
+        let what = if shown.adding {
+            "member add"
+        } else {
+            "member save"
+        };
+        match save(gateway, replica, token, (change, member, shown)).await {
+            Ok(saved) => {
+                let saved = previewed(gateway, replica, token, saved).await;
+                let at = (replica.name.as_str(), what);
+                render::answers::saved(&acted(ActionKind::Configuration, at, saved, |line| line))
+            }
+            Err(refused) => crate::admin::answer::refused(&refused),
+        }
+    }
+
     /// Saves `member` merged onto the member the newest revision holds of
-    /// its `node_id` ([`merged`]); when the resources cannot be read the
-    /// failure is the answer and nothing is sent, since a save without the
-    /// held member would drop the keys the form does not show.
+    /// its `node_id` ([`merged`](crate::configure::member::merged)); when the
+    /// resources cannot be read the failure is the answer and nothing is
+    /// sent, since a save without the held member would drop the keys the
+    /// form does not show.
+    ///
+    /// # Errors
+    /// Returns [`Refusal::Invalid`], asking nothing more, for the form that
+    /// adds a member naming a `node_id` the gateway already holds.
     async fn save(
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        (change, member): (Change<'_>, ConsoleMember),
-    ) -> Result<Revision, GatewayError> {
-        let resources = gateway.config_resources(replica, token).await?;
+        (change, member, shown): (Change<'_>, ConsoleMember, Shown),
+    ) -> Result<Result<Revision, GatewayError>, Refusal> {
+        let resources = match gateway.config_resources(replica, token).await {
+            Ok(resources) => resources,
+            Err(error) => return Ok(Err(error)),
+        };
+        let node = member.node.id.as_str();
+        if shown.adding
+            && resources
+                .members
+                .iter()
+                .any(|resource| resource.node.as_str() == node)
+        {
+            return Err(invalid(
+                "A member with this node_id exists: change it with its own edit form.",
+            ));
+        }
         let held = resources
             .members
             .iter()
             .filter_map(|resource| resource.member.as_ref())
             .find(|held| held.node.id == member.node.id);
-        let member = merged(member, held);
-        gateway.save_member(replica, token, change, &member).await
+        let member = crate::configure::member::merged(member, held, shown.fhir);
+        Ok(gateway.save_member(replica, token, change, &member).await)
     }
-
     /// The saved revision `saved` with the preview of what it changes
     /// against the running revision.
     async fn previewed(
