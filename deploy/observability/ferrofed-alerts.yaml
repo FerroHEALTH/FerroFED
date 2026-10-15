@@ -61,7 +61,7 @@ groups:
     rules:
       - alert: FerroFEDMemberFailing
         expr: |
-          sum by (endpoint) (rate(ferrofed_node_requests_total{outcome=~"node-error|time-out|offline"}[5m]))
+          sum by (endpoint) (rate(ferrofed_node_requests_total{outcome=~"node-error|time-out|offline",class!="client-error"}[5m]))
             / sum by (endpoint) (rate(ferrofed_node_requests_total[5m])) > 0.1
         for: 10m
         labels:

@@ -13,7 +13,9 @@
 //! success, a `4xx` included, or a refusal of the gateway's onward
 //! credentials is `node-error`, and a consent refusal in a code the registry
 //! lists is `consent-denied`, also where the client's answer withholds it. A
-//! probed member's `404`, which says it holds no such EHR, is `active`.
+//! probed member's `404`, which says it holds no such EHR, is `active`. The
+//! `class` label tells a member's own answer or failure, `member`, from a
+//! `4xx` it answered a routed request with, `client-error`.
 //! Every request counted is timed, and a request that never left the gateway
 //! is neither counted nor timed, whatever its §11.1 record says of it. The
 //! `endpoint` label is an endpoint id of the registry snapshot the request
@@ -225,7 +227,7 @@ impl NodeRequests {
         if let Some(latency_ms) = outcome.latency_ms() {
             self.count(
                 endpoint,
-                outcome.status(),
+                (outcome.status(), Class::Member),
                 Duration::from_millis(latency_ms),
             );
         }
@@ -247,11 +249,14 @@ impl NodeRequests {
         if !contact.sent() {
             return;
         }
-        let status = match outcome {
-            Ok(answer) => answered(answer.status(), refused),
-            Err(error) => unanswered(error),
+        let (status, class) = match outcome {
+            Ok(answer) if !refused && answer.status().is_client_error() => {
+                (answered(answer.status(), refused), Class::ClientError)
+            }
+            Ok(answer) => (answered(answer.status(), refused), Class::Member),
+            Err(error) => (unanswered(error), Class::Member),
         };
-        self.count(endpoint, status, elapsed);
+        self.count(endpoint, (status, class), elapsed);
     }
 
     /// Records an ask-all probe of `endpoint` and its latency, when the
@@ -276,7 +281,7 @@ impl NodeRequests {
             Answer::Failed(error) => unanswered(error),
             Answer::Abandoned => EndpointStatus::TimeOut,
         };
-        self.count(endpoint, status, probed.latency);
+        self.count(endpoint, (status, Class::Member), probed.latency);
     }
 
     /// Counts one call to the consent pre-filter that ended in `decision`, in
@@ -387,9 +392,14 @@ impl NodeRequests {
         );
     }
 
-    /// Counts one request to `endpoint` that ended as `status` after
-    /// `elapsed`; an endpoint outside the snapshot is not recorded.
-    fn count(&self, endpoint: &EndpointId, status: EndpointStatus, elapsed: Duration) {
+    /// Counts one request to `endpoint` that ended as `status`, of `class`,
+    /// after `elapsed`; an endpoint outside the snapshot is not recorded.
+    fn count(
+        &self,
+        endpoint: &EndpointId,
+        (status, class): (EndpointStatus, Class),
+        elapsed: Duration,
+    ) {
         let Some(instruments) = &self.instruments else {
             return;
         };
@@ -401,8 +411,37 @@ impl NodeRequests {
         let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
         instruments.requests.add(
             1,
-            &[label.clone(), KeyValue::new("outcome", status.as_str())],
+            &[
+                label.clone(),
+                KeyValue::new("outcome", status.as_str()),
+                KeyValue::new("class", class.as_str()),
+            ],
         );
         instruments.duration.record(elapsed.as_secs_f64(), &[label]);
+    }
+}
+
+/// Whose doing a node request's outcome is, the `class` label of
+/// [`NODE_REQUESTS`], so an alert on a member's failures leaves out a
+/// client's mistakes the member answered correctly.
+// NOTE: no specification governs this: our own design; §11.1 calls both `node-error`, and
+// the label tells them apart without changing the status the access record also names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Class {
+    /// The member's own answer or failure: every request the gateway
+    /// composed, and a routed request's answer that is no `4xx`.
+    Member,
+    /// A `4xx` other than a consent refusal, with which the member answered
+    /// a request routed to it on the client's behalf.
+    ClientError,
+}
+
+impl Class {
+    /// The label value.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Member => "member",
+            Self::ClientError => "client-error",
+        }
     }
 }

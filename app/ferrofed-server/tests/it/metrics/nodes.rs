@@ -236,16 +236,25 @@ async fn a_routed_read_the_node_answers_with_a_4xx_is_a_node_error() -> TestResu
         count(
             &samples,
             REQUESTS,
-            &[("endpoint", "node-a-pub"), ("outcome", "node-error")]
+            &[
+                ("endpoint", "node-a-pub"),
+                ("outcome", "node-error"),
+                ("class", "client-error")
+            ]
         ),
-        "§11.1, N16: the read the node answered 404, as its access record names it: {samples:?}"
+        "§11.1, N16: the read the node answered 404, as its access record names it, \
+         a client's mistake the member answered correctly: {samples:?}"
     );
     assert_eq!(
         Some("1".to_owned()),
         count(
             &samples,
             REQUESTS,
-            &[("endpoint", "node-a-pub"), ("outcome", "active")]
+            &[
+                ("endpoint", "node-a-pub"),
+                ("outcome", "active"),
+                ("class", "member")
+            ]
         ),
         "the probe the node answered with its EHR: {samples:?}"
     );

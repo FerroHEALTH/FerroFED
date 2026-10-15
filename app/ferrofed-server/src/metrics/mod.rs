@@ -61,7 +61,7 @@ pub const PATH: &str = "/metrics";
 /// `ferrofed_integrity_incidents_total`.
 pub const INTEGRITY_INCIDENTS: &str = "ferrofed.integrity.incidents";
 
-/// The requests sent to a member node, by `endpoint` and `outcome`;
+/// The requests sent to a member node, by `endpoint`, `outcome` and `class`;
 /// Prometheus `ferrofed_node_requests_total`.
 pub const NODE_REQUESTS: &str = "ferrofed.node.requests";
 
