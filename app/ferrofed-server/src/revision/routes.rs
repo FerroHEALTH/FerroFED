@@ -18,20 +18,26 @@
 //! | `GET` [`DIFF`] | the keys that differ from one revision to another |
 //! | `POST` [`APPLY`] | the mark once the revision is applied |
 //! | `POST` [`ROLLBACK`] | the revision a rollback saved, and its mark |
+//! | `GET` [`RESOURCES`] | every member and stored query, with its owner ([`console`]) |
+//! | `PUT` [`MEMBER`] | `201` with the revision saved with the console member in place |
+//! | `POST` [`MEMBER_REMOVE`] | `201` with the revision saved without the console member |
+//! | `PUT` [`STORED_QUERY`] | `201` with the stored-query version stored (§12.7, N44) |
 //!
 //! A refusal is an error body: `400` (`body-invalid`) for a body that does
 //! not read, `404` (`revision-unknown`), `409` (`revision-stale`) when
 //! another save, apply or rollback came first, `409`
-//! (`rollback-unavailable`), `422` (`configuration-invalid`) with the errors
-//! `config check` reports, and `500` (`internal`) when the store fails. No
-//! specification governs this: our own design.
+//! (`rollback-unavailable`), `409` (`resource-file-owned`) for a change to a
+//! resource the file provides, `404` (`resource-unknown`), `422`
+//! (`configuration-invalid`) with the errors `config check` reports, and
+//! `500` (`internal`) when the store fails. No specification governs this:
+//! our own design.
 
 use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{Extension, Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use ferrofed_registry::operator::{MAX_PAGE, Page, PageRequest};
 use http::{HeaderMap, StatusCode};
@@ -63,6 +69,20 @@ pub const APPLY: &str = "/admin/config/revisions/{id}/apply";
 /// The rollback of the running revision.
 pub const ROLLBACK: &str = "/admin/config/rollback";
 
+/// Every member and stored query, with its owner.
+pub const RESOURCES: &str = "/admin/config/resources";
+
+/// The save of one member the console owns, by its `node_id`.
+pub const MEMBER: &str = "/admin/config/members/{node_id}";
+
+/// The removal of one member the console owns, by its `node_id`.
+pub const MEMBER_REMOVE: &str = "/admin/config/members/{node_id}/remove";
+
+/// The store of one stored-query version.
+pub const STORED_QUERY: &str = "/admin/config/stored-queries/{qualified_query_name}/{version}";
+
+pub mod console;
+
 /// The revisions and the reload path they are applied through.
 #[derive(Debug)]
 pub struct Managed {
@@ -88,6 +108,7 @@ pub fn reads(managed: Arc<Managed>) -> Router {
         .route(REVISIONS, get(history))
         .route(REVISION, get(revision))
         .route(DIFF, get(difference))
+        .route(RESOURCES, get(console::resources))
         .with_state(managed)
 }
 
@@ -97,6 +118,9 @@ pub fn writes(managed: Arc<Managed>) -> Router {
         .route(REVISIONS, post(save))
         .route(APPLY, post(apply))
         .route(ROLLBACK, post(rollback))
+        .route(MEMBER, put(console::save_member))
+        .route(MEMBER_REMOVE, post(console::remove_member))
+        .route(STORED_QUERY, put(console::store_query))
         .with_state(managed)
 }
 
@@ -174,6 +198,16 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, RevisionError> + Send + 'static,
     Result<T, RevisionError>: Answer,
+{
+    answered(headers, work).await
+}
+
+/// Runs `work` on a thread that may block, and answers the outcome it
+/// returns or the failure that stopped it.
+async fn answered<R, F>(headers: &HeaderMap, work: F) -> Response
+where
+    R: Answer + Send + 'static,
+    F: FnOnce() -> R + Send + 'static,
 {
     let request_id = request_id::of(headers).unwrap_or_default().to_owned();
     match tokio::task::spawn_blocking(work).await {

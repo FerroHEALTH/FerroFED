@@ -66,10 +66,15 @@
 //! one in its userinfo, is held in a [`Secret`](secret::Secret) or a
 //! [`SecretUrl`](secret::SecretUrl), whose renderings never show it.
 //!
+//! [`console`] holds a member the operator console manages beside the
+//! document's, owned whole, and the report of who owns each configured
+//! resource.
+//!
 //! [`manufacturer`] names the manufacturer of FerroFED, the one source the
 //! gateway and the operator console both read it from.
 #![doc(test(attr(deny(warnings))))]
 
+pub mod console;
 pub mod creating_system;
 pub mod definition;
 pub mod document;

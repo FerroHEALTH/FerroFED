@@ -78,6 +78,9 @@ pub fn App() -> impl IntoView {
                     <li>
                         <a href=crate::query::QUERY>"Query"</a>
                     </li>
+                    <li>
+                        <a href=crate::configure::CONFIGURATION>"Configuration"</a>
+                    </li>
                 </ul>
                 // The sign-out route is the server's: a plain form post it
                 // answers with a redirect, which no client router takes.
@@ -103,6 +106,11 @@ pub fn App() -> impl IntoView {
                         ssr=SsrMode::Async
                     />
                     <Route path=path!("/query") view=crate::query::QueryPage ssr=SsrMode::Async />
+                    <Route
+                        path=path!("/configuration")
+                        view=crate::configure::ConfigurationPage
+                        ssr=SsrMode::Async
+                    />
                 </Routes>
             </main>
             <Footer />

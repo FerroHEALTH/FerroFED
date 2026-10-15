@@ -14,6 +14,7 @@
 )]
 
 mod api;
+mod console;
 mod off;
 mod replicas;
 mod secrets;

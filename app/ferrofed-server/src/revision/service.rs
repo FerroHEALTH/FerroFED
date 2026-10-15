@@ -26,7 +26,9 @@ use crate::config::error::parse::Stage;
 use crate::config::revisions::RevisionsFault;
 use crate::config::settings::Settings;
 use crate::reload::{ReloadError, Reloader};
-use crate::revision::tree::{core_keys, inline_secrets, join, split};
+use crate::revision::tree::{
+    console_keys, core_keys, inline_secrets, join, split, with_console_of, without_console,
+};
 use crate::revision::{
     Author, Current, Draft, Origin, Outcome, Revision, RevisionId, RevisionStore, Saved,
     StoreError, Swapped,
@@ -497,7 +499,12 @@ impl Revisions {
     /// returns the configuration to run: the file's when it changed, and the
     /// running revision's beside the file's core when it did not.
     ///
-    /// The core is taken from `tree` for every later revision.
+    /// A changed file's revision carries the resources the operator console
+    /// owns over from the running revision ([`with_console_of`]), so a
+    /// console member survives a reload of the file; one the file now
+    /// provides too is the file's, and the registry names the console's
+    /// copy as shadowed. The core is taken from `tree` for every later
+    /// revision.
     ///
     /// # Errors
     ///
@@ -517,7 +524,10 @@ impl Revisions {
                 .iter()
                 .rev()
                 .find(|revision| revision.origin == Origin::File);
-            let unchanged = newest_file.is_some_and(|revision| revision.toml == text);
+            let unchanged = match newest_file {
+                Some(revision) => without_console(&held_table(revision)?) == rest,
+                None => false,
+            };
             if unchanged && let Some(current) = &current {
                 let running = self
                     .store
@@ -529,7 +539,7 @@ impl Revisions {
                     recorded: false,
                 });
             }
-            let (toml, config) = self.validate(&text)?;
+            let (toml, config) = self.carried(&rest, current.as_ref(), &text)?;
             let head = history.last().map(|revision| revision.id);
             let draft = Draft {
                 origin: Origin::File,
@@ -574,6 +584,59 @@ impl Revisions {
         }
         .into())
     }
+}
+
+impl Revisions {
+    /// Checks the file's configuration `rest`, written as `text`, with the
+    /// resources the operator console owns carried over from the running
+    /// revision `current`, and returns it as [`Revisions::validate`] does.
+    ///
+    /// When the console's resources are refused beside the file's, as when
+    /// the file drops the registry document they join, the file's
+    /// configuration is checked alone and the resources left out are logged
+    /// by key: the revision before it keeps them.
+    fn carried(
+        &self,
+        rest: &toml::Table,
+        current: Option<&Current>,
+        text: &str,
+    ) -> Result<(String, Config), RevisionError> {
+        let running = match current {
+            Some(mark) => self.store.revision(mark.revision)?,
+            None => None,
+        };
+        let Some(running) = running else {
+            return Ok(self.validate(text)?);
+        };
+        let carried = with_console_of(rest, &held_table(&running)?);
+        if carried == *rest {
+            return Ok(self.validate(text)?);
+        }
+        let written = toml::to_string(&carried)
+            .map_err(|source| Refused::from(Error::Assemble { source }))?;
+        match self.validate(&written) {
+            Ok(validated) => Ok(validated),
+            Err(refused) => {
+                tracing::warn!(
+                    keys = console_keys(&carried).join(","),
+                    revision = %running.id,
+                    error = crate::chain(&refused),
+                    "the console's resources are refused beside the file's configuration and left out of its revision; the running revision still holds them"
+                );
+                Ok(self.validate(text)?)
+            }
+        }
+    }
+}
+
+/// The configuration `revision` holds, as a table.
+///
+/// # Errors
+///
+/// [`StoreError::Corrupt`] when the text the store holds is no TOML table.
+pub fn held_table(revision: &Revision) -> Result<toml::Table, RevisionError> {
+    toml::from_str(&revision.toml)
+        .map_err(|error| RevisionError::Store(StoreError::Corrupt(Box::new(error))))
 }
 
 /// The configuration a file load gives the gateway to run.

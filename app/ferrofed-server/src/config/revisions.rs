@@ -199,6 +199,22 @@ pub enum RevisionsFault {
         /// The dotted key of the secret, never its value.
         key: String,
     },
+    /// The configuration file sets a resource the operator console owns,
+    /// which only a configuration revision holds.
+    #[error(
+        "{key} is owned by the operator console and held only in a configuration revision; the configuration file does not set it"
+    )]
+    ConsoleKeyInFile {
+        /// The dotted key.
+        key: String,
+    },
+    /// `[[registry.members]]` is set without `registry.document`: the
+    /// console's members join a registry document, and a care services
+    /// directory is the whole registry.
+    #[error(
+        "registry.members joins the members of registry.document, which is unset; a care services directory is the whole registry"
+    )]
+    MembersWithoutDocument,
 }
 
 /// Resolves `[config]` of `config`: the revision store when the

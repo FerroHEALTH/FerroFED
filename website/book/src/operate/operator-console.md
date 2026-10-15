@@ -141,6 +141,19 @@ service worker or a URL.
   calls the admin listener with your own access token, which never reaches
   the browser, so the gateway admits the action only for a token carrying
   your issuer's `operator_scope` and records you as the operator who ran it.
+- **`/configuration`**, where `[admin]` names at least one gateway replica
+  whose configuration is managed (`config.ui = "managed"`). It reads the
+  first replica's configuration revisions and shows which revision runs,
+  the newest revision with what it changes against the running one, every
+  member and stored-query version with its owner, and the newest revisions.
+  A member the registry document or a care services directory provides is
+  marked read-only and offers no edit. A console member is added, edited or
+  removed as a new revision, which you then apply with its own form, and
+  the running revision rolls back in one step; a stored-query version is
+  stored once and never edited. Each form asks for a confirmation, which
+  the console checks again, and runs once the page has loaded. A replica
+  whose configuration is not managed answers `404`, and the page says so
+  and offers no form ([Console-managed resources](configuration-revisions.md#console-managed-resources)).
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 

@@ -23,6 +23,63 @@ use serde::Serialize;
 /// transport policy every outbound URL is held to.
 pub const CORE: [&str; 6] = ["profile", "server", "metrics", "auth", "config", "dev"];
 
+/// The keys of the resources the operator console owns, each a table and
+/// the key inside it: only a revision holds them, and a file load carries
+/// them over from the running revision ([`with_console_of`]).
+pub const CONSOLE: [(&str, &str); 1] = [("registry", "members")];
+
+/// The dotted keys of [`CONSOLE`] that `tree` sets, in [`CONSOLE`] order.
+#[must_use]
+pub fn console_keys(tree: &toml::Table) -> Vec<String> {
+    CONSOLE
+        .iter()
+        .filter(|(table, key)| {
+            tree.get(*table)
+                .and_then(toml::Value::as_table)
+                .is_some_and(|inner| inner.contains_key(*key))
+        })
+        .map(|(table, key)| format!("{table}.{key}"))
+        .collect()
+}
+
+/// Returns `tree` without the keys of [`CONSOLE`]; a table left empty by
+/// their removal is removed too.
+#[must_use]
+pub fn without_console(tree: &toml::Table) -> toml::Table {
+    let mut tree = tree.clone();
+    for (table, key) in CONSOLE {
+        if let Some(toml::Value::Table(inner)) = tree.get_mut(table) {
+            inner.remove(key);
+            if inner.is_empty() {
+                tree.remove(table);
+            }
+        }
+    }
+    tree
+}
+
+/// Returns `tree` with the keys of [`CONSOLE`] as `from` sets them, and
+/// without those `from` does not set.
+#[must_use]
+pub fn with_console_of(tree: &toml::Table, from: &toml::Table) -> toml::Table {
+    let mut tree = without_console(tree);
+    for (table, key) in CONSOLE {
+        let value = from
+            .get(table)
+            .and_then(toml::Value::as_table)
+            .and_then(|inner| inner.get(key));
+        if let Some(value) = value {
+            let entry = tree
+                .entry(table.to_owned())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+            if let toml::Value::Table(inner) = entry {
+                inner.insert(key.to_owned(), value.clone());
+            }
+        }
+    }
+    tree
+}
+
 /// The keys whose value is a secret with a `_file` sibling, wherever they
 /// sit: an inline value is refused, and the `_file` reference is kept.
 const SECRETS: [&str; 7] = [
@@ -214,7 +271,27 @@ fn leaves_in(table: &toml::Table, prefix: &str, found: &mut BTreeMap<String, Str
 
 #[cfg(test)]
 mod tests {
-    use super::{Change, core_keys, diff, inline_secrets, join, split};
+    use super::{
+        Change, console_keys, core_keys, diff, inline_secrets, join, split, with_console_of,
+        without_console,
+    };
+
+    #[test]
+    fn the_console_keys_come_off_and_carry_over_whole() {
+        let file = table("[registry]\ndocument = \"/r.toml\"\n");
+        let running = table(
+            "[registry]\ndocument = \"/old.toml\"\n[[registry.members]]\nnode = { id = \"node-c\" }\n",
+        );
+        assert!(console_keys(&file).is_empty());
+        assert_eq!(vec!["registry.members"], console_keys(&running));
+        let carried = with_console_of(&file, &running);
+        assert_eq!(vec!["registry.members"], console_keys(&carried));
+        assert_eq!(Some("/r.toml"), carried["registry"]["document"].as_str());
+        assert_eq!(file, without_console(&carried));
+        assert_eq!(file, with_console_of(&carried, &file));
+        let only = table("[[registry.members]]\nnode = { id = \"node-c\" }\n");
+        assert!(without_console(&only).is_empty());
+    }
 
     fn table(text: &str) -> toml::Table {
         toml::from_str(text).unwrap()

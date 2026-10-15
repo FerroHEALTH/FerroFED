@@ -47,7 +47,7 @@ pub fn repaired(answer: &ReplicaAnswer<RepairLine>) -> ActionAnswer {
 
 /// What `answer`'s replica did with the action `what`, its report drawn by
 /// `done`.
-fn replica_said<T>(
+pub(crate) fn replica_said<T>(
     answer: &ReplicaAnswer<T>,
     what: &str,
     done: fn(&str, &T) -> AnyView,

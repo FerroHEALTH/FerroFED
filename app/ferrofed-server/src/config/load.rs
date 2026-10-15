@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::error::Error;
 use crate::config::error::parse::Stage;
+use crate::config::revisions::RevisionsFault;
 use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX, deprecated};
 
 impl Config {
@@ -19,8 +20,10 @@ impl Config {
     /// `FERROFED_CONFIG` names, and without that the defaults stand.
     ///
     /// # Errors
-    /// Returns [`Error::Read`] when a named file cannot be read and every
-    /// other [`Error`] the merge and the parse produce.
+    /// Returns [`Error::Read`] when a named file cannot be read,
+    /// [`RevisionsFault::ConsoleKeyInFile`] when the file or the environment
+    /// sets a resource the operator console owns, and every other [`Error`]
+    /// the merge and the parse produce.
     pub fn load(path: Option<&Path>) -> Result<Self, Error> {
         Self::load_with_tree(path).map(|(config, _tree)| config)
     }
@@ -51,7 +54,17 @@ impl Config {
         let environment: BTreeMap<String, String> = std::env::vars()
             .filter(|(name, _)| name.starts_with(ENV_PREFIX))
             .collect();
-        let loaded = Self::merged(text.as_deref(), &environment);
+        let loaded = Self::merged(text.as_deref(), &environment).and_then(|(config, tree)| {
+            // NOTE: no specification governs this: our own design; what the console owns
+            // lives only in a revision, so the file never sets it and nothing is written back.
+            match crate::revision::tree::console_keys(&tree)
+                .into_iter()
+                .next()
+            {
+                Some(key) => Err(RevisionsFault::ConsoleKeyInFile { key }.into()),
+                None => Ok((config, tree)),
+            }
+        });
         match &named {
             Some(path) => loaded.map_err(|error| error.in_file(path)),
             None => loaded,

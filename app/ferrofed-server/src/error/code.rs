@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 63] = [
+    pub const GATEWAY: [Self; 65] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -75,6 +75,8 @@ impl Code {
         Self::RevisionStale,
         Self::RevisionUnknown,
         Self::RollbackUnavailable,
+        Self::ResourceFileOwned,
+        Self::ResourceUnknown,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -171,6 +173,8 @@ impl Code {
             Self::RevisionStale => "revision-stale",
             Self::RevisionUnknown => "revision-unknown",
             Self::RollbackUnavailable => "rollback-unavailable",
+            Self::ResourceFileOwned => "resource-file-owned",
+            Self::ResourceUnknown => "resource-unknown",
         }
     }
 
@@ -207,14 +211,16 @@ impl Code {
             | Self::NotFound
             | Self::StoredQueryUnknown
             | Self::SubjectUnavailable
-            | Self::RevisionUnknown => StatusCode::NOT_FOUND,
+            | Self::RevisionUnknown
+            | Self::ResourceUnknown => StatusCode::NOT_FOUND,
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
             | Self::StoredQueryReserved
             | Self::EhrIdHeld
             | Self::RevisionStale
-            | Self::RollbackUnavailable => StatusCode::CONFLICT,
+            | Self::RollbackUnavailable
+            | Self::ResourceFileOwned => StatusCode::CONFLICT,
             Self::ConfigurationInvalid => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
@@ -401,6 +407,12 @@ impl Code {
             Self::RollbackUnavailable => {
                 "the running configuration revision has no earlier revision to roll back to"
             }
+            Self::ResourceFileOwned => {
+                "the configuration file, its registry document or a care services directory provides this resource, so only that source changes it"
+            }
+            Self::ResourceUnknown => {
+                "the newest configuration revision holds no resource of that name"
+            }
         }
     }
 }
@@ -482,6 +494,8 @@ mod tests {
             Code::RevisionStale => Some(60),
             Code::RevisionUnknown => Some(61),
             Code::RollbackUnavailable => Some(62),
+            Code::ResourceFileOwned => Some(63),
+            Code::ResourceUnknown => Some(64),
         }
     }
 
@@ -618,6 +632,8 @@ mod tests {
             (Code::RevisionStale, StatusCode::CONFLICT),
             (Code::RevisionUnknown, StatusCode::NOT_FOUND),
             (Code::RollbackUnavailable, StatusCode::CONFLICT),
+            (Code::ResourceFileOwned, StatusCode::CONFLICT),
+            (Code::ResourceUnknown, StatusCode::NOT_FOUND),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

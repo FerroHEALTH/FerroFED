@@ -316,13 +316,15 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
 
 /// Every server function a view loads through or an admin action posts to,
 /// with the form body it takes.
-const SERVER_FUNCTIONS: [(&str, &str); 6] = [
+const SERVER_FUNCTIONS: [(&str, &str); 8] = [
     ("/api/members", ""),
     ("/api/integrity", "offset=0"),
     ("/api/stored-queries", "offset=0"),
     ("/api/federation", ""),
     ("/api/clear-ehr-id", "form%5Bconfirm%5D=yes"),
     ("/api/repair-drift", "form%5Bconfirm%5D=yes"),
+    ("/api/configuration", ""),
+    ("/api/configure", "form%5Bconfirm%5D=yes"),
 ];
 
 /// A `POST` of the server function at `route` with `form`, carrying the

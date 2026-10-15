@@ -27,7 +27,7 @@ use crate::metrics::security::Event;
 pub const TARGET: &str = "ferrofed::security";
 
 /// A query was refused before anything was dispatched (§5.4.3).
-pub(super) fn refused(refusal: &Refusal, request_id: &str) {
+pub(crate) fn refused(refusal: &Refusal, request_id: &str) {
     Event::AqlRefused.record();
     tracing::warn!(
         target: TARGET,
@@ -170,7 +170,7 @@ pub(super) fn forward_withheld(endpoint: &EndpointId, part: Part, request_id: &s
 
 /// A stored-query definition naming its patient by a literal was refused, so
 /// the registry holds no identifier (§12.7, §5.4.3).
-pub(super) fn definition_refused(at: Option<&Range<usize>>, request_id: &str) {
+pub(crate) fn definition_refused(at: Option<&Range<usize>>, request_id: &str) {
     Event::DefinitionSubjectLiteral.record();
     tracing::warn!(
         target: TARGET,

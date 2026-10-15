@@ -46,12 +46,13 @@ pub const STORED_QUERIES: &str = "/stored-queries";
 pub const FEDERATION: &str = "/federation";
 
 /// Every view path, each of which needs a signed-in operator.
-pub const PATHS: [&str; 5] = [
+pub const PATHS: [&str; 6] = [
     MEMBERS,
     INTEGRITY,
     STORED_QUERIES,
     FEDERATION,
     crate::query::QUERY,
+    crate::configure::CONFIGURATION,
 ];
 
 /// The page title of a view called `section`.
@@ -408,7 +409,10 @@ fn federation_section(view: FederationView) -> AnyView {
 
 /// The section `section` draws of a view `loaded`, the notice of the refusal
 /// that kept it, or the notice of the console's fault: never an empty view.
-fn shown<T>(loaded: Result<Outcome<T>, ViewError>, section: impl FnOnce(T) -> AnyView) -> AnyView {
+pub(crate) fn shown<T>(
+    loaded: Result<Outcome<T>, ViewError>,
+    section: impl FnOnce(T) -> AnyView,
+) -> AnyView {
     match loaded {
         Ok(Outcome::Shown(view)) => section(view),
         Ok(Outcome::Refused(refused)) => refusal(&refused),

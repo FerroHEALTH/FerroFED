@@ -80,10 +80,7 @@ fn action_section(
     action: &Action,
     fields: String,
     dispatch: Callback<AdminForm>,
-    (value, pending): (
-        MappedSignal<Option<Result<ActionAnswer, ViewError>>>,
-        Memo<bool>,
-    ),
+    outcome: Outcome,
 ) -> AnyView {
     let form = NodeRef::<Form>::new();
     // NOTE: the Leptos book, `ssr/24_hydration_bugs`: an effect runs only in the
@@ -101,6 +98,7 @@ fn action_section(
             dispatch.run(submitted(&data));
         }
     };
+    let pending = outcome.1;
     view! {
         <section aria-labelledby=action.id>
             <h2 id=action.id>{action.heading}</h2>
@@ -109,34 +107,49 @@ fn action_section(
                 <button type="submit" disabled=move || !hydrated.get()>
                     {action.label}
                 </button>
-                <p role="status">
-                    {move || {
-                        if hydrated.get() {
-                            ""
-                        } else {
-                            "The form is ready once the page has loaded."
-                        }
-                    }}
-                </p>
+                <p role="status">{move || ready(hydrated.get())}</p>
             </form>
             <section aria-labelledby=action.outcome aria-busy=move || pending.get().to_string()>
                 <h3 id=action.outcome>"Outcome"</h3>
-                <p role="status">
-                    {move || if pending.get() { "Running the action." } else { "" }}
-                </p>
-                {move || {
-                    value
-                        .with(|answer| match answer {
-                            None => view! { <p>"No action has run yet."</p> }.into_any(),
-                            Some(Ok(rendered)) => {
-                                let html = rendered.html.clone();
-                                view! { <div inner_html=html></div> }.into_any()
-                            }
-                            Some(Err(error)) => fault(error),
-                        })
-                }}
+                {answered(outcome)}
             </section>
         </section>
+    }
+    .into_any()
+}
+
+/// What a form says while the page has not hydrated, and nothing once it
+/// has.
+pub(crate) fn ready(hydrated: bool) -> &'static str {
+    if hydrated {
+        ""
+    } else {
+        "The form is ready once the page has loaded."
+    }
+}
+
+/// The answer an action holds and whether one is running.
+pub(crate) type Outcome = (
+    MappedSignal<Option<Result<ActionAnswer, ViewError>>>,
+    Memo<bool>,
+);
+
+/// Whether an action runs, and the answer the server rendered for the last
+/// one, or the console's fault.
+pub(crate) fn answered((value, pending): Outcome) -> AnyView {
+    view! {
+        <p role="status">{move || if pending.get() { "Running the action." } else { "" }}</p>
+        {move || {
+            value
+                .with(|answer| match answer {
+                    None => view! { <p>"No action has run yet."</p> }.into_any(),
+                    Some(Ok(rendered)) => {
+                        let html = rendered.html.clone();
+                        view! { <div inner_html=html></div> }.into_any()
+                    }
+                    Some(Err(error)) => fault(error),
+                })
+        }}
     }
     .into_any()
 }

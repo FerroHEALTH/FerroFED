@@ -11,6 +11,7 @@
 )]
 
 mod assigned;
+mod console;
 mod creating_system;
 mod definition;
 mod fixture;

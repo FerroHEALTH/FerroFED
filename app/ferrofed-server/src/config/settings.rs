@@ -30,8 +30,9 @@ use crate::client_address::Forwarding;
 use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
+use crate::config::registry::RegistryFormat;
 use crate::config::stored_queries::Store;
-use crate::config::{EmergencyConsent, NodeSelection, RegistryFormat};
+use crate::config::{EmergencyConsent, NodeSelection};
 use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
 
@@ -52,6 +53,8 @@ pub struct Settings {
     pub registry_document: Option<PathBuf>,
     /// The form the registry document is written in.
     pub registry_format: RegistryFormat,
+    /// The members the operator console manages, joined to the document's.
+    pub registry_members: Vec<ferrofed_registry::console::ConsoleMember>,
     /// The mCSD care services directory the registry is read from, when it
     /// is read from one (§15.1, Annex A.5).
     #[cfg(feature = "binding-ihe")]

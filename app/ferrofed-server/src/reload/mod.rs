@@ -223,6 +223,20 @@ impl Reloader {
         outcome
     }
 
+    /// Returns the state whose federation a reload replaces.
+    #[must_use]
+    pub fn state(&self) -> &Arc<AppState> {
+        &self.state
+    }
+
+    /// Whether the registry is read from a binding's source, such as a care
+    /// services directory, rather than a document; a restart alone changes
+    /// it.
+    #[must_use]
+    pub fn reads_directory(&self) -> bool {
+        binding::sources_registry(&self.boot)
+    }
+
     /// Returns this reloader with `certificates`, the TLS of the listeners,
     /// which [`Reloader::reload_certificates`] reads again from their files.
     #[must_use]

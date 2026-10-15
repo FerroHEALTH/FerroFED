@@ -23,6 +23,7 @@
 //! client.
 
 pub mod admin;
+pub mod config;
 
 use std::collections::BTreeMap;
 use std::fmt;
