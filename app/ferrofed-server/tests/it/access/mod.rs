@@ -23,6 +23,7 @@ mod labels;
 mod limits;
 mod origins;
 mod patient;
+mod population;
 mod professional;
 mod query;
 mod relayed;

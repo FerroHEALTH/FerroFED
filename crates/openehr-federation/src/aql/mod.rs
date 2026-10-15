@@ -314,6 +314,17 @@ impl Analysis {
         }
     }
 
+    /// The node columns whose delivered values name the `EHR` each row came
+    /// from ([`UnscopedQuery::ehr_columns`]); none for a patient query, whose
+    /// `EHR`s are the ones its patient resolved to.
+    #[must_use]
+    pub fn ehr_columns(&self) -> &[usize] {
+        match self {
+            Self::Patient(_) => &[],
+            Self::Unscoped(query) => query.ehr_columns(),
+        }
+    }
+
     /// Where each façade column of a row comes from, in façade order.
     #[must_use]
     pub fn sources(&self) -> &[ColumnSource] {
@@ -466,6 +477,7 @@ pub struct UnscopedQuery {
     order: ResultOrder,
     recombination: Option<Recombination>,
     within_one_ehr: bool,
+    ehr_columns: Vec<usize>,
     constrained: Constrained,
     sorted_by: Vec<EndpointAttribute>,
 }
@@ -507,6 +519,20 @@ impl UnscopedQuery {
     #[must_use]
     pub fn within_one_ehr(&self) -> bool {
         self.within_one_ehr
+    }
+
+    /// The node columns that project the `ehr_id` of an `EHR` the query binds
+    /// (`<ehr>/ehr_id/value` or `<ehr>/ehr_id`), each a column the client
+    /// sees, so each delivered row names the `EHR` it came from.
+    ///
+    /// None for a query recombined at the Tier (§11.6.3), whose one row is no
+    /// row of any `EHR`.
+    #[must_use]
+    pub fn ehr_columns(&self) -> &[usize] {
+        if self.recombination.is_some() {
+            return &[];
+        }
+        &self.ehr_columns
     }
 }
 

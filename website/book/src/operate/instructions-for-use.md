@@ -156,7 +156,10 @@ years = 3                      # Art 9(2): at least three years from each access
   "any access". Name in `[access_log] patient_namespaces` the namespaces
   your Member State's access service searches the log by, so the record of
   a request addressed by `ehr_id` names the patient
-  ([The patient behind an `ehr_id`](audit.md#the-patient-behind-an-ehr_id)).
+  ([The patient behind an `ehr_id`](audit.md#the-patient-behind-an-ehr_id)),
+  and set `max_named_ehrs` to the most `ehr_id`s the record of a query over
+  many patients' data names
+  ([A query over many patients' data](audit.md#a-query-over-many-patients-data)).
 - **The emergency purposes.** Art 11(5) asks that an access to restricted
   data in the vital interests of the patient be logged "in a clear and
   understandable format". FerroFED names no emergency purpose of use.

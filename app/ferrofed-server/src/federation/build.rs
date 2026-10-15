@@ -347,7 +347,8 @@ fn access_log(
                 .with_retention(retention.clone())
                 .with_labels(labels.clone())
                 .with_emergency(settings.access_log.emergency.clone())
-                .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
+                .with_patient_namespaces(settings.access_log.patient_namespaces.clone())
+                .with_max_named_ehrs(settings.access_log.max_named_ehrs),
         ));
     }
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2 asks for a record of every access, so a

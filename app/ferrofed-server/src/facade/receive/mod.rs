@@ -375,6 +375,7 @@ fn accessed(
                 ehr_id: at.ehr_id.as_str().to_owned(),
                 patient: PatientLookup::RequestNamed,
             }],
+            population: None,
         },
         evidence: evidence.clone(),
         delivered: Some(usize::from(version.is_some())),

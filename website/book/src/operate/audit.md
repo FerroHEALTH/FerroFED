@@ -450,6 +450,7 @@ each record's `recorded`:
 | An operator, for one caller | `agent.identifier=<iss>\|<sub>`, the caller's issuer and subject |
 | An operator, for one EHR at one member | `entity.identifier=\|<ehr_id>`, the record's `ehr` entity |
 | An operator, for one member | `entity.identifier=\|<endpoint>`, the record's `origin` entity |
+| A person's population accesses, through the access service | `entity.identifier=\|<endpoint>` for each member that holds an EHR for the person, keeping the records with an `ehds-population` entity: see [A query over many patients' data](#a-query-over-many-patients-data) |
 | An operator, for refused or failed accesses | `outcome=http://hl7.org/fhir/audit-event-outcome\|4,8,12` |
 
 The repository answers with a FHIR `Bundle` of type `searchset` holding
@@ -504,9 +505,60 @@ ITI-83 with the person's identifier as the source and each member's
 such as one identifier in each of two namespaces, writes each and claims
 the plain BALP pattern, whose slices bound no patient.
 
-A query over many patients' data, one that names no patient and is scoped
-to no `ehr_id`, records neither: the gateway does not know whose rows it
-returned, so a search by the person's identifier does not find it.
+#### A query over many patients' data
+
+A query that names no patient and is scoped to no `ehr_id` is a
+population access. The gateway sends each member the query as the client
+wrote it, so its record names whose records it read only where the
+delivered rows say so (Art 9(1); GDPR Art 5(1)(c), data minimisation).
+
+When the query's `SELECT` projects the `ehr_id`, as
+`SELECT e/ehr_id/value, c FROM EHR e CONTAINS COMPOSITION c` does (or
+`e/ehr_id`), each delivered row names the EHR it came from. The record
+then writes an `ehr` entity for each `ehr_id` the delivered rows hold, at
+each member whose own answer held it, and names the patient behind each
+as for a request addressed by `ehr_id` (see above). A search by the
+person's identifier finds it. All the identity service's answers for one
+record share one `federation.per_node_timeout_ms`. A query recombined
+at the gateway, such as `COUNT`, delivers no row of any one EHR.
+
+Otherwise the record names no `ehr_id` and no patient, and carries one
+`ehds-population` entity:
+
+| Element | Value |
+|---|---|
+| `type` | `4` (other) |
+| `name` | `ehds-population` |
+| `description` | a sentence saying that a query over many patients' data ran over each origin the record names, and that the record confirms no read of any one person's record |
+| `detail` `ehds-population` | `true` |
+| `detail` `ehds-population-reason` | why no `ehr_id` is named: `not-projected` (the query projects no `ehr_id`), `over-limit` (the rows name more than `[access_log] max_named_ehrs`), `not-delivered` (no row was delivered) or `unattributed` (a delivered `ehr_id` was in no member's own answer) |
+| `detail` `ehds-population-ehrs` | how many `ehr_id`s the rows named, when they were read: always for `over-limit` |
+| `detail` `ehds-population-limit` | `max_named_ehrs` |
+| `detail` `template-id`, `archetype-id` | each template and archetype id the query's `FROM` and `CONTAINS` constrain it to |
+
+The members the query asked are the record's `origin` entities, each with
+its node and `system_id`. To show a person the population accesses that
+may concern them, the access service asks your identity service which
+members hold an EHR for the person, searches the log with
+`entity.identifier=|<endpoint>` for each such member's endpoint, and keeps
+the records that carry the `ehds-population` entity. Present each as "a
+population query over your member ran", never as a confirmed read of the
+person's record: the record does not say that the query read it.
+
+A population access is not findable by the person when:
+
+- the access service cannot learn which members hold an EHR for the
+  person, because the identity service holds no `ehr_id` of the person at
+  the member or did not answer;
+- the person's EHR at the member was created after the query ran, or the
+  member left the registry, and the access service matches by the members
+  of today;
+- the query reached no member at all: no data was read, and no record is
+  written.
+
+The gateway never adds the `ehr_id` to a dispatched query to learn whose
+rows it returned: that changes what each member is asked (§7.1) and which
+rows `DISTINCT` keeps and what an aggregate counts (N13, §11.6.3).
 
 Each record carries a security label per category and per origin, in
 `meta.security` and on its `ehds-categories` and `origin` entities, so your
@@ -522,6 +574,8 @@ the access records](access-labels.md) and `[access_log.labels]` there.
 national_categories = ["https://example.org/fhir/CodeSystem/national-category|nl-example"]
 # the namespaces the patient behind an ehr_id is named in (Art 9(1))
 patient_namespaces = ["urn:oid:2.999.1"]
+# the most ehr_ids a population query's record names; 0 names none
+max_named_ehrs = 50
 
 [access_log.templates]
 "Example Lab Report.v1" = ["Laboratory-Reports"]
@@ -554,6 +608,13 @@ under the IHE binding a namespace that is an absolute URI, or one
 `[pixm]` maps to an assigning authority. An empty namespace is refused
 when the configuration loads. With none, a request addressed by `ehr_id`
 names no patient, and its record says `not-configured`.
+
+`max_named_ehrs`, 50 by default, is the most `ehr_id`s the record of a
+population query names from its delivered rows. Above it, or at `0`, the
+record carries the `ehds-population` entity instead
+([A query over many patients' data](#a-query-over-many-patients-data)).
+Each named `ehr_id` asks your identity service once, so a larger bound
+writes larger records and asks more.
 
 Each key is a template id or an archetype id, written exactly as the
 `archetype_details` of your compositions write it. Each value is a list of

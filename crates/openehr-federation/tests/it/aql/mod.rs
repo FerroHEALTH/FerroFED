@@ -15,6 +15,7 @@ mod dedup;
 mod definition;
 mod directive;
 mod distinct;
+mod ehr_columns;
 mod endpoint_order;
 mod entry;
 mod folding;

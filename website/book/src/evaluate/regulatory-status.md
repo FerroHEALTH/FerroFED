@@ -394,7 +394,11 @@ them:
   9(2); [Reading the log](../operate/audit.md#reading-the-log)). A request
   addressed by `ehr_id` names the patient the identity binding holds under
   it, so a search by the person's identifier finds it (Art 9(1)); a query
-  over many patients' data names none. Each record carries a security
+  over many patients' data names the patient behind each `ehr_id` its
+  delivered rows project, up to a bound, and otherwise records its scope,
+  which a person's search finds through the members that hold their EHR
+  ([A query over many patients' data](../operate/audit.md#a-query-over-many-patients-data)).
+  Each record carries a security
   label per category and per origin, which the repository applies as
   access rights by origin and category (point 3.4;
   [Labelling the access records](../operate/access-labels.md)).

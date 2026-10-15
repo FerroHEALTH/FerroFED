@@ -34,11 +34,16 @@ pub(crate) async fn name(
     subject: &mut DataSubject,
 ) {
     let named = subject.patient.is_some();
+    // NOTE: §11.5: the asks of one record share one per-node budget, so naming the patients
+    // of a population query never holds an answer longer than reaching a node may.
+    let deadline = Instant::now()
+        .checked_add(federation.budget().per_node())
+        .unwrap_or_else(Instant::now);
     for ehr in &mut subject.ehrs {
         ehr.patient = if named {
             PatientLookup::RequestNamed
         } else {
-            lookup(federation, namespaces, on_behalf, ehr).await
+            lookup(federation, namespaces, on_behalf, ehr, deadline).await
         };
     }
 }
@@ -50,6 +55,7 @@ async fn lookup(
     namespaces: &[IdentifierNamespace],
     on_behalf: &OnBehalfOf,
     ehr: &EhrAt,
+    deadline: Instant,
 ) -> PatientLookup {
     if namespaces.is_empty() {
         return PatientLookup::NotConfigured;
@@ -68,11 +74,6 @@ async fn lookup(
         );
         return PatientLookup::Unavailable;
     };
-    // NOTE: §11.5: one ask of one service is bounded as one node's request is, so
-    // naming the patient never holds an answer longer than reaching a node may.
-    let deadline = Instant::now()
-        .checked_add(federation.budget().per_node())
-        .unwrap_or_else(Instant::now);
     match resolver
         .identify(&member, &ehr_id, namespaces, on_behalf, deadline)
         .await

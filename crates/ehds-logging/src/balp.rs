@@ -54,6 +54,15 @@
 //! whose `detail` entries name the purposes that marked it, so a reader of
 //! the record need not know which codes the deployment maps, and each member
 //! whose consent pre-filter denial was set aside for it.
+//!
+//! A population access, a query over many patients' data whose record names
+//! none of them, is marked in one entity `ehds-population`, whose
+//! `description` says in words that the query ran over each origin the
+//! record names and that the record confirms no read of any one person's
+//! record, and whose `detail` entries name why no `ehr_id` is named and the
+//! template and archetype ids the query read (Regulation (EU) 2025/327 Art
+//! 9(1)). BALP 1:52.4.1.6 recommends one record per patient "driven by a
+//! Policy"; this record names the scope, never a person.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -71,7 +80,7 @@ use crate::classify::Classification;
 use crate::emergency::Emergency;
 use crate::label::Label;
 use crate::record::{
-    AccessRecord, Action, Origin, Outcome, PatientIdentifier, PatientLookup, Relayed,
+    AccessRecord, Action, Origin, Outcome, PatientIdentifier, PatientLookup, Population, Relayed,
 };
 use crate::sink::{AccessSink, Reservation, SinkError};
 
@@ -160,6 +169,15 @@ pub mod detail {
     /// A member whose consent pre-filter denial was set aside for the
     /// emergency, once per member.
     pub const CONSENT_SET_ASIDE: &str = "ehds-consent-set-aside";
+    /// That the access is a population access: `true`.
+    pub const POPULATION: &str = "ehds-population";
+    /// Why a population access's record names no `ehr_id`: `not-projected`,
+    /// `over-limit`, `not-delivered` or `unattributed`.
+    pub const POPULATION_REASON: &str = "ehds-population-reason";
+    /// How many `ehr_id`s the delivered rows of a population access named.
+    pub const POPULATION_EHRS: &str = "ehds-population-ehrs";
+    /// The most `ehr_id`s a record names.
+    pub const POPULATION_LIMIT: &str = "ehds-population-limit";
 }
 
 /// The name of the entity that marks an emergency access.
@@ -169,6 +187,15 @@ pub const EMERGENCY_ENTITY: &str = "ehds-emergency-access";
 pub const EMERGENCY_DESCRIPTION: &str = "Emergency access: the accessor declared that the access \
      was necessary to protect the vital interests of the data subject \
      (Regulation (EU) 2025/327 Art 11(5)).";
+
+/// The name of the entity that marks a population access.
+pub const POPULATION_ENTITY: &str = "ehds-population";
+
+/// The `description` of the entity that marks a population access.
+pub const POPULATION_DESCRIPTION: &str = "Population access: a query over many \
+     patients' data ran over each origin this record names; the record does not name \
+     the persons whose records it read, and does not say that it read any one \
+     person's record (Regulation (EU) 2025/327 Art 9(1)).";
 
 /// The sink that writes each record as a BALP `AuditEvent` and hands it to
 /// an `ihe-iti` audit recorder, such as one that spools it for an ATNA
@@ -465,6 +492,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if let Some(relayed) = &record.accessor.relayed {
         entities.push(other(None, "ehds-relayed", relayed_details(relayed), &[]));
     }
+    entities.extend(record.subject.population.as_ref().map(population_entity));
     if let Some(emergency) = &record.emergency {
         entities.push(emergency_entity(emergency));
     }
@@ -533,6 +561,39 @@ fn security(labels: &[Label]) -> Vec<SecurityLabel> {
             code: label.code().to_owned(),
         })
         .collect()
+}
+
+/// The entity that marks a population access, with why it names no
+/// `ehr_id` and the template and archetype ids the query read.
+fn population_entity(population: &Population) -> Entity {
+    let mut details = vec![
+        Detail::new(detail::POPULATION, "true"),
+        Detail::new(detail::POPULATION_REASON, population.reason.code()),
+    ];
+    details.extend(
+        population
+            .ehrs
+            .map(|ehrs| Detail::new(detail::POPULATION_EHRS, ehrs.to_string())),
+    );
+    details.push(Detail::new(
+        detail::POPULATION_LIMIT,
+        population.limit.to_string(),
+    ));
+    for (name, ids) in [
+        (detail::TEMPLATE_ID, &population.templates),
+        (detail::ARCHETYPE_ID, &population.archetypes),
+    ] {
+        details.extend(ids.iter().map(|id| Detail::new(name, id.clone())));
+    }
+    Entity::Described(Described {
+        what: None,
+        kind: OTHER,
+        role: None,
+        name: Some(POPULATION_ENTITY.to_owned()),
+        description: Some(POPULATION_DESCRIPTION.to_owned()),
+        details,
+        security_labels: Vec::new(),
+    })
 }
 
 /// `<system>|<code>`, or `<code>` when no system is named.

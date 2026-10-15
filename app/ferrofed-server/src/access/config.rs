@@ -8,6 +8,7 @@
 //! [access_log]
 //! national_categories = ["https://example.org/fhir/CodeSystem/national-category|nl-example"]
 //! patient_namespaces = ["urn:oid:2.999.1"]
+//! max_named_ehrs = 50
 //!
 //! [access_log.templates]
 //! "Example Lab Report.v1" = ["Laboratory-Reports"]
@@ -72,6 +73,10 @@
 //! to name the patient behind an `ehr_id` in, when a request named none, so
 //! a search of the log by the patient's identifier finds the access (Art
 //! 9(1)).
+//! `max_named_ehrs`, 50 by default, is the most `ehr_id`s the record of a
+//! query over many patients' data names from the `ehr_id` column its rows
+//! deliver; above it, or at `0`, the record states the query's scope (Art
+//! 9(1); no specification governs the bound: our own design).
 
 use std::collections::BTreeMap;
 
@@ -86,7 +91,7 @@ use serde::Deserialize;
 use crate::config::error::Error;
 
 /// `[access_log]`, as the configuration writes it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AccessLog {
     /// The categories national law adds (Art 14(1) third subparagraph),
@@ -106,6 +111,25 @@ pub struct AccessLog {
     /// request named no patient: those an electronic health data access
     /// service searches the log by (Art 9(1), (2)).
     pub patient_namespaces: Vec<String>,
+    /// The most `ehr_id`s the record of a query over many patients' data
+    /// names, read from the delivered rows; above it, and at `0`, the record
+    /// states the query's scope instead (Art 9(1)).
+    pub max_named_ehrs: usize,
+}
+
+impl Default for AccessLog {
+    fn default() -> Self {
+        Self {
+            national_categories: Vec::new(),
+            templates: BTreeMap::new(),
+            archetypes: BTreeMap::new(),
+            retention: Retention::default(),
+            labels: Labels::default(),
+            emergency_purpose: Vec::new(),
+            patient_namespaces: Vec::new(),
+            max_named_ehrs: 50,
+        }
+    }
 }
 
 /// `[access_log.retention]`, as the configuration writes it.
@@ -168,8 +192,9 @@ pub struct EmergencyPurpose {
 }
 
 /// `[access_log]`, resolved: the category map, named by its digest, the
-/// retention policy and the emergency purposes.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// retention policy, the emergency purposes, the patient namespaces and the
+/// most `ehr_id`s a population query's record names.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccessLogSettings {
     /// The category map every record is classified with.
     pub map: CategoryMap,
@@ -181,6 +206,22 @@ pub struct AccessLogSettings {
     pub emergency: EmergencyPurposes,
     /// The namespaces the patient behind an `ehr_id` is named in.
     pub patient_namespaces: Vec<IdentifierNamespace>,
+    /// The most `ehr_id`s the record of a query over many patients' data
+    /// names.
+    pub max_named_ehrs: usize,
+}
+
+impl Default for AccessLogSettings {
+    fn default() -> Self {
+        Self {
+            map: CategoryMap::default(),
+            retention: RetentionPolicy::default(),
+            labels: LabelPolicy::default(),
+            emergency: EmergencyPurposes::default(),
+            patient_namespaces: Vec::new(),
+            max_named_ehrs: AccessLog::default().max_named_ehrs,
+        }
+    }
 }
 
 impl AccessLogSettings {
@@ -253,5 +294,6 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         labels,
         emergency,
         patient_namespaces,
+        max_named_ehrs: table.max_named_ehrs,
     })
 }

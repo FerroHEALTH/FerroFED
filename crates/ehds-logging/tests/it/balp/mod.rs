@@ -37,6 +37,8 @@ mod emergency;
 #[cfg(test)]
 mod labels;
 #[cfg(test)]
+mod population;
+#[cfg(test)]
 mod relayed;
 
 /// The synthetic values a record carries, each unlike any other text.
@@ -97,6 +99,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
                 ehr_id: EHR_ID.to_owned(),
                 patient: PatientLookup::RequestNamed,
             }],
+            population: None,
         },
         categories,
         delivered: Some(1),

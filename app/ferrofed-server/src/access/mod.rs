@@ -82,6 +82,7 @@ pub struct AccessLog {
     labels: LabelPolicy,
     emergency: EmergencyPurposes,
     patient_namespaces: Vec<IdentifierNamespace>,
+    max_named_ehrs: usize,
     sink: Arc<dyn AccessSink>,
 }
 
@@ -105,6 +106,7 @@ impl AccessLog {
             labels: LabelPolicy::default(),
             emergency: EmergencyPurposes::default(),
             patient_namespaces: Vec::new(),
+            max_named_ehrs: config::AccessLog::default().max_named_ehrs,
             sink,
         }
     }
@@ -115,6 +117,22 @@ impl AccessLog {
     pub fn with_patient_namespaces(mut self, namespaces: Vec<IdentifierNamespace>) -> Self {
         self.patient_namespaces = namespaces;
         self
+    }
+
+    /// This log, the record of a query over many patients' data naming at
+    /// most `max` `ehr_id`s from its delivered rows, and stating the query's
+    /// scope above it (Regulation (EU) 2025/327 Art 9(1)).
+    #[must_use]
+    pub fn with_max_named_ehrs(mut self, max: usize) -> Self {
+        self.max_named_ehrs = max;
+        self
+    }
+
+    /// The most `ehr_id`s the record of a query over many patients' data
+    /// names.
+    #[must_use]
+    pub fn max_named_ehrs(&self) -> usize {
+        self.max_named_ehrs
     }
 
     /// This log, each record kept as `retention` says.

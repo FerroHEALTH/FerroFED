@@ -11,12 +11,16 @@
 //! resolution input as a constant `STRING` (N5), or the value the registry
 //! holds for the endpoint the row came from, as a `STRING` (§9.3). A cell
 //! travels as the node sent it. The access log reads the template and
-//! archetype ids of the archetype roots a delivered row holds, and no other
-//! member of a cell ([`root_objects`]).
+//! archetype ids of the archetype roots a delivered row holds
+//! ([`root_objects`]), and the `ehr_id`s a query that names no patient
+//! delivers in a column that projects one ([`ehr_ids`]), and no other member
+//! of a cell.
 #![expect(
     clippy::disallowed_types,
     reason = "the result-cell seam: ITS-REST types a RESULT_SET cell as a JSON value"
 )]
+
+use std::collections::BTreeSet;
 
 use ehds_logging::classify::RootObject;
 use openehr_federation::aql::ColumnSource;
@@ -206,6 +210,59 @@ pub fn node_root_objects(
             ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint(_) => None,
         })
     }))
+}
+
+/// Returns the `ehr_id`s the delivered façade `rows` hold, or `None` when a
+/// cell that should hold one does not.
+///
+/// Each is read from a node column `ehr_columns` names, through `sources`.
+///
+/// A cell is the `ehr_id` as a `STRING` (`<ehr>/ehr_id/value`) or as a
+/// `HIER_OBJECT_ID` (`<ehr>/ehr_id`); `null` names no `EHR`.
+#[must_use]
+pub fn ehr_ids(
+    rows: &[ResultSetRow],
+    sources: &[ColumnSource],
+    ehr_columns: &[usize],
+) -> Option<BTreeSet<String>> {
+    collect_ehr_ids(rows.iter().flat_map(|row| {
+        row.iter()
+            .zip(sources)
+            .filter(|(_, source)| {
+                matches!(source, ColumnSource::Node(column) if ehr_columns.contains(column))
+            })
+            .map(|(cell, _)| Some(cell))
+    }))
+}
+
+/// Returns the `ehr_id`s the `rows` one node answered hold, before the merge.
+///
+/// Each is read from the node column `ehr_columns` names, as [`ehr_ids`]
+/// reads the delivered rows; a cell the row is too short to hold is no
+/// `ehr_id`.
+#[must_use]
+pub fn node_ehr_ids(rows: &[ResultSetRow], ehr_columns: &[usize]) -> Option<BTreeSet<String>> {
+    collect_ehr_ids(
+        rows.iter()
+            .flat_map(|row| ehr_columns.iter().map(move |column| row.get(*column))),
+    )
+}
+
+/// The `ehr_id`s among `cells`, or `None` when a cell is missing or no
+/// `ehr_id`.
+fn collect_ehr_ids<'a>(cells: impl Iterator<Item = Option<&'a Value>>) -> Option<BTreeSet<String>> {
+    let mut found = BTreeSet::new();
+    for cell in cells {
+        let cell = cell?;
+        if cell.is_null() {
+            continue;
+        }
+        let value = cell
+            .as_str()
+            .or_else(|| cell.get("value").and_then(Value::as_str))?;
+        found.insert(value.to_owned());
+    }
+    Some(found)
 }
 
 /// The root objects among `cells`, and whether any cell is no root: a

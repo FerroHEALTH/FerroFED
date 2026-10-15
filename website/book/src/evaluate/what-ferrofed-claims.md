@@ -378,8 +378,10 @@ These are the ones to know before you deploy FerroFED; the
   logging software component (Art 25(1)), read at your Audit Record
   Repository with ITI-81 (point 3.3), each record stating its retention by
   origin and category (point 3.4). A query over many patients' data names
-  no patient in its record, so a search by the person's identifier does
-  not find it. Each record carries a security label per category and per
+  the patients its delivered rows project by `ehr_id`, up to a bound, and
+  otherwise records only its scope, which shows a person that a query ran
+  over a member holding their EHR, never that it read their record.
+  Each record carries a security label per category and per
   origin, which your repository applies as access rights
   ([Labelling the access records](../operate/access-labels.md)). The
   European interoperability software component writes the patient
