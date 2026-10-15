@@ -128,6 +128,17 @@ async fn an_apply_on_one_replica_reaches_the_other_within_the_poll_bound() -> Te
         Ok(metric(&replicas.two, "ferrofed_config_revision_in_step", &[])?.as_deref() == Some("1"))
     })
     .await?;
+    // NOTE: no specification governs this: our own design; the watch counts a follow after
+    // the reload it made, so the count is awaited like the gauge, and then read exactly.
+    within_bound("the follow is counted", || {
+        Ok(metric(
+            &replicas.two,
+            "ferrofed_config_revision_follows_total",
+            &[("result", "applied")],
+        )?
+        .is_some_and(|count| count != "0"))
+    })
+    .await?;
     assert_eq!(
         Some(String::from("1")),
         metric(
