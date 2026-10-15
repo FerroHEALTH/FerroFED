@@ -31,9 +31,12 @@ use eehrxf::receive::{ReceiveError, ReceivedDocument};
 use eehrxf::terminology::bindings::BindingError;
 use eehrxf::terminology::expansion::{ExpansionError, Expansions};
 use eehrxf::terminology::{Terminology, TerminologyError};
+use eehrxf::transformation::{Direction, Pin, Report, ReportError};
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::run::Settings;
+
+use crate::transformation::preferred;
 
 /// One category the deployment receives, as it names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,6 +134,8 @@ struct Receiver {
     expansions: Expansions,
     /// The mapping into openEHR.
     mapping: Mapping,
+    /// The file name of the package the profiles are read from.
+    package: Option<String>,
     /// The composition language.
     language: String,
     /// The composition territory.
@@ -207,6 +212,10 @@ impl Receivers {
                     composition,
                     expansions,
                     mapping,
+                    package: source
+                        .package
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned()),
                     language: source.language.clone(),
                     territory: source.territory.clone(),
                 },
@@ -324,14 +333,49 @@ impl Receivers {
                 Some(Identifier { system, value })
             })
             .collect();
+        let transformation = transformed(receiver, category, (&document, &composition))?;
         Ok(Prepared {
             category,
             member: receiver.member.clone(),
             composition,
             unevaluated,
             subject,
+            transformation,
         })
     }
+}
+
+/// What `receiver`'s mapping did to `document`, of `category`, which it
+/// mapped to `composition`: every coded element of every entry of the
+/// document as received, and every loss the run declared.
+fn transformed(
+    receiver: &Receiver,
+    category: Category,
+    (document, composition): (&ReceivedDocument, &ReceivedComposition),
+) -> Result<Report, Unreceived> {
+    let template = composition.template_id();
+    // NOTE: the run selected the context that wrote the composition's template, so its pin
+    // exists; the template alone is named should it not.
+    let mut pin = receiver.mapping.pin(template).unwrap_or_else(|| Pin {
+        template: template.to_owned(),
+        ..Pin::default()
+    });
+    pin.package.clone_from(&receiver.package);
+    let mut report = Report::new(Direction::Received, category, pin);
+    for resource in document
+        .bundle()
+        .entry
+        .iter()
+        .filter_map(|entry| entry.resource.as_ref())
+    {
+        report
+            .count_coded(resource, preferred)
+            .map_err(Unreceived::Transformation)?;
+    }
+    if let Some(outcome) = composition.outcome() {
+        report.count_losses(outcome);
+    }
+    Ok(report)
 }
 
 /// One identifier of the document's patient, with its system.
@@ -367,6 +411,9 @@ pub struct Prepared {
     /// Every identifier of the document's patient that has a system and a
     /// value, in document order.
     pub subject: Vec<Identifier>,
+    /// What the transformation into openEHR did (eHealth Network General
+    /// Guidelines Release 3.1 Art 6(3)).
+    pub transformation: Report,
 }
 
 /// Where a prepared document was written: the member, the endpoint it was
@@ -498,4 +545,7 @@ pub enum Unreceived {
     /// looked up.
     #[error("a coding of the document has no display")]
     Display(#[source] DisplayError),
+    /// The transformation of the document could not be counted.
+    #[error("the transformation of the document could not be counted")]
+    Transformation(#[source] ReportError),
 }

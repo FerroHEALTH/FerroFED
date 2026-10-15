@@ -28,6 +28,7 @@ use crate::classify::Classification;
 use crate::emergency::Emergency;
 use crate::label::Labels;
 use crate::retention::Retention;
+use crate::transformation::Transformation;
 
 /// What the access did to the data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -650,6 +651,10 @@ pub struct AccessRecord {
     /// That the data subject inserted the information the access wrote,
     /// which the written data marks as inserted by them (Art 5).
     pub subject_inserted: bool,
+    /// Each semantic transformation the access applied between openEHR and
+    /// the exchange format (eHealth Network General Guidelines Release 3.1
+    /// Art 6(3)), in the order it applied them.
+    pub transformations: Vec<Transformation>,
 }
 
 impl fmt::Debug for AccessRecord {
@@ -668,6 +673,7 @@ impl fmt::Debug for AccessRecord {
             .field("labels", &self.labels)
             .field("emergency", &self.emergency)
             .field("subject_inserted", &self.subject_inserted)
+            .field("transformations", &self.transformations)
             .finish()
     }
 }

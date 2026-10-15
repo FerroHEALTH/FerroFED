@@ -63,9 +63,15 @@
 //! template and archetype ids the query read (Regulation (EU) 2025/327 Art
 //! 9(1)). BALP 1:52.4.1.6 recommends one record per patient "driven by a
 //! Policy"; this record names the scope, never a person.
+//!
+//! Each semantic transformation the access applied is one entity of its own
+//! ([`transformation`]), in the same `AuditEvent` as the access, so it is
+//! kept and found with it (eHealth Network General Guidelines Release 3.1
+//! Art 6(3)).
 
 pub mod detail;
 pub mod inserted;
+pub mod transformation;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -406,6 +412,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if record.subject_inserted {
         entities.push(inserted::entity());
     }
+    entities.extend(record.transformations.iter().map(transformation::entity));
     entities
 }
 

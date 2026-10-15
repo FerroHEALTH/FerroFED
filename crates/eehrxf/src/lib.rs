@@ -35,7 +35,12 @@
 //!   recorded, an equivalent mapping as a second coding and every other one
 //!   in the narrative (with `openehr`), the `required` bindings held to the
 //!   vendored expansions, and the seam to an optional FHIR terminology
-//!   server, which fails closed when none is configured.
+//!   server, which fails closed when none is configured;
+//! - `transformation` (feature `fhir-r4`): what one semantic transformation
+//!   did, the facts the system that applied it logs (eHealth Network General
+//!   Guidelines Release 3.1 Art 6(3)): the mapping and terminology versions
+//!   in force and the elements transcoded, untranscoded and dropped, counted
+//!   by path and never by value.
 //!
 //! The feature `fhir-r4` is the FHIR R4 serialisation and compiles no
 //! openEHR crate; only `openehr` brings in the openEHR side the mapping reads.
@@ -71,3 +76,5 @@ pub mod mapping;
 pub mod receive;
 #[cfg(feature = "fhir-r4")]
 pub mod terminology;
+#[cfg(feature = "fhir-r4")]
+pub mod transformation;

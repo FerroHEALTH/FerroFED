@@ -28,6 +28,8 @@ mod receipt;
 mod receive;
 mod refusals;
 mod summary;
+#[cfg(feature = "binding-ihe")]
+mod transformation;
 mod unidentified;
 
 use std::collections::BTreeMap;

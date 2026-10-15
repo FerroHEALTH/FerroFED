@@ -43,10 +43,13 @@ use openehr_mapping_core::index::WebTemplateIndex;
 use openehr_mapping_core::template::PathError;
 use openehr_mapping_core::template::TemplateSource;
 
+use crate::transformation::Pin;
+
 /// FHIRconnect context mappings compiled against one operational template.
 #[derive(Debug)]
 pub struct Mapping {
     programs: ProgramSet,
+    files: Vec<String>,
 }
 
 impl Mapping {
@@ -95,7 +98,12 @@ impl Mapping {
                 .insert_program(program)
                 .map_err(|source| MappingError::Program { source })?;
         }
-        Ok(Self { programs })
+        let files = files
+            .iter()
+            .filter_map(|file| file.as_ref().file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect();
+        Ok(Self { programs, files })
     }
 
     /// Returns how many compiled context mappings the mapping holds.
@@ -108,6 +116,29 @@ impl Mapping {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.programs.is_empty()
+    }
+
+    /// Returns the file names of the model and context mappings it was
+    /// compiled from, in the order given.
+    #[must_use]
+    pub fn files(&self) -> &[String] {
+        &self.files
+    }
+
+    /// Returns the pin of the context mapping compiled for `template`: its
+    /// name, the template, the profile it maps to and the mapping's files, or
+    /// `None` when no context maps that template.
+    #[must_use]
+    pub fn pin(&self, template: &str) -> Option<Pin> {
+        self.contexts()
+            .find(|context| context.template == template)
+            .map(|context| Pin {
+                context: Some(context.name.to_owned()),
+                template: context.template.to_owned(),
+                profile: Some(context.profile.to_owned()),
+                files: self.files.clone(),
+                package: None,
+            })
     }
 
     /// Returns the compiled programs, for the receive direction.

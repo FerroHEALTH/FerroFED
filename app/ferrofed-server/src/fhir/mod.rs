@@ -514,10 +514,15 @@ fn document(
         (&gathered.origins, &gathered.sections, &elsewhere),
         &fhir.mappings,
     );
-    let (mut response, delivered) = match assembled {
+    let (mut response, delivered, transformations) = match assembled {
         Ok(assembled) => (
             fhir_json(StatusCode::OK, &assembled.bundle),
             assembled.mapped,
+            assembled
+                .transformations
+                .iter()
+                .map(crate::access::transformation::of)
+                .collect(),
         ),
         Err(failure) => {
             tracing::error!(
@@ -532,18 +537,21 @@ fn document(
                     "the patient summary could not be written from what the members answered",
                 ),
                 BTreeSet::new(),
+                Vec::new(),
             )
         }
     };
-    attach(
-        &mut response,
-        gathered::accessed(
-            federation,
-            gathered,
-            (system, value),
-            (Scope::Summary, Some(&delivered)),
-        ),
-    );
+    let accessed = gathered::accessed(
+        federation,
+        gathered,
+        (system, value),
+        (Scope::Summary, Some(&delivered)),
+    )
+    .map(|mut accessed| {
+        accessed.transformations = transformations;
+        accessed
+    });
+    attach(&mut response, accessed);
     response
 }
 

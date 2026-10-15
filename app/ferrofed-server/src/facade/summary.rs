@@ -696,6 +696,7 @@ pub(crate) fn accessed(
             .map(|member| member.as_str().to_owned())
             .collect(),
         subject_inserted: false,
+        transformations: Vec::new(),
     })
 }
 

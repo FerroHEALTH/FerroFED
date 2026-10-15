@@ -109,3 +109,36 @@ pub const POPULATION_REASON: &str = "ehds-population-reason";
 pub const POPULATION_EHRS: &str = "ehds-population-ehrs";
 /// The most `ehr_id`s a record names.
 pub const POPULATION_LIMIT: &str = "ehds-population-limit";
+/// Which way a semantic transformation ran: `provided` or `received`.
+pub const TRANSFORMATION_DIRECTION: &str = "ehds-transformation-direction";
+/// The Art 14(1) category of the data a transformation transformed, as
+/// `<system>|<code>`.
+pub const TRANSFORMATION_CATEGORY: &str = "ehds-transformation-category";
+/// The FHIRconnect context mapping a transformation ran.
+pub const MAPPING_CONTEXT: &str = "mapping-context";
+/// The openEHR template id a transformation's mapping maps.
+pub const MAPPING_TEMPLATE: &str = "mapping-template";
+/// The profile a transformation's mapping maps to.
+pub const MAPPING_PROFILE: &str = "mapping-profile";
+/// A file name of a transformation's model or context mappings, once per
+/// file.
+pub const MAPPING_FILE: &str = "mapping-file";
+/// The FHIR package a received document was held to.
+pub const MAPPING_PACKAGE: &str = "mapping-package";
+/// A terminology release or code system version in force, as
+/// `<name>|<version>`, once per version.
+pub const TERMINOLOGY_VERSION: &str = "terminology-version";
+/// How many coded elements a transformation carried in a preferred code
+/// system.
+pub const TRANSCODED: &str = "ehds-transcoded";
+/// `<path>=<count>`, once per path of a transcoded element.
+pub const TRANSCODED_PATH: &str = "ehds-transcoded-path";
+/// How many coded elements a transformation carried in no preferred code
+/// system (eHealth Network Guidelines on Patient Summary Art 10(7)).
+pub const UNTRANSCODED: &str = "ehds-untranscoded";
+/// `<path>=<count>`, once per path of an untranscoded element.
+pub const UNTRANSCODED_PATH: &str = "ehds-untranscoded-path";
+/// How many elements a transformation did not carry.
+pub const DROPPED: &str = "ehds-dropped";
+/// `<path>=<count>`, once per path of a dropped element that names one.
+pub const DROPPED_PATH: &str = "ehds-dropped-path";
