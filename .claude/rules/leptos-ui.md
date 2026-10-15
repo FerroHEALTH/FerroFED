@@ -366,6 +366,14 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   The bytes are the browser's decoding of `Outcome<T>` and `Refusal` for each
   of the five server functions it calls, the typed outcome §7 requires, and
   the split of the inline notices into a refusal and a fault.
+- **The admin actions (#909) measured 235745 bytes** brotli-compressed
+  (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129), 9163 more than
+  the 226582 of the tree they were built on. Their first cut measured
+  244726: each form's fields drawn by components in the browser. The
+  fields are static, so the server now renders them into the view it sends
+  (`admin::fields`) and the page shows that HTML inside the one form
+  section both actions share, under the `inner_html` obligation above
+  (`tests/it/admin.rs`). The second action costs 1287 bytes of the total.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

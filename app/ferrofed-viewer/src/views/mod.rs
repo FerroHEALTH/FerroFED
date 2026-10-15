@@ -28,6 +28,7 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::use_query_map;
 
+use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::views::model::{
     FederationView, IntegrityView, MembersView, Outcome, PAGE_SIZE, Refusal, StoredView, ViewError,
 };
@@ -197,17 +198,22 @@ fn members_section(view: MembersView) -> AnyView {
 #[component]
 pub fn IntegrityPage() -> impl IntoView {
     let loaded = Resource::new_blocking(offset_in_url(), load::integrity);
+    let clear = ServerAction::<ClearEhrId>::new();
     view! {
         <Title text=titled("Integrity") />
         <h1>"Integrity"</h1>
         <Transition fallback=|| {
             view! { <p>"Loading the incidents."</p> }
-        }>{move || Suspend::new(async move { shown(loaded.await, integrity_section) })}</Transition>
+        }>
+            {move || Suspend::new(async move {
+                shown(loaded.await, move |view| integrity_section(view, clear))
+            })}
+        </Transition>
     }
 }
 
 /// The incident counts, the recent incidents and the routing table.
-fn integrity_section(view: IntegrityView) -> AnyView {
+fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> AnyView {
     let counts = view
         .counts
         .into_iter()
@@ -220,6 +226,7 @@ fn integrity_section(view: IntegrityView) -> AnyView {
             }
         })
         .collect_view();
+    let clear = crate::admin::clear_section(clear, view.clear_form);
     let recent = if view.recent.is_empty() {
         view! { <p>"No incident since the gateway started."</p> }.into_any()
     } else {
@@ -283,6 +290,7 @@ fn integrity_section(view: IntegrityView) -> AnyView {
             <tbody>{counts}</tbody>
         </table>
         {recent}
+        {clear}
         <table>
             <caption>"The creating_system_id routing table"</caption>
             <thead>
@@ -304,17 +312,22 @@ fn integrity_section(view: IntegrityView) -> AnyView {
 #[component]
 pub fn StoredQueriesPage() -> impl IntoView {
     let loaded = Resource::new_blocking(offset_in_url(), load::stored_queries);
+    let repair = ServerAction::<RepairDrift>::new();
     view! {
         <Title text=titled("Stored queries") />
         <h1>"Stored queries"</h1>
         <Transition fallback=|| {
             view! { <p>"Loading the stored queries."</p> }
-        }>{move || Suspend::new(async move { shown(loaded.await, stored_section) })}</Transition>
+        }>
+            {move || Suspend::new(async move {
+                shown(loaded.await, move |view| stored_section(view, repair))
+            })}
+        </Transition>
     }
 }
 
 /// Every held version with its text.
-fn stored_section(view: StoredView) -> AnyView {
+fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView {
     if view.total == 0 {
         return view! { <p>"The gateway holds no stored query."</p> }.into_any();
     }
@@ -324,6 +337,7 @@ fn stored_section(view: StoredView) -> AnyView {
         view.definitions.len(),
         view.total,
     );
+    let repair = crate::admin::repair_section(repair, view.repair_form);
     let rows = view
         .definitions
         .into_iter()
@@ -354,6 +368,7 @@ fn stored_section(view: StoredView) -> AnyView {
             <tbody>{rows}</tbody>
         </table>
         {stored_pager}
+        {repair}
     }
     .into_any()
 }
@@ -393,7 +408,7 @@ fn federation_section(view: FederationView) -> AnyView {
 
 /// The section `section` draws of a view `loaded`, the notice of the refusal
 /// that kept it, or the notice of the console's fault: never an empty view.
-fn shown<T>(loaded: Result<Outcome<T>, ViewError>, section: fn(T) -> AnyView) -> AnyView {
+fn shown<T>(loaded: Result<Outcome<T>, ViewError>, section: impl FnOnce(T) -> AnyView) -> AnyView {
     match loaded {
         Ok(Outcome::Shown(view)) => section(view),
         Ok(Outcome::Refused(refused)) => refusal(&refused),

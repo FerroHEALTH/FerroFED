@@ -120,6 +120,27 @@ service worker or a URL.
   request body, so nothing you enter reaches a URL or the browser history.
   The fields carry `autocomplete="off"`, and the console logs a refusal by
   its status and code alone, never the query or a parameter.
+- **The operator's admin actions**, where `[admin]` names at least one
+  gateway replica. `/integrity` offers the clear of a held `ehr_id` below
+  the recent incidents, which calls
+  `POST /admin/ehr-ids/{ehr_id}/clear` on the admin listener of the replica
+  you pick, or of every replica one after another, since each replica keeps
+  its own routing state. The form offers the `ehr_id`s the incidents name.
+  `/stored-queries` offers the stored-query drift repair below the held
+  versions, which calls
+  `POST /admin/stored-queries/{name}/{version}/distribute` with the members
+  in `openEHR-federation-endpoint` (`*` for every active member) on the
+  first replica configured, since the replicas share the stored-query store.
+  Each action asks you to tick a confirmation, which the console checks
+  again on its server, and runs once the page has loaded. Its answer names
+  the replica it went to: what a clear found there (a collision and its
+  claimants, one owner, or nothing), or the status of a repair, whether
+  every member took the version, and each member's outcome. A replica that
+  refuses shows its status and stable error code, a `401` links back to
+  sign-in, and one the console cannot reach is named as such. The console
+  calls the admin listener with your own access token, which never reaches
+  the browser, so the gateway admits the action only for a token carrying
+  your issuer's `operator_scope` and records you as the operator who ran it.
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 
@@ -190,6 +211,14 @@ redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
 end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
 post_logout_redirect_uri = "https://console.example.org/"
+
+[[admin.replicas]]
+name = "gateway-0"
+admin_url = "https://ferrofed-0.ferrofed-admin.internal:9464/"
+
+[[admin.replicas]]
+name = "gateway-1"
+admin_url = "https://ferrofed-1.ferrofed-admin.internal:9464/"
 ```
 
 With `secure_cookie = true` the session and sign-in cookies carry the
@@ -207,6 +236,26 @@ answers `503`. The provider's URLs must be `https` unless their host is
 loopback, and `scopes` must include `openid`. `end_session_endpoint` is
 optional, and `post_logout_redirect_uri` needs it. `ferrofed-viewer config check`
 reads and checks a configuration without binding a socket.
+
+`[[admin.replicas]]` names the admin listener of each gateway replica the
+console runs the operator's admin actions on. Each entry has a `name`, which
+the console shows and the operator picks the replica by (letters, digits,
+`.`, `_` and `-`, at most 64, each name once), and an `admin_url`, the
+`http` or `https` root of that replica's admin listener. Without an entry
+the console offers no admin action, and its views are as before. The list
+can be set from the environment as one TOML value, for example
+`FERROFED_VIEWER__ADMIN__REPLICAS='[{ name = "gateway-0", admin_url = "https://ferrofed-0.internal:9464/" }]'`.
+
+The console's server calls each admin listener directly, so it must reach
+it on an internal network that nothing outside the deployment can reach;
+never publish an admin listener. Its default bind is loopback, so set the
+gateway's `[metrics] listen` to a non-loopback internal address with
+`allow_remote = true` ([Metrics](metrics.md#who-the-admin-listener-serves)),
+and prefer an `https` admin listener, since the operator's access token
+travels on each call. The console's client of the admin listener is the one
+it calls the gateway with: it trusts the system's root certificates and
+presents no client certificate, so an admin listener that asks for mutual
+TLS cannot be reached from the console.
 
 The image sets `server.listen` to `0.0.0.0:3000` and `server.site_root` to
 the site bundle it carries, runs as the numeric user `65532`, and runs

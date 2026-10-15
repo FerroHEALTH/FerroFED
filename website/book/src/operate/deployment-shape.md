@@ -134,7 +134,10 @@ memory of one process and is lost on its restart, and the gateway writes
 nothing derived from a patient identifier to a shared store. For the same
 reason the operator's clear of a held `ehr_id` collision clears the replica
 whose admin listener receives it, so send it to each replica
-([Clearing a held collision](registry.md#clearing-a-held-collision)), and
+([Clearing a held collision](registry.md#clearing-a-held-collision)); the
+operator console does that for you when its `[admin]` table names every
+replica's admin listener on an internal address
+([The operator console](operator-console.md#configuration)), and
 the export of the learned routes for a replacement system holds one
 replica's routes, so export each replica
 ([Exporting the identity state](identity-state-export.md)).

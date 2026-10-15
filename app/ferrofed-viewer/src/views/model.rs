@@ -171,6 +171,9 @@ pub struct IntegrityView {
     pub routes_offset: u64,
     /// How many rows the whole table holds.
     pub routes_total: u64,
+    /// The collision clear's fields, rendered on the server; `None` when
+    /// the console is configured with no admin listener.
+    pub clear_form: Option<String>,
 }
 
 /// One held stored-query version.
@@ -195,6 +198,9 @@ pub struct StoredView {
     pub offset: u64,
     /// How many versions the registry holds.
     pub total: u64,
+    /// The drift repair's fields, rendered on the server; `None` when the
+    /// console is configured with no admin listener.
+    pub repair_form: Option<String>,
 }
 
 /// The self-description view, `OPTIONS {base}/`.

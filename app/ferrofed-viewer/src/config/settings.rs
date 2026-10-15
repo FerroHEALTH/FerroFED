@@ -14,7 +14,7 @@ use secrecy::zeroize::Zeroizing;
 use url::Url;
 
 use crate::config::error::Error;
-use crate::config::{Config, Oidc};
+use crate::config::{Config, Oidc, Replica};
 
 /// The resolved configuration.
 #[derive(Debug, Clone)]
@@ -29,6 +29,18 @@ pub struct Settings {
     pub session: SessionSettings,
     /// The OpenID Provider operators sign in with, when one is configured.
     pub oidc: Option<OidcSettings>,
+    /// The admin listener of every gateway replica the console acts on, in
+    /// the order configured; empty when the console offers no admin action.
+    pub admin: Vec<ReplicaSettings>,
+}
+
+/// One resolved `[[admin.replicas]]` entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaSettings {
+    /// The name the console shows and the operator picks the replica by.
+    pub name: String,
+    /// The root of the replica's admin listener.
+    pub url: Url,
 }
 
 /// The resolved `[gateway]`.
@@ -126,6 +138,7 @@ impl Config {
             max_sessions: bound("session.max_sessions", session.max_sessions)?,
         };
         let oidc = self.oidc.as_ref().map(resolve_oidc).transpose()?;
+        let admin = resolve_admin(&self.admin.replicas)?;
         // NOTE: RFC 6265bis §4.1.2.5: a cookie without `Secure` travels over plain
         // HTTP, so it is admitted only where the console itself is HTTP on loopback.
         if !session.secure_cookie
@@ -143,8 +156,47 @@ impl Config {
             gateway: GatewaySettings { base, timeout },
             session,
             oidc,
+            admin,
         })
     }
+}
+
+/// Resolves `[[admin.replicas]]`, each name checked and given once.
+fn resolve_admin(replicas: &[Replica]) -> Result<Vec<ReplicaSettings>, Error> {
+    let mut resolved: Vec<ReplicaSettings> = Vec::with_capacity(replicas.len());
+    for replica in replicas {
+        let key = "admin.replicas.name";
+        let name = replica.name.trim();
+        if name.is_empty() {
+            return Err(Error::Missing {
+                key: key.to_owned(),
+            });
+        }
+        // NOTE: no specification governs this: our own design; a name the console
+        // shows and posts back is short plain text, so it needs no escaping anywhere.
+        let plain = name.len() <= 64
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+        if !plain {
+            return Err(Error::ReplicaName {
+                key: key.to_owned(),
+                reason: "must be letters, digits, '.', '_' and '-', at most 64 of them",
+            });
+        }
+        if resolved.iter().any(|known| known.name == name) {
+            return Err(Error::ReplicaName {
+                key: key.to_owned(),
+                reason: "must name each replica once",
+            });
+        }
+        let url = web_url("admin.replicas.admin_url", &replica.admin_url)?;
+        resolved.push(ReplicaSettings {
+            name: name.to_owned(),
+            url,
+        });
+    }
+    Ok(resolved)
 }
 
 /// Resolves `[oidc]`, reading its client secret.
