@@ -129,6 +129,9 @@ pub struct MembersView {
     pub members: Vec<MemberRow>,
     /// Every other dependency and its state, by key.
     pub services: Vec<(String, String)>,
+    /// Which replica observed the health, as the view says it: each
+    /// replica observes its own.
+    pub answered_by: String,
 }
 
 /// One integrity incident.
@@ -187,6 +190,9 @@ pub struct IntegrityView {
     /// The collision clear's fields, rendered on the server; `None` when
     /// the console is configured with no admin listener.
     pub clear_form: Option<String>,
+    /// Which replica answered the incidents and the routing table, as the
+    /// view says it.
+    pub answered_by: String,
 }
 
 /// One held stored-query version.
@@ -214,6 +220,8 @@ pub struct StoredView {
     /// The drift repair's fields, rendered on the server; `None` when the
     /// console is configured with no admin listener.
     pub repair_form: Option<String>,
+    /// Which replica answered the page, as the view says it.
+    pub answered_by: String,
 }
 
 /// The self-description view, `OPTIONS {base}/`.

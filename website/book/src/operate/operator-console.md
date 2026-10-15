@@ -117,6 +117,21 @@ service worker or a URL.
   carrying the [operator scope](authentication.md#the-operator-surface) its
   issuer names. No view shows a patient identifier, a token or clinical
   data.
+
+  `/members`, `/integrity` and `/stored-queries` each name the gateway
+  replica that answered them, as the gateway's
+  [operator surface](authentication.md#the-operator-surface) names it in
+  every report: "Answered by replica ferrofed-0." The health, the
+  incidents and the routing table are each replica's own, so read them as
+  that replica's view, never the federation's. `/integrity` reads two
+  reports, and when two replicas answered them it names each. A gateway
+  that names no replica is shown as one that did not. The console reads
+  the gateway through the one `base_url` it is configured with, so behind a
+  load balancer it shows the replica the balancer chose for each request
+  and cannot show every replica at once: it has no address of each replica's
+  client listener. To compare replicas, reload a view until each has
+  answered, or read `GET {base}/operator/incidents` at each replica's own
+  address.
 - **The query console, `/query`:** an AQL query, or a stored query by name
   and optional version, runs through the gateway's own query surface,
   `POST {base}/v1/query/aql` or `POST {base}/v1/query/{name}`, as the

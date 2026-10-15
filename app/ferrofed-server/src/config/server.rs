@@ -10,6 +10,7 @@
 use std::net::IpAddr;
 use std::path::PathBuf;
 
+use ferrofed_registry::replica::Replica;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ipnet::IpNet;
 use serde::Deserialize;
@@ -78,6 +79,12 @@ pub struct Server {
     /// The TLS the listener serves (`[server.tls]`); unset, it serves plain
     /// HTTP, for a proxy that terminates TLS in front of it.
     pub tls: Option<ListenerTls>,
+    /// The name of this process, which every report of the operator surface
+    /// and the export of the identity state carry: 1 to 64 ASCII letters,
+    /// digits, `.`, `_` and `-`. Unset, it is the `HOSTNAME` the process
+    /// runs with, which Kubernetes sets to the pod's name, and `unnamed`
+    /// without one ([`Server::resolve_replica`]).
+    pub replica: Option<String>,
 }
 
 impl Default for Server {
@@ -97,6 +104,7 @@ impl Default for Server {
             overload_retry_after_s: 1,
             caller_rate: None,
             tls: None,
+            replica: None,
         }
     }
 }
@@ -123,6 +131,38 @@ impl Server {
             .map(|text| PublicUrl::resolve(text, &base_path))
             .transpose()?;
         Ok((base_path, public_url))
+    }
+
+    /// Resolves `server.replica`, the name of this process, with the
+    /// [`HOST_NAME_ENV`] the process runs with as the name when none is
+    /// configured ([`Server::replica_or_host`]).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Replica`] for a configured name that is no replica name.
+    pub fn resolve_replica(&self) -> Result<Replica, Error> {
+        self.replica_or_host(std::env::var(HOST_NAME_ENV).ok().as_deref())
+    }
+
+    /// Resolves `server.replica`, with `host_name` as the name when none is
+    /// configured.
+    ///
+    /// A host name that is no replica name, or none, names the process
+    /// [`UNNAMED`](ferrofed_registry::replica::UNNAMED): the platform's
+    /// host name is never a reason to refuse a start.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Replica`] for a configured name that is no replica name.
+    pub fn replica_or_host(&self, host_name: Option<&str>) -> Result<Replica, Error> {
+        match &self.replica {
+            Some(configured) => configured.parse().map_err(Error::Replica),
+            // NOTE: no specification governs this: our own design; a host name outside the
+            // form is legitimately absent as a name, so the process is unnamed.
+            None => Ok(host_name
+                .and_then(|host| host.parse().ok())
+                .unwrap_or_default()),
+        }
     }
 
     /// Resolves `server.trusted_proxies` and `server.forwarded_header`: each
@@ -261,6 +301,10 @@ pub(crate) fn resolve_tls(
 
 /// The table of the client listener's TLS.
 pub const SERVER_TLS: &str = "server.tls";
+
+/// The environment variable a process's host name is read from when
+/// `server.replica` names none; Kubernetes sets it to the pod's name.
+pub const HOST_NAME_ENV: &str = "HOSTNAME";
 
 /// The table of the admin listener's TLS.
 pub const METRICS_TLS: &str = "metrics.tls";

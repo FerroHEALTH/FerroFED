@@ -287,6 +287,7 @@ impl Dependencies {
     #[must_use]
     pub fn report(&self) -> DependencyReport {
         DependencyReport {
+            replica: None,
             endpoints: self
                 .endpoints
                 .iter()

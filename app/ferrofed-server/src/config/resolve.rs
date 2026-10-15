@@ -137,6 +137,7 @@ impl Config {
                 forwarding,
                 overload: self.server.resolve_overload()?,
                 tls: resolve_tls(self.server.tls.as_ref(), SERVER_TLS)?,
+                replica: self.server.resolve_replica()?,
             },
             telemetry,
             registry_document: self.registry.document.clone(),

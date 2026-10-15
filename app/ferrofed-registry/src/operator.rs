@@ -10,7 +10,8 @@
 //! stored definitions only. An `ehr_id` is named only when it is a bare
 //! UUID, which cannot spell a patient identifier, and a stored definition
 //! names no patient, because one that does is refused before it is held
-//! (§5.4.1, N33, §12.7). No specification governs the operator surface: our
+//! (§5.4.1, N33, §12.7). Each report of the surface names the
+//! [`Replica`] that answered it, because its state is that process's own. No specification governs the operator surface: our
 //! own design.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -22,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::creating_system::LearnedMap;
 use crate::id::{EhrId, NodeId};
 use crate::incident::{Incident, Kind};
+use crate::replica::Replica;
 use crate::snapshot::RegistrySnapshot;
 
 /// How many incidents of each kind the report keeps, newest last: a burst of
@@ -66,6 +68,10 @@ pub struct IncidentReport {
     /// incident is an event, so a clear is listed beside it and removes
     /// none.
     pub cleared: Vec<RecordedClear>,
+    /// The replica whose incidents these are, which the operator surface
+    /// names; absent from a report no surface answered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replica: Option<String>,
 }
 
 impl IncidentReport {
@@ -99,6 +105,7 @@ impl IncidentReport {
             counts,
             recent,
             cleared,
+            replica: None,
         }
     }
 }
@@ -388,6 +395,10 @@ pub struct Page<T> {
     pub offset: u64,
     /// How many items the whole listing holds.
     pub total: u64,
+    /// The replica that answered the page, for a listing of per-process
+    /// state or one read through a replica; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replica: Option<String>,
 }
 
 impl<T> Page<T> {
@@ -401,7 +412,15 @@ impl<T> Page<T> {
             items: all.into_iter().skip(skip).take(take).collect(),
             offset: request.offset,
             total,
+            replica: None,
         }
+    }
+
+    /// Returns the page naming `replica` as the process that answered it.
+    #[must_use]
+    pub fn answered_by(mut self, replica: &Replica) -> Self {
+        self.replica = Some(replica.to_string());
+        self
     }
 }
 

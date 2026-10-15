@@ -96,7 +96,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
         &gateway,
         "GET",
         "/operator/dependencies",
-        format!(r#"{{"endpoints":{{{endpoints}}},"resolver":"failing"}}"#),
+        format!(r#"{{"endpoints":{{{endpoints}}},"resolver":"failing","replica":"ferrofed-0"}}"#),
     )
     .await;
     answers_after(
@@ -112,7 +112,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
                "endpoints":["node-a-pub","node-b-pub"],"nodes":[]}],
                "cleared":[{"at":"2026-10-05T09:00:00Z","ehr_id":"7d44b88c-4199-4bad-97dc-d78268e01398",
                "claimants":["node-a","node-b"]},
-               {"at":"2026-10-05T10:00:00Z","ehr_id":null,"claimants":["node-a","node-c"]}]}"#,
+               {"at":"2026-10-05T10:00:00Z","ehr_id":null,"claimants":["node-a","node-c"]}],"replica":"ferrofed-0"}"#,
         ),
     )
     .await;
@@ -124,7 +124,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
         String::from(
             r#"{"items":[{"creating_system_id":"cdr-a.example.org","source":"member","node":"node-a","endpoint":null},
                {"creating_system_id":"legacy-a.example.org","source":"learned","node":"node-a","endpoint":"node-a-pub"}],
-               "offset":0,"total":2}"#,
+               "offset":0,"total":2,"replica":"ferrofed-1"}"#,
         ),
     )
     .await;
@@ -136,7 +136,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
         String::from(
             r#"{"items":[{"name":"org.example::compositions","type":"AQL","version":"1.0.0","saved":"2026-10-05T08:00:00Z",
                "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}],
-               "offset":0,"total":1}"#,
+               "offset":0,"total":1,"replica":"ferrofed-0"}"#,
         ),
     )
     .await;
@@ -673,5 +673,42 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
             }
         }
     }
+    Ok(())
+}
+
+/// Each replica holds its own health, incidents and routing table, so each
+/// view of the operator surface names the replica its reports name, and
+/// names each when two replicas answered one view.
+#[tokio::test]
+async fn each_operator_view_names_the_replica_that_answered() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    for (page, line) in [
+        ("/members", "<p>Answered by replica ferrofed-0.</p>"),
+        ("/stored-queries", "<p>Answered by replica ferrofed-0.</p>"),
+        (
+            "/integrity",
+            "<p>Each part names its replica: the incidents by replica ferrofed-0, the routing table by replica ferrofed-1.</p>",
+        ),
+    ] {
+        let (response, body) = send(&service, get_as(page, &session)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{page}: {body}");
+        assert!(body.contains(line), "{page}: {body}");
+    }
+    Ok(())
+}
+
+/// A gateway whose reports name no replica is shown as one, never as a
+/// replica the console guessed.
+#[tokio::test]
+async fn a_view_whose_reports_name_no_replica_says_so() -> Result<(), Box<dyn Error>> {
+    let gateway = paged_gateway(0, 2).await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(
+        body.contains("<p>The gateway did not name the replica that answered.</p>"),
+        "{body}"
+    );
     Ok(())
 }

@@ -302,6 +302,7 @@ pub mod server {
                 .into_iter()
                 .map(|(key, state)| (key.to_owned(), state.to_owned()))
                 .collect(),
+            answered_by: answered_by(&[("health", dependencies.replica.as_deref())]),
         }
     }
 
@@ -367,6 +368,10 @@ pub mod server {
                 .collect(),
             clear_form: (!replicas.is_empty())
                 .then(|| crate::admin::fields::clear(replicas, &ehr_ids)),
+            answered_by: answered_by(&[
+                ("incidents", incidents.replica.as_deref()),
+                ("routing table", routes.replica.as_deref()),
+            ]),
         }
     }
 
@@ -396,6 +401,33 @@ pub mod server {
             repair_form: replicas
                 .first()
                 .map(|replica| crate::admin::fields::repair(replica, &names)),
+            answered_by: answered_by(&[("stored queries", report.replica.as_deref())]),
+        }
+    }
+
+    /// The line a view shows of the replicas that answered its `reports`,
+    /// each named by what it holds with the replica its body names.
+    ///
+    /// The console reads one replica through the address it is configured
+    /// with, and a view that reads two reports can be answered by two
+    /// replicas, so the line names each when they differ, and says so when
+    /// a report names none.
+    #[must_use]
+    pub fn answered_by(reports: &[(&str, Option<&str>)]) -> String {
+        let named: BTreeSet<Option<&str>> = reports.iter().map(|(_, replica)| *replica).collect();
+        match named.into_iter().collect::<Vec<_>>().as_slice() {
+            [Some(replica)] => format!("Answered by replica {replica}."),
+            [None] => String::from("The gateway did not name the replica that answered."),
+            _ => {
+                let parts: Vec<String> = reports
+                    .iter()
+                    .map(|(what, replica)| match replica {
+                        Some(replica) => format!("the {what} by replica {replica}"),
+                        None => format!("the {what} by a replica that gave no name"),
+                    })
+                    .collect();
+                format!("Each part names its replica: {}.", parts.join(", "))
+            }
         }
     }
 

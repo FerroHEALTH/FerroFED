@@ -435,15 +435,19 @@ impl Federation {
 
     /// The operator's export of the routing state this process learned: the
     /// `creating_system_id` mappings, read against the current snapshot and
-    /// taken now (§12.2, N21).
+    /// taken now at `replica`, the process it names (§12.2, N21).
     ///
     /// It holds no resolution binding and no `ehr_id`, so it names no
     /// patient (§5.4.1, N33). The export is logged under the security target
     /// with how many mappings it holds, never a value.
     #[must_use]
-    pub fn export_identity_state(&self) -> IdentityStateExport {
+    pub fn export_identity_state(
+        &self,
+        replica: &ferrofed_registry::replica::Replica,
+    ) -> IdentityStateExport {
         let export = IdentityStateExport::of(
             self.id.as_str(),
+            replica,
             &self.snapshot,
             &self.learned(),
             jiff::Timestamp::now(),

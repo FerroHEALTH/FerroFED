@@ -198,7 +198,9 @@ pub(crate) fn gateway_within_state(
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
-    let state = Arc::new(AppState::with_federation(federation));
+    let state = Arc::new(
+        AppState::with_federation(federation).with_replica(settings.server.replica.clone()),
+    );
     Ok((
         ferrofed_server::router(Arc::clone(&state), &settings_with_room()),
         state,

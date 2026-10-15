@@ -210,7 +210,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
                 .fallback(facade::route::unrouted),
         )
         .fallback(facade::route::unrouted);
-    let surface = operator::routes(surface);
+    let surface = operator::routes(surface, state.replica());
     let surface = state.processes().routes(surface);
     let routes = if server.base_path.is_root() {
         surface.route("/", base_root())

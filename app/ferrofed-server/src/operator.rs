@@ -13,8 +13,10 @@
 //! bodies of [`ferrofed_registry::operator`], [`ferrofed_registry::health`]
 //! and the ITS-REST `StoredQuery`, never a patient identifier (§5.4.1, N33),
 //! and none of it is part of the ITS-REST surface. The two listings answer one page at a time, `offset` and
-//! `limit` in the query, at most [`MAX_PAGE`] items. No specification
-//! governs the operator surface: our own design.
+//! `limit` in the query, at most [`MAX_PAGE`] items. Every answer names the
+//! replica that gave it, in the `ferrofed-replica` header and in each
+//! report's `replica` member, because the state is that process's own. No
+//! specification governs the operator surface: our own design.
 
 use std::sync::Arc;
 
@@ -23,7 +25,8 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::operator::{IncidentReport, MAX_PAGE, Page, PageRequest, routing_table};
-use http::HeaderMap;
+use ferrofed_registry::replica::{HEADER, Replica};
+use http::{HeaderMap, HeaderName, HeaderValue};
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::base_path::BasePath;
@@ -59,16 +62,38 @@ pub fn addresses(base: &BasePath, path: &str) -> bool {
 }
 
 /// Returns the operator routes, added to the client surface.
-pub fn routes(surface: axum::Router<Arc<AppState>>) -> axum::Router<Arc<AppState>> {
-    surface
+///
+/// Every answer they give, the refusal of a page among them, names
+/// `replica` in the [`HEADER`] response header, and each report names it in
+/// its `replica` member as well.
+pub fn routes(
+    surface: axum::Router<Arc<AppState>>,
+    replica: &Replica,
+) -> axum::Router<Arc<AppState>> {
+    // NOTE: no specification governs this: our own design; a replica name's form is a
+    // header token's, so the value always builds, and one that did not would name nothing.
+    let named = HeaderValue::from_str(replica.as_str()).ok();
+    let operator = axum::Router::new()
         .route(INCIDENTS, axum::routing::get(incidents))
         .route(CREATING_SYSTEMS, axum::routing::get(creating_systems))
         .route(STORED_QUERIES, axum::routing::get(stored_queries))
         .route(DEPENDENCIES, axum::routing::get(dependencies))
+        .route_layer(axum::middleware::map_response(
+            move |mut response: Response| {
+                if let Some(value) = &named {
+                    response
+                        .headers_mut()
+                        .insert(HeaderName::from_static(HEADER), value.clone());
+                }
+                std::future::ready(response)
+            },
+        ));
+    surface.merge(operator)
 }
 
 /// `GET {base}/operator/dependencies`: the last observed state of each
-/// member endpoint and service, always `200` ([`AppState::dependencies`]).
+/// member endpoint and service, always `200` ([`AppState::dependencies`]),
+/// naming the replica that observed them.
 async fn dependencies(
     State(state): State<Arc<AppState>>,
 ) -> Json<ferrofed_registry::health::DependencyReport> {
@@ -76,9 +101,12 @@ async fn dependencies(
 }
 
 /// `GET {base}/operator/incidents`: every kind's count since the process
-/// started, and the most recent incidents of each kind.
-async fn incidents() -> Json<IncidentReport> {
-    Json(IncidentReport::current())
+/// started, and the most recent incidents of each kind, naming the replica
+/// that holds them.
+async fn incidents(State(state): State<Arc<AppState>>) -> Json<IncidentReport> {
+    let mut report = IncidentReport::current();
+    report.replica = Some(state.replica().to_string());
+    Json(report)
 }
 
 /// The `400` of a page request outside the surface's bound.
@@ -105,7 +133,7 @@ async fn creating_systems(
         let learned: LearnedMap = federation.learned().clone();
         routing_table(federation.snapshot(), &learned)
     });
-    Json(Page::of(table, page)).into_response()
+    Json(Page::of(table, page).answered_by(state.replica())).into_response()
 }
 
 /// `GET {base}/operator/stored-queries`: one page of the held versions, as
@@ -120,7 +148,8 @@ async fn stored_queries(
         return page_refused(&headers);
     }
     let Some(definitions) = state.definitions().map(Arc::clone) else {
-        return Json(Page::<StoredQuery>::of(Vec::new(), page)).into_response();
+        return Json(Page::<StoredQuery>::of(Vec::new(), page).answered_by(state.replica()))
+            .into_response();
     };
     // NOTE: no specification governs this: our own design; a shared store is
     // read again first, on a thread that may block, as every stored-query read is.
@@ -135,7 +164,7 @@ async fn stored_queries(
     })
     .await;
     match read {
-        Ok(Ok(held)) => Json(Page::of(held, page)).into_response(),
+        Ok(Ok(held)) => Json(Page::of(held, page).answered_by(state.replica())).into_response(),
         Ok(Err(failure)) => {
             tracing::error!(
                 error = crate::chain(&failure),

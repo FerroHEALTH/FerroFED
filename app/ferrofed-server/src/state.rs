@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
+use ferrofed_registry::replica::Replica;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 #[cfg(feature = "binding-ihe")]
@@ -55,6 +56,9 @@ pub struct AppState {
     /// services directory or an identity feed; it outlives every federation
     /// a reload or a refresh builds.
     processes: Processes,
+    /// The name of this process, which every operator report names; fixed
+    /// for the life of the process.
+    replica: Replica,
 }
 
 /// A state that cannot be built from the settings.
@@ -163,6 +167,7 @@ impl AppState {
             public_url: settings.server.public_url.clone(),
             metrics,
             processes: Processes::build(settings)?,
+            replica: settings.server.replica.clone(),
         })
     }
 
@@ -215,6 +220,7 @@ impl AppState {
             public_url: None,
             metrics: Arc::default(),
             processes: Processes::default(),
+            replica: Replica::default(),
         }
     }
 
@@ -232,6 +238,7 @@ impl AppState {
             public_url: None,
             metrics,
             processes: Processes::default(),
+            replica: Replica::default(),
         }
     }
 
@@ -252,7 +259,21 @@ impl AppState {
                 .into_iter()
                 .map(|(key, indication)| (key.to_owned(), indication)),
         );
+        report.replica = Some(self.replica.to_string());
         report
+    }
+
+    /// Returns this state with `replica` as the name of its process.
+    #[must_use]
+    pub fn with_replica(mut self, replica: Replica) -> Self {
+        self.replica = replica;
+        self
+    }
+
+    /// Returns the name of this process, which every operator report names.
+    #[must_use]
+    pub const fn replica(&self) -> &Replica {
+        &self.replica
     }
 
     /// Returns where the process is in its life, which gates readiness.

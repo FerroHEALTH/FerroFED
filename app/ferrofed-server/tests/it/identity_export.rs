@@ -22,7 +22,6 @@ use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::export::{
     FORMAT_VERSION, IdentityStateExport, LearnedCreatingSystem, LearnedStatus, NotExported,
-    StateScope,
 };
 use ferrofed_server::admin::{self, Access, FINISHED};
 use ferrofed_server::state::AppState;
@@ -44,6 +43,9 @@ const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::legacy-x.example.
 
 /// A version node B holds, created by another system no member is.
 const VERSION_B: &str = "2c1fd7e4-6a43-4d0e-9a5e-6f1b2f1d6a01::legacy-y.example.org::1";
+
+/// The name of the replica the export is taken at.
+const REPLICA: &str = "ferrofed-1";
 
 /// A peer off loopback, so only the gate admits it.
 const REMOTE: ([u8; 4], u16) = ([192, 0, 2, 10], 40_000);
@@ -86,7 +88,10 @@ async fn learned_and_bound(dir: &std::path::Path) -> Result<Arc<AppState>, Box<d
         dir,
         &registry(&a.uri(), &b.uri(), ""),
         "profile = \"development\"",
-        &crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
+        &format!(
+            "{}\n\n[server]\nreplica = \"{REPLICA}\"\n",
+            crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
+        ),
         (2_000, 3_000),
     )?;
     let (answers, _) = captured(&app, vec![post(body(&patient_query())?)?]).await?;
@@ -132,11 +137,11 @@ async fn the_export_holds_the_learned_creating_system_mappings_in_its_format() -
     assert_eq!(Some("no-store"), cache.as_deref());
     let answer: IdentityStateExport = serde_json::from_str(&text)?;
     assert_eq!(
-        (FORMAT_VERSION, "example-federation", StateScope::Replica),
+        (FORMAT_VERSION, "example-federation", REPLICA),
         (
             answer.format_version,
             answer.federation_id.as_str(),
-            answer.scope
+            answer.replica.as_str()
         )
     );
     assert!(

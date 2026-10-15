@@ -141,6 +141,11 @@ replica's admin listener on an internal address
 the export of the learned routes for a replacement system holds one
 replica's routes, so export each replica
 ([Exporting the identity state](identity-state-export.md)).
+Every operator report and every export names the replica that produced
+it ([The replica name](configuration.md#the-replica-name)), so name your
+replicas apart or leave each its pod name. The operator console reads the
+gateway through one address and shows the replica that answered each view;
+it cannot show every replica at once.
 
 The stored-query registry is the exception, because a stored version must be
 the same on every replica and a second `PUT` of it refused on every replica
