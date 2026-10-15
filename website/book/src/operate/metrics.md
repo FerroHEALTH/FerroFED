@@ -222,12 +222,14 @@ The per-member record a federated query, a template upload, a
 distribution and a drift check write is the one the client reads in
 `meta.federation`, and the counter follows it exactly. A routed request and
 a probe have no such record, so their `outcome` is read from the node's
-answer by the same rules. Each outcome therefore covers these calls:
+answer by the same rules, the ones the [access record](access-log.md) of a
+routed request names its origin's status by, so the two never read one
+answer apart. Each outcome therefore covers these calls:
 
 | `outcome` | Covers |
 |---|---|
-| `active` | a member that answered with success; for a routed request or a probe, any answer below `500`, a `404` included, so a probe that finds no EHR at a member is `active` |
-| `node-error` | in a member record, any answer that is not a success, a `4xx` included (except a consent refusal the registry names), and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
+| `active` | a member that answered with success, and a probed member that answered `404`, which says it holds no such EHR |
+| `node-error` | in every call, any answer that is not a success, a `4xx` included (except a consent refusal the registry names, and a probed member's `404`), and a node that refused the gateway's onward credentials; in a drift check, a copy that differs from the registry's definition or is missing |
 | `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
 | `offline` | a member the gateway sent a request to and could not reach |
 | `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](consent.md)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
