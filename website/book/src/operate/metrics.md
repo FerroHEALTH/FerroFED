@@ -174,7 +174,7 @@ path reaches the surface:
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
-| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`, `admin-write-admitted`: the `event` field of the log line |
+| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`, `admin-write-admitted`, `write-unrecorded`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic`, `natural-person`, `assurance`, `contact-point-attributes`, `correlation` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
@@ -252,6 +252,7 @@ Operator. Its alerts carry `severity: page` or `severity: ticket`:
 | `FerroFEDRegistryReloadRefused` | a registry reload is refused |
 | `FerroFEDAuditSpoolBacklog`, `FerroFEDAuditRefused` | the audit spool holds over 1000 records for 15 minutes, or refuses one |
 | `FerroFEDOutboundGateStopped` | the outbound gate stops a request that would have carried a patient identifier |
+| `FerroFEDWriteUnrecorded` | the record of a write a member was asked to make could not be stored in the place reserved for it, so the write stands unrecorded |
 | `FerroFEDCallerRefusals` | callers are refused at authentication over once a second for 10 minutes, by reason |
 | `FerroFEDAuthenticationUnavailable` | an issuer's key set or introspection endpoint cannot be had |
 

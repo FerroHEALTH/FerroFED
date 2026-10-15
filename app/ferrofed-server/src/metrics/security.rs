@@ -62,11 +62,15 @@ pub enum Event {
     ScrapeRefused,
     /// An admitted operator ran a write action on the admin listener.
     AdminWriteAdmitted,
+    /// The record of a write a member was asked to make could not be stored
+    /// in the place reserved for it before the write, so the write stands
+    /// unrecorded (Regulation (EU) 2025/327 Annex II 3.2).
+    WriteUnrecorded,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -83,6 +87,7 @@ impl Event {
         Self::AdminWriteRefused,
         Self::ScrapeRefused,
         Self::AdminWriteAdmitted,
+        Self::WriteUnrecorded,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -105,6 +110,7 @@ impl Event {
             Self::AdminWriteRefused => "admin-write-refused",
             Self::ScrapeRefused => "scrape-refused",
             Self::AdminWriteAdmitted => "admin-write-admitted",
+            Self::WriteUnrecorded => "write-unrecorded",
         }
     }
 

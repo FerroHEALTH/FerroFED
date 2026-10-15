@@ -405,8 +405,14 @@ every record's period.
 An access whose record cannot be stored is refused: the gateway stores the
 record before the answer leaves, and when it cannot, it answers `503
 access-unrecorded` and none of the data
-([Errors](../integrate/errors.md)). A write the node took before the record
-failed stays at the node; read the resource before writing again. An
+([Errors](../integrate/errors.md)). A write cannot be taken back, so the
+gateway reserves its record's place in the spool before it asks any
+member: a write whose record has no place is refused with the same `503`,
+and no member saw it, so you can send it again. Once a member was asked,
+its answer stands. Should the reserved record still fail to be stored (the
+spool's disk failed or stalled), the gateway raises the security event
+`write-unrecorded` and the alert `FerroFEDWriteUnrecorded` with the
+request id, and you record the access from the member's own log. An
 answer of a patient-data operation that carries data and no record is
 refused the same way, so no path of the gateway can hand out data without
 its record.

@@ -1249,7 +1249,7 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "async-trait",
  "flate2",
@@ -2407,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.34"
+version = "0.0.35"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

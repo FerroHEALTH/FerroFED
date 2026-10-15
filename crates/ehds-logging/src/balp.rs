@@ -53,7 +53,7 @@ use std::sync::Arc;
 use ihe_iti::balp::{
     APPLICATION, AuditRecorder, CREATE, CUSTODIAN, DELETE, DESTINATION_ROLE, DOMAIN_RESOURCE,
     Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Peer, READ,
-    REQUEST_ID, REST, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, UPDATE, What,
+    REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, UPDATE, What,
 };
 use ihe_iti::user::{Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -62,7 +62,7 @@ use url::Url;
 use crate::classify::Classification;
 use crate::emergency::Emergency;
 use crate::record::{AccessRecord, Action, Outcome, PatientIdentifier, PatientLookup, Relayed};
-use crate::sink::{AccessSink, SinkError};
+use crate::sink::{AccessSink, Reservation, SinkError};
 
 /// The names of the `detail` entries a record's added entities carry.
 pub mod detail {
@@ -189,6 +189,47 @@ impl AccessSink for BalpSink {
             .record(exchange(&record, &self.gateway))
             .await
             .map_err(|error| SinkError(Box::new(error)))
+    }
+
+    async fn reserve(&self) -> Result<Box<dyn Reservation>, SinkError> {
+        let place = self
+            .recorder
+            .reserve()
+            .await
+            .map_err(|error| SinkError(Box::new(error)))?;
+        Ok(Box::new(BalpReservation {
+            place,
+            recorder: Arc::clone(&self.recorder),
+            gateway: self.gateway.clone(),
+        }))
+    }
+}
+
+/// The place of one record [`BalpSink`] took: the recorder's own place, or
+/// none when the recorder holds no bounded store.
+struct BalpReservation {
+    place: Option<Box<dyn Reserved>>,
+    recorder: Arc<dyn AuditRecorder>,
+    gateway: Url,
+}
+
+impl std::fmt::Debug for BalpReservation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BalpReservation")
+            .field("place", &self.place)
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait::async_trait]
+impl Reservation for BalpReservation {
+    async fn store(self: Box<Self>, record: AccessRecord) -> Result<(), SinkError> {
+        let exchange = exchange(&record, &self.gateway);
+        match self.place {
+            Some(place) => place.record(exchange).await,
+            None => self.recorder.record(exchange).await,
+        }
+        .map_err(|error| SinkError(Box::new(error)))
     }
 }
 

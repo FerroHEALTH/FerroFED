@@ -22,9 +22,14 @@
 //!
 //! An access whose record cannot be stored is refused: the answer is
 //! withheld and the caller gets `503 access-unrecorded`, as an IHE
-//! transaction whose audit record cannot be stored fails closed. A write the
-//! node took before the record failed stays at the node, and the answer says
-//! the gateway does not know its outcome. No record content reaches a node,
+//! transaction whose audit record cannot be stored fails closed. A write
+//! cannot be taken back once a member took it, so the place of its record
+//! is reserved in the sink before any member is asked: a write whose record
+//! has no place is refused with the same `503`, and no member sees it. The
+//! reservation is filled with the record of how the write ended, a failed
+//! one included. Should that still fail, the member's answer stands, so a
+//! client never retries a write that was made, and the loss is raised as the
+//! security event `write-unrecorded`. No record content reaches a node,
 //! the operator log, a span or a metric label (§5.4, N33): the failure is
 //! logged under the gateway's request id with the error chain, which names
 //! no value. No specification governs where the record is built: our own
@@ -50,7 +55,7 @@ use ehds_logging::record::{
     RelayedProfessional, RelayedProvider,
 };
 use ehds_logging::retention::RetentionPolicy;
-use ehds_logging::sink::AccessSink;
+use ehds_logging::sink::{AccessSink, Reservation, SinkError};
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_engine::outbound_id::OutboundId;
@@ -64,6 +69,7 @@ use crate::auth::caller::Caller;
 use crate::base_path::BasePath;
 use crate::client_address::ClientAddress;
 use crate::error::{self, Code};
+use crate::metrics::security::Event;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -418,10 +424,12 @@ impl Gate {
             .is_some_and(|federation| federation.access_log().is_some())
     }
 
-    /// Whether `method` on `path` is an operation that reaches patient data
-    /// at a node: a query execution, a request in the EHR area, the creation
-    /// of an EHR, a DEMOGRAPHIC request, or the read of an EHR by subject.
-    fn reaches_patient_data(&self, method: &Method, path: &str) -> bool {
+    /// What `method` on `path` does with patient data at a node: a query
+    /// execution, a request in the EHR area, the creation of an EHR, a
+    /// DEMOGRAPHIC request, or the read of an EHR by subject reaches it; a
+    /// `POST`, `PUT` or `DELETE` among them but a query, or a document
+    /// received on the FHIR face, writes it.
+    fn reach(&self, method: &Method, path: &str) -> Reach {
         // NOTE: Regulation (EU) 2025/327 Annex II 3.2: every path under the FHIR face but its
         // capability statement is held to a record, so no variant answers data unrecorded.
         if let Some(face) = self
@@ -429,7 +437,11 @@ impl Gate {
             .fhir()
             .and_then(|fhir| crate::fhir::classify(fhir, path))
         {
-            return face != crate::fhir::FacePath::Metadata;
+            return match face {
+                crate::fhir::FacePath::Metadata => Reach::None,
+                crate::fhir::FacePath::Bundle if *method == Method::POST => Reach::Write,
+                _ => Reach::Read,
+            };
         }
         let under_base = if self.base.is_root() {
             Some(path)
@@ -437,17 +449,52 @@ impl Gate {
             path.strip_prefix(self.base.as_str())
         };
         let Some(relative) = under_base.and_then(|path| path.strip_prefix("/v1")) else {
-            return false;
+            return Reach::None;
         };
         let Lookup::Matched(matched) = routes::lookup(method, relative) else {
-            return false;
+            return Reach::None;
         };
-        (matched.group == QUERY_GROUP && matched.operation_id.starts_with(QUERY_EXECUTION))
-            || crate::facade::route::in_ehr_area(&matched)
+        if matched.group == QUERY_GROUP && matched.operation_id.starts_with(QUERY_EXECUTION) {
+            return Reach::Read;
+        }
+        let routed = crate::facade::route::in_ehr_area(&matched)
             || crate::facade::write::creates_ehr(&matched)
             || crate::facade::route::in_demographic_area(&matched)
-            || crate::facade::subject::serves(&matched)
+            || crate::facade::subject::serves(&matched);
+        match *method {
+            _ if !routed => Reach::None,
+            Method::POST | Method::PUT | Method::DELETE => Reach::Write,
+            _ => Reach::Read,
+        }
     }
+
+    /// The place of the record of a request that `reach` says writes, taken
+    /// in the access log's sink before any member is asked; `None` for a
+    /// request that writes nothing or a federation that keeps no log.
+    async fn reserve(&self, reach: Reach) -> Result<Option<Box<dyn Reservation>>, SinkError> {
+        if reach != Reach::Write {
+            return Ok(None);
+        }
+        let Some(log) = self
+            .state
+            .federation()
+            .and_then(|federation| federation.access_log().cloned())
+        else {
+            return Ok(None);
+        };
+        log.sink.reserve().await.map(Some)
+    }
+}
+
+/// What a request does with patient data at a node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Reach {
+    /// It reaches none.
+    None,
+    /// It reads it.
+    Read,
+    /// It changes it, which cannot be taken back once a member took it.
+    Write,
 }
 
 /// The API group of the Query API (ITS-REST).
@@ -466,7 +513,9 @@ fn carries_data(response: &Response) -> bool {
 /// answer leaves.
 ///
 /// The answer is withheld when the record cannot be stored, or when a
-/// patient-data answer carries data and no access at all.
+/// patient-data answer carries data and no access at all. A write is
+/// refused before `next` runs when its record has no place in the sink, and
+/// once a member was asked its answer is never withheld.
 /// Every answer of the gateway's surface passes here, so no path that
 /// returns data can leave without its record.
 pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next) -> Response {
@@ -483,12 +532,23 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     let request_id = request_id::of(request.headers())
         .unwrap_or_default()
         .to_owned();
-    let reaches = gate.reaches_patient_data(request.method(), request.uri().path());
+    let reach = gate.reach(request.method(), request.uri().path());
+    let reserved = match gate.reserve(reach).await {
+        Ok(reserved) => reserved,
+        Err(failure) => {
+            tracing::error!(
+                error = %crate::chain(&failure),
+                request_id = logged,
+                "the record of a write has no place in the access log, so no member is asked"
+            );
+            return error::fixed(Code::AccessUnrecorded, &request_id);
+        }
+    };
     let mut response = next.run(request).await;
     let accessed = response.extensions_mut().remove::<Accessed>();
     let declared_none = response.extensions_mut().remove::<NoAccess>().is_some();
     let Some(mut accessed) = accessed else {
-        if reaches && !declared_none && carries_data(&response) && gate.logs() {
+        if reach != Reach::None && !declared_none && carries_data(&response) && gate.logs() {
             tracing::error!(
                 request_id = logged,
                 "an answer of a patient-data operation carried no access, so it is withheld"
@@ -521,15 +581,33 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
             "the access was declared an emergency access by its purpose of use"
         );
     }
-    match accessed.log.sink.store(record).await {
+    let Some(reserved) = reserved else {
+        return match accessed.log.sink.store(record).await {
+            Ok(()) => response,
+            Err(failure) => {
+                tracing::error!(
+                    error = %crate::chain(&failure),
+                    request_id = logged,
+                    "the access could not be recorded, so its answer is withheld"
+                );
+                error::fixed(Code::AccessUnrecorded, &request_id)
+            }
+        };
+    };
+    match reserved.store(record).await {
         Ok(()) => response,
+        // NOTE: no specification governs this: our own design; the member took the write, so
+        // its answer stands and the lost record is raised to the operator, naming no value.
         Err(failure) => {
+            Event::WriteUnrecorded.record();
             tracing::error!(
+                target: crate::facade::security::TARGET,
+                event = Event::WriteUnrecorded.as_str(),
                 error = %crate::chain(&failure),
                 request_id = logged,
-                "the access could not be recorded, so its answer is withheld"
+                "the record of a write a member was asked to make could not be stored in its reserved place; the answer stands"
             );
-            error::fixed(Code::AccessUnrecorded, &request_id)
+            response
         }
     }
 }

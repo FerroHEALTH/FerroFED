@@ -15,7 +15,9 @@
 //! recorded once it is stored, a repository that cannot be reached delays
 //! its delivery, and a spool that is full, cannot be written, or does not
 //! store the record within its write bound refuses the record, which fails
-//! the transaction closed, as the ITI-55 audit trail does.
+//! the transaction closed, as the ITI-55 audit trail does. A record's place
+//! can be reserved in the spool before its exchange is made, so a write
+//! whose record has no room is refused before it reaches anyone.
 //!
 //! [`LogFeedAudit`] writes each record as a structured event at the
 //! [`AUDIT_TARGET`] log target, for a deployment
@@ -35,7 +37,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
-use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer};
+use ihe_iti::atna::spool::reserve::Reservation;
+use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer, Reserved};
 #[cfg(feature = "ihe")]
 use ihe_iti::user::{PurposeOfUse, User};
 use tokio::task::JoinHandle;
@@ -183,6 +186,51 @@ impl AuditRecorder for FeedAudit {
             .map_err(|error| AuditError(Box::new(error)))?;
         self.forwarder
             .submit(record.into_bytes())
+            .await
+            .map_err(|error| AuditError(Box::new(error)))
+    }
+
+    async fn reserve(&self) -> Result<Option<Box<dyn Reserved>>, AuditError> {
+        self.start();
+        let reservation = self
+            .forwarder
+            .reserve(RESERVED_BYTES)
+            .map_err(|error| AuditError(Box::new(error)))?;
+        Ok(Some(Box::new(FeedPlace {
+            reservation,
+            observer: self.observer.clone(),
+        })))
+    }
+}
+
+/// The bytes a record's place holds before the record is written: a record
+/// larger than this still needs room in the spool for the rest.
+// NOTE: no specification governs this: our own design; it covers an access record with
+// its query text and origins, and a larger one is refused only when the spool is that full.
+const RESERVED_BYTES: u64 = 64 * 1024;
+
+/// The place of one record [`FeedAudit`] took in its spool.
+struct FeedPlace {
+    reservation: Reservation,
+    observer: Observer,
+}
+
+impl fmt::Debug for FeedPlace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FeedPlace")
+            .field("reservation", &self.reservation)
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl Reserved for FeedPlace {
+    async fn record(self: Box<Self>, exchange: Exchange) -> Result<(), AuditError> {
+        let record = exchange
+            .audit_event(&self.observer)
+            .map_err(|error| AuditError(Box::new(error)))?;
+        self.reservation
+            .push(record.into_bytes())
             .await
             .map_err(|error| AuditError(Box::new(error)))
     }

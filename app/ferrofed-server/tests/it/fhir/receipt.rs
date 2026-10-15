@@ -357,6 +357,63 @@ mod recorded {
         );
         Ok(())
     }
+
+    /// The compositions member `a` was asked to create.
+    async fn writes_at(a: &Server) -> Result<usize, Box<dyn std::error::Error>> {
+        let target = format!("/v1/ehr/{EHR_A}/composition");
+        Ok(a.received_requests()
+            .await
+            .ok_or("recording is on")?
+            .iter()
+            .filter(|request| request.method == http::Method::POST && request.url.path() == target)
+            .count())
+    }
+
+    #[tokio::test]
+    async fn a_receipt_whose_record_has_no_place_never_reaches_its_member() -> TestResult {
+        let (a, b) = (creating().await, Server::start().await);
+        let repository = FeedRepository::start().await;
+        repository.set_up(false);
+        let dir = tempfile::tempdir()?;
+        let app = recording(dir.path(), (&a, &b), &repository, "spool_max_events = 1")?;
+        let (status, text) = call(app.clone(), post(&document())?).await?;
+        assert_eq!(
+            StatusCode::OK,
+            status,
+            "the first record fills the spool: {text}"
+        );
+        let (status, text) = call(app, post(&document())?).await?;
+        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status, "{text}");
+        assert!(issue(&text)?.1.contains("access-unrecorded"), "{text}");
+        assert_eq!(
+            1,
+            writes_at(&a).await?,
+            "the refused receipt is never asked of the member, so a retry cannot write it twice"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_receipts_against_one_free_place_write_once() -> TestResult {
+        let (a, b) = (creating().await, Server::start().await);
+        let repository = FeedRepository::start().await;
+        repository.set_up(false);
+        let dir = tempfile::tempdir()?;
+        let app = recording(dir.path(), (&a, &b), &repository, "spool_max_events = 1")?;
+        let (first, second) = tokio::join!(
+            call(app.clone(), post(&document())?),
+            call(app, post(&document())?)
+        );
+        let mut statuses = [first?.0, second?.0];
+        statuses.sort_unstable();
+        assert_eq!([StatusCode::OK, StatusCode::SERVICE_UNAVAILABLE], statuses);
+        assert_eq!(
+            1,
+            writes_at(&a).await?,
+            "only the receipt that took the place"
+        );
+        Ok(())
+    }
 }
 
 /// A member that refuses every composition `422`.

@@ -533,15 +533,14 @@ async fn a_received_document_is_written_the_same_whatever_the_access_log_sink_do
     let refused = call(app, post(&document())?).await?;
     withheld(&refused, &[VERSION_A, "node-a"]);
     let compositions = written_to(&a).await?;
-    let [_, refused_write] = compositions.as_slice() else {
-        return Err(format!("two writes, got {}", compositions.len()).into());
+    let [first_write] = compositions.as_slice() else {
+        return Err(format!(
+            "one write, the refused one never asked of the member; got {}",
+            compositions.len()
+        )
+        .into());
     };
-    // TODO(#945): refuse the write before the member is asked when its record cannot be
-    // stored; today the member holds a composition whose answer the caller was refused.
-    written.push((
-        String::from("Refusing"),
-        received_at_any_time(refused_write)?,
-    ));
+    written.push((String::from("Refusing"), received_at_any_time(first_write)?));
     let (_, expected) = written.first().ok_or("a composition")?;
     for (sink, composition) in &written {
         assert_eq!(expected, composition, "{sink}: the same bytes");
