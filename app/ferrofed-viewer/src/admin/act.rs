@@ -114,8 +114,10 @@ pub mod server {
         pub replica: String,
         /// What it did.
         pub acted: Acted<T>,
-        /// The gateway's message of a `configuration-invalid` refusal, which
-        /// names the key refused and, as `config check` does, never a value.
+        /// The gateway's message of a `configuration-invalid` refusal: the
+        /// errors `config check` reports, which name each key refused. The
+        /// gateway leaves out the source text a parse error quotes and
+        /// shows a URL with no userinfo and no query; the page escapes it.
         pub said: Option<String>,
     }
 

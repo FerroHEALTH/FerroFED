@@ -278,6 +278,30 @@ async fn a_console_member_is_edited_and_removed_through_revisions() -> TestResul
     Ok(())
 }
 
+// NOTE: no specification governs this: our own design; the operator console
+// shows a configuration-invalid message, so a URL credential never reaches it.
+#[tokio::test]
+async fn a_refused_member_url_never_shows_its_credential() -> TestResult {
+    let gateway = Gateway::start("")?;
+    for url in [
+        "http://127.0.0.1:9/c?token=s3cret-q",
+        "http://127.0.0.1:9/c#s3cret-q",
+        "http://op:s3cret-q@127.0.0.1:9/c",
+    ] {
+        let member = console_member("c").replace("http://127.0.0.1:9/c", url);
+        let (status, text) = gateway
+            .put(
+                "/admin/config/members/node-c",
+                save_body(1, "add C", &member),
+            )
+            .await?;
+        assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{url}: {text}");
+        assert_eq!("configuration-invalid", error_body(&text)?.code);
+        assert!(!text.contains("s3cret-q"), "{url}: {text}");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_console_member_survives_a_file_reload_until_the_file_provides_it() -> TestResult {
     let gateway = Gateway::start("")?;

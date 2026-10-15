@@ -102,6 +102,18 @@ impl fmt::Display for Referrer {
     }
 }
 
+/// Returns `url` as an error shows it: its scheme, host, port and path, with
+/// no userinfo, query or fragment, any of which may carry a credential.
+#[must_use]
+pub fn shown_url(url: &url::Url) -> String {
+    let port = url
+        .port()
+        .map(|port| format!(":{port}"))
+        .unwrap_or_default();
+    let host = url.host_str().unwrap_or_default();
+    format!("{}://{host}{port}{}", url.scheme(), url.path())
+}
+
 /// Why an endpoint's base URL was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -217,7 +229,8 @@ pub enum LoadError {
     /// two ids.
     #[error("endpoint {first} and endpoint {second} share the base URL {url}")]
     DuplicateEndpointUrl {
-        /// The shared base URL, as normalised.
+        /// The shared base URL, as normalised and shown by [`shown_url`]:
+        /// its scheme, host, port and path alone.
         url: String,
         /// The endpoint declared first.
         first: EndpointId,
