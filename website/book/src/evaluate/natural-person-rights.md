@@ -86,8 +86,7 @@ five categories of Art 14(1) have no interface in the exchange format
 [#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
 [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
 [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)). The first gap
-is held by [#961](https://github.com/FerroHEALTH/FerroFED/issues/961) until
-its own issue is filed.
+is planned ([#991](https://github.com/FerroHEALTH/FerroFED/issues/991)).
 
 ## Art 4(2): proxies and legal representatives
 
@@ -146,9 +145,8 @@ each version, decides whether the person may change it.
 
 **The gap.** Nothing the component writes marks the composition as
 inserted by the person, and no test shows the member or the composition
-telling a person's entry from a professional's. Held by
-[#961](https://github.com/FerroHEALTH/FerroFED/issues/961) until its own
-issue is filed.
+telling a person's entry from a professional's. It is planned
+([#992](https://github.com/FerroHEALTH/FerroFED/issues/992)).
 
 ## Art 6: rectification
 
