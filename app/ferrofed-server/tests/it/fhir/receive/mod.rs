@@ -10,6 +10,7 @@
 
 #[cfg(feature = "binding-ihe")]
 mod audit;
+mod check;
 mod display;
 mod refused;
 mod start;

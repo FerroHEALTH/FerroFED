@@ -21,6 +21,9 @@ The information sheet lists the categories a release can receive, and each
 deployment's `GET {fhir-base}/metadata` the ones it receives and the ones
 it has no receiving member for
 ([The categories received](information-sheet.md#the-categories-received)).
+`ferrofed config check` names the same categories to the operator, each
+received one with its member
+([Running it](../operate/configuration.md#running-it)).
 
 ## What the component accepts
 
