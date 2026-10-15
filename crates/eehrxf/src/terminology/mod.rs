@@ -19,6 +19,8 @@
 //!   systems the rules prefer by default;
 //! - `local` (feature `openehr`): the archetype-local terms of an
 //!   operational template, by which a `local` code is rendered;
+//! - `system` (feature `openehr`): the FHIR `Coding.system` an openEHR
+//!   terminology id is written as, and none for an id with no known system;
 //! - [`expansion`]: the value set expansions a FHIR package carries;
 //! - [`bindings`]: the `required` bindings of a profile checked against
 //!   those expansions, every binding with no expansion named as not
@@ -36,6 +38,8 @@ pub mod ehn;
 pub mod expansion;
 #[cfg(feature = "openehr")]
 pub mod local;
+#[cfg(feature = "openehr")]
+pub mod system;
 #[cfg(feature = "openehr")]
 pub mod transcode;
 pub(crate) mod walk;

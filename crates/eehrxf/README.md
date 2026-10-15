@@ -52,7 +52,11 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   code in a preferred system as recorded, a `TERM_MAPPING` of match `=` as a
   second coding, every other match in the narrative, an archetype-local code
   displayed with its term from the operational template (`local`), and any
-  other code in no preferred system under eHN PS Art 10(7). `ehn` holds the
+  other code in no preferred system under eHN PS Art 10(7). `system` writes
+  each coding's system as a FHIR URI: a local code under its archetype's
+  code system, the openEHR names `SNOMED-CT`, `LOINC` and `ICD10` as their
+  URIs, and a code of a terminology with no known URI as no coding, in the
+  narrative and reported as unmapped. `ehn` holds the
   eHN Patient Summary §4 preferred systems, the default set. `Expansions` reads the value set
   expansions of a package, and `bindings::check_required` holds the
   `required` bindings of a profile to them, naming every binding it cannot

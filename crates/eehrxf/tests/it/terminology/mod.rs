@@ -15,6 +15,8 @@ mod ehn;
 mod local;
 mod server;
 #[cfg(feature = "openehr")]
+mod system;
+#[cfg(feature = "openehr")]
 mod transcode;
 
 use async_trait::async_trait;
