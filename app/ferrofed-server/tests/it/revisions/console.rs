@@ -9,10 +9,10 @@
 //! the file never sets one, and a stored-query version is stored once
 //! (§12.7, N44). No specification governs the ownership: our own design.
 
-use ferrofed_registry::console::{ConsoleMember, ConsoleState, Owner, Resources};
+use ferrofed_registry::console::{ConsoleMember, ConsoleState, Owner, QueryRegistry, Resources};
 use ferrofed_registry::id::NodeId;
+use ferrofed_registry::revision::{Origin, Revision, RevisionId};
 use ferrofed_server::config::Config;
-use ferrofed_server::revision::{Origin, Revision, RevisionId};
 use http::{Method, StatusCode};
 
 use super::{Diff, Gateway, TestResult, member, operator};
@@ -77,8 +77,9 @@ async fn the_report_names_the_owner_of_every_member_and_stored_query() -> TestRe
     let store = toml::Value::String(dir.path().join("q.redb").display().to_string());
     let gateway = Gateway::start(&format!("\n[stored_queries]\npath = {store}\n"))?;
     let resources = gateway.resources().await?;
-    assert_eq!(Some(1), resources.running);
-    assert_eq!(Some(1), resources.head);
+    assert_eq!(Some(RevisionId::FIRST), resources.running);
+    assert_eq!(Some(RevisionId::FIRST), resources.head);
+    assert_eq!(QueryRegistry::Writable, resources.stored_query_registry);
     assert_eq!(
         vec![(String::from("node-a"), Owner::File, None)],
         owners(&resources)
@@ -92,6 +93,15 @@ async fn the_report_names_the_owner_of_every_member_and_stored_query() -> TestRe
         "only the reserved namespace is held: {:?}",
         resources.stored_queries
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_report_says_when_no_stored_query_registry_is_offered() -> TestResult {
+    let gateway = Gateway::start("")?;
+    let resources = gateway.resources().await?;
+    assert_eq!(QueryRegistry::Absent, resources.stored_query_registry);
+    assert!(resources.stored_queries.is_empty());
     Ok(())
 }
 

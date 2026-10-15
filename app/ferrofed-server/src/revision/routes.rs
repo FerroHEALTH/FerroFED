@@ -48,8 +48,8 @@ use crate::error::{self, Code};
 use crate::reload::Reloader;
 use crate::request_id;
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED};
-use crate::revision::tree::{Difference, diff};
-use crate::revision::{Author, Current, Revision, RevisionId};
+use crate::revision::tree::diff;
+use ferrofed_registry::revision::{Applied, Author, Diff, Revision, RevisionId, Standing};
 
 /// The running revision's mark and the newest revision.
 pub const CONFIG: &str = "/admin/config";
@@ -124,24 +124,6 @@ pub fn writes(managed: Arc<Managed>) -> Router {
         .with_state(managed)
 }
 
-/// The body of `GET` [`CONFIG`].
-#[derive(Debug, Serialize)]
-struct Standing {
-    /// Always `managed`: the routes exist only then.
-    ui: &'static str,
-    /// The newest revision.
-    head: Option<RevisionId>,
-    /// The mark of the running revision.
-    current: Option<Current>,
-    /// The revision this replica runs, once it runs one.
-    running: Option<RevisionId>,
-    /// Whether this replica runs the revision the store marks running.
-    in_step: bool,
-    /// The revision marked running that this replica refused, while it
-    /// does not run it.
-    refused: Option<RevisionId>,
-}
-
 /// The body of a save.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -170,27 +152,6 @@ struct RollbackRequest {
     /// Why the rollback is made.
     reason: String,
 }
-
-/// The answer to an apply or a rollback.
-#[derive(Debug, Serialize)]
-struct AppliedAnswer {
-    /// The revision applied.
-    revision: Revision,
-    /// The mark the store now holds.
-    current: Current,
-}
-
-/// The answer to a diff.
-#[derive(Debug, Serialize)]
-struct DiffAnswer {
-    /// The earlier revision.
-    from: RevisionId,
-    /// The later revision.
-    to: RevisionId,
-    /// The keys that differ, in key order.
-    changes: Vec<Difference>,
-}
-
 /// Runs `work` on a thread that may block, and answers what it returns or
 /// the failure that stopped it.
 async fn blocking<T, F>(headers: &HeaderMap, work: F) -> Response
@@ -263,7 +224,7 @@ async fn config(State(managed): State<Arc<Managed>>, headers: HeaderMap) -> Resp
         let current = store.current()?;
         let replica = revisions.replica();
         Ok(Standing {
-            ui: crate::config::revisions::Ui::Managed.as_str(),
+            ui: crate::config::revisions::Ui::Managed.as_str().to_owned(),
             head: store.head()?,
             in_step: replica.running == current.as_ref().map(|mark| mark.revision),
             running: replica.running,
@@ -329,7 +290,7 @@ async fn difference(
     blocking(&headers, move || {
         let from = held(&revisions, number(&id)?)?;
         let to = held(&revisions, number(&other)?)?;
-        Ok(DiffAnswer {
+        Ok(Diff {
             from: from.id,
             to: to.id,
             changes: diff(&table(&from)?, &table(&to)?),
@@ -423,7 +384,7 @@ async fn apply(
             .revisions
             .apply(&managed.reloader, id, Author::from(&operator))?;
         record(APPLIED, id, &operator);
-        Ok(AppliedAnswer { revision, current })
+        Ok(Applied { revision, current })
     })
     .await
 }
@@ -447,7 +408,7 @@ async fn rollback(
             (Author::from(&operator), request.reason),
         )?;
         record(ROLLED_BACK, revision.id, &operator);
-        Ok(AppliedAnswer { revision, current })
+        Ok(Applied { revision, current })
     })
     .await
 }

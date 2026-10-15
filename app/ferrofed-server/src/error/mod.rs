@@ -264,6 +264,9 @@ pub enum Code {
     /// A change in the operator console names a resource the newest
     /// configuration revision does not hold.
     ResourceUnknown,
+    /// A configuration route on the admin listener of a gateway whose
+    /// configuration is not managed (`config.ui = "off"`).
+    ConfigurationUnmanaged,
 }
 
 /// The code of a refused query: the refusal's stable kind

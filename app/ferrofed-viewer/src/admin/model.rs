@@ -56,4 +56,8 @@ impl fmt::Debug for AdminForm {
 pub struct ActionAnswer {
     /// The answer rendered as HTML, naming every replica it went to.
     pub html: String,
+    /// Whether the action changed what the page shows, so the page reads
+    /// it again; a refusal changes nothing and keeps the forms as they are.
+    #[serde(default)]
+    pub changed: bool,
 }

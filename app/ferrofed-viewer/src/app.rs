@@ -48,12 +48,18 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 
 /// The root component: the stylesheet, the document title and the routes.
 #[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
-)]
 pub fn App() -> impl IntoView {
     provide_meta_context();
+    // NOTE: the Leptos book, `ssr/22_life_cycle`: a value the server decides reaches
+    // the hydrating page serialized, so both halves draw the same navigation.
+    let administered = *SharedValue::new_str(administered);
+    let configuration = administered.then(|| {
+        view! {
+            <li>
+                <a href=crate::configure::CONFIGURATION>"Configuration"</a>
+            </li>
+        }
+    });
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
@@ -78,9 +84,7 @@ pub fn App() -> impl IntoView {
                     <li>
                         <a href=crate::query::QUERY>"Query"</a>
                     </li>
-                    <li>
-                        <a href=crate::configure::CONFIGURATION>"Configuration"</a>
-                    </li>
+                    {configuration}
                 </ul>
                 // The sign-out route is the server's: a plain form post it
                 // answers with a redirect, which no client router takes.
@@ -172,5 +176,21 @@ fn NotFound() -> impl IntoView {
         <p>
             <a href="/">"Back to the console"</a>
         </p>
+    }
+}
+
+/// Whether the console is configured with a replica's admin listener, which
+/// the configuration page and the admin actions need.
+fn administered() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use_context::<crate::server::ViewerState>()
+            .is_some_and(|state| !state.settings().admin.is_empty())
+    }
+    // NOTE: the browser reads the value the server decided; this runs only if
+    // that value is missing, and then shows the link the page explains.
+    #[cfg(target_arch = "wasm32")]
+    {
+        true
     }
 }

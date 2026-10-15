@@ -218,6 +218,7 @@ and its set is closed, so the code says which.
 | `rollback-unavailable` | 409 | A rollback on the admin listener asks for the revision before the running one, and none ran before it ([Configuration revisions](../operate/configuration-revisions.md)). |
 | `resource-file-owned` | 409 | A change on the admin listener names a member the registry document provides, or a care services directory, or a stored-query version the read-only definition files provide. Only that source changes it, and nothing is saved ([Console-managed resources](../operate/configuration-revisions.md#console-managed-resources)). |
 | `resource-unknown` | 404 | The removal of a member on the admin listener names a `node_id` the newest configuration revision holds no console member under ([Console-managed resources](../operate/configuration-revisions.md#console-managed-resources)). |
+| `configuration-unmanaged` | 404 | `GET /admin/config` on the admin listener of a gateway whose configuration is not managed (`config.ui = "off"`): it serves no configuration revisions, and the file alone configures it ([Configuration revisions](../operate/configuration-revisions.md)). |
 
 On the client listener the gateway answers `409` with five codes, and none
 of them sends anything to a node:

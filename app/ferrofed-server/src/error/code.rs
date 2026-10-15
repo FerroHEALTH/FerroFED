@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 65] = [
+    pub const GATEWAY: [Self; 66] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -77,6 +77,7 @@ impl Code {
         Self::RollbackUnavailable,
         Self::ResourceFileOwned,
         Self::ResourceUnknown,
+        Self::ConfigurationUnmanaged,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -175,6 +176,7 @@ impl Code {
             Self::RollbackUnavailable => "rollback-unavailable",
             Self::ResourceFileOwned => "resource-file-owned",
             Self::ResourceUnknown => "resource-unknown",
+            Self::ConfigurationUnmanaged => "configuration-unmanaged",
         }
     }
 
@@ -212,7 +214,8 @@ impl Code {
             | Self::StoredQueryUnknown
             | Self::SubjectUnavailable
             | Self::RevisionUnknown
-            | Self::ResourceUnknown => StatusCode::NOT_FOUND,
+            | Self::ResourceUnknown
+            | Self::ConfigurationUnmanaged => StatusCode::NOT_FOUND,
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
@@ -413,6 +416,9 @@ impl Code {
             Self::ResourceUnknown => {
                 "the newest configuration revision holds no resource of that name"
             }
+            Self::ConfigurationUnmanaged => {
+                "the gateway's configuration is not managed (config.ui = \"off\"), so it serves no configuration revisions"
+            }
         }
     }
 }
@@ -496,6 +502,7 @@ mod tests {
             Code::RollbackUnavailable => Some(62),
             Code::ResourceFileOwned => Some(63),
             Code::ResourceUnknown => Some(64),
+            Code::ConfigurationUnmanaged => Some(65),
         }
     }
 
@@ -634,6 +641,7 @@ mod tests {
             (Code::RollbackUnavailable, StatusCode::CONFLICT),
             (Code::ResourceFileOwned, StatusCode::CONFLICT),
             (Code::ResourceUnknown, StatusCode::NOT_FOUND),
+            (Code::ConfigurationUnmanaged, StatusCode::NOT_FOUND),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

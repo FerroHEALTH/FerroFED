@@ -29,11 +29,9 @@ use crate::reload::{ReloadError, Reloader};
 use crate::revision::tree::{
     console_keys, core_keys, inline_secrets, join, split, with_console_of, without_console,
 };
-use crate::revision::{
-    Author, Current, Draft, Origin, Outcome, Revision, RevisionId, RevisionStore, Saved,
-    StoreError, Swapped,
-};
+use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::state::{AppState, StateError};
+use ferrofed_registry::revision::{Author, Current, Origin, Outcome, Revision, RevisionId};
 
 /// The longest reason a revision records, in characters.
 pub const REASON_LIMIT: usize = 1_000;

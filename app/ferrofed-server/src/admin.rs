@@ -37,7 +37,7 @@ use axum::extract::rejection::ExtensionRejection;
 use axum::extract::{MatchedPath, Path, Request, State};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::serve::{Listener, ListenerExt};
 use axum::{Json, Router};
 use ferrofed_identity::dev::Profile;
@@ -292,6 +292,13 @@ pub fn managed_router(
         let reads = revision::routes::reads(managed)
             .route_layer(middleware::from_fn_with_state(access, operator_read));
         app = app.merge(writes).merge(reads);
+    } else {
+        // NOTE: no specification governs this: our own design; a console tells an
+        // unmanaged gateway from a wrong admin URL by this code, not by a bare 404.
+        let unmanaged = Router::new()
+            .route(revision::routes::CONFIG, get(unmanaged))
+            .route_layer(middleware::from_fn_with_state(access, operator_read));
+        app = app.merge(unmanaged);
     }
     app.fallback(|| async { StatusCode::NOT_FOUND })
 }
@@ -490,6 +497,16 @@ async fn distribute(
     body: Bytes,
 ) -> Response {
     stored::distribute_held(&state, (&name, &version), (&headers, &body)).await
+}
+
+/// `GET` [`revision::routes::CONFIG`] under `config.ui = "off"`: `404`
+/// (`configuration-unmanaged`), so a caller learns the gateway serves no
+/// configuration revisions rather than that the path is unknown.
+async fn unmanaged(headers: HeaderMap) -> Response {
+    error::fixed(
+        Code::ConfigurationUnmanaged,
+        request_id::of(&headers).unwrap_or_default(),
+    )
 }
 
 /// The message of a clear that carries a body.

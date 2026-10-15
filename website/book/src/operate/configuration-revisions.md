@@ -36,7 +36,8 @@ path = "/var/lib/ferrofed/config-revisions.redb"   # redb: the store file
 | `config.path` | none | the `redb` store file, created when it does not exist |
 | `config.url`, `config.url_file` | none | the PostgreSQL connection string of the `postgres` backend, a URL or libpq key/value pairs; a secret, never logged, and its `sslmode` must be `require` when it carries a password over a network outside the development profile |
 
-Under `off`, any other key of `[config]` refuses to start, so a store you
+Under `off`, `GET /admin/config` answers `404 configuration-unmanaged`, so a
+client tells an unmanaged gateway from a wrong admin URL. Under `off`, any other key of `[config]` refuses to start, so a store you
 meant to use is never silently ignored. Under `managed`, `[metrics] listen`
 must be set, since the revision API is served on the admin listener.
 
@@ -164,7 +165,7 @@ endpoints = [
 
 | Route | Answer |
 |---|---|
-| `GET /admin/config/resources` | `running` and `head`, every member with its `node`, `organisation`, `system_id`, `endpoints`, `owner`, and for a console member its `state` and the `member` itself, and every stored-query version with its `owner` |
+| `GET /admin/config/resources` | `running` and `head`, `stored_query_registry` (`absent`, `read-only` or `writable`), every member with its `node`, `organisation`, `system_id`, `endpoints`, `owner`, and for a console member its `state` and the `member` itself, and every stored-query version with its `owner` |
 | `PUT /admin/config/members/{node_id}` | `{"base": <newest>, "reason": "…", "member": {…}}`: saves a revision with the member in place of the console member of that `node_id`, or beside the others, `201` with the revision |
 | `POST /admin/config/members/{node_id}/remove` | `{"base": <newest>, "reason": "…"}`: saves a revision without that console member, `201` with the revision |
 | `PUT /admin/config/stored-queries/{name}/{version}` | `{"aql": "…"}`: stores the version in the stored-query store at once, `201` with it as an ITS-REST `StoredQuery` |

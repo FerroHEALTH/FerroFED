@@ -36,6 +36,7 @@ const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
                "node":{"id":"node-c","system_id":"cdr-c.example.org"},
                "endpoints":[{"id":"node-c-pub","url":"https://cdr-c.example.org/openehr\"><b>x</b>",
                              "connection_type":"openehr-rest-query"}]}}],
+    "stored_query_registry":"writable",
     "stored_queries":[{"name":"org.example::<i>q</i>","version":"1.0.0","owner":"store"}]}"#;
 
 /// The history: revision 2 by an operator, with markup in its reason.
@@ -341,9 +342,9 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
 
 /// A revision applied, as an apply answers it.
 const APPLIED: &str = r#"{"revision":{"id":2,"base":1,"origin":"operator","restores":null,
-    "author":{"kind":"operator","subject":"op-1"},"at":"2026-10-15T09:00:00Z","reason":"add C","toml":""},
+    "author":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},"at":"2026-10-15T09:00:00Z","reason":"add C","toml":""},
     "current":{"revision":2,"previous":1,"outcome":"pending-restart","needs_restart":["federation.id"],
-    "applied_by":{"kind":"operator","subject":"op-1"},"applied_at":"2026-10-15T09:01:00Z"}}"#;
+    "applied_by":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},"applied_at":"2026-10-15T09:01:00Z"}}"#;
 
 #[tokio::test]
 async fn an_apply_and_a_rollback_post_to_their_routes() -> Result<(), Box<dyn Error>> {
@@ -436,11 +437,172 @@ async fn a_stored_query_version_is_put_with_its_aql() -> Result<(), Box<dyn Erro
 async fn a_gateway_whose_configuration_is_not_managed_shows_so_and_no_form()
 -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    answers(&listener, ("GET", "/admin/config"), 404, "").await;
+    answers(
+        &listener,
+        ("GET", "/admin/config"),
+        404,
+        r#"{"message":"not managed","code":"configuration-unmanaged"}"#,
+    )
+    .await;
     let (service, session) = signed_in_console(&listener)?;
     let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("its configuration is not managed"), "{body}");
     assert!(!body.contains("Save as a new revision"), "{body}");
+    Ok(())
+}
+
+// A 404 without the gateway's code, as from a wrong admin URL, is a refusal
+// shown with its status, never read as a gateway that is not managed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bare_not_found_is_shown_as_a_refusal() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    answers(&listener, ("GET", "/admin/config"), 404, "").await;
+    let (service, session) = signed_in_console(&listener)?;
+    let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
+    assert!(!body.contains("its configuration is not managed"), "{body}");
+    assert!(body.contains("404 (no code)"), "{body}");
+    Ok(())
+}
+
+// A plain form post, which a page without its bundle sends, asks no replica.
+#[tokio::test]
+async fn a_plain_form_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let request = Request::post("/api/configure")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("accept", "text/html")
+        .header("sec-fetch-site", "same-origin")
+        .header("cookie", format!("{COOKIE}={}", session.as_str()))
+        .body(Body::from(save_c()))?;
+    let (response, body) = send(&service, request).await?;
+    assert_ne!(StatusCode::OK, response.status(), "{body}");
+    assert!(body.contains("PlainPost"), "{body}");
+    assert_eq!(0, changes(&listener).await?);
+    let asked = listener
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(
+        asked.is_empty(),
+        "{} requests reached the replica",
+        asked.len()
+    );
+    Ok(())
+}
+
+// The form shows an endpoint's id, URL and status alone, so a save keeps
+// what it does not show of the held member (§11.1, N27): the consent refusal
+// codes of an endpoint it names, and an `hl7-fhir-rest` endpoint it does not.
+#[tokio::test]
+async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    answers(&listener, ("GET", "/admin/config"), 200, STANDING).await;
+    answers(
+        &listener,
+        ("GET", "/admin/config/resources"),
+        200,
+        r#"{"running":1,"head":2,"stored_query_registry":"absent","stored_queries":[],"members":[
+          {"node":"node-c","organisation":"org-c","system_id":"cdr-c.example.org",
+           "endpoints":["node-c-pub","node-c-fhir"],"owner":"console","state":"pending",
+           "member":{"organisation":{"id":"org-c"},"node":{"id":"node-c","system_id":"cdr-c.example.org"},
+             "endpoints":[
+               {"id":"node-c-pub","url":"https://old.example.org/openehr","connection_type":"openehr-rest-query",
+                "consent_refusal_codes":["CONSENT_DENIED"]},
+               {"id":"node-c-fhir","url":"https://cdr-c.example.org/fhir","connection_type":"hl7-fhir-rest",
+                "categories":["Patient-Summaries"],"profiles":["http://example.org/ps"],
+                "ehr_id_system":"urn:oid:2.999.1"}]}}]}"#,
+    )
+    .await;
+    answers(
+        &listener,
+        ("PUT", "/admin/config/members/node-c"),
+        201,
+        SAVED,
+    )
+    .await;
+    let (service, session) = signed_in_console(&listener)?;
+    configured(&service, &session, save_c()).await?;
+    let sent = bodies(&listener, ("PUT", "/admin/config/members/node-c")).await?;
+    let [sent] = sent.as_slice() else {
+        return Err(format!("one save, not {}", sent.len()).into());
+    };
+    let body: SaveBody = serde_json::from_str(sent)?;
+    let ids: Vec<&str> = body
+        .member
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.id.as_str())
+        .collect();
+    assert_eq!(vec!["node-c-pub", "node-c-old", "node-c-fhir"], ids);
+    let public = &body.member.endpoints[0];
+    assert_eq!("https://cdr-c.example.org/openehr", public.url);
+    assert_eq!(
+        vec![String::from("CONSENT_DENIED")],
+        public.consent_refusal_codes
+    );
+    assert_eq!(
+        Some("urn:oid:2.999.1"),
+        body.member.endpoints[2].ehr_id_system.as_deref()
+    );
+    Ok(())
+}
+
+// A save that cannot read the held member sends nothing: a save without it
+// would drop what the form does not show.
+#[tokio::test]
+async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
+    let (service, session) = signed_in_console(&listener)?;
+    let html = configured(&service, &session, save_c()).await?;
+    assert!(
+        html.contains("Replica gateway-0 refused the save: 500"),
+        "{html}"
+    );
+    assert_eq!(0, changes(&listener).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_empty_stored_query_registry_still_offers_a_version() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    answers(&listener, ("GET", "/admin/config"), 200, STANDING).await;
+    answers(
+        &listener,
+        ("GET", "/admin/config/resources"),
+        200,
+        r#"{"running":1,"head":2,"members":[],"stored_query_registry":"writable","stored_queries":[]}"#,
+    )
+    .await;
+    answers(&listener, ("GET", "/admin/config/revisions"), 200, HISTORY).await;
+    answers(
+        &listener,
+        ("GET", "/admin/config/revisions/1/diff/2"),
+        200,
+        DIFF,
+    )
+    .await;
+    let (service, session) = signed_in_console(&listener)?;
+    let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
+    assert!(!body.contains("offers no stored-query registry"), "{body}");
+    assert!(body.contains("Store a stored-query version"), "{body}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_console_with_no_admin_listener_offers_no_configuration_link()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(
+        "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n",
+    )?;
+    let session = state.sessions().establish(signed_in())?;
+    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
+    assert!(!body.contains(r#"href="/configuration""#), "{body}");
+    let listener = listener().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
+    assert!(body.contains(r#"href="/configuration""#), "{body}");
     Ok(())
 }

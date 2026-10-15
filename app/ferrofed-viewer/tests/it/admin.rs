@@ -348,7 +348,9 @@ async fn an_unreachable_replica_is_named_and_the_others_still_clear() -> Result<
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
     let html = acted(&service, &session, "/api/clear-ehr-id", clear_at("*")).await?;
     assert!(
-        html.contains("Replica gateway-0: its admin listener could not be reached"),
+        html.contains(
+            "Replica gateway-0: its admin listener gave no answer, so whether the clear ran there is unknown."
+        ),
         "{html}"
     );
     assert!(html.contains("Replica gateway-1 cleared"), "{html}");

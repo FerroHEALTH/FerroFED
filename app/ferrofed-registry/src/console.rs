@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::{Document, EndpointDoc, NodeDoc, OrganisationDoc};
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use crate::revision::RevisionId;
 use crate::secret::SecretUrl;
 use crate::snapshot::{ConnectionType, EndpointStatus};
 
@@ -251,12 +252,29 @@ pub struct QueryResource {
 #[serde(deny_unknown_fields)]
 pub struct Resources {
     /// The revision the store marks running.
-    pub running: Option<u64>,
+    pub running: Option<RevisionId>,
     /// The newest revision, which a console change is saved on top of.
-    pub head: Option<u64>,
+    pub head: Option<RevisionId>,
     /// Every member, the running registry's and the newest revision's, by
     /// `node_id`.
     pub members: Vec<MemberResource>,
+    /// Whether the gateway offers a stored-query registry, and whether the
+    /// console can store a version in it.
+    pub stored_query_registry: QueryRegistry,
     /// Every stored-query version the gateway holds, by name and version.
     pub stored_queries: Vec<QueryResource>,
+}
+
+/// The stored-query registry a gateway offers (§12.7, N44).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum QueryRegistry {
+    /// The gateway offers no stored-query registry.
+    #[default]
+    Absent,
+    /// The registry reads the read-only definition files: the file's.
+    ReadOnly,
+    /// The registry's store takes a new version.
+    Writable,
 }

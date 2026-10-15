@@ -61,11 +61,14 @@ pub async fn configure(
 /// sent, the gateway's answers read into what the page renders.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use std::fmt;
+
     use ferrofed_registry::console::{
         ConsoleEndpoint, ConsoleMember, ConsoleNode, ConsoleOrganisation,
     };
     use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
     use ferrofed_registry::operator::PageRequest;
+    use ferrofed_registry::revision::{Revision, RevisionId};
     use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
     use crate::admin::act::server::acted;
@@ -73,7 +76,7 @@ pub mod server {
     use crate::config::settings::ReplicaSettings;
     use crate::configure::model::{ConfigForm, ConfigView};
     use crate::configure::render::{self, SavedLine, StoredLine};
-    use crate::gateway::config::{Change, RevisionLine};
+    use crate::gateway::config::Change;
     use crate::gateway::{AccessToken, Gateway, GatewayError};
     use crate::views::load::server::Stop;
     use crate::views::model::Refusal;
@@ -81,27 +84,33 @@ pub mod server {
     /// How many revisions the history shows.
     pub const HISTORY: u64 = 20;
 
+    /// The stable code of a gateway whose configuration is not managed.
+    pub const UNMANAGED: &str = "configuration-unmanaged";
+
     /// The longest reason a revision records, in characters, as the
     /// gateway holds it.
     const REASON_LIMIT: usize = 1_000;
 
     /// What a form asks for, read and checked.
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    ///
+    /// Its `Debug` output names the action and the revisions alone, never a
+    /// reason, a member or an AQL text.
+    #[derive(Clone, PartialEq, Eq)]
     pub enum Plan {
         /// Save a revision with `member` in place of the console's member
         /// of its `node_id`.
         SaveMember {
             /// The revision the change is based on.
-            base: Option<u64>,
+            base: Option<RevisionId>,
             /// Why.
             reason: String,
-            /// The member, whole.
+            /// The member as the form gives it.
             member: Box<ConsoleMember>,
         },
         /// Save a revision without the console's member `node`.
         RemoveMember {
             /// The revision the change is based on.
-            base: Option<u64>,
+            base: Option<RevisionId>,
             /// Why.
             reason: String,
             /// The member's `node_id`.
@@ -110,12 +119,12 @@ pub mod server {
         /// Apply revision `revision`.
         Apply {
             /// The revision.
-            revision: u64,
+            revision: RevisionId,
         },
         /// Roll the running revision `current` back.
         Rollback {
             /// The running revision the operator read.
-            current: u64,
+            current: RevisionId,
             /// Why.
             reason: String,
         },
@@ -128,6 +137,29 @@ pub mod server {
             /// The AQL.
             aql: String,
         },
+    }
+
+    impl fmt::Debug for Plan {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::SaveMember { base, .. } => f
+                    .debug_struct("SaveMember")
+                    .field("base", base)
+                    .finish_non_exhaustive(),
+                Self::RemoveMember { base, .. } => f
+                    .debug_struct("RemoveMember")
+                    .field("base", base)
+                    .finish_non_exhaustive(),
+                Self::Apply { revision } => {
+                    f.debug_struct("Apply").field("revision", revision).finish()
+                }
+                Self::Rollback { current, .. } => f
+                    .debug_struct("Rollback")
+                    .field("current", current)
+                    .finish_non_exhaustive(),
+                Self::StoreQuery { .. } => f.debug_struct("StoreQuery").finish_non_exhaustive(),
+            }
+        }
     }
 
     /// A refusal of the form, naming the field and never its value.
@@ -157,10 +189,10 @@ pub mod server {
     }
 
     /// The revision number `field` holds, `None` for an empty field.
-    fn revision(field: &str, what: &str) -> Result<Option<u64>, Refusal> {
+    fn revision(field: &str, what: &str) -> Result<Option<RevisionId>, Refusal> {
         given(field)
             .map(|text| {
-                text.parse::<u64>()
+                text.parse::<RevisionId>()
                     .map_err(|_not_a_number| Refusal::Invalid {
                         reason: format!("The {what} is not a revision number."),
                     })
@@ -295,6 +327,38 @@ pub mod server {
         })
     }
 
+    /// Returns `form`, the member the page's form gives, merged onto `held`.
+    ///
+    /// `held` is the member the newest revision holds of its `node_id`:
+    /// each endpoint the form names keeps every key the form does not show (its consent
+    /// refusal codes, categories, profiles and `ehr_id` system), and each
+    /// `hl7-fhir-rest` endpoint the form does not name is kept whole.
+    #[must_use]
+    pub fn merged(mut form: ConsoleMember, held: Option<&ConsoleMember>) -> ConsoleMember {
+        let Some(held) = held else {
+            return form;
+        };
+        for endpoint in &mut form.endpoints {
+            if let Some(kept) = held.endpoints.iter().find(|kept| kept.id == endpoint.id) {
+                *endpoint = ConsoleEndpoint {
+                    id: endpoint.id.clone(),
+                    url: endpoint.url.clone(),
+                    status: endpoint.status,
+                    ..kept.clone()
+                };
+            }
+        }
+        let natives: Vec<ConsoleEndpoint> = held
+            .endpoints
+            .iter()
+            .filter(|kept| kept.connection_type == ConnectionType::Hl7FhirRest)
+            .filter(|kept| !form.endpoints.iter().any(|named| named.id == kept.id))
+            .cloned()
+            .collect();
+        form.endpoints.extend(natives);
+        form
+    }
+
     /// The configuration page `replica` answers, or the page saying its
     /// configuration is not managed.
     ///
@@ -339,12 +403,13 @@ pub mod server {
         ))
     }
 
-    /// Whether `error` is the `404` of an admin listener that serves no
-    /// configuration revisions.
+    /// Whether `error` is the `404` (`configuration-unmanaged`) of an admin
+    /// listener that serves no configuration revisions; a `404` without
+    /// that code, as from a wrong admin URL, is not.
     fn unmanaged(error: &GatewayError) -> bool {
-        error
-            .refusal()
-            .is_some_and(|(status, _)| status == http::StatusCode::NOT_FOUND)
+        error.refusal().is_some_and(|(status, code)| {
+            status == http::StatusCode::NOT_FOUND && code.as_deref() == Some(UNMANAGED)
+        })
     }
 
     /// Runs `plan` at `replica` as the operator, and renders its answer.
@@ -361,12 +426,11 @@ pub mod server {
                 reason,
                 member,
             } => {
-                let member = with_natives(gateway, replica, token, *member).await;
                 let change = Change {
                     base,
                     reason: &reason,
                 };
-                let saved = gateway.save_member(replica, token, change, &member).await;
+                let saved = save(gateway, replica, token, (change, *member)).await;
                 let saved = previewed(gateway, replica, token, saved).await;
                 render::saved(&acted(name, "save", saved, |line| line))
             }
@@ -403,32 +467,24 @@ pub mod server {
         }
     }
 
-    /// `member` with the native endpoints the newest revision holds for it,
-    /// which the page's form does not edit and a save keeps.
-    async fn with_natives(
+    /// Saves `member` merged onto the member the newest revision holds of
+    /// its `node_id` ([`merged`]); when the resources cannot be read the
+    /// failure is the answer and nothing is sent, since a save without the
+    /// held member would drop the keys the form does not show.
+    async fn save(
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        mut member: ConsoleMember,
-    ) -> ConsoleMember {
-        // NOTE: no specification governs this: our own design; a report that cannot be
-        // read leaves the member as the form gave it, and the gateway then refuses or saves it.
-        let Ok(resources) = gateway.config_resources(replica, token).await else {
-            return member;
-        };
+        (change, member): (Change<'_>, ConsoleMember),
+    ) -> Result<Revision, GatewayError> {
+        let resources = gateway.config_resources(replica, token).await?;
         let held = resources
             .members
-            .into_iter()
-            .filter_map(|resource| resource.member)
+            .iter()
+            .filter_map(|resource| resource.member.as_ref())
             .find(|held| held.node.id == member.node.id);
-        if let Some(held) = held {
-            member.endpoints.extend(
-                held.endpoints
-                    .into_iter()
-                    .filter(|endpoint| endpoint.connection_type == ConnectionType::Hl7FhirRest),
-            );
-        }
-        member
+        let member = merged(member, held);
+        gateway.save_member(replica, token, change, &member).await
     }
 
     /// The saved revision `saved` with the preview of what it changes
@@ -437,7 +493,7 @@ pub mod server {
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        saved: Result<RevisionLine, GatewayError>,
+        saved: Result<Revision, GatewayError>,
     ) -> Result<SavedLine, GatewayError> {
         let revision = saved?;
         // NOTE: no specification governs this: our own design; the save stands without its

@@ -13,11 +13,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_registry::revision::RevisionId;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::revisions::RevisionsFault;
 use ferrofed_server::reload::Reloader;
-use ferrofed_server::revision::RevisionId;
 use ferrofed_server::revision::service::Followed;
 use ferrofed_server::revision::watch;
 use ferrofed_server::state::AppState;

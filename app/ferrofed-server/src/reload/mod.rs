@@ -53,9 +53,9 @@ use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::listener::certificates::Certificates;
 use crate::metrics::ReloadResult;
-use crate::revision::RevisionId;
 use crate::revision::service::{RevisionError, Revisions};
 use crate::state::AppState;
+use ferrofed_registry::revision::RevisionId;
 
 mod restart;
 

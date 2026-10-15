@@ -92,6 +92,18 @@ pub(crate) struct Stack {
 impl Stack {
     /// Starts the nodes, the provider, the gateway and the console.
     pub(crate) async fn start() -> Result<Self, Box<dyn Error>> {
+        Self::start_with(None).await
+    }
+
+    /// Starts the stack with the console configured with one replica,
+    /// `gateway-0`, whose admin listener is at `admin`.
+    pub(crate) async fn start_with_admin(admin: &str) -> Result<Self, Box<dyn Error>> {
+        Self::start_with(Some(admin)).await
+    }
+
+    /// Starts the stack, the console naming the admin listener `admin` when
+    /// one is given.
+    async fn start_with(admin: Option<&str>) -> Result<Self, Box<dyn Error>> {
         let site = site_root()?;
         let answering = node(200, &format!(
             r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{UID_AT_A}"]]}}"##
@@ -110,6 +122,12 @@ impl Stack {
              [session]\nsecure_cookie = false\n\n{}",
             provider.console_configuration(&console)
         );
+        let text = match admin {
+            Some(admin) => format!(
+                "{text}\n[[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{admin}\"\n"
+            ),
+            None => text,
+        };
         let settings =
             ferrofed_viewer::config::Config::from_sources(Some(&text), &BTreeMap::new())?
                 .resolve()?;

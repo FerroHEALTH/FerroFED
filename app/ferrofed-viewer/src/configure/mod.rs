@@ -49,14 +49,41 @@ pub const CONFIGURATION: &str = "/configuration";
 )]
 pub fn ConfigurationPage() -> impl IntoView {
     let configure = ServerAction::<Configure>::new();
-    let version = configure.version();
-    let loaded = Resource::new_blocking(move || version.get(), |_| act::configuration());
+    let (version, value) = (configure.version(), configure.value());
+    // NOTE: WCAG 2.2 SC 3.3.7 and 2.4.3: only a change the replica made reads the
+    // page again, so a refused form keeps what the operator entered.
+    let changes = Memo::new(move |previous: Option<&usize>| {
+        let at = version.get();
+        let changed = value.with(|answer| matches!(answer, Some(Ok(answer)) if answer.changed));
+        if changed {
+            at
+        } else {
+            previous.copied().unwrap_or_default()
+        }
+    });
+    let loaded = Resource::new_blocking(move || changes.get(), |_| act::configuration());
     // NOTE: the Leptos book, `ssr/24_hydration_bugs`: an effect runs only in the
     // browser, once hydrated, so the server and the hydration render alike.
     let hydrated = RwSignal::new(false);
     Effect::new(move |_| hydrated.set(true));
-    let outcome = (configure.value(), configure.pending());
-    let pending = outcome.1;
+    let heading = NodeRef::<leptos::html::H2>::new();
+    // NOTE: WCAG 2.2 SC 2.4.3: focus follows an answer to its heading, also once
+    // a change has drawn the page again.
+    Effect::new(move |_| {
+        let answered = value.with(Option::is_some);
+        if let Some(heading) = heading.get()
+            && answered
+        {
+            match heading.focus() {
+                Ok(()) | Err(_) => {}
+            }
+        }
+    });
+    let page = Page {
+        configure,
+        hydrated,
+        heading,
+    };
     view! {
         <Title text=crate::views::titled("Configuration") />
         <h1>"Configuration"</h1>
@@ -64,26 +91,32 @@ pub fn ConfigurationPage() -> impl IntoView {
             view! { <p>"Loading the configuration."</p> }
         }>
             {move || Suspend::new(async move {
-                crate::views::shown(
-                    loaded.await,
-                    move |view| config_section(view, configure, hydrated),
-                )
+                crate::views::shown(loaded.await, move |view| config_section(view, page))
             })}
         </Transition>
-        <section aria-labelledby="configure-outcome" aria-busy=move || pending.get().to_string()>
-            <h2 id="configure-outcome">"Outcome"</h2>
-            {crate::admin::answered(outcome)}
-        </section>
     }
 }
 
-/// The page the server rendered, its forms in one fieldset that hands the
-/// form submitted to `configure` once `hydrated`.
-fn config_section(
-    view: ConfigView,
+/// What every part of the page shares.
+#[derive(Clone, Copy)]
+struct Page {
+    /// The server function every form posts to.
     configure: ServerAction<Configure>,
+    /// Whether the page has hydrated, so its forms run.
     hydrated: RwSignal<bool>,
-) -> AnyView {
+    /// The heading of the outcome, which an answer moves focus to.
+    heading: NodeRef<leptos::html::H2>,
+}
+
+/// The page the server rendered, its forms in one fieldset that hands the
+/// form submitted to the server function once the page has hydrated, and
+/// the outcome of the last form.
+fn config_section(view: ConfigView, page: Page) -> AnyView {
+    let Page {
+        configure,
+        hydrated,
+        heading,
+    } = page;
     let submit = move |event: leptos::ev::SubmitEvent| {
         let form = event_target::<leptos::web_sys::HtmlFormElement>(&event);
         // NOTE: no specification governs this: our own design; form data the
@@ -95,6 +128,8 @@ fn config_section(
             });
         }
     };
+    let outcome = (configure.value(), configure.pending());
+    let pending = outcome.1;
     view! {
         <div inner_html=view.html></div>
         <fieldset disabled=move || !hydrated.get() on:submit=submit>
@@ -102,6 +137,12 @@ fn config_section(
             <p role="status">{move || crate::admin::ready(hydrated.get())}</p>
             <div inner_html=view.forms></div>
         </fieldset>
+        <section aria-labelledby="configure-outcome" aria-busy=move || pending.get().to_string()>
+            <h2 id="configure-outcome" tabindex="-1" node_ref=heading>
+                "Outcome"
+            </h2>
+            {crate::admin::answered(outcome)}
+        </section>
     }
     .into_any()
 }

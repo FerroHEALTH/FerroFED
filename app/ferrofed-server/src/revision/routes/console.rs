@@ -26,7 +26,7 @@ use axum::extract::{Extension, Path, State};
 use axum::response::{IntoResponse, Response};
 use ferrofed_eehrxf::reserved;
 use ferrofed_registry::console::{
-    ConsoleMember, ConsoleState, MemberResource, Owner, QueryResource, Resources,
+    ConsoleMember, ConsoleState, MemberResource, Owner, QueryRegistry, QueryResource, Resources,
 };
 use ferrofed_registry::definition::store::Insertion;
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
@@ -42,8 +42,8 @@ use crate::config::error::Error;
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::service::{Refused, RevisionError, SAVED, held_table};
-use crate::revision::{Author, RevisionId};
 use crate::stored::{self, Inadmissible};
+use ferrofed_registry::revision::{Author, Revision, RevisionId};
 
 /// The `event` of the record of a stored-query version the console stored.
 pub const STORED: &str = "config-stored-query-stored";
@@ -266,9 +266,10 @@ fn report(managed: &Managed) -> Result<Resources, RevisionError> {
     }
     members.sort_by(|a, b| a.node.cmp(&b.node));
     Ok(Resources {
-        running: running.map(RevisionId::get),
-        head: head.map(RevisionId::get),
+        running,
+        head,
         members,
+        stored_query_registry: registry(managed),
         stored_queries: queries(managed)?,
     })
 }
@@ -287,6 +288,16 @@ fn console_resource(member: &ConsoleMember, state: ConsoleState) -> MemberResour
         owner: Owner::Console,
         state: Some(state),
         member: Some(member.clone()),
+    }
+}
+
+/// The stored-query registry `managed` serves, and whether it takes a new
+/// version.
+fn registry(managed: &Managed) -> QueryRegistry {
+    match managed.reloader.state().definitions() {
+        None => QueryRegistry::Absent,
+        Some(definitions) if definitions.is_read_only() => QueryRegistry::ReadOnly,
+        Some(_) => QueryRegistry::Writable,
     }
 }
 
@@ -354,7 +365,7 @@ fn saved_as(
     managed: &Managed,
     (base, table): (Option<RevisionId>, &toml::Table),
     (operator, reason): (&Operator, String),
-) -> Result<crate::revision::Revision, ConsoleError> {
+) -> Result<Revision, ConsoleError> {
     let text =
         toml::to_string(table).map_err(|source| Refused::from(Error::Assemble { source }))?;
     let saved = managed

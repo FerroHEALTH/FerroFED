@@ -18,6 +18,7 @@ use crate::views::model::{Refusal, ViewError};
 #[must_use]
 pub fn refused(refused: &Refusal) -> ActionAnswer {
     ActionAnswer {
+        changed: false,
         html: crate::views::refusal(refused).to_html(),
     }
 }
@@ -33,6 +34,7 @@ pub fn cleared(answers: &[ReplicaAnswer<ClearLine>]) -> ActionAnswer {
         })
         .collect_view();
     ActionAnswer {
+        changed: false,
         html: view! { <ul>{items}</ul> }.to_html(),
     }
 }
@@ -41,6 +43,7 @@ pub fn cleared(answers: &[ReplicaAnswer<ClearLine>]) -> ActionAnswer {
 #[must_use]
 pub fn repaired(answer: &ReplicaAnswer<RepairLine>) -> ActionAnswer {
     ActionAnswer {
+        changed: false,
         html: replica_said(answer, "drift repair", repair_line).to_html(),
     }
 }
@@ -88,7 +91,7 @@ pub(crate) fn replica_said<T>(
         Acted::Fault(ViewError::Unreachable) => view! {
             <p role="alert">
                 {format!(
-                    "Replica {replica}: its admin listener could not be reached, so the {what} did not run there.",
+                    "Replica {replica}: its admin listener gave no answer, so whether the {what} ran there is unknown. Reload the page before running it again; a configuration change shows in the revision history.",
                 )}
             </p>
         }

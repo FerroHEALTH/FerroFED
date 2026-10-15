@@ -10,31 +10,33 @@
 //! `textarea`: a field the page fills in carries its value as an attribute.
 
 use ferrofed_registry::console::{
-    ConsoleMember, ConsoleState, MemberResource, Owner, QueryResource, Resources,
+    ConsoleMember, ConsoleState, MemberResource, Owner, QueryRegistry, QueryResource, Resources,
 };
 use ferrofed_registry::operator::Page;
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
-use crate::admin::act::server::ReplicaAnswer;
+use crate::admin::act::server::{Acted, ReplicaAnswer};
 use crate::admin::answer::replica_said;
 use crate::admin::model::ActionAnswer;
 use crate::config::settings::ReplicaSettings;
 use crate::configure::act::Configure;
 use crate::configure::model::ConfigView;
-use crate::gateway::config::{AppliedLine, AuthorLine, ChangeLine, Mark, RevisionLine, Standing};
+use ferrofed_registry::revision::{
+    Applied, Author, Current, Difference, Origin, Outcome, Revision, RevisionId, Standing,
+};
 
 /// What a replica reports of a saved revision, with the preview of what it
 /// changes against the running revision when the console could read it.
 #[derive(Debug, Clone)]
 pub struct SavedLine {
     /// The revision saved.
-    pub revision: RevisionLine,
+    pub revision: Revision,
     /// The revision that runs, which the preview compares with.
-    pub running: Option<u64>,
+    pub running: Option<RevisionId>,
     /// The keys that differ, `None` when the preview could not be read.
-    pub changes: Option<Vec<ChangeLine>>,
+    pub changes: Option<Vec<Difference>>,
 }
 
 /// What a replica reports of a stored-query version stored.
@@ -67,11 +69,11 @@ pub fn page(
     replica: &ReplicaSettings,
     standing: &Standing,
     resources: &Resources,
-    (history, pending): (&Page<RevisionLine>, Option<&[ChangeLine]>),
+    (history, pending): (&Page<Revision>, Option<&[Difference]>),
 ) -> ConfigView {
     let revisions = revisions_section(replica, standing, pending);
     let members = members_section(&resources.members);
-    let queries = queries_section(&resources.stored_queries);
+    let queries = queries_section(resources.stored_query_registry, &resources.stored_queries);
     let history = history_section(history);
     ConfigView {
         html: view! {
@@ -86,17 +88,30 @@ pub fn page(
 }
 
 /// Who `author` is, in words.
-fn author(author: &AuthorLine) -> String {
-    match (author.kind.as_str(), &author.subject) {
-        ("file", _) => String::from("the configuration file"),
-        ("operator", Some(subject)) => format!("operator {subject}"),
-        _ => String::from("a loopback peer under the development profile"),
+fn author(author: &Author) -> String {
+    match author {
+        Author::File => String::from("the configuration file"),
+        Author::Operator { subject, .. } => format!("operator {subject}"),
+        Author::DevelopmentLoopback => {
+            String::from("a loopback peer under the development profile")
+        }
+        _ => String::from("an author this console does not know"),
+    }
+}
+
+/// Where a revision came from, in words.
+fn origin(origin: Origin) -> &'static str {
+    match origin {
+        Origin::File => "file",
+        Origin::Operator => "operator",
+        Origin::Rollback => "rollback",
+        _ => "another origin",
     }
 }
 
 /// The running revision's mark, in words.
-fn mark_said(mark: &Mark) -> String {
-    let outcome = if mark.outcome == "pending-restart" {
+fn mark_said(mark: &Current) -> String {
+    let outcome = if mark.outcome == Outcome::PendingRestart {
         format!(
             " Some of its settings take effect only at a restart: {}.",
             mark.needs_restart.join(", ")
@@ -117,7 +132,7 @@ fn mark_said(mark: &Mark) -> String {
 fn revisions_section(
     replica: &ReplicaSettings,
     standing: &Standing,
-    pending: Option<&[ChangeLine]>,
+    pending: Option<&[Difference]>,
 ) -> AnyView {
     let running = standing
         .current
@@ -163,7 +178,7 @@ fn revisions_section(
 }
 
 /// The keys `changes` names, against revision `to`.
-fn diff_table(changes: &[ChangeLine], to: u64) -> AnyView {
+fn diff_table(changes: &[Difference], to: RevisionId) -> AnyView {
     if changes.is_empty() {
         return view! { <p>"It changes no setting."</p> }.into_any();
     }
@@ -175,7 +190,7 @@ fn diff_table(changes: &[ChangeLine], to: u64) -> AnyView {
                     <th scope="row">
                         <code>{change.key.clone()}</code>
                     </th>
-                    <td>{change.change.clone()}</td>
+                    <td>{change.change.as_str()}</td>
                     <td>
                         <code>{change.from.clone().unwrap_or_default()}</code>
                     </td>
@@ -277,8 +292,8 @@ fn members_section(members: &[MemberResource]) -> AnyView {
 }
 
 /// The stored-query versions, each with its owner.
-fn queries_section(queries: &[QueryResource]) -> AnyView {
-    if queries.is_empty() {
+fn queries_section(registry: QueryRegistry, queries: &[QueryResource]) -> AnyView {
+    if registry == QueryRegistry::Absent {
         return view! {
             <section aria-labelledby="config-queries">
                 <h2 id="config-queries">"Stored queries"</h2>
@@ -299,6 +314,14 @@ fn queries_section(queries: &[QueryResource]) -> AnyView {
             }
         })
         .collect_view();
+    let read_only = (registry == QueryRegistry::ReadOnly).then(|| {
+        view! {
+            <p>
+                "The stored queries are read from the read-only definition files, so the "
+                "console stores no version: change the files."
+            </p>
+        }
+    });
     view! {
         <section aria-labelledby="config-queries">
             <h2 id="config-queries">"Stored queries"</h2>
@@ -306,6 +329,7 @@ fn queries_section(queries: &[QueryResource]) -> AnyView {
                 "A stored version is immutable (§12.7): a change is a new version, and "
                 "none is edited or removed."
             </p>
+            {read_only}
             <table>
                 <caption>"Stored-query versions and their owners"</caption>
                 <thead>
@@ -323,21 +347,21 @@ fn queries_section(queries: &[QueryResource]) -> AnyView {
 }
 
 /// The newest revisions, newest first.
-fn history_section(history: &Page<RevisionLine>) -> AnyView {
+fn history_section(history: &Page<Revision>) -> AnyView {
     let rows = history
         .items
         .iter()
         .map(|revision| {
             let origin = match revision.restores {
                 Some(restored) => format!("rollback to revision {restored}"),
-                None => revision.origin.clone(),
+                None => origin(revision.origin).to_owned(),
             };
             view! {
                 <tr>
-                    <th scope="row">{revision.id}</th>
+                    <th scope="row">{revision.id.to_string()}</th>
                     <td>{origin}</td>
                     <td>{author(&revision.author)}</td>
-                    <td>{revision.at.clone()}</td>
+                    <td>{revision.at.to_string()}</td>
                     <td>{revision.reason.clone()}</td>
                 </tr>
             }
@@ -441,12 +465,7 @@ fn forms(standing: &Standing, resources: &Resources) -> Vec<FormView> {
     if !removable.is_empty() {
         forms.push(remove_form(standing.head, &removable));
     }
-    let writable = !resources.stored_queries.is_empty()
-        && !resources
-            .stored_queries
-            .iter()
-            .any(|query| query.owner == Owner::File);
-    if writable {
+    if resources.stored_query_registry == QueryRegistry::Writable {
         forms.push(query_form());
     }
     forms
@@ -495,12 +514,12 @@ fn confirm(form: &str, label: &'static str) -> impl IntoView {
 }
 
 /// The base a change is saved on, `""` for none.
-fn base(head: Option<u64>) -> String {
+fn base(head: Option<RevisionId>) -> String {
     head.map(|head| head.to_string()).unwrap_or_default()
 }
 
 /// The apply of revision `head`.
-fn apply_form(head: u64) -> FormView {
+fn apply_form(head: RevisionId) -> FormView {
     let said = format!(
         "Applies revision {head} through the reload path; every replica sharing the store follows it. Its changes are listed under Revisions."
     );
@@ -519,7 +538,7 @@ fn apply_form(head: u64) -> FormView {
 }
 
 /// The rollback of the running revision `running` to `previous`'s content.
-fn rollback_form(running: u64, previous: u64) -> FormView {
+fn rollback_form(running: RevisionId, previous: RevisionId) -> FormView {
     let said = format!(
         "Saves the content of revision {previous} as a new revision and applies it, in one step."
     );
@@ -560,7 +579,7 @@ fn endpoints_text(member: &ConsoleMember) -> String {
 fn member_form(
     id: &str,
     heading: &str,
-    head: Option<u64>,
+    head: Option<RevisionId>,
     member: Option<&ConsoleMember>,
 ) -> FormView {
     let value = |read: fn(&ConsoleMember) -> String| member.map(read).unwrap_or_default();
@@ -620,7 +639,7 @@ fn member_form(
 }
 
 /// The removal of one of the console members `nodes`.
-fn remove_form(head: Option<u64>, nodes: &[&str]) -> FormView {
+fn remove_form(head: Option<RevisionId>, nodes: &[&str]) -> FormView {
     let choices = nodes
         .iter()
         .map(|node| view! { <option value=(*node).to_owned()>{(*node).to_owned()}</option> })
@@ -691,6 +710,7 @@ fn query_form() -> FormView {
 #[must_use]
 pub fn saved(answer: &ReplicaAnswer<SavedLine>) -> ActionAnswer {
     ActionAnswer {
+        changed: matches!(answer.acted, Acted::Done(_)),
         html: replica_said(answer, "save", saved_line).to_html(),
     }
 }
@@ -723,14 +743,15 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
 
 /// The answer of an apply or a rollback at `answer`'s replica.
 #[must_use]
-pub fn applied(answer: &ReplicaAnswer<AppliedLine>, what: &str) -> ActionAnswer {
+pub fn applied(answer: &ReplicaAnswer<Applied>, what: &str) -> ActionAnswer {
     ActionAnswer {
+        changed: matches!(answer.acted, Acted::Done(_)),
         html: replica_said(answer, what, applied_line).to_html(),
     }
 }
 
 /// What a replica reports of an apply or a rollback.
-fn applied_line(replica: &str, line: &AppliedLine) -> AnyView {
+fn applied_line(replica: &str, line: &Applied) -> AnyView {
     let restored = line
         .revision
         .restores
@@ -752,6 +773,7 @@ fn applied_line(replica: &str, line: &AppliedLine) -> AnyView {
 #[must_use]
 pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
     ActionAnswer {
+        changed: matches!(answer.acted, Acted::Done(_)),
         html: replica_said(answer, "store", stored_line).to_html(),
     }
 }

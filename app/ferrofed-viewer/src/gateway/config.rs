@@ -15,107 +15,19 @@
 
 use ferrofed_registry::console::{ConsoleMember, Resources};
 use ferrofed_registry::operator::{Page, PageRequest};
+use ferrofed_registry::revision::{Applied, Diff, Revision, RevisionId, Standing};
 use http::{Method, StatusCode};
 use openehr_its::rest::client::{Request, path_segment};
 use openehr_its::rest::generated::definition::StoredQuery;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::config::settings::ReplicaSettings;
 use crate::gateway::{AccessToken, Gateway, GatewayError};
 
-/// Who made a revision or applied one, as the gateway records it.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct AuthorLine {
-    /// `file`, `operator` or `development-loopback`.
-    pub kind: String,
-    /// The operator's issuer.
-    pub issuer: Option<String>,
-    /// The operator's subject at that issuer.
-    pub subject: Option<String>,
-}
-
-/// The mark of the revision the gateway runs.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct Mark {
-    /// The revision in effect.
-    pub revision: u64,
-    /// The revision before it, which a rollback restores.
-    pub previous: Option<u64>,
-    /// `applied`, or `pending-restart`.
-    pub outcome: String,
-    /// The changed settings that take effect only at a restart.
-    pub needs_restart: Vec<String>,
-    /// Who applied it.
-    pub applied_by: AuthorLine,
-    /// When, as RFC 3339 text.
-    pub applied_at: String,
-}
-
-/// The body of `GET /admin/config`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct Standing {
-    /// The newest revision.
-    pub head: Option<u64>,
-    /// The mark of the running revision.
-    pub current: Option<Mark>,
-}
-
-/// A revision as the gateway answers it, its configuration text left out.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct RevisionLine {
-    /// Its number.
-    pub id: u64,
-    /// The revision it was saved on top of.
-    pub base: Option<u64>,
-    /// `file`, `operator` or `rollback`.
-    pub origin: String,
-    /// The revision whose content a rollback restores.
-    pub restores: Option<u64>,
-    /// Who made it.
-    pub author: AuthorLine,
-    /// When, as RFC 3339 text.
-    pub at: String,
-    /// Why, as its author wrote it.
-    pub reason: String,
-}
-
-/// One key that differs between two revisions.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct ChangeLine {
-    /// The dotted key.
-    pub key: String,
-    /// `added`, `removed` or `changed`.
-    pub change: String,
-    /// The value in the earlier revision.
-    pub from: Option<String>,
-    /// The value in the later revision.
-    pub to: Option<String>,
-}
-
-/// The body of a diff.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct DiffLine {
-    /// The earlier revision.
-    pub from: u64,
-    /// The later revision.
-    pub to: u64,
-    /// The keys that differ, in key order.
-    pub changes: Vec<ChangeLine>,
-}
-
-/// The answer to an apply or a rollback.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct AppliedLine {
-    /// The revision applied.
-    pub revision: RevisionLine,
-    /// The mark the store now holds.
-    pub current: Mark,
-}
-
 /// The body of a member's save.
 #[derive(Serialize)]
 struct MemberBody<'a> {
-    base: Option<u64>,
+    base: Option<RevisionId>,
     reason: &'a str,
     member: &'a ConsoleMember,
 }
@@ -123,14 +35,14 @@ struct MemberBody<'a> {
 /// The body of a member's removal.
 #[derive(Serialize)]
 struct RemoveBody<'a> {
-    base: Option<u64>,
+    base: Option<RevisionId>,
     reason: &'a str,
 }
 
 /// The body of a rollback.
 #[derive(Serialize)]
 struct RollbackBody<'a> {
-    current: u64,
+    current: RevisionId,
     reason: &'a str,
 }
 
@@ -142,12 +54,21 @@ struct QueryBody<'a> {
 
 /// The change a revision is saved on: the revision the operator read, and
 /// why.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Change<'a> {
     /// The revision the change is based on, the newest the operator read.
-    pub base: Option<u64>,
+    pub base: Option<RevisionId>,
     /// Why the change is made.
     pub reason: &'a str,
+}
+
+impl std::fmt::Debug for Change<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Change")
+            .field("base", &self.base)
+            .field("reason", &!self.reason.trim().is_empty())
+            .finish()
+    }
 }
 
 impl Gateway {
@@ -193,7 +114,7 @@ impl Gateway {
         replica: &ReplicaSettings,
         token: &AccessToken,
         page: PageRequest,
-    ) -> Result<Page<RevisionLine>, GatewayError> {
+    ) -> Result<Page<Revision>, GatewayError> {
         let mut request = Request::new(Method::GET, String::from("/admin/config/revisions"));
         request.query("offset", page.offset);
         request.query("limit", page.limit);
@@ -209,8 +130,8 @@ impl Gateway {
         &self,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        (from, to): (u64, u64),
-    ) -> Result<DiffLine, GatewayError> {
+        (from, to): (RevisionId, RevisionId),
+    ) -> Result<Diff, GatewayError> {
         let path = format!("/admin/config/revisions/{from}/diff/{to}");
         self.admin(
             replica,
@@ -233,7 +154,7 @@ impl Gateway {
         token: &AccessToken,
         change: Change<'_>,
         member: &ConsoleMember,
-    ) -> Result<RevisionLine, GatewayError> {
+    ) -> Result<Revision, GatewayError> {
         let path = format!(
             "/admin/config/members/{}",
             path_segment(&member.node.id.as_str())
@@ -265,7 +186,7 @@ impl Gateway {
         token: &AccessToken,
         change: Change<'_>,
         node: &str,
-    ) -> Result<RevisionLine, GatewayError> {
+    ) -> Result<Revision, GatewayError> {
         let path = format!("/admin/config/members/{}/remove", path_segment(&node));
         let mut request = Request::new(Method::POST, path);
         request
@@ -290,8 +211,8 @@ impl Gateway {
         &self,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        id: u64,
-    ) -> Result<AppliedLine, GatewayError> {
+        id: RevisionId,
+    ) -> Result<Applied, GatewayError> {
         let path = format!("/admin/config/revisions/{id}/apply");
         self.admin(
             replica,
@@ -311,9 +232,9 @@ impl Gateway {
         &self,
         replica: &ReplicaSettings,
         token: &AccessToken,
-        current: u64,
+        current: RevisionId,
         reason: &str,
-    ) -> Result<AppliedLine, GatewayError> {
+    ) -> Result<Applied, GatewayError> {
         let mut request = Request::new(Method::POST, String::from("/admin/config/rollback"));
         request
             .json_body(&RollbackBody { current, reason }, None)

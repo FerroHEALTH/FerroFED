@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use ferrofed_registry::revision::{Change, Difference};
 
 /// The top-level keys of the bootstrap core, which only the file sets and a
 /// revision never holds.
@@ -185,33 +185,6 @@ fn dotted(prefix: &str, key: &str) -> String {
     } else {
         format!("{prefix}.{key}")
     }
-}
-
-/// How one key differs between two revisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-#[non_exhaustive]
-pub enum Change {
-    /// The key is set only in the later revision.
-    Added,
-    /// The key is set only in the earlier revision.
-    Removed,
-    /// The key is set in both, to different values.
-    Changed,
-}
-
-/// One key that differs between two revisions, with its values as TOML
-/// writes them.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Difference {
-    /// The dotted key, an array of tables indexed as `table[0]`.
-    pub key: String,
-    /// How the key differs.
-    pub change: Change,
-    /// The value in the earlier revision, when it sets one.
-    pub from: Option<String>,
-    /// The value in the later revision, when it sets one.
-    pub to: Option<String>,
 }
 
 /// The keys that differ from `from` to `to`, in key order. A revision holds
