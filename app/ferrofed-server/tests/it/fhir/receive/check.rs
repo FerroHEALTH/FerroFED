@@ -53,7 +53,7 @@ fn a_category_with_no_member_is_named() -> TestResult {
     let stdout = checked(&fhir_tables(UNREACHED_SUPPLIER))?;
     assert!(
         stdout.contains(
-            "ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of any of these Art 14(1) categories\n"
+            "ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category\n"
         ),
         "{stdout}"
     );

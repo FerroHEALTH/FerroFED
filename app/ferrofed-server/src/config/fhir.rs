@@ -176,8 +176,13 @@ impl FhirSettings {
             .collect();
         let unreceived: Vec<&str> = self.receivers.unreceived().map(Category::code).collect();
         if !unreceived.is_empty() {
+            let which = if unreceived.len() == 1 {
+                "this Art 14(1) category"
+            } else {
+                "any of these Art 14(1) categories"
+            };
             notes.push(format!(
-                "[[fhir.receive]] names no receiving member for {}: the FHIR face refuses a document of any of these Art 14(1) categories",
+                "[[fhir.receive]] names no receiving member for {}: the FHIR face refuses a document of {which}",
                 unreceived.join(", ")
             ));
         }
