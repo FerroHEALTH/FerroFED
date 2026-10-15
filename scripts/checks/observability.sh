@@ -17,13 +17,95 @@
 #      app/ferrofed-server/src with each `.` written `_`.
 #
 # Usage:
-#   scripts/checks/observability.sh
-# Needs jq and yq (mikefarah). Exit 1 naming each failure; 0 otherwise.
+#   scripts/checks/observability.sh              check the shipped assets
+#   scripts/checks/observability.sh --self-test  prove a missing tool skips
+#                                                outside CI and fails in it
+# Needs jq and yq (mikefarah), and promtool in CI. Outside CI (CI unset), a
+# missing jq or yq prints a SKIP naming it and exits 0, and a missing
+# promtool leaves the structure check alone; in CI each fails the run, since
+# CI installs them. Exit 1 naming each failure; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 readonly RULES=deploy/observability/ferrofed-alerts.yaml
 readonly DASHBOARD=deploy/observability/ferrofed-dashboard.json
+
+# missing TOOL: outside CI, print a SKIP naming TOOL and exit 0; in CI,
+# where every tool is installed, fail naming it.
+missing() {
+  if [[ -n "${CI:-}" ]]; then
+    echo "::error::observability: $1 is not on PATH, and CI installs it" >&2
+    exit 1
+  fi
+  echo "SKIP: observability: $1 is not on PATH; install it to run this check"
+  exit 0
+}
+
+# self_test: runs this script under a PATH without one tool, with CI unset
+# and with CI=true, and exits 1 when a run skips or fails the wrong way.
+self_test() {
+  local work failed=0 script
+  script="$PWD/scripts/checks/observability.sh"
+  work="$(mktemp -d)"
+  # shellcheck disable=SC2064 # expand $work now: the local is gone at EXIT.
+  trap "rm -rf '$work'" EXIT
+  mkdir -p "$work/nojq" "$work/noyq" "$work/nopromtool"
+  printf '#!/bin/sh\nexit 0\n' > "$work/stub"
+  chmod +x "$work/stub"
+  ln -s "$(command -v dirname)" "$work/nojq/dirname"
+  ln -s "$(command -v dirname)" "$work/noyq/dirname"
+  ln -s "$work/stub" "$work/noyq/jq"
+  ln -s "$(command -v dirname)" "$work/nopromtool/dirname"
+  ln -s "$work/stub" "$work/nopromtool/jq"
+  ln -s "$work/stub" "$work/nopromtool/yq"
+
+  # expect BIN TOOL CI WANT: a run on PATH=BIN with CI set to CI exits WANT
+  # and names TOOL, as a SKIP when WANT is 0.
+  expect() {
+    local bin="$1" tool="$2" ci="$3" want="$4" status=0 pattern
+    CI="$ci" PROMTOOL="" PATH="$work/$bin" "$BASH" "$script" > "$work/out" 2>&1 || status=$?
+    pattern="::error::observability: $tool is not on PATH"
+    if [[ "$want" -eq 0 ]]; then
+      pattern="SKIP: observability: $tool is not on PATH"
+    fi
+    if [[ "$status" -eq "$want" ]] && grep -q -F "$pattern" "$work/out"; then
+      echo "  ok: without $tool, CI='$ci' exits $want naming it"
+    else
+      echo "  FAIL: without $tool, CI='$ci' exited $status, wanted $want naming it" >&2
+      sed 's/^/    /' "$work/out" >&2
+      failed=1
+    fi
+  }
+  expect nojq jq "" 0
+  expect nojq jq true 1
+  expect noyq yq "" 0
+  expect noyq yq true 1
+  expect nopromtool promtool true 1
+  if [[ "$failed" -ne 0 ]]; then
+    exit 1
+  fi
+  echo "observability self-test: OK"
+}
+
+case "${1:-}" in
+  --self-test)
+    self_test
+    exit
+    ;;
+  '') ;;
+  *)
+    echo "usage: $0 [--self-test]" >&2
+    exit 2
+    ;;
+esac
+
+for tool in jq yq; do
+  command -v "$tool" > /dev/null 2>&1 || missing "$tool"
+done
+promtool="${PROMTOOL:-$(command -v promtool || true)}"
+if [[ -z "$promtool" ]] && [[ -n "${CI:-}" ]]; then
+  missing promtool
+fi
 
 fail=0
 bad() {
@@ -38,7 +120,6 @@ done
 [[ "$fail" -eq 0 ]] || exit 1
 
 echo "== the rule file"
-promtool="${PROMTOOL:-$(command -v promtool || true)}"
 if [[ -n "$promtool" ]]; then
   if out="$("$promtool" check rules "$RULES" 2>&1)"; then
     echo "OK: promtool: ${out##*$'\n'}"

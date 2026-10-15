@@ -39,7 +39,8 @@ scripts/checks/site-links.sh
 These are the tier-1 guards `ci.yml` runs, with the same flags, so a local
 pass means a CI pass. `hadolint` lints `docker/Dockerfile` in the same tier.
 `site-links.sh` needs the docs toolchain of `docs/VERSIONS.md` and lychee on
-your `PATH`.
+your `PATH`. A guard whose tool is missing prints a `SKIP` naming the tool and
+passes on your machine; in CI, where `CI` is set, the same gap fails it.
 The `conclusion` job aggregates every job and is the single required check on
 `main`.
 

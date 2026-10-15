@@ -37,11 +37,13 @@
 # Usage:
 #   scripts/checks/ihe-citations.sh              check the tracked tree
 #   scripts/checks/ihe-citations.sh --self-test  prove each refusal and pass
-# Needs pdftotext (poppler) to read a vendored text that is a PDF. Without it
-# the guard names each PDF it could not read on stderr, and counts a citation
-# no text it read holds as not checked, as it does for a cache-only text; a
-# citation a text it read holds is still held to its designator. Exit 1 naming each citation the vendored text does
-# not hold; 0 otherwise.
+# Needs pdftotext (poppler) to read a vendored text that is a PDF. Without it,
+# outside CI (CI unset), the guard prints a SKIP on stderr naming each PDF it
+# could not read, and counts a citation no text it read holds as not checked,
+# as it does for a cache-only text; a citation a text it read holds is still
+# held to its designator. In CI, which installs poppler, a PDF left unread
+# fails the run. Exit 1 naming each citation the vendored text does not hold;
+# 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -244,9 +246,16 @@ check() {
   local root="$1" work status=0 file unread=""
   if ! command -v pdftotext > /dev/null 2>&1; then
     while IFS= read -r file; do
-      echo "ihe-citations: pdftotext is not on PATH, so ${file#"$root"/} is not read; install poppler (brew install poppler, or apt-get install poppler-utils)." >&2
+      if [[ -n "${CI:-}" ]]; then
+        echo "::error::ihe-citations: pdftotext is not on PATH, so ${file#"$root"/} is not read, and CI installs it." >&2
+      else
+        echo "SKIP: ihe-citations: pdftotext is not on PATH, so ${file#"$root"/} is not read; install poppler (brew install poppler, or apt-get install poppler-utils)." >&2
+      fi
       unread="$unread${unread:+, }${file#"$root"/}"
     done < <(corpus_files "$root" | grep '\.pdf$' || true)
+    if [[ -n "$unread" ]] && [[ -n "${CI:-}" ]]; then
+      return 1
+    fi
   fi
   work="$(mktemp -d)"
   build_index "$root" > "$work/index.tsv" || status=$?
@@ -290,12 +299,12 @@ self_test() {
     > "$work/docs/specs/ihe-iua/IUA.md"
 
   # expect WANT LINE: a source line LINE exits WANT, the tools found on
-  # $search.
+  # $search, with CI unset.
   local search="$PATH"
   expect() {
     local want="$1" status=0
     n=$((n + 1))
-    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$2" | PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
+    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$2" | CI="" PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
     if [[ "$status" -ne "$want" ]]; then
       echo "ihe-citations: self-test failed: '$2' exited $status, wanted $want." >&2
       sed 's/^/  /' "$work/out" >&2
@@ -363,7 +372,7 @@ self_test() {
   printf 'not read\n' > "$work/docs/specs/ihe-atna/Suppl.pdf"
   search="$work/bin"
   expect 0 '/// ITI-81 §3.81.4.1.2.1 the date search.'
-  if ! grep -q -F 'pdftotext is not on PATH, so docs/specs/ihe-atna/Suppl.pdf is not read; install poppler' "$work/out" ||
+  if ! grep -q -F 'SKIP: ihe-citations: pdftotext is not on PATH, so docs/specs/ihe-atna/Suppl.pdf is not read; install poppler' "$work/out" ||
     ! grep -q -F '1 citation(s) not checked' "$work/out"; then
     echo "ihe-citations: self-test failed: without pdftotext the PDF is not named, or the citation is not counted as not checked." >&2
     sed 's/^/  /' "$work/out" >&2
@@ -372,6 +381,17 @@ self_test() {
   expect 0 '/// PIXm §2:3.83.4.2.2.1 lists the identifiers.'
   expect 1 '/// PDQm §2:3.83.4 the messages.'
   expect 1 '/// ITI-38 §3.55.4.2.3 names another transaction.'
+  # In CI, which installs poppler, a PDF left unread fails the run.
+  local status=0
+  n=$((n + 1))
+  printf 'crates/x/src/lib.rs:%d:%s\n' "$n" '/// PIXm §2:3.83.4.2.2.1 lists the identifiers.' |
+    CI=true PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
+  if [[ "$status" -ne 1 ]] ||
+    ! grep -q -F '::error::ihe-citations: pdftotext is not on PATH, so docs/specs/ihe-atna/Suppl.pdf is not read, and CI installs it.' "$work/out"; then
+    echo "ihe-citations: self-test failed: in CI without pdftotext the run exited $status, wanted 1 naming the PDF." >&2
+    sed 's/^/  /' "$work/out" >&2
+    failed=1
+  fi
   if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi

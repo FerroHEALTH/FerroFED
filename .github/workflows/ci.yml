@@ -239,6 +239,7 @@ jobs:
             "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/$tarball"
           echo "${PROMETHEUS_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum --check --strict
           tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
+          bash scripts/checks/observability.sh --self-test
           PROMTOOL="$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" \
             bash scripts/checks/observability.sh
 
