@@ -134,7 +134,10 @@ memory of one process and is lost on its restart, and the gateway writes
 nothing derived from a patient identifier to a shared store. For the same
 reason the operator's clear of a held `ehr_id` collision clears the replica
 whose admin listener receives it, so send it to each replica
-([Clearing a held collision](registry.md#clearing-a-held-collision)).
+([Clearing a held collision](registry.md#clearing-a-held-collision)), and
+the export of the learned routes for a replacement system holds one
+replica's routes, so export each replica
+([Exporting the identity state](identity-state-export.md)).
 
 The stored-query registry is the exception, because a stored version must be
 the same on every replica and a second `PUT` of it refused on every replica

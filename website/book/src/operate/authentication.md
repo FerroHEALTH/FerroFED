@@ -146,7 +146,7 @@ addresses, only `*` or `**` covers it.
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
 | `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries` and `/operator/dependencies` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
-| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
+| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear`, and the export `POST /admin/identity-state/export` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
 
