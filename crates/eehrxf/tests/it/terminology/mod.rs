@@ -18,6 +18,8 @@ mod server;
 mod system;
 #[cfg(feature = "openehr")]
 mod transcode;
+#[cfg(feature = "openehr")]
+mod version;
 
 use async_trait::async_trait;
 use eehrxf::terminology::Operation;

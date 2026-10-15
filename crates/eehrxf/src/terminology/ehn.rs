@@ -10,11 +10,12 @@
 //! implementation and the HL7 IPS implementations". Each constant here is
 //! the URI by which the MyHealth@EU Master Value Sets Catalogue 9.1.0 (the
 //! eHDSI implementation) includes that system in the value set it names, so
-//! a coding a deployment sends is one MyHealth@EU reads.
+//! a coding a deployment sends is one MyHealth@EU reads. The catalogue
+//! includes no NPU, so [`NPU`] is the URI HL7 Europe includes it by.
 //!
-//! Three names of §4 have no constant: NPU and EMDN, for which no vendored
-//! eHDSI or HL7 package names a system URI, and IDMP, which §4 lists for use
-//! "when available". A deployment that needs one adds it with
+//! Two names of §4 have no constant: EMDN, for which no vendored eHDSI or
+//! HL7 package names a system URI, and IDMP, which §4 lists for use "when
+//! available". A deployment that needs one adds it with
 //! `PreferredSystems::new` (feature `openehr`).
 
 /// SNOMED CT, listed in §4 as "SNOMED CT GPS".
@@ -49,6 +50,11 @@ pub const UCUM: &str = "http://unitsofmeasure.org";
 /// `eHDSILabCode`).
 pub const LOINC: &str = "http://loinc.org";
 
+/// NPU, listed in §4 beside LOINC for the result observation details (HL7
+/// Europe Laboratory Report 2.0.0, `ValueSet` `lab-obsCode-npu-eu-lab`,
+/// `compose.include.system`).
+pub const NPU: &str = "http://npu-terminology.org";
+
 /// ISO 3166, listed in §4 for the country of affiliation, the address
 /// country, the country of vaccination and the travel history (MVC 9.1.0
 /// `eHDSICountry`).
@@ -73,7 +79,7 @@ pub const HL7_OBSERVATION_CATEGORY: &str =
     "http://terminology.hl7.org/CodeSystem/observation-category";
 
 /// Every preferred code system of §4 this crate ships, in the order above.
-pub const PATIENT_SUMMARY: [&str; 12] = [
+pub const PATIENT_SUMMARY: [&str; 13] = [
     SNOMED_CT,
     ICD_10,
     ORPHACODE,
@@ -81,6 +87,7 @@ pub const PATIENT_SUMMARY: [&str; 12] = [
     EDQM_STANDARD_TERMS,
     UCUM,
     LOINC,
+    NPU,
     ISO_3166,
     HL7_ADMINISTRATIVE_GENDER,
     HL7_ROLE_CLASS,
