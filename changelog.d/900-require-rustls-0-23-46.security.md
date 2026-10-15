@@ -1,1 +1,0 @@
-- The workspace requires `rustls` 0.23.46 or later, so no build resolves a version open to RUSTSEC-2026-0346, RUSTSEC-2026-0347 or RUSTSEC-2026-0348; `ihe-iti` moves to 0.0.33 and `ehds-logging` to 0.0.15.

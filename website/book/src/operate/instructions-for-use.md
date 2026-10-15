@@ -255,7 +255,9 @@ event, and its frequency is the event's:
 | Watch the alerts | continuously, on the shipped alert rules | [Dashboard and alert rules](metrics.md#dashboard-and-alert-rules) |
 | Clear a quarantined audit record | when `ferrofed_audit_quarantined` rises, after reading why the repository refused it | [The audit spool](hardening.md#the-audit-spool) |
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
-| Renew TLS certificates and onward credentials | before each expires | [Hardening](hardening.md#tls) |
+| Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
+| Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
+| Move to a supported release | before the end date of your release's support period in `SECURITY.md`; once it has passed, the startup banner and `config check` say so | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its
@@ -286,9 +288,24 @@ deployment in the EU must plan for are:
   person's identifier does not find it, and the records carry no label for
   access rights by origin and category
   ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
-- **The professional's identification and assurance level are not yet in
-  the access record**
-  ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).
+- **The access record names the professional only as the token does.** It
+  records the professional's identifier and the assurance level when your
+  issuer's tokens state them, and an assurance level only for an issuer
+  with `[auth.issuer.assurance]`
+  ([The person behind an access](audit.md#the-person-behind-an-access)).
+- **A received document is not yet checked in full.** Its profiles'
+  invariants, its bindings and each entry's own profile are not all
+  evaluated, and the constraints the check cannot evaluate are listed
+  ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The
+  terminology rules of the exchange format are not yet applied to the
+  patient summary the gateway writes
+  ([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)).
+- **Each replica holds its own resolution bindings.** Behind several
+  replicas, a follow-up write that names no node is refused `400`
+  `target-required` by a replica that did not resolve the patient. Send
+  `openEHR-federation-endpoint` on every write, or keep each client on one
+  replica
+  ([Writes through a gateway with several replicas](../integrate/client-contract.md#writes-through-a-gateway-with-several-replicas)).
 - **No EU declaration of conformity has been drawn up**, and no release
   carries the CE marking
   ([Regulatory status](../evaluate/regulatory-status.md#what-is-built-and-what-is-planned)).

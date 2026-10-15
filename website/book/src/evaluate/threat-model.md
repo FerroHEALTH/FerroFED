@@ -190,9 +190,9 @@ control from you, or an issue that is open:
 3. **The access records live at your Audit Record Repository.** The
    gateway stores each record in the spool before it answers, and refuses
    an access it cannot record, but who may read the records and how long
-   they are kept is the repository's. FerroFED's own review interface and
-   retention by origin and category are planned
-   ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
+   they are kept is the repository's; each record states the period its
+   origins and categories call for. FerroFED's own review interface is
+   planned ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)).
 4. **Bearer replay.** An onward token or a caller token stolen at a node can
    be replayed at that node until it expires (§13.4). DPoP or mutual TLS
    narrows it for onward tokens; the caller token lives 60 seconds.

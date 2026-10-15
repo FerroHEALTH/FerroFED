@@ -96,11 +96,11 @@ What the record does not cover:
 - Every build records accesses, with the IHE binding, the Dutch binding,
   both or neither: the access log needs no regional binding.
 - FerroFED offers no interface of its own to review the records (Annex II,
-  point 3.3), and keeps them for no period by origin and category (point
-  3.4). Both are planned
-  ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)); until then
-  your Audit Record Repository decides who reads the records and how long
-  it keeps them.
+  point 3.3); it is planned ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)). Each record states how long it is
+  kept by its origins and categories, at least three years (point 3.4,
+  [How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
+  Your Audit Record Repository decides who reads the records and applies
+  the period each one states.
 
 Each member node still audits who asked: every request carries the verified
 caller in the `openEHR-federation-client` token and the gateway's request
@@ -130,8 +130,9 @@ person's data through the health professional access service "be available
 for at least three years from each date of access" (Art 9(2)). That duty
 belongs to the access service. The gateway's access records are kept as long
 as your Audit Record Repository keeps them, so its retention policy decides
-whether they meet that period; retention by origin and category is planned
-([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)).
+whether they meet that period. Each record states the period its origins and
+categories call for, never under three years, for the repository to apply
+([How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
 
 ## Roles
 
@@ -278,8 +279,8 @@ under GDPR Art 33: the controller notifies "where feasible, not later than
 The EHDS Regulation has the manufacturer of an EHR system report a serious
 incident "not later than three days" after becoming aware of it, "without
 prejudice to incident notification requirements under Directive (EU)
-2022/2555" (Art 44(7)). That is the manufacturer's duty, planned in
-[#672](https://github.com/FerroHEALTH/FerroFED/issues/672).
+2022/2555" (Art 44(7)). That is the manufacturer's duty, and its procedure
+is on the [Complaints and incidents](post-market.md#serious-incidents) page.
 
 ## The medical device question
 

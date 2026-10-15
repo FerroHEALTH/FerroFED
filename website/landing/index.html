@@ -63,7 +63,7 @@
     <section class="hero">
       <div class="wrap">
         <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
-        <p class="status" role="note">v0.0.9 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
+        <p class="status" role="note">v0.0.10 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
@@ -264,6 +264,20 @@ EOF</code></pre>
             </p>
           </article>
 
+          <article class="card">
+            <span class="tag">In v0.0.10</span>
+            <h3>EHDS readiness, and ready for production</h3>
+            <p>
+              Every access to patient data is recorded with the verified
+              caller and the categories of the data, as the EHDS logging
+              component asks. A FHIR face answers the patient summary in the
+              European exchange format and receives a patient summary into
+              the member you name. Several replicas, restarts with no dropped
+              request, TLS on the listener, overload limits and inbound
+              metrics are built, and the specification is pinned at 1.0.0.
+            </p>
+          </article>
+
         </div>
       </div>
     </section>
@@ -357,14 +371,17 @@ EOF</code></pre>
         <div class="status-panel">
           <h2>Where the project is</h2>
           <p>
-            v0.0.9 is the current release. It answers one federated AQL query
+            v0.0.10 is the current release. It answers one federated AQL query
             over many nodes with the patient resolved outside AQL, merges the
             rows as one CDR would, and routes reads, writes and definitions to
             the node that owns them. Every caller is authenticated, each node
             is told who is asking in a token the gateway signs, and the IHE and
             Dutch bindings locate the patient, check consent and audit each
-            exchange. v0.0.9 adds the operator console and the conformance
-            statement; v0.0.10 is EHDS readiness. The tracker's milestones are the
+            exchange. v0.0.9 added the operator console and the conformance
+            statement. v0.0.10 adds the EHDS access log, the patient summary
+            in the European exchange format, and what a production deployment
+            needs; v0.0.11 continues EHDS readiness and brings configuration
+            from the console. The tracker's milestones are the
             roadmap; every issue carries its acceptance criteria, and a
             release is cut when its milestone has no open issue left.
           </p>
