@@ -57,6 +57,26 @@ partial or planned names the issue that completes it.
 | 6 | "A copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity), attached to each release as `ferrofed-vX.Y.Z-eu-declaration-of-conformity.md` once the manufacturer issues it; the generator [`scripts/release/declaration-of-conformity.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/release/declaration-of-conformity.sh) | partial, [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) |
 | 37(2) | "a reference to the results obtained from a European digital testing environment referred to in Article 40" | [The European digital testing environment](#the-european-digital-testing-environment) | planned, [#675](https://github.com/FerroHEALTH/FerroFED/issues/675) |
 
+## The Cyber Resilience Act's part
+
+FerroFED is also a product with digital elements under Regulation (EU)
+2024/2847, the Cyber Resilience Act
+([The Cyber Resilience Act](regulatory-status.md#the-cyber-resilience-act)).
+Art 104(2) of the EHDS Regulation replaces that Act's Art 31(3), so for an
+EHR system "a single set of technical documentation shall be drawn up
+containing the information referred to in Annex VII and the information
+required by those Union legal acts". These pages are that Act's part of
+this set:
+
+| Annex VII | What it asks | Where FerroFED documents it |
+|---|---|---|
+| point 1(d) | "user information and instructions as set out in Annex II" | [CRA information to the user](cra-user-information.md) |
+| point 3 | "an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13" | [Cybersecurity risk assessment](cra-risk-assessment.md) |
+
+The other points of Annex VII are not indexed here yet; the single set of
+technical documentation for both acts is planned under
+[#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
+
 ## Forms placed on the market
 
 Each release is placed on the market by Cadasto B.V. in these forms, all
