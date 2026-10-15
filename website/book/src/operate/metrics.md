@@ -29,9 +29,11 @@ otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothi
 
 The admin listener serves `GET /metrics` and the operator's
 [stored-query distribution](../integrate/stored-queries.md#repairing-drift)
-(`POST /admin/stored-queries/{name}/{version}/distribute`) and
+(`POST /admin/stored-queries/{name}/{version}/distribute`),
 [clear of a held `ehr_id` collision](registry.md#clearing-a-held-collision)
-(`POST /admin/ehr-ids/{ehr_id}/clear`), answers every
+(`POST /admin/ehr-ids/{ehr_id}/clear`) and
+[export of the identity state](identity-state-export.md)
+(`POST /admin/identity-state/export`), answers every
 other path `404`, and never sits under the base path. It is never the
 gateway's own listener, so no client of the federation reaches it.
 

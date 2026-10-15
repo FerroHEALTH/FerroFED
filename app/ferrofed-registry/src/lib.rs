@@ -75,6 +75,7 @@ pub mod definition;
 pub mod document;
 pub mod ehr_index;
 pub mod error;
+pub mod export;
 pub mod health;
 pub mod id;
 pub mod incident;

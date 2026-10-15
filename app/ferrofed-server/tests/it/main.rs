@@ -52,6 +52,7 @@ mod follow_up;
 mod healthcheck;
 mod http;
 mod hygiene;
+mod identity_export;
 #[cfg(feature = "binding-ihe")]
 mod identity_grant;
 mod its_rest_areas;

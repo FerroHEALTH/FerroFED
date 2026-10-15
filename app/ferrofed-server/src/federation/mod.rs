@@ -35,6 +35,7 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_identity::session::{IdentityChange, ResolutionBindings};
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
+use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::operator::ClearedEhrId;
@@ -430,6 +431,30 @@ impl Federation {
             "the operator cleared an ehr_id from this process's index and resolution bindings"
         );
         cleared
+    }
+
+    /// The operator's export of the routing state this process learned: the
+    /// `creating_system_id` mappings, read against the current snapshot and
+    /// taken now (§12.2, N21).
+    ///
+    /// It holds no resolution binding and no `ehr_id`, so it names no
+    /// patient (§5.4.1, N33). The export is logged under the security target
+    /// with how many mappings it holds, never a value.
+    #[must_use]
+    pub fn export_identity_state(&self) -> IdentityStateExport {
+        let export = IdentityStateExport::of(
+            self.id.as_str(),
+            &self.snapshot,
+            &self.learned(),
+            jiff::Timestamp::now(),
+        );
+        tracing::info!(
+            target: crate::facade::security::TARGET,
+            format_version = export.format_version,
+            learned_creating_systems = export.learned_creating_systems.len(),
+            "the operator exported this process's routing state"
+        );
+        export
     }
 
     /// The last state the gateway observed of each member endpoint and of

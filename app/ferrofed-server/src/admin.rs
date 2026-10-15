@@ -9,11 +9,12 @@
 //! ([`metrics`]), and the distribution of a stored-query version the
 //! registry holds to the members that miss it at `POST`
 //! [`DISTRIBUTE`], and the clear of one `ehr_id` from this process's
-//! routing state at `POST` [`CLEAR_EHR_ID`]. Every other path is `404`. No
-//! route is on the gateway's client listener, and none is part of the
-//! ITS-REST surface.
+//! routing state at `POST` [`CLEAR_EHR_ID`], and the export of the routing
+//! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`]. Every
+//! other path is `404`. No route is on the gateway's client listener, and
+//! none is part of the ITS-REST surface.
 //!
-//! Every write or administrative action, the distribution and the clear among them, is
+//! Every write or administrative action, the distribution, the clear and the export among them, is
 //! admitted by the gateway's client authentication ([`Gate`], built from
 //! `[auth]`) only for a caller whose token carries the operator scope its
 //! issuer's entry names, from any peer ([`operator_only`]). Under
@@ -38,6 +39,7 @@ use axum::routing::post;
 use axum::serve::{Listener, ListenerExt};
 use axum::{Json, Router};
 use ferrofed_identity::dev::Profile;
+use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::secret::Secret;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -63,6 +65,10 @@ pub const DISTRIBUTE: &str = "/admin/stored-queries/{qualified_query_name}/{vers
 /// The path of the operator's clear of one `ehr_id`, a node-local
 /// identifier, from this process's `ehr_id` index and resolution bindings.
 pub const CLEAR_EHR_ID: &str = "/admin/ehr-ids/{ehr_id}/clear";
+
+/// The path of the operator's export of the routing state this process
+/// learned, for a system that replaces the gateway.
+pub const EXPORT_IDENTITY_STATE: &str = "/admin/identity-state/export";
 
 /// Why the admin listener refused a request before its route read anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -238,8 +244,10 @@ impl Access {
 }
 
 /// Returns the admin listener's application over `state`, admitting as
-/// `access` says: `GET /metrics`, `POST` [`DISTRIBUTE`] and `POST`
-/// [`CLEAR_EHR_ID`], and `404` on every other path.
+/// `access` says.
+///
+/// It serves `GET /metrics`, `POST` [`DISTRIBUTE`], `POST` [`CLEAR_EHR_ID`]
+/// and `POST` [`EXPORT_IDENTITY_STATE`], and `404` on every other path.
 ///
 /// A development profile admits a loopback peer to the write actions
 /// without a credential; the peer is the [`ConnectInfo<SocketAddr>`] the
@@ -252,6 +260,7 @@ pub fn router(state: Arc<AppState>, access: Access) -> Router {
     Router::new()
         .route(DISTRIBUTE, post(distribute))
         .route(CLEAR_EHR_ID, post(clear_ehr_id))
+        .route(EXPORT_IDENTITY_STATE, post(export_identity_state))
         .route_layer(middleware::from_fn_with_state(access, operator_only))
         .with_state(state)
         .merge(metrics)
@@ -457,4 +466,35 @@ async fn clear_ehr_id(
         return error::fixed(Code::NotImplemented, request_id);
     };
     Json(federation.clear_ehr_id(&ehr_id)).into_response()
+}
+
+/// The message of an export that carries a body.
+const EXPORT_TAKES_NO_BODY: &str = "the export of the identity state takes no body";
+
+/// `POST` [`EXPORT_IDENTITY_STATE`]: answers `200` with the
+/// [`IdentityStateExport`] of this process, marked `Cache-Control: no-store`.
+///
+/// The action takes no `body`. It is refused with `400` (`body-invalid`)
+/// for a body, and `501` when the gateway runs without a registry. Each
+/// replica learns its own maps, so the export names `scope: "replica"`.
+// NOTE: Regulation (EU) 2025/327 Annex II 2.6; a POST, so the export is admitted and
+// recorded with its operator as every admin action is: our own design.
+async fn export_identity_state(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let request_id = request_id::of(&headers).unwrap_or_default();
+    if !body.is_empty() {
+        return error::response(Code::BodyInvalid, EXPORT_TAKES_NO_BODY, request_id);
+    }
+    let Some(federation) = state.federation() else {
+        return error::fixed(Code::NotImplemented, request_id);
+    };
+    let export: IdentityStateExport = federation.export_identity_state();
+    (
+        [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+        Json(export),
+    )
+        .into_response()
 }

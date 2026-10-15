@@ -334,10 +334,11 @@ fn config_checked(cleartext: &[config::transport::ProtectedSite], settings: &Set
             "every peer"
         };
         println!(
-            "ferrofed: note: metrics.listen {address} is not a loopback address: GET {} answers {scrape}, and the admin write actions ({}, {}) answer a caller whose token carries an [[auth.issuer]] operator_scope",
+            "ferrofed: note: metrics.listen {address} is not a loopback address: GET {} answers {scrape}, and the admin write actions ({}, {}, {}) answer a caller whose token carries an [[auth.issuer]] operator_scope",
             metrics::PATH,
             admin::DISTRIBUTE,
-            admin::CLEAR_EHR_ID
+            admin::CLEAR_EHR_ID,
+            admin::EXPORT_IDENTITY_STATE
         );
     }
     println!("ferrofed: the configuration is valid");
@@ -629,6 +630,7 @@ fn serve_command(
                 path = metrics::PATH,
                 distribute = admin::DISTRIBUTE,
                 clear_ehr_id = admin::CLEAR_EHR_ID,
+                export_identity_state = admin::EXPORT_IDENTITY_STATE,
                 "serving the admin listener"
             );
             listener_certificates.extend(admin_tls.iter().cloned());
