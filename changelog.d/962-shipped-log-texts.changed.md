@@ -1,0 +1,1 @@
+- The clinical safety risk file rates hazard L-07 controlled for the access records the gateway writes, which are reviewed with ITI-81 at the Audit Record Repository and each state their retention period; keeping them for that period stays with the repository (#962).

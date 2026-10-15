@@ -33,11 +33,15 @@ Fourteen workflows:
   link guard over the assembled site, the conformance-matrix guard with the
   conformance report script's self-test, the obligations guard, the
   technical documentation guard (`scripts/checks/technical-documentation.sh`,
-  which `release.yml`'s `plan` job runs too), the register of economic
-  operators guard (`scripts/checks/economic-operators.sh`), the
+  which `release.yml`'s `plan` job runs too), the Annex II checklist guard
+  (`scripts/checks/annex-ii.sh`, which the `plan` job runs too), the
+  register of economic operators guard
+  (`scripts/checks/economic-operators.sh`), the
   e2e-placement guard, the tracker-helper self-tests, the crate-version
   guard's self-test, the changelog fragment check
-  `scripts/release/changelog.sh --check`), plus the manifest
+  (`scripts/release/changelog.sh --check`, in the `changelog` job with the
+  EU declaration of conformity's self-test and its `status` read of
+  `conformance/eu-declaration-of-conformity.toml`), plus the manifest
   guard, the one tier-1 job with a toolchain, which reads every Cargo
   manifest with `cargo metadata --no-deps` and compiles nothing; tier 2 is the
   Rust set, gated behind a `detect` job that needs the manifest guard and looks

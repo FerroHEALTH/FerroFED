@@ -315,7 +315,7 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   the period the record is kept, as Annex II, point 3.2, of Regulation (EU)
   2025/327 asks of the European logging component, and `crates/ehds-logging`
   as a library ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623), [#742](https://github.com/FerroHEALTH/FerroFED/issues/742), [#722](https://github.com/FerroHEALTH/FerroFED/issues/722), [#694](https://github.com/FerroHEALTH/FerroFED/issues/694), [#795](https://github.com/FerroHEALTH/FerroFED/issues/795),
-  [The access log](../operate/audit.md#the-access-log)).
+  [The access log](../operate/access-log.md)).
 - The FHIR face: the patient summary in the HL7 Europe exchange format, the
   document list and the read of a listed document, and the receipt of a
   patient summary document into the member you declare for it, with
@@ -346,8 +346,8 @@ release, and every issue in it names the sections it answers.
 
 v0.0.11: FerroFED's choices revisited where the upstream reports bear on
 them ([#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and more of EHDS readiness
-([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's review, retention and export
-([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the
+([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's log access interface against the Art 36(1)
+common specifications ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the
 interoperability component ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523)), the national contact
 point's connector ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), and the manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)). It also brings
@@ -397,20 +397,20 @@ These are the ones to know before you deploy FerroFED; the
   recorded with the verified caller and the patient, and an access whose
   record cannot be stored is refused `503 access-unrecorded`, a write
   before any member is asked
-  ([The access log](../operate/audit.md#the-access-log)). The gateway keeps
+  ([The access log](../operate/access-log.md)). The gateway keeps
   no copy, so who reads the records is the repository's, and it keeps each
   for the period the record states from `[access_log.retention]`, at least
-  three years ([How long a record is kept](../operate/audit.md#how-long-a-record-is-kept)).
+  three years ([How long a record is kept](../operate/access-log.md#how-long-a-record-is-kept)).
   FerroFED ships no category map: until you declare one in
   `[access_log]`, the categories of the data an access reached are recorded
   `ehds-unclassified`. The record names the professional the token names,
   and the assurance level when the issuer declares one
-  ([The person behind an access](../operate/audit.md#the-person-behind-an-access)).
+  ([The person behind an access](../operate/access-log.md#the-person-behind-an-access)).
   An access whose token declares a purpose of use you name in
   `[[access_log.emergency_purpose]]` is marked an emergency access (Art
   11(5)); FerroFED names none, and the mark records what the caller
   asserted, never whether restricted data were released, which the node
-  decides ([Emergency access](../operate/audit.md#emergency-access)).
+  decides ([Emergency access](../operate/access-log.md#emergency-access)).
 - **The assurance level is yours to set.** Patient data needs a natural
   person behind the token, or a client application you declare to act for
   the professional its token names; any other token is refused

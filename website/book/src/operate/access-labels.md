@@ -7,7 +7,7 @@ Regulation (EU) 2025/327 asks the components that store personal
 electronic health data to "support different retention periods and access
 rights that take into account the origins and categories" of the data
 (Annex II 3.4). The gateway keeps no access record: each goes to your Audit
-Record Repository ([The access log](audit.md#the-access-log)), which
+Record Repository ([The access log](access-log.md)), which
 returns only the records "which the requester is authorized to view" (IHE
 RESTful ATNA Rev. 3.6 §3.81.4.1.3), and ATNA asks that "access controls
 should appropriately restrict access to audit records" (ITI TF-1 §9.5).
@@ -47,7 +47,7 @@ which categories its data hold: a repository that admits a reader to a
 record only when the reader may read each of its labels shows it only to
 a reader who may read every category. The same reasoning keeps such a
 record for the longest period you declare
-([How long a record is kept](audit.md#how-long-a-record-is-kept)).
+([How long a record is kept](access-log.md#how-long-a-record-is-kept)).
 
 No adopted act fixes a label vocabulary for a category or an origin, so
 the defaults and the rule for an unclassified access are FerroFED's own

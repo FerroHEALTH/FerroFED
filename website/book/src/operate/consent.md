@@ -55,7 +55,7 @@ exclusion ([Withholding consent exclusions](consent-exclusions.md)).
 **An emergency request.** A caller asserts an emergency access through the
 purpose of use of its verified token, matched against
 `[[access_log.emergency_purpose]]`
-([Emergency access](audit.md#emergency-access)). Whether the pre-filter's
+([Emergency access](access-log.md#emergency-access)). Whether the pre-filter's
 exclusion applies to such a request is your choice, under
 `[federation.consent] emergency`:
 
@@ -71,7 +71,7 @@ emergency = "apply"            # or "pass-to-node"
   asked all the same. Its node decides on its own consent, restrictions
   and the purpose the request conveys (N26, N27). The access record names
   each such member in its `ehds-emergency-access` entity
-  ([Emergency access](audit.md#emergency-access)), whatever the node
+  ([Emergency access](access-log.md#emergency-access)), whatever the node
   answered; a request whose record cannot be stored is refused `503
   access-unrecorded`. The answer, the status and the log line say nothing
   of it (Art 8). The setting-aside holds for that one request: the gateway

@@ -32,7 +32,9 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   generated from the commit range standing in for the changelog. It then
   runs `scripts/checks/technical-documentation.sh`, which refuses a release
   that changes a harmonised component with no review row for it (§ Before
-  the tag, step 6), before any release exists. Last it reads the
+  the tag, step 6), and `scripts/checks/annex-ii.sh`, which refuses an
+  Annex II checklist with a point left out or evidence that does not exist,
+  before any release exists. Last it reads the
   manufacturer's file of the EU declaration of conformity,
   `conformance/eu-declaration-of-conformity.toml` (§ Before the tag, step
   7): when it issues the declaration, `plan` writes the declaration once

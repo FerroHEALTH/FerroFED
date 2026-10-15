@@ -377,7 +377,7 @@ is bound to a member, writes only into its own patient's EHR. Every receipt
 that reached the member writes one access record, an action `C` with the
 document's category by construction. A receipt whose record has no place in
 the spool is refused `503` before the member is asked, so sending it again
-writes it once ([Failing closed](../operate/audit.md#failing-closed)).
+writes it once ([Failing closed](../operate/access-log.md#failing-closed)).
 
 The capability statement, `GET {fhir-base}/metadata`, declares the
 `create` on `Bundle`. Its documentation names the categories the deployment

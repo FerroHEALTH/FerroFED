@@ -62,6 +62,7 @@ as a broken command, is fixed in the same change.
 |---|---|---|---|---|
 | v0.0.10 | 2026-10-06 | see below | 16, below | [#674](https://github.com/FerroHEALTH/FerroFED/issues/674), except finding 16 |
 | v0.0.10 | 2026-10-15 | see below | 17 to 30, below | the v0.0.10 version bump, except finding 16, which stands |
+| v0.0.11 | 2026-10-15 | this page and the clinical safety risk file | 31 and 32, below | [#962](https://github.com/FerroHEALTH/FerroFED/issues/962) |
 
 ### Findings of 2026-10-06
 
@@ -201,6 +202,22 @@ cites server tests planned with [#689](https://github.com/FerroHEALTH/FerroFED/i
 
 No text suggested a use outside the intended purpose, (c).
 
+### Findings of 2026-10-15, after the cut
+
+Read against the log work that shipped: this page and the clinical safety
+risk file.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+31. This page planned the export of the gateway's state for a replacement
+    product (Annex II, point 2.6) with
+    [#660](https://github.com/FerroHEALTH/FerroFED/issues/660). It shipped
+    with [#798](https://github.com/FerroHEALTH/FerroFED/issues/798).
+32. The clinical safety risk file held L-07 open until #660, although the
+    review of the records with ITI-81 is built and tested. L-07 is re-rated
+    and its review row records it.
+
 ## Annex II, point 2.5
 
 Point 2.5 binds the harmonised software components, which are partly built
@@ -280,5 +297,7 @@ controls the record, or for a new object to the member the client names
 (§12.4, N22, N23), and a routed read comes back as the node answered. The
 gateway adds no fee, no export limit and no format of its own to either.
 Exporting the gateway's own state for a replacement product is Annex II,
-point 2.6, planned with the log access interface
-([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)).
+point 2.6: an operator exports the routing state the gateway learned with
+`POST /admin/identity-state/export`
+([Exporting the identity state](../operate/identity-state-export.md)), and
+the access records are exported from the Audit Record Repository.

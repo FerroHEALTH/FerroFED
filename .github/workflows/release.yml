@@ -224,6 +224,13 @@ jobs:
         # fetches the previous tag alone into this shallow checkout.
         run: bash scripts/checks/technical-documentation.sh
 
+      - name: The Annex II checklist is whole
+        # Regulation (EU) 2025/327 Art 30(1)(a), Art 37(2): every point of
+        # Annex II has its row with evidence that exists, and the book page
+        # lists each, so a release never ships a checklist that names a
+        # moved heading or a deleted test.
+        run: bash scripts/checks/annex-ii.sh
+
       - id: declaration
         name: The EU declaration of conformity is issued whole, or not at all
         # Regulation (EU) 2025/327 Art 39 and Annex IV. The manufacturer's
