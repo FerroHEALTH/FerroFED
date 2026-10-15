@@ -234,7 +234,17 @@ the token's patient:
    own `ehrId`, the request is `403` (`patient-confinement`) before any
    localizer (XCPD or the NVI), consent pre-filter or other member is
    asked about it, so no ITI-55 exchange or audit event is made for that
-   patient.
+   patient. A patient summary on the FHIR face is held the same way
+   before the PDQm Supplier is asked for its header, so no ITI-78
+   exchange is made for another patient either.
+
+An electronic health data access service (Regulation (EU) 2025/327 Art 3(1)
+and Art 4) reads a person's own patient summary with such a token: the
+scope `patient/aql-eu.ferrofed.eehrxf::*.s` covers the summary's section
+queries and nothing else, and the token names the person as its `sub`.
+The summary comes from every member the cross-reference places the person
+at, and the access record names the person as the caller and as the data
+subject ([The patient summary over FHIR](../integrate/patient-summary.md#authentication-and-the-access-log)).
 
 A token whose resource scopes are all `patient/` never reaches the
 DEMOGRAPHIC API, whether or not its issuer is bound and even when its client
