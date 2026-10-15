@@ -38,6 +38,7 @@
 pub mod config;
 pub(crate) mod patient;
 pub(crate) mod routed;
+pub(crate) mod version;
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -53,7 +54,7 @@ use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
     AccessRecord, Accessor, Action, Coded, DataSubject, Origin, Outcome, Professional, Purpose,
-    RelayedProfessional, RelayedProvider,
+    RelayedProfessional, RelayedProvider, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
@@ -63,6 +64,7 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use http::{Method, StatusCode};
 use openehr_federation::headers;
+use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::routes::{self, Lookup};
 use secrecy::SecretString;
 
@@ -176,6 +178,11 @@ impl AccessLog {
 #[derive(Debug, Clone)]
 pub(crate) struct ConsentSetAside(pub(crate) BTreeSet<String>);
 
+/// How the one node a routed request was sent to answered it, as the §11.1
+/// status set spells it, attached to its answer for its record.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Reached(pub(crate) EndpointStatus);
+
 /// One origin an access asked, as the handler saw it.
 #[derive(Debug, Clone)]
 pub(crate) struct Asked {
@@ -185,10 +192,13 @@ pub(crate) struct Asked {
     pub(crate) node: Option<String>,
     /// The node's `system_id`.
     pub(crate) system_id: Option<String>,
-    /// How it answered.
+    /// How it answered, as the §11.1 status set spells it.
     pub(crate) status: String,
     /// What it contributed.
     pub(crate) rows: Option<usize>,
+    /// The version a write left there, as its answer named it, or `None`
+    /// when the access wrote nothing there.
+    pub(crate) version: Option<WrittenVersion>,
     /// Whether it contributed what the access delivered.
     pub(crate) contributed: bool,
     /// What its own answer showed of its data, read before a merge with
@@ -259,6 +269,7 @@ impl Accessed {
                 system_id: asked.system_id.clone(),
                 status: asked.status.clone(),
                 rows: asked.rows,
+                version: asked.version.clone(),
                 categories: per_origin(&self.log.map, asked, contributing, &categories),
             })
             .collect();

@@ -383,9 +383,13 @@ impl<T: Transport + Clone> NodeClient<T> {
     }
 }
 
-/// The `ehr_id` an `ETag` carries: the value in double quotes, weak or
-/// strong (RFC 9110 §8.8.3), or `None` for an empty or malformed tag.
-pub(super) fn from_etag(etag: &str) -> Option<String> {
+/// The identifier an `ETag` carries, or `None` for an empty or malformed tag.
+///
+/// The identifier is the value in double quotes, weak or strong (RFC 9110
+/// §8.8.3), such as the `ehr_id` of a new EHR or the `version_uid` of a new
+/// version.
+#[must_use]
+pub fn from_etag(etag: &str) -> Option<String> {
     let tag = etag.trim();
     let tag = tag.strip_prefix("W/").unwrap_or(tag);
     tag.strip_prefix('"')
@@ -394,9 +398,12 @@ pub(super) fn from_etag(etag: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The `ehr_id` a `Location` names: its last non-empty path segment,
-/// percent-decoded, or `None` when it has none.
-pub(super) fn from_location(location: &str) -> Option<String> {
+/// The identifier a `Location` names, or `None` when it has none.
+///
+/// The identifier is its last non-empty path segment, percent-decoded, such
+/// as the `ehr_id` of a new EHR or the `version_uid` of a new version.
+#[must_use]
+pub fn from_location(location: &str) -> Option<String> {
     let url = url::Url::parse(location.trim()).ok()?;
     let segment = url.path_segments()?.rfind(|segment| !segment.is_empty())?;
     let decoded = crate::hygiene::decode::percent_decoded(segment);

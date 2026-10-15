@@ -218,7 +218,7 @@ pub(crate) async fn serve(
                 if !consented.set_aside.contains(endpoint.node()) {
                     route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
                 }
-                provenance.stamp(route::answered(forwarded))
+                provenance.stamp(route::answered_by(endpoint, forwarded))
             }),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => {

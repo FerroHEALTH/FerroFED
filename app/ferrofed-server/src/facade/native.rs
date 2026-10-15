@@ -207,6 +207,7 @@ pub(crate) fn origins<'a>(
                     .map(|node| node.system_id().as_str().to_owned()),
                 status: native.answer.status().as_str().to_owned(),
                 rows: None,
+                version: None,
                 contributed,
                 evidence: contributed.then(|| {
                     Evidence::reached(Basis::Returned, Vec::new())

@@ -54,5 +54,18 @@ async fn a_receipt_is_recorded_once_as_a_creation_of_its_category() -> TestResul
     ] {
         assert!(record.contains(expected), "{expected}: {record}");
     }
+    let [record] = crate::access::accesses(&records)?
+        .try_into()
+        .map_err(|records| format!("one access record, got {records:?}"))?;
+    assert_eq!(
+        vec!["active"],
+        crate::access::details(&record, "origin", "status"),
+        "§11.1, N16: the origin is named in the status set a routed write's is"
+    );
+    assert_eq!(
+        vec![VERSION_A],
+        crate::access::details(&record, "origin", "written-version"),
+        "Annex II 3.2: the version the member created, as its answer named it"
+    );
     Ok(())
 }

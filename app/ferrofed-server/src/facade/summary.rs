@@ -650,6 +650,7 @@ pub(crate) fn accessed(
                 system_id: reached.system_id.clone(),
                 status: reached.status.as_str().to_owned(),
                 rows: Some(reached.compositions),
+                version: None,
                 contributed,
                 evidence: contributed.then(|| evidence(reached.objects.clone())),
             }

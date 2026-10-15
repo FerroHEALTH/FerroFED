@@ -21,7 +21,7 @@ use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::record::{
     AccessRecord, Accessor, Acting, Action, AssuranceLevel, DataSubject, EhrAt, Origin, Outcome,
-    PatientIdentifier, PatientLookup, Professional, Purpose, Request,
+    PatientIdentifier, PatientLookup, Professional, Purpose, Request, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
@@ -109,6 +109,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             system_id: Some("cdr-a.example.org".to_owned()),
             status: "active".to_owned(),
             rows: Some(1),
+            version: None,
             categories: None,
         }],
         request: Request {
@@ -645,4 +646,57 @@ async fn a_reservation_is_refused_when_the_recorder_has_no_place_and_filled_othe
         .await
         .expect("stored");
     assert_eq!(kept.kept.lock().expect("kept").len(), 1);
+}
+
+/// The record of a create whose origin's answer said `version`.
+fn created(version: &WrittenVersion) -> AccessRecord {
+    let mut record = record(Action::Create, Outcome::Success);
+    for origin in &mut record.origins {
+        origin.version = Some(version.clone());
+    }
+    record
+}
+
+#[test]
+fn the_version_a_write_left_is_named_on_its_origin() {
+    let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::2";
+    let written = written(&created(&WrittenVersion::Named(uid.to_owned())));
+    let origins = entity(&written, "origin");
+    let [origin] = origins.as_slice() else {
+        panic!("one origin, got {origins:?}");
+    };
+    assert_eq!(details(origin, "written-version"), [uid]);
+    assert!(details(origin, "written-version-unread").is_empty());
+}
+
+#[test]
+fn a_version_the_answer_did_not_tell_is_said_so_and_names_nothing() {
+    for (version, why) in [
+        (WrittenVersion::Unnamed, "unnamed"),
+        (WrittenVersion::Malformed, "malformed"),
+    ] {
+        let written = written(&created(&version));
+        let origins = entity(&written, "origin");
+        let [origin] = origins.as_slice() else {
+            panic!("one origin, got {origins:?}");
+        };
+        assert_eq!(details(origin, "written-version-unread"), [why]);
+        assert!(details(origin, "written-version").is_empty());
+    }
+}
+
+#[test]
+fn a_record_of_no_write_names_no_version() {
+    let written = written(&record(Action::Read, Outcome::Success));
+    for origin in entity(&written, "origin") {
+        assert!(details(origin, "written-version").is_empty());
+        assert!(details(origin, "written-version-unread").is_empty());
+    }
+}
+
+#[test]
+fn a_written_version_shows_no_id_in_debug() {
+    let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::2";
+    let shown = format!("{:?}", WrittenVersion::Named(uid.to_owned()));
+    assert!(!shown.contains(uid), "{shown}");
 }
