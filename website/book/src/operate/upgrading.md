@@ -88,6 +88,94 @@ so stay within a release or two of the newest.
 
 ## Upgrade notes by release
 
+### To v0.0.10, from v0.0.9
+
+- A gateway with a registry outside the development profile must set
+  `[audit] destination` (#623, #693), and it must be `"repository"` with an
+  `[audit.repository]` table: `"log"` is refused there, because it records no
+  caller and no patient and so cannot hold the access log Regulation (EU)
+  2025/327 Annex II 3.2 asks for. Point the gateway at your Audit Record
+  Repository, with `spool_dir` on durable storage, before you upgrade.
+- Set `server.shutdown_timeout_ms` to at least `server.request_timeout_ms`,
+  or remove it so it takes the request timeout (#625). `config check` and
+  `serve` now refuse a shorter drain, and the v0.0.9 example configuration
+  set 10000 beside a request timeout of 30000. Then give the container
+  longer to stop than `server.drain_delay_ms` plus the drain: the examples
+  use `stop_grace_period: 40s` in Compose and
+  `terminationGracePeriodSeconds: 45` in Kubernetes.
+- If you run the Kubernetes example, move from `deployment.yaml` to
+  `statefulset.yaml` (#628). Replace the `encrypted` storage class with
+  your own. Wait until the dependency report, `GET
+  {base}/operator/dependencies` with an operator token (#751), reads `up` for
+  the audit repository, so the spool on the old `emptyDir` is drained, then
+  delete the Deployment and apply the StatefulSet.
+- The listeners need no change: unset, `[server.tls]` and `[metrics.tls]`
+  leave them on plain HTTP as before (#632). Once you set either, remove it
+  before rolling back to an earlier release, which refuses it as an unknown
+  key.
+- If `[metrics] listen` names an address other than a loopback one outside
+  `profile = "development"`, set `[metrics] scrape_token_file` to a file
+  holding a scrape token and give your Prometheus the same token with
+  `authorization.credentials_file`, or set `[metrics.tls] client_ca_file`
+  (#635). Without either, `serve` and `config check` refuse the
+  configuration. The Kubernetes example reads the token from the
+  `metrics-scrape-token` key of the `ferrofed-secrets` Secret.
+- To run the admin listener's stored-query distribution outside the
+  development profile, from the gateway's host or another, set
+  `operator_scope` on the `[[auth.issuer]]` your operators use and send a
+  token carrying it (#629, #635). Without one it answers
+  `401 unauthenticated`, from a loopback peer as from any other, where a
+  loopback peer was served before.
+- If a backend client reads patient data through the gateway with a
+  `system/` scope or a token whose `sub` is its `client_id`, set
+  `client_tokens_act_for_professional = true` on its `[[auth.issuer]]` and
+  have its tokens name the professional it acts for in
+  `extensions.ihe_iua.national_provider_identifier` (#661). Until both
+  hold, such a request is answered `401 natural-person-required`. Then set
+  `[auth.issuer.assurance]` on each issuer whose tokens reach patient data;
+  without it no assurance level is required, and `config check` notes the
+  issuer.
+- A document received on the FHIR face whose codings carry no `display` is
+  now refused with a `422` unless `[eehrxf.terminology]` names a terminology
+  server to look the displays up (#687). Senders that omit displays need the
+  server configured.
+- Read the dependency report at `GET {base}/operator/dependencies` with a
+  token that carries your issuer's `operator_scope` (#751). `GET
+  {base}/health/dependencies` is no longer served and answers `404`, so move
+  every monitor that read it, and give it an operator token. `ferrofed report`
+  reads the report with `--operator-token-file`. A proxy rule that kept
+  `/health/dependencies` inside can go; the health family left open,
+  `{base}/health` and `{base}/health/readiness`, names no member.
+- Move any stored-query definition you hold in the namespace
+  `eu.ferrofed.eehrxf`, or a namespace under it, to a namespace of your own
+  before you upgrade (#776). The gateway now reserves that namespace for its
+  own read-only queries: a `redb` or PostgreSQL store, or a definition file,
+  holding one there refuses the start, and `config check` refuses such a
+  file.
+- If you wrote an `[access_log]` map on a development build, rewrite its
+  categories with the codes of HL7 Europe's
+  `EEHRxFDocumentPriorityCategoryCS` (#824), which are case-sensitive:
+  `patient-summary` becomes `Patient-Summaries`, `electronic-prescription`
+  `Electronic-Prescriptions`, `electronic-dispensation`
+  `Electronic-Dispensations`, `medical-imaging` `Medical-Imaging`,
+  `medical-test-result` `Laboratory-Reports` and `discharge-report`
+  `Discharge-Reports`, in `[access_log.templates]`,
+  `[access_log.archetypes]` and the keys of
+  `[access_log.retention.categories]`. Declare each national category in
+  `national_categories` as `<system>|<code>`, the absolute URI of your
+  Member State's code system (or one you control) and its code, and name it
+  the same way in the map and the retention table. The old spellings and a
+  national code without a system are refused when the configuration
+  loads. A search of your Audit Record Repository for a category matches
+  the `ehds-category` detail `<system>|<code>`, never the bare code.
+- The registry document refuses an `[[organisation]]` that manages no
+  `[[endpoint]]` (§8.1: "an Organization manages 1..* Endpoints"), so
+  `config check` and the gateway's start fail on it, naming the
+  organisation (#874). Give the organisation an endpoint it manages, or
+  remove it. A registry read from an mCSD directory or in the FHIR form
+  keeps such an organisation, and selecting it still answers `404` with
+  `no-destination`.
+
 ### To v0.0.9, from v0.0.8
 
 - If you run the operator console with `[session] secure_cookie = false`,

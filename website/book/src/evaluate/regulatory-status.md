@@ -284,11 +284,11 @@ and Art 104 of the EHDS Regulation amends three of its articles.
   within 24 hours. Art 71(2) applies Art 14 "from 11 September 2026", and
   Art 69(3) applies it to "all products with digital elements ... placed on
   the market before 11 December 2027", the v0.0.x releases among them. The
-  written reporting procedure is planned
-  ([#762](https://github.com/FerroHEALTH/FerroFED/issues/762)); until it
-  lands, report a vulnerability as
-  [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#reporting-a-vulnerability)
-  says.
+  written reporting procedure is in
+  [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#actively-exploited-vulnerabilities-and-severe-incidents)
+  and on the
+  [Complaints and incidents](post-market.md#actively-exploited-vulnerabilities-and-severe-incidents)
+  page ([#762](https://github.com/FerroHEALTH/FerroFED/issues/762)).
 - **The rest from 11 December 2027.** Art 71(2) applies the rest of the CRA
   from 11 December 2027. Each release placed on the market from that date
   meets the essential requirements of Annex I and has the support period
@@ -335,10 +335,12 @@ the year", specified "at the time of purchase", and Annex II, point 7, puts
 The manufacturer gives every release placed on the market from 11 December
 2027 a support period of at least five years, with its end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
-says which releases receive security fixes; stating the support period and
-the end date of each release there is planned
-([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)), and so is a
-notice to users when a release reaches its end date
+lists every release with its support period and end date, five years from
+its release date
+([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)). The gateway
+knows the end date of its own release from its build: the startup banner and
+`OPTIONS {base}/` name it, and once it has passed the banner, the log and
+`config check` say so
 ([#782](https://github.com/FerroHEALTH/FerroFED/issues/782)).
 
 ### Already in place
@@ -422,14 +424,15 @@ Five of the manufacturer's obligations have a first answer:
   it, for Annex II, point 1.1.
 
 The planned work is filed under
-[#519](https://github.com/FerroHEALTH/FerroFED/issues/519), in the v0.0.10
-milestone, which is due before the Regulation applies on 26 March 2027:
+[#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
+issues are in the v0.0.11 milestone, before the Regulation applies on 26 March
+2027:
 
-- [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the European
-  logging software component.
-- [#522](https://github.com/FerroHEALTH/FerroFED/issues/522): the European
-  interoperability software component for the patient summary, built from
-  federated openEHR data.
+- [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the rest of
+  the European logging software component, its review, retention and export.
+- [#522](https://github.com/FerroHEALTH/FerroFED/issues/522): the rest of
+  the European interoperability software component for the patient summary,
+  built from federated openEHR data.
 - [#523](https://github.com/FerroHEALTH/FerroFED/issues/523): the
   interoperability component for electronic prescriptions and dispensations.
 - [#524](https://github.com/FerroHEALTH/FerroFED/issues/524): serving a
@@ -439,10 +442,6 @@ milestone, which is due before the Regulation applies on 26 March 2027:
   the CE marking and the registration.
 - [#526](https://github.com/FerroHEALTH/FerroFED/issues/526): tracking and
   vendoring the implementing acts the components depend on.
-- [#762](https://github.com/FerroHEALTH/FerroFED/issues/762): the written
-  procedure for the reports of CRA Art 14.
-- [#763](https://github.com/FerroHEALTH/FerroFED/issues/763): the support
-  period and its end date for each release.
 
 No EU declaration of conformity has been drawn up and no FerroFED release
 carries the CE marking.

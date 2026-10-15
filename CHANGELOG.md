@@ -24,6 +24,1188 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-10-15
+
+Supported until 2031-10-15, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- A gateway with a registry outside the development profile must set
+  `[audit] destination` (#623, #693), and it must be `"repository"` with an
+  `[audit.repository]` table: `"log"` is refused there, because it records no
+  caller and no patient and so cannot hold the access log Regulation (EU)
+  2025/327 Annex II 3.2 asks for. Point the gateway at your Audit Record
+  Repository, with `spool_dir` on durable storage, before you upgrade.
+- Set `server.shutdown_timeout_ms` to at least `server.request_timeout_ms`,
+  or remove it so it takes the request timeout (#625). `config check` and
+  `serve` now refuse a shorter drain, and the v0.0.9 example configuration
+  set 10000 beside a request timeout of 30000. Then give the container
+  longer to stop than `server.drain_delay_ms` plus the drain: the examples
+  use `stop_grace_period: 40s` in Compose and
+  `terminationGracePeriodSeconds: 45` in Kubernetes.
+- If you run the Kubernetes example, move from `deployment.yaml` to
+  `statefulset.yaml` (#628). Replace the `encrypted` storage class with
+  your own. Wait until the dependency report, `GET
+  {base}/operator/dependencies` with an operator token (#751), reads `up` for
+  the audit repository, so the spool on the old `emptyDir` is drained, then
+  delete the Deployment and apply the StatefulSet.
+- The listeners need no change: unset, `[server.tls]` and `[metrics.tls]`
+  leave them on plain HTTP as before (#632). Once you set either, remove it
+  before rolling back to an earlier release, which refuses it as an unknown
+  key.
+- If `[metrics] listen` names an address other than a loopback one outside
+  `profile = "development"`, set `[metrics] scrape_token_file` to a file
+  holding a scrape token and give your Prometheus the same token with
+  `authorization.credentials_file`, or set `[metrics.tls] client_ca_file`
+  (#635). Without either, `serve` and `config check` refuse the
+  configuration. The Kubernetes example reads the token from the
+  `metrics-scrape-token` key of the `ferrofed-secrets` Secret.
+- To run the admin listener's stored-query distribution outside the
+  development profile, from the gateway's host or another, set
+  `operator_scope` on the `[[auth.issuer]]` your operators use and send a
+  token carrying it (#629, #635). Without one it answers
+  `401 unauthenticated`, from a loopback peer as from any other, where a
+  loopback peer was served before.
+- If a backend client reads patient data through the gateway with a
+  `system/` scope or a token whose `sub` is its `client_id`, set
+  `client_tokens_act_for_professional = true` on its `[[auth.issuer]]` and
+  have its tokens name the professional it acts for in
+  `extensions.ihe_iua.national_provider_identifier` (#661). Until both
+  hold, such a request is answered `401 natural-person-required`. Then set
+  `[auth.issuer.assurance]` on each issuer whose tokens reach patient data;
+  without it no assurance level is required, and `config check` notes the
+  issuer.
+- A document received on the FHIR face whose codings carry no `display` is
+  now refused with a `422` unless `[eehrxf.terminology]` names a terminology
+  server to look the displays up (#687). Senders that omit displays need the
+  server configured.
+- Read the dependency report at `GET {base}/operator/dependencies` with a
+  token that carries your issuer's `operator_scope` (#751). `GET
+  {base}/health/dependencies` is no longer served and answers `404`, so move
+  every monitor that read it, and give it an operator token. `ferrofed report`
+  reads the report with `--operator-token-file`. A proxy rule that kept
+  `/health/dependencies` inside can go; the health family left open,
+  `{base}/health` and `{base}/health/readiness`, names no member.
+- Move any stored-query definition you hold in the namespace
+  `eu.ferrofed.eehrxf`, or a namespace under it, to a namespace of your own
+  before you upgrade (#776). The gateway now reserves that namespace for its
+  own read-only queries: a `redb` or PostgreSQL store, or a definition file,
+  holding one there refuses the start, and `config check` refuses such a
+  file.
+- If you wrote an `[access_log]` map on a development build, rewrite its
+  categories with the codes of HL7 Europe's
+  `EEHRxFDocumentPriorityCategoryCS` (#824), which are case-sensitive:
+  `patient-summary` becomes `Patient-Summaries`, `electronic-prescription`
+  `Electronic-Prescriptions`, `electronic-dispensation`
+  `Electronic-Dispensations`, `medical-imaging` `Medical-Imaging`,
+  `medical-test-result` `Laboratory-Reports` and `discharge-report`
+  `Discharge-Reports`, in `[access_log.templates]`,
+  `[access_log.archetypes]` and the keys of
+  `[access_log.retention.categories]`. Declare each national category in
+  `national_categories` as `<system>|<code>`, the absolute URI of your
+  Member State's code system (or one you control) and its code, and name it
+  the same way in the map and the retention table. The old spellings and a
+  national code without a system are refused when the configuration
+  loads. A search of your Audit Record Repository for a category matches
+  the `ehds-category` detail `<system>|<code>`, never the bare code.
+- The registry document refuses an `[[organisation]]` that manages no
+  `[[endpoint]]` (§8.1: "an Organization manages 1..* Endpoints"), so
+  `config check` and the gateway's start fail on it, naming the
+  organisation (#874). Give the organisation an endpoint it manages, or
+  remove it. A registry read from an mCSD directory or in the FHIR form
+  keeps such an organisation, and selecting it still answers `404` with
+  `no-destination`.
+
+### Added
+
+- The identity page of the book says how each member's `ehr_id`s reach the
+  PIX Manager: the PIXm ITI-104 feed or the PMIR ITI-93 feed from each
+  member, the bulk load of the EHRs that already exist, why the gateway
+  feeds no Manager itself, and what to do when the hospital MPI does not
+  answer PIXm (#622). It names SanteMPI 2.5.12 as a PIX Manager verified
+  against two CDRs, with its setup and its limits, and the products checked
+  that do not answer as the gateway needs.
+- The end-to-end lane resolves a patient through SanteMPI, a deployable PIX
+  Manager each member feeds over ITI-93, and gets a federated query answered
+  by both members (#622).
+- The access log: every federated query, stored-query execution, routed
+  read and routed write that reaches patient data at a node is recorded
+  with the verified caller, as Regulation (EU) 2025/327 Annex II 3.2 asks
+  of an EHR system's logging component and the GDPR asks of an access
+  trail (#623). Each record is a BALP `AuditEvent` sent through the
+  `[audit]` spool to the Audit Record Repository. It names the provider,
+  the person and their purposes of use, the patient and each `ehr_id`, the
+  time, each endpoint asked with its node and outcome, and the categories
+  of the data. The categories come from a map you declare in the new
+  `[access_log]` table, from template and archetype ids to the Art 14(1)
+  categories, national categories or `none`. An access the map cannot
+  classify exactly is recorded `unclassified`, with its ids as evidence,
+  and is never refused. The gateway stores the record before the answer
+  leaves. An access whose record cannot be stored answers
+  `503 access-unrecorded` with none of the data. A query run from the
+  operator console is recorded with the operator as the caller. The book's
+  audit page describes the record and gives an Annex II 3.2 checklist.
+- `crates/ehds-logging` 0.0.1, the European logging component as a library
+  (#623): the Annex II 3.2 access record, the Art 14(1) categories, the
+  category map and its classification, the sink trait, and, behind
+  `balp`, the record written as a BALP `AuditEvent` through `ihe-iti`. It
+  depends on nothing in FerroFED and on no interoperability component.
+- The book has a production guide that walks a deployment from nothing to a
+  first federated query over two CDRs (#624): what to have in place, a
+  checklist each CDR meets before admission, verifying and installing the
+  release, the registry, an issuer recipe for Keycloak 26.2 or later that
+  issues the RFC 9068 tokens the gateway accepts with the SMART on openEHR
+  scopes and the purpose of use, the onward credentials, the PIX Manager,
+  the access log, TLS, the checks before the start, admission, the first
+  query and the operations that follow. The Keycloak recipe was verified
+  against Keycloak 26.8.0.
+- `deploy/nginx/ferrofed.conf` is a reverse proxy for the gateway: TLS on the
+  public address, the base path, the JWK Set and PMIR feed routes passed, the
+  health family kept inside, and an access log that names the gateway's
+  request id and never a query string (#624).
+  `scripts/checks/production-guide.sh` runs `config check` over every TOML
+  block of the guide, then serves that configuration behind the shipped
+  file in nginx and checks each route; CI runs it in the release compose job.
+- `[signing] next_key_file`, a signing key the JWK Set at
+  `{base}/.well-known/jwks.json` publishes ahead of a rotation and that never
+  signs, so every replica publishes a new key before any replica signs with
+  it (#627). `next_key_algorithm` names the algorithm the next key is meant
+  for, and `config check` refuses a next key on another curve, naming
+  `signing.next_key_file`, or one that is already the current or previous
+  key. The book gives the three-step rotation for any number of replicas
+  and the node cache time it assumes.
+- The metrics now show what the gateway's own clients see (#629).
+  `ferrofed_http_requests_total` counts every answered request by method,
+  route template and status class, and the OpenTelemetry HTTP server
+  metrics `http_server_request_duration_seconds` and
+  `http_server_active_requests` time them and count those in flight. The
+  cross-reference resolver's calls are counted by outcome in
+  `ferrofed_resolver_requests_total` and timed, and the localizer and
+  demographics calls are timed beside their existing counters.
+  `ferrofed_security_events_total` counts every caller refused at client
+  authentication by its reason, and every identifier-hygiene event of the
+  `ferrofed::security` log, the outbound-gate stops among them, by kind.
+  Every label comes from a closed set: a route is a template, never a path,
+  and nothing a request sends reaches a label.
+- Each release attaches a Grafana dashboard, `ferrofed-dashboard.json`, and
+  a Prometheus rule file, `ferrofed-alerts.yaml`, from
+  `deploy/observability/`, held to the exported metrics by
+  `scripts/checks/observability.sh` and `promtool check rules` in CI. The
+  Kubernetes example serves the admin listener on port 9464 of each pod,
+  annotates the pods for scraping, and opens that port to the monitoring
+  namespace's Prometheus alone in a new `networkpolicy.yaml`.
+- Upgrade notes, a configuration compatibility policy, and a versioned
+  stored-query store (#630). Each release's changelog opens with "Upgrade
+  notes", saying what an operator must change: `changelog.d/` takes an
+  `upgrade` fragment, and CI runs `config check` from the new build over the
+  example configuration the last release attached, and fails when it is
+  refused and no upgrade note is pending. A renamed key is read under its
+  old name for at least one release, and `config check` and the start-up
+  log warn about it, naming the release that will refuse it; setting the
+  old and the new key together is refused. The `redb` and PostgreSQL
+  stored-query stores record a schema version (`ferrofed_schema` and
+  `ferrofed.schema_version`), migrate forward in order when the gateway
+  starts, and refuse to start over a store a newer FerroFED migrated, saying
+  so. The book has an Upgrading page, with the notes for v0.0.8 and v0.0.9
+  and the compatibility policy, and a Rollback page.
+- The gateway bounds the load it takes on and passes on (#631). Past
+  `server.max_concurrent_requests` (512 by default) a request is answered
+  `503 overloaded` with `Retry-After` (`server.overload_retry_after_s`)
+  before it reaches client authentication or a member; the health family is
+  never refused. The optional `[server.caller_rate]` gives each verified
+  caller, by issuer and `client_id` and never by a forwarded address, a
+  bucket of `burst` requests refilled at `requests_per_second`; past it the
+  answer is `429 rate-limited` with `Retry-After`. At most
+  `federation.max_in_flight_per_node` requests (64 by default) go to one
+  member endpoint at once; one past it waits for a slot until its per-node
+  deadline and is then `time-out` with nothing sent (§11.5, N38), so one
+  slow member holds no other member's requests. A zero in any of them is
+  refused by `config check`, and `ferrofed_overload_refusals_total` counts
+  every refusal by its limit. The errors page lists `overloaded` and
+  `rate-limited`.
+- TLS on the gateway's listeners (#632). `[server.tls]` serves HTTPS with a
+  certificate chain and key from `certificate_file` and `key_file`, and
+  `[metrics.tls]` does the same for the admin listener. An optional
+  `client_ca_file` requires every client to present a certificate that CA
+  signed, so only the proxy in front of the gateway is admitted. The
+  listener negotiates TLS 1.3 or TLS 1.2 and nothing older, prefers TLS 1.3,
+  and offers TLS 1.2 only with the four suites RFC 9325 §4.2 recommends
+  (BCP 195). `SIGHUP` reads the files again, so a renewed certificate is
+  presented from the next handshake with no restart; files that do not form
+  a valid pair are refused and the running certificate stays. `ferrofed
+  healthcheck` follows `[server.tls]`, accepting exactly the certificate the
+  file holds and presenting `healthcheck_identity_file` where a client
+  certificate is required, and says when the file was replaced without a
+  `SIGHUP`. `config check` reads every file and refuses a missing, unreadable
+  or mismatched one naming its key, never its content. Unset, the listeners
+  speak plain HTTP as before, for a proxy that terminates TLS; the
+  configuration page says which mode to use when. `url_scheme` on the HTTP
+  server metrics reads `https` on a TLS listener.
+- The book's Evaluate part has a data-protection page (#633): every store
+  and channel that carries personal data, with its retention and its
+  protection; the controller and processor roles of a hospital and a
+  regional deployment; DPIA inputs and a template for the GDPR Art 30
+  record; what the gateway offers an entity under NIS2; and what the
+  documents claim about Regulation (EU) 2017/745, with what counsel must
+  confirm.
+- The book has a threat model and a hardening guide (#634). The threat
+  model names the assets, the trust boundaries, the attacker positions and
+  each mitigation with the setting or test behind it, and lists the risks a
+  deployment carries with their issues. The hardening guide is a checklist
+  for network placement, TLS, issuers, secrets, key rotation, the admin
+  listener, the audit spool, resource limits, logs and the console.
+- A troubleshooting page in the book leads from what an operator sees (a
+  status and error code, a log line under its target, a metric, a refusal
+  at start) to the cause, how to confirm it and the setting that fixes it,
+  with a row for every error code the gateway answers, which a test holds
+  to the gateway's own table (#640).
+- The client contract and the replicas section say how a follow-up write
+  behaves behind several gateway replicas (#641): each replica holds its
+  own resolution bindings, so a write that names no node is routed by the
+  replica that resolved the patient and refused `400` `target-required` by
+  the others. A client sends `openEHR-federation-endpoint` on every write,
+  or the operator keeps each client on one replica with balancer affinity.
+- The book's Regulatory status page names the two implementing acts adopted
+  under the EHDS Regulation, Commission Implementing Regulations (EU)
+  2026/2083 on MyHealth@EU and (EU) 2026/2099 on cross-border identification
+  and authentication, with their dates (#652). Both are vendored beside the
+  Regulation, with Commission Recommendation (EU) 2019/243 on the exchange
+  format. A weekly check reads EUR-Lex and the Commission's "Have your say"
+  register and files an issue when an act the harmonised components wait for
+  is adopted (#653), and the weekly pin-freshness read now reports a newer
+  stable tag of every container image the test harness starts (#678).
+- An access to patient data in the vital interests of the data subject is
+  marked in its access record (Regulation (EU) 2025/327 Art 11(5)): each
+  `[[access_log.emergency_purpose]]` names a purpose of use, such as the
+  HL7 v3 `ActReason` code `BTG`, and a record whose verified token declares
+  one carries the entity `ehds-emergency-access`, with a description in
+  words and the purposes that marked it. The mark is read from the token's
+  purposes alone and never inferred. It changes no dispatch and no answer:
+  the purpose reaches each node in the conveyance, the node decides, and
+  a node's refusal stands. The gateway writes one log line under its
+  request id for each marked access, and `config check` notes an access
+  log that names no emergency purpose. The book's audit and authentication
+  pages name the codes a deployment maps (#659).
+- `crates/ehds-logging` 0.0.9: the `emergency` module, `EmergencyPurposes`
+  and `Emergency`, the record's `emergency`, and its BALP entity (#659).
+- The authentication assurance of every caller that reaches patient data
+  (#661, Regulation (EU) 2025/327 Annex II 3.1). Per issuer,
+  `[auth.issuer.assurance]` names the claim that carries the assurance,
+  `acr` by default (RFC 9068 §2.2.1), the values that stand for the levels
+  `low`, `substantial` and `high` of Regulation (EU) No 910/2014 Art 8(2),
+  and the least level a query, an EHR request or a DEMOGRAPHIC request
+  needs. A token below it, without the claim, or with a value listed at no
+  level is answered `401 authentication-assurance-insufficient` with the
+  RFC 9470 §3 challenge `insufficient_user_authentication`; no node is
+  asked and no access record is written. The level is read from the token
+  or the introspection answer, and `config check` notes each issuer that
+  declares none. Each node is told who acts (`acting`), the level reached
+  (`assurance_level`) and the professional's IHE IUA `subject_name` and
+  `national_provider_identifier` in the caller's
+  `openEHR-federation-client` token, and in nothing else the gateway sends.
+- Every request to a node now tells it the professional's roles, from the IHE IUA
+  `subject_role`, and the agency that issued the professional's identifier, from the
+  claim an issuer's new `professional_issuing_authority` names, beside the
+  identifier and the provider's identifier it already carried, so a node can
+  identify the professional and provider of every registration (Regulation (EU)
+  2025/327 Art 13(4), Implementing Regulation (EU) 2026/2099 Annex Table 1). The
+  outbound gate reads the new claims as it reads every caller claim (#662).
+- The patient summary's `Patient` carries the header the demographics
+  binding holds (eHN PS A.1.1, A.1.2, #663): the names, birth date,
+  administrative gender, addresses and phone numbers and email addresses the
+  PDQm Supplier of `[pdqm]` gives for the identifier the summary was asked
+  by, asked before any member and never sent to one (N33). An element the
+  Supplier does not hold is left out, and a missing birth date carries a
+  `data-absent-reason` of `unknown`. A patient the Supplier does not know is
+  a `404`, several patients under one identifier a `422`
+  `multiple-matches`, a patient with no name a `422` `required`, and a
+  Supplier that does not answer a `502` or `504`; none of them asks a member.
+- The running system names its manufacturer, Cadasto B.V., with its postal
+  address and its single point of contact, as Regulation (EU) 2025/327 Art
+  30(1)(g) asks (#669): `GET {base}/` and `OPTIONS {base}/` carry a
+  `manufacturer` object (`name`, `postal_address`, `email`, `website`), the
+  startup banner and `ferrofed --version` print it, as does
+  `ferrofed-viewer --version`, and every page of the operator console names
+  it in its footer. Both container images carry it in the
+  `org.opencontainers.image.vendor` and `.authors` labels and a new
+  `eu.ferrofed.manufacturer` label. The details are written once, and a test
+  holds every surface and `LICENSE` to them.
+- The information sheet and the instructions for use of Regulation (EU)
+  2025/327 (#670). The book's new "Information sheet" page gives every item
+  of Art 38(2): the manufacturer, the name, version and date of release, the
+  intended purpose, the six Art 14(1) categories and the standards with
+  their versions; `scripts/checks/versions.sh` holds its standards and
+  version to `docs/VERSIONS.md` and its date to `CHANGELOG.md`. The new
+  "Instructions for use" page covers installation, the configuration of a
+  deployment in the EU (`[federation.consent] disclose = false`, the
+  assurance level per issuer, the access records, the category map), the
+  sizing of the budgets and limits, how a client reads an answer safely,
+  maintenance and its frequency, the limitations Art 28(b) requires, and
+  accessible formats. The release checklist updates both at each cut.
+- The manufacturer's post-market procedures under Regulation (EU) 2025/327
+  (#672): a complaint channel at info@cadasto.com, a register of complaints
+  and a register of non-conforming versions under `docs/registers/`,
+  corrective action, recall and withdrawal with the notices to authorities
+  and users, and the serious-incident report to the market surveillance
+  authorities "not later than three days" after awareness (Art 44(7)),
+  separate from any NIS 2 notification. The book's new "Complaints and
+  incidents" page is the public account and `docs/post-market.md` the
+  working checklist; `SECURITY.md`, `SUPPORT.md` and the issue chooser point
+  to them.
+- A clinical safety risk file for the two harmonised software components of
+  Regulation (EU) 2025/327, Annex II, point 1.1 (#673). The book's new
+  "Clinical safety risk file" page follows the risk management process of
+  EN ISO 14971:2019 as a method, with no claim of conformity: severity and
+  occurrence scales, an acceptability rule, and a hazard log for the logging
+  component, the interoperability component and the hazards they share.
+  Each hazard names its control and the test or code that implements it, or
+  the issue that plans it; the silent node, duplicate entries across nodes,
+  an unmapped code and a demographic mismatch are among them. The release
+  checklist reviews the file whenever a release changes a component.
+- The IHE FHIR services take the OAuth 2.0 client-credentials grant (RFC 6749
+  §4.4; IHE IUA ITI-71) in `[pixm.manager.credentials.oauth2]`,
+  `[pdqm.credentials.oauth2]`, `[pmir.credentials.oauth2]` and
+  `[registry.mcsd.credentials.oauth2]` (#677). The gateway authenticates with
+  a client secret, in the Basic scheme (`client_auth = "client_secret_basic"`,
+  as ITI-71 prescribes) or the request body (`"client_secret_post"`), read
+  inline or from `client_secret_file`, or with a client assertion the
+  `[signing]` key signs (`"private_key_jwt"`), and asks for the `scope` the
+  service's authorization server defines. The token is cached until 30
+  seconds before it expires and incorporated in each request as a bearer
+  token (ITI-72); a `401` gets one more request with a fresh token. `config
+  check` names every key it refuses: token exchange, a `DPoP` key, a
+  certificate binding or TLS client authentication in an identity service's
+  grant, a secret beside `private_key_jwt`, a scope outside RFC 6749 §3.3,
+  and a token endpoint that is not `https` outside the development profile.
+  A node's `oauth2` grant refuses a client secret. The `ihe-iti` PIXm,
+  PDQm, mCSD and PMIR clients take an `authorizer::Authorizer` for the
+  headers of each request.
+- `crates/eehrxf` 0.0.1, the European interoperability component of
+  Regulation (EU) 2025/327 as a library (#684). Its dataset model reads the
+  Xt-EHR *EHDS Logical Information Models* package as data: every logical
+  model and element path, with what a producer and a consumer must do with
+  each element. One feature per Art 14(1) category names the dataset of that
+  category. Behind `fhir-r4`, it compiles FHIRconnect mappings against an
+  operational template and runs them in process over a canonical-JSON
+  composition, through FerroBRIDGE's `fhirconnect` 0.1.108, answering a
+  FHIR R4 Bundle with a `Provenance`. It depends on nothing in FerroFED and
+  on no logging component. An architecture test fails when the two
+  components reach each other or the application, when a crate other than
+  the server links both, or when the engine reaches either. `fhir-types`
+  moves to 0.1.108, the release `fhirconnect` builds on. `cargo deny` now
+  checks every feature, so a dependency behind a feature no crate enables
+  yet is checked too.
+- A member's own exchange-format endpoint, the `native` mode (#686): a
+  second `[[endpoint]]` of a node with `connection_type = "hl7-fhir-rest"`,
+  its `categories`, `profiles` and the `ehr_id_system` the member's
+  `ehr_id` is written in. For a patient summary, the gateway leaves such a
+  member out of its section queries and asks its endpoint
+  `Patient/$summary` by `identifier=<ehr_id_system>|<ehr_id>` and
+  `profile`, through the outbound identifier-hygiene gate, with the onward
+  credential and the signed caller identity of the member's Query API
+  endpoint, so no patient identifier reaches it (N33). The member's
+  document comes back byte for byte, and every section of the gateway's
+  document names the member as serving its own summary. A member whose
+  endpoint does not answer makes the summary incomplete, `424` or `504`
+  under all-or-nothing, and is named in every section under `partial`. The
+  endpoint is absent from `OPTIONS {base}/`, and a directive or a targeting
+  header naming it is `400`. `config check` refuses a native endpoint with
+  no `ehr_id_system`, no category or no profile, a category code that is no
+  Art 14(1) priority category, and a patient summary endpoint that does not
+  declare the EPS composition profile.
+- The interoperability component carries the terminology rules of the
+  exchange format (#687): a code in a preferred system passes as recorded,
+  an openEHR `TERM_MAPPING` of match `=` adds a coding after the original, a
+  broader, narrower or unknown mapping adds no coding and is written into
+  the narrative, and a code in no preferred system follows Art 10(7) of the
+  eHealth Network Guidelines on Patient Summary.
+- An optional FHIR terminology server, `[eehrxf.terminology]`, is asked for
+  `$translate` (only an `equivalent` or `equal` match becomes a coding),
+  `$lookup` and `$validate-code`. A refusal or a time-out is an error that
+  names the operation and the server's status.
+- A received document is held to the `required` bindings of its `Bundle`
+  and `Composition` profiles, against the value set expansions its package
+  carries; a binding no expansion and no terminology server decides is
+  listed as not evaluated. A received coding with no display is given one by
+  `$lookup`, and refused when no terminology server is configured.
+- The access record of a query answered by several endpoints now carries
+  the categories of each origin (#694), as Regulation (EU) 2025/327 Annex II
+  3.2(c) and (e) ask. Each endpoint's categories are classified from the
+  rows it answered with, before the merge, under the same rules as the
+  access's own, so an id the map does not hold marks that origin
+  `unclassified`. The merged answer, its columns and `DISTINCT` are
+  unchanged. An origin's set can name a category of a row the merge then
+  cut by `LIMIT` or `DISTINCT`, and never misses one it delivered.
+- `ferrofed report` writes one tar archive a deployment attaches to a
+  complaint or a serious-incident report (Regulation (EU) 2025/327 Art 44):
+  the version, the commit and target the release build recorded, the
+  bindings, the pins, the release attestations to verify, the effective
+  configuration redacted fail-closed (every key and value not known to be
+  safe, in any casing or nesting, and every `[dev]` value), and, from the
+  gateway on the same host, readiness, the
+  dependency states, the integrity incidents without their `ehr_id`s
+  (with `--operator-token-file`) and the metrics with only the gateway's
+  own labels. A part it cannot read is listed in the manifest with the
+  reason. The book's Complaints and incidents page documents the format.
+- `scripts/release/withdraw.sh` withdraws a non-conforming release without
+  editing anything published. It refuses a version with no finding row in the
+  register of non-conforming versions. It moves the `<major>.<minor>` and
+  `latest` image tags to the correcting release and keeps the version's own
+  tag and digest. It publishes the advisory, writes the upgrade note, lists
+  the version under "Withdrawn versions" in `SECURITY.md` and records the
+  withdrawal in the register. It runs dry by default. `docs/release.md`
+  describes the route.
+- The access record names the client's address behind a reverse proxy (#722). `server.trusted_proxies`
+  lists the proxies, each an IP address or a CIDR block, whose forwarded
+  client address the gateway takes, and `server.forwarded_header` names the
+  header they write: `forwarded` (RFC 7239), the default, or
+  `x-forwarded-for`. A request from a listed proxy is named by the rightmost
+  address in that header that is no listed proxy; a request from any other
+  peer is named by that peer, whatever headers it sends. The list is empty by
+  default, so every request is named by its peer as before. The per-caller
+  rate limit keeps keying on the verified caller. The shipped nginx file sets
+  `X-Forwarded-For` to the address it received the request from and drops
+  `Forwarded`, and the production guide trusts it on loopback.
+- `server.public_url` names the gateway's public base URL once (#723). Set,
+  an unset `auth.audience` is that URL, an unset `signing.jwks_uri` is the
+  JWK Set route under it, and an unset `pmir.callback_url` is the feed route
+  under it. Its path must be `server.base_path`, and a `signing.jwks_uri` or
+  `pmir.callback_url` that is still written must name the route the gateway
+  serves under it, or `config check` refuses it, naming the key and the URL
+  it expects. Unset, every key is read as written, as before. The
+  production guide shows the shorter form.
+- The end-to-end lane holds the production guide's Keycloak recipe (#724): it
+  reads the `kcadm.sh` commands, the protocol mapper files and the `[auth]`
+  table from the book page, applies them to Keycloak 26.8.0 pinned by digest,
+  and gets a federated answer over two FerroEHR nodes with a signed-in
+  user's token and a client-credentials token, and a `401` naming `at+jwt`
+  with the token-type setting off. The weekly pin-freshness read reports a
+  newer Keycloak, and it now follows a registry that pages its tag list.
+- Every release attaches the nginx reverse proxy configuration of the
+  production guide as `ferrofed.conf`, with its SHA-256 as
+  `ferrofed.conf.sha256sum`, and the release lane fails when it is missing
+  (#725). The container page and the production guide download it from the
+  release with the compose files.
+- `ferrofed admission check --read-only` checks a member whose governance
+  forbids test data in its production CDR (#726, §12b.1, §12b.2, N42a): it
+  creates nothing, reads the `ehr_id` and `system_id` of up to `--count`
+  existing EHRs through one AQL query, judges `ehr_id` generation and
+  `system_id` uniqueness on them, and ends its report with every condition
+  a run without writes leaves unproven, the `ehr_id` exchange of §5.5
+  (N34) among them. The admission page says when to run it and when to run
+  the full check against a staging copy instead.
+- An issuer can be declared a national contact point,
+  `[auth.issuer.national_contact_point]` (Implementing Regulation (EU)
+  2026/2099 Art 6 and 7; #734). A patient-data request from it needs every
+  attribute of the 2026/2099 Annex Tables 1 and 2, read from the IHE IUA
+  claims where they coincide and from the claims the table names otherwise,
+  and a purpose of use whatever `auth.purpose_of_use.required` says; one
+  that lacks either is `403 contact-point-attributes-required` or
+  `403 purpose-of-use-required`, with nothing sent. Its requests are served
+  with consent exclusions withheld whatever `[federation.consent] disclose`
+  says (Regulation (EU) 2025/327 Art 8, Art 11(5)). The professional and the
+  provider reach each node in the `national_contact_point` claim of the
+  conveyance and the access record in an `ehds-relayed` entity, both marked
+  as asserted by the contact point, and the outbound gate reads them like
+  every other caller claim; the IUA `person_id` is never read. A correlation
+  identifier the connector sends in the declared `correlation_header` is
+  recorded with the request, and one out of form is
+  `400 correlation-invalid`. `OPTIONS {base}/` declares the setting under
+  `federation.national_contact_point`, and the book's authentication and
+  §13.4 pages name who authenticates the foreign professional (CP-39).
+- `crates/ehds-logging` 0.0.6: `Accessor` carries what a contact point
+  relays (`Relayed`), `Request` a correlation identifier, and the BALP
+  record writes both (#734).
+- The access record names the person behind each access as client
+  authentication verified them (Regulation (EU) 2025/327 Annex II 3.1 and
+  3.2(b); #742). The BALP `agent:user` carries the professional's IHE IUA
+  `subject_name` as `who.display` and `national_provider_identifier` as an
+  `ihe-otherId` extension typed `NPI`, the assurance level of the
+  authentication as an `ihe-assuranceLevel` extension, and who acts,
+  `person` or `client`, as its `role`. The level is recorded only when the
+  issuer's `[auth.issuer.assurance]` table maps the value the token states,
+  never inferred. No other part of the record, and no log line, carries
+  them.
+- `crates/ehds-logging` 0.0.4: `Accessor` carries the acting mode, the
+  assurance level and the professional's name and identifier, and the
+  requester's professional number moves to `alt_id`. `crates/ihe-iti`
+  0.0.30: a BALP `User` takes a name, a provider identifier, roles and an
+  assurance level, written to the `agent:user` (#742).
+- The reporting procedure of the Cyber Resilience Act, Regulation (EU)
+  2024/2847 Art 14, which applies to every FerroFED release from 11
+  September 2026 (Art 69(3), Art 71(2)). `SECURITY.md`, the book's
+  Complaints and incidents page and the maintainers' checklist in
+  `docs/post-market.md` describe the early warning within 24 hours, the
+  notification within 72 hours and the final report, sent through the
+  single reporting platform to the CSIRT designated as coordinator in the
+  Netherlands and to ENISA; how users are told through the repository's
+  GitHub security advisories (Art 14(8)); and how these reports sit beside
+  the serious-incident report of Regulation (EU) 2025/327 Art 44(7).
+- A support period for every release: five years from its release date, the
+  minimum of Regulation (EU) 2024/2847 Art 13(8). `SECURITY.md` lists each
+  release with its end date (Art 13(19), Annex II point 7) and says how
+  fixes ship in the latest release (Art 13(10)).
+  `scripts/release/changelog.sh --assemble` now opens a release's notes
+  with its end date, adds its row to `SECURITY.md` and prints the date; a
+  pre-release gets no support period.
+- The Regulatory status page states FerroFED's position under the Cyber
+  Resilience Act, Regulation (EU) 2024/2847 (#764): every tagged release is
+  one product Cadasto B.V. places on the market as its manufacturer, Art 14
+  reporting applies to the v0.0.x releases now, and from 11 December 2027
+  each release has one technical documentation set, one EU declaration of
+  conformity and one CE marking for the CRA and the EHDS Regulation. The
+  page and the information sheet state the support period of at least five
+  years, with its end date published, and link to `SECURITY.md`. A
+  deployment's counsel point on placing on the market now asks whether the
+  deployment is an economic operator Cadasto B.V. supplied.
+- Every write action an operator runs on the admin listener is recorded
+  under `ferrofed::security` (#767): `admin-write-admitted` before the
+  action has any effect, counted under the same name, and
+  `admin-write-finished` with its outcome, `abandoned` when it never
+  answered. Each names the operator's issuer and subject, the method and
+  route template, and the time, and nothing else: never the token, a path
+  value, a body or a stored query, and the issuer and subject are never a
+  metric label.
+- Every release attaches its own copy of the information sheet and the
+  instructions for use, which Regulation (EU) 2025/327 Art 30(1)(d) has an
+  EHR system accompanied by, as `ferrofed-vX.Y.Z-information-sheet.md` and
+  `ferrofed-vX.Y.Z-instructions-for-use.md`: the Markdown source of the two
+  book pages at the tag, plain text a screen reader reads (#769). The
+  release lane refuses an information sheet that does not describe the
+  version being released, and publishes no release without both files. The
+  gateway and console images name the download address of each copy in the
+  labels `eu.ferrofed.information-sheet` and
+  `eu.ferrofed.instructions-for-use`.
+- The patient summary's stored section queries (#776): wherever the
+  stored-query registry is offered, it holds eleven read-only queries of the
+  gateway's own under the reserved namespace `eu.ferrofed.eehrxf`, at the
+  immutable version `1.0.0`, one per patient summary section openEHR
+  content feeds (`eu.ferrofed.eehrxf::patient-summary-problems` and so on).
+  Each selects, from every member, the whole compositions that contain one
+  of the archetypes the openEHR International Patient Summary template names
+  for its section, once each, with the composition's uid and template id.
+  The patient is bound through `$patient` and `$namespace`, so no node
+  receives the identifier. They are listed, read and run by name as any
+  stored query. A `PUT` into the namespace answers `409`
+  `stored-query-reserved`, and a store that holds a definition there refuses
+  the start. The selection, and the four sections no query feeds, are in the
+  book's clinical safety risk file, pending the clinical review.
+- `app/ferrofed-eehrxf` 0.0.1, the interoperability component's federation
+  half, which builds the section queries as AQL syntax trees with
+  `openehr-query`; `eehrxf` still links nothing of FerroFED (#776).
+- The openEHR International Patient Summary template of the openEHR
+  international Clinical Knowledge Manager, vendored with its source under
+  CC BY-SA by `scripts/vendor/openehr-ckm.sh` (#776).
+- `eehrxf` 0.0.4: the patient summary crosswalk (#777). Under the
+  `patient-summary` feature, each row of `crosswalk::patient_summary` keys on
+  an Xt-EHR `EHDSPatientSummary` element path and names the eHealth Network
+  element ids of the patient summary guideline Release 3.4, the producer
+  obligation, the element or slice of the HL7 Europe Patient Summary
+  composition that carries it, and the profiles a FHIRconnect context may map
+  to in order to feed it. `Crosswalk::check` fails when an element a
+  producer `SHALL:able-to-populate` has no row, when a row names a slice the
+  pinned profile lacks, or when a required EPS section slice is uncovered.
+  The medical alert (A.2.1.2) and the functional status (A.2.3.4) are listed
+  as gaps for the clinical safety review. `dataset::ResourceProfile` reads a
+  FHIR resource profile and its slices from a package, and each element now
+  carries its target profiles.
+- The gateway knows the end of its release's support period from its build,
+  never from the network (Regulation (EU) 2024/2847 Art 13(19)). The startup
+  banner names it on a `Support` line, and `OPTIONS {base}/` declares it as
+  the top-level `supported_until`, or `null` for a build from source or a
+  pre-release. Once the date has passed, the banner shows an `UNSUPPORTED`
+  notice, `serve` logs it at `WARN` and `ferrofed config check` prints it as
+  a warning. `scripts/checks/versions.sh` fails when a release in
+  `CHANGELOG.md` has no row in the `SECURITY.md` support table or a row
+  whose end date is not five years after its release date.
+- Each access record states how long it is kept (Regulation (EU) 2025/327
+  Art 9(2), Annex II 3.4): `[access_log.retention]` declares whole years
+  for every record, per category and per registry endpoint, each at least
+  three, and a record is kept for the longest its categories and origins
+  call for, an unclassified one for the longest declared anywhere. The BALP
+  record carries `ehds-retention-years`, `ehds-retention-ends` and
+  `ehds-retention-ground`, so the Audit Record Repository can apply it. A
+  period under three years, an unknown category and an endpoint the
+  registry does not hold are refused when the configuration loads. The
+  book's audit page names the ITI-81 searches the log is read with at the
+  repository (#795, #660).
+- `crates/ehds-logging` 0.0.7: the `retention` module, the period a record
+  is kept by category and origin with the three-year floor of Art 9(2),
+  the record's `retention`, its three BALP `detail` entries, and
+  `CategoryMap::category` (#795).
+- The access record of a request addressed by `ehr_id`, such as a routed
+  read or write or a query scoped to one `ehr_id`, names the patient the
+  identity binding holds under it, in each namespace the new `[access_log]
+  patient_namespaces` names, so a search of the log by the person's
+  identifier (ITI-81 `patient.identifier`) finds it (Regulation (EU)
+  2025/327 Art 9(1)). Under PIXm the gateway asks the member's PIX Manager
+  with one ITI-83, on behalf of the caller, within the per-node budget.
+  Each `ehr` entity says how its patient was looked up in a
+  `patient-lookup` detail (`request-named`, `found`, `not-found`,
+  `unavailable`, `not-configured`, `unsupported`) and keeps the `ehr_id`;
+  the access is recorded and answered whatever the lookup says, and no
+  identifier reaches a node or a log line (#796).
+- `crates/ehds-logging` 0.0.8: `PatientLookup` and the `patient` of each
+  `EhrAt`, every patient found written as a BALP `entity:patient`, and the
+  `patient-lookup` detail (#796).
+- `eehrxf` 0.0.6: the interoperability component's receive side (#801, part
+  of #665). Under `fhir-r4`, `receive::ReceivedDocument::read` reads a
+  document received in the exchange format once: it refuses an object that
+  repeats a name, decodes the text against FHIR R4, refuses a resource of a
+  type R4 does not define and a document that does not encode back to what
+  was read, holds it to the R4 document rules (`bdl-7` to `bdl-11`, and
+  `fullUrl`s that agree with their resource), and resolves its subject to
+  its one `Patient` entry. Every reference, found by its R4 type at any
+  depth and resolved by one resolver (`receive::reference::resolve`, which
+  reads only canonical spellings and answers exactly one entry or a typed
+  refusal), is held to that patient: a `subject`, `patient`, `beneficiary` or
+  `for` must name it, and a reference that could name another patient, a
+  `type` that disagrees with its target, a second or contained `Patient` and
+  an element the R4 table does not describe are refused. The
+  text is kept byte for byte. `ReceivedDocument::check` holds the decoded
+  document to a `Bundle` and a `Composition` profile read from the vendored
+  package: cardinalities, `fixed[x]` and `pattern[x]` values, and `value`,
+  `pattern`, `exists` and `type` slices, an entry of a type no slice names,
+  and the invariants that require a reference on listed entry types, with
+  every constraint it cannot evaluate listed. Under `openehr`, `Mapping::to_openehr` maps the document
+  into one canonical composition through FHIRconnect and keeps the document
+  in the composition's `FEEDER_AUDIT.original_content` as a `DV_PARSABLE`.
+  `dataset::Element` now carries its `fixed[x]` or `pattern[x]` value and
+  its slicing (`dataset::constraint`). The gateway does not serve the
+  receive path yet; writing a received document to a member is #802.
+- Receiving a document in the exchange format (Regulation (EU) 2025/327
+  Annex II 2.2 and 2.3, #802): `POST {fhir-base}/Bundle` takes a document
+  `Bundle` and writes it as one openEHR composition to the member
+  `[[fhir.receive]]` declares for its Art 14(1) category, by ITS-REST
+  `composition_create` at that member's own `ehr_id`. The document is held
+  to the category's HL7 Europe profiles from the package the deployment
+  supplies, mapped by its FHIRconnect mapping, and kept whole in the
+  composition's `FEEDER_AUDIT.original_content`. Its patient is resolved
+  from every `Patient.identifier` in a namespace `fhir.receive_namespaces`
+  names, at the receiving member alone, and every identifier must name the
+  same `ehr_id`; no patient identifier is sent in the path, the query string
+  or the headers. The caller needs `user/composition-*.c` (a read scope is
+  refused), and a `patient/` grant writes only into its own patient's EHR.
+  A category with no member, a document that breaks its profiles, a patient
+  the member holds no EHR for, identifiers that name two patients, and a
+  member's refusal or silence are each an `OperationOutcome` error, never a
+  success; every receipt that reached the member writes one access record.
+  A member the registry does not hold, or receiving with no resolver,
+  refuses the start and `config check`.
+- `eehrxf` 0.0.8: `ReceivedDocument::category` names a received document's
+  priority category from its `Composition.type`, `Category::profiles` and
+  `Category::document_type` name the profiles and the document type of each
+  category, `Category::code` and `Category::of_code` name each category by
+  its HL7 Europe priority category code, such as `Patient-Summaries`, and
+  `ReceivedComposition::model` is the mapped composition as the RM model
+  holds it (#802).
+- The FHIR face's capability statement, `GET {fhir-base}/metadata`,
+  declares the `create` on `Bundle` that receives a document in the
+  European exchange format. It names the Art 14(1) categories the
+  deployment receives and those it has no receiving member for, and lists
+  the `Bundle` profile of each category received (#803).
+- The information sheet lists the categories a release can receive in the
+  exchange format, patient summaries alone in this one, and says where a
+  deployment states the ones it receives and the ones it has no receiving
+  member for (#803).
+- The FHIR R4 face of the European exchange format (Regulation (EU)
+  2025/327 Annex II 2.1, #809): with `[fhir]` set, `GET` and
+  `POST {fhir-base}/Patient/$summary` answer the patient summary as an HL7
+  Europe Patient Summary document `Bundle`, and `GET {fhir-base}/metadata`
+  the face's `CapabilityStatement`. The face sits on its own base beside
+  `{base}`, so no ITS-REST path changes. A summary runs the gateway's own
+  eleven section queries over every member that holds the patient, with or
+  without `[stored_queries]`, resolving the patient once and sending no
+  patient identifier to a node, and maps each composition through the
+  FHIRconnect mappings `[[fhir.mapping]]` names. Each member whose data a
+  section holds is named as its author with one `Provenance` per mapped
+  composition; a silent member fails the summary under all-or-nothing and is
+  named in every section under partial; what no mapping covers is counted,
+  never dropped. Every request passes client authentication, a summary takes
+  the `aql-` search scope of each section query, every summary that reached
+  a member writes one access record with the `patient-summary` category, and
+  every error is an `OperationOutcome`. The book's new page "The patient
+  summary over FHIR" describes the request, the document and the
+  configuration.
+- `eehrxf` 0.0.7: the `document` module writes the EPS document `Bundle`
+  from the resources and sections a caller gives, naming every entry under a
+  base and keeping two runs over one composition apart; `Mapping` names its
+  compiled contexts and runs under a FHIRconnect call context (#809).
+- `ehds-logging` 0.0.9: `Evidence::constructed` classifies an access that
+  serves one category by construction, such as a patient summary, beside
+  what its data show (#809).
+- The document list on the Annex II 2.1 FHIR face (#810):
+  `GET {fhir-base}/DocumentReference?patient.identifier=system|value`, with
+  the optional `type` token of the patient summary, LOINC `60591-5`, answers
+  a `searchset` of `DocumentReference`s that meet the HL7 Europe EU Health
+  Data API `EehrxfMhdDocumentReference` profile: the summary the gateway
+  writes on request, retrievable through `Patient/$summary`, and each
+  `native` member's own document, named by `attachment.url`
+  `Binary/{token}` with its media type, SHA-1 hash and size. The gateway
+  asks each such member's own endpoint by its `ehr_id` alone, through the
+  outbound identifier-hygiene gate, with the same budget, onward credential
+  and signed caller identity as for a summary, and runs no section query. A
+  member that does not answer fails the list, `424` or `504`, under
+  all-or-nothing, and is named in an `OperationOutcome` entry with
+  `search.mode` `outcome` under `partial`. `GET {fhir-base}/Binary/{token}`
+  reads a listed document through the gateway: the token is a JWS the
+  gateway signs with its `[signing]` key, of its own JOSE type, valid for
+  `fhir.document_url_lifetime_secs` (300 unless set) and for the caller it
+  was listed for, and carries no patient identifier; the member is asked
+  again and its bytes are answered unchanged, with nothing stored. Both
+  take the scopes of a summary and write an access record naming every
+  member endpoint asked, and `metadata` declares the search and the read.
+- `eehrxf::receive::conform::check_resource` holds any one resource to a
+  profile by the rules the document check applies, and the component's own
+  tests hold the patient summary it writes to `bundle-eu-eps`,
+  `composition-eu-eps`, the profile each entry claims and the EU core
+  profile its mapped entries are written to (#815).
+- `[federation.consent] emergency` chooses what the consent pre-filter does
+  for a request whose verified token declares an
+  `[[access_log.emergency_purpose]]` (#833). Under `"apply"`, the default,
+  the pre-filter applies as to any request. Under `"pass-to-node"`, the
+  pre-filter is still asked, and every member it denies is asked all the
+  same, so its node decides (Regulation (EU) 2025/327 Art 11(5); N26,
+  N27). The access record names each such member in an
+  `ehds-consent-set-aside` detail of its `ehds-emergency-access` entity,
+  and the answer never shows it. `"pass-to-node"` needs a declared
+  emergency purpose to load, `config check` notes it beside
+  `[nl_gf.mitz]`, and `OPTIONS {base}/` declares the setting as
+  `federation.consent.emergency`. `crates/ehds-logging` 0.0.13 carries
+  `Emergency::with_consent_set_aside`. The book states that the pre-filter
+  is asked with the configured `TREAT` or `COC`, never the caller's
+  purpose.
+- A directed query can order on an ENDPOINT attribute through the
+  directive's variable, `ORDER BY p/organisation DESC` alone or among other
+  keys (#874). The gateway takes the key out of every node query, orders
+  the merged rows on the value it holds per endpoint in the place the client
+  wrote it, and breaks a tie on the endpoint id and then the uid; each node
+  keeps the other keys and the `LIMIT` (§8.1, §9.3, §11.6.1). Under
+  `DISTINCT` the attribute must also be selected, and under
+  version-identity dedup with a `LIMIT` the key is refused `400` with the
+  new code `endpoint-order-dedup` (§10.2). The variable anywhere else is
+  still refused with `endpoint-variable`.
+- A stored-query `PUT {base}/v1/definition/query/{name}` with no version is
+  stored as a new version the registry assigns: `1.0.0` for a name it holds
+  no version of, else the next patch of the newest version by number (after
+  `1.9.0` and `1.10.0`, `1.10.1`), answered `200` with `Location` naming it
+  as `./{name}/{version}` (§12.7 `stored-query-versioning`; ITS-REST
+  `definition_query_store`). A held version is never replaced: the embedded
+  store reads and writes in one transaction, and over PostgreSQL a replica
+  that finds the version taken assigns the next, up to eight times, then
+  answers `409 stored-query-held` and stores nothing. The literal-patient
+  refusal applies before any version is assigned, the reserved namespace
+  stays closed, a read-only registry still answers `405`, and a distribution
+  sends the assigned version. The code `query-version-required`, the `400`
+  this `PUT` answered before, is retired, and the error page lists it as
+  retired (#875).
+- The operator can clear a held `ehr_id` collision once the node at fault
+  has fixed it, with `POST /admin/ehr-ids/{ehr_id}/clear` on the admin
+  listener (#876). It needs a token with the issuer's `operator_scope`, is
+  recorded with the operator who ran it, takes the node-local `ehr_id`
+  alone, and forgets it from this replica's `ehr_id` index and from every
+  caller's resolution bindings. The next read asks every member again and
+  is refused `409` again while the collision stands; a write is never probed
+  for. The answer says what the replica held, and the incident report lists
+  each cleared collision under `cleared`.
+- A registry in FHIR form or read from an mCSD directory declares a member's
+  own exchange-format endpoint, as the TOML form does (#883). An `Endpoint`
+  with `connectionType` `hl7-fhir-rest` in HL7's `endpoint-connection-type`
+  names its categories as `payloadType` codings in HL7 Europe's priority
+  category code system, its profiles in `payload-profile` extensions and the
+  identifier system of the member's `ehr_id` in one `ehr-id-system`
+  extension. Without them it is refused as before, under the rules the TOML
+  form's native endpoint meets; the registry page of the book has the
+  mapping. `ihe-iti` 0.0.34 reads `payloadType` codings and `valueCanonical`
+  and `valueUri` extensions of a directory `Endpoint`.
+
+### Changed
+
+- FerroFED implements the 1.0.0 release of the Federation Tier with AQL
+  specification, approved by the openEHR SEC on 2026-10-12, in place of the
+  0.9.0 release candidate (#17). `OPTIONS {base}/` now reports
+  `federation.spec_version` `"1.0"` (§7a.2), and the startup banner names
+  Federation Tier 1.0.0. A client that matches `"0.9"` must accept `"1.0"`;
+  no other wire structure changes, and no requirement or conformance point
+  moved. `openehr-federation` 0.0.45 carries the new `FEDERATION_SPEC`. The
+  book links the specification site at its `1.0` path.
+- `nl-generic-functions` 0.0.19 cites the did:web Method Specification by its
+  section titles, Method name and Method-specific identifier, where it cited
+  a section number the specification does not use (#620). No behaviour
+  changes.
+- `oauth-server-metadata` 0.0.5 says in its manifest that its name is not yet
+  reserved on crates.io and must be claimed before publishing is turned on.
+  No behaviour changes.
+- Outside the development profile, a gateway with a registry needs an
+  `[audit] destination`, because every access to patient data is now
+  recorded (#623). `config check`, `serve` and a reload refuse the
+  configuration without one, naming `audit.destination`. Outside
+  development a gateway with a registry also refuses `destination = "log"`,
+  naming `audit.destination`: the log target names no caller and no
+  patient, so an access record written there names no one
+  (Regulation (EU) 2025/327 Annex II 3.2). `log` stays accepted under
+  development, and for a gateway with no registry. The example Kubernetes
+  ConfigMap and the release compose example send the records to an Audit
+  Record Repository, from the spool on their durable volume. The `log`
+  destination never names the client of a request the gateway received.
+- `ihe-iti` 0.0.27 writes a BALP entity with `detail` entries, a user's
+  organisation as an agent of its own and their alternative identity as
+  `altId`, and a record that claims no pattern. `openehr-federation` 0.0.43
+  reads the archetype and template ids a bound query constrains its data
+  to, and whether they bind every class it reads (#623).
+- The Kubernetes example runs the gateway as a StatefulSet,
+  `deploy/kubernetes/statefulset.yaml` in place of `deployment.yaml`, so
+  each replica keeps its audit spool on a persistent volume claim of its own
+  instead of an `emptyDir` a reschedule deletes (#628). The claim names an
+  `encrypted` storage class to replace with your own, and is kept when the
+  StatefulSet is deleted or scaled down. The container page says what a
+  lost spool means for the audit trail. To move an existing Deployment,
+  wait until the dependency report reads `up` for the audit repository,
+  then delete the Deployment and apply the StatefulSet.
+- The front-door documents match the code on `main` (#639). The README's
+  status names what v0.0.10 has built so far and what it plans, each with its
+  issue. The README, the container page and the configuration page say that
+  a secret written inline is accepted under every profile, and that a
+  `_file` key keeps it out of the configuration, as `config check` does; a
+  test holds `config check` to it. The claims page no longer lists the
+  professional's identification, the assurance level and TLS on the listener
+  as missing. A test holds the registry page's reload table to the sections
+  a reload applies.
+- A request that reaches patient data needs a natural person behind its
+  token (#661, Regulation (EU) 2025/327 Annex II 3.1). A token whose `sub`
+  is its `client_id` (IHE IUA ITI TF-2 3.71.4.2.2.1), or one only `system/`
+  scopes cover (SMART on openEHR master08), is answered
+  `401 natural-person-required`, unless its issuer declares
+  `client_tokens_act_for_professional = true` and the token names the
+  professional, in the IUA `national_provider_identifier` or the
+  `[auth.issuer.requester]` professional claim. Definitions, `OPTIONS` and
+  the operator surface are unchanged. A refused request asks no node and
+  writes no access record.
+- `[fhir]` needs `[pdqm]`: configuration load refuses the FHIR face
+  without a demographics binding, because the HL7 Europe Patient Summary
+  `Patient` requires a name (`ips-pat-1`) and the members federate no
+  demographics (#663).
+- The public texts are reviewed against Regulation (EU) 2025/327 Art 28 at
+  every release cut, on the book's new "Claims review" page, which also
+  assesses the completeness default, the budgets and the consent pre-filter
+  against Annex II, point 2.5 (#674). The first review corrects the claim
+  that a client "never learns it was federated" (`meta.federation` names
+  every member), says that the identifier rule covers every request the
+  gateway composes while a written body travels as sent, credits mutual TLS
+  to a node to v0.0.9, fixes the landing page's quickstart, which sent no
+  access token, and the README's, which sent the wrong body, and brings the
+  stated status up to v0.0.9. The claims page gains a list of the
+  limitations to know before deploying FerroFED.
+- The access record needs no regional binding: `[audit]`, its spool and the
+  BALP access record are part of every build of `ferrofed-server`, so a
+  build without the `binding-ihe` feature records every access to patient
+  data and runs a registry outside development. `binding-ihe` keeps only
+  the IHE transactions' own records, and the audit spool metrics are on the
+  metrics surface in every build (#697).
+- The book's data-protection and threat-model pages describe the access log
+  as built (#711): the access records are a row of the processing inventory,
+  the `log` audit destination row says it names no client of a request the
+  gateway received and is refused for a registry outside development, and
+  boundary B6 and the deployment's risks name what the access log covers and
+  what stays planned. The hardening guide asks for `[audit] destination =
+  "repository"` once a registry is configured. The authentication page no
+  longer says the open health routes name no member:
+  `GET {base}/health/dependencies` names every member endpoint id and its
+  state. The operator console page says to set `Strict-Transport-Security`
+  at the proxy. The README, `llms.txt`, the claims page's limitations and the
+  regulatory status page no longer say the European logging component is not
+  built or that access to patient data is not audited; the limitations now
+  say the access records are kept by your Audit Record Repository and are
+  recorded unclassified until you declare a category map.
+- The engine compiles no FHIR model (#730). `nl-generic-functions` 0.0.21 moves
+  the request authorizer a Generic Functions client takes out of the
+  FHIR-bearing `nvi` feature into a feature of its own, `authorizer`, at
+  `nl_generic_functions::authorizer`; `nvi` turns it on, and the engine's
+  Nuts grant implements it with `nuts-auth` and `authorizer` alone. The
+  architecture test now fails when the engine compiles `fhir-types` through
+  any crate.
+- `eehrxf` 0.0.2: its `fhir-r4` feature compiles no openEHR crate (#730). The
+  FHIRconnect mapping from openEHR moves behind a new `openehr` feature,
+  which turns on `fhir-r4`, and the architecture test fails when `fhir-r4`
+  alone reaches an openEHR crate or the mapping engine.
+- A national contact point's `country_code` must be the ISO 3166-1 alpha-2
+  code of an EU Member State (Implementing Regulation (EU) 2026/2099 Annex
+  Table 1), or the request is refused `403 contact-point-attributes-required`.
+  `[auth.issuer.national_contact_point] additional_countries` admits a
+  further country per contact point, such as a third country whose contact
+  point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327
+  Art 24(3)) (#734).
+- The node profile checks of `conformance run --node-profile` send each
+  `ehr_id`-scoped query as a fixed AQL template with the `ehr_id` as the
+  value of its `$ehr_id` parameter in `query_parameters`, so a node must
+  bind ITS-REST query parameters, in a `WHERE` clause and in an `EHR`
+  predicate, to pass them (#739). The scenario queries of
+  `conformance run` are built and printed through `openehr-query`, so a
+  value always reaches the gateway as an escaped AQL literal. A new CI
+  guard, `scripts/checks/aql-splice.sh`, refuses AQL built by string
+  formatting or concatenation outside the tests.
+- `[telemetry] filter` no longer quiets the security log (#767): the
+  gateway adds `ferrofed::security=info` after the configured filter, so
+  every security line at `info` or above is written whatever it says.
+- The access record writes each category as a coded value (#824): the six
+  Art 14(1) categories carry the codes of HL7 Europe's
+  `EEHRxFDocumentPriorityCategoryCS` (`hl7.fhir.eu.health-data-api`
+  1.0.0-ballot), written `<system>|<code>` in the `ehds-category`,
+  `ehds-category-basis` and `ehds-retention-ground` details, with a new
+  `ehds-category-version` detail naming the code system's version. A
+  national category is its Member State's code in that state's system.
+  No category and unclassified stay states of the record, and the reasons
+  an access is unclassified are a closed set. `crates/ehds-logging`
+  0.0.12 carries the change: `Category::system`, `version` and `token`,
+  `NationalCategory` in place of `NationalCode`, and `classify::Unreadable`
+  in place of a free reason string. The four packages the codes are read
+  against are vendored with their provenance.
+- An audit record names the caller's purposes of use at `purposeOfEvent`
+  too, each once, beside the `agent:user` `purposeOfUse` that BALP 1.1.4
+  places them at, so an Audit Record Repository that keeps the DICOM audit
+  message form keeps them, an emergency purpose such as `BTG` among them
+  (RESTful ATNA Tables 3.20.4.2.2.1-1 and 3.81.4.2.2.1-1, ITI TF-2
+  §3.20.7.1.2). The access log's records carry them there as well
+  (`ihe-iti` 0.0.32, `ehds-logging` 0.0.14; #830).
+- The harness and the quickstart run FerroEHR 4.3.6, node and database image
+  alike, pinned by digest, in place of 4.3.3. The conformance statement names
+  4.3.6 as the FerroEHR product the tests run against.
+- `GET {base}/v1/ehr?subject_id=…` whose subject resolves at more than one
+  member now answers `400` (`subject-several`) instead of `409`, as N41 has
+  it when no one node is found, with the endpoints a client may name in
+  `openEHR-federation-endpoint` listed in the message (#869). An `ehr_id`
+  two members claim keeps N42's `409` (`ehr-id-collision`). A client that
+  branched on the `409` reads the `400` and the `subject-several` code.
+- The `409` (`controlling-system-unreachable`) for a versioned write whose
+  controlling system is no member now names that system by the version's
+  `creating_system_id`, read as an RM `system_id`, and says it is outside the
+  federation, as §12.2 and N36 ask (#872). The message still points at where
+  the request names the version and quotes no other part of the request.
+- A DEMOGRAPHIC request now goes to the endpoint
+  `federation.demographic_endpoint` declares without an
+  `openEHR-federation-endpoint` header (#873). One destination the operator
+  fixes and `OPTIONS {base}/` declares is the explicit choice §12.6 asks
+  for, so the request no longer answers `400` `target-required`. A header
+  naming another endpoint is still `400` `targeting-conflict`, the query
+  string and headers are held as before, and `its_rest.demographic` says the
+  header is optional.
+
+### Fixed
+
+- A rolling restart no longer cuts requests in flight (#625). The drain,
+  `server.shutdown_timeout_ms`, now defaults to `server.request_timeout_ms`,
+  and `config check`, `serve` and a reload refuse a drain shorter than the
+  request timeout, naming both keys. The new `server.drain_delay_ms` keeps
+  the listener accepting for that long after `SIGTERM`, with readiness
+  already `503`, so a load balancer stops routing to the gateway before it
+  stops taking requests; it is `0` by default. The example configurations
+  drain for 30 seconds, the Kubernetes example waits 5 seconds first, and
+  the grace periods outlast both: `terminationGracePeriodSeconds: 45` and
+  `stop_grace_period: 40s`. A configuration that set a drain shorter than
+  its request timeout, such as the earlier examples' 10 seconds beside 30,
+  is refused until the drain is raised or removed.
+- The PMIR identity feed across several replicas (#626). A draining gateway
+  no longer deletes the ITI-94 subscription that the other replicas behind
+  the same `[pmir] callback_url` rely on: the new `on_drain` key keeps it by
+  default, for the other replicas and the next start, and `on_drain =
+  "unsubscribe"` deletes it, for the last gateway or a replica with a
+  `callback_url` of its own. Replicas that find several subscriptions for
+  their `callback_url` adopt the same one and delete the others, and a
+  delete the Registry answers `404` or `410` counts as done. The book's
+  identity page describes the two ways to run the feed across replicas and
+  the window during which a replica the change did not reach keeps a stale
+  binding.
+- Each resolution binding now expires `federation.binding_ttl_ms` after the
+  last resolution that returned it. A caller that kept resolving used to keep
+  every binding it had ever recorded, so a binding made stale by an identity
+  merge or split could route a follow-up to a node the patient no longer maps
+  to for as long as the caller stayed active (#650).
+- On a stop, the bindings' drain, such as deleting the PMIR subscription,
+  runs under its own budget, `server.bindings_drain_timeout_ms` (5 seconds
+  by default), after the requests in flight have drained; a binding still
+  stopping when it elapses is abandoned with a warning (#676). The shipped
+  grace periods are derived from the drain delay, the drain and this budget,
+  and the health page shows the arithmetic.
+- `scripts/checks/versions.sh` fails when a file the release ships or builds
+  its images from is missing, where it skipped the check, and
+  `scripts/checks/kubernetes-example.sh` and
+  `scripts/checks/release-compose.sh` read every timeout of their grace
+  period check from the example's configuration, where they assumed the
+  gateway's default request timeout (#676).
+- The PIXm resolver reads an ITI-83 answer that repeats one identical
+  `(system, value)` `targetIdentifier` in a member's domain as that one
+  identifier, so a PIX Manager that returns the same identifier from a master
+  and a local record no longer fails the query with `424` (PIXm 3.1.0
+  §2:3.83.4.2.2.1, §5.2). Two different values in one domain stay ambiguous
+  (#679).
+- The `request` span records `http.request.method` as `_OTHER` for a method
+  no RFC the gateway knows defines, and names that span `HTTP {route}`, as
+  the OpenTelemetry HTTP conventions ask, so a client can no longer mint a
+  span value with its method token (#692). An ask-all probe still waiting for
+  a slot of a member's in-flight cap when its deadline passes is reported as
+  capped with nothing sent, never as a member abandoned without an answer, so
+  it no longer counts as a sent time-out in the member metrics (§11.1, §11.5,
+  N38).
+- The registry page's reload table lists every section a `SIGHUP` reload
+  applies, `[pdqm]`, `[nl_gf]` and each endpoint's onward TLS included, and
+  every one that takes a restart, `[registry.mcsd]` and `[pmir]` included.
+  The SanteMPI setup on the identity page says why the client-credentials
+  policies are granted by hand (#695).
+- A federated query still waiting for a slot of a member's in-flight cap
+  when the overall budget runs out is reported as capped with nothing sent,
+  never as a member abandoned without an answer, so it no longer counts as a
+  sent time-out in the member metrics (§11.1, §11.5, N38). The request log
+  writes the closed method label in its `method` field, `_OTHER` for a
+  method no RFC the gateway knows defines, so a client's method token no
+  longer reaches the log (#708).
+- The two federated-query examples on the book's container page post the
+  query from the here-document with `-d @-`; they posted a number, which the
+  gateway refused. A guard, `scripts/checks/doc-curl.sh`, refuses a `curl`
+  example that posts a bare number, or opens a here-document and passes `-d`
+  anything but `@-` or `@<file>` (#721).
+- `config check` writes nothing to disk (#727). It created the
+  `[audit.repository]` and `[xcpd.audit_repository]` spool directories, so it
+  failed on a read-only root filesystem and left a directory behind on a
+  host. It now checks each spool directory where it stands: one that exists
+  must give its owner write access and no one else any, and hold no file the
+  gateway did not write; for one that does not exist, the nearest directory
+  above it must admit a writer. Only modes are read, and `serve` still
+  creates the directory. A spool `serve` would refuse is refused by the key
+  that names it, and `serve` names that key too. The production guide's
+  check runs on a read-only root with no durable volume.
+- The access log no longer names an endpoint as an origin of data it never
+  sent (#731). An endpoint whose request waited out its deadline for a slot
+  of `federation.max_in_flight_per_node`, or never left the gateway for
+  another reason, is reported `time-out` in the answer and is no origin in
+  the record, and a query that left the gateway for no endpoint writes no
+  record.
+- The book's data-protection page lists the professional's name and
+  identifier, the assurance level of the authentication and whether a person
+  or a client acted among the personal data the access record carries (#773).
+- Configuration load refuses a `[fhir]` base and a PMIR feed route that
+  overlap, ASCII case ignored, naming `fhir.base` and `pmir.path`, so the
+  FHIR face and the identity feed never share a path (#822).
+- The receive path admits the patient summary the gateway writes: an entry
+  of a type no slice names is admitted where the profile slices
+  `Bundle.entry` open, as `bundle-eu-eps` does, and refused only where the
+  slicing is closed, or open at the end and the entry comes before a sliced
+  one; an untyped reference by identifier alone is admitted at
+  `Provenance.entity.what`, where the summary names each source composition,
+  and refused everywhere else as before. Such an entry stays in the kept
+  original and becomes no openEHR content (#842).
+- The component maps the patient summary it writes back to openEHR (#862).
+  The summary names its patient in one form, the relative reference
+  `Patient/{id}`, in `Composition.subject` and in each mapped resource,
+  where the absolute `fullUrl` in `Composition.subject` read as a second
+  subject. Each mapped resource now claims in `meta.profile` the profile its
+  FHIRconnect context maps to, once, so a receiver selects the mapping by it.
+- Every query the gateway sends a node now carries an explicit `fetch`, so no
+  node's own default page can cut its share unseen: the `LIMIT` the query
+  carries, or for a query with no `LIMIT` the new `federation.max_node_rows`
+  plus one (9999 rows by default, so a node is asked for 10000, the page FerroEHR
+  serves by default; declared in `OPTIONS {base}/` as
+  `paging.max_node_rows`). A node that answers more rows than that is
+  `node-error` and its rows are never merged: the query fails `424` under
+  all-or-nothing, and a `partial` answer is incomplete and names the node
+  (§11.4, §11.5). The ITS-REST `offset` and `fetch` members now select a
+  window over the AQL result (the skip is the AQL `OFFSET` plus `offset`, the
+  count the smaller of `fetch` and the rows the AQL `LIMIT` leaves), paged
+  under the declared `OFFSET` strategy. The code `paging-conflict`, a `400`
+  for a member that differed from its clause, is retired: no request is
+  refused with it any more, and the error page lists it as retired (#868).
+- `OPTIONS {base}/` now declares that a stored query invoked by name,
+  `GET` or `POST {base}/v1/query/{name}[/{version}]`, answers `501 Not
+  Implemented` on a gateway without the stored-query registry, as N32
+  requires of an unsupported area (#871). With the registry, `its_rest.query`
+  says those paths are served from it. The behaviour is unchanged.
+- Every stored-query answer that carries `Location` names the stored
+  query's own URL, `{base}/v1/definition/query/{name}/{version}` (ITS-REST
+  `Location_Query`). With `server.public_url` set it is that absolute URL
+  on every route. Without it, the `PUT` answers keep a reference relative to
+  the request URL, and the operator's redistribution on the admin listener,
+  whose bare version resolved to `…/{version}/{version}`, carries no
+  `Location`, because no reference from the admin listener reaches the
+  client listener (#899).
+- A `native` member's answer on the FHIR face counts as its document only
+  when it is a FHIR document `Bundle` whose `identifier` has a system and
+  a value (FHIR R4 `bdl-9`), which the `EehrxfMhdDocumentReference`
+  profile needs as the list entry's `masterIdentifier` (#901). Any other
+  answer, a document with no identifier included, makes the member
+  `node-error`. Under all-or-nothing, `Patient/$summary` and the document
+  list fail with `424` and name the member. Under `partial`, the summary
+  names it as a member that did not answer, never as one covered by its
+  own document, and the list leaves its answer out and names it in an
+  `outcome` entry. `GET {fhir-base}/Binary/{token}` refuses such an answer
+  with `424` and returns none of its bytes. The access record counts no
+  document the answer did not deliver.
+- A stored query named `.` or `..` with no namespace is refused with
+  `400 query-name-invalid`, on `PUT`, `GET` and a run by name, spelled
+  plainly or percent-encoded. Such a name is an RFC 3986 dot-segment, so its
+  URL resolved to another resource and the gateway could not name it in a
+  `Location` or reach it at a node. A name with a namespace, or of three or
+  more dots, is no dot-segment and is still accepted (#907).
+
+### Security
+
+- The admin listener authenticates its callers (#629, #635), where it served
+  its write actions to every peer that reached it. A write action, such
+  as the stored-query distribution, needs an access token that client
+  authentication verifies and that carries its issuer's `operator_scope`,
+  from any peer, loopback included; it answers `401 unauthenticated` or
+  `403 scope-insufficient` otherwise. Only `profile = "development"` still
+  admits a loopback peer without a credential. `GET /metrics` takes an
+  optional bearer token, `[metrics] scrape_token_file`, compared in
+  constant time, and outside the development profile a listener off
+  loopback is refused unless that token or `[metrics.tls] client_ca_file`
+  authenticates the scrape. Each refusal is counted as `admin-write-refused`
+  or `scrape-refused`. The Kubernetes example sets a scrape token, and the
+  diagnostic report reads `GET /metrics` with it. The Kubernetes example's
+  network policy admits the scraper alone to the admin port, as defence in
+  depth.
+- The access log no longer classifies a query by fewer categories than the
+  data it delivers (#694). A value a query selects through an archetype
+  predicate in its path, such as `c/content[openEHR-EHR-OBSERVATION.….v1]/…`,
+  is classified by that archetype too, and an archetype id compared as
+  `archetype_details/archetype_id/value` binds its class as
+  `archetype_node_id` does. A selected path that names its archetype by a
+  pattern, a parameter or any comparison other than `=` marks the record
+  `unclassified`. An archetype id written in another case, with another
+  version or a namespace is held to the map's exact keys and marked
+  `unclassified`, never matched to a near key. `crates/openehr-federation`
+  0.0.44 carries the reader.
+- The gateway reads at most `federation.max_node_answer_bytes` (16 MiB by
+  default) of one answer from a member or its token endpoint (#710). A
+  longer answer, or one that never ends, is dropped unread, so a faulty or
+  hostile member can no longer make the gateway buffer an unbounded body on
+  every request. The member is `node-error` with an `error` naming the
+  bound, which fails the query `424` under all-or-nothing and clears
+  `meta.federation.complete` (§11.1, §11.4); a routed request answers `424`.
+  `config check` refuses a zero, and a reload that changes the bound logs it
+  as needing a restart.
+- `ferrofed admission check --read-only` no longer prints or keeps the
+  `ehr_id`s of the existing EHRs it reads. Those are real patients'
+  pseudonymous identifiers at a production node, so the report now names each
+  EHR by its row and keeps only how many it read; a run with writes still
+  names the synthetic EHRs it created.
+- The dependency report, which names every member endpoint and which are
+  down, moved to the read-only operator surface, `GET
+  {base}/operator/dependencies`, behind the issuer's `operator_scope`, so a
+  reader without a token no longer learns the federation's membership (#751).
+  The operator console and `ferrofed report` read it there with the
+  operator's token. It is no probe, so the overload limit now holds it.
+- The access record names only whose data the access reached (#756). A
+  federated query's record names an `ehr_id` only at a member the query was
+  sent to, at the endpoint it was sent through. A routed request's record
+  reads the path `ehr_id` and the subject of `GET {base}/v1/ehr` with the
+  parsers the route is served by, so a `subject_id` holding a `+` is
+  recorded as the patient the gateway resolved, where it was recorded with
+  a space. A routed answer whose `ehr_id` or subject the record cannot read
+  is withheld with `503 access-unrecorded`.
+- `rustls` moves to 0.23.46, which fixes RUSTSEC-2026-0346,
+  RUSTSEC-2026-0347 and RUSTSEC-2026-0348, and the workspace requires that
+  version or later, so no build resolves one open to them; `ihe-iti` moves
+  to 0.0.33 and `ehds-logging` to 0.0.15.
+
 ## [0.0.9] - 2026-10-05
 
 ### Added
@@ -3193,7 +4375,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...v0.0.7

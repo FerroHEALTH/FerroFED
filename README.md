@@ -39,7 +39,7 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.9 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.10 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
@@ -66,36 +66,43 @@ node, and traces exported through OpenTelemetry shipped in v0.0.8. v0.0.9
 added the conformance statement, `ferrofed conformance run` and the operator
 console.
 
-v0.0.10, being built on `main`, is EHDS readiness and the production gaps.
-Built so far: every access to patient data recorded with the verified
-caller, the professional and, where the issuer states one, the assurance
-level, as Annex II, point 3.2,
-asks of the European logging component
+v0.0.10 is EHDS readiness and the production gaps. Every access to patient
+data is recorded with the verified caller, the professional, the assurance
+level where the issuer states one, the categories of the data and how long
+the record is kept, as Annex II, point 3.2, asks of the European logging
+component
 ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623),
-[#742](https://github.com/FerroHEALTH/FerroFED/issues/742),
-[the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log));
-TLS on the listener
-([#632](https://github.com/FerroHEALTH/FerroFED/issues/632)); overload
-protection ([#631](https://github.com/FerroHEALTH/FerroFED/issues/631));
-restarts without dropped requests
-([#625](https://github.com/FerroHEALTH/FerroFED/issues/625)); several
+[the access log](https://ferrofed.eu/docs/operate/audit.html#the-access-log)).
+With `[fhir]` set, a FHIR face answers the patient summary in the European
+exchange format and receives a patient summary document into the member you
+name for it
+([#809](https://github.com/FerroHEALTH/FerroFED/issues/809),
+[#802](https://github.com/FerroHEALTH/FerroFED/issues/802)). The book has an
+information sheet and instructions for use. For production, v0.0.10 adds
+identity resolution through a PIX Manager the members feed
+([#622](https://github.com/FerroHEALTH/FerroFED/issues/622)), restarts
+without dropped requests
+([#625](https://github.com/FerroHEALTH/FerroFED/issues/625)), several
 replicas ([#626](https://github.com/FerroHEALTH/FerroFED/issues/626),
-[#627](https://github.com/FerroHEALTH/FerroFED/issues/627)); and inbound
+[#627](https://github.com/FerroHEALTH/FerroFED/issues/627)), inbound
 metrics behind an authenticated admin listener
 ([#629](https://github.com/FerroHEALTH/FerroFED/issues/629),
-[#635](https://github.com/FerroHEALTH/FerroFED/issues/635)). Planned: the
-logging component's review tools and retention by origin and category
-([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the European
-interoperability component served by the gateway, which today is the
-library `crates/eehrxf`
-([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and the
-conformity file ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
+[#635](https://github.com/FerroHEALTH/FerroFED/issues/635)), overload
+protection ([#631](https://github.com/FerroHEALTH/FerroFED/issues/631)), TLS
+on the listener ([#632](https://github.com/FerroHEALTH/FerroFED/issues/632)),
+and the production, upgrade, data-protection and threat-model pages. It
+implements the Federation Tier specification's 1.0.0 release.
 Each tagged release is a product its manufacturer, Cadasto B.V., places on
-the market under the Cyber Resilience Act; the reporting procedure and the
-support period of each release are planned
-([#762](https://github.com/FerroHEALTH/FerroFED/issues/762),
-[#763](https://github.com/FerroHEALTH/FerroFED/issues/763),
+the market under the Cyber Resilience Act, with a support period of five
+years from its release date
+([SECURITY.md](SECURITY.md#supported-versions),
 [regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
+Planned: the logging component's review tools and export
+([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the rest of the
+European interoperability component
+([#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
+[#523](https://github.com/FerroHEALTH/FerroFED/issues/523)), and the
+conformity file ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped, what is planned, and the limitations to

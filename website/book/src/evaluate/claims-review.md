@@ -61,6 +61,7 @@ as a broken command, is fixed in the same change.
 | Release | Reviewed on | Texts read | Findings | Fixed in |
 |---|---|---|---|---|
 | v0.0.10 | 2026-10-06 | see below | 16, below | [#674](https://github.com/FerroHEALTH/FerroFED/issues/674), except finding 16 |
+| v0.0.10 | 2026-10-15 | see below | 17 to 30, below | the v0.0.10 version bump, except finding 16, which stands |
 
 ### Findings of 2026-10-06
 
@@ -131,13 +132,83 @@ Not fixed here:
 
 No text suggested a use outside the intended purpose, (c).
 
+### Findings of 2026-10-15
+
+The review at the v0.0.10 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the book's introduction, the Evaluate pages
+written by hand, the instructions for use, the patient summary page, and the
+README and manifest description of `ehds-logging`, `eehrxf` and
+`openehr-federation`. Every other page of the book, `SUPPORT.md` and
+`SECURITY.md` was searched for "planned" and "yet" next to an issue that is
+closed, and for the words of the first review.
+
+Against Art 28(a), a function or property FerroFED lacks: none found.
+
+Against Art 28(b), a limitation left out:
+
+17. The instructions for use did not say that a received document is not
+    yet checked in full ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)), that the terminology rules are not yet
+    applied to the summary the gateway writes ([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)), or that behind
+    several replicas a follow-up write that names no node can be refused
+    ([#641](https://github.com/FerroHEALTH/FerroFED/issues/641)). All three are now listed.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+18. `README.md` described v0.0.10 as being built on `main` and planned the
+    reporting procedure and the support period, which ship in it
+    ([#762](https://github.com/FerroHEALTH/FerroFED/issues/762), [#763](https://github.com/FerroHEALTH/FerroFED/issues/763)).
+19. `llms.txt` said retention by origin and category is planned and the
+    gateway does not serve the interoperability component; both ship
+    ([#795](https://github.com/FerroHEALTH/FerroFED/issues/795), [#809](https://github.com/FerroHEALTH/FerroFED/issues/809)).
+20. The landing page named v0.0.9 as current. It now names v0.0.10 and has
+    a card for it.
+21. The claims page planned the re-pin to 1.0.0, the reporting procedure
+    and the support period for v0.0.10 and listed no v0.0.10 section under
+    Shipped.
+22. The instructions for use listed the professional's identification and
+    the assurance level as missing from the access record ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742)).
+23. The regulatory status page planned the Art 14 reporting procedure, the
+    support period and the end-of-support notice ([#762](https://github.com/FerroHEALTH/FerroFED/issues/762), [#763](https://github.com/FerroHEALTH/FerroFED/issues/763),
+    [#782](https://github.com/FerroHEALTH/FerroFED/issues/782)), and put the remaining EHDS work in the v0.0.10 milestone; it
+    is in v0.0.11.
+24. The information sheet planned the support period of each release
+    ([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)). It now states the end date of 0.0.10.
+25. The information sheet's standards table left out the HL7 Europe
+    packages, the Xt-EHR models, FHIRconnect and the TLS versions the
+    release uses. They are added, held to the pin matrix where it pins
+    them.
+26. The data-protection page and the threat model said the records are kept
+    for no period by origin and category; each record states its period
+    ([#795](https://github.com/FerroHEALTH/FerroFED/issues/795)). The data-protection page also planned the serious-incident
+    procedure, which is written ([#672](https://github.com/FerroHEALTH/FerroFED/issues/672)).
+27. The clinical safety risk file said the gateway does not serve the
+    interoperability component, and marked as planned controls that shipped
+    ([#742](https://github.com/FerroHEALTH/FerroFED/issues/742), [#722](https://github.com/FerroHEALTH/FerroFED/issues/722), [#663](https://github.com/FerroHEALTH/FerroFED/issues/663), [#687](https://github.com/FerroHEALTH/FerroFED/issues/687), [#688](https://github.com/FerroHEALTH/FerroFED/issues/688), [#734](https://github.com/FerroHEALTH/FerroFED/issues/734),
+    [#802](https://github.com/FerroHEALTH/FerroFED/issues/802)). Its review row for 0.0.10 records the update.
+28. The patient summary page planned the FHIR Validator lane, which CI runs
+    ([#688](https://github.com/FerroHEALTH/FerroFED/issues/688)).
+29. This page said the harmonised components are not built; the logging
+    component's access record and the interoperability component's FHIR
+    face are.
+30. The release notes repeated two upgrade notes and two security entries,
+    and told an operator to read `GET /health/dependencies`, which v0.0.10
+    no longer serves ([#751](https://github.com/FerroHEALTH/FerroFED/issues/751)). The duplicates are merged and the note
+    names the operator surface.
+
+Not fixed here: finding 16 stands, and the clinical safety file's X-01
+cites server tests planned with [#689](https://github.com/FerroHEALTH/FerroFED/issues/689), which is closed without them.
+
+No text suggested a use outside the intended purpose, (c).
+
 ## Annex II, point 2.5
 
-Point 2.5 binds the harmonised software components, which are not built yet
+Point 2.5 binds the harmonised software components, which are partly built
 ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
-They are planned on the same query path
+The patient summary of the FHIR face runs on the same query path, and the
+rest of the interoperability component is planned on it
 ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), so the features
-of that path that can stop or delay an answer are assessed now, with Art
+of that path that can stop or delay an answer are assessed here, with Art
 7(1), which names the manufacturers of the systems a healthcare provider
 uses. The Annex II checklist that
 [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) builds takes its
