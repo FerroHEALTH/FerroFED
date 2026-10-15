@@ -300,7 +300,8 @@ self_test() {
   row '3.2(c)' 0
   expect "a point with no row" 1 "has no row for 3.2(c)"
   fixture
-  grep -F '3.3' "$repo/$CHECKLIST" >> "$repo/$CHECKLIST"
+  dup="$(grep -F '3.3' "$repo/$CHECKLIST")"
+  printf '%s\n' "$dup" >> "$repo/$CHECKLIST"
   expect "a point with two rows" 1 "3.3 has a second row"
   fixture
   row 1.2 1 '1.9'
