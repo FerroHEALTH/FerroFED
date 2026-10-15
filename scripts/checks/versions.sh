@@ -1336,7 +1336,10 @@ for pair in \
   "Tailwind CSS standalone CLI, tailwindcss-macos-arm64 SHA-256|tailwind_macos_arm64_sha256" \
   "Binaryen (wasm-opt)|binaryen_version" \
   "Binaryen, binaryen-version_123-x86_64-linux.tar.gz SHA-256|binaryen_x86_64_linux_sha256" \
-  "Binaryen, binaryen-version_123-arm64-macos.tar.gz SHA-256|binaryen_arm64_macos_sha256"; do
+  "Binaryen, binaryen-version_123-arm64-macos.tar.gz SHA-256|binaryen_arm64_macos_sha256" \
+  "Binaryen, bin/wasm-opt of the x86_64 Linux archive, SHA-256|wasm_opt_x86_64_linux_sha256" \
+  "Binaryen, bin/wasm-opt of the arm64 macOS archive, SHA-256|wasm_opt_arm64_macos_sha256" \
+  "Binaryen, lib/libbinaryen.dylib of the arm64 macOS archive, SHA-256|libbinaryen_arm64_macos_sha256"; do
   item="${pair%|*}"
   want="$(pin_of "$item" "$matrix")"
   found="$(tool_pin "${pair#*|}")"

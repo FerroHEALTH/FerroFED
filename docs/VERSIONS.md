@@ -418,6 +418,9 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | Binaryen (wasm-opt) | version_123 | `scripts/release/viewer-tools.sh` |
 | Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/viewer-tools.sh` |
 | Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the x86_64 Linux archive, SHA-256 | `d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/viewer-tools.sh` |
+| Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/viewer-tools.sh` |
 
 The console's stylesheet is Tailwind CSS 4, configured in
 `app/ferrofed-viewer/style/tailwind.css` with no JavaScript config file, as
@@ -430,7 +433,12 @@ releases and checks each against its digest first, and
 version_123 is the release cargo-leptos 0.3.11 fetches by default. Each digest
 equals the one the upstream release publishes beside its asset
 (`sha256sums.txt` for Tailwind CSS, a `.sha256` file per archive for
-Binaryen), read on 2026-10-15.
+Binaryen), read on 2026-10-15. `scripts/release/viewer-tools.sh --check`,
+which the site script runs before every build, compares the files on `PATH`
+with the pins: the Tailwind CSS CLI is its release asset, and for Binaryen it
+digests the `wasm-opt` inside the verified archive, and on macOS the
+`libbinaryen.dylib` that `wasm-opt` loads, both taken from the archives above
+on 2026-10-15.
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

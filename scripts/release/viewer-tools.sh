@@ -18,7 +18,7 @@
 #                                         DIR/bin on PATH before the build
 #   scripts/release/viewer-tools.sh --check
 #                                         fail unless PATH holds both at
-#                                         their pinned versions
+#                                         their pinned versions and digests
 set -Eeuo pipefail
 
 tailwind_version="4.3.3"
@@ -27,38 +27,89 @@ tailwind_macos_arm64_sha256="cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67
 binaryen_version="version_123"
 binaryen_x86_64_linux_sha256="e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe"
 binaryen_arm64_macos_sha256="74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b"
+# The files inside each Binaryen archive that --check digests: wasm-opt, and
+# on macOS the libbinaryen it loads, which holds the optimizer itself.
+wasm_opt_x86_64_linux_sha256="d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a"
+wasm_opt_arm64_macos_sha256="4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8"
+libbinaryen_arm64_macos_sha256="672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14"
 
 die() {
   echo "viewer-tools: $*" >&2
   exit 1
 }
 
-# Fails unless the tools on PATH are the pinned releases.
-check() {
-  local said
-  command -v tailwindcss > /dev/null ||
-    die "no tailwindcss on PATH; run scripts/release/viewer-tools.sh DIR and put DIR/bin on PATH"
-  command -v wasm-opt > /dev/null ||
-    die "no wasm-opt on PATH; run scripts/release/viewer-tools.sh DIR and put DIR/bin on PATH"
-  said="$(tailwindcss --help 2>&1 | head -n 1 || true)"
-  case "$said" in
-    *"tailwindcss v$tailwind_version") ;;
-    *) die "tailwindcss on PATH says '$said', not v$tailwind_version" ;;
-  esac
-  said="$(wasm-opt --version 2>&1 || true)"
-  case "$said" in
-    *"($binaryen_version)") ;;
-    *) die "wasm-opt on PATH says '$said', not $binaryen_version" ;;
-  esac
+# Prints the SHA-256 of FILE, with the tool the platform has.
+digest_of() {
+  if command -v sha256sum > /dev/null; then
+    sha256sum "$1" | cut -d' ' -f1
+  else
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
 }
 
-# Checks FILE against the SHA-256 DIGEST, with the tool the platform has.
+# Checks FILE against the SHA-256 DIGEST.
 verify() {
-  local file="$1" digest="$2"
-  if command -v sha256sum > /dev/null; then
-    printf '%s  %s\n' "$digest" "$file" | sha256sum -c --quiet -
-  else
-    printf '%s  %s\n' "$digest" "$file" | shasum -a 256 -c --quiet -
+  local file="$1" digest="$2" found
+  found="$(digest_of "$file")"
+  [ "$found" = "$digest" ] || die "$file has SHA-256 $found, the pin is $digest"
+}
+
+# Prints FILE with every symbolic link on its way resolved, so the digest is
+# taken of the file a link on PATH runs.
+resolve() {
+  local file="$1" link
+  while [ -L "$file" ]; do
+    link="$(readlink "$file")"
+    case "$link" in
+      /*) file="$link" ;;
+      *) file="$(dirname "$file")/$link" ;;
+    esac
+  done
+  (cd -P "$(dirname "$file")" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$file")")
+}
+
+# Prints the first line a tool printed, with any ANSI escape removed: the
+# Tailwind CSS 4 CLI colours its banner even when its output is a pipe.
+first_line() {
+  NO_COLOR=1 FORCE_COLOR=0 "$@" 2>&1 | head -n 1 | sed -E $'s/\x1b\\[[0-9;]*[A-Za-z]//g' || true
+}
+
+# Fails unless the tools on PATH are the pinned releases, by version and by
+# the SHA-256 of the files that run.
+check() {
+  local said tailwind wasm_opt tailwind_sha wasm_opt_sha libbinaryen_sha=""
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)
+      tailwind_sha="$tailwind_linux_x64_sha256"
+      wasm_opt_sha="$wasm_opt_x86_64_linux_sha256"
+      ;;
+    Darwin-arm64)
+      tailwind_sha="$tailwind_macos_arm64_sha256"
+      wasm_opt_sha="$wasm_opt_arm64_macos_sha256"
+      libbinaryen_sha="$libbinaryen_arm64_macos_sha256"
+      ;;
+    *) die "no pinned digest for $(uname -s) $(uname -m), so the tools on PATH cannot be checked" ;;
+  esac
+  tailwind="$(command -v tailwindcss)" ||
+    die "no tailwindcss on PATH; run scripts/release/viewer-tools.sh DIR and put DIR/bin on PATH"
+  wasm_opt="$(command -v wasm-opt)" ||
+    die "no wasm-opt on PATH; run scripts/release/viewer-tools.sh DIR and put DIR/bin on PATH"
+  said="$(first_line tailwindcss --help)"
+  case "$said" in
+    *"tailwindcss v$tailwind_version"*) ;;
+    *) die "tailwindcss on PATH says '$said', not v$tailwind_version" ;;
+  esac
+  said="$(first_line wasm-opt --version)"
+  case "$said" in
+    *"($binaryen_version)"*) ;;
+    *) die "wasm-opt on PATH says '$said', not $binaryen_version" ;;
+  esac
+  tailwind="$(resolve "$tailwind")"
+  wasm_opt="$(resolve "$wasm_opt")"
+  verify "$tailwind" "$tailwind_sha"
+  verify "$wasm_opt" "$wasm_opt_sha"
+  if [ -n "$libbinaryen_sha" ]; then
+    verify "$(dirname "$wasm_opt")/../lib/libbinaryen.dylib" "$libbinaryen_sha"
   fi
 }
 
