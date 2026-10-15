@@ -20,7 +20,11 @@
 //! The origin's status is the §11.1 status of the node's answer, the set
 //! every other record's origins are named in (N16), and a successful
 //! write records the version its answer named ([`super::version`]), which
-//! is also the `version_uid` of the `COMPOSITION` it wrote.
+//! is also the `version_uid` of the `COMPOSITION` it wrote. A successful EHR
+//! create names the `ehr_id` its answer named among the EHRs it reached, so
+//! the patient behind it is looked up as for any other `ehr_id`
+//! ([`super::patient`]), and a search by that EHR finds the access that
+//! created it.
 
 use std::sync::Arc;
 
@@ -28,7 +32,7 @@ use axum::body::Body;
 use axum::response::Response;
 use ehds_logging::classify::{Basis, Evidence, RootObject, Unreadable};
 use ehds_logging::record::{
-    Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
+    Action, CreatedEhr, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
 };
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, Method, header};
@@ -74,6 +78,9 @@ const JSON: &str = "application/json";
 
 /// The path parameter that names the EHR of a request in the EHR area.
 const EHR_ID: &str = "ehr_id";
+
+/// The operation that creates an EHR whose `ehr_id` the node chooses.
+const EHR_CREATE: &str = "ehr_create";
 
 /// What one routed request shows before it is sent.
 #[derive(Debug)]
@@ -178,32 +185,23 @@ impl Routed {
             }
         };
         let system_id = acting(response.headers(), headers::SYSTEM_ID);
+        // NOTE: ITS-REST 1.1.0 EHR API `ETag_EHR`, `Location_EHR`; a create's path names no
+        // `ehr_id`, so the record reads the one its successful answer named.
+        let created = (self.operation == EHR_CREATE && response.status().is_success())
+            .then(|| version::created(response.headers()));
         let Some((mut response, evidence, version)) =
             shown((self.operation, self.action), self.written, response).await
         else {
             return error::fixed(Code::Internal, &self.request_id);
         };
-        let lookup = if self.patient.is_some() {
-            PatientLookup::RequestNamed
-        } else {
-            // NOTE: no specification governs this: our own design; the record gate names
-            // the patient, and an ehr_id it never reaches stays marked unavailable.
-            PatientLookup::Unavailable
-        };
-        let subject = DataSubject {
-            patient: self.patient,
-            ehrs: endpoint
-                .iter()
-                .flat_map(|endpoint| {
-                    self.ehr_id.iter().map(|ehr_id| EhrAt {
-                        endpoint: endpoint.clone(),
-                        ehr_id: ehr_id.as_str().to_owned(),
-                        patient: lookup.clone(),
-                    })
-                })
-                .collect(),
-            population: None,
-        };
+        let ehr_ids: Vec<&str> = self
+            .ehr_id
+            .as_ref()
+            .map(EhrId::as_str)
+            .into_iter()
+            .chain(created.as_ref().and_then(CreatedEhr::named))
+            .collect();
+        let subject = subject(self.patient, endpoint.as_deref(), &ehr_ids);
         let origins = endpoint
             .zip(status)
             .map(|(endpoint, status)| {
@@ -219,6 +217,7 @@ impl Routed {
                     status: status.as_str().to_owned(),
                     rows: None,
                     version,
+                    created_ehr: created,
                     contributed: true,
                     evidence: None,
                 }
@@ -272,6 +271,37 @@ async fn shown(
         None => read(operation, response).await?,
     };
     Some((response, evidence, version))
+}
+
+/// Whose data an access reached: the `patient` the request named, and each
+/// of `ehr_ids` at the acting `endpoint`, the one the path named and the one
+/// an EHR create left.
+fn subject(
+    patient: Option<PatientIdentifier>,
+    endpoint: Option<&str>,
+    ehr_ids: &[&str],
+) -> DataSubject {
+    let lookup = if patient.is_some() {
+        PatientLookup::RequestNamed
+    } else {
+        // NOTE: no specification governs this: our own design; the record gate names
+        // the patient, and an ehr_id it never reaches stays marked unavailable.
+        PatientLookup::Unavailable
+    };
+    DataSubject {
+        patient,
+        ehrs: endpoint
+            .iter()
+            .flat_map(|endpoint| {
+                ehr_ids.iter().map(|ehr_id| EhrAt {
+                    endpoint: (*endpoint).to_owned(),
+                    ehr_id: (*ehr_id).to_owned(),
+                    patient: lookup.clone(),
+                })
+            })
+            .collect(),
+        population: None,
+    }
 }
 
 /// The value of the provenance header `name`, when the answer names one

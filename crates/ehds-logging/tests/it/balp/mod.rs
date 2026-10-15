@@ -20,8 +20,8 @@ use ehds_logging::category::PRIORITY_SYSTEM;
 use ehds_logging::classify::{Basis, Evidence, RootObject};
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::record::{
-    AccessRecord, Accessor, Acting, Action, AssuranceLevel, DataSubject, EhrAt, Origin, Outcome,
-    PatientIdentifier, PatientLookup, Professional, Purpose, Request, WrittenVersion,
+    AccessRecord, Accessor, Acting, Action, AssuranceLevel, CreatedEhr, DataSubject, EhrAt, Origin,
+    Outcome, PatientIdentifier, PatientLookup, Professional, Purpose, Request, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
@@ -110,6 +110,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             status: "active".to_owned(),
             rows: Some(1),
             version: None,
+            created_ehr: None,
             categories: None,
         }],
         request: Request {
@@ -699,4 +700,28 @@ fn a_written_version_shows_no_id_in_debug() {
     let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::2";
     let shown = format!("{:?}", WrittenVersion::Named(uid.to_owned()));
     assert!(!shown.contains(uid), "{shown}");
+}
+
+#[test]
+fn the_ehr_a_create_left_is_named_on_its_origin_or_said_unread() {
+    let ehr_id = "7d44b88c-4199-4bad-97dc-d78268e01398";
+    for (created, named, why) in [
+        (CreatedEhr::Named(ehr_id.to_owned()), vec![ehr_id], vec![]),
+        (CreatedEhr::Unnamed, vec![], vec!["unnamed"]),
+        (CreatedEhr::Malformed, vec![], vec!["malformed"]),
+    ] {
+        let mut record = record(Action::Create, Outcome::Success);
+        for origin in &mut record.origins {
+            origin.created_ehr = Some(created.clone());
+        }
+        let written = written(&record);
+        let origins = entity(&written, "origin");
+        let [origin] = origins.as_slice() else {
+            panic!("one origin, got {origins:?}");
+        };
+        assert_eq!(details(origin, "created-ehr"), named, "{created:?}");
+        assert_eq!(details(origin, "created-ehr-unread"), why, "{created:?}");
+    }
+    let shown = format!("{:?}", CreatedEhr::Named(ehr_id.to_owned()));
+    assert!(!shown.contains(ehr_id), "{shown}");
 }

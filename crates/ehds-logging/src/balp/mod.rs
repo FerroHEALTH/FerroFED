@@ -64,6 +64,8 @@
 //! 9(1)). BALP 1:52.4.1.6 recommends one record per patient "driven by a
 //! Policy"; this record names the scope, never a person.
 
+pub mod detail;
+
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -83,109 +85,6 @@ use crate::record::{
     AccessRecord, Action, Origin, Outcome, PatientIdentifier, PatientLookup, Population, Relayed,
 };
 use crate::sink::{AccessSink, Reservation, SinkError};
-
-/// The names of the `detail` entries a record's added entities carry.
-pub mod detail {
-    /// A category as `<system>|<code>`, once per category.
-    pub const CATEGORY: &str = "ehds-category";
-    /// `<system>|<code>:<basis>`, once per basis of each category, the basis
-    /// after the last `:`.
-    pub const BASIS: &str = "ehds-category-basis";
-    /// `<system>|<version>`, once per code system a category is written in
-    /// whose version is known.
-    pub const CATEGORY_VERSION: &str = "ehds-category-version";
-    /// `true` when the access reached data of no category.
-    pub const NO_CATEGORY: &str = "ehds-no-category";
-    /// Why the access is unclassified.
-    pub const UNCLASSIFIED: &str = "ehds-unclassified";
-    /// A template id of the evidence.
-    pub const TEMPLATE_ID: &str = "template-id";
-    /// An archetype id of the evidence.
-    pub const ARCHETYPE_ID: &str = "archetype-id";
-    /// A version uid of a root object the access reached.
-    pub const VERSION_UID: &str = "version-uid";
-    /// An id the category map holds no key for.
-    pub const UNMAPPED_ID: &str = "unmapped-id";
-    /// The digest of the category map.
-    pub const MAP_DIGEST: &str = "category-map-digest";
-    /// The rows or objects delivered.
-    pub const DELIVERED: &str = "delivered";
-    /// The stored query executed.
-    pub const STORED_QUERY: &str = "stored-query";
-    /// The node behind an origin.
-    pub const NODE: &str = "node";
-    /// The `system_id` of the node behind an origin.
-    pub const SYSTEM_ID: &str = "system-id";
-    /// How an origin answered.
-    pub const STATUS: &str = "status";
-    /// The rows an origin contributed.
-    pub const ROWS: &str = "rows";
-    /// The `OBJECT_VERSION_ID` of the version a write left at an origin, as
-    /// its answer named it.
-    pub const WRITTEN_VERSION: &str = "written-version";
-    /// Why the version a write left at an origin cannot be told: `unnamed`
-    /// when its answer named none, `malformed` when it named no
-    /// `OBJECT_VERSION_ID`.
-    pub const WRITTEN_VERSION_UNREAD: &str = "written-version-unread";
-    /// The endpoint an `ehr_id` is held at.
-    pub const ENDPOINT: &str = "endpoint";
-    /// Whether the patient behind an `ehr_id` is named: `request-named`,
-    /// `found`, `not-found`, `unavailable`, `not-configured` or
-    /// `unsupported`.
-    pub const PATIENT_LOOKUP: &str = "patient-lookup";
-    /// The identifier the client correlates the request by in its own log.
-    pub const CORRELATION: &str = "correlation-id";
-    /// The national contact point that asserted the relayed professional
-    /// and provider, by the issuer of its token.
-    pub const CONTACT_POINT: &str = "contact-point";
-    /// That the relayed values are the contact point's assertion: `true`.
-    pub const ASSERTED: &str = "asserted";
-    /// The relayed `country_code`.
-    pub const COUNTRY_CODE: &str = "country-code";
-    /// The relayed professional's `family_name`.
-    pub const FAMILY_NAME: &str = "hp-family-name";
-    /// The relayed professional's `given_name`.
-    pub const GIVEN_NAME: &str = "hp-given-name";
-    /// The relayed professional's `hp_identifier`.
-    pub const HP_IDENTIFIER: &str = "hp-identifier";
-    /// The agency that issued the relayed `hp_identifier`.
-    pub const HP_ISSUING_AUTHORITY: &str = "hp-issuing-authority";
-    /// `<system>|<code>`, or `<code>`, once per relayed
-    /// `hp_professional_role`.
-    pub const HP_ROLE: &str = "hp-professional-role";
-    /// The relayed `healthcare_provider_identifier`.
-    pub const PROVIDER_IDENTIFIER: &str = "provider-identifier";
-    /// The agency that issued the relayed provider identifier.
-    pub const PROVIDER_ISSUING_AUTHORITY: &str = "provider-issuing-authority";
-    /// The relayed `healthcare_provider_name`.
-    pub const PROVIDER_NAME: &str = "provider-name";
-    /// The relayed `healthcare_provider_address`.
-    pub const PROVIDER_ADDRESS: &str = "provider-address";
-    /// The years the record is kept.
-    pub const RETENTION_YEARS: &str = "ehds-retention-years";
-    /// The first UTC date the record may be deleted on, `YYYY-MM-DD`.
-    pub const RETENTION_ENDS: &str = "ehds-retention-ends";
-    /// What called for the period: `default`, `unclassified`,
-    /// `category:<system>|<code>` or `origin:<endpoint>`.
-    pub const RETENTION_GROUND: &str = "ehds-retention-ground";
-    /// That the access is an emergency access (Art 11(5)): `true`.
-    pub const EMERGENCY_ACCESS: &str = "ehds-emergency-access";
-    /// `<system>|<code>`, or `<code>`, once per purpose of use that marked
-    /// the access an emergency access.
-    pub const EMERGENCY_PURPOSE: &str = "ehds-emergency-purpose";
-    /// A member whose consent pre-filter denial was set aside for the
-    /// emergency, once per member.
-    pub const CONSENT_SET_ASIDE: &str = "ehds-consent-set-aside";
-    /// That the access is a population access: `true`.
-    pub const POPULATION: &str = "ehds-population";
-    /// Why a population access's record names no `ehr_id`: `not-projected`,
-    /// `over-limit`, `not-delivered` or `unattributed`.
-    pub const POPULATION_REASON: &str = "ehds-population-reason";
-    /// How many `ehr_id`s the delivered rows of a population access named.
-    pub const POPULATION_EHRS: &str = "ehds-population-ehrs";
-    /// The most `ehr_id`s a record names.
-    pub const POPULATION_LIMIT: &str = "ehds-population-limit";
-}
 
 /// The name of the entity that marks an emergency access.
 pub const EMERGENCY_ENTITY: &str = "ehds-emergency-access";
@@ -507,8 +406,8 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
 }
 
 /// The entity of `origin`, labelled `labels`: how it answered, its node, its
-/// `system_id`, its rows, the version a write left there and its
-/// categories.
+/// `system_id`, its rows, the version a write left there, the `ehr_id` an
+/// EHR create left there and its categories.
 fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
     let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];
     details.extend(
@@ -538,6 +437,18 @@ fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
             version
                 .unread()
                 .map(|why| Detail::new(detail::WRITTEN_VERSION_UNREAD, why)),
+        );
+    }
+    if let Some(created) = &origin.created_ehr {
+        details.extend(
+            created
+                .named()
+                .map(|ehr_id| Detail::new(detail::CREATED_EHR, ehr_id)),
+        );
+        details.extend(
+            created
+                .unread()
+                .map(|why| Detail::new(detail::CREATED_EHR_UNREAD, why)),
         );
     }
     details.extend(origin.categories.iter().flat_map(categories));

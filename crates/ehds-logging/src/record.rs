@@ -459,6 +459,9 @@ pub struct Origin {
     /// The version a write left at the endpoint, as its answer named it, or
     /// `None` for an access that wrote nothing there.
     pub version: Option<WrittenVersion>,
+    /// The `ehr_id` an EHR create left at the endpoint, as its answer named
+    /// it, or `None` for an access that created no EHR there.
+    pub created_ehr: Option<CreatedEhr>,
     /// The categories of what it contributed, when told apart from the
     /// other origins'.
     pub categories: Option<Classification>,
@@ -472,6 +475,7 @@ impl fmt::Debug for Origin {
             .field("status", &self.status)
             .field("rows", &self.rows)
             .field("version", &self.version)
+            .field("created_ehr", &self.created_ehr)
             .field("categories", &self.categories)
             .finish_non_exhaustive()
     }
@@ -519,6 +523,57 @@ impl WrittenVersion {
 }
 
 impl fmt::Debug for WrittenVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(_) => f.write_str("Named(..)"),
+            Self::Unnamed => f.write_str("Unnamed"),
+            Self::Malformed => f.write_str("Malformed"),
+        }
+    }
+}
+
+/// The `ehr_id` of the EHR a create left at its origin, as the origin's
+/// answer named it.
+///
+/// The recording system holds the `ehr_id` to the `HIER_OBJECT_ID` form
+/// before it is recorded, so a value the answer carried in its place,
+/// whatever it holds, never reaches the record.
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CreatedEhr {
+    /// The answer named this `ehr_id`.
+    Named(String),
+    /// The answer named no `ehr_id`, so the record cannot tell which EHR the
+    /// create left.
+    Unnamed,
+    /// The answer named an `ehr_id` that is no `HIER_OBJECT_ID`, or two
+    /// that differ, so the record cannot tell which EHR the create left.
+    Malformed,
+}
+
+impl CreatedEhr {
+    /// The `ehr_id`, when the answer named one.
+    #[must_use]
+    pub fn named(&self) -> Option<&str> {
+        match self {
+            Self::Named(ehr_id) => Some(ehr_id),
+            Self::Unnamed | Self::Malformed => None,
+        }
+    }
+
+    /// Why the record cannot tell the `ehr_id`, as a record writes it:
+    /// `unnamed` or `malformed`, or `None` when the answer named it.
+    #[must_use]
+    pub fn unread(&self) -> Option<&'static str> {
+        match self {
+            Self::Named(_) => None,
+            Self::Unnamed => Some("unnamed"),
+            Self::Malformed => Some("malformed"),
+        }
+    }
+}
+
+impl fmt::Debug for CreatedEhr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Named(_) => f.write_str("Named(..)"),
