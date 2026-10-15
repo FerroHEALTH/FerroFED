@@ -26,6 +26,11 @@
 //! download, and Maven retries a download that fails
 //! ([`MAVEN_RETRIES`] times).
 //!
+//! The image is built at most once per process, and under an advisory lock
+//! file, so two test processes never run Maven at once; a process that finds
+//! the image's tag in the local Docker daemon reuses it without running
+//! Maven.
+//!
 //! The reference container reaches the nodes and its database through the
 //! Docker host gateway, as [`CONTAINER_HOST`]: each node sits behind a
 //! [`CapturingProxy`](crate::proxy::CapturingProxy) started with
@@ -35,9 +40,13 @@
 //! No specification governs the harness; it is FerroFED's own design.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::fs::{File, OpenOptions, TryLockError};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use http::StatusCode;
+use testcontainers::bollard::Docker;
+use testcontainers::bollard::errors::Error;
 use testcontainers::core::wait::ExitWaitStrategy;
 use testcontainers::core::{Host, IntoContainerPort, Mount, WaitFor};
 use testcontainers::{ContainerAsync, GenericBuildableImage, GenericImage, ImageExt};
@@ -106,6 +115,20 @@ const JAR: &str = "target/openehr-federation-ref-0.9.0-SNAPSHOT.jar";
 /// How long the Maven build may run, downloads included.
 const BUILD_BUDGET: Duration = Duration::from_mins(15);
 
+/// The advisory lock file one image build at a time holds, in the Maven
+/// repository directory or, without one, in the temporary directory.
+const LOCK_FILE: &str = "ferrofed-reference-build.lock";
+
+/// How long a process waits for another's build: the build's own budget and
+/// five minutes for the image around the jar.
+const LOCK_WAIT: Duration = BUILD_BUDGET.saturating_add(Duration::from_mins(5));
+
+/// How long the wait for the build lock sleeps between two tries.
+const LOCK_POLL: Duration = Duration::from_secs(1);
+
+/// The gateway's image once this process has built or found it.
+static BUILT: tokio::sync::OnceCell<GenericImage> = tokio::sync::OnceCell::const_new();
+
 /// The reference implementation could not be built or started.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -129,6 +152,26 @@ pub enum ReferenceError {
         #[source]
         source: std::io::Error,
     },
+    /// The build lock file could not be opened or locked.
+    #[error("the build lock {path} could not be taken")]
+    Lock {
+        /// The lock file.
+        path: String,
+        /// What the file system reported.
+        #[source]
+        source: std::io::Error,
+    },
+    /// Another process held the build lock for longer than the wait allows.
+    #[error("the build lock {path} was still held after {}s", waited.as_secs())]
+    Locked {
+        /// The lock file.
+        path: String,
+        /// How long the wait lasted.
+        waited: Duration,
+    },
+    /// Docker could not say whether the image is already built.
+    #[error("Docker could not be asked for the reference implementation's image")]
+    Inspect(#[source] Error),
     /// Maven ran and did not package the reference implementation.
     #[error(
         "the reference implementation's Maven build exited with {}; its output ends:\n{log}",
@@ -280,22 +323,32 @@ pub fn container_origin(port: u16) -> String {
     format!("http://{CONTAINER_HOST}:{port}")
 }
 
-/// Packages the vendored source with the pinned manifest and builds the
-/// gateway's image around the jar.
-///
-/// The image build is cached by the Docker builder, so a call whose jar is
-/// the same as the last one's reuses its layers.
+/// Returns the gateway's image, built at most once per process and reused
+/// across processes while its tag is in the local Docker daemon.
 async fn build() -> Result<GenericImage, ReferenceError> {
-    let jar = package(manifest().await?).await?;
-    let dockerfile = format!(
-        "FROM {jre}\n\
-         COPY gateway.jar /app/gateway.jar\n\
-         EXPOSE {PORT}\n\
-         ENTRYPOINT [\"java\", \"-jar\", \"/app/gateway.jar\"]\n",
-        jre = TEMURIN_JRE.reference(),
-    );
+    BUILT.get_or_try_init(build_once).await.cloned()
+}
+
+/// Packages the vendored source with the pinned manifest and builds the
+/// gateway's image around the jar, unless the image is already built.
+///
+/// The build holds an advisory lock on [`LOCK_FILE`] beside Maven's
+/// repository, so two test processes never run Maven at once, and the second
+/// finds the first one's image.
+async fn build_once() -> Result<GenericImage, ReferenceError> {
+    let dockerfile = dockerfile();
+    let tag = tag(&dockerfile);
+    let repository = repository()?;
+    let directory = repository
+        .as_deref()
+        .map_or_else(std::env::temp_dir, PathBuf::from);
+    let _held = lock(&directory.join(LOCK_FILE), LOCK_WAIT).await?;
+    if exists(&tag).await? {
+        return Ok(GenericImage::new(IMAGE.to_owned(), tag));
+    }
+    let jar = package(manifest().await?, repository.as_deref()).await?;
     retry::build(|| {
-        GenericBuildableImage::new(IMAGE, REFERENCE_COMMIT)
+        GenericBuildableImage::new(IMAGE, tag.clone())
             .with_dockerfile_string(dockerfile.clone())
             .with_data(jar.clone(), "./gateway.jar")
     })
@@ -306,10 +359,82 @@ async fn build() -> Result<GenericImage, ReferenceError> {
     })
 }
 
+/// Returns the Dockerfile of the gateway's image around `gateway.jar`.
+fn dockerfile() -> String {
+    format!(
+        "FROM {jre}\n\
+         COPY gateway.jar /app/gateway.jar\n\
+         EXPOSE {PORT}\n\
+         ENTRYPOINT [\"java\", \"-jar\", \"/app/gateway.jar\"]\n",
+        jre = TEMURIN_JRE.reference(),
+    )
+}
+
+/// Returns the image tag for `dockerfile`: [`REFERENCE_COMMIT`] and the first
+/// 12 hexadecimal digits of the Dockerfile's sha256, so a new runtime image
+/// pin is a new tag.
+fn tag(dockerfile: &str) -> String {
+    let digest =
+        hex(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, dockerfile.as_bytes()).as_ref());
+    let short = digest.get(..12).unwrap_or(&digest);
+    format!("{REFERENCE_COMMIT}-{short}")
+}
+
+/// Returns whether the local Docker daemon holds the image `IMAGE:tag`.
+async fn exists(tag: &str) -> Result<bool, ReferenceError> {
+    let docker = Docker::connect_with_defaults().map_err(ReferenceError::Inspect)?;
+    match docker.inspect_image(&format!("{IMAGE}:{tag}")).await {
+        Ok(_) => Ok(true),
+        Err(Error::DockerResponseServerError { status_code, .. })
+            if StatusCode::from_u16(status_code)
+                .is_ok_and(|status| status == StatusCode::NOT_FOUND) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(ReferenceError::Inspect(error)),
+    }
+}
+
+/// Takes the advisory lock on the file `path`, polling until it is free or
+/// `wait` has passed; the lock is released when the returned file drops.
+async fn lock(path: &Path, wait: Duration) -> Result<File, ReferenceError> {
+    let shown = || path.to_string_lossy().into_owned();
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .map_err(|source| ReferenceError::Lock {
+            path: shown(),
+            source,
+        })?;
+    let started = tokio::time::Instant::now();
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(TryLockError::WouldBlock) if started.elapsed() < wait => {
+                tokio::time::sleep(LOCK_POLL).await;
+            }
+            Err(TryLockError::WouldBlock) => {
+                return Err(ReferenceError::Locked {
+                    path: shown(),
+                    waited: wait,
+                });
+            }
+            Err(TryLockError::Error(source)) => {
+                return Err(ReferenceError::Lock {
+                    path: shown(),
+                    source,
+                });
+            }
+        }
+    }
+}
+
 /// Runs Maven over the vendored source and the manifest `pom` in a
-/// container and returns the jar it packages.
-async fn package(pom: Vec<u8>) -> Result<Vec<u8>, ReferenceError> {
-    let repository = repository()?;
+/// container, with the host directory `repository` as its local repository
+/// when one is given, and returns the jar it packages.
+async fn package(pom: Vec<u8>, repository: Option<&str>) -> Result<Vec<u8>, ReferenceError> {
     let stage = "Maven build";
     let build = retry::start(|| {
         let request = MAVEN
@@ -320,8 +445,8 @@ async fn package(pom: Vec<u8>) -> Result<Vec<u8>, ReferenceError> {
             .with_copy_to(format!("{BUILD_DIRECTORY}/src"), Path::new(SOURCE))
             .with_cmd(maven_command())
             .with_startup_timeout(BUILD_BUDGET);
-        match &repository {
-            Some(path) => request.with_mount(Mount::bind_mount(path.clone(), REPOSITORY_TARGET)),
+        match repository {
+            Some(path) => request.with_mount(Mount::bind_mount(path, REPOSITORY_TARGET)),
             None => request,
         }
     })
@@ -436,4 +561,47 @@ async fn tail(server: &ContainerAsync<GenericImage>) -> String {
     }
     let start = out.len().saturating_sub(LOG_TAIL);
     String::from_utf8_lossy(out.get(start..).unwrap_or(&out)).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_tag_names_the_commit_and_the_dockerfile() {
+        let first = tag(&dockerfile());
+        assert_eq!(first, tag(&dockerfile()));
+        assert!(first.starts_with(&format!("{REFERENCE_COMMIT}-")));
+        assert_eq!(first.len(), REFERENCE_COMMIT.len() + 13);
+        assert_ne!(first, tag("FROM another-runtime\n"));
+    }
+
+    #[tokio::test]
+    #[expect(clippy::panic_in_result_fn, reason = "test assertions")]
+    async fn a_held_build_lock_keeps_a_second_taker_out() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join(LOCK_FILE);
+        let held = lock(&path, Duration::ZERO).await?;
+        let refused = lock(&path, Duration::ZERO).await;
+        assert!(matches!(refused, Err(ReferenceError::Locked { .. })));
+        drop(held);
+        lock(&path, Duration::ZERO).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_waiting_taker_gets_the_lock_once_it_is_released()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join(LOCK_FILE);
+        let held = lock(&path, Duration::ZERO).await?;
+        let release = async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            drop(held);
+        };
+        let (taken, ()) = tokio::join!(lock(&path, Duration::from_secs(10)), release);
+        taken?;
+        Ok(())
+    }
 }
