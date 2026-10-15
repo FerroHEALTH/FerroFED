@@ -28,11 +28,15 @@ vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
   third subparagraph, sets. Each end date in the table below is computed
   from that rule. If Cadasto B.V. sets a longer period, this page states
   it.
-- **Where fixes ship:** a security fix ships in a new release, never as a
-  back-port into an older one, so a user of an older release within its
-  support period moves to the latest release to get the fix. The family
-  book says why, and for whom CRA Art 13(10) allows it
-  ([how a fix reaches you](https://ferrohealth.eu/docs/security.html#how-a-fix-reaches-you)).
+- **Where fixes ship:** a security fix ships as its own patch release on
+  each supported line, with no feature changes in it, so the update is
+  provided separately from functionality updates (Annex I Part II(2)). A
+  line is the releases that share a `<major>.<minor>` version, whose image
+  tag moves to each new patch release of the line
+  ([`docs/release.md`](docs/release.md#withdrawing-a-release)); a line is
+  supported while a release on it is within its support period. A
+  published release is never changed, so a user of an older release moves
+  to the security patch release of its line to get the fix.
 - **Updates stay available:** a published release, its tag and its image
   digest are never deleted ([`docs/release.md`](docs/release.md)).
 - **After the end date:** a release past its end date is unsupported. The

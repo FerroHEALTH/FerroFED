@@ -129,7 +129,7 @@ carries, with the control the operator supplies
 |---|---|---|---|
 | (a) no known exploitable vulnerabilities | yes | `cargo deny check` reads the RustSec advisory database and fails on any advisory or yanked crate; it is part of the required check on every change to `main`, from which a release is tagged. Two exceptions in `deny.toml` are unmaintained compile-time macros of the console with no runtime code. Dependabot proposes updates; fuzz targets run over the untrusted inputs; each binary embeds its dependency list (`cargo auditable`) | [Checks and gates](../contribute/checks-and-gates.md); [`deny.toml`](https://github.com/FerroHEALTH/FerroFED/blob/main/deny.toml) |
 | (b) secure by default, and reset | yes | `profile` defaults to `production`; the development profile must be set, takes a restart and prints a red notice. There is no unauthenticated mode; the binary listens on loopback; the admin listener is off; a credential or a patient identifier travels only over `https`; the audit destination must be chosen once a registry is configured. See [Reset](#reset-to-the-original-state) | [Configuration](../operate/configuration.md); [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted); [B8](threat-model.md#b8-configuration-and-secrets) |
-| (c) security updates | yes, automatic installation excepted | a fix ships in a new release; users hear of it from the advisory and the release feed; the gateway names its support end date and says when it has passed. See [Automatic security updates](#automatic-security-updates) | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions); [Upgrading](../operate/upgrading.md) |
+| (c) security updates | yes, automatic installation excepted | a security fix ships as its own patch release on each supported line; users hear of it from the advisory and the release feed; the gateway names its support end date and says when it has passed. See [Automatic security updates](#automatic-security-updates) | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions); [Upgrading](../operate/upgrading.md) |
 | (d) protection from unauthorised access, and reporting it | yes | every request is authenticated before the façade reads it; scopes per route; the operator surface and the admin write actions need the operator scope; the ADMIN API is refused. Every refusal is logged as `caller-refused` under `ferrofed::security` | [B1](threat-model.md#b1-client-to-gateway), [B5](threat-model.md#b5-the-admin-listener); [Client authentication](../operate/authentication.md) |
 | (e) confidentiality | yes | in transit: `https` for every credential and patient identifier outside development, mutual TLS and DPoP where configured, TLS on the listener as an option. At rest: no clinical data is written to disk; secrets are read from files, redacted and zeroised; the audit spool is `0700` and is encrypted by the volume, which the deployment supplies | [B2](threat-model.md#b2-gateway-to-member-node), [B6](threat-model.md#b6-audit-and-telemetry-sinks); [Hardening](../operate/hardening.md#tls) |
 | (f) integrity, and reporting corruptions | yes | each release is built in an isolated lane with signed provenance, verified with `gh attestation verify`; the image runs read-only; `config check` refuses a defective configuration and a refused reload keeps the running one; two members claiming one `ehr_id` is `409` and an integrity incident, counted and alerted | [Integrity incidents](../operate/registry.md#integrity-incidents); [The image](../operate/container.md#the-image) |
@@ -203,10 +203,11 @@ every product. What is FerroFED's own:
   source graph and an SPDX SBOM of the shipped binary per tarball, and
   attests an SPDX SBOM per platform of each image
   ([The release binaries](../operate/container.md#the-release-binaries)).
-- **Point (2), remediation.** A fix ships in a new release
+- **Point (2), remediation.** Point (2) asks that "where technically
+  feasible, new security updates shall be provided separately from
+  functionality updates". A security fix ships as its own patch release on
+  each supported `<major>.<minor>` line, with no feature changes in it
   ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
-  Whether a security fix ships in a release that carries no functional
-  change, "where technically feasible", is not stated for FerroFED yet.
 - **Point (3), tests and reviews.** The required checks run on every
   change; the leakage track 10 and the identifier-integrity track 11 run
   against the gateway ([Conformance matrix](conformance.md)); CodeQL and
@@ -235,3 +236,4 @@ the ones a professional user needs to know.
 | Revision | Date | Release | Change |
 |---|---|---|---|
 | 1 | 2026-10-15 | 0.0.10, and `main` before 0.0.11 | first assessment |
+| 2 | 2026-10-15 | `main` before 0.0.11 | Annex I, Part II, point (2): a security fix ships as its own patch release on each supported line, with no feature changes in it |

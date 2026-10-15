@@ -143,8 +143,10 @@ vulnerabilities to be handled and to receive security updates;"
 
 The type of support is the manufacturer's, described on the family book's
 [How a fix reaches you](https://ferrohealth.eu/docs/security.html#how-a-fix-reaches-you).
-For FerroFED, a security fix ships in a new release, and a user of an older
-release within its support period moves to the latest release to get it
+For FerroFED, a security fix ships as its own patch release on each
+supported line, the releases that share a `<major>.<minor>` version, with
+no feature changes in it. A user of an older release within its support
+period moves to the security patch release of its line to get the fix
 ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
 Each release is supported for five years from its release date. The end
