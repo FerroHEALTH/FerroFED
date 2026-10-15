@@ -31,7 +31,7 @@ This page is not legal advice.
 
 | Right | Who acts | FerroFED | Status |
 |---|---|---|---|
-| Art 3(1), access | the access service | the summary is served to a professional; no test serves it to a person's own grant | partial |
+| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them; the other five categories have no interface | partial |
 | Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
 | Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants and records who acted | not the gateway's |
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR; nothing marks the entry as the person's | partial |
@@ -74,19 +74,21 @@ serves the patient summary in the HL7 Europe format
 `fhir/summary.rs`:
 `the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`).
 
-**The gap.** The summary is served to a caller that acts for a
-professional and states a purpose of use (`fhir/refusals.rs`:
-`a_client_that_names_no_professional_is_refused`,
-`a_token_with_no_purpose_of_use_is_refused`). No test shows it served to a
-person's own grant or to an access service acting for the person. The other
-five categories of Art 14(1) have no interface in the exchange format
-(Annex II, point 2.1:
+A person's own grant gets their summary, and only theirs: a grant confined
+to one patient asking for another is refused before the identity service or
+any member is asked, and the access record names the person as the caller
+and as the data subject (`fhir/patient_grant.rs`:
+`a_persons_own_grant_gets_their_summary_and_no_identifier_reaches_a_node_or_a_log`,
+`a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone_is_asked`,
+`the_access_record_names_the_person_as_caller_and_as_data_subject`).
+
+**The gap.** The other five categories of Art 14(1) have no interface in
+the exchange format (Annex II, point 2.1:
 [#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
 [#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
 [#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
 [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
-[#668](https://github.com/FerroHEALTH/FerroFED/issues/668)). The first gap
-is planned ([#991](https://github.com/FerroHEALTH/FerroFED/issues/991)).
+[#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
 
 ## Art 4(2): proxies and legal representatives
 
