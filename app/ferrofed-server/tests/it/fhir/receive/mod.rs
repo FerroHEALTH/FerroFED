@@ -14,6 +14,7 @@ mod check;
 mod display;
 mod inserted;
 mod refused;
+mod representative;
 mod start;
 mod write;
 
@@ -220,6 +221,7 @@ pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
             ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
+            act_is_representative: false,
         });
     }
     Ok(server)

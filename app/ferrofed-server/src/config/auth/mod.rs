@@ -199,6 +199,12 @@ pub struct PatientIssuer {
     /// The identifier system whose values are that member's `ehr_id`s, as
     /// the cross-reference names it.
     pub ehr_id_system: String,
+    /// Whether the RFC 8693 `act` claim of this issuer's patient tokens
+    /// names a natural person who acts for the patient, a proxy or a legal
+    /// representative (Regulation (EU) 2025/327 Art 4(2)); `false` by
+    /// default, and then no caller of this issuer is read as a
+    /// representative.
+    pub act_is_representative: bool,
 }
 
 /// `[auth.edge]`.
@@ -323,6 +329,9 @@ pub struct PatientBinding {
     /// The identifier system of that member's `ehr_id`s at the
     /// cross-reference.
     pub ehr_id_system: IdentifierNamespace,
+    /// Whether the `act` claim of this issuer's patient tokens names a
+    /// representative who acts for the patient.
+    pub act_is_representative: bool,
 }
 
 /// How an issuer's tokens are verified.
@@ -674,6 +683,7 @@ fn resolve_patient(key: &str, written: &PatientIssuer) -> Result<PatientBinding,
     Ok(PatientBinding {
         endpoint,
         ehr_id_system,
+        act_is_representative: written.act_is_representative,
     })
 }
 

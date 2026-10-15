@@ -20,7 +20,10 @@
 //! (Regulation (EU) 2025/327 Annex II 3.1). A caller a national contact point
 //! vouched for also holds the professional and the provider of another
 //! Member State it relays, as it asserts them ([`Relayed`]), and the
-//! correlation identifier its connector sent.
+//! correlation identifier its connector sent. A caller whose patient token
+//! names a current actor ([`Actor`], RFC 8693 §4.1) holds it as the
+//! patient's representative only when the token's issuer declares its
+//! `act` claim one; the gateway never infers a representative.
 
 use std::fmt;
 
@@ -85,6 +88,9 @@ pub struct Caller {
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
+    /// The representative the token names as acting for the patient, when
+    /// its issuer declares its patient tokens' `act` one.
+    representative: Option<Actor>,
     /// Whether the issuer that vouched for the caller is declared a national
     /// contact point.
     contact_point: bool,
@@ -112,6 +118,7 @@ impl fmt::Debug for Caller {
             .field("confined", &self.patient.is_some())
             .field("assurance", &self.assurance)
             .field("acting", &self.acting)
+            .field("representative", &self.representative)
             .field("contact_point", &self.contact_point)
             .field("relayed", &self.relayed)
             .finish_non_exhaustive()
@@ -244,6 +251,29 @@ pub struct Stated {
     pub purposes: Vec<PurposeOfUse>,
 }
 
+/// The current actor a token's RFC 8693 §4.1 `act` claim names: "the acting
+/// party to whom authority has been delegated".
+///
+/// It holds the `iss` and the `sub` of the claim, each when the claim
+/// states it, and nothing else of it. `Debug` shows which it holds and no
+/// value.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Actor {
+    /// The `iss` of the `act` claim.
+    pub issuer: Option<String>,
+    /// The `sub` of the `act` claim.
+    pub subject: Option<String>,
+}
+
+impl fmt::Debug for Actor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Actor")
+            .field("issuer", &self.issuer.is_some())
+            .field("subject", &self.subject.is_some())
+            .finish()
+    }
+}
+
 impl Caller {
     /// Returns the caller `stated` describes, verified as `verified_by`
     /// says, its scopes read with
@@ -269,6 +299,7 @@ impl Caller {
             professional: Professional::default(),
             assurance: None,
             acting: Acting::Person,
+            representative: None,
             contact_point: false,
             relayed: None,
             correlation: None,
@@ -354,6 +385,22 @@ impl Caller {
     #[must_use]
     pub fn acting(&self) -> Acting {
         self.acting
+    }
+
+    /// Returns this caller, its token naming `representative` as the
+    /// person who acts for the patient its grant is confined to.
+    #[must_use]
+    pub fn with_representative(mut self, representative: Option<Actor>) -> Self {
+        self.representative = representative;
+        self
+    }
+
+    /// Returns the representative the caller's token names as acting for
+    /// the patient (Regulation (EU) 2025/327 Art 4(2)): its `act` claim, when
+    /// the issuer declares its patient tokens' `act` a representative.
+    #[must_use]
+    pub fn representative(&self) -> Option<&Actor> {
+        self.representative.as_ref()
     }
 
     /// Returns whether the token names the professional a client acts for:

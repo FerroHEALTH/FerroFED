@@ -129,7 +129,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         retention,
         labels,
         emergency: None,
-        subject_inserted: false,
+        inserted: None,
         transformations: Vec::new(),
     }
 }

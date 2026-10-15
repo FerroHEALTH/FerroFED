@@ -189,7 +189,7 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
   stated in each document), pinned by commit: the authorization server, the
   VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.
-- `docs/specs/ietf-oauth/`: RFC 6749, 7519, 7521, 7523, 7662, 8414, 8705,
+- `docs/specs/ietf-oauth/`: RFC 6749, 7519, 7521, 7523, 7662, 8414, 8693, 8705,
   9126, 9396 and 9449 as the RFC Editor publishes them (IETF Trust Legal Provisions
   §3.c, in full and unmodified), each pinned by URL and sha256.
 - `docs/specs/w3c-did-vc/`: VC Data Model 1.1, DID 1.0, DID Resolution and

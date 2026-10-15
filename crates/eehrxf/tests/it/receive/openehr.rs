@@ -17,13 +17,17 @@ use eehrxf::mapping::Mapping;
 use eehrxf::receive::ReceivedDocument;
 use eehrxf::receive::openehr::FHIR_JSON;
 use eehrxf::receive::openehr::ReceiveMappingError;
+use eehrxf::receive::openehr::Representative;
 use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run::Settings;
+use openehr_base::containers::NonEmptyVec;
+use openehr_rm::v1_2::common::generic::party_identified::{PartyIdentified, PartyIdentifiedData};
 use openehr_rm::v1_2::common::generic::party_proxy::PartyProxy;
 use openehr_rm::v1_2::common::generic::party_self::PartySelf;
 use openehr_rm::v1_2::composition::composition::Composition;
 use openehr_rm::v1_2::composition::content::content_item::ContentItem;
+use openehr_rm::v1_2::data_types::basic::dv_identifier::DvIdentifier;
 use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 
 use super::DOCUMENT;
@@ -283,4 +287,76 @@ fn a_composition_mapped_for_a_professional_names_no_provider() -> Result<(), Box
         "no mark unless asked: {providers:?}"
     );
     Ok(())
+}
+
+// RM Release 1.1.0, Common IM, §Referring to Demographic Entities, and Regulation (EU)
+// 2025/327 Art 4(2), Art 5: what a representative inserts names them, never the subject.
+#[test]
+fn a_composition_a_representative_inserted_names_them_as_every_entrys_provider()
+-> Result<(), Box<dyn Error>> {
+    let document = ReceivedDocument::read(DOCUMENT)?;
+    let received = mapping()?.to_openehr(&document, &settings())?;
+    let before = received.composition().matches(PATIENT_IDENTIFIER).count();
+    let identifier = DvIdentifier {
+        issuer: Some(String::from("https://issuer.example.org")),
+        assigner: None,
+        id: String::from("representative-7"),
+        r#type: None,
+    };
+    let representative = Representative::new(
+        Some(String::from("A. Representative")),
+        Some(identifier.clone()),
+    )
+    .ok_or("a named representative")?;
+    let marked = received.inserted_by_representative(&representative)?;
+    let composition: Composition = serde_json::from_str(marked.composition())?;
+    assert_eq!(
+        &composition,
+        marked.model(),
+        "the text is the model written"
+    );
+    let providers = providers(composition.content.as_deref().unwrap_or_default());
+    assert!(!providers.is_empty(), "the composition holds an entry");
+    let expected =
+        PartyProxy::PartyIdentified(PartyIdentified::PartyIdentified(PartyIdentifiedData {
+            external_ref: None,
+            name: Some(String::from("A. Representative")),
+            identifiers: Some(NonEmptyVec::of(identifier)),
+        }));
+    for provider in &providers {
+        assert_eq!(
+            provider,
+            &Some(expected.clone()),
+            "the representative, never PARTY_SELF"
+        );
+    }
+    assert_eq!(
+        before,
+        marked.composition().matches(PATIENT_IDENTIFIER).count(),
+        "the mark adds no identifier of the patient"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_representative_named_by_nothing_is_no_representative() {
+    assert!(Representative::new(None, None).is_none(), "nothing given");
+    assert!(
+        Representative::new(Some(String::new()), None).is_none(),
+        "an empty name is no name"
+    );
+    let empty = DvIdentifier {
+        issuer: Some(String::from("https://issuer.example.org")),
+        assigner: None,
+        id: String::new(),
+        r#type: None,
+    };
+    assert!(
+        Representative::new(None, Some(empty)).is_none(),
+        "an empty id is no identifier"
+    );
+    assert!(
+        Representative::new(Some(String::from("A. Representative")), None).is_some(),
+        "a name alone names them"
+    );
 }

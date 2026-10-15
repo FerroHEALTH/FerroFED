@@ -8,8 +8,9 @@
 # publishes: OAuth 2.0 (RFC 6749), JWT (RFC 7519), the assertion framework
 # and its JWT profile (RFC 7521, RFC 7523), token introspection (RFC 7662),
 # authorization server metadata (RFC 8414), Pushed Authorization Requests
-# (RFC 9126), Rich Authorization Requests (RFC 9396), DPoP (RFC 9449) and
-# mutual-TLS client authentication with certificate-bound tokens (RFC 8705).
+# (RFC 9126), Rich Authorization Requests (RFC 9396), DPoP (RFC 9449),
+# mutual-TLS client authentication with certificate-bound tokens (RFC 8705)
+# and token exchange (RFC 8693).
 #
 # The GF-Authentication pages of the Netherlands Generic Functions IG cite
 # RFC 6749, 7523, 7662 and 9449; Nuts RFC021 builds on RFC 7521, 7519 and
@@ -18,7 +19,9 @@
 # RFC 8414, and the Nuts grant of crates/nl-generic-functions feature
 # `nuts-auth` (#88) and the FAPI 2.0 grant of app/ferrofed-engine (#497) hold
 # their authorization server metadata to it. The Nuts grant reads RFC 9449,
-# and the onward grants of app/ferrofed-engine read RFC 8705 (#492).
+# and the onward grants of app/ferrofed-engine read RFC 8705 (#492). The
+# client authentication gate reads the "act" claim of RFC 8693 §4.1 as the
+# representative who acts for a person (#1003).
 #
 # An RFC never changes once published, so each "IETF RFC <n>" row of
 # docs/VERSIONS.md pins its URL and the sha256 of its bytes; the script fails
@@ -46,7 +49,7 @@ cd "$root"
 corpus_require curl shasum
 
 dest="docs/specs/ietf-oauth"
-numbers=(6749 7519 7521 7523 7662 8414 8705 9126 9396 9449)
+numbers=(6749 7519 7521 7523 7662 8414 8693 8705 9126 9396 9449)
 notice="This document is subject to BCP 78 and the IETF Trust's Legal"
 
 tmp="$(mktemp -d)"
@@ -112,7 +115,8 @@ change the pins in docs/VERSIONS.md and re-run the script.
   request of \`crates/nl-generic-functions\` feature \`nuts-auth\`: the DPoP
   proof of RFC 9449; the research comparing the B.4 and B.4a tracks),
   #492 (the mutual-TLS client authentication and certificate-bound tokens
-  of RFC 8705 on the onward grants)
+  of RFC 8705 on the onward grants), #1003 (the \`act\` claim of RFC 8693
+  §4.1, read as the representative who acts for a person)
 
 ## What is taken
 
@@ -120,7 +124,8 @@ The RFCs the GF-Authentication pages of the Netherlands Generic Functions IG
 cite (6749, 7523, 7662, 9449), the ones Nuts RFC021 builds its grant on
 (7519, 7521, 8414), and the two the BgZ/eOverdracht track of Annex B §B.4a
 adds (9126, 9396), and RFC 8705, which the onward grants authenticate and
-bind their tokens with when a deployment uses mutual TLS. The other RFCs
+bind their tokens with when a deployment uses mutual TLS, and RFC 8693,
+whose \`act\` claim names the party a token's subject delegated to. The other RFCs
 the OAuth family references are cited, not taken.
 
 | File | sha256 |

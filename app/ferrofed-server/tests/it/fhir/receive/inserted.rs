@@ -62,7 +62,7 @@ pub(super) fn person_gateway(
 
 /// The `provider` of every entry the composition `body` holds, in its
 /// sections included, `Value::Null` for an entry that names none.
-fn providers(body: &str) -> Result<Vec<Value>, Box<dyn Error>> {
+pub(super) fn providers(body: &str) -> Result<Vec<Value>, Box<dyn Error>> {
     fn walk(value: &Value, found: &mut Vec<Value>) {
         match value {
             Value::Object(members) => {
@@ -90,7 +90,7 @@ fn providers(body: &str) -> Result<Vec<Value>, Box<dyn Error>> {
 }
 
 /// The one composition `server` was sent.
-async fn written(server: &Server) -> Result<String, Box<dyn Error>> {
+pub(super) async fn written(server: &Server) -> Result<String, Box<dyn Error>> {
     let [body] = received(server)
         .await?
         .try_into()

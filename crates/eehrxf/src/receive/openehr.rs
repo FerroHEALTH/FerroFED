@@ -18,6 +18,8 @@
 //! still stored, and what the run declared lost travels beside the
 //! composition as an `OperationOutcome`.
 
+use std::fmt;
+
 use fhir_types::r4::operation_outcome::OperationOutcome;
 use fhir_types::r4::schema::SCHEMAS;
 use fhirconnect::engine::traverse::functions::NoMappingFunctions;
@@ -25,12 +27,15 @@ use fhirconnect::operations::contract::ToOpenehrRequest;
 use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run;
 use fhirconnect::operations::run::Settings;
+use openehr_base::containers::NonEmptyVec;
 use openehr_rm::v1_2::common::archetyped::feeder_audit::FeederAudit;
 use openehr_rm::v1_2::common::archetyped::feeder_audit_details::FeederAuditDetails;
+use openehr_rm::v1_2::common::generic::party_identified::{PartyIdentified, PartyIdentifiedData};
 use openehr_rm::v1_2::common::generic::party_proxy::PartyProxy;
 use openehr_rm::v1_2::common::generic::party_self::PartySelf;
 use openehr_rm::v1_2::composition::composition::Composition;
 use openehr_rm::v1_2::composition::content::content_item::ContentItem;
+use openehr_rm::v1_2::data_types::basic::dv_identifier::DvIdentifier;
 use openehr_rm::v1_2::data_types::encapsulated::dv_encapsulated::DvEncapsulated;
 use openehr_rm::v1_2::data_types::encapsulated::dv_parsable::DvParsable;
 
@@ -191,9 +196,40 @@ impl ReceivedComposition {
     /// no entry, [`SubjectInsertionError::GenericEntry`] when it holds a
     /// `GENERIC_ENTRY`, which has no provider, and
     /// [`SubjectInsertionError::Encode`] when it cannot be written out.
-    pub fn inserted_by_subject(mut self) -> Result<Self, SubjectInsertionError> {
+    pub fn inserted_by_subject(self) -> Result<Self, SubjectInsertionError> {
+        self.provided_by(&PartyProxy::PartySelf(PartySelf { external_ref: None }))
+    }
+
+    /// Returns this composition with every entry's provider `representative`,
+    /// for a document a representative of the record's subject inserted for
+    /// them.
+    ///
+    /// The Common IM refers to the subject of the record with a
+    /// `PARTY_SELF`, "while `PARTY_IDENTIFIED` is used for all other
+    /// situations" (RM Release 1.1.0, Common IM, §Referring to Demographic
+    /// Entities,
+    /// <https://specifications.openehr.org/releases/RM/Release-1.1.0/common.html#_referring_to_demographic_entities>),
+    /// so each entry, in the composition and in every section, names the
+    /// representative as a `PARTY_IDENTIFIED`, never as the subject. A
+    /// provider the mapping wrote is replaced; the document as received
+    /// stays in the original content.
+    ///
+    /// # Errors
+    ///
+    /// As [`ReceivedComposition::inserted_by_subject`].
+    pub fn inserted_by_representative(
+        self,
+        representative: &Representative,
+    ) -> Result<Self, SubjectInsertionError> {
+        self.provided_by(&PartyProxy::PartyIdentified(
+            PartyIdentified::PartyIdentified(representative.party.clone()),
+        ))
+    }
+
+    /// Returns this composition with every entry's provider `provider`.
+    fn provided_by(mut self, provider: &PartyProxy) -> Result<Self, SubjectInsertionError> {
         let marked = match self.model.content.as_mut() {
-            Some(content) => mark_subject(content)?,
+            Some(content) => mark(content, provider)?,
             None => 0,
         };
         if marked == 0 {
@@ -205,15 +241,64 @@ impl ReceivedComposition {
     }
 }
 
+/// A natural person who acts for the subject of a record, as a proxy or a
+/// legal representative (Regulation (EU) 2025/327 Art 4(2)), named as a
+/// `PARTY_IDENTIFIED`.
+///
+/// It holds at least one of a name and an identifier, as `PARTY_IDENTIFIED`
+/// requires when it carries no `external_ref` (RM Release 1.1.0, Common IM,
+/// `PARTY_IDENTIFIED` invariant `Basic_validity`). `Debug` shows which of
+/// the two it holds and neither value.
+#[derive(Clone, PartialEq)]
+pub struct Representative {
+    /// The representative as the provider every entry names.
+    party: PartyIdentifiedData,
+}
+
+impl Representative {
+    /// Returns the representative named `name` and identified by
+    /// `identifier`, or `None` when neither is given.
+    ///
+    /// An empty name, or an identifier whose `id` is empty, counts as not
+    /// given (RM Release 1.1.0, Common IM, `PARTY_IDENTIFIED` invariant
+    /// `Name_valid`; Data Types IM, `DV_IDENTIFIER` invariant `Id_valid`).
+    #[must_use]
+    pub fn new(name: Option<String>, identifier: Option<DvIdentifier>) -> Option<Self> {
+        let name = name.filter(|name| !name.is_empty());
+        let identifiers = identifier
+            .filter(|identifier| !identifier.id.is_empty())
+            .map(NonEmptyVec::of);
+        if name.is_none() && identifiers.is_none() {
+            return None;
+        }
+        Some(Self {
+            party: PartyIdentifiedData {
+                external_ref: None,
+                name,
+                identifiers,
+            },
+        })
+    }
+}
+
+impl fmt::Debug for Representative {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Representative")
+            .field("name", &self.party.name.is_some())
+            .field("identifier", &self.party.identifiers.is_some())
+            .finish()
+    }
+}
+
 /// Sets the provider of every entry among `items`, and in their sections,
-/// to the subject of the record, and returns how many it set.
-fn mark_subject(items: &mut [ContentItem]) -> Result<usize, SubjectInsertionError> {
+/// to `provider`, and returns how many it set.
+fn mark(items: &mut [ContentItem], provider: &PartyProxy) -> Result<usize, SubjectInsertionError> {
     let mut marked = 0_usize;
     for item in items {
-        let provider = match item {
+        let named = match item {
             ContentItem::Section(section) => {
                 let within = match section.items.as_mut() {
-                    Some(items) => mark_subject(items)?,
+                    Some(items) => mark(items, provider)?,
                     None => 0,
                 };
                 marked = marked.saturating_add(within);
@@ -226,7 +311,7 @@ fn mark_subject(items: &mut [ContentItem]) -> Result<usize, SubjectInsertionErro
             ContentItem::Instruction(entry) => &mut entry.provider,
             ContentItem::Observation(entry) => &mut entry.provider,
         };
-        *provider = Some(PartyProxy::PartySelf(PartySelf { external_ref: None }));
+        *named = Some(provider.clone());
         marked = marked.saturating_add(1);
     }
     Ok(marked)

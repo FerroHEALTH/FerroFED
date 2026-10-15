@@ -263,6 +263,10 @@ pub struct Claims {
     /// The SMART on openEHR `ehrId` of the launch context, when set.
     #[serde(rename = "ehrId", skip_serializing_if = "Option::is_none")]
     pub ehr_id: Option<String>,
+    /// The RFC 8693 §4.1 `act` claim, the current actor's string claims by
+    /// name, when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub act: Option<std::collections::BTreeMap<String, String>>,
     /// Any other string claim, by name: the claims a deployment maps in
     /// `[auth.issuer.requester]`, for instance.
     #[serde(flatten)]
@@ -288,6 +292,7 @@ impl Claims {
             extensions: Some(Extensions::treatment()),
             authorization_details: None,
             ehr_id: None,
+            act: None,
             other: std::collections::BTreeMap::new(),
         }
     }

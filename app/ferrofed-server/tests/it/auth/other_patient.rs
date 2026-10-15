@@ -191,6 +191,7 @@ fn bound() -> Result<AuthSettings, Box<dyn Error>> {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
             ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
+            act_is_representative: false,
         });
     }
     Ok(auth)

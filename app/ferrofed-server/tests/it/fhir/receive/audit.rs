@@ -110,3 +110,39 @@ async fn a_receipt_a_person_inserted_is_recorded_as_inserted_by_them() -> TestRe
     );
     Ok(())
 }
+
+/// Regulation (EU) 2025/327 Art 4(2), Art 5: the record of a document a
+/// representative inserted under the person's grant says a representative
+/// inserted it, never the person.
+#[tokio::test]
+async fn a_receipt_a_representative_inserted_is_recorded_as_theirs() -> TestResult {
+    use crate::feed_audit::{SETTLE, audit_tables};
+    use ehds_logging::balp::inserted::{ENTITY, REPRESENTATIVE_ENTITY};
+    use ferrofed_testkit::atna_feed::FeedRepository;
+
+    use super::representative::{REPRESENTATIVE, acted_for, representing_gateway};
+    use crate::auth::{bearing, minted};
+
+    let (a, b) = (creating().await, Server::start().await);
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = representing_gateway(dir.path(), (&a, &b), &audit_tables(&repository, ""))?;
+    let token = minted(&acted_for(&[("sub", REPRESENTATIVE)]))?;
+    let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let records = repository.wait_for(1, SETTLE).await;
+    let records = crate::access::accesses(&records)?;
+    let [record] = records.as_slice() else {
+        return Err(format!("one record of the receipt: {records:#?}").into());
+    };
+    assert_eq!(
+        vec!["true"],
+        crate::access::details(record, REPRESENTATIVE_ENTITY, REPRESENTATIVE_ENTITY),
+        "the receipt is recorded as inserted by a representative: {record}"
+    );
+    assert!(
+        crate::access::named(record, ENTITY).is_empty(),
+        "a representative's insertion is not recorded as the person's: {record}"
+    );
+    Ok(())
+}

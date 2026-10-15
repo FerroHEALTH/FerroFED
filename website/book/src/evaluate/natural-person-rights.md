@@ -33,8 +33,8 @@ This page is not legal advice.
 |---|---|---|---|
 | Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them; the other five categories have no interface | partial |
 | Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
-| Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants and records who acted | not the gateway's |
-| Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's, and the record says so; the member keeps a person from changing a professional's entry | met |
+| Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants, records who acted, and marks what a declared representative inserts as theirs | not the gateway's |
+| Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
 | Art 6, rectification | the access service and the controller | routes the controller's correction | not the gateway's |
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
 | Art 7(2), cross-border transmission | the national contact point | the national route is planned | partial |
@@ -107,8 +107,19 @@ natural person the token names, by its issuer and subject
 ([The person behind an access](../operate/access-log.md#the-person-behind-an-access);
 `access/accessor.rs`:
 `a_person_is_recorded_with_the_professional_and_the_verified_level`). When
-the proxy service's issuer names the representative in the token, the
+the proxy service's token names the representative as its `sub`, the
 record names the representative.
+
+A proxy service may instead issue a token in the person's name that names
+the representative in its RFC 8693 `act` claim, the party the person
+delegated to. The gateway reads that claim as a representative only when
+the issuer declares it one (`act_is_representative`), never by inference
+([Patient grants](../operate/authentication.md#patient-grants)). A
+document such a token inserts names the representative as each entry's
+provider, and its access record says a representative inserted it
+([Art 5](#art-5-inserting-information)). The record's caller is still the
+token's `sub`, the person; it names the representative only through that
+mark, with no identifier of theirs.
 
 ## Art 5: inserting information
 
@@ -151,9 +162,28 @@ while a professional's document names no provider
 (`a_professionals_document_names_no_provider`). The access record of the
 person's receipt carries the `ehds-subject-inserted` entity, and a
 professional's does not (`fhir/receive/audit.rs`:
-`a_receipt_a_person_inserted_is_recorded_as_inserted_by_them`). A
-representative who holds the person's grant is marked the same way, as Art
-5 allows, and the record names who acted.
+`a_receipt_a_person_inserted_is_recorded_as_inserted_by_them`).
+
+Art 5 asks that what a representative of Art 4(2) inserts be told apart
+from what the person inserts. When the token's issuer declares the RFC
+8693 `act` claim of its patient tokens a representative and the token
+carries one, every entry names that representative as its `provider`, a
+`PARTY_IDENTIFIED` whose one identifier is the claim's `sub`, never the
+person's `PARTY_SELF`
+([Patient grants](../operate/authentication.md#patient-grants);
+`fhir/receive/representative.rs`:
+`a_representatives_document_names_them_as_every_entrys_provider`), and
+the access record carries the `ehds-representative-inserted` entity in
+place of `ehds-subject-inserted` (`fhir/receive/audit.rs`:
+`a_receipt_a_representative_inserted_is_recorded_as_theirs`). A token that
+names the representative by an identifier of the person is refused with
+nothing sent
+(`a_representative_named_by_an_identifier_of_the_person_is_refused`). The
+gateway never infers a representative: a token whose issuer declares no
+`act` claim is read as the person's own, whatever it carries
+(`an_act_the_issuer_does_not_declare_leaves_the_persons_own_mark`), so a
+proxy service whose tokens do not name the representative leaves their
+insertions marked as the person's.
 
 The routed ITS-REST writes are outside the harmonised components. Under a
 patient grant whose scopes cover an update or a delete, the gateway sends it

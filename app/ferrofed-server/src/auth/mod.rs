@@ -385,6 +385,7 @@ impl Gate {
         let relayed = contact_point::read(&trusted.settings, token.claims.annex(), |claim| {
             token.claims.text(claim)
         });
+        let representative = token.claims.representative(&trusted.settings);
         let stated = token.claims.stated();
         let acting = acting(&stated.subject, &stated.client_id);
         let caller = Caller::new(stated, verified_by)
@@ -392,7 +393,8 @@ impl Gate {
             .with_requester(requester)
             .with_professional(professional)
             .with_assurance(assurance)
-            .with_acting(acting);
+            .with_acting(acting)
+            .with_representative(representative);
         Ok((contact_point::vouched(caller, relayed), trusted))
     }
 
@@ -474,7 +476,8 @@ impl Gate {
             .with_requester(requester)
             .with_professional(answer.declared.professional(authority))
             .with_assurance(assurance)
-            .with_acting(acting);
+            .with_acting(acting)
+            .with_representative(answer.declared.representative(&trusted.settings));
         Ok(contact_point::vouched(caller, relayed))
     }
 

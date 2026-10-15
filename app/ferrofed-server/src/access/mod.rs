@@ -54,8 +54,8 @@ use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
-    AccessRecord, Accessor, Action, Coded, CreatedEhr, DataSubject, Origin, Outcome, Professional,
-    Purpose, RelayedProfessional, RelayedProvider, WrittenVersion,
+    AccessRecord, Accessor, Action, Coded, CreatedEhr, DataSubject, Insertion, Origin, Outcome,
+    Professional, Purpose, RelayedProfessional, RelayedProvider, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
@@ -237,9 +237,9 @@ pub(crate) struct Accessed {
     /// The members whose consent pre-filter denial was set aside for an
     /// emergency purpose, each asked all the same.
     pub(crate) consent_set_aside: BTreeSet<String>,
-    /// That the data subject inserted what the access wrote, marked in the
-    /// written data as inserted by them (Regulation (EU) 2025/327 Art 5).
-    pub(crate) subject_inserted: bool,
+    /// Who inserted what the access wrote under the data subject's own grant,
+    /// as the written data marks it (Regulation (EU) 2025/327 Art 4(2), Art 5).
+    pub(crate) inserted: Option<Insertion>,
     /// Each semantic transformation the access applied, recorded on its
     /// access record (eHealth Network General Guidelines Release 3.1 Art
     /// 6(3)).
@@ -325,7 +325,7 @@ impl Accessed {
             retention,
             labels,
             emergency,
-            subject_inserted: self.subject_inserted,
+            inserted: self.inserted,
             transformations: self.transformations.clone(),
         }
     }

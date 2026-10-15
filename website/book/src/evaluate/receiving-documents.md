@@ -170,9 +170,10 @@ a success.
 
 ## Inserted by the person
 
-Regulation (EU) 2025/327 Art 5 asks that information a person inserts in
-their own EHR "be clearly distinguishable as having been inserted by the
-natural person". When the caller is a person acting under their own grant,
+Regulation (EU) 2025/327 Art 5 asks that information a person, or their
+representative of Art 4(2), inserts in the person's EHR "be clearly
+distinguishable as having been inserted by the natural person or by his or
+her representative". When the caller is a person acting under their own grant,
 a token whose `sub` names the person and whose `patient/` scopes are
 confined to them ([Patient grants](../operate/authentication.md#patient-grants)),
 the component marks the composition before it is sent: every entry, in
@@ -192,6 +193,25 @@ refused `422` with nothing sent. A professional's document is written as
 before, with no provider set. The access record of a person's receipt
 carries the `ehds-subject-inserted` entity ([Information a person
 inserted](../operate/access-log.md#information-a-person-inserted)).
+
+A proxy or a legal representative who acts for the person under the
+person's grant is told apart only when the token says a representative
+acts: its issuer declares that the RFC 8693 `act` claim of its patient
+tokens names one, and the token carries that claim
+([Patient grants](../operate/authentication.md#patient-grants)). Every
+entry then names the representative as its `provider`, a
+`PARTY_IDENTIFIED`, which the Common Information Model uses for every party
+other than the subject of the record ("Referring to Demographic
+Entities"), never a `PARTY_SELF`. Its one identifier is the `act` claim's
+`sub`, issued by the claim's `iss` or the token's own; it carries nothing
+else the token does not state. A token that names the representative by
+nothing, by its own `sub` or by an identifier of the document's patient is
+refused `403` with nothing sent, so the provider names nothing of the
+person. The access record carries the `ehds-representative-inserted`
+entity in place of `ehds-subject-inserted`. A token that cannot say a
+representative acts, because its issuer declares no `act` claim or the
+proxy service issues tokens in the person's own name, is read as the
+person's own, and the gateway cannot mark the representative.
 
 The component only creates compositions, so it never changes an entry a
 professional wrote. What a person changes over ITS-REST is the member's to

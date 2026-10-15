@@ -236,7 +236,7 @@ impl Routed {
             evidence,
             origins,
             consent_set_aside,
-            subject_inserted: false,
+            inserted: None,
             transformations: Vec::new(),
         });
         response
