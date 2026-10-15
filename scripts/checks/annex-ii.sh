@@ -334,7 +334,7 @@ self_test() {
   row 2.4 4 -
   expect "a row with no evidence" 1 "names no evidence"
   fixture
-  row 2.5 3 done
+  row 2.5 3 'done'
   expect "an unknown status" 1 "status \"done\""
   fixture
   row 2.6 3 not-applicable

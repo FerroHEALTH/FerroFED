@@ -65,7 +65,7 @@ self_test() {
     out="$(PATH="$work/bin" "$BASH" "$PWD/scripts/checks/release-compose.sh" "$@" 2>&1)" || status=$?
     if [[ "$status" -ne 1 ]] || ! grep -q -F "needs $want on PATH" <<< "$out"; then
       echo "release compose: self-test failed: without $want it exited $status, and said:" >&2
-      sed 's/^/  /' <<< "$out" >&2
+      while IFS= read -r line; do printf '  %s\n' "$line"; done <<< "$out" >&2
       failed=1
     fi
   }

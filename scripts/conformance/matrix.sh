@@ -756,6 +756,7 @@ write_block() {
 
 # The committed statement block, its markers included.
 placeholder_statement() {
+  # shellcheck disable=SC2016 # the backticks are Markdown the page prints, never expanded
   printf '%s\n' \
     '<!-- statement:begin -->' \
     '<!-- Rendered by scripts/conformance/matrix.sh --statement-write-into when the site is assembled. Do not edit between the statement markers. -->' \
@@ -767,6 +768,7 @@ placeholder_statement() {
 
 # The committed tests page.
 placeholder_tests_page() {
+  # shellcheck disable=SC2016 # the backticks are Markdown the page prints, never expanded
   printf '%s\n' \
     '<!-- SPDX-FileCopyrightText: Cadasto B.V. -->' \
     '<!-- SPDX-License-Identifier: BUSL-1.1 -->' \

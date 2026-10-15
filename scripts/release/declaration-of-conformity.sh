@@ -116,6 +116,7 @@ owner() {
   if [[ "$value" =~ [^[:space:]] ]]; then
     printf '%s\n' "$value"
   else
+    # shellcheck disable=SC2016 # the backticks are Markdown the declaration prints, never expanded
     printf '**[%s: `%s` in `%s`]**\n' "$MARK" "$1" "$OWNER"
   fi
 }
@@ -398,6 +399,7 @@ self_test() {
   check 'the commit is named' grep -qF "$sha" "$doc"
   check 'the manufacturer is read from the code' grep -qF -- '- **Postal address:** Street 1, Town' "$doc"
   check 'the representative is read from the sheet' grep -qF -- '- **Authorised representative:** none' "$doc"
+  # shellcheck disable=SC2016 # the backticks are Markdown the declaration holds, never expanded
   check 'the components carry their versions' grep -qF '`eehrxf` 0.5.0' "$doc"
   check 'the standards are read from the sheet' grep -qxF -- '- openEHR AQL: 1.1.0' "$doc"
   check 'a table after (e) is not a standard' sh -c "! grep -qF -- '- 1.2.3' '$doc'"
@@ -421,6 +423,7 @@ self_test() {
   check 'an unissued declaration is refused' grep -qF 'does not issue the declaration' "$work/log"
   check 'a refusal writes nothing' test ! -e "$work/out"
   attempt 0 --draft 1.2.3 "$sha" "$work/out"
+  # shellcheck disable=SC2016 # the backticks are Markdown the draft holds, never expanded
   check 'a draft is written under its own name' \
     grep -qF "$MARK"': `place_of_issue`' "$work/out/ferrofed-v1.2.3-eu-declaration-of-conformity-draft.md"
   check 'a draft is marked as one' grep -qF '**DRAFT.**' "$work/out/ferrofed-v1.2.3-eu-declaration-of-conformity-draft.md"
