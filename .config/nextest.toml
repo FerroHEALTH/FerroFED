@@ -27,6 +27,13 @@ slow-timeout = { period = "60s", terminate-after = 20 }
 filter = 'package(ferrofed-engine) & test(/^architecture::/)'
 slow-timeout = { period = "30s", terminate-after = 6 }
 
+# The ihe-iti feature tests run some twenty cargo trees, one or two per
+# feature, so they get the same three minutes and the same private package
+# cache lock for their child cargo.
+[[profile.default.overrides]]
+filter = 'package(ihe-iti) & test(/^features::/)'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).
