@@ -303,8 +303,8 @@ pub mod server {
                         .map(crate::query::run::server::error_text),
                 })
                 .collect(),
-            name: distribution.name,
-            version: distribution.version,
+            name: distribution.definition.name,
+            version: distribution.definition.version,
             registry: distribution.registry,
         }
     }

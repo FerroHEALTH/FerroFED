@@ -392,6 +392,86 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
     Ok(())
 }
 
+/// The confirmed drift repair of the synthetic stored query at every
+/// member.
+fn repair_every_member() -> String {
+    form(&[
+        ("name", "org.example::compositions"),
+        ("version", "1.0.0"),
+        ("endpoints", "*"),
+        ("confirm", "yes"),
+    ])
+}
+
+// A refusal's code reaches the page through `inner_html` in either refusal
+// line, the 401's and every other's, so a hostile code arrives as text.
+#[tokio::test]
+async fn a_hostile_refusal_code_of_an_action_renders_escaped() -> Result<(), Box<dyn Error>> {
+    for status in [401, 409] {
+        let listener = Server::start().await;
+        answers(
+            &listener,
+            DISTRIBUTE,
+            status,
+            String::from(r#"{"code":"\"><script>alert(1)</script><img src=x onerror=alert(2)>"}"#),
+        )
+        .await;
+        let replicas = [("gateway-0", listener.uri())];
+        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+        let html = acted(
+            &service,
+            &session,
+            "/api/repair-drift",
+            repair_every_member(),
+        )
+        .await?;
+        for escaped in [
+            "&lt;script&gt;alert(1)&lt;/script&gt;",
+            "&lt;img src=x onerror=alert(2)&gt;",
+        ] {
+            assert!(html.contains(escaped), "{status}: {escaped}: {html}");
+        }
+        for raw in ["<script", "<img"] {
+            assert!(!html.contains(raw), "{status}: {raw}: {html}");
+        }
+    }
+    Ok(())
+}
+
+// A drift repair's report carries the stored query's name, the registry's
+// word and each member's error text, each a hostile value that arrives as
+// text, the member's id in a table header included.
+#[tokio::test]
+async fn hostile_values_in_a_drift_repair_answer_render_escaped() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let body = r#"{"name":"<script>alert(1)</script>","type":"AQL","version":"1.0.0",
+        "saved":"2026-10-05T08:00:00Z","q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c",
+        "meta":{"federation":{"complete":false,"endpoints":[
+          {"id":"node-a-pub","status":"node-error","error":"<img src=x onerror=alert(2)>","latency_ms":5}]},
+        "registry":"<b onmouseover=alert(3)>held</b>"}}"#;
+    answers(&listener, DISTRIBUTE, 207, String::from(body)).await;
+    let replicas = [("gateway-0", listener.uri())];
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let html = acted(
+        &service,
+        &session,
+        "/api/repair-drift",
+        repair_every_member(),
+    )
+    .await?;
+    for escaped in [
+        "&lt;script&gt;alert(1)&lt;/script&gt;",
+        "&lt;img src=x onerror=alert(2)&gt;",
+        "&lt;b onmouseover=alert(3)&gt;held&lt;/b&gt;",
+    ] {
+        assert!(html.contains(escaped), "{escaped}: {html}");
+    }
+    for raw in ["<script", "<img", "<b "] {
+        assert!(!html.contains(raw), "{raw}: {html}");
+    }
+    Ok(())
+}
+
 // A page without its bundle posts the form plainly, and the console asks no
 // replica for an answer no page would show.
 #[tokio::test]
