@@ -155,7 +155,7 @@ services:
 
   # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
   ferroehr-postgres:
-    image: ghcr.io/ferrohealth/ferroehr-postgres:4.3.6@sha256:fc93ccffba5e1dc266169e3d22b7a2c57cbe35e1266b42ff6c819ca323c204c3
+    image: ghcr.io/ferrohealth/ferroehr-postgres:4.3.9@sha256:c907bb1e35ef97063f2735082e79a43c4847db2f7497fb9cff4063431d6746cd
     restart: unless-stopped
     environment:
       # The development superuser password of FerroEHR's own quickstart.
