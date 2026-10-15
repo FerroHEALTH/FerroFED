@@ -31,6 +31,8 @@
     )
 )]
 pub mod act;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod member;
 pub mod model;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;
@@ -171,6 +173,7 @@ fn submitted(data: &leptos::web_sys::FormData) -> ConfigForm {
         product: field("form[product]"),
         product_version: field("form[product_version]"),
         endpoints: field("form[endpoints]"),
+        fhir_endpoints: field("form[fhir_endpoints]"),
         name: field("form[name]"),
         version: field("form[version]"),
         aql: field("form[aql]"),

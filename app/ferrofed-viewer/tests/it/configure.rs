@@ -499,9 +499,9 @@ async fn a_plain_form_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// The form shows an endpoint's id, URL and status alone, so a save keeps
-// what it does not show of the held member (§11.1, N27): the consent refusal
-// codes of an endpoint it names, and an `hl7-fhir-rest` endpoint it does not.
+// The form shows a Query API endpoint's id, URL and status alone, so a save
+// keeps the consent refusal codes of one it names (§11.1, N27), and the
+// `hl7-fhir-rest` endpoint the edit form shows is saved as it shows it.
 #[tokio::test]
 async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
@@ -530,7 +530,9 @@ async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    configured(&service, &session, save_c()).await?;
+    let fhir = "node-c-fhir https://cdr-c.example.org/fhir system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps";
+    let body = format!("{}&{}", save_c(), form(&[("fhir_endpoints", fhir)]));
+    configured(&service, &session, body).await?;
     let sent = bodies(&listener, ("PUT", "/admin/config/members/node-c")).await?;
     let [sent] = sent.as_slice() else {
         return Err(format!("one save, not {}", sent.len()).into());

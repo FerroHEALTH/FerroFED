@@ -62,6 +62,10 @@ pub struct ConfigForm {
     /// optionally `suspended`, separated by spaces, each endpoint separated
     /// by a semicolon.
     pub endpoints: String,
+    /// The node's FHIR endpoints: `endpoint_id`, base URL, `system=`,
+    /// `categories=`, `profiles=` and optionally `suspended`, separated by
+    /// spaces, each endpoint separated by a semicolon.
+    pub fhir_endpoints: String,
     /// The stored query's qualified name.
     pub name: String,
     /// The stored query's version.
@@ -98,6 +102,7 @@ impl fmt::Debug for ConfigForm {
             .field("confirm", &filled(&self.confirm))
             .field("node", &filled(&self.node))
             .field("endpoints", &filled(&self.endpoints))
+            .field("fhir_endpoints", &filled(&self.fhir_endpoints))
             .field("name", &filled(&self.name))
             .field("aql", &filled(&self.aql))
             .field("settings", &filled(&self.settings))

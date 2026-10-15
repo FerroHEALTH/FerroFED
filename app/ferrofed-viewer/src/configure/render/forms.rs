@@ -119,6 +119,31 @@ fn endpoints_text(member: &ConsoleMember) -> String {
         .join("; ")
 }
 
+/// The FHIR endpoints of `member`, as the FHIR endpoints field writes them.
+fn fhir_text(member: &ConsoleMember) -> String {
+    member
+        .endpoints
+        .iter()
+        .filter(|endpoint| endpoint.connection_type == ConnectionType::Hl7FhirRest)
+        .map(|endpoint| {
+            let status = if endpoint.status == EndpointStatus::Suspended {
+                " suspended"
+            } else {
+                ""
+            };
+            format!(
+                "{} {} system={} categories={} profiles={}{status}",
+                endpoint.id.as_str(),
+                endpoint.url,
+                endpoint.ehr_id_system.as_deref().unwrap_or_default(),
+                endpoint.categories.join(","),
+                endpoint.profiles.join(","),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 /// The save of a console member, `member` filled in for an edit.
 fn member_form(
     id: &str,
@@ -170,6 +195,15 @@ fn member_form(
             ),
             value(endpoints_text),
             (true, false),
+        )}
+        {field(
+            id,
+            (
+                "fhir_endpoints",
+                "FHIR endpoints: endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service; separate endpoints with a semicolon",
+            ),
+            value(fhir_text),
+            (false, false),
         )}
         {field(id, ("reason", "Reason"), String::new(), (true, false))}
         {confirm(id, "I confirm saving this member as a new revision, which I apply separately")}

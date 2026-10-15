@@ -64,15 +64,12 @@ pub async fn configure(
 pub mod server {
     use std::fmt;
 
-    use ferrofed_registry::console::{
-        ConsoleEndpoint, ConsoleMember, ConsoleNode, ConsoleOrganisation,
-    };
-    use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
+    use ferrofed_registry::console::ConsoleMember;
+    use ferrofed_registry::id::EndpointId;
     use ferrofed_registry::operator::PageRequest;
     use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
     use ferrofed_registry::revision::{Revision, RevisionId};
     use ferrofed_registry::secret::WriteOnly;
-    use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
     use crate::admin::act::server::acted;
     use crate::admin::model::ActionAnswer;
@@ -212,14 +209,14 @@ pub mod server {
     }
 
     /// A refusal of the form, naming the field and never its value.
-    fn invalid(reason: &str) -> Refusal {
+    pub(crate) fn invalid(reason: &str) -> Refusal {
         Refusal::Invalid {
             reason: reason.to_owned(),
         }
     }
 
     /// The text of `field`, trimmed, or `None` when it is empty.
-    fn given(field: &str) -> Option<&str> {
+    pub(crate) fn given(field: &str) -> Option<&str> {
         let text = field.trim();
         (!text.is_empty()).then_some(text)
     }
@@ -273,7 +270,7 @@ pub mod server {
             "save-member" => Ok(Plan::SaveMember {
                 base: revision(&form.base, "base revision")?,
                 reason: reason(form)?,
-                member: Box::new(member(form)?),
+                member: Box::new(crate::configure::member::member(form)?),
             }),
             "remove-member" => Ok(Plan::RemoveMember {
                 base: revision(&form.base, "base revision")?,
@@ -391,108 +388,6 @@ pub mod server {
             settings: form.settings.trim().to_owned(),
             secrets,
         })
-    }
-
-    /// The member the form describes.
-    fn member(form: &ConfigForm) -> Result<ConsoleMember, Refusal> {
-        let id_form = "1 to 64 letters, digits, '.', '-' or '_', starting with a letter or digit";
-        let organisation =
-            OrganisationId::new(form.organisation.trim()).map_err(|_bad| Refusal::Invalid {
-                reason: format!("The organisation id is not {id_form}."),
-            })?;
-        let node = NodeId::new(form.node.trim()).map_err(|_bad| Refusal::Invalid {
-            reason: format!("The node_id is not {id_form}."),
-        })?;
-        let system_id = SystemId::new(form.system_id.trim())
-            .map_err(|_bad| invalid("The system_id is not an openEHR UID."))?;
-        let mut endpoints = Vec::new();
-        for line in form
-            .endpoints
-            .split(';')
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-        {
-            endpoints.push(endpoint(line)?);
-        }
-        if endpoints.is_empty() {
-            return Err(invalid("Give at least one Query API endpoint."));
-        }
-        Ok(ConsoleMember {
-            organisation: ConsoleOrganisation {
-                id: organisation,
-                name: given(&form.organisation_name).map(str::to_owned),
-            },
-            node: ConsoleNode {
-                id: node,
-                system_id,
-                product: given(&form.product).map(str::to_owned),
-                version: given(&form.product_version).map(str::to_owned),
-            },
-            endpoints,
-        })
-    }
-
-    /// One Query API endpoint: its `endpoint_id`, its base URL and
-    /// optionally `suspended`.
-    fn endpoint(line: &str) -> Result<ConsoleEndpoint, Refusal> {
-        let shape = "Each endpoint is an endpoint_id and a base URL, then suspended if it is out of service.";
-        let mut words = line.split_whitespace();
-        let (Some(id), Some(url)) = (words.next(), words.next()) else {
-            return Err(invalid(shape));
-        };
-        let status = match words.next() {
-            None => EndpointStatus::Active,
-            Some("suspended") => EndpointStatus::Suspended,
-            Some(_) => return Err(invalid(shape)),
-        };
-        if words.next().is_some() {
-            return Err(invalid(shape));
-        }
-        let id = EndpointId::new(id).map_err(|_bad| {
-            invalid("An endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.")
-        })?;
-        Ok(ConsoleEndpoint {
-            id,
-            url: url.to_owned(),
-            connection_type: ConnectionType::OpenehrRestQuery,
-            status,
-            consent_refusal_codes: Vec::new(),
-            categories: Vec::new(),
-            profiles: Vec::new(),
-            ehr_id_system: None,
-        })
-    }
-
-    /// Returns `form`, the member the page's form gives, merged onto `held`.
-    ///
-    /// `held` is the member the newest revision holds of its `node_id`:
-    /// each endpoint the form names keeps every key the form does not show (its consent
-    /// refusal codes, categories, profiles and `ehr_id` system), and each
-    /// `hl7-fhir-rest` endpoint the form does not name is kept whole.
-    #[must_use]
-    pub fn merged(mut form: ConsoleMember, held: Option<&ConsoleMember>) -> ConsoleMember {
-        let Some(held) = held else {
-            return form;
-        };
-        for endpoint in &mut form.endpoints {
-            if let Some(kept) = held.endpoints.iter().find(|kept| kept.id == endpoint.id) {
-                *endpoint = ConsoleEndpoint {
-                    id: endpoint.id.clone(),
-                    url: endpoint.url.clone(),
-                    status: endpoint.status,
-                    ..kept.clone()
-                };
-            }
-        }
-        let natives: Vec<ConsoleEndpoint> = held
-            .endpoints
-            .iter()
-            .filter(|kept| kept.connection_type == ConnectionType::Hl7FhirRest)
-            .filter(|kept| !form.endpoints.iter().any(|named| named.id == kept.id))
-            .cloned()
-            .collect();
-        form.endpoints.extend(natives);
-        form
     }
 
     /// The configuration page `replica` answers, or the page saying its
@@ -652,7 +547,7 @@ pub mod server {
     }
 
     /// Saves `member` merged onto the member the newest revision holds of
-    /// its `node_id` ([`merged`]); when the resources cannot be read the
+    /// its `node_id` ([`merged`](crate::configure::member::merged)); when the resources cannot be read the
     /// failure is the answer and nothing is sent, since a save without the
     /// held member would drop the keys the form does not show.
     async fn save(
@@ -667,7 +562,7 @@ pub mod server {
             .iter()
             .filter_map(|resource| resource.member.as_ref())
             .find(|held| held.node.id == member.node.id);
-        let member = merged(member, held);
+        let member = crate::configure::member::merged(member, held);
         gateway.save_member(replica, token, change, &member).await
     }
 
