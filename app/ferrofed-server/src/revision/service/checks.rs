@@ -16,7 +16,7 @@ use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::revision::Saved;
-use crate::revision::resources::value_at;
+use crate::revision::resources::{present, value_at};
 use crate::state::{AppState, StateError};
 
 /// `reason`, trimmed, when it is 1 to [`REASON_LIMIT`] characters.
@@ -51,6 +51,27 @@ pub(super) fn checked(settings: &Settings) -> Result<(), StateError> {
 }
 
 impl Revisions {
+    /// The credentials and binding sections the configuration file
+    /// provides: those the newest revision the file gave sets as its own.
+    ///
+    /// # Errors
+    ///
+    /// The store's errors.
+    pub fn file_owned(&self) -> Result<Vec<Resource>, RevisionError> {
+        let history = self.store.history()?;
+        let Some(file) = history
+            .iter()
+            .rev()
+            .find(|revision| revision.origin == Origin::File)
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(present(&held_table(file)?)
+            .into_iter()
+            .filter(|resource| !file.console.contains(resource))
+            .collect())
+    }
+
     /// The credentials and binding sections the file provides, once `table`
     /// sets each of them as the newest revision the file gave does.
     ///

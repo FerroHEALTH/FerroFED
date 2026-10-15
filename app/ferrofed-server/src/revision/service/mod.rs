@@ -373,27 +373,6 @@ impl Revisions {
         stored(self.store.save(base, draft)?, base)
     }
 
-    /// The credentials and binding sections the configuration file
-    /// provides: those the newest revision the file gave sets as its own.
-    ///
-    /// # Errors
-    ///
-    /// The store's errors.
-    pub fn file_owned(&self) -> Result<Vec<Resource>, RevisionError> {
-        let history = self.store.history()?;
-        let Some(file) = history
-            .iter()
-            .rev()
-            .find(|revision| revision.origin == Origin::File)
-        else {
-            return Ok(Vec::new());
-        };
-        Ok(present(&held_table(file)?)
-            .into_iter()
-            .filter(|resource| !file.console.contains(resource))
-            .collect())
-    }
-
     /// Applies revision `id` for `by` through `reloader`, and returns the
     /// mark the store now holds.
     ///
