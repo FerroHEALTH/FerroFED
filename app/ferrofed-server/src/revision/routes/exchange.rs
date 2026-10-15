@@ -31,11 +31,11 @@ use http::{HeaderMap, HeaderValue, StatusCode, header};
 use serde::Deserialize;
 
 use super::console::{ConsoleError, created, guarded};
-use super::{Managed, answered, held, number, record, refused, table};
+use super::{Managed, answered, held, number, record, refused};
 use crate::admin::Operator;
 use crate::error::{self, Code};
 use crate::request_id;
-use crate::revision::service::RevisionError;
+use crate::revision::service::{RevisionError, held_table};
 use crate::revision::tree::{CORE, diff};
 
 /// The export of one revision as TOML.
@@ -228,7 +228,7 @@ fn imported(
         diff: Diff {
             from: from.id,
             to: saved.id,
-            changes: diff(&table(&from)?, &table(&saved)?),
+            changes: diff(&held_table(&from)?, &held_table(&saved)?),
         },
         revision: saved,
     })

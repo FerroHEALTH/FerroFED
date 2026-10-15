@@ -26,7 +26,7 @@ use tokio_postgres::Client;
 
 use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 
-use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
+use crate::revision::{Corruption, Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::stored::postgres::{Connection, Statement, lock};
 
 /// The table of revisions, qualified by its schema.
@@ -300,14 +300,9 @@ async fn head(client: &Client) -> Result<Option<RevisionId>, store::StoreError> 
             .ok()
             .and_then(RevisionId::new)
             .map(Some)
-            .ok_or_else(|| connection_corrupt(NotARevision(newest))),
+            .ok_or_else(|| connection_corrupt(Corruption::NotARevision(newest))),
     }
 }
-
-/// A held number that is no revision number.
-#[derive(Debug, thiserror::Error)]
-#[error("the revision store holds the number {0}, which is no revision number")]
-struct NotARevision(i64);
 
 /// `id` as the database stores it.
 fn number(id: RevisionId) -> Result<i64, StoreError> {
@@ -368,7 +363,12 @@ fn revision_error(error: store::StoreError) -> StoreError {
             Ok(revision) => *revision,
             Err(source) => StoreError::Backend(source),
         },
-        store::StoreError::Corrupt(source) => StoreError::Corrupt(source),
+        store::StoreError::Corrupt(source) => {
+            StoreError::Corrupt(match source.downcast::<Corruption>() {
+                Ok(corruption) => *corruption,
+                Err(source) => Corruption::Column(source),
+            })
+        }
         other => StoreError::Backend(Box::new(other)),
     }
 }
@@ -379,8 +379,8 @@ fn backend(error: impl std::error::Error + Send + Sync + 'static) -> StoreError 
 }
 
 /// A held row that does not read as a revision, for `error`.
-fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
-    StoreError::Corrupt(Box::new(error))
+fn corrupt(error: serde_json::Error) -> StoreError {
+    StoreError::Corrupt(Corruption::from(error))
 }
 
 /// The connection's backend failure `error`.

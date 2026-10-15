@@ -129,9 +129,8 @@ impl Config {
             .map(|error| Error::parse(&error, text, Stage::File))?;
         let same_key = match (merged, &file) {
             (Error::Parse { fault: merged }, Error::Parse { fault: file }) => {
-                let unquoted =
-                    |key: &Option<String>| key.as_deref().map(|key| key.replace('"', ""));
-                unquoted(&merged.key) == unquoted(&file.key)
+                let unquoted = |key: Option<&str>| key.map(|key| key.replace('"', ""));
+                unquoted(merged.key()) == unquoted(file.key())
             }
             _ => false,
         };

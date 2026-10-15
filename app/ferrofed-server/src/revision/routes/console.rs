@@ -30,6 +30,7 @@ use ferrofed_registry::console::{
 };
 use ferrofed_registry::definition::store::Insertion;
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use ferrofed_registry::error::document::DocumentFault;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, StatusCode};
@@ -155,7 +156,9 @@ fn members_of(table: &toml::Table) -> Result<Vec<ConsoleMember>, RevisionError> 
         return Ok(Vec::new());
     };
     members.clone().try_into().map_err(|error| {
-        RevisionError::Store(crate::revision::StoreError::Corrupt(Box::new(error)))
+        RevisionError::Store(crate::revision::StoreError::Corrupt(
+            crate::revision::Corruption::Configuration(DocumentFault::unlocated(&error)),
+        ))
     })
 }
 

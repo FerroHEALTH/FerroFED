@@ -646,7 +646,7 @@ fn pending(mark: Current, needs_restart: &[&'static str]) -> Current {
 /// [`StoreError::Corrupt`] when the text the store holds is no TOML table.
 pub fn held_table(revision: &Revision) -> Result<toml::Table, RevisionError> {
     toml::from_str(&revision.toml)
-        .map_err(|error| RevisionError::Store(StoreError::Corrupt(Box::new(error))))
+        .map_err(|error| RevisionError::Store(StoreError::configuration(&error, &revision.toml)))
 }
 
 /// The configuration a file load gives the gateway to run.

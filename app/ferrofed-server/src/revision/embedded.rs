@@ -18,7 +18,7 @@ use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTran
 
 use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 
-use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
+use crate::revision::{Corruption, Draft, RevisionStore, Saved, StoreError, Swapped};
 
 /// The revision number to the revision, as JSON.
 const REVISIONS: TableDefinition<'static, u64, &str> = TableDefinition::new("config_revisions");
@@ -108,14 +108,9 @@ fn newest(table: &impl ReadableTable<u64, &'static str>) -> Result<Option<Revisi
         None => Ok(None),
         Some((key, _)) => RevisionId::new(key.value())
             .map(Some)
-            .ok_or_else(|| corrupt(ZeroNumber)),
+            .ok_or(StoreError::Corrupt(Corruption::ZeroNumber)),
     }
 }
-
-/// A row numbered zero, which no save writes.
-#[derive(Debug, thiserror::Error)]
-#[error("a revision is numbered zero")]
-struct ZeroNumber;
 
 impl RevisionStore for RedbRevisions {
     fn save(&self, base: Option<RevisionId>, draft: Draft) -> Result<Saved, StoreError> {
@@ -241,6 +236,6 @@ fn backend(error: impl std::error::Error + Send + Sync + 'static) -> StoreError 
 }
 
 /// A held row that does not read as a revision, for `error`.
-fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
-    StoreError::Corrupt(Box::new(error))
+fn corrupt(error: serde_json::Error) -> StoreError {
+    StoreError::Corrupt(Corruption::from(error))
 }
