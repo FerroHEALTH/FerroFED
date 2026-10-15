@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The eHN Patient Summary §4 preferred systems held to the vendored
-//! MyHealth@EU Master Value Sets Catalogue 9.1.0: each URI is the system
-//! the value set its documentation names includes.
+//! MyHealth@EU Master Value Sets Catalogue 9.1.0, and NPU, which the
+//! catalogue does not include, to the vendored HL7 Europe Laboratory Report
+//! 2.0.0: each URI is the system the value set its documentation names
+//! includes.
 
 #![expect(
     clippy::panic_in_result_fn,
@@ -41,11 +43,18 @@ struct Include {
     system: Option<String>,
 }
 
-/// The systems each value set of the vendored catalogue includes, by the
-/// value set's name.
-fn catalogue() -> Result<BTreeMap<String, BTreeSet<String>>, Box<dyn Error>> {
+/// The vendored MyHealth@EU catalogue.
+const CATALOGUE: &str = "ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz";
+
+/// The vendored HL7 Europe Laboratory Report guide.
+const LABORATORY: &str = "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.0.0.tgz";
+
+/// The systems each value set of the vendored package `package`, a path
+/// under `docs/specs/`, includes, by the value set's id.
+fn value_sets(package: &str) -> Result<BTreeMap<String, BTreeSet<String>>, Box<dyn Error>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz");
+        .join("../../docs/specs")
+        .join(package);
     let mut archive = tar::Archive::new(GzDecoder::new(std::fs::File::open(path)?));
     let mut sets = BTreeMap::new();
     for entry in archive.entries()? {
@@ -75,7 +84,7 @@ fn catalogue() -> Result<BTreeMap<String, BTreeSet<String>>, Box<dyn Error>> {
 
 #[test]
 fn each_preferred_system_is_the_uri_the_ehdsi_catalogue_includes() -> TestResult {
-    let sets = catalogue()?;
+    let sets = value_sets(CATALOGUE)?;
     for (system, set) in [
         (ehn::SNOMED_CT, "eHDSIProcedure"),
         (ehn::ICD_10, "eHDSIIllnessandDisorder"),
@@ -100,4 +109,31 @@ fn each_preferred_system_is_the_uri_the_ehdsi_catalogue_includes() -> TestResult
 fn the_patient_summary_set_names_each_system_once() {
     let distinct: BTreeSet<&str> = ehn::PATIENT_SUMMARY.into_iter().collect();
     assert_eq!(distinct.len(), ehn::PATIENT_SUMMARY.len());
+}
+
+#[test]
+fn npu_is_the_uri_hl7_europe_includes_its_laboratory_codes_by() -> TestResult {
+    let sets = value_sets(LABORATORY)?;
+    let included = sets
+        .get("lab-obsCode-npu-eu-lab")
+        .ok_or("the laboratory guide has no lab-obsCode-npu-eu-lab")?;
+    assert_eq!(included, &BTreeSet::from([String::from(ehn::NPU)]));
+    assert!(ehn::PATIENT_SUMMARY.contains(&ehn::NPU));
+    Ok(())
+}
+
+#[test]
+fn the_unnamed_medical_device_system_is_not_shipped_as_emdn() -> TestResult {
+    // NOTE: eHN PS §4 prefers EMDN for devices, and no vendored text names the catalogue's OID
+    // system in eHDSIMedicalDevice as EMDN, so it is no preferred system.
+    let sets = value_sets(CATALOGUE)?;
+    let devices = sets
+        .get("eHDSIMedicalDevice")
+        .ok_or("the catalogue has no eHDSIMedicalDevice")?;
+    let unnamed: Vec<&String> = devices
+        .iter()
+        .filter(|system| !ehn::PATIENT_SUMMARY.contains(&system.as_str()))
+        .collect();
+    assert_eq!(unnamed, ["urn:oid:1.3.6.1.4.1.12559.11.10.1.3.1.44.6"]);
+    Ok(())
 }

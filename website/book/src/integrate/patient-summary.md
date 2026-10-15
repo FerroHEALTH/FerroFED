@@ -414,14 +414,21 @@ beside it only where the coding means the same thing:
   and its text is in the narrative.
 
 The preferred code systems are those §4 of the guidelines names for its
-data elements. The component ships twelve of them as the system URIs the
-MyHealth@EU Master Value Sets Catalogue 9.1.0 includes them by, and the
-rules prefer them by default: SNOMED CT, ICD-10, Orphacode, ATC, the EDQM
-Standard Terms, UCUM, LOINC, ISO 3166, and HL7 Administrative Gender,
-RoleClass, RoleCode and ObservationCategoryCodes. NPU and EMDN are not
-shipped, because no vendored package names their URIs, and neither is IDMP,
-which §4 lists for use when available. A caller may name its own set
-instead.
+data elements. The component ships thirteen of them, and the rules prefer
+them by default. Twelve are the system URIs the MyHealth@EU Master Value
+Sets Catalogue 9.1.0 includes them by: SNOMED CT, ICD-10, Orphacode, ATC,
+the EDQM Standard Terms, UCUM, LOINC, ISO 3166, and HL7 Administrative
+Gender, RoleClass, RoleCode and ObservationCategoryCodes. The catalogue
+includes no NPU, so NPU is `http://npu-terminology.org`, the URI the HL7
+Europe Laboratory Report 2.0.0 includes it by.
+
+EMDN is not shipped. The catalogue's medical device value set includes one
+system by an OID, `urn:oid:1.3.6.1.4.1.12559.11.10.1.3.1.44.6`, but no
+vendored text says which code system that OID is, and no vendored package
+names a URI for EMDN. EMDN is added once a MyHealth@EU catalogue release,
+an HL7 Europe guide or the publisher of EMDN names its system URI. IDMP is
+not shipped either, because §4 lists it for use when available. A caller
+may name its own set instead.
 
 These rules are built into the component. The summary the face writes
 today carries the codings its FHIRconnect mappings write; applying the rules
