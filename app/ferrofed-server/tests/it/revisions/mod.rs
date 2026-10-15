@@ -16,8 +16,10 @@
 mod api;
 mod console;
 mod credentials;
+mod exchange;
 mod file_reload;
 mod off;
+mod ownership;
 mod policy;
 mod replicas;
 mod secrets;

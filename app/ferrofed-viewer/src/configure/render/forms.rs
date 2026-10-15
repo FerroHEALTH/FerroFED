@@ -59,6 +59,7 @@ pub(super) fn forms(standing: &Standing, resources: &Resources) -> Vec<FormView>
         forms.push(query_form());
     }
     forms.extend(crate::configure::sections::forms(standing, resources));
+    forms.push(import_form(standing.head));
     forms
 }
 
@@ -298,6 +299,42 @@ fn query_form() -> FormView {
         id: String::from("store-query"),
         heading: String::from("Store a stored-query version"),
         label: String::from("Store the version"),
+        fields: fields.to_html(),
+    }
+}
+
+/// The import of a TOML configuration as a revision on `head`.
+fn import_form(head: Option<RevisionId>) -> FormView {
+    let fields = view! {
+        {hidden("action", String::from("import"))}
+        {hidden("base", base(head))}
+        <p id="import-toml-help">
+            "Saves the TOML as a new revision, a dry run you preview and then apply. "
+            "It is the whole configuration less the bootstrap core, as an export writes it: "
+            "a secret only as its _file reference, and every resource the file provides "
+            "as the file sets it."
+        </p>
+        <p>
+            <label for="import-toml">"TOML"</label>
+            <textarea
+                id="import-toml"
+                name="form[toml]"
+                aria-describedby="import-toml-help"
+                rows="12"
+                spellcheck="false"
+                required
+            ></textarea>
+        </p>
+        {field("import", ("reason", "Reason"), String::new(), (true, false))}
+        {confirm(
+            "import",
+            "I confirm saving this TOML as a new revision, which I apply separately",
+        )}
+    };
+    FormView {
+        id: String::from("import"),
+        heading: String::from("Import a configuration as TOML"),
+        label: String::from("Import as a dry-run revision"),
         fields: fields.to_html(),
     }
 }

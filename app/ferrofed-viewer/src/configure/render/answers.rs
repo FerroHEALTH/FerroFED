@@ -3,7 +3,7 @@
 
 //! The answer of each form, as a replica reports it.
 
-use ferrofed_registry::revision::Applied;
+use ferrofed_registry::revision::{Applied, Imported};
 use leptos::prelude::*;
 
 use crate::admin::act::server::{Acted, ReplicaAnswer};
@@ -92,6 +92,29 @@ fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
                 {format!("Replica {replica} stored {} version {}.", line.name, line.version)}
             </strong>
         </p>
+    }
+    .into_any()
+}
+
+/// The answer of an import at `answer`'s replica, with its changes.
+#[must_use]
+pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
+    ActionAnswer {
+        changed: matches!(answer.acted, Acted::Done(_)),
+        html: replica_said(answer, "import", imported_line).to_html(),
+    }
+}
+
+/// What a replica reports of an import.
+fn imported_line(replica: &str, line: &Imported) -> AnyView {
+    let id = line.revision.id;
+    view! {
+        <p role="status">
+            <strong>{format!("Replica {replica} imported revision {id} as a dry run.")}</strong>
+            " It is not applied: apply it with the form Apply revision once you have read its changes."
+        </p>
+        <p>{format!("What it changes against the running revision {}:", line.diff.from)}</p>
+        {diff_table(&line.diff.changes, id)}
     }
     .into_any()
 }

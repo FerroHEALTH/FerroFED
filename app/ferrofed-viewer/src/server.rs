@@ -124,6 +124,10 @@ pub fn router(state: ViewerState) -> axum::Router {
     };
     let pages = axum::Router::new()
         .route(HEALTH, get(health))
+        .route(
+            crate::configure::export::EXPORT,
+            get(crate::configure::export::export),
+        )
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
         .route(
@@ -143,8 +147,48 @@ pub fn router(state: ViewerState) -> axum::Router {
             crate::oidc::refresh::refresh_session,
         ))
         .layer(axum::middleware::from_fn(same_origin_only))
-        .layer(Extension(state));
+        .layer(Extension(state))
+        .layer(axum::extract::DefaultBodyLimit::max(CONFIGURE_BODY_LIMIT))
+        .layer(axum::middleware::from_fn(limit_body));
     with_security_headers(pages.layer(bundle_compression()), form_action).with_state(options)
+}
+
+/// The largest body a request to the console carries, but the
+/// configuration form's.
+pub const BODY_LIMIT: usize = 64 * 1024;
+
+/// The largest body the configuration form's server function takes: the
+/// largest TOML an import sends, each byte form-encoded as three, and the
+/// form's other fields.
+pub const CONFIGURE_BODY_LIMIT: usize = 3 * crate::configure::import::IMPORT_LIMIT + BODY_LIMIT;
+
+/// Holds every request's body to [`BODY_LIMIT`], or the configuration
+/// form's to [`CONFIGURE_BODY_LIMIT`], before anything reads it: a body
+/// whose `Content-Length` is over the limit is `413`, and a longer body
+/// sent without one fails when it is read.
+///
+/// A server function reads its body whole before it checks the session,
+/// so the limit holds for a caller with no session too. Axum's own default
+/// limit is raised to [`CONFIGURE_BODY_LIMIT`] beside it, so an import at
+/// its limit is read whole.
+async fn limit_body(request: Request, next: Next) -> Response {
+    use leptos::server_fn::ServerFn as _;
+    let limit = if request.uri().path() == crate::configure::act::Configure::url() {
+        CONFIGURE_BODY_LIMIT
+    } else {
+        BODY_LIMIT
+    };
+    let inner = tower::ServiceExt::map_request(
+        next,
+        |request: http::Request<tower_http::body::Limited<axum::body::Body>>| {
+            request.map(axum::body::Body::new)
+        },
+    );
+    let limited = tower_http::limit::RequestBodyLimit::new(inner, limit);
+    match tower::ServiceExt::oneshot(limited, request).await {
+        Ok(response) => response.map(axum::body::Body::new),
+        Err(never) => match never {},
+    }
 }
 
 /// Sends a request for an operator view that carries no live signed-in

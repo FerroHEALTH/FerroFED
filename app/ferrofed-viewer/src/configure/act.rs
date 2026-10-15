@@ -168,6 +168,15 @@ pub mod server {
             /// The revision.
             revision: RevisionId,
         },
+        /// Save `toml` as a dry-run revision.
+        Import {
+            /// The revision the import is based on.
+            base: Option<RevisionId>,
+            /// Why.
+            reason: String,
+            /// The configuration as TOML.
+            toml: String,
+        },
     }
 
     impl fmt::Debug for Plan {
@@ -207,6 +216,10 @@ pub mod server {
                     .debug_struct("Approve")
                     .field("revision", revision)
                     .finish(),
+                Self::Import { base, .. } => f
+                    .debug_struct("Import")
+                    .field("base", base)
+                    .finish_non_exhaustive(),
             }
         }
     }
@@ -338,8 +351,30 @@ pub mod server {
                 revision: revision(&form.revision, "revision to approve")?
                     .ok_or_else(|| invalid("Name the revision to approve."))?,
             }),
+            "import" => Ok(Plan::Import {
+                base: revision(&form.base, "base revision")?,
+                reason: reason(form)?,
+                toml: toml(form)?,
+            }),
             _ => Err(invalid("The form names no action this page offers.")),
         }
+    }
+
+    /// The TOML an import sends, not empty and within the gateway's limit.
+    fn toml(form: &mut ConfigForm) -> Result<String, Refusal> {
+        let text = std::mem::take(&mut form.toml);
+        if text.trim().is_empty() {
+            return Err(invalid("Paste the TOML to import."));
+        }
+        if text.len() > crate::configure::import::IMPORT_LIMIT {
+            return Err(Refusal::Invalid {
+                reason: format!(
+                    "The TOML is larger than {} bytes.",
+                    crate::configure::import::IMPORT_LIMIT
+                ),
+            });
+        }
+        Ok(text)
     }
 
     /// The credential or binding section a removal names, as
@@ -549,7 +584,28 @@ pub mod server {
                     review
                 }))
             }
+            Plan::Import { base, reason, toml } => {
+                import(gateway, (replica, token), (base, &reason, &toml)).await
+            }
         }
+    }
+
+    /// Imports `toml` as a dry-run revision on `base` for `reason` at
+    /// `replica` as the operator, and renders its answer.
+    async fn import(
+        gateway: &Gateway,
+        (replica, token): (&ReplicaSettings, &AccessToken),
+        (base, reason, toml): (Option<RevisionId>, &str, &str),
+    ) -> ActionAnswer {
+        let name = replica.name.as_str();
+        let change = Change { base, reason };
+        let imported = gateway.import_config(replica, token, change, toml).await;
+        render::answers::imported(&acted(
+            ActionKind::Configuration,
+            (name, "import"),
+            imported,
+            |line| line,
+        ))
     }
 
     /// Saves `member` as [`save`] does, and renders the answer with its preview.

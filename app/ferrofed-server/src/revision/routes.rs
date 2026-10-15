@@ -16,6 +16,8 @@
 //! | `POST` [`REVISIONS`] | `201` with the revision saved |
 //! | `GET` [`REVISION`] | one revision |
 //! | `GET` [`DIFF`] | the keys that differ from one revision to another |
+//! | `GET` [`exchange::EXPORT`] | one revision as TOML, an attachment ([`exchange`]) |
+//! | `POST` [`exchange::IMPORT`] | `201` with the TOML body saved as a dry-run revision and its changes against the running one |
 //! | `POST` [`APPLY`] | the mark once the revision is applied |
 //! | `POST` [`CONFIRM`] | the mark once the running revision is confirmed |
 //! | `POST` [`APPROVE`] | what the revision takes once approved |
@@ -28,7 +30,7 @@
 //! | `POST` [`sections::CREDENTIALS_REMOVE`], [`sections::BINDING_REMOVE`] | `201` with the revision saved without it |
 //!
 //! A refusal is an error body: `400` (`body-invalid`) for a body that does
-//! not read, `404` (`revision-unknown`), `409` (`revision-stale`) when
+//! not read, `415` (`media-type-unsupported`) for an import that is not TOML, `404` (`revision-unknown`), `409` (`revision-stale`) when
 //! another save, apply or rollback came first, `409`
 //! (`rollback-unavailable`), `409` (`resource-file-owned`) for a change to a
 //! resource the file provides, `404` (`resource-unknown`), `409`
@@ -57,7 +59,7 @@ use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED};
 use crate::revision::tree::diff;
-use ferrofed_registry::revision::{Applied, Author, Diff, Revision, RevisionId, Standing};
+use ferrofed_registry::revision::{Applied, Author, Diff, Origin, Revision, RevisionId, Standing};
 
 /// The running revision's mark and the newest revision.
 pub const CONFIG: &str = "/admin/config";
@@ -96,6 +98,7 @@ pub const MEMBER_REMOVE: &str = "/admin/config/members/{node_id}/remove";
 pub const STORED_QUERY: &str = "/admin/config/stored-queries/{qualified_query_name}/{version}";
 
 pub mod console;
+pub mod exchange;
 pub mod sections;
 
 /// The revisions and the reload path they are applied through.
@@ -123,6 +126,7 @@ pub fn reads(managed: Arc<Managed>) -> Router {
         .route(REVISIONS, get(history))
         .route(REVISION, get(revision))
         .route(DIFF, get(difference))
+        .route(exchange::EXPORT, get(exchange::export))
         .route(RESOURCES, get(console::resources))
         .with_state(managed)
 }
@@ -145,6 +149,7 @@ pub fn writes(managed: Arc<Managed>) -> Router {
         .route(sections::BINDING, put(sections::save_binding))
         .route(sections::BINDING_REMOVE, post(sections::remove_binding))
         .route(STORED_QUERY, put(console::store_query))
+        .route(exchange::IMPORT, post(exchange::import))
         .with_state(managed)
 }
 
@@ -235,6 +240,7 @@ fn refused(refusal: &RevisionError, request_id: &str) -> Response {
         RevisionError::Unknown(_) | RevisionError::NotANumber => Code::RevisionUnknown,
         RevisionError::Refused(_) | RevisionError::Reload(_) => Code::ConfigurationInvalid,
         RevisionError::Stale(_) | RevisionError::NoCurrent => Code::RevisionStale,
+        RevisionError::FileOwned(_) => Code::ResourceFileOwned,
         RevisionError::NoPrevious => Code::RollbackUnavailable,
         RevisionError::ApprovalRequired { .. } => Code::ApprovalRequired,
         RevisionError::OwnApproval(_) => Code::ApprovalOwn,
@@ -378,12 +384,17 @@ async fn save(
     let Ok(request) = serde_json::from_slice::<SaveRequest>(&body) else {
         return body_refused(&headers, SAVE_SHAPE);
     };
-    let revisions = Arc::clone(&managed.revisions);
+    let managed = Arc::clone(&managed);
     let author = Author::from(&operator);
-    let answer = blocking(&headers, move || {
-        let saved = revisions.save(request.base, (author, request.reason), &request.toml)?;
+    let answer = answered(&headers, move || {
+        let saved = console::guarded(
+            &managed,
+            (Origin::Operator, request.base),
+            (author, request.reason),
+            &request.toml,
+        )?;
         record(SAVED, saved.id, &operator);
-        Ok(saved)
+        Ok::<_, console::ConsoleError>(saved)
     })
     .await;
     if answer.status() == StatusCode::OK {

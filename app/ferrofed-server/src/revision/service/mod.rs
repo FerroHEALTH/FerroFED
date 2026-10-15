@@ -126,6 +126,10 @@ pub enum RevisionError {
     /// Another save, apply or rollback came first.
     #[error(transparent)]
     Stale(#[from] Stale),
+    /// The revision changes or removes a credential or a binding section
+    /// the configuration file provides.
+    #[error("{0} is provided by the configuration file, so only the file changes it")]
+    FileOwned(Resource),
     /// The running revision has no earlier one to roll back to.
     #[error("the running revision has no earlier revision to roll back to")]
     NoPrevious,
@@ -322,6 +326,8 @@ impl Revisions {
     /// # Errors
     ///
     /// [`RevisionError::Refused`] for a reason or a configuration refused,
+    /// [`RevisionError::FileOwned`] for a credential or a binding section
+    /// the file provides set otherwise than the file sets it,
     /// [`RevisionError::Stale`] when `base` is not the newest revision, and
     /// the store's errors.
     pub fn save(
@@ -330,17 +336,33 @@ impl Revisions {
         (author, reason): (Author, String),
         toml: &str,
     ) -> Result<Revision, RevisionError> {
+        self.save_from(Origin::Operator, base, (author, reason), toml)
+    }
+
+    /// Saves `toml` as [`Revisions::save`] does, recording `origin` as
+    /// where it comes from: an operator's save or an import.
+    ///
+    /// # Errors
+    ///
+    /// As [`Revisions::save`].
+    pub fn save_from(
+        &self,
+        origin: Origin,
+        base: Option<RevisionId>,
+        (author, reason): (Author, String),
+        toml: &str,
+    ) -> Result<Revision, RevisionError> {
         let reason = reason_of(&reason)?;
         let (toml, _config) = self.validate(toml)?;
-        let file_owned = self.file_owned()?;
         let table: toml::Table = toml::from_str(&toml)
             .map_err(|source| Refused::from(Error::parse(&source, &toml, Stage::File)))?;
+        let file_owned = self.file_untouched(&table)?;
         let console = present(&table)
             .into_iter()
             .filter(|resource| !file_owned.contains(resource))
             .collect();
         let draft = Draft {
-            origin: Origin::Operator,
+            origin,
             restores: None,
             author,
             at: Timestamp::now(),
@@ -349,27 +371,6 @@ impl Revisions {
             console,
         };
         stored(self.store.save(base, draft)?, base)
-    }
-
-    /// The credentials and binding sections the configuration file
-    /// provides: those the newest revision the file gave sets as its own.
-    ///
-    /// # Errors
-    ///
-    /// The store's errors.
-    pub fn file_owned(&self) -> Result<Vec<Resource>, RevisionError> {
-        let history = self.store.history()?;
-        let Some(file) = history
-            .iter()
-            .rev()
-            .find(|revision| revision.origin == Origin::File)
-        else {
-            return Ok(Vec::new());
-        };
-        Ok(present(&held_table(file)?)
-            .into_iter()
-            .filter(|resource| !file.console.contains(resource))
-            .collect())
     }
 
     /// Applies revision `id` for `by` through `reloader`, and returns the

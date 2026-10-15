@@ -24,6 +24,7 @@
 
 pub mod admin;
 pub mod config;
+pub mod exchange;
 
 use std::collections::BTreeMap;
 use std::fmt;

@@ -17,7 +17,8 @@ and the onward credentials and binding sections it manages, with write-only
 secrets, a confirmation after a change applies and a second operator's
 approval before it applies (#578,
 [Credentials and binding sections](#credentials-and-binding-sections)).
-Export to and import from TOML is planned (#579).
+Any revision exports as TOML, and TOML imports as a dry-run revision
+(#579, [Export and import](#export-and-import)).
 
 ## Turning it on
 
@@ -74,7 +75,7 @@ the key, never the value. A secret inside the core, such as
 Comments are not kept: a revision is stored as TOML writes it.
 
 Each revision records its number, the revision it was based on, where it
-came from (`file`, `operator` or `rollback`), who made it (the file, or the
+came from (`file`, `operator`, `rollback` or `import`), who made it (the file, or the
 operator's issuer and subject as their token names them), when, and why.
 
 ## The file is a revision too
@@ -103,7 +104,8 @@ whose token carries the issuer's `operator_scope`, as the other admin
 actions are ([Who the admin listener serves](metrics.md#who-the-admin-listener-serves)).
 Each write is recorded under `ferrofed::security` as an admin action, and
 with the revision number as `config-revision-saved`,
-`config-revision-applied` or `config-rolled-back`.
+`config-revision-applied`, `config-rolled-back` or
+`config-revision-imported`.
 
 | Route | Answer |
 |---|---|
@@ -114,6 +116,7 @@ with the revision number as `config-revision-saved`,
 | `POST /admin/config/revisions` | saves `{"base": <newest>, "reason": "…", "toml": "…"}`, `201` with the revision |
 | `POST /admin/config/revisions/{id}/apply` | applies the newest revision, with no body |
 | `POST /admin/config/rollback` | `{"current": <running>, "reason": "…"}`: saves the content of the revision that ran before the running one as a new revision, and applies it |
+| `GET /admin/config/revisions/{id}/export`, `POST /admin/config/import` | a revision as TOML, and TOML saved as a dry-run revision ([Export and import](#export-and-import)) |
 
 A save names the revision it is based on, which must be the newest (`null`
 for none), and an apply names the newest revision. When another operator,
@@ -362,6 +365,84 @@ are logged under `ferrofed::security` (`config-revision-approved`).
 
 Each is read only under `managed`, refused under `off`, and takes a
 restart to change.
+
+## Export and import
+
+Any revision exports as TOML, and TOML imports as a dry-run revision, so a
+configuration moves between the console and version control (#579).
+
+| Route | Answer |
+|---|---|
+| `GET /admin/config/revisions/{id}/export` | the revision as TOML, `Content-Type: application/toml`, as the attachment `ferrofed-revision-{id}.toml` with `Cache-Control: no-store` |
+| `POST /admin/config/import?base=<newest>&reason=<text>` | saves the TOML body as a revision on `base`, `201` with `{"revision": …, "diff": …}`: the revision, and each key it changes against the running revision, as the diff route writes them |
+
+The export is the revision's TOML text under a comment header that names
+the revision, who made it, when, and where it came from. It holds the whole
+configuration a revision holds, the console's members, credentials and
+binding sections beside the file's, and every secret as its `_file`
+reference. A secret the console wrote to `config.secrets_dir` is exported as
+the path of the file it wrote. The bootstrap core is not part of a revision,
+so it is not exported, and the header says so: keep the core in your file.
+
+An import takes a body of `Content-Type: application/toml` (or `text/plain`)
+of at most 1048576 bytes, and is checked as every save is. It is recorded
+with the origin `import`, by the operator who sent it, for the reason the
+query gives, and it is never applied by the import itself. Read the diff in
+the answer, then apply it with `POST /admin/config/revisions/{id}/apply`,
+which takes the approval and the confirmation it needs as any revision
+does. An import is refused, and nothing is saved, when:
+
+| The import | Refusal |
+|---|---|
+| sets a key of the bootstrap core | `422 configuration-invalid`, naming the key |
+| holds a secret inline | `422 configuration-invalid`, naming the key, never the value |
+| sets a credential or a binding section the file provides otherwise than the file does, or leaves it out | `409 resource-file-owned` |
+| holds a console member that shares an identity with a member the registry document or a directory provides, and that `base` does not hold as it is | `409 resource-file-owned` |
+| is based on a revision other than the newest | `409 revision-stale` |
+| is sent as another media type | `415 media-type-unsupported` |
+| names no reason, or is larger than 1048576 bytes | `400 body-invalid` |
+
+Each import is recorded under `ferrofed::security` as
+`config-revision-imported` with its revision number. An export of a
+revision imports as the same configuration: its revision holds the same
+TOML, and its diff against the revision exported is empty.
+
+On the Configuration page each revision of the history offers its download
+(Export revision N as TOML), which the console's server reads from the
+first replica with your access token and answers as an attachment. The
+form Import a configuration as TOML takes the TOML pasted into it, saves it
+as a dry-run revision, and shows what it changes; apply it with the form
+Apply revision.
+
+### File-first and console-first
+
+Two ways of working use the same revisions:
+
+- **File-first:** the configuration lives in version control and reaches
+  the gateway as its file. Each `SIGHUP` reload or start records the file
+  as a revision by the file, and its credentials and binding sections are
+  the file's, read-only in the console. Use the console to read the history
+  and the diffs, and to roll back.
+- **Console-first:** the file holds the bootstrap core and little else, and
+  operators change the configuration on the Configuration page or the admin
+  routes. Export a revision to keep it in version control or review it as a
+  pull request.
+
+To move from console-first to file-first, export the running revision,
+copy its tables into your file beside the bootstrap core, and reload: the
+file then sets those credentials and binding sections and owns them.
+Console members are the exception: the file never sets
+`registry.members`, so move each one into the registry document. Secrets
+stay as the `_file` references the export names; keep those files in
+place.
+
+To move a credential or a binding section from file-first to
+console-first, export the running revision, remove the section from the
+file and reload, then import the export: the file no longer provides the
+section, so the import sets it as the console's, and you apply it as any
+revision. A configuration kept in version control comes in the same way,
+as an import you preview and apply, as long as it leaves every resource
+the file provides as the file sets it.
 
 ## Several replicas
 

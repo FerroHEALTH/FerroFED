@@ -44,7 +44,7 @@ use crate::request_id;
 use crate::revision::service::{Refused, RevisionError, SAVED, held_table};
 use crate::stored::{self, Inadmissible};
 use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Revision, RevisionId};
+use ferrofed_registry::revision::{Author, Origin, Revision, RevisionId};
 
 use super::sections;
 use crate::revision::resources::SectionFault;
@@ -389,11 +389,50 @@ pub(super) fn saved_as(
 ) -> Result<Revision, ConsoleError> {
     let text =
         toml::to_string(table).map_err(|source| Refused::from(Error::Assemble { source }))?;
-    let saved = managed
-        .revisions
-        .save(base, (Author::from(operator), reason), &text)?;
+    let saved = guarded(
+        managed,
+        (Origin::Operator, base),
+        (Author::from(operator), reason),
+        &text,
+    )?;
     record(SAVED, saved.id, operator);
     Ok(saved)
+}
+
+/// Saves `text` as the revision after `base`, from `origin`, by `author`
+/// for `reason`: the one path every save on the admin listener takes.
+///
+/// A member the registry document or a directory provides cannot be set
+/// unless `base` holds it as it is, and [`Revisions::save_from`] refuses a
+/// change to a credential or a binding section the file provides.
+///
+/// [`Revisions::save_from`]: crate::revision::service::Revisions::save_from
+pub(super) fn guarded(
+    managed: &Managed,
+    (origin, base): (Origin, Option<RevisionId>),
+    (author, reason): (Author, String),
+    text: &str,
+) -> Result<Revision, ConsoleError> {
+    // NOTE: no specification governs this: our own design; a TOML or members that do
+    // not read are refused by the save with the errors `config check` reports.
+    if let Ok(table) = toml::from_str::<toml::Table>(text)
+        && let Ok(members) = members_of(&table)
+        && let Some(snapshot) = snapshot(managed)
+    {
+        let held = members_at(managed, base)?;
+        if let Some(member) = members
+            .into_iter()
+            .find(|member| !held.contains(member) && file_holds(&snapshot, member))
+        {
+            return Err(ConsoleError::FileOwned {
+                node: member.node.id,
+                owner: source(managed),
+            });
+        }
+    }
+    Ok(managed
+        .revisions
+        .save_from(origin, base, (author, reason), text)?)
 }
 
 /// `201` for an answer that is `200`, as a save answers.
