@@ -1,0 +1,428 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE HTML>
+<html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" lang="en">
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>Home - MyHealth@Eu NCPeH API v9.1.0</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="author" content="http://hl7.org/fhir"/>
+
+    <link href="fhir.css" rel="stylesheet"/>
+
+    <!-- Bootstrap core CSS -->
+    <link href="assets/css/bootstrap-fhir.css" rel="stylesheet"/>
+
+    <!-- Project extras -->
+    <link href="assets/css/project.css" rel="stylesheet"/>
+    <link href="assets/css/pygments-manni.css" rel="stylesheet"/>
+    <link href="assets/css/jquery-ui.css" rel="stylesheet"/>
+  	<link href="assets/css/prism.css" rel="stylesheet" />
+  	<link href="assets/css/cqf.css" rel="stylesheet" />
+    <!-- Placeholder for child template CSS declarations -->
+<!-- <link href="assets/css/hl7.css" rel="stylesheet"/> -->
+<link href="assets/css/ehdsi.css" rel="stylesheet"/>
+<link href="assets/css/myhealtheu.css" rel="stylesheet"/>
+<!-- <link href="assets/css/unicom-productviewer.css" rel="stylesheet"/> -->
+
+    <script type="text/javascript" src="fhir-table-scripts.js"> </script>
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+    <script src="assets/js/html5shiv.js"></script>
+    <script src="assets/js/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="assets/ico/icon-fhir-144.png"/>
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="assets/ico/icon-fhir-114.png"/>
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="assets/ico/icon-fhir-72.png"/>
+    <link rel="apple-touch-icon-precomposed" href="assets/ico/icon-fhir-57.png"/>
+    <link rel="shortcut icon" href="assets/ico/favicon.png"/>
+  </head>
+  <body onload="document.body.style.opacity='1'">
+
+	  <script src="assets/js/prism.js"></script>
+    <script type="text/javascript" src="assets/js/mermaid.js"></script>
+    <script type="text/javascript" src="assets/js/mermaid-init.js"></script>
+    <style type="text/css">h2{--heading-prefix:"1"}
+    h3,h4,h5,h6{--heading-prefix:"1"}</style>
+    <div id="segment-header" class="segment">  <!-- segment-header -->
+      <div class="container">  <!-- container -->
+
+        <!-- Placeholder for child template header declarations -->
+
+<!-- Left logo - typically the publisher's logo - project or affiliate -->
+        <div id="project-nav">
+            <a id="project-logo" no-external="true" href="https://fhir.ehdsi.eu">
+                <img height="80" alt="MyHealth logo horizontal" src="assets/images/MyHealth-logo-horizontal.png"/>
+            </a>
+        </div>
+
+<!-- Right logo - for example the FHIR logo -->
+<!-- Make sure you have authorization to use the FHIR logo -->
+
+       <div id="family-nav">
+          <a id="family-logo" no-external="true" href="http://hl7.org/fhir"><img height="61" alt="FHIR website" src="assets/images/fhir-logo-www.png"/> </a>
+        </div> 
+    
+
+<!-- search icon - if you want -->
+<!--
+        <div id="hl7-search">
+          <a id="hl7-search-lnk" no-external="true" href="http://hl7.org/fhir/search.cfm"><img alt="Search FHIR" src="assets/images/search.png"/></a>
+        </div>
+-->
+
+
+        <div id="ig-status">
+          <p><span style="font-size:12pt;font-weight:bold">MyHealth@Eu NCPeH API</span>
+            <br/>
+            <span style="display:inline-block;">9.1.0 - ci-build
+
+
+
+  <span title="">150</span>
+
+
+            </span>
+          </p>
+        </div>
+      </div> <!-- /container -->
+    </div>  <!-- /segment-header -->
+
+    <div id="segment-navbar" class="segment">  <!-- segment-navbar -->
+      <div id="stripe"> </div>
+      <div class="container">  <!-- container -->
+        <!-- HEADER CONTENT -->
+
+        <nav class="navbar navbar-inverse">
+          <!--status-bar-->
+          <div class="container">
+            <button data-target=".navbar-inverse-collapse" class="navbar-toggle" data-toggle="collapse" type="button">
+              <span class="icon-bar"> </span>
+              <span class="icon-bar"> </span>
+              <span class="icon-bar"> </span>
+            </button>
+            <a class="navbar-brand hidden" href="http://hl7.org/fhir/R4/index.html">FHIR</a>
+            <div class="nav-collapse collapse navbar-inverse-collapse">
+              <!-- menu.xml  -->
+
+<ul xmlns="http://www.w3.org/1999/xhtml" class="nav navbar-nav">
+  <li>
+    <a href="index.html">Home</a>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Business
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="business.html">Overview</a>
+      </li>
+      <li>
+        <a href="bus-scenario-pat.html">Check Patient ID</a>
+      </li>
+      <li>
+        <a href="bus-scenario-lab.html">Laboratory</a>
+      </li>
+      <li>
+        <a href="bus-scenario-hdr.html">HDR</a>
+      </li>
+      <li>
+        <a href="bus-scenario-img.html">Imaging</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <a href="content.html">Data</a>
+  </li>
+  <li>
+    <a href="application.html">Application</a>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Implementation
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="technical.html">Overview</a>
+      </li>
+      <li>
+        <a href="sequence-pat.html">Patient Search</a>
+      </li>
+      <li>
+        <a href="sequence-doc.html">Document Retrieval</a>
+      </li>
+      <li>
+        <a href="sequence-study.html">Study Retrieval</a>
+      </li>
+      <li>
+        <a href="sequence-doc-push.html">Document Provisioning</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <a href="artifacts.html">Artifacts</a>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">About
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="dependencies.html">Dependencies</a>
+      </li>
+      <li>
+        <a href="copyright.html">Copyright</a>
+      </li>
+      <li>
+        <a href="downloads.html">Downloads</a>
+      </li>
+    </ul>
+  </li>
+</ul>
+            </div>  <!-- /.nav-collapse -->
+          </div>  <!-- /.container -->
+        </nav>  <!-- /.navbar -->
+      <!-- /HEADER CONTENT -->
+      </div>  <!-- /container -->
+    </div>  <!-- /segment-navbar -->
+    <!--status-bar-->
+
+    <div id="segment-breadcrumb" class="segment">  <!-- segment-breadcrumb -->
+      <div class="container">  <!-- container -->
+        <ul class="breadcrumb">
+          <li><a href='toc.html'><b>Table of Contents</b></a></li><li><b>Home</b></li>
+
+        </ul>
+      </div>  <!-- /container -->
+    </div>  <!-- /segment-breadcrumb -->
+
+    <a name="top"> </a>
+    <div id="segment-content" class="segment">  <!-- segment-content -->
+      <div class="container">  <!-- container -->
+        <div class="row">
+          <div class="inner-wrapper">
+
+<style type="text/css">
+h2:before{color:silver;counter-increment:section;content:var(--heading-prefix) " ";}
+h3:before{color:silver;counter-increment:sub-section;content:var(--heading-prefix) "." counter(sub-section) " ";}
+h4:before{color:silver;counter-increment:composite;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) " ";}
+h5:before{color:silver;counter-increment:detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) " ";}
+h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) "." counter(more-detail)" ";}
+</style>
+<div class="col-12">
+  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.0) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
+  <h2>Home</h2>
+  
+
+
+
+
+
+
+  <table class="colsd">
+
+    <tr>
+      <td colspan="4"><i>Official URL</i>: <span class="copy-text">http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api<button title="Click to copy URL" class="btn-copy" data-clipboard-text="http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api"/></span>
+      </td>
+      <td><i>Version</i>:
+      <span class="copy-text">9.1.0<button title="Click to copy versioned URL" class="btn-copy" data-clipboard-text="http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api|9.1.0"/></span>
+      </td>
+    </tr>
+
+    <tr>
+
+
+
+
+
+
+
+      <td colspan="4">
+        
+          Draft
+          
+            as of 2026-05-05
+          
+        
+      </td>
+
+
+
+      <td><i>Computable Name</i>: <span style="font-family: monospace;">MyHealthEuNcpApiIg</span></td>
+    </tr>
+
+
+
+
+  </table>
+
+
+
+
+
+
+
+
+
+    <p><!-- white space is critical inside of capture --></p>
+<div class="markdown-toc">
+<ul id="markdown-toc">
+  <li><a href="#scope" id="markdown-toc-scope">Scope</a></li>
+  <li><a href="#introduction" id="markdown-toc-introduction">Introduction</a></li>
+  <li><a href="#how-to-read-this-guide" id="markdown-toc-how-to-read-this-guide">How to read this guide</a></li>
+</ul>
+
+</div>
+<h3 id="scope">Scope</h3>
+
+<p>This HL7 FHIR Implementation Guide describes the services used in MyHealth@EU, including the interface specifications used in the gateway (NCPeH) to gateway (NCPeH) communications.</p>
+
+<div>
+<table style="width: 100%; border: 1px solid #000; text-align: left; border-collapse: collapse;">
+    <tr>
+        <td style="border: 1px solid #000; padding: 8px;">
+            <strong>Note:</strong> this guide only specifies the NCPeH to NCPeH communications.<br />
+            It is out of scope of this guide to define the interfaces with the National Connector and/or between the National Connector and National Infrastructure.
+        </td>
+    </tr>
+</table>
+
+</div>
+
+<h3 id="introduction">Introduction</h3>
+
+<p><strong>MyHealth@EU</strong> is the <strong>European digital health infrastructure</strong> designed to support the secure <strong>cross-border exchange of health data</strong> among <strong>EU Member States</strong> through a set of services, including:</p>
+
+<ul>
+  <li><strong>Patient Summary</strong></li>
+  <li><strong>ePrescription / eDispensation</strong></li>
+  <li><strong>Original Clinical Document</strong></li>
+  <li><strong>Laboratory Results Report</strong></li>
+  <li><strong>Hospital Discharge Report</strong></li>
+  <li><strong>Medical Imaging Studies</strong></li>
+</ul>
+
+<p>The <strong>maturity of these services</strong>, as well as the <strong>technology used to implement them</strong>, varies depending on the <strong>priority category</strong> documented.</p>
+
+<p>The following figure provides an <strong>overview of their maturity levels and the technologies used</strong>.</p>
+
+<div>
+<p> </p>
+<img src="services-overview.png" alt="Overview of MyHealth@EU Services" style="max-width: 70%; height: auto;" />
+<p>Figure 1 - Overview of MyHealth@EU Services</p>
+<p> </p>
+</div>
+
+<p>This version of this guide focuses on the new MyHealth@EU services based on the HL7 FHIR technology, with the goal to be the one-stop-shop guide for all the specifications for the MyHealth@EU Node to Node communications.</p>
+
+<p>It will define moreover the capabilities of the HL7 FHIR API offered by the MyHealth@EU NCPeH for supporting:</p>
+
+<ul>
+  <li>the identification of the patient</li>
+  <li>the retrieval of relevant document metadata</li>
+  <li>the retrieval of selected documents</li>
+  <li>the provision of selected documents</li>
+  <li>the search and retrieval of imaging study information</li>
+</ul>
+
+<p><strong>No liability can be however inferred from the use or misuse of this specification, or its consequences; for the services not released.</strong></p>
+
+<h3 id="how-to-read-this-guide">How to read this guide</h3>
+
+<p>Readers are encouraged to familiarize themselves with how information is organized in this guide.</p>
+
+<p>The information in this guide is structured according to the BDAT model (Business, Data, Application, and Technology), as illustrated in the figure below.</p>
+
+<div>
+  <p> </p>
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="86px" preserveAspectRatio="none" style="width:452px;height:86px;background:#FFFFFF;" version="1.1" viewBox="0 0 452 86" width="452px" zoomAndPan="magnify"><title>Viewpoint</title><defs /><g><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="79.1602" x="179.5553" y="22.9951">Viewpoint</text><!--entity bus--><g class="entity" data-entity="bus" data-source-line="20" data-uid="ent0002" id="entity_bus"><a href="business.html" target="_top" title="business.html" xlink:actuate="onRequest" xlink:href="business.html" xlink:show="new" xlink:title="business.html" xlink:type="simple"><rect fill="#FFFFCC" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="81.7354" x="7" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="61.7354" x="17" y="67.292">Business</text></a></g><!--entity app--><g class="entity" data-entity="app" data-source-line="21" data-uid="ent0003" id="entity_app"><a href="application.html" target="_top" title="application.html" xlink:actuate="onRequest" xlink:href="application.html" xlink:show="new" xlink:title="application.html" xlink:type="simple"><rect fill="#C2F0FF" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="98.2236" x="123.76" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="78.2236" x="133.76" y="67.292">Application</text></a></g><!--entity data--><g class="entity" data-entity="data" data-source-line="22" data-uid="ent0004" id="entity_data"><a href="content.html" target="_top" title="content.html" xlink:actuate="onRequest" xlink:href="content.html" xlink:show="new" xlink:title="content.html" xlink:type="simple"><rect fill="#F1F1F1" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="53.4277" x="257.15" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="33.4277" x="267.15" y="67.292">Data</text></a></g><!--entity tech--><g class="entity" data-entity="tech" data-source-line="23" data-uid="ent0005" id="entity_tech"><a href="technical.html" target="_top" title="technical.html" xlink:actuate="onRequest" xlink:href="technical.html" xlink:show="new" xlink:title="technical.html" xlink:type="simple"><rect fill="#C9FFC9" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="100.8008" x="345.47" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="80.8008" x="355.47" y="67.292">Technology</text></a></g><!--link bus to app--><g class="link" data-entity-1="bus" data-entity-2="app" data-source-line="25" data-uid="lnk6" id="link_bus_app"><path d="M88.88,62.4469 C100.37,62.4469 105.85,62.4469 117.33,62.4469" fill="none" id="bus-to-app" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="123.33,62.4469,114.33,58.4469,118.33,62.4469,114.33,66.4469,123.33,62.4469" style="stroke:#181818;stroke-width:1;" /></g><!--link app to data--><g class="link" data-entity-1="app" data-entity-2="data" data-source-line="26" data-uid="lnk7" id="link_app_data"><path d="M222.3,62.4469 C233.84,62.4469 239.39,62.4469 250.93,62.4469" fill="none" id="app-to-data" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="256.93,62.4469,247.93,58.4469,251.93,62.4469,247.93,66.4469,256.93,62.4469" style="stroke:#181818;stroke-width:1;" /></g><!--link data to tech--><g class="link" data-entity-1="data" data-entity-2="tech" data-source-line="27" data-uid="lnk8" id="link_data_tech"><path d="M310.99,62.4469 C322.38,62.4469 327.76,62.4469 339.14,62.4469" fill="none" id="data-to-tech" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="345.14,62.4469,336.14,58.4469,340.14,62.4469,336.14,66.4469,345.14,62.4469" style="stroke:#181818;stroke-width:1;" /></g></g></svg>
+    <p><caption>Fig. 1: Navigating this guide</caption></p>  
+  </div>
+
+<p>Where:</p>
+<ul>
+  <li>the <strong>Business domain</strong> describes what is supposed to be realized and why from a user perspective. It may include description of the Business goals, Use Cases, requirements, processes and rules. The main reference for this part is the <a href="https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue">MyHealth@EU requirement catalogue</a></li>
+  <li>The <strong>Data (Information) domain</strong> describes the content that is exchanged. It is documented in the domain specific content guides, based on the data set described in the <a href="https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue">requirement catalogue</a></li>
+  <li>the <strong>Application (Computational) domain</strong>, describing how gateways interact in an implementation independent form, to fulfill the business requirements. It may include sequence diagrams.</li>
+  <li>The <strong>Technology (Engineering) domain</strong>, describes the technology stack required to support the MyHealth@EU processes. This includes how HL7 FHIR, or other standards adopted, are used for implementing the documented services.</li>
+</ul>
+
+
+
+</div>
+        </div>  <!-- /inner-wrapper -->
+      </div>  <!-- /row -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-content -->
+
+  <script type="text/javascript" src="assets/js/jquery.js"> </script>     <!-- note keep space here, otherwise it will be transformed to empty tag -> fails -->
+  <script type="text/javascript" src="assets/js/jquery-ui.min.js"> </script>
+
+  <script type="text/javascript" src="assets/js/window-hash.js"> </script>
+  <a name="bottom"> </a>
+  <div id="segment-footer" igtool="footer" class="segment">  <!-- segment-footer -->
+    <div class="container">  <!-- container -->
+
+      <div class="inner-wrapper">
+        <p>
+          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.0 based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, May 5, 2026 10:44+0000">2026-05-05</span>
+          <br/>
+          <span style="color: var(--footer-highlight-text-color)">
+            <div style="color: #333333" >
+
+          Links: <a style="color: #81BEF7" href="toc.html">Table of Contents</a> |
+                 <a style="color: #81BEF7" href="qa.html">QA Report</a> 
+				 
+<!--
+                 <a style="color: #81BEF7" target="_blank" href="http://fhir.ehdsi.eu/ncp-api/history.html">Version History <img alt="external" style="vertical-align: baseline" src="external.png"/></a></a> |
+-->
+
+                 <a style="color: #81BEF7" rel="license" href="http://hl7.org/fhir/R4/license.html"><img style="border-style: none;" alt="CC0" src="cc0.png"/></a>
+                 <!--<a style="color: #81BEF7" href="todo.html">Search</a> | --> 
+<!--
+                 <a style="color: #81BEF7" target="_blank" href="mailto:mail@hl7belgium.org">Propose a change<img alt="external" style="vertical-align: baseline" src="external.png"/></a>
+-->
+
+<!--				 
+<br/>				 
+				 <a style="color: #81BEF7" rel="eufunded" href="https://europa.eu"><img style="border-style: none;" alt="EU" src="assets/images/en_horizontal_cef_logo.png" width="250"/></a>
+	-->			  
+<!-- <div id=container width=100% style="display:block;" >
+<div style="float: left; padding-top: 17px; padding-bottom: 17px;" >The UNICOM Innovation Action has received funding from the European Union's Horizon 2020
+  <br/>research and innovation programme under grant agreement No. 875299.
+</div>
+<div style="float: right; width: 69px; vertical-align:middle; text-align:center; padding-top: 17px; padding-bottom: 17px;"><img height="41" alt="a EU funded project" src="assets/images/eu.png"/></div>
+</div> -->
+<div>
+</div>
+
+</div>
+          </span>
+        </p>
+      </div>  <!-- /inner-wrapper -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-footer -->
+  
+  <div id="segment-post-footer" class="segment hidden">  <!-- segment-post-footer -->
+    <div class="container">  <!-- container -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-post-footer -->
+
+  <!-- JS and analytics only. -->
+  <!-- Bootstrap core JavaScript
+  ================================================== -->
+  <!-- Placed at the end of the document so the pages load faster -->
+  <script type="text/javascript" src="assets/js/bootstrap.min.js"> </script>
+  <script type="text/javascript" src="assets/js/respond.min.js"> </script>
+  <script type="text/javascript" src="assets/js/anchor.min.js"> </script>
+  <script type="text/javascript" src="assets/js/clipboard.min.js"> </script>
+  <script type="text/javascript" src="assets/js/clipboard-btn.js"> </script>
+  <script type="text/javascript" src="assets/js/anchor-hover.js"> </script>
+  <!-- Analytics Below
+  ================================================== -->
+  </body>
+</html>
+
