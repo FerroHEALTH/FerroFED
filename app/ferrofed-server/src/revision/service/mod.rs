@@ -10,7 +10,9 @@
 //! refused with the errors `config check` reports. An apply moves the current
 //! mark from the revision it read and then hands the configuration to the
 //! reload path ([`Reloader::reload_config`]); a reload that refuses it moves
-//! the mark back, so the mark and the running gateway agree. A rollback saves
+//! the mark back, so the mark and the running gateway agree. A reload of the
+//! file, or a start, marks the revision the file's load records running
+//! only once the gateway runs it, so no replica follows one it refused. A rollback saves
 //! the content of the revision before the current one as a new revision and
 //! applies it. Every call blocks, so it is made where a thread may. No
 //! specification governs this: our own design.
@@ -611,11 +613,7 @@ impl Revisions {
             return Ok(mark);
         }
         let id = mark.revision;
-        let settled = Current {
-            outcome: Outcome::PendingRestart,
-            needs_restart: needs_restart.iter().map(|key| (*key).to_owned()).collect(),
-            ..mark
-        };
+        let settled = pending(mark, needs_restart);
         if let Swapped::Stale { current } = self.store.swap_current(Some(id), &settled)? {
             tracing::warn!(
                 revision = %id,
@@ -625,31 +623,18 @@ impl Revisions {
         }
         Ok(settled)
     }
+}
 
-    /// Records that a reload of the file applied revision `id`, which the
-    /// file load recorded, leaving `needs_restart` for the next start: the
-    /// mark is then pending a restart, as an applied revision's is.
-    ///
-    /// # Errors
-    ///
-    /// The store's errors.
-    pub fn file_applied(
-        &self,
-        id: RevisionId,
-        needs_restart: &[&'static str],
-    ) -> Result<(), RevisionError> {
-        let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        match self.store.current()? {
-            Some(mark) if mark.revision == id => {
-                self.settle_held(mark, needs_restart)?;
-            }
-            current => tracing::warn!(
-                revision = %id,
-                current = shown(current.map(|current| current.revision)),
-                "the running revision moved before the file's pending restart was recorded"
-            ),
-        }
-        Ok(())
+/// `mark` pending a restart for `needs_restart`, when any setting waits for
+/// one.
+fn pending(mark: Current, needs_restart: &[&'static str]) -> Current {
+    if needs_restart.is_empty() {
+        return mark;
+    }
+    Current {
+        outcome: Outcome::PendingRestart,
+        needs_restart: needs_restart.iter().map(|key| (*key).to_owned()).collect(),
+        ..mark
     }
 }
 
@@ -669,10 +654,22 @@ pub fn held_table(revision: &Revision) -> Result<toml::Table, RevisionError> {
 pub struct Loaded {
     /// The configuration, the revision beside the file's bootstrap core.
     pub config: Config,
-    /// The revision it is.
+    /// The revision it is, and whether the load recorded it.
+    pub file: FileRevision,
+}
+
+/// The revision a file load gives the gateway to run, and the mark the load
+/// read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FileRevision {
+    /// The revision.
     pub revision: RevisionId,
     /// Whether the load recorded it as a new revision by the file.
     pub recorded: bool,
+    /// The revision the store marked running when the load read it, from
+    /// which a reload that applies a recorded revision moves the mark.
+    pub previous: Option<RevisionId>,
 }
 
 /// The `event` of the record of a saved revision.
@@ -681,15 +678,30 @@ pub const SAVED: &str = "config-revision-saved";
 /// The `event` of the record of an applied revision.
 pub const APPLIED: &str = "config-revision-applied";
 
+/// The `event` of the record of a file's revision a reload refused.
+pub const REFUSED: &str = "config-revision-refused";
+
 /// The `event` of the record of a rollback.
 pub const ROLLED_BACK: &str = "config-rolled-back";
+
+/// The revisions a managed gateway starts with, and the revision the file's
+/// load gave it to run, which is marked running once the gateway runs it.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct Booted {
+    /// The revisions.
+    pub revisions: std::sync::Arc<Revisions>,
+    /// The revision the gateway starts on.
+    pub file: FileRevision,
+}
 
 /// Opens the revision store `settings` name and records the file's configuration.
 ///
 /// When the configuration is managed, the file's configuration `tree` is
 /// recorded ([`Revisions::file_loaded`]) and the settings to start with are
-/// returned with the revisions; otherwise `settings` are returned unchanged
-/// with none.
+/// returned with the revisions, whose revision is marked running once the
+/// gateway built what it runs ([`Booted::started`]); otherwise `settings`
+/// are returned unchanged with none.
 ///
 /// # Errors
 ///
@@ -698,17 +710,19 @@ pub const ROLLED_BACK: &str = "config-rolled-back";
 pub fn boot(
     settings: Settings,
     tree: &toml::Table,
-) -> Result<(Settings, Option<std::sync::Arc<Revisions>>), RevisionError> {
+) -> Result<(Settings, Option<Booted>), RevisionError> {
     let Some(store) = &settings.revisions else {
         return Ok((settings, None));
     };
-    let (effective, revisions) = boot_over(crate::revision::open(store)?, tree)?;
-    Ok((effective, Some(revisions)))
+    let (effective, booted) = boot_over(crate::revision::open(store)?, tree)?;
+    Ok((effective, Some(booted)))
 }
 
 /// Records the file's configuration `tree` in `store`, as [`boot`] does with
 /// the store the settings name, and returns the settings to start with and
 /// the revisions.
+///
+/// A running revision past its confirmation deadline is rolled back first.
 ///
 /// # Errors
 ///
@@ -717,12 +731,18 @@ pub fn boot(
 pub fn boot_over(
     store: Box<dyn RevisionStore>,
     tree: &toml::Table,
-) -> Result<(Settings, std::sync::Arc<Revisions>), RevisionError> {
+) -> Result<(Settings, Booted), RevisionError> {
     let revisions = Revisions::new(store, split(tree).0);
     revisions.expire_unapplied(Timestamp::now())?;
     let loaded = revisions.file_loaded(tree)?;
     let effective = loaded.config.resolve().map_err(Refused::from)?;
     let revisions = revisions.with_policy(effective.revision_policy.clone());
-    revisions.ran(loaded.revision);
-    Ok((effective, std::sync::Arc::new(revisions)))
+    revisions.ran(loaded.file.revision);
+    Ok((
+        effective,
+        Booted {
+            revisions: std::sync::Arc::new(revisions),
+            file: loaded.file,
+        },
+    ))
 }

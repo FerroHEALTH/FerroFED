@@ -30,7 +30,7 @@ use crate::federation::Federation;
 use crate::listener::TlsListener;
 use crate::listener::certificates::{Certificates, TlsFiles};
 use crate::revision::routes::Managed;
-use crate::revision::service::Revisions;
+use crate::revision::service::{Booted, Revisions};
 use crate::state::AppState;
 use crate::support::Support;
 use crate::{
@@ -199,7 +199,7 @@ fn report_command(settings: &Settings, tree: &toml::Table, args: &ReportArgs) ->
     reason = "a refused log filter, runtime or trace exporter is reported before any log subscriber exists"
 )]
 fn serve_job(settings: Settings, tree: &toml::Table, config: Option<PathBuf>) -> ExitCode {
-    let (settings, revisions) = match revision::service::boot(settings, tree) {
+    let (settings, booted) = match revision::service::boot(settings, tree) {
         Ok(booted) => booted,
         Err(error) => {
             eprintln!("ferrofed: cannot start: {}", chain(&error));
@@ -274,6 +274,7 @@ fn serve_job(settings: Settings, tree: &toml::Table, config: Option<PathBuf>) ->
     // tonic client, which is built inside the runtime it will run on.
     if let Err(error) = state::admits_callers(&settings, settings.federates()) {
         tracing::error!(error = chain(&error), "cannot start");
+        booted.inspect(|booted| booted.refused("callers", "the configuration admits no caller"));
         return ExitCode::from(EXIT_CONFIG);
     }
     let entered = runtime.enter();
@@ -281,10 +282,17 @@ fn serve_job(settings: Settings, tree: &toml::Table, config: Option<PathBuf>) ->
         Ok(state) => Arc::new(state.with_sources(sources)),
         Err(error) => {
             tracing::error!(error = chain(&error), "cannot start");
+            booted.inspect(|booted| {
+                booted.refused(
+                    "state",
+                    "what the configuration describes could not be built",
+                );
+            });
             return ExitCode::from(EXIT_CONFIG);
         }
     };
     drop(entered);
+    let revisions = booted.map(started);
     let code = match serve_command(&runtime, settings, &state, (config, revisions)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -595,6 +603,19 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
         eprintln!("ferrofed: {address}: {outcome}");
         ExitCode::FAILURE
     }
+}
+
+/// Marks the revision the gateway started on running, logging a store that
+/// refuses it, and returns the revisions.
+fn started(booted: Booted) -> Arc<Revisions> {
+    if let Err(error) = booted.started() {
+        tracing::error!(
+            revision = %booted.file.revision,
+            error = chain(&error),
+            "the file's revision could not be marked running"
+        );
+    }
+    booted.revisions
 }
 
 /// Serves `state` on `runtime` until the process is asked to stop,
