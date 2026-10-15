@@ -402,9 +402,12 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   shell does. Its first cut, each section of the top bar and the
   navigation erased with `.into_any()`, measured 261058: an erased section
   carries its own rendering code, so the shell's shallow sections return
-  their typed views. A wrapper around each table the browser hydrates cost
-  about 260 bytes a table, so a wide table scrolls inside `<main>` instead,
-  and only a table the server renders as HTML gets its own box. The brand
+  their typed views. Every table scrolls sideways in its own box and
+  `<main>` never does, so a reflow check of the document can fail for
+  anything else (WCAG 2.2 SC 1.4.10). A box written around each table the
+  browser hydrates cost 1472 bytes for the seven of the operator views; one
+  section function that boxes an erased table (`views::scrolled`) brought
+  the bundle to 254426 bytes, 578 below the tree without the boxes. The brand
   mark is a background the stylesheet draws, since an inline SVG brings the
   SVG rendering (§13). A tinted cell for a state word cost about 1 KB.
 - **The bundle is served compressed.** The server compresses a response

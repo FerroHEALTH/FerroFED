@@ -4,8 +4,9 @@
 //! Reflow: every page, signed out and signed in, fits a window 320 CSS
 //! pixels wide without scrolling the document sideways (WCAG 2.2 SC 1.4.10,
 //! <https://www.w3.org/TR/WCAG22/#reflow>). A table wider than that scrolls
-//! inside the page's own `<main>`, which SC 1.4.10 allows for content that
-//! needs two dimensions.
+//! in its own box, which SC 1.4.10 allows for content that needs two
+//! dimensions; nothing else scrolls, so any other overflow widens the
+//! document this journey measures.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -53,16 +54,14 @@ async fn narrow(browser: &Browser) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Fails when the page at `path` is wider than the window: the `html`
-/// element's box, and the document's content as the browser lays it out
-/// (the Chrome `DevTools` Protocol, `Page.getLayoutMetrics`), each against
-/// the width of the window.
+/// Fails when the page at `path` is wider than the window: the document's
+/// content as the browser lays it out (the Chrome `DevTools` Protocol,
+/// `Page.getLayoutMetrics`) against the width of the window.
 #[expect(
     clippy::disallowed_types,
     reason = "the test seam: the DevTools Protocol answers its layout metrics as JSON, read here alone"
 )]
 async fn fits(browser: &Browser, path: &str) -> Result<(), Box<dyn Error>> {
-    let html = browser.driver().find(By::Tag("html")).await?.rect().await?;
     let metrics = browser
         .driver()
         .cdp()
@@ -77,11 +76,6 @@ async fn fits(browser: &Browser, path: &str) -> Result<(), Box<dyn Error>> {
     };
     let window = width("cssLayoutViewport", "clientWidth")?;
     let content = width("cssContentSize", "width")?;
-    assert!(
-        html.width <= f64::from(WIDTH),
-        "{path}: the html element is {} wide in a {WIDTH} px window",
-        html.width
-    );
     assert!(
         content <= window,
         "{path}: the document is {content} px wide in a {window} px window"
@@ -114,8 +108,15 @@ async fn every_page_fits_a_window_320_pixels_wide() -> Result<(), Box<dyn Error>
         browser.text("h1", "Not found").await?;
         fits(browser, "/no/such/page").await?;
         // The page answers 404, which the browser logs as an error: that
-        // answer is the page under test, so the entry is drained here.
-        let _not_found = browser.console_clean("the page for an unknown path").await;
+        // answer is the page under test, so it is the one entry allowed.
+        let errors = browser.console_errors().await?;
+        let [error] = errors.as_slice() else {
+            panic!("the page for an unknown path logged {errors:?}, not its one 404");
+        };
+        assert!(
+            error.contains("/no/such/page") && error.contains("404"),
+            "the page for an unknown path logged {error}, not its 404"
+        );
         Ok(())
     })
     .await

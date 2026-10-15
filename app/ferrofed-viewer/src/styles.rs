@@ -41,11 +41,10 @@ pub const NAV_LIST: &str = "flex flex-row flex-wrap gap-tight md:flex-col";
 pub const NAV_ENTRY: &str = "state-change block rounded-md px-default py-tight text-small \
                              font-medium text-fg no-underline hover:bg-inset";
 
-/// The page itself, which scrolls sideways inside itself when a table is
-/// wider than the screen, so the document never does; it takes the keyboard
-/// focus for that, with its ring drawn inside its edge.
-pub const MAIN: &str =
-    "min-w-0 flex-1 overflow-x-auto px-loose py-loose focus-visible:-outline-offset-2";
+/// The page itself. It never scrolls sideways: a table wider than the screen
+/// scrolls in its own [`TABLE_SCROLL`] box, so anything else that overflows
+/// widens the document, where a reflow check sees it.
+pub const MAIN: &str = "min-w-0 flex-1 px-loose py-loose";
 
 /// The column the page reads in.
 pub const COLUMN: &str = "mx-auto max-w-6xl";
@@ -54,7 +53,8 @@ pub const COLUMN: &str = "mx-auto max-w-6xl";
 pub const BUTTON_QUIET: &str = "state-change border border-control bg-raised text-fg \
                                 hover:bg-inset";
 
-/// The box a table scrolls sideways in, so the page never does.
+/// The box a table scrolls sideways in, so the page never does; it takes the
+/// keyboard focus, so a keyboard can scroll it.
 pub const TABLE_SCROLL: &str = "table-scroll";
 
 /// A table cell holding a number, aligned on the right.

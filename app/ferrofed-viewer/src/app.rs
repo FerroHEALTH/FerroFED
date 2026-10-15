@@ -64,7 +64,7 @@ pub fn App() -> impl IntoView {
             <div class=styles::PAGE>
                 {shell::topbar(signed_in)}
                 <div class=styles::BODY>
-                    {sidebar} <main class=styles::MAIN tabindex="0">
+                    {sidebar} <main class=styles::MAIN>
                         <div class=styles::COLUMN>
                             {unreadable}
                             // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills
