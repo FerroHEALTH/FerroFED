@@ -98,7 +98,7 @@ impl Support {
         match self {
             Self::Ended(end) => Some(format!(
                 "FerroFED v{version} is past its support period, which ended on {end}: \
-                 it receives no security fixes, so move to the latest release"
+                 it receives no security fixes, so move to the latest patch release of a supported line"
             )),
             Self::NoPeriod | Self::Until(_) => None,
         }
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(
             Some(
                 "FerroFED v0.0.9 is past its support period, which ended on 2031-10-05: \
-                 it receives no security fixes, so move to the latest release"
+                 it receives no security fixes, so move to the latest patch release of a supported line"
                     .to_owned()
             ),
             ended.notice("0.0.9")

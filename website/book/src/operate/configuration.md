@@ -147,7 +147,8 @@ The release build compiles the date in, and the gateway never reads it from
 the network. A build from source and a pre-release have no support period,
 and the line says so. Once the date has passed, the line reads
 `ended on YYYY-MM-DD`, and an `UNSUPPORTED` notice under it says the release
-receives no security fixes, in red on a terminal with colour. `config check`
+receives no security fixes and to move to the latest patch release of a
+supported line, in red on a terminal with colour. `config check`
 prints the same notice as a `warning:` line, `serve` logs it at `WARN`, and
 `OPTIONS {base}/` names the date as `supported_until`, or `null` for a build
 with none (Regulation (EU) 2024/2847 Art 13(19)).
