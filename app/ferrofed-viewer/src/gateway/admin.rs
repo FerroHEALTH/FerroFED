@@ -17,6 +17,7 @@ use http::{Method, StatusCode};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::meta::FederationMeta;
 use openehr_its::rest::client::{ClientError, ErrorBody, Request, path_segment};
+use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::config::settings::ReplicaSettings;
 use crate::gateway::{AccessToken, Gateway, GatewayError};
@@ -42,10 +43,8 @@ pub struct Distribution {
     /// The status the replica answered with: `200` when every member took
     /// the version, `207` when some did, and `424` or `504` when none did.
     pub status: StatusCode,
-    /// The qualified name of the version sent.
-    pub name: String,
-    /// The version sent.
-    pub version: String,
+    /// The version sent, as the registry holds it.
+    pub definition: StoredQuery,
     /// What the registry did with the version, `held` for a repair.
     pub registry: Option<String>,
     /// Each member's outcome.
@@ -53,11 +52,11 @@ pub struct Distribution {
 }
 
 /// The body of a distribution's answer: the registry's `StoredQuery` and
-/// its `meta`, of which the console reads the name, the version and `meta`.
+/// its `meta`.
 #[derive(serde::Deserialize)]
 struct Distributed {
-    name: String,
-    version: String,
+    #[serde(flatten)]
+    definition: StoredQuery,
     meta: DistributedMeta,
 }
 
@@ -159,8 +158,7 @@ fn distribution(status: StatusCode, body: ErrorBody) -> Result<Distribution, Gat
     match serde_json::from_slice::<Distributed>(body.raw()) {
         Ok(read) => Ok(Distribution {
             status,
-            name: read.name,
-            version: read.version,
+            definition: read.definition,
             registry: read.meta.registry,
             federation: read.meta.federation,
         }),

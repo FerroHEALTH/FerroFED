@@ -30,7 +30,8 @@ use leptos_router::hooks::use_query_map;
 
 use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::views::model::{
-    FederationView, IntegrityView, MembersView, Outcome, PAGE_SIZE, Refusal, StoredView, ViewError,
+    ClearedRow, FederationView, IntegrityView, MembersView, Outcome, PAGE_SIZE, Refusal,
+    StoredView, ViewError,
 };
 
 /// The path of the members view.
@@ -259,6 +260,7 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
         }
         .into_any()
     };
+    let cleared = cleared_section(view.cleared);
     let routes_pager = pager(
         INTEGRITY,
         view.routes_offset,
@@ -291,6 +293,7 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
             <tbody>{counts}</tbody>
         </table>
         {recent}
+        {cleared}
         {clear}
         <table>
             <caption>"The creating_system_id routing table"</caption>
@@ -305,6 +308,41 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
             <tbody>{routes}</tbody>
         </table>
         {routes_pager}
+    }
+    .into_any()
+}
+
+/// The collisions the operator cleared recently, newest first.
+fn cleared_section(cleared: Vec<ClearedRow>) -> AnyView {
+    if cleared.is_empty() {
+        return view! { <p>"No collision cleared since the gateway started."</p> }.into_any();
+    }
+    let rows = cleared
+        .into_iter()
+        .map(|cleared| {
+            view! {
+                <tr>
+                    <td>{cleared.at}</td>
+                    <th scope="row">
+                        {cleared.ehr_id.unwrap_or_else(|| String::from("not a bare UUID"))}
+                    </th>
+                    <td>{cleared.claimants.join(", ")}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+    view! {
+        <table>
+            <caption>"Collisions cleared recently, newest first"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"Cleared at"</th>
+                    <th scope="col">"ehr_id"</th>
+                    <th scope="col">"Members that claimed it"</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
     }
     .into_any()
 }

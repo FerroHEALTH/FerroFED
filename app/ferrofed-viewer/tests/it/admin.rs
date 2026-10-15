@@ -17,7 +17,7 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{OPERATOR_TOKEN, console, get_as, send, signed_in};
+use crate::support::{Captured, OPERATOR_TOKEN, console, get_as, send, signed_in};
 
 /// A synthetic `ehr_id` two members claim.
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
@@ -387,6 +387,140 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
         assert!(html.contains(escaped), "{escaped}: {html}");
     }
     for raw in ["<script", "<img"] {
+        assert!(!html.contains(raw), "{raw}: {html}");
+    }
+    Ok(())
+}
+
+// A refused or unreachable action is logged as the action it is, naming the
+// replica, the status and the code, and never the ehr_id or the stored query
+// the operator named.
+#[tokio::test]
+async fn a_refused_action_is_logged_as_that_action_with_no_identifier() -> Result<(), Box<dyn Error>>
+{
+    let captured = Captured::default();
+    let _logging = captured.logging();
+    let refusing = Server::start().await;
+    answers(
+        &refusing,
+        &clear_path(),
+        403,
+        String::from(r#"{"code":"scope-insufficient"}"#),
+    )
+    .await;
+    answers(
+        &refusing,
+        DISTRIBUTE,
+        409,
+        String::from(r#"{"code":"conflict"}"#),
+    )
+    .await;
+    let replicas = [
+        ("gateway-0", refusing.uri()),
+        ("gateway-1", String::from("http://127.0.0.1:9/")),
+    ];
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    acted(&service, &session, "/api/clear-ehr-id", clear_at("*")).await?;
+    acted(
+        &service,
+        &session,
+        "/api/repair-drift",
+        repair_every_member(),
+    )
+    .await?;
+
+    let logged = captured.text();
+    for line in [
+        r#"a replica refused an operator's admin action status=403 Forbidden code="scope-insufficient" replica="gateway-0" action="clear""#,
+        r#"a replica refused an operator's admin action status=409 Conflict code="conflict" replica="gateway-0" action="drift repair""#,
+        r#"a replica's admin listener could not be reached for an operator's admin action error=the gateway call failed replica="gateway-1" action="clear""#,
+    ] {
+        assert!(logged.contains(line), "{line}: {logged}");
+    }
+    for as_a_view in ["refused a view", "for a view", "answered a view"] {
+        assert!(!logged.contains(as_a_view), "{as_a_view}: {logged}");
+    }
+    for named in [EHR_ID, "org.example::compositions", OPERATOR_TOKEN] {
+        assert!(!logged.contains(named), "{named}: {logged}");
+    }
+    Ok(())
+}
+
+/// The confirmed drift repair of the synthetic stored query at every
+/// member.
+fn repair_every_member() -> String {
+    form(&[
+        ("name", "org.example::compositions"),
+        ("version", "1.0.0"),
+        ("endpoints", "*"),
+        ("confirm", "yes"),
+    ])
+}
+
+// A refusal's code reaches the page through `inner_html` in either refusal
+// line, the 401's and every other's, so a hostile code arrives as text.
+#[tokio::test]
+async fn a_hostile_refusal_code_of_an_action_renders_escaped() -> Result<(), Box<dyn Error>> {
+    for status in [401, 409] {
+        let listener = Server::start().await;
+        answers(
+            &listener,
+            DISTRIBUTE,
+            status,
+            String::from(r#"{"code":"\"><script>alert(1)</script><img src=x onerror=alert(2)>"}"#),
+        )
+        .await;
+        let replicas = [("gateway-0", listener.uri())];
+        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+        let html = acted(
+            &service,
+            &session,
+            "/api/repair-drift",
+            repair_every_member(),
+        )
+        .await?;
+        for escaped in [
+            "&lt;script&gt;alert(1)&lt;/script&gt;",
+            "&lt;img src=x onerror=alert(2)&gt;",
+        ] {
+            assert!(html.contains(escaped), "{status}: {escaped}: {html}");
+        }
+        for raw in ["<script", "<img"] {
+            assert!(!html.contains(raw), "{status}: {raw}: {html}");
+        }
+    }
+    Ok(())
+}
+
+// A drift repair's report carries the stored query's name, the registry's
+// word and each member's error text, each a hostile value that arrives as
+// text, the member's id in a table header included.
+#[tokio::test]
+async fn hostile_values_in_a_drift_repair_answer_render_escaped() -> Result<(), Box<dyn Error>> {
+    let listener = Server::start().await;
+    let body = r#"{"name":"<script>alert(1)</script>","type":"AQL","version":"1.0.0",
+        "saved":"2026-10-05T08:00:00Z","q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c",
+        "meta":{"federation":{"complete":false,"endpoints":[
+          {"id":"node-a-pub","status":"node-error","error":"<img src=x onerror=alert(2)>","latency_ms":5}]},
+        "registry":"<b onmouseover=alert(3)>held</b>"}}"#;
+    answers(&listener, DISTRIBUTE, 207, String::from(body)).await;
+    let replicas = [("gateway-0", listener.uri())];
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let html = acted(
+        &service,
+        &session,
+        "/api/repair-drift",
+        repair_every_member(),
+    )
+    .await?;
+    for escaped in [
+        "&lt;script&gt;alert(1)&lt;/script&gt;",
+        "&lt;img src=x onerror=alert(2)&gt;",
+        "&lt;b onmouseover=alert(3)&gt;held&lt;/b&gt;",
+    ] {
+        assert!(html.contains(escaped), "{escaped}: {html}");
+    }
+    for raw in ["<script", "<img", "<b "] {
         assert!(!html.contains(raw), "{raw}: {html}");
     }
     Ok(())

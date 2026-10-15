@@ -6,6 +6,8 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::io::Write;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::body::Body;
 use ferrofed_viewer::config::Config;
@@ -96,4 +98,42 @@ pub(crate) fn get_as(path: &str, session: &SessionId) -> Result<Request<Body>, B
             format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
         )
         .body(Body::empty())?)
+}
+
+/// Every line the console logs while it is captured.
+#[derive(Clone, Default)]
+pub(crate) struct Captured(Arc<Mutex<Vec<u8>>>);
+
+impl Captured {
+    /// Captures every event of this thread, at every level, until the
+    /// guard drops.
+    pub(crate) fn logging(&self) -> tracing::subscriber::DefaultGuard {
+        let writer = self.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_ansi(false)
+            .with_writer(move || writer.clone())
+            .finish();
+        tracing::subscriber::set_default(subscriber)
+    }
+
+    /// What was logged.
+    pub(crate) fn text(&self) -> String {
+        let bytes = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+}
+
+impl Write for Captured {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

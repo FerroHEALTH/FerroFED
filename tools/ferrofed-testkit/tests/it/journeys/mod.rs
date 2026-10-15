@@ -18,6 +18,7 @@
 //! journey in this module. No specification governs the journeys: our own
 //! design.
 
+mod admin;
 mod browser;
 mod configure;
 mod provider;

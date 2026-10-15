@@ -7,8 +7,6 @@
 //! console reaches no URL and no log (N33).
 
 use std::error::Error;
-use std::io::Write;
-use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::body::Body;
 use ferrofed_viewer::query::model::RenderedAnswer;
@@ -17,7 +15,7 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::support::{OPERATOR_TOKEN, console, get_as, send, signed_in};
+use crate::support::{Captured, OPERATOR_TOKEN, console, get_as, send, signed_in};
 
 /// The vendored specification page that carries the §9.4 example.
 const RESULT_SET: &str = concat!(
@@ -425,45 +423,13 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
     Ok(())
 }
 
-/// Every line the console logs while it is captured.
-#[derive(Clone, Default)]
-struct Captured(Arc<Mutex<Vec<u8>>>);
-
-impl Captured {
-    /// What was logged.
-    fn text(&self) -> String {
-        let bytes = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        String::from_utf8_lossy(&bytes).into_owned()
-    }
-}
-
-impl Write for Captured {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
 // The identifier an operator enters travels in the console's request body
 // and the gateway's, and reaches no URL, no log line and no answer.
 #[tokio::test]
 async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
 -> Result<(), Box<dyn Error>> {
     let captured = Captured::default();
-    let writer = captured.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .with_ansi(false)
-        .with_writer(move || writer.clone())
-        .finish();
-    let _logging = tracing::subscriber::set_default(subscriber);
+    let _logging = captured.logging();
 
     let gateway = gateway(200, complete_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
