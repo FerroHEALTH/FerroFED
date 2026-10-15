@@ -76,12 +76,18 @@ chromedriver whose major version matches your Chrome, listening on port 9515,
 and run behind their own gate, as the `journeys (browser)` job runs them:
 
 ```
+scripts/release/viewer-tools.sh "$HOME/.cache/ferrofed-viewer-tools"
+export PATH="$HOME/.cache/ferrofed-viewer-tools/bin:$PATH"
 scripts/release/viewer-site.sh --release
 chromedriver --port=9515 &
 FERROFED_JOURNEYS=1 cargo nextest run --locked -p ferrofed-testkit \
   -E 'test(/^journeys::/)'
 ```
 
+`viewer-tools.sh` installs the Tailwind CSS CLI and wasm-opt the bundle is
+built with, each checked against its pinned SHA-256 (Linux x86-64 and macOS
+arm64), and `viewer-site.sh` refuses to build until both are on `PATH`, so
+cargo-leptos never downloads either itself.
 `FERROFED_WEBDRIVER` names another WebDriver endpoint, and `FERROFED_CHROME`
 a Chrome binary chromedriver would not find itself. A journey lives in the
 testkit's `tests/it/journeys/`, where the guard above keeps it.

@@ -53,8 +53,10 @@ pub fn App() -> impl IntoView {
     // NOTE: the Leptos book, `ssr/22_life_cycle`: a value the server decides reaches
     // the hydrating page serialized, so both halves draw the same navigation.
     let administered = *SharedValue::new_str(administered);
-    let signed_in = *SharedValue::new_str(signed_in);
+    let session = *SharedValue::new_str(session_state);
+    let signed_in = session == SessionState::SignedIn;
     let sidebar = signed_in.then(|| shell::sidebar(administered));
+    let unreadable = (session == SessionState::Unreadable).then(unreadable);
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
@@ -64,13 +66,11 @@ pub fn App() -> impl IntoView {
                 <div class=styles::BODY>
                     {sidebar} <main class=styles::MAIN tabindex="0">
                         <div class=styles::COLUMN>
+                            {unreadable}
                             // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills
                             // renders `Async`, whole in one sweep, so no content waits on a script.
                             <Routes fallback=NotFound>
-                                <Route
-                                    path=path!("/")
-                                    view=move || view! { <Landing signed_in /> }
-                                />
+                                <Route path=path!("/") view=move || view! { <Landing session /> } />
                                 <Route
                                     path=path!("/members")
                                     view=views::MembersPage
@@ -126,14 +126,31 @@ fn Footer() -> impl IntoView {
     }
 }
 
+/// The notice a page carries when the console cannot read its session store,
+/// in place of the sign-in a visitor would be offered.
+fn unreadable() -> impl IntoView {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
+        response.set_status(http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    view! {
+        <p role="alert">
+            "The console cannot read its session store, so it cannot tell whether you are "
+            "signed in: 500. Ask the console's operator to restart it."
+        </p>
+    }
+}
+
 /// The landing page: what the console is, and the way to sign in, or for a
 /// signed-in operator what the navigation leads to.
 #[component]
 fn Landing(
-    /// Whether the request carries a live signed-in session.
-    signed_in: bool,
+    /// What the server knows of the request's session.
+    session: SessionState,
 ) -> impl IntoView {
-    let next = if signed_in {
+    let next = if session == SessionState::Unreadable {
+        ().into_any()
+    } else if session == SessionState::SignedIn {
         view! {
             <p>
                 "The navigation leads to the members and their health, the integrity incidents "
@@ -202,17 +219,107 @@ fn administered() -> bool {
     }
 }
 
-/// Whether the request carries a live signed-in session, which the
-/// navigation and the sign-out are drawn for.
-fn signed_in() -> bool {
+/// What the server knows of the request's session, which decides the shell
+/// the page is drawn in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    /// A live signed-in session: the navigation and the sign-out.
+    SignedIn,
+    /// No live session: the sign-in, and neither the navigation nor the
+    /// sign-out.
+    SignedOut,
+    /// The session store cannot be read, so the console cannot tell: the
+    /// page says so, and offers neither the sign-in nor the views.
+    Unreadable,
+}
+
+impl SessionState {
+    /// The state a session lookup's answer `looked_up` stands for: only a
+    /// missing or ended session is signed out, and any other fault is
+    /// unreadable.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn of<T>(looked_up: &Result<T, views::model::ViewError>) -> Self {
+        match looked_up {
+            Ok(_) => Self::SignedIn,
+            Err(views::model::ViewError::SignedOut) => Self::SignedOut,
+            Err(_) => Self::Unreadable,
+        }
+    }
+}
+
+impl std::fmt::Display for SessionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::SignedIn => "in",
+            Self::SignedOut => "out",
+            Self::Unreadable => "unreadable",
+        })
+    }
+}
+
+impl std::str::FromStr for SessionState {
+    type Err = UnknownSessionState;
+
+    fn from_str(said: &str) -> Result<Self, Self::Err> {
+        match said {
+            "in" => Ok(Self::SignedIn),
+            "out" => Ok(Self::SignedOut),
+            "unreadable" => Ok(Self::Unreadable),
+            _ => Err(UnknownSessionState),
+        }
+    }
+}
+
+/// A serialized [`SessionState`] the browser cannot read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the page names a session state the console does not know")]
+pub struct UnknownSessionState;
+
+/// The state of the request's session, which the shell is drawn for.
+fn session_state() -> SessionState {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        views::load::server::signed_in().is_ok()
+        SessionState::of(&views::load::server::signed_in())
     }
     // NOTE: the browser reads the value the server decided; this runs only if
     // that value is missing, and then draws the page a visitor sees.
     #[cfg(target_arch = "wasm32")]
     {
-        false
+        SessionState::SignedOut
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::SessionState;
+    use crate::views::model::ViewError;
+
+    #[test]
+    fn only_a_missing_session_reads_as_signed_out_and_a_broken_store_as_unreadable() {
+        assert_eq!(
+            SessionState::SignedIn,
+            SessionState::of(&Ok::<(), ViewError>(()))
+        );
+        assert_eq!(
+            SessionState::SignedOut,
+            SessionState::of(&Err::<(), _>(ViewError::SignedOut))
+        );
+        assert_eq!(
+            SessionState::Unreadable,
+            SessionState::of(&Err::<(), _>(ViewError::Unavailable))
+        );
+    }
+
+    #[test]
+    fn the_state_the_page_carries_reads_back_as_itself() {
+        for state in [
+            SessionState::SignedIn,
+            SessionState::SignedOut,
+            SessionState::Unreadable,
+        ] {
+            assert_eq!(Ok(state), state.to_string().parse());
+        }
+        assert!("signed in".parse::<SessionState>().is_err());
     }
 }

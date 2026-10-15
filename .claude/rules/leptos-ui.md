@@ -396,7 +396,7 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   confirmation and the approval are rendered on the server, so the browser
   adds the eight form fields it reads and the zeroing type that holds a
   typed secret.
-- **The console's styling (#1036, #1037) measured 254579 bytes**
+- **The console's styling (#1036, #1037) measured 255004 bytes**
   brotli-compressed (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129,
   Tailwind CSS 4.3.3). The stylesheet costs the WebAssembly nothing; the
   shell does. Its first cut, each section of the top bar and the

@@ -54,10 +54,13 @@ for dir in "$cargo_home" "$sysroot" "$root"; do
 done
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="--remap-path-prefix=$cargo_home=/cargo --remap-path-prefix=$sysroot=/rustc-sysroot --remap-path-prefix=$root=/ferrofed"
 
-# cargo-leptos builds the stylesheet with the Tailwind standalone CLI, which it
-# downloads at the version this variable names; without it the version would
-# be the default of the cargo-leptos release (no specification governs this:
-# our own design).
+# cargo-leptos runs the Tailwind CSS standalone CLI and wasm-opt it finds on
+# PATH and downloads either one unchecked when it finds none, so the build
+# refuses to start until PATH holds both at their pinned, verified releases
+# (scripts/release/viewer-tools.sh installs them). The variable tells
+# cargo-leptos which Tailwind major version the configuration is written for
+# (no specification governs this: our own design).
+bash "$root/scripts/release/viewer-tools.sh" --check
 export LEPTOS_TAILWIND_VERSION="v4.3.3"
 
 # cargo-leptos reads its configuration from the crate's own manifest

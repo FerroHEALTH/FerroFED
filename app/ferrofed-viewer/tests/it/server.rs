@@ -67,8 +67,9 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
         assert!(body.contains("Sign out"), "{path}: {body}");
         assert!(body.contains(r#"href="/members""#), "{path}: {body}");
     }
-    let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    let (response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(!body.contains(r#"href="/login""#), "{body}");
+    assert_eq!("no-store", header(&response, "cache-control"));
 
     state.sessions().end(&session)?;
     let (_response, body) = send(&service, get_as("/", &session)?).await?;

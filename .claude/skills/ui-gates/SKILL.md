@@ -50,7 +50,11 @@ cargo nextest run --locked -p ferrofed-engine -E 'test(/architecture/)'
 
 # 4. The release site bundle, when the change touches the build surface
 #    (Cargo.toml, the [package.metadata.leptos] table, style/, the profile,
-#    the script); otherwise report it skipped with the reason.
+#    the script); otherwise report it skipped with the reason. The site script
+#    refuses to run until the pinned, checksum-verified Tailwind CSS CLI and
+#    wasm-opt are on PATH, which viewer-tools.sh installs.
+bash scripts/release/viewer-tools.sh "$HOME/.cache/ferrofed-viewer-tools"
+export PATH="$HOME/.cache/ferrofed-viewer-tools/bin:$PATH"
 bash scripts/release/viewer-site.sh --release
 
 # 5. The bundle budget, over the bundle stage 4 wrote: the raw and compressed

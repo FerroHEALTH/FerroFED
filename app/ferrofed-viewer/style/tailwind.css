@@ -408,7 +408,7 @@
 }
 
 /* A wide table scrolls inside its own box, so the page never scrolls
-   sideways at 390 px; the box takes the keyboard focus to scroll. */
+   sideways at 320 px; the box takes the keyboard focus to scroll. */
 @utility table-scroll {
   max-width: 100%;
   overflow-x: auto;
