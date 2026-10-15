@@ -41,7 +41,7 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::configure::act::Configure;
-use crate::configure::model::{ConfigForm, ConfigView};
+use crate::configure::model::{ConfigForm, ConfigView, Typed};
 
 /// The path of the configuration page.
 pub const CONFIGURATION: &str = "/configuration";
@@ -179,7 +179,7 @@ fn submitted(data: &leptos::web_sys::FormData) -> ConfigForm {
         resource: field("form[resource]"),
         settings: field("form[settings]"),
         secret_key: field("form[secret_key]"),
-        secret_value: field("form[secret_value]"),
+        secret_value: Typed::new(field("form[secret_value]")),
         secret_file: field("form[secret_file]"),
         secret_clear: field("form[secret_clear]"),
     }

@@ -99,11 +99,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         "{body}"
     );
     assert!(body.contains("Add a binding section"), "{body}");
-    assert!(
-        body.contains(r#"<option value="binding:consent">"#)
-            || body.contains(r#"<option value="consent">"#),
-        "{body}"
-    );
+    assert!(body.contains(r#"<option value="consent">"#), "{body}");
     assert!(
         body.contains(r#"<option value="credentials:node-c-pub">"#),
         "{body}"

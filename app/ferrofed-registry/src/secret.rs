@@ -128,6 +128,25 @@ impl WriteOnly {
     pub fn expose(&self) -> &str {
         self.0.expose()
     }
+
+    /// Whether the value is the empty string, as a form field left empty
+    /// gives it.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl From<SecretString> for WriteOnly {
+    fn from(value: SecretString) -> Self {
+        Self(Secret::from(value))
+    }
+}
+
+impl Default for WriteOnly {
+    fn default() -> Self {
+        Self::new(String::new())
+    }
 }
 
 impl fmt::Debug for WriteOnly {

@@ -461,6 +461,38 @@ async fn a_refused_save_removes_the_secret_file_it_wrote() -> TestResult {
     Ok(())
 }
 
+// The gateway refuses a token endpoint with a query, so the revision is put
+// in the store directly: the answer redacts whatever a revision holds.
+#[tokio::test]
+async fn a_credential_in_a_url_setting_never_reaches_the_resources_answer() -> TestResult {
+    let gateway = Gateway::start("")?;
+    let base = gateway
+        .revisions
+        .store()
+        .revision(id(1)?)?
+        .ok_or("the file's revision is held")?;
+    let toml = format!(
+        "{}\n[credentials.\"{ENDPOINT}\".oauth2]\ntoken_endpoint = \"https://u:{VALUE}@as.example.org/token?api_key={VALUE}\"\nclient_id = \"ferrofed\"\n",
+        base.toml
+    );
+    let draft = ferrofed_server::revision::Draft {
+        origin: ferrofed_registry::revision::Origin::Operator,
+        restores: None,
+        author: operator_author(),
+        at: Timestamp::now(),
+        reason: String::from("synthetic"),
+        toml,
+        console: vec![Resource::Credentials(ENDPOINT.to_owned())],
+    };
+    let saved = gateway.revisions.store().save(Some(id(1)?), draft)?;
+    assert!(matches!(saved, ferrofed_server::revision::Saved::Stored(_)));
+    let (status, text) = gateway.get("/admin/config/resources").await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(!text.contains(VALUE), "{text}");
+    assert!(text.contains("as.example.org/token?***"), "{text}");
+    Ok(())
+}
+
 #[tokio::test]
 async fn settings_that_name_a_secret_are_refused() -> TestResult {
     let gateway = Gateway::start("")?;

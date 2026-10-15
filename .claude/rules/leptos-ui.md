@@ -384,11 +384,12 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   so most of the bytes are that function's typed outcome and the page's
   hydration; about 590 move focus to the outcome after a refused form
   (WCAG 2.2 2.4.3), and about 330 hide the navigation link with no replica.
-- **The credentials and bindings (#578) measured 246227 bytes**
+- **The credentials and bindings (#578) measured 246373 bytes**
   brotli-compressed (2026-10-15, cargo-leptos 0.3.11, wasm-bindgen 0.2.129),
-  34 more than the configuration page: their tables and forms, the
+  180 more than the configuration page: their tables and forms, the
   confirmation and the approval are rendered on the server, so the browser
-  adds only the eight form fields it reads.
+  adds the eight form fields it reads and the zeroing type that holds a
+  typed secret.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

@@ -16,7 +16,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SecretSlot};
-use ferrofed_registry::secret::WriteOnly;
+use ferrofed_registry::secret::{SecretUrl, WriteOnly};
 
 use crate::revision::tree::SECRETS;
 
@@ -190,10 +190,13 @@ fn slots_in(table: &toml::Table, prefix: &str, found: &mut Vec<SecretSlot>) {
     }
 }
 
-/// `value` without its secrets and their references.
+/// `value` without its secrets and their references, and with every URL
+/// that may carry a credential, in its userinfo or its query, redacted as
+/// [`SecretUrl`] renders it.
 #[must_use]
 pub fn without_secrets(value: &toml::Value) -> toml::Value {
     match value {
+        toml::Value::String(text) => toml::Value::String(shown(text)),
         toml::Value::Table(table) => toml::Value::Table(
             table
                 .iter()
@@ -205,6 +208,41 @@ pub fn without_secrets(value: &toml::Value) -> toml::Value {
             toml::Value::Array(items.iter().map(without_secrets).collect())
         }
         other => other.clone(),
+    }
+}
+
+/// `text` as a page may show it: a URL redacted as [`SecretUrl`] renders it,
+/// any other text as it is.
+fn shown(text: &str) -> String {
+    if text.contains("://") {
+        SecretUrl::new(text).redacted()
+    } else {
+        text.to_owned()
+    }
+}
+
+/// Puts back in `settings` each URL `held` holds at the same key whose
+/// redaction, as [`without_secrets`] shows it, `settings` carries unchanged.
+fn restore(settings: &mut toml::Value, held: &toml::Value) {
+    match (settings, held) {
+        (toml::Value::String(text), toml::Value::String(kept)) => {
+            if *text != *kept && *text == shown(kept) {
+                text.clone_from(kept);
+            }
+        }
+        (toml::Value::Table(table), toml::Value::Table(kept)) => {
+            for (key, value) in table.iter_mut() {
+                if let Some(kept) = kept.get(key) {
+                    restore(value, kept);
+                }
+            }
+        }
+        (toml::Value::Array(items), toml::Value::Array(kept)) => {
+            for (value, kept) in items.iter_mut().zip(kept) {
+                restore(value, kept);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -321,6 +359,14 @@ pub fn compose(
         return Err(SectionFault::SecretInSettings { key });
     }
     let mut composed = settings;
+    if let Some(held) = held {
+        let mut value = toml::Value::Table(composed);
+        restore(&mut value, held);
+        composed = match value {
+            toml::Value::Table(table) => table,
+            _ => toml::Table::new(),
+        };
+    }
     let named = |key: &str| changes.iter().any(|change| change.key == key);
     for slot in held.map(slots).unwrap_or_default() {
         if !named(&slot.key) {
@@ -543,6 +589,37 @@ mod tests {
             table("user = \"v\"\n[oauth2]\nscope = \"s\"\nclient_secret_file = \"/run/c\"\n"),
             composed
         );
+    }
+
+    #[test]
+    fn a_url_credential_is_redacted_and_an_edit_that_keeps_it_keeps_the_url() {
+        let held = toml::Value::Table(table(
+            "url = \"https://u:synthetic-pw-1@pix.example.org/fhir?key=synthetic-q-2\"\nname = \"plain text\"\n",
+        ));
+        let shown = without_secrets(&held);
+        let text = shown.to_string();
+        assert!(!text.contains("synthetic-pw-1"), "{text}");
+        assert!(!text.contains("synthetic-q-2"), "{text}");
+        assert_eq!(
+            Some("plain text"),
+            shown.get("name").and_then(toml::Value::as_str)
+        );
+        let kept = compose(
+            shown.as_table().cloned().unwrap(),
+            Some(&held),
+            &[],
+            |_, _| Err(SectionFault::Settings),
+        )
+        .unwrap();
+        assert_eq!(*held.as_table().unwrap(), kept);
+        let changed = compose(
+            table("url = \"https://pix.example.org/other\""),
+            Some(&held),
+            &[],
+            |_, _| Err(SectionFault::Settings),
+        )
+        .unwrap();
+        assert_eq!(table("url = \"https://pix.example.org/other\""), changed);
     }
 
     #[test]

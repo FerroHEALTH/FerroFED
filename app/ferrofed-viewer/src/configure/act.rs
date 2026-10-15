@@ -48,8 +48,9 @@ pub async fn configure(
 ) -> Result<ActionAnswer, ViewError> {
     let (state, token) = crate::views::load::server::signed_in()?;
     crate::query::run::server::from_the_hydrated_page()?;
+    let mut form = form;
     let planned = server::replica(&state.settings().admin)
-        .and_then(|replica| server::plan(&form).map(|plan| (replica, plan)));
+        .and_then(|replica| server::plan(&mut form).map(|plan| (replica, plan)));
     let (replica, plan) = match planned {
         Ok(planned) => planned,
         Err(refused) => return Ok(crate::admin::answer::refused(&refused)),
@@ -264,7 +265,7 @@ pub mod server {
     /// Returns [`Refusal::Invalid`] for a form not confirmed, an action the
     /// page does not offer, or a field that does not read, naming the field
     /// and never what it holds.
-    pub fn plan(form: &ConfigForm) -> Result<Plan, Refusal> {
+    pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refusal> {
         if given(&form.confirm).is_none() {
             return Err(invalid("Tick the confirmation to run this change."));
         }
@@ -355,8 +356,9 @@ pub mod server {
     /// The save of a credential or a binding section the form gives: its
     /// settings, and at most one secret set by its value or a file, or
     /// cleared.
-    fn section_request(form: &ConfigForm) -> Result<SectionRequest, Refusal> {
-        let value = (!form.secret_value.is_empty()).then(|| WriteOnly::new(&form.secret_value));
+    fn section_request(form: &mut ConfigForm) -> Result<SectionRequest, Refusal> {
+        let typed = std::mem::take(&mut form.secret_value);
+        let value = (!typed.is_empty()).then(|| WriteOnly::from(typed.into_secret()));
         let file = given(&form.secret_file).map(str::to_owned);
         let clear = given(&form.secret_clear).is_some();
         let named = [value.is_some(), file.is_some(), clear]
@@ -602,7 +604,6 @@ pub mod server {
                 let saved = gateway
                     .save_section(replica, token, &resource, &request)
                     .await;
-                drop(request);
                 let saved = previewed(gateway, replica, token, saved).await;
                 render::saved(&acted(name, "save", saved, |line| line))
             }
