@@ -20,6 +20,7 @@
 mod binary;
 mod config;
 mod header;
+mod independence;
 mod list;
 mod native;
 mod receipt;
