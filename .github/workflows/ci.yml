@@ -890,10 +890,23 @@ jobs:
       - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest
+      # The local Maven repository the reference implementation is built
+      # against (#1024), so the differential run needs no download from Maven
+      # Central once a run has saved it. The key is the provenance record,
+      # which holds the vendored commit and the manifest's sha256. This is a
+      # test lane: no release is built from this cache.
+      - name: Restore the reference implementation's Maven repository
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/reference-maven
+          key: reference-maven-${{ hashFiles('docs/specs/federation-ref/PROVENANCE.md') }}
+          restore-keys: reference-maven-
       # The testkit's whole suite, and every other crate's container tests
       # alone, since the test job already runs the rest offline. Every
       # feature is on, so the PostgreSQL store's tests run too.
-      - run: >-
+      - env:
+          FERROFED_E2E_MAVEN_REPOSITORY: ${{ runner.temp }}/reference-maven
+        run: >-
           cargo nextest run --profile ci --locked --workspace --all-features
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass

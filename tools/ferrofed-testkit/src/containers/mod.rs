@@ -35,7 +35,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use testcontainers::core::{Healthcheck, IntoContainerPort};
-use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ContainerRequest, GenericImage, ImageExt};
 
 use database::database_server;
@@ -46,6 +45,7 @@ pub mod ehrbase;
 pub mod images;
 pub mod keycloak;
 pub mod restricted;
+pub(crate) mod retry;
 pub mod santempi;
 
 /// The environment variable that admits the container-backed tests.
@@ -337,15 +337,16 @@ async fn ferroehr_on(
     name: &str,
     system_id: &'static str,
 ) -> Result<Node, HarnessError> {
-    let server = ferroehr_request(database, name, system_id)
-        .with_env_var("FERROEHR__AUTH__ENABLED", "false")
-        .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: FERROEHR.repository,
-            source,
-        })?;
+    let server = retry::start(|| {
+        ferroehr_request(database, name, system_id)
+            .with_env_var("FERROEHR__AUTH__ENABLED", "false")
+            .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
+    })
+    .await
+    .map_err(|source| HarnessError::Container {
+        image: FERROEHR.repository,
+        source,
+    })?;
     ready(FERROEHR_PRODUCT, system_id, server, Arc::clone(database)).await
 }
 
