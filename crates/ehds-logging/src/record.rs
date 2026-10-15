@@ -17,6 +17,7 @@
 //! `Debug` shows neither, nor any id the classification read: a record
 //! leaves through an [`AccessSink`](crate::sink::AccessSink) alone.
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::net::IpAddr;
 
@@ -352,16 +353,18 @@ impl fmt::Debug for EhrAt {
     }
 }
 
-/// Whose data an access concerned: the patient the request named, and each
-/// `ehr_id` the access reached.
-///
-/// An access to many patients' data, such as a population query, names none.
+/// Whose data an access concerned: the patient the request named, each
+/// `ehr_id` the access reached, and, for an access over many patients' data
+/// that names none of them, the scope it read.
 #[derive(Clone, Default)]
 pub struct DataSubject {
     /// The patient, when the request named one.
     pub patient: Option<PatientIdentifier>,
     /// The `ehr_id`s the access reached.
     pub ehrs: Vec<EhrAt>,
+    /// The scope of an access over many patients' data whose record names
+    /// none of them: a population access.
+    pub population: Option<Population>,
 }
 
 impl fmt::Debug for DataSubject {
@@ -369,6 +372,71 @@ impl fmt::Debug for DataSubject {
         f.debug_struct("DataSubject")
             .field("patient", &self.patient.is_some())
             .field("ehrs", &self.ehrs.len())
+            .field("population", &self.population)
+            .finish()
+    }
+}
+
+/// Why the record of an access over many patients' data names none of the
+/// `ehr_id`s whose records it read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PopulationReason {
+    /// The query projects no `ehr_id`, so no delivered row says whose
+    /// record it came from.
+    NotProjected,
+    /// The delivered rows name more `ehr_id`s than a record names.
+    OverLimit,
+    /// No row was delivered, so no row names an `ehr_id`.
+    NotDelivered,
+    /// A delivered `ehr_id` was in no origin's own answer, so the record
+    /// cannot say which origin holds it.
+    Unattributed,
+}
+
+impl PopulationReason {
+    /// The reason as a record writes it: `not-projected`, `over-limit`,
+    /// `not-delivered` or `unattributed`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::NotProjected => "not-projected",
+            Self::OverLimit => "over-limit",
+            Self::NotDelivered => "not-delivered",
+            Self::Unattributed => "unattributed",
+        }
+    }
+}
+
+/// The scope of a population access: what the access read, when the record
+/// names none of the persons whose records it read.
+///
+/// The origins the access asked are the record's origins. A person's
+/// search finds the record through an origin that holds their record, and
+/// it says that a query over that origin ran, never that it read their
+/// record. `Debug` shows the reason and the counts, never an id.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Population {
+    /// Why the record names no `ehr_id`.
+    pub reason: PopulationReason,
+    /// How many `ehr_id`s the delivered rows named, when they were read.
+    pub ehrs: Option<usize>,
+    /// The most `ehr_id`s a record names.
+    pub limit: usize,
+    /// The template ids the query constrains its data to.
+    pub templates: BTreeSet<String>,
+    /// The archetype ids the query constrains its data to.
+    pub archetypes: BTreeSet<String>,
+}
+
+impl fmt::Debug for Population {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Population")
+            .field("reason", &self.reason)
+            .field("ehrs", &self.ehrs)
+            .field("limit", &self.limit)
+            .field("templates", &self.templates.len())
+            .field("archetypes", &self.archetypes.len())
             .finish()
     }
 }

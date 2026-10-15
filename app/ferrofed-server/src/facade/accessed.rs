@@ -20,7 +20,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
+use ehds_logging::record::{
+    Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup, Population, PopulationReason,
+};
 use ferrofed_engine::fanout::reader::RowReader;
 use ferrofed_engine::fanout::{FederatedAnswer, Plan};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -131,7 +133,13 @@ pub(super) fn query(
                     .and_then(|reached| reached.of(record.id().as_str(), &queried)),
             }
         })
+        .collect::<Vec<Asked>>();
+    let contributed: Vec<&str> = origins
+        .iter()
+        .filter(|asked| asked.contributed)
+        .map(|asked| asked.endpoint.as_str())
         .collect();
+    let subject = subject(log, snapshot, answered, &contributed);
     Some(Accessed {
         log: Arc::clone(log),
         action: Action::Query,
@@ -147,7 +155,7 @@ pub(super) fn query(
             serde_json::to_string(answered.request).unwrap_or_else(|_| answered.request.q.clone()),
         )),
         stored_query: answered.stored.map(str::to_owned),
-        subject: subject(snapshot, answered),
+        subject,
         evidence,
         delivered: Some(answered.rows.len()),
         origins,
@@ -192,20 +200,45 @@ pub(super) fn kept(
 
 /// What the rows each endpoint answered with held, read before the merge
 /// combines them, so each origin of a merged answer is classified by its own
-/// rows without a column that would change which rows `DISTINCT` keeps (N13).
+/// rows, and each `ehr_id` a delivered row names is told by the origin that
+/// answered it, without a column that would change which rows `DISTINCT`
+/// keeps (N13).
 #[derive(Debug, Default)]
-pub(super) struct Reached(Mutex<BTreeMap<EndpointId, (Vec<RootObject>, bool)>>);
+pub(super) struct Reached(Mutex<BTreeMap<EndpointId, Held>>);
+
+/// What one endpoint's rows held: the root objects, whether a cell is no
+/// root, and the `ehr_id`s its rows named in a column that projects one, or
+/// `None` when a cell there is no `ehr_id`.
+#[derive(Debug)]
+struct Held {
+    objects: Vec<RootObject>,
+    unrooted: bool,
+    ehr_ids: Option<BTreeSet<String>>,
+}
 
 impl Reached {
     /// The evidence of the rows `endpoint` answered with, from a query
     /// constrained as `queried`, or `None` when it answered none.
     fn of(&self, endpoint: &str, queried: &Queried) -> Option<Evidence> {
         let read = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let (objects, unrooted) = read
+        let held = read
             .iter()
             .find(|(read, _)| read.as_str() == endpoint)
-            .map(|(_, reached)| reached)?;
-        Some(evidence(objects.clone(), *unrooted, queried.clone()))
+            .map(|(_, held)| held)?;
+        Some(evidence(
+            held.objects.clone(),
+            held.unrooted,
+            queried.clone(),
+        ))
+    }
+
+    /// The `ehr_id`s the rows `endpoint` answered with named, or `None`
+    /// when it answered none or a cell there was no `ehr_id`.
+    fn ehr_ids(&self, endpoint: &str) -> Option<BTreeSet<String>> {
+        let read = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        read.iter()
+            .find(|(read, _)| read.as_str() == endpoint)
+            .and_then(|(_, held)| held.ehr_ids.clone())
     }
 }
 
@@ -223,8 +256,14 @@ pub(super) fn reading(
     let reached = Arc::new(Reached::default());
     let read = Arc::clone(&reached);
     let sources: Vec<ColumnSource> = analysis.sources().to_vec();
+    let ehr_columns: Vec<usize> = analysis.ehr_columns().to_vec();
     let reader = RowReader::new(move |endpoint, rows| {
-        let held = cells::node_root_objects(rows, &sources);
+        let (objects, unrooted) = cells::node_root_objects(rows, &sources);
+        let held = Held {
+            objects,
+            unrooted,
+            ehr_ids: cells::node_ehr_ids(rows, &ehr_columns),
+        };
         read.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -239,9 +278,19 @@ pub(super) fn reading(
 /// routed to, when that endpoint was sent it.
 ///
 /// An `ehr_id` at a member the query never left the gateway for was not
-/// reached, so the record does not name it.
-fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject {
+/// reached, so the record does not name it. A query that names no patient
+/// and is scoped to no `ehr_id` is a population access ([`population`]),
+/// whose `contributed` origins delivered its rows.
+fn subject(
+    log: &AccessLog,
+    snapshot: &RegistrySnapshot,
+    answered: &Answered<'_>,
+    contributed: &[&str],
+) -> DataSubject {
     match answered.analysis {
+        Analysis::Unscoped(query) if query.ehr_scope().is_none() => {
+            population(log.max_named_ehrs(), answered, contributed)
+        }
         Analysis::Patient(query) => DataSubject {
             patient: Some(PatientIdentifier {
                 namespace: query.subject().namespace().to_owned(),
@@ -263,6 +312,7 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
                     })
                 })
                 .collect(),
+            population: None,
         },
         Analysis::Unscoped(query) => DataSubject {
             patient: None,
@@ -282,6 +332,72 @@ fn subject(snapshot: &RegistrySnapshot, answered: &Answered<'_>) -> DataSubject 
                 })
                 .into_iter()
                 .collect(),
+            population: None,
         },
+    }
+}
+
+/// Whose data the population access `answered` reached, its `contributed`
+/// origins having delivered its rows: each `ehr_id` a delivered row names in
+/// a column that projects one, at each origin whose own rows named it, when
+/// they are at most `max`; otherwise the query's scope, and why.
+///
+/// The record names an `ehr_id` only from what the client was delivered,
+/// never by adding a column to what a node is asked (§7.1), which would
+/// change the rows `DISTINCT` keeps and what an aggregate counts (N13,
+/// §11.6.3).
+fn population(max: usize, answered: &Answered<'_>, contributed: &[&str]) -> DataSubject {
+    let constrained = answered.analysis.constrained();
+    let scope = |reason: PopulationReason, ehrs: Option<usize>| DataSubject {
+        patient: None,
+        ehrs: Vec::new(),
+        population: Some(Population {
+            reason,
+            ehrs,
+            limit: max,
+            templates: constrained.templates().clone(),
+            archetypes: constrained.archetypes().clone(),
+        }),
+    };
+    let columns = answered.analysis.ehr_columns();
+    if columns.is_empty() {
+        return scope(PopulationReason::NotProjected, None);
+    }
+    if answered.status != StatusCode::OK || answered.rows.is_empty() {
+        return scope(PopulationReason::NotDelivered, None);
+    }
+    let (Some(delivered), Some(reached)) = (
+        cells::ehr_ids(answered.rows, answered.analysis.sources(), columns),
+        answered.reached,
+    ) else {
+        return scope(PopulationReason::Unattributed, None);
+    };
+    let mut ehrs = Vec::new();
+    let mut told = BTreeSet::new();
+    for endpoint in contributed {
+        let held = reached.ehr_ids(endpoint).unwrap_or_default();
+        for ehr_id in held.intersection(&delivered) {
+            told.insert(ehr_id.clone());
+            ehrs.push(EhrAt {
+                endpoint: (*endpoint).to_owned(),
+                ehr_id: ehr_id.clone(),
+                // NOTE: no specification governs this: our own design; the record gate names
+                // the patient, as it does for an ehr_id-scoped query.
+                patient: PatientLookup::Unavailable,
+            });
+        }
+    }
+    // NOTE: Regulation (EU) 2025/327 Art 9(1); an ehr_id no origin's own rows held cannot be
+    // named at its member, so the record states the scope rather than leave it out.
+    if delivered.is_empty() || told != delivered {
+        return scope(PopulationReason::Unattributed, Some(delivered.len()));
+    }
+    if ehrs.len() > max {
+        return scope(PopulationReason::OverLimit, Some(ehrs.len()));
+    }
+    DataSubject {
+        patient: None,
+        ehrs,
+        population: None,
     }
 }

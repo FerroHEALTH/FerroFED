@@ -341,6 +341,7 @@ fn accessed(federation: &Federation, native: &Native) -> Option<Accessed> {
         subject: DataSubject {
             patient: None,
             ehrs: native::ehrs(natives).collect(),
+            population: None,
         },
         evidence: Evidence::reached(Basis::Returned, Vec::new())
             .constructed(Category::PatientSummary),

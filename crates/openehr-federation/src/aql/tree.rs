@@ -7,7 +7,7 @@
 //! (§7.1, §8.1, §11.6).
 
 use openehr_its::rest::generated::query::ResultSetColumn;
-use openehr_query::ast::SelectQuery;
+use openehr_query::ast::{ColumnExpr, SelectQuery};
 use openehr_query::bind::{Parameters, bind};
 use openehr_query::federation::Directive;
 use openehr_query::printer::to_aql;
@@ -196,6 +196,16 @@ fn unscoped(
     }
     let within_one_ehr = ehr_scope.is_some()
         && matches!(findings.ehr.as_slice(), [only] if scope::within_one_ehr(&query.from, only));
+    let ehr_columns = query
+        .select
+        .columns
+        .iter()
+        .enumerate()
+        .filter(|(_, column)| {
+            matches!(&column.column, ColumnExpr::Path(path) if subject::projects_ehr_id(path, &findings.ehr))
+        })
+        .map(|(index, _)| index)
+        .collect();
     if query.select.columns.is_empty() {
         // NOTE: no specification governs a query that selects only ENDPOINT attributes (§9.3):
         // our own design, each node answers one EHR column per row it holds.
@@ -216,6 +226,7 @@ fn unscoped(
         order,
         recombination: None,
         within_one_ehr,
+        ehr_columns,
         constrained: Constrained::default(),
         sorted_by: Vec::new(),
     }))

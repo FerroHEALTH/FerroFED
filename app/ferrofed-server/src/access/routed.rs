@@ -187,6 +187,7 @@ impl Routed {
                     })
                 })
                 .collect(),
+            population: None,
         };
         let origins = endpoint
             .map(|endpoint| {

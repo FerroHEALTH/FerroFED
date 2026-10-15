@@ -725,5 +725,6 @@ pub(crate) fn subject(
             })
             .chain(native::ehrs(&gathered.natives))
             .collect(),
+        population: None,
     }
 }

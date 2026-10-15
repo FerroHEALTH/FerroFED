@@ -197,6 +197,16 @@ pub(super) fn ehr_id_path(path: &IdentifiedPath, ehr: &[String]) -> bool {
         && parts.iter().all(|part| part.predicate.is_none())
 }
 
+/// Whether `path` reads the `ehr_id` of an `EHR` bound in `ehr`: `<ehr>/ehr_id/value`, or the
+/// whole `<ehr>/ehr_id`.
+pub(super) fn projects_ehr_id(path: &IdentifiedPath, ehr: &[String]) -> bool {
+    let parts = path.path.as_ref().map_or(&[][..], |p| p.parts.as_slice());
+    ehr.contains(&path.root)
+        && path.predicate.is_none()
+        && (names_are(parts, &["ehr_id", "value"]) || names_are(parts, &["ehr_id"]))
+        && parts.iter().all(|part| part.predicate.is_none())
+}
+
 fn names_are(parts: &[PathPart], names: &[&str]) -> bool {
     parts.len() == names.len()
         && parts
