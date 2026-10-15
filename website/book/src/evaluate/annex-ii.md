@@ -88,9 +88,11 @@ of the audit trail page.
 ## What is missing
 
 - **1.1:** the [risk file](clinical-safety.md#overall-residual-risk) leaves
-  hazard L-07 of the logging component open, and every hazard of the
-  interoperability component but I-07, I-08 and I-10, so that component is
-  not offered for its Annex II purpose.
+  the repository's part of hazard L-07 of the logging component, keeping
+  each record for its period and limiting who reads it, at S3, P2 with the
+  deployment, and every hazard of the interoperability component but I-07,
+  I-08 and I-10 open, so that component is not offered for its Annex II
+  purpose.
 - **1.3:** the restriction of access (Art 8) and the information on access
   (Art 9) are built and tested, but no assessment holds the features of the
   harmonised components to each right Chapter II gives a natural person.
