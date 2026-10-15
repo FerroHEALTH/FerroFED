@@ -50,8 +50,10 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
 - `terminology` (feature `fhir-r4`): the terminology rules. With `openehr`,
   `transcode` turns an openEHR text item into FHIR codings and narrative: a
   code in a preferred system as recorded, a `TERM_MAPPING` of match `=` as a
-  second coding, every other match in the narrative, and a code in no
-  preferred system under eHN PS Art 10(7). `Expansions` reads the value set
+  second coding, every other match in the narrative, an archetype-local code
+  displayed with its term from the operational template (`local`), and any
+  other code in no preferred system under eHN PS Art 10(7). `ehn` holds the
+  eHN Patient Summary §4 preferred systems, the default set. `Expansions` reads the value set
   expansions of a package, and `bindings::check_required` holds the
   `required` bindings of a profile to them, naming every binding it cannot
   evaluate. `Terminology` is the optional FHIR terminology server

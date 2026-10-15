@@ -10,6 +10,9 @@
 
 mod bindings;
 mod displays;
+mod ehn;
+#[cfg(feature = "openehr")]
+mod local;
 mod server;
 #[cfg(feature = "openehr")]
 mod transcode;

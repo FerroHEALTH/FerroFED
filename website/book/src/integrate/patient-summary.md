@@ -401,14 +401,27 @@ beside it only where the coding means the same thing:
   written into the narrative.
 - The text of every coded item is in the narrative, as Art 10(3) of the
   eHealth Network Guidelines on Patient Summary asks.
-- A code that is in no preferred system follows Art 10(7) of those
+- A code of the archetype-local terminology (`local`, an `at` or `ac`
+  code) is displayed with the text the operational template defines for it
+  in the archetype the item sits in, in the language asked. The coding is
+  kept as recorded, and the term's text opens the narrative. A template that
+  holds the term only in another language leaves the code to Art 10(7);
+  no other language is substituted. A local code the archetype does not
+  define is refused, because the item does not conform to its template.
+- Any other code that is in no preferred system follows Art 10(7) of those
   guidelines: it is "transferred encoded, preferably displayed in English,
   and/or in narrative form". The original coding is kept with its display,
   and its text is in the narrative.
 
-The preferred code systems of each data element are those §4 of the
-guidelines names, such as SNOMED CT GPS, ICD-10, LOINC, ATC and the EDQM
-Standard Terms. The rules take the system URIs that name them as an input.
+The preferred code systems are those §4 of the guidelines names for its
+data elements. The component ships twelve of them as the system URIs the
+MyHealth@EU Master Value Sets Catalogue 9.1.0 includes them by, and the
+rules prefer them by default: SNOMED CT, ICD-10, Orphacode, ATC, the EDQM
+Standard Terms, UCUM, LOINC, ISO 3166, and HL7 Administrative Gender,
+RoleClass, RoleCode and ObservationCategoryCodes. NPU and EMDN are not
+shipped, because no vendored package names their URIs, and neither is IDMP,
+which §4 lists for use when available. A caller may name its own set
+instead.
 
 These rules are built into the component. The summary the face writes
 today carries the codings its FHIRconnect mappings write; applying the rules
