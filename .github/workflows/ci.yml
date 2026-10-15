@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: zizmor@1.30.1
       - name: Audit .github
@@ -129,7 +129,7 @@ jobs:
       # The upstream release binary, pinned by version, rather than the
       # runner's distro package, which moves at every runner-image refresh.
       # Fetched by the same SHA-pinned installer, which verifies the checksum.
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: shellcheck@0.11.0
       - name: Every tracked shell program is clean at severity=style
@@ -746,7 +746,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest
       # Every feature: a library feature no workspace member enables yet (the
@@ -757,7 +757,7 @@ jobs:
         env:
           FERROFED_EMIT_DIR: ${{ runner.temp }}/eehrxf-documents
       - name: Upload the emitted exchange-format documents
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eehrxf-documents
           path: ${{ runner.temp }}/eehrxf-documents/
@@ -766,7 +766,7 @@ jobs:
       # The JUnit report of the offline run, for the conformance report.
       - name: Upload the offline JUnit report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-offline
           path: target/nextest/ci/junit.xml
@@ -807,7 +807,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache-shared-key: binding-tests-${{ matrix.build }}
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest
       - name: Run the server's tests in the build
@@ -841,7 +841,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest
       # The testkit's whole suite, and every other crate's container tests
@@ -854,7 +854,7 @@ jobs:
       # The JUnit report of the gated run, for the conformance report.
       - name: Upload the gated JUnit report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-gated
           path: target/nextest/ci/junit.xml
@@ -864,7 +864,7 @@ jobs:
       # product (section 16.2, #93), for the conformance report's node class.
       - name: Upload the node profile findings
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: node-profile
           path: target/conformance/node-profile/
@@ -876,7 +876,7 @@ jobs:
       # leaves the directory empty, which the test failure already names.
       - name: Upload the differential report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: differential-report
           path: target/differential/
@@ -905,17 +905,17 @@ jobs:
         with:
           persist-credentials: false
       - name: Download the offline JUnit report
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: junit-offline
           path: junit/offline
       - name: Download the gated JUnit report
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: junit-gated
           path: junit/gated
       - name: Download the node profile findings
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: node-profile
           path: node-profile
@@ -932,7 +932,7 @@ jobs:
           exit "$status"
       - name: Upload the report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: conformance-report
           path: target/conformance/
@@ -965,7 +965,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - name: Download the emitted exchange-format documents
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: eehrxf-documents
           path: ${{ runner.temp }}/eehrxf-documents
@@ -986,7 +986,7 @@ jobs:
           exit "$status"
       - name: Upload the validation results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eehrxf-fhir-validation
           path: target/fhir-validation/
@@ -1069,7 +1069,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-deny
       # Reads the same RustSec advisory database as cargo-audit and adds
@@ -1089,7 +1089,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-hack
       # The Cargo book's named tool for verifying the declared rust-version,
@@ -1117,7 +1117,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-hack
       - run: >-
@@ -1153,11 +1153,11 @@ jobs:
           target: wasm32-unknown-unknown
       - run: cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings
       - name: Install cargo-leptos
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-leptos@0.3.11
       - name: Install the wasm-bindgen CLI
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: wasm-bindgen@0.2.129
       - run: bash scripts/release/viewer-site.sh --release
@@ -1197,14 +1197,14 @@ jobs:
         with:
           target: wasm32-unknown-unknown
       - name: Install cargo-leptos
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-leptos@0.3.11
       - name: Install the wasm-bindgen CLI
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: wasm-bindgen@0.2.129
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest
       - name: Install Chrome and chromedriver
