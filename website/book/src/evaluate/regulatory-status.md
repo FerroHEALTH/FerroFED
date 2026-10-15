@@ -138,9 +138,10 @@ and 26 March 2031 for imaging, test results and discharge reports (Art
 | Corrective action, complaint channels, and the registers of complaints and non-conforming systems | Art 30(1)(i) to (o) | 26 March 2027 (see below) |
 | Keeping the technical documentation and the declaration "for 10 years" | Art 30(3) | 26 March 2027 (see below) |
 | Reporting a serious incident "not later than three days" after becoming aware of it | Art 44(7) | 26 March 2027 (see below) |
+| Identifying the economic operators supplied, on request, "for 10 years" | Art 35 | 26 March 2027 (see below) |
 | No claim that ascribes "functions and properties to the EHR system which it does not have" | Art 28 | 26 March 2027 (see below) |
 
-Art 105 names no later date for Articles 28, 30, 36 to 41 and 44, so the
+Art 105 names no later date for Articles 28, 30, 35 to 41 and 44, so the
 general date of 26 March 2027 applies to them. Each of them attaches to an
 EHR system placed on the market or put into service, and Art 26(1), which
 makes compliance the condition for either, applies to FerroFED from
@@ -310,6 +311,10 @@ and Art 104 of the EHDS Regulation amends three of its articles.
   EHDS Art 35 has no such qualifier. The manufacturer's answer is a
   register, kept for 10 years, of every economic operator it supplies under
   a contract: commercial licensees, resellers, integrators and hosts. The
+  procedure is in place
+  ([The register of economic operators](post-market.md#the-register-of-economic-operators)):
+  the register's format is public and checked in CI, and its rows are kept
+  by the manufacturer outside the public repository and are not published. The
   public release is not gated, and it is supplied for non-production use
   and for non-commercial production use under the licence. If counsel holds
   that an anonymous production user is an economic operator, for example
@@ -414,7 +419,7 @@ them:
   ones included
   ([The document list](../integrate/patient-summary.md#the-document-list)).
 
-Six of the manufacturer's obligations have a first answer:
+Seven of the manufacturer's obligations have a first answer:
 
 - The running system names its manufacturer, with the postal address and the
   single point of contact (Art 30(1)(g)): `GET {base}/`, `OPTIONS {base}/`,
@@ -423,6 +428,10 @@ Six of the manufacturer's obligations have a first answer:
 - The complaint channels, the two registers, corrective action and the
   serious-incident report (Art 30(1)(i) to (o), Art 44(7)) are written
   procedures ([Complaints and incidents](post-market.md)).
+- The economic operators supplied under a contract are identified from a
+  register kept for 10 years outside the public repository (Art 35, CRA Art
+  23), with its procedure written and its public format checked in CI
+  ([The register of economic operators](post-market.md#the-register-of-economic-operators)).
 - Every public text is reviewed against Art 28 at each release, and the
   completeness default, the budgets and the consent pre-filter are assessed
   against Annex II, point 2.5 ([Claims review](claims-review.md)).

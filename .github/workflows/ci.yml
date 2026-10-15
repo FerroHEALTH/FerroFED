@@ -493,6 +493,26 @@ jobs:
           bash scripts/checks/annex-ii.sh --self-test
           bash scripts/checks/annex-ii.sh
 
+  # The register of economic operators guard (Regulation (EU) 2025/327 Art
+  # 35, Regulation (EU) 2024/2847 Art 23): the public copy has the documented
+  # column row and no entry, because the rows are kept outside the public
+  # repository. Its self-test proves each refusal of the format and of the
+  # retention check the private register is held to.
+  economic-operators:
+    name: economic-operators
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/economic-operators.sh --self-test
+          bash scripts/checks/economic-operators.sh
+
   # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
   # an e2e module, the one place the e2e job's filter selects, and that job
   # still runs that filter across the workspace; a journey that checks the
@@ -1409,6 +1429,7 @@ jobs:
       - obligations
       - technical-documentation
       - annex-ii
+      - economic-operators
       - e2e-placement
       - aql-splice
       - site-links

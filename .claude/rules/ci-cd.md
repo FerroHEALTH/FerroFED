@@ -33,7 +33,9 @@ Fourteen workflows:
   link guard over the assembled site, the conformance-matrix guard with the
   conformance report script's self-test, the obligations guard, the
   technical documentation guard (`scripts/checks/technical-documentation.sh`,
-  which `release.yml`'s `plan` job runs too), the e2e-placement guard, the tracker-helper self-tests, the crate-version
+  which `release.yml`'s `plan` job runs too), the register of economic
+  operators guard (`scripts/checks/economic-operators.sh`), the
+  e2e-placement guard, the tracker-helper self-tests, the crate-version
   guard's self-test, the changelog fragment check
   `scripts/release/changelog.sh --check`), plus the manifest
   guard, the one tier-1 job with a toolchain, which reads every Cargo
