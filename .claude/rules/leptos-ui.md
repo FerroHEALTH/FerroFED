@@ -54,6 +54,12 @@ the orchestrator, never made in a slice.
   (`crate::session`); the browser carries one opaque `HttpOnly` cookie. An
   access token, a client secret, or a PKCE verifier never reaches a signal,
   a prop, a serialized resource, the page HTML, or a log.
+  A secret the operator types for the gateway (a credential set through the
+  configuration page, #578) starts in the browser: it lives only in a
+  password field that is never pre-filled and in the pending server-function
+  input, is held in a type that zeroes on drop and redacts its `Debug`, moves
+  into the request without a copy, and is never rendered back, logged, or
+  returned.
 - **No patient identifier in a URL, the browser history, or a log**
   (`.claude/rules/identifier-hygiene.md`). A patient is named through a
   request body or a form the BFF reads, never a path segment or a query
