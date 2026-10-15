@@ -100,7 +100,7 @@ pin commit reg-eu-2024-2847-en.xhtml "OJ L, 2024/2847, 20.11.2024 (CELEX 32024R2
 pin commit corr-eu-2024-2847-r01-en.xhtml "OJ L, 2024/90780, 5.12.2024 (CELEX 32024R2847R(01)), English" \
   https://publications.europa.eu/resource/cellar/a392ab1c-b2a9-11ef-acb1-01aa75ed71a1.0001.03/DOC_1 \
   c1bbbc0e2734c7f39b6a1b8d8ea4b44b070d349732a7b89ca349b164e49027ff "$eu_act" \
-  'The corrigendum to the title of Regulation (EU) 2024/2847. Cellar records seven corrigenda; this one, the second and the fourth have an English version, and the others correct other language versions only (read 2026-10-06).'
+  'The corrigendum to the title of Regulation (EU) 2024/2847. Cellar records eight corrigenda; this one, the second and the fourth have an English version, and the others correct other language versions only (read 2026-10-15).'
 pin commit corr-eu-2024-2847-r02-en.xhtml "OJ L, 2025/90555, 2.7.2025 (CELEX 32024R2847R(02)), English" \
   https://publications.europa.eu/resource/cellar/696c22ec-56e1-11f0-a9d0-01aa75ed71a1.0006.03/DOC_1 \
   8fb5f7dad72e6d9211b28ee3daf88eb85df0c64c33382c8568b586e6d31c1bd9 "$eu_act" \
@@ -113,6 +113,14 @@ pin commit impl-reg-eu-2025-2392-en.xhtml "OJ L, 2025/2392, 1.12.2025 (CELEX 320
   https://publications.europa.eu/resource/cellar/2d4a6388-ce5f-11f0-8da2-01aa75ed71a1.0006.03/DOC_1 \
   8dd48c7990527289ea46b5bd2f3c4dbbac95a89d99de2f3aa5388c3bc9398e0e "$eu_act" \
   'Commission Implementing Regulation (EU) 2025/2392 of 28 November 2025 on the technical description of the categories of important and critical products with digital elements, adopted under Article 7(4) of Regulation (EU) 2024/2847. Pinned at the Cellar manifestation the CELEX resource resolves to.'
+pin commit del-reg-eu-2025-1535-en.xhtml "OJ L, 2025/1535, 29.10.2025 (CELEX 32025R1535), English" \
+  https://publications.europa.eu/resource/cellar/5dd0aa6c-b468-11f0-b37f-01aa75ed71a1.0006.03/DOC_1 \
+  28c824d7b817a83a57e9a92a25681af43c0a23be52bb0ac70086571f475b1efc "$eu_act" \
+  'Commission Delegated Regulation (EU) 2025/1535 of 29 July 2025, adopted under Article 2(5), second subparagraph, of Regulation (EU) 2024/2847: it excludes from that Regulation the products with digital elements within the scope of Regulation (EU) No 168/2013 on two- or three-wheel vehicles and quadricycles, L1e vehicles designed to pedal excepted (its Article 1). Pinned at the Cellar manifestation the CELEX resource resolves to.'
+pin commit del-reg-eu-2026-881-en.xhtml "OJ L, 2026/881, 20.4.2026 (CELEX 32026R0881), English" \
+  https://publications.europa.eu/resource/cellar/e117d914-3c51-11f1-814f-01aa75ed71a1.0006.03/DOC_1 \
+  87e373481fb6df59f6634f6e9613a58b26d1617ac603c9f1df8258525911c0a9 "$eu_act" \
+  'Commission Delegated Regulation (EU) 2026/881 of 11 December 2025, adopted under Article 14(9) of Regulation (EU) 2024/2847: the terms on which the CSIRT designated as coordinator that first receives a notification may delay passing it on under Article 16(2) of that Regulation (its Articles 3 to 5). Pinned at the Cellar manifestation the CELEX resource resolves to.'
 pin commit reg-eu-2019-1020-en.xhtml "OJ L 169, 25.6.2019, p. 1 (CELEX 32019R1020), English" \
   https://publications.europa.eu/resource/cellar/903d90ee-9712-11e9-9369-01aa75ed71a1.0006.03/DOC_1 \
   68073c53fd07d6f2b8a503327fab6b9851684a09893510bcfbc2cbff44b46920 "$eu_act" \
@@ -126,7 +134,10 @@ pinned_corpus eu-cra "EU Cyber Resilience Act and market surveillance acts" \
   "Regulation (EU) 2024/2847, the Cyber Resilience Act, with its three
 corrigenda that have an English version and Commission Implementing
 Regulation (EU) 2025/2392 on the technical description of its important and
-critical product categories; Regulation (EU) 2019/1020 on market
+critical product categories; Commission Delegated Regulations (EU)
+2025/1535, which excludes products within the scope of Regulation (EU) No
+168/2013, and (EU) 2026/881, on when a CSIRT may delay passing on a
+notification; Regulation (EU) 2019/1020 on market
 surveillance and compliance of products, whose Article 3 definitions of
 placing on the market, making available on the market, manufacturer and
 economic operator Regulation (EU) 2025/327 takes in its Article 2(1)(d);
@@ -137,7 +148,7 @@ December 2011 on the reuse of Commission documents, vendored at
 \`docs/specs/eu-ehds/dec-eu-2011-833-en.xhtml\`. Each is the text as
 published, with no later amendment applied; the notes name the amendments
 the research reads." "" \
-  '#654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release)'
+  $'#654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release) and\n  #844 (the delegated acts under the Cyber Resilience Act)'
 
 pin commit myhealth.eu.fhir.ncp-api-9.1.0.tgz "9.1.0 (ci-build, draft, 2026-05-05)" \
   https://fhir.ehdsi.eu/ncp-api/package.tgz \

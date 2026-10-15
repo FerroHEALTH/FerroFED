@@ -2934,7 +2934,12 @@ activity" test. The decision:
   documented as development code that is not supplied for use.
 - CRA Art 14 reporting is put into effect now: Art 71(2) applies it from 11
   September 2026, and Art 69(3) to products placed on the market before 11
-  December 2027, the v0.0.x releases among them.
+  December 2027, the v0.0.x releases among them. Delegated Regulation (EU)
+  2026/881, adopted under Art 14(9), sets when the CSIRT that first receives
+  a notification may delay passing it on (Art 16(2)); it binds that CSIRT
+  and adds no duty to the manufacturer. Delegated Regulation (EU) 2025/1535
+  excludes products within Regulation (EU) No 168/2013 and does not reach
+  FerroFED (#844).
 - From 11 December 2027 (Art 71(2)) each release meets Annex I, carries a
   support period of at least five years with its end date (Art 13(8),
   (19)), and has one technical documentation set, one EU declaration of

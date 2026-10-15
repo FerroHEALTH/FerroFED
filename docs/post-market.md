@@ -148,8 +148,12 @@ ENISA (Art 14(1), (3), (7)).
    releases concerned, the nature of the exploit and the vulnerability, or
    an initial assessment of the incident; the corrective or mitigating
    measures taken and those users can take; and how sensitive the
-   information is. Ask for the dissemination to be delayed only on the
-   grounds Art 16(2) allows.
+   information is. Say when a security update or user guidance is
+   expected: within 72 hours, that is the ground for a delay that
+   Delegated Regulation (EU) 2026/881 ties to the manufacturer (its Art
+   3(a)). Ask for the dissemination to be delayed only on the grounds Art
+   16(2) and that Regulation (its Art 3 to 5) allow; the CSIRT decides, and
+   the Regulation puts no duty on the manufacturer.
 4. **Tell the users** (Art 14(8)). Publish the advisory once users can act
    on it: the releases affected, the mitigation a deployment can apply now,
    and the fixed release once there is one. For an actively exploited

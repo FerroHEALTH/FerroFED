@@ -209,6 +209,19 @@ that is the Netherlands, so the notifications go to the Dutch CSIRT
 designated as coordinator. That CSIRT passes each notification on to the
 CSIRTs of the other Member States the manufacturer names (Art 16(2)).
 
+Commission Delegated Regulation (EU) 2026/881, adopted under Art 14(9), sets
+when that CSIRT may delay passing a notification on. It binds the CSIRT and
+puts no duty on the manufacturer. One of its grounds starts with the
+manufacturer: the CSIRT may hold a notification back where the manufacturer
+has told it that "an effective risk mitigation measure, such as a security
+update or user guidance, is expected to be made available within 72 hours",
+and passes it on if none is available in that time (its Art 3(a)). The
+others are the CSIRT's own: information that would let an attacker build an
+exploit, a coordinated vulnerability disclosure in which it is the trusted
+intermediary, or doubt about another CSIRT or the single reporting platform
+(its Art 3(b) to (d), Art 4 and Art 5). So the notification says when the
+fix or the mitigation is expected, and the CSIRT decides on any delay.
+
 ### The three reports
 
 The clock starts when the manufacturer becomes aware of the vulnerability or
