@@ -26,6 +26,8 @@ mod query;
 #[cfg(test)]
 mod query_safety;
 #[cfg(test)]
+mod refresh;
+#[cfg(test)]
 mod secrets;
 #[cfg(test)]
 mod server;

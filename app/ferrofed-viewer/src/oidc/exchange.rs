@@ -43,7 +43,7 @@ pub const ALGORITHMS: [Algorithm; 9] = [
 /// How much clock skew the ID Token's times are allowed.
 const LEEWAY: Duration = Duration::from_secs(60);
 
-/// Why a sign-in could not be completed.
+/// Why a sign-in, or a refresh of its access token, could not be completed.
 #[derive(Debug, thiserror::Error)]
 pub enum ExchangeError {
     /// The provider could not be reached, or its answer could not be read.
@@ -112,10 +112,16 @@ impl ExchangeError {
 /// The token endpoint's answer (RFC 6749 §5.1, OpenID Connect Core 1.0
 /// §3.1.3.3).
 #[derive(Deserialize)]
-struct TokenResponse {
-    access_token: String,
+pub(super) struct TokenResponse {
+    /// The access token.
+    pub(super) access_token: String,
+    /// Its type, which must be `Bearer`.
     token_type: String,
-    expires_in: Option<u64>,
+    /// Its lifetime in seconds.
+    pub(super) expires_in: Option<u64>,
+    /// The refresh token, when the provider issued one.
+    pub(super) refresh_token: Option<String>,
+    /// The ID Token.
     id_token: Option<String>,
 }
 
@@ -157,6 +163,39 @@ pub async fn exchange(
     pending: &PendingSignIn,
     code: &str,
 ) -> Result<SignedIn, ExchangeError> {
+    let grant = [
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", oidc.redirect_uri.as_str()),
+        ("code_verifier", pending.verifier().expose_secret()),
+    ];
+    let tokens = token_request(client, oidc, &grant).await?;
+    let id_token = tokens.id_token.ok_or(ExchangeError::NoIdToken)?;
+    verify_id_token(client, oidc, pending, &id_token).await?;
+    Ok(SignedIn {
+        access_token: SecretString::from(tokens.access_token),
+        expires_in: tokens.expires_in.map(Duration::from_secs),
+        refresh_token: tokens.refresh_token.map(SecretString::from),
+        id_token: Some(SecretString::from(id_token)),
+    })
+}
+
+/// Sends the parameters of the grant `grant` to the provider's token
+/// endpoint and reads its bearer token answer (RFC 6749 §3.2, §5.1).
+///
+/// The console authenticates as a confidential client with HTTP Basic, and
+/// a public client names itself in the form (RFC 6749 §2.3.1, §3.2.1).
+///
+/// # Errors
+/// Returns [`ExchangeError::Transport`] when the provider cannot be reached,
+/// [`ExchangeError::Refused`] for any answer but `200`,
+/// [`ExchangeError::Body`] for one that is not a token response, and
+/// [`ExchangeError::TokenType`] for a token that is not a bearer token.
+pub(super) async fn token_request(
+    client: &reqwest::Client,
+    oidc: &OidcSettings,
+    grant: &[(&str, &str)],
+) -> Result<TokenResponse, ExchangeError> {
     let mut request = client
         .post(oidc.token_endpoint.clone())
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
@@ -177,7 +216,7 @@ pub async fn exchange(
         );
     }
     let answer = request
-        .body(token_request(oidc, pending, code))
+        .body(grant_form(oidc, grant))
         .send()
         .await
         .map_err(|source| ExchangeError::Transport { source })?;
@@ -194,23 +233,14 @@ pub async fn exchange(
     if !tokens.token_type.eq_ignore_ascii_case("bearer") {
         return Err(ExchangeError::TokenType);
     }
-    let id_token = tokens.id_token.ok_or(ExchangeError::NoIdToken)?;
-    verify_id_token(client, oidc, pending, &id_token).await?;
-    Ok(SignedIn {
-        access_token: SecretString::from(tokens.access_token),
-        expires_in: tokens.expires_in.map(Duration::from_secs),
-        id_token: Some(SecretString::from(id_token)),
-    })
+    Ok(tokens)
 }
 
-/// The form of the token request (RFC 6749 §4.1.3, RFC 7636 §4.5), naming
-/// the client in it only for a public client, which sends no secret.
-fn token_request(oidc: &OidcSettings, pending: &PendingSignIn, code: &str) -> String {
+/// The form of a token request carrying `grant`, naming the client in it
+/// only for a public client, which sends no secret.
+fn grant_form(oidc: &OidcSettings, grant: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
-    form.append_pair("grant_type", "authorization_code")
-        .append_pair("code", code)
-        .append_pair("redirect_uri", oidc.redirect_uri.as_str())
-        .append_pair("code_verifier", pending.verifier().expose_secret());
+    form.extend_pairs(grant);
     if oidc.client_secret.is_none() {
         form.append_pair("client_id", &oidc.client_id);
     }

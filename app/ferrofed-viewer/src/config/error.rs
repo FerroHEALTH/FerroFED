@@ -269,6 +269,15 @@ pub enum Error {
         /// What is wrong with it, as a predicate.
         reason: &'static str,
     },
+    /// A scope list names a scope the console asks for through a setting of
+    /// its own.
+    #[error("{key} {reason}")]
+    Scope {
+        /// The key.
+        key: String,
+        /// What is wrong with it, as a predicate.
+        reason: &'static str,
+    },
     /// A number is out of its range.
     #[error("{key} must be at least 1")]
     Zero {

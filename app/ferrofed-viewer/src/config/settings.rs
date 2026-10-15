@@ -89,6 +89,8 @@ pub struct OidcSettings {
     pub redirect_uri: Url,
     /// The scopes requested, `openid` among them.
     pub scopes: Vec<String>,
+    /// Whether the sign-in asks for `offline_access`.
+    pub offline_access: bool,
     /// The provider's end-session endpoint, when it publishes one.
     pub end_session_endpoint: Option<Url>,
     /// Where the provider sends the operator after a sign-out.
@@ -112,6 +114,7 @@ impl Config {
     /// [`Error::Url`] and [`Error::UrlShape`] for a URL that does not parse
     /// or is not one its key admits, [`Error::Zero`] for a zero timeout or
     /// session bound, [`Error::Missing`] for an absent `[oidc]` key,
+    /// [`Error::Scope`] for `offline_access` listed in `oidc.scopes`,
     /// [`Error::InsecureCookie`] for `secure_cookie = false` on a console
     /// whose `redirect_uri` is not `http` on loopback, and the secret errors
     /// of a `_file`.
@@ -228,6 +231,18 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
             key: String::from("oidc.scopes (openid)"),
         });
     }
+    // NOTE: OpenID Connect Core 1.0 §11: `offline_access` goes with `prompt`
+    // `consent`, which the console sends only for `oidc.offline_access`.
+    if oidc
+        .scopes
+        .iter()
+        .any(|scope| scope == crate::oidc::OFFLINE_ACCESS)
+    {
+        return Err(Error::Scope {
+            key: String::from("oidc.scopes"),
+            reason: "must not list offline_access; set oidc.offline_access = true",
+        });
+    }
     let end_session_endpoint = oidc
         .end_session_endpoint
         .as_deref()
@@ -259,6 +274,7 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
         client_secret,
         redirect_uri,
         scopes: oidc.scopes.clone(),
+        offline_access: oidc.offline_access,
         end_session_endpoint,
         post_logout_redirect_uri,
     })

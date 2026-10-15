@@ -37,6 +37,25 @@ service worker or a URL.
   operator's access token on the server, and the browser goes back to `/`. A
   session the browser already held ends when the new one begins. An ID Token that fails a check is
   `401`, and a provider that refuses or cannot be reached is `502`.
+- **The access token is refreshed on the console's server.** When the
+  provider answers the sign-in with a refresh token, the session keeps it
+  on the server beside the access token; it never reaches a cookie, a page,
+  the browser or a log line (RFC 6749 §10.4). A request that arrives
+  within 60 seconds of the access token's `expires_in` first sends the
+  refresh token to the token endpoint (RFC 6749 §6), with the client secret
+  as HTTP Basic for a confidential client, and the session goes on with the
+  new access token. A rotated refresh token replaces the old one, which is
+  never sent again, and one refresh of a session runs at a time, so
+  requests that arrive together spend a rotated token once. A refresh that
+  fails for any reason, an `invalid_grant` refusal, any other refusal, or a
+  provider that cannot be reached, ends the session: a view sends the
+  browser to `/login` and drops the session cookie. A session with no
+  refresh token ends when its access token expires, and one whose provider
+  sends no `expires_in` is never refreshed. The ID Token of the sign-in
+  stays the sign-out's hint; one a refresh answers is not read. Set
+  `offline_access = true` in `[oidc]` to ask for the `offline_access` scope
+  and the `prompt=consent` it requires (OpenID Connect Core 1.0 §11), for a
+  provider that issues a refresh token only then.
 - **Operator sign-out:** the navigation bar's "Sign out" button posts to
   `POST /logout`, which ends the signed-in session on the console's server
   and removes the session cookie. Where `[oidc]` names the provider's
@@ -65,7 +84,9 @@ service worker or a URL.
   many and stops costing anything once it ends. A signed-in session is
   created only once a sign-in completes, lives for `idle_timeout_s` without
   a request and `absolute_timeout_s` at most, and is bounded by
-  `max_sessions`, which refuses a new session rather than evicting one. No
+  `max_sessions`, which refuses a new session rather than evicting one. The
+  idle and the absolute timeouts end a session whatever its tokens say,
+  however long a refresh token would last. No
   sign-in traffic ever removes a signed-in session. The console does not
   limit sign-ins per client: behind a load balancer it cannot tell clients
   apart without trusting a forwarded address, so put a rate limit for
@@ -222,6 +243,7 @@ client_id = "ferrofed-viewer"
 client_secret_file = "/run/secrets/viewer-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
+offline_access = false
 end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
 post_logout_redirect_uri = "https://console.example.org/"
 
@@ -246,7 +268,11 @@ key has nothing to govern there and is not checked.
 
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
 answers `503`. The provider's URLs must be `https` unless their host is
-loopback, and `scopes` must include `openid`. `end_session_endpoint` is
+loopback, and `scopes` must include `openid`. `offline_access`, off by
+default, adds the `offline_access` scope and `prompt=consent` to the
+sign-in; `scopes` must not list `offline_access` itself, and the refusal
+names `oidc.scopes`. The console refreshes the access token with whatever
+refresh token the provider issues, with or without it. `end_session_endpoint` is
 optional, and `post_logout_redirect_uri` needs it. `ferrofed-viewer config check`
 reads and checks a configuration without binding a socket.
 

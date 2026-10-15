@@ -11,7 +11,8 @@
 //! provider sends the operator back: it takes the pending sign-in once and
 //! holds the returned `state` to it (RFC 6749 §10.12), then [`exchange`]
 //! trades the code for the operator's tokens and checks the ID Token, and
-//! only then is a signed-in session begun, and [`logout`] ends it. The
+//! only then is a signed-in session begun; [`refresh`] renews its access
+//! token before it expires, and [`logout`] ends it. The
 //! browser never sees a token. No specification of the federation governs
 //! sign-in to the console: our own design on RFC 6749 and RFC 7636.
 
@@ -29,6 +30,7 @@ use crate::session::{PendingSignIn, SIGN_IN_COOKIE, SessionError, SessionId, cha
 
 pub mod exchange;
 pub mod logout;
+pub mod refresh;
 
 /// The path of the sign-in route.
 pub const LOGIN: &str = crate::app::SIGN_IN;
@@ -44,18 +46,34 @@ pub const CALLBACK: &str = "/auth/callback";
 /// already carries, which RFC 6749 §3.1 requires a client to keep.
 #[must_use]
 pub fn authorization_request(oidc: &OidcSettings, pending: &PendingSignIn) -> Url {
+    let mut scopes: Vec<&str> = oidc.scopes.iter().map(String::as_str).collect();
+    if oidc.offline_access {
+        scopes.push(OFFLINE_ACCESS);
+    }
     let mut url = oidc.authorization_endpoint.clone();
-    url.query_pairs_mut()
-        .append_pair("response_type", "code")
-        .append_pair("client_id", &oidc.client_id)
-        .append_pair("redirect_uri", oidc.redirect_uri.as_str())
-        .append_pair("scope", &oidc.scopes.join(" "))
-        .append_pair("state", pending.state())
-        .append_pair("nonce", pending.nonce())
-        .append_pair("code_challenge", &challenge(pending.verifier()))
-        .append_pair("code_challenge_method", "S256");
+    {
+        let mut query = url.query_pairs_mut();
+        query
+            .append_pair("response_type", "code")
+            .append_pair("client_id", &oidc.client_id)
+            .append_pair("redirect_uri", oidc.redirect_uri.as_str())
+            .append_pair("scope", &scopes.join(" "))
+            .append_pair("state", pending.state())
+            .append_pair("nonce", pending.nonce())
+            .append_pair("code_challenge", &challenge(pending.verifier()))
+            .append_pair("code_challenge_method", "S256");
+        // NOTE: OpenID Connect Core 1.0 §11: a request for `offline_access`
+        // MUST carry the `prompt` value `consent`.
+        if oidc.offline_access {
+            query.append_pair("prompt", "consent");
+        }
+    }
     url
 }
+
+/// The scope value that asks for a refresh token that outlives the
+/// operator's session at the provider (OpenID Connect Core 1.0 §11).
+pub const OFFLINE_ACCESS: &str = "offline_access";
 
 /// Serves `GET /login`: begins a session and redirects to the provider.
 pub async fn login(Extension(state): Extension<ViewerState>) -> Response {
