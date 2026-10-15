@@ -38,6 +38,9 @@ leptos_router.workspace = true
 # their error.
 serde.workspace = true
 thiserror.workspace = true
+# A secret the operator types into a form, zeroed when dropped on either
+# half.
+secrecy.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }
@@ -72,7 +75,6 @@ openehr-its = { workspace = true, features = ["rest-client"] }
 # The healthcheck job asks the viewer beside it, over the client openehr-its
 # already brings in.
 reqwest.workspace = true
-secrecy.workspace = true
 serde_json.workspace = true
 # `sync` holds one refresh of a session's access token at a time.
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }

@@ -94,6 +94,91 @@ impl PartialEq for Secret {
 
 impl Eq for Secret {}
 
+/// A secret value an operator sends to the gateway to be written to a file,
+/// on its one trip there.
+///
+/// `Debug` and `Display` show [`REDACTED`]. `Serialize` writes the value
+/// itself, because the console's server sends it in the body of the one
+/// request that hands it to the gateway; nothing else serializes one, and
+/// the gateway never answers, stores or logs it.
+///
+/// # Examples
+///
+/// ```
+/// use ferrofed_registry::secret::WriteOnly;
+///
+/// let value = WriteOnly::new("Qz7-client-secret");
+/// assert_eq!(format!("{value:?}"), "\"***\"");
+/// assert_eq!(value.expose(), "Qz7-client-secret");
+/// ```
+#[derive(Clone, PartialEq, Eq)]
+pub struct WriteOnly(Secret);
+
+impl WriteOnly {
+    /// Creates the value `value`.
+    #[must_use]
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(Secret::new(value))
+    }
+
+    /// Returns the value, for the one place it is written to its file.
+    ///
+    /// Never log or format the result.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        self.0.expose()
+    }
+
+    /// Whether the value is the empty string, as a form field left empty
+    /// gives it.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl From<SecretString> for WriteOnly {
+    fn from(value: SecretString) -> Self {
+        Self(Secret::from(value))
+    }
+}
+
+impl Default for WriteOnly {
+    fn default() -> Self {
+        Self::new(String::new())
+    }
+}
+
+impl fmt::Debug for WriteOnly {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for WriteOnly {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl<'de> Deserialize<'de> for WriteOnly {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Secret::deserialize(deserializer).map(Self)
+    }
+}
+
+impl Serialize for WriteOnly {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.0.expose())
+    }
+}
+
 impl<'de> Deserialize<'de> for Secret {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

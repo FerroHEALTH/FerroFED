@@ -48,8 +48,9 @@ pub async fn configure(
 ) -> Result<ActionAnswer, ViewError> {
     let (state, token) = crate::views::load::server::signed_in()?;
     crate::query::run::server::from_the_hydrated_page()?;
+    let mut form = form;
     let planned = server::replica(&state.settings().admin)
-        .and_then(|replica| server::plan(&form).map(|plan| (replica, plan)));
+        .and_then(|replica| server::plan(&mut form).map(|plan| (replica, plan)));
     let (replica, plan) = match planned {
         Ok(planned) => planned,
         Err(refused) => return Ok(crate::admin::answer::refused(&refused)),
@@ -68,7 +69,9 @@ pub mod server {
     };
     use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
     use ferrofed_registry::operator::PageRequest;
+    use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
     use ferrofed_registry::revision::{Revision, RevisionId};
+    use ferrofed_registry::secret::WriteOnly;
     use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
     use crate::admin::act::server::acted;
@@ -76,6 +79,7 @@ pub mod server {
     use crate::config::settings::ReplicaSettings;
     use crate::configure::model::{ConfigForm, ConfigView};
     use crate::configure::render::{self, SavedLine, StoredLine};
+    use crate::configure::sections;
     use crate::gateway::config::Change;
     use crate::gateway::{AccessToken, Gateway, GatewayError};
     use crate::views::load::server::Stop;
@@ -137,6 +141,33 @@ pub mod server {
             /// The AQL.
             aql: String,
         },
+        /// Save a revision with a credential or a binding section.
+        SaveSection {
+            /// The credential or binding section.
+            resource: Resource,
+            /// The save as the gateway takes it, a secret value among it.
+            request: Box<SectionRequest>,
+        },
+        /// Save a revision without a credential or a binding section.
+        RemoveSection {
+            /// The revision the change is based on.
+            base: Option<RevisionId>,
+            /// Why.
+            reason: String,
+            /// The credential or binding section.
+            resource: Resource,
+        },
+        /// Confirm the running revision `revision`.
+        Confirm {
+            /// The revision.
+            revision: RevisionId,
+        },
+        /// Approve revision `revision` as an operator other than its
+        /// author.
+        Approve {
+            /// The revision.
+            revision: RevisionId,
+        },
     }
 
     impl fmt::Debug for Plan {
@@ -158,6 +189,24 @@ pub mod server {
                     .field("current", current)
                     .finish_non_exhaustive(),
                 Self::StoreQuery { .. } => f.debug_struct("StoreQuery").finish_non_exhaustive(),
+                Self::SaveSection { resource, request } => f
+                    .debug_struct("SaveSection")
+                    .field("resource", resource)
+                    .field("base", &request.base)
+                    .finish_non_exhaustive(),
+                Self::RemoveSection { base, resource, .. } => f
+                    .debug_struct("RemoveSection")
+                    .field("resource", resource)
+                    .field("base", base)
+                    .finish_non_exhaustive(),
+                Self::Confirm { revision } => f
+                    .debug_struct("Confirm")
+                    .field("revision", revision)
+                    .finish(),
+                Self::Approve { revision } => f
+                    .debug_struct("Approve")
+                    .field("revision", revision)
+                    .finish(),
             }
         }
     }
@@ -216,7 +265,7 @@ pub mod server {
     /// Returns [`Refusal::Invalid`] for a form not confirmed, an action the
     /// page does not offer, or a field that does not read, naming the field
     /// and never what it holds.
-    pub fn plan(form: &ConfigForm) -> Result<Plan, Refusal> {
+    pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refusal> {
         if given(&form.confirm).is_none() {
             return Err(invalid("Tick the confirmation to run this change."));
         }
@@ -253,8 +302,95 @@ pub mod server {
                     .ok_or_else(|| invalid("Give the AQL to store."))?
                     .to_owned(),
             }),
+            "save-credentials" => {
+                let endpoint = given(&form.endpoint)
+                    .ok_or_else(|| invalid("Name the endpoint_id of the credentials."))?;
+                EndpointId::new(endpoint).map_err(|_bad| {
+                    invalid("The endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.")
+                })?;
+                Ok(Plan::SaveSection {
+                    resource: Resource::Credentials(endpoint.to_owned()),
+                    request: Box::new(section_request(form)?),
+                })
+            }
+            "save-binding" => {
+                let section = BindingSection::named(form.section.trim())
+                    .ok_or_else(|| invalid("Choose the binding section."))?;
+                Ok(Plan::SaveSection {
+                    resource: Resource::Binding(section),
+                    request: Box::new(section_request(form)?),
+                })
+            }
+            "remove-section" => Ok(Plan::RemoveSection {
+                base: revision(&form.base, "base revision")?,
+                reason: reason(form)?,
+                resource: chosen(&form.resource)?,
+            }),
+            "confirm" => Ok(Plan::Confirm {
+                revision: revision(&form.revision, "revision to confirm")?
+                    .ok_or_else(|| invalid("Name the revision to confirm."))?,
+            }),
+            "approve" => Ok(Plan::Approve {
+                revision: revision(&form.revision, "revision to approve")?
+                    .ok_or_else(|| invalid("Name the revision to approve."))?,
+            }),
             _ => Err(invalid("The form names no action this page offers.")),
         }
+    }
+
+    /// The credential or binding section a removal names, as
+    /// [`crate::configure::sections::choice`] writes it.
+    fn chosen(field: &str) -> Result<Resource, Refusal> {
+        let refused = || invalid("Choose the credential or binding section to remove.");
+        match given(field).and_then(|text| text.split_once(':')) {
+            Some(("credentials", endpoint)) if EndpointId::new(endpoint).is_ok() => {
+                Ok(Resource::Credentials(endpoint.to_owned()))
+            }
+            Some(("binding", section)) => BindingSection::named(section)
+                .map(Resource::Binding)
+                .ok_or_else(refused),
+            _ => Err(refused()),
+        }
+    }
+
+    /// The save of a credential or a binding section the form gives: its
+    /// settings, and at most one secret set by its value or a file, or
+    /// cleared.
+    fn section_request(form: &mut ConfigForm) -> Result<SectionRequest, Refusal> {
+        let typed = std::mem::take(&mut form.secret_value);
+        let value = (!typed.is_empty()).then(|| WriteOnly::from(typed.into_secret()));
+        let file = given(&form.secret_file).map(str::to_owned);
+        let clear = given(&form.secret_clear).is_some();
+        let named = [value.is_some(), file.is_some(), clear]
+            .into_iter()
+            .filter(|named| *named)
+            .count();
+        let secrets = match (given(&form.secret_key), named) {
+            (None, 0) => Vec::new(),
+            (None, _) => return Err(invalid("Name the key of the secret to set or clear.")),
+            (Some(_), 0) => {
+                return Err(invalid(
+                    "Give the secret's value or file, or tick its clear, for the key you named.",
+                ));
+            }
+            (Some(key), 1) => vec![SecretChange {
+                key: key.to_owned(),
+                value,
+                file,
+                clear,
+            }],
+            (Some(_), _) => {
+                return Err(invalid(
+                    "Give exactly one of the secret's value, its file and its clear.",
+                ));
+            }
+        };
+        Ok(SectionRequest {
+            base: revision(&form.base, "base revision")?,
+            reason: reason(form)?,
+            settings: form.settings.trim().to_owned(),
+            secrets,
+        })
     }
 
     /// The member the form describes.
@@ -463,6 +599,36 @@ pub mod server {
                     name: stored.name,
                     version: stored.version,
                 }))
+            }
+            Plan::SaveSection { resource, request } => {
+                let saved = gateway
+                    .save_section(replica, token, &resource, &request)
+                    .await;
+                let saved = previewed(gateway, replica, token, saved).await;
+                render::saved(&acted(name, "save", saved, |line| line))
+            }
+            Plan::RemoveSection {
+                base,
+                reason,
+                resource,
+            } => {
+                let change = Change {
+                    base,
+                    reason: &reason,
+                };
+                let saved = gateway
+                    .remove_section(replica, token, change, &resource)
+                    .await;
+                let saved = previewed(gateway, replica, token, saved).await;
+                render::saved(&acted(name, "save", saved, |line| line))
+            }
+            Plan::Confirm { revision } => {
+                let confirmed = gateway.confirm_revision(replica, token, revision).await;
+                sections::confirmed(&acted(name, "confirmation", confirmed, |mark| mark))
+            }
+            Plan::Approve { revision } => {
+                let approved = gateway.approve_revision(replica, token, revision).await;
+                sections::approved(&acted(name, "approval", approved, |review| review))
             }
         }
     }

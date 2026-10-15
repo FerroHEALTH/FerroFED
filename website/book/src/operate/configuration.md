@@ -510,9 +510,11 @@ listen address, the profile, `[server]`, `[metrics]`, `[auth]`, `[config]`
 and `[dev]` stay file-only, and a revision holds only `_file` references,
 never a secret. With `off`, the default, nothing changes.
 
-Editing these resources in the console is planned: members, endpoints and
-stored queries (#577), then credentials and bindings (#578), and export to
-and import from TOML (#579).
+The console manages members and stored queries (#577), and onward
+credentials and binding sections with write-only secrets, a confirmation
+after a change applies and a second operator's approval (#578;
+[Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
+Export to and import from TOML is planned (#579).
 
 ## The base path
 

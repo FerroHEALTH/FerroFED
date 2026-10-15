@@ -21,6 +21,7 @@
 mod admin;
 mod browser;
 mod configure;
+mod configure_credentials;
 mod provider;
 mod query;
 mod sign_in;

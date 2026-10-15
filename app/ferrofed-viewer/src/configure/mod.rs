@@ -12,7 +12,10 @@
 //! and marked so; a console member is saved as a revision, its changes
 //! against the running revision are shown, and it is applied with a
 //! confirmation, as a rollback is. A stored-query version is stored once
-//! and never edited (§12.7, N44). Every form posts to one server function,
+//! and never edited (§12.7, N44). An onward credential or a binding section
+//! is owned whole as a member is, its secrets shown as set by reference and
+//! never by value ([`sections`]); the confirmation the running revision
+//! awaits and the approval the newest one takes are forms of their own. Every form posts to one server function,
 //! which checks the confirmation again; the forms sit in one fieldset that
 //! stays disabled until the page has hydrated, and its one listener hands
 //! the form submitted to the server function. No specification governs the
@@ -31,12 +34,14 @@ pub mod act;
 pub mod model;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sections;
 
 use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::configure::act::Configure;
-use crate::configure::model::{ConfigForm, ConfigView};
+use crate::configure::model::{ConfigForm, ConfigView, Typed};
 
 /// The path of the configuration page.
 pub const CONFIGURATION: &str = "/configuration";
@@ -169,5 +174,13 @@ fn submitted(data: &leptos::web_sys::FormData) -> ConfigForm {
         name: field("form[name]"),
         version: field("form[version]"),
         aql: field("form[aql]"),
+        endpoint: field("form[endpoint]"),
+        section: field("form[section]"),
+        resource: field("form[resource]"),
+        settings: field("form[settings]"),
+        secret_key: field("form[secret_key]"),
+        secret_value: Typed::new(field("form[secret_value]")),
+        secret_file: field("form[secret_file]"),
+        secret_clear: field("form[secret_clear]"),
     }
 }

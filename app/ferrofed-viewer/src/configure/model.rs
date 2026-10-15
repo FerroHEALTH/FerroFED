@@ -7,10 +7,12 @@
 //! the revisions, the members and stored queries with their owners, the
 //! history, and each form's fields. Its forms cross to the server in a
 //! `POST` body alone, and a form's `Debug` output names which fields are
-//! filled, never what they hold.
+//! filled, never what they hold: a secret's value among them, which the
+//! page never renders.
 
 use std::fmt;
 
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 /// The configuration page as the server rendered it.
@@ -30,8 +32,9 @@ pub struct ConfigView {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConfigForm {
-    /// The action: `save-member`, `remove-member`, `apply`, `rollback` or
-    /// `store-query`.
+    /// The action: `save-member`, `remove-member`, `apply`, `rollback`,
+    /// `store-query`, `save-credentials`, `save-binding`, `remove-section`,
+    /// `confirm` or `approve`.
     pub action: String,
     /// The revision a change is based on.
     pub base: String,
@@ -65,6 +68,25 @@ pub struct ConfigForm {
     pub version: String,
     /// The stored query's AQL.
     pub aql: String,
+    /// The endpoint whose onward credentials a form saves.
+    pub endpoint: String,
+    /// The binding section a form saves, as its route names it.
+    pub section: String,
+    /// The credential or binding section a removal names, as
+    /// `credentials:<endpoint id>` or `binding:<section>`.
+    pub resource: String,
+    /// The settings of a credential or a binding section less its secrets,
+    /// as one TOML inline table.
+    pub settings: String,
+    /// The dotted key of the secret a form sets or clears.
+    pub secret_key: String,
+    /// The secret's value, which the gateway writes to a file of its own;
+    /// zeroed when dropped, and never rendered or logged.
+    pub secret_value: Typed,
+    /// The file the gateway reads the secret from.
+    pub secret_file: String,
+    /// Not empty when the operator clears the secret.
+    pub secret_clear: String,
 }
 
 impl fmt::Debug for ConfigForm {
@@ -78,6 +100,70 @@ impl fmt::Debug for ConfigForm {
             .field("endpoints", &filled(&self.endpoints))
             .field("name", &filled(&self.name))
             .field("aql", &filled(&self.aql))
+            .field("settings", &filled(&self.settings))
+            .field("secret_key", &filled(&self.secret_key))
+            .field("secret_value", &!self.secret_value.is_empty())
+            .field("secret_file", &filled(&self.secret_file))
             .finish_non_exhaustive()
+    }
+}
+
+/// A secret the operator typed into a form, on its way to the gateway:
+/// zeroed when dropped, and shown by `Debug` as whether it is empty.
+///
+/// It serializes as its value, because the form carries it to the
+/// console's server in the one request that hands it on.
+#[derive(Clone)]
+pub struct Typed(SecretString);
+
+impl Typed {
+    /// The secret `value`.
+    #[must_use]
+    pub fn new(value: String) -> Self {
+        Self(SecretString::from(value))
+    }
+
+    /// Whether the field was left empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.expose_secret().is_empty()
+    }
+
+    /// The secret, still wrapped, for the request that carries it.
+    #[must_use]
+    pub fn into_secret(self) -> SecretString {
+        self.0
+    }
+}
+
+impl Default for Typed {
+    fn default() -> Self {
+        Self::new(String::new())
+    }
+}
+
+impl PartialEq for Typed {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for Typed {}
+
+impl fmt::Debug for Typed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Typed").field(&!self.is_empty()).finish()
+    }
+}
+
+impl Serialize for Typed {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.0.expose_secret())
+    }
+}
+
+impl<'de> Deserialize<'de> for Typed {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::new)
     }
 }

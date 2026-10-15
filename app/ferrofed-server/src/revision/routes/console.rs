@@ -43,7 +43,11 @@ use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::service::{Refused, RevisionError, SAVED, held_table};
 use crate::stored::{self, Inadmissible};
+use ferrofed_registry::resource::Resource;
 use ferrofed_registry::revision::{Author, Revision, RevisionId};
+
+use super::sections;
+use crate::revision::resources::SectionFault;
 
 /// The `event` of the record of a stored-query version the console stored.
 pub const STORED: &str = "config-stored-query-stored";
@@ -66,6 +70,17 @@ pub enum ConsoleError {
     /// The newest revision holds no console member of that `node_id`.
     #[error("the revision holds no console member {0}")]
     Unknown(NodeId),
+    /// The credential or binding section is provided by the file.
+    #[error("{0} is provided by the configuration file, so only the file changes it")]
+    ResourceFileOwned(Resource),
+    /// The newest revision holds no credential or binding section of that
+    /// name, or this gateway is built without the binding.
+    #[error("the revision holds no {0}, or this gateway is built without its binding")]
+    ResourceUnknown(Resource),
+    /// The settings or the secrets of a credential or a binding section are
+    /// refused.
+    #[error(transparent)]
+    Section(#[from] SectionFault),
 }
 
 impl From<Refused> for ConsoleError {
@@ -79,12 +94,13 @@ impl<T: serde::Serialize> Answer for Result<T, ConsoleError> {
         match self {
             Ok(body) => Json(body).into_response(),
             Err(ConsoleError::Revision(refusal)) => refused(&refusal, request_id),
-            Err(refusal @ ConsoleError::FileOwned { .. }) => {
-                error::response(Code::ResourceFileOwned, refusal.to_string(), request_id)
-            }
-            Err(refusal @ ConsoleError::Unknown(_)) => {
+            Err(
+                refusal @ (ConsoleError::FileOwned { .. } | ConsoleError::ResourceFileOwned(_)),
+            ) => error::response(Code::ResourceFileOwned, refusal.to_string(), request_id),
+            Err(refusal @ (ConsoleError::Unknown(_) | ConsoleError::ResourceUnknown(_))) => {
                 error::response(Code::ResourceUnknown, refusal.to_string(), request_id)
             }
+            Err(ConsoleError::Section(fault)) => sections::refused(&fault, request_id),
         }
     }
 }
@@ -271,6 +287,8 @@ fn report(managed: &Managed) -> Result<Resources, RevisionError> {
         members,
         stored_query_registry: registry(managed),
         stored_queries: queries(managed)?,
+        sections: sections::report(managed)?,
+        bindings: sections::available(),
     })
 }
 
@@ -334,7 +352,10 @@ fn queries(managed: &Managed) -> Result<Vec<QueryResource>, RevisionError> {
 
 /// The configuration of revision `base`, which a change is written on top
 /// of; an empty one for none.
-fn base_table(managed: &Managed, base: Option<RevisionId>) -> Result<toml::Table, RevisionError> {
+pub(super) fn base_table(
+    managed: &Managed,
+    base: Option<RevisionId>,
+) -> Result<toml::Table, RevisionError> {
     match base {
         Some(id) => held_table(&held(&managed.revisions, id)?),
         None => Ok(toml::Table::new()),
@@ -361,7 +382,7 @@ fn with_members(mut table: toml::Table, members: &[ConsoleMember]) -> Result<tom
 
 /// Saves `table` as the revision after `base`, made by `operator` for
 /// `reason`, and records it.
-fn saved_as(
+pub(super) fn saved_as(
     managed: &Managed,
     (base, table): (Option<RevisionId>, &toml::Table),
     (operator, reason): (&Operator, String),
@@ -376,7 +397,7 @@ fn saved_as(
 }
 
 /// `201` for an answer that is `200`, as a save answers.
-fn created(answer: Response) -> Response {
+pub(super) fn created(answer: Response) -> Response {
     if answer.status() == StatusCode::OK {
         (StatusCode::CREATED, answer).into_response()
     } else {

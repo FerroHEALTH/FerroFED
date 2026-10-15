@@ -104,6 +104,9 @@ pub struct Settings {
     /// How often the running mark of the revision store is read, under
     /// `config.ui = "managed"`.
     pub revision_poll: Duration,
+    /// What a revision that changes a credential or a binding section
+    /// takes, under `config.ui = "managed"`.
+    pub revision_policy: crate::revision::policy::Policy,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
     pub deprecated: Vec<crate::config::deprecated::Deprecated>,

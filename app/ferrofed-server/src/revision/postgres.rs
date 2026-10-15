@@ -5,8 +5,9 @@
 //! uses, so a revision one replica saves, and the mark one moves, hold for
 //! all of them.
 //!
-//! The revisions live in `ferrofed.config_revision`, keyed by number, and
-//! the current mark in `ferrofed.config_current`. A save is one `INSERT …
+//! The revisions live in `ferrofed.config_revision`, keyed by number, the
+//! current mark in `ferrofed.config_current`, and the approvals of each
+//! revision in `ferrofed.config_approval`. A save is one `INSERT …
 //! SELECT … WHERE` the newest number is the base, `ON CONFLICT (id) DO
 //! NOTHING`, so two replicas saving on one base store exactly one revision,
 //! in one statement; a move of the mark is one `UPDATE … WHERE` the mark is
@@ -23,7 +24,7 @@ use ferrofed_registry::definition::store;
 use ferrofed_registry::secret::SecretUrl;
 use tokio_postgres::Client;
 
-use ferrofed_registry::revision::{Current, Revision, RevisionId};
+use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 
 use crate::revision::{Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::stored::postgres::{Connection, Statement, lock};
@@ -35,7 +36,7 @@ pub const TABLE: &str = "ferrofed.config_revision";
 pub const LAYOUT: &str = "config_revision";
 
 /// The schema version of the layout this binary writes and reads.
-pub const VERSION: i32 = 1;
+pub const VERSION: i32 = 2;
 
 /// The layout's version as `ferrofed.schema_version` records it.
 const SELECT_VERSION: &str = "SELECT version FROM ferrofed.schema_version WHERE layout = $1";
@@ -54,6 +55,22 @@ CREATE TABLE IF NOT EXISTS ferrofed.config_current (
   revision bigint NOT NULL,
   record text NOT NULL
 );";
+
+/// Version 2: the approvals of each revision, one row per approver.
+const MIGRATION_2: &str = "CREATE TABLE IF NOT EXISTS ferrofed.config_approval (
+  revision bigint NOT NULL,
+  approver text NOT NULL,
+  record text NOT NULL,
+  PRIMARY KEY (revision, approver)
+);";
+
+/// Records approval `$3` by `$2` of revision `$1`, once per approver.
+const INSERT_APPROVAL: &str = "INSERT INTO ferrofed.config_approval (revision, approver, record)
+VALUES ($1, $2, $3) ON CONFLICT (revision, approver) DO NOTHING";
+
+/// The approvals of one revision.
+const SELECT_APPROVALS: &str =
+    "SELECT record FROM ferrofed.config_approval WHERE revision = $1 ORDER BY approver";
 
 /// Stores revision `$1` when the newest number held is `$3`, `0` for none.
 const INSERT: &str = "INSERT INTO ferrofed.config_revision (id, record)
@@ -232,6 +249,40 @@ impl RevisionStore for PostgresRevisions {
             })
         }
     }
+
+    fn approvals(&self, id: RevisionId) -> Result<Vec<Signed>, StoreError> {
+        let id = number(id)?;
+        let records = self.call(move |client| {
+            Box::pin(async move {
+                let rows = client
+                    .query(SELECT_APPROVALS, &[&id])
+                    .await
+                    .map_err(connection_backend)?;
+                rows.iter()
+                    .map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+        })?;
+        records
+            .iter()
+            .map(|json| serde_json::from_str(json).map_err(corrupt))
+            .collect()
+    }
+
+    fn approve(&self, id: RevisionId, approval: &Signed) -> Result<(), StoreError> {
+        let id = number(id)?;
+        let approver = serde_json::to_string(&approval.by).map_err(backend)?;
+        let record = serde_json::to_string(approval).map_err(backend)?;
+        self.call(move |client| {
+            Box::pin(async move {
+                client
+                    .execute(INSERT_APPROVAL, &[&id, &approver, &record])
+                    .await
+                    .map(drop)
+                    .map_err(connection_backend)
+            })
+        })
+    }
 }
 
 /// The newest number `client` reads.
@@ -288,11 +339,19 @@ async fn prepare(client: &mut Client) -> Result<(), store::StoreError> {
             supported: VERSION.unsigned_abs(),
         })));
     }
-    if found < VERSION {
+    if found < 1 {
         transaction
             .batch_execute(MIGRATION_1)
             .await
             .map_err(connection_backend)?;
+    }
+    if found < 2 {
+        transaction
+            .batch_execute(MIGRATION_2)
+            .await
+            .map_err(connection_backend)?;
+    }
+    if found < VERSION {
         transaction
             .execute(RECORD_VERSION, &[&LAYOUT, &VERSION])
             .await

@@ -82,7 +82,7 @@ pub fn with_console_of(tree: &toml::Table, from: &toml::Table) -> toml::Table {
 
 /// The keys whose value is a secret with a `_file` sibling, wherever they
 /// sit: an inline value is refused, and the `_file` reference is kept.
-const SECRETS: [&str; 7] = [
+pub const SECRETS: [&str; 7] = [
     "bearer_token",
     "password",
     "client_identity",
@@ -130,7 +130,7 @@ pub fn core_keys(revision: &toml::Table) -> Vec<String> {
 }
 
 /// The dotted keys of `tree` that hold a secret inline, in key order: a key
-/// of `SECRETS` anywhere, a key of `SECRET_URLS`, and any string that is
+/// of [`SECRETS`] anywhere, a key of `SECRET_URLS`, and any string that is
 /// a URL carrying a password. Never a value.
 #[must_use]
 pub fn inline_secrets(tree: &toml::Table) -> Vec<String> {

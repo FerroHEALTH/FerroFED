@@ -16,7 +16,11 @@
 //!   the `postgres` feature offers it.
 //!
 //! Under `managed`, `poll_ms` sets how often each gateway reads the running
-//! mark, to apply a revision another replica marked running ([`poll`]).
+//! mark, to apply a revision another replica marked running ([`poll`]), and
+//! [`policy`] reads what a revision that changes an onward credential or a
+//! binding section takes: its confirmation window `confirm_ms`, the
+//! resources `approval` names for a second operator's approval, and the
+//! directory `secrets_dir` a secret value is written to.
 //!
 //! The table is part of the bootstrap core, which a revision never holds
 //! ([`crate::revision::tree::CORE`]). No specification governs this: our own
@@ -32,6 +36,7 @@ use serde::Deserialize;
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::secrets::secret;
+use crate::revision::policy::Policy;
 
 /// Whether the configuration is managed as revisions, `config.ui`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -106,6 +111,18 @@ pub struct Revisions {
     /// mark, to apply a revision another replica marked running; 5000 when
     /// the table sets none.
     pub poll_ms: Option<u64>,
+    /// How long, in milliseconds, an applied revision that changed an
+    /// onward credential or a binding section awaits an operator's
+    /// confirmation before the gateway rolls it back; 120000 when the
+    /// table sets none.
+    pub confirm_ms: Option<u64>,
+    /// The resource kinds and resources a revision changes only once an
+    /// operator other than its author approved it.
+    pub approval: Vec<String>,
+    /// The directory a secret value the operator console sends is written
+    /// to, a new file per value; unset, the console sets a secret only by a
+    /// reference to a file.
+    pub secrets_dir: Option<PathBuf>,
 }
 
 /// The store the revisions are kept in, resolved.
@@ -215,6 +232,20 @@ pub enum RevisionsFault {
         "registry.members joins the members of registry.document, which is unset; a care services directory is the whole registry"
     )]
     MembersWithoutDocument,
+    /// `config.confirm_ms` is outside the bounds it is read within.
+    #[error(
+        "config.confirm_ms is {value}; it must be from {CONFIRM_MIN_MS} to {CONFIRM_MAX_MS} milliseconds"
+    )]
+    Confirm {
+        /// The value set.
+        value: u64,
+    },
+    /// An entry of `config.approval` names no kind and no resource.
+    #[error(transparent)]
+    Approval(#[from] crate::revision::policy::UnknownRule),
+    /// `config.secrets_dir` is no absolute path of a directory.
+    #[error("config.secrets_dir is not an absolute path to a directory that exists")]
+    SecretsDir,
 }
 
 /// Resolves `[config]` of `config`: the revision store when the
@@ -242,11 +273,18 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
         // nothing of the store is read, so a key that would configure it is refused.
         return match keys.iter().find(|(_, set)| *set) {
             Some((key, _)) => Err(RevisionsFault::Off { key }.into()),
-            None if section.poll_ms.is_some() => Err(RevisionsFault::Off {
-                key: "config.poll_ms",
-            }
-            .into()),
-            None => Ok(None),
+            None => match [
+                ("config.poll_ms", section.poll_ms.is_some()),
+                ("config.confirm_ms", section.confirm_ms.is_some()),
+                ("config.approval", !section.approval.is_empty()),
+                ("config.secrets_dir", section.secrets_dir.is_some()),
+            ]
+            .iter()
+            .find(|(_, set)| *set)
+            {
+                Some((key, _)) => Err(RevisionsFault::Off { key }.into()),
+                None => Ok(None),
+            },
         };
     }
     if config.metrics.listen.is_none() {
@@ -349,4 +387,49 @@ pub fn check_tree(store: Option<&Store>, tree: &toml::Table) -> Result<(), Error
         Some(key) => Err(RevisionsFault::InlineSecret { key }.into()),
         None => Ok(()),
     }
+}
+
+/// The shortest `config.confirm_ms` read, in milliseconds.
+pub const CONFIRM_MIN_MS: u64 = 1_000;
+
+/// The longest `config.confirm_ms` read, in milliseconds: one hour.
+pub const CONFIRM_MAX_MS: u64 = 3_600_000;
+
+/// Reads what a revision that changes a credential or a binding section
+/// takes from `section`.
+///
+/// That is its confirmation window, the resources that take a second
+/// operator's approval, and where a secret value is written.
+///
+/// # Errors
+///
+/// [`RevisionsFault::Confirm`] for a `confirm_ms` outside
+/// [`CONFIRM_MIN_MS`] to [`CONFIRM_MAX_MS`], [`RevisionsFault::Approval`]
+/// for an entry of `approval` that names nothing, and
+/// [`RevisionsFault::SecretsDir`] for a `secrets_dir` that is no absolute
+/// path to a directory.
+pub fn policy(section: &Revisions) -> Result<Policy, Error> {
+    let defaults = Policy::default();
+    let confirm = match section.confirm_ms {
+        None => defaults.confirm,
+        Some(value) if (CONFIRM_MIN_MS..=CONFIRM_MAX_MS).contains(&value) => {
+            Duration::from_millis(value)
+        }
+        Some(value) => return Err(RevisionsFault::Confirm { value }.into()),
+    };
+    let approval = section
+        .approval
+        .iter()
+        .map(|entry| entry.parse().map_err(RevisionsFault::from))
+        .collect::<Result<Vec<_>, _>>()?;
+    let secrets_dir = match &section.secrets_dir {
+        None => None,
+        Some(dir) if dir.is_absolute() && dir.is_dir() => Some(dir.clone()),
+        Some(_) => return Err(RevisionsFault::SecretsDir.into()),
+    };
+    Ok(Policy {
+        confirm,
+        approval,
+        secrets_dir,
+    })
 }

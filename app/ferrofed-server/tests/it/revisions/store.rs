@@ -22,6 +22,7 @@ fn draft(toml: &str) -> Draft {
         at: Timestamp::UNIX_EPOCH,
         reason: String::from("synthetic"),
         toml: toml.to_owned(),
+        console: Vec::new(),
     }
 }
 
@@ -34,6 +35,8 @@ fn mark(revision: RevisionId, previous: Option<RevisionId>) -> Current {
         needs_restart: Vec::new(),
         applied_by: Author::File,
         applied_at: Timestamp::UNIX_EPOCH,
+        awaiting: None,
+        confirmed: None,
     }
 }
 
