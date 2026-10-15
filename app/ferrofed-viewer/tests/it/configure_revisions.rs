@@ -93,7 +93,7 @@ async fn each_revision_offers_its_download_and_the_page_offers_an_import()
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     for id in [1, 2] {
         let link = format!(
-            r#"<a href="/configuration/revisions/{id}/export" rel="external" download>Export revision {id} as TOML</a>"#
+            r#"<a href="/configuration/revisions/{id}/export" rel="external">Export revision {id} as TOML</a>"#
         );
         assert!(body.contains(&link), "{body}");
     }

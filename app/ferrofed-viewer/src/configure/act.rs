@@ -367,7 +367,12 @@ pub mod server {
             return Err(invalid("Paste the TOML to import."));
         }
         if text.len() > crate::configure::import::IMPORT_LIMIT {
-            return Err(invalid("The TOML is larger than 1048576 bytes."));
+            return Err(Refusal::Invalid {
+                reason: format!(
+                    "The TOML is larger than {} bytes.",
+                    crate::configure::import::IMPORT_LIMIT
+                ),
+            });
         }
         Ok(text)
     }

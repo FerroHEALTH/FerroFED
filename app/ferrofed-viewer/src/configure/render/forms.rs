@@ -308,7 +308,7 @@ fn import_form(head: Option<RevisionId>) -> FormView {
     let fields = view! {
         {hidden("action", String::from("import"))}
         {hidden("base", base(head))}
-        <p>
+        <p id="import-toml-help">
             "Saves the TOML as a new revision, a dry run you preview and then apply. "
             "It is the whole configuration less the bootstrap core, as an export writes it: "
             "a secret only as its _file reference, and every resource the file provides "
@@ -319,6 +319,7 @@ fn import_form(head: Option<RevisionId>) -> FormView {
             <textarea
                 id="import-toml"
                 name="form[toml]"
+                aria-describedby="import-toml-help"
                 rows="12"
                 spellcheck="false"
                 required

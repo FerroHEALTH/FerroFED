@@ -81,7 +81,9 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sig
 toml.workspace = true
 # The site bundle is served brotli- or gzip-compressed, as the request's
 # Accept-Encoding chooses.
-tower-http = { workspace = true, features = ["set-header", "compression-br", "compression-gzip"] }
+tower-http = { workspace = true, features = ["set-header", "compression-br", "compression-gzip", "limit"] }
+# The body limit of each request is a tower service the console calls itself.
+tower.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true

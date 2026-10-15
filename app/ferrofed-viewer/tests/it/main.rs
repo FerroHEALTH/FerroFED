@@ -14,6 +14,8 @@
 #[cfg(test)]
 mod admin;
 #[cfg(test)]
+mod body_limit;
+#[cfg(test)]
 mod config;
 #[cfg(test)]
 mod configure;
