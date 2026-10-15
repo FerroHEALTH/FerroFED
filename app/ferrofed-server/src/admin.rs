@@ -10,9 +10,11 @@
 //! registry holds to the members that miss it at `POST`
 //! [`DISTRIBUTE`], and the clear of one `ehr_id` from this process's
 //! routing state at `POST` [`CLEAR_EHR_ID`], and the export of the routing
-//! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`]. Every
-//! other path is `404`. No route is on the gateway's client listener, and
-//! none is part of the ITS-REST surface.
+//! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`]. Under
+//! `config.ui = "managed"` it also serves the configuration revisions under
+//! `/admin/config` ([`revision::routes`], [`managed_router`]), whose reads
+//! pass [`operator_read`]. Every other path is `404`. No route is on the
+//! gateway's client listener, and none is part of the ITS-REST surface.
 //!
 //! Every write or administrative action, the distribution, the clear and the export among them, is
 //! admitted by the gateway's client authentication ([`Gate`], built from
@@ -55,6 +57,8 @@ use crate::facade::stored;
 use crate::metrics;
 use crate::metrics::security::Event;
 use crate::request_id;
+use crate::revision;
+use crate::revision::routes::Managed;
 use crate::state::AppState;
 
 /// The path of the operator's distribution of a held stored-query version:
@@ -254,17 +258,42 @@ impl Access {
 /// server records, so the application is served with
 /// `into_make_service_with_connect_info::<SocketAddr>()`.
 pub fn router(state: Arc<AppState>, access: Access) -> Router {
+    managed_router(state, access, None)
+}
+
+/// Returns the admin listener's application with the revision routes of `managed`.
+///
+/// It is [`router`] with the configuration revisions of [`revision::routes`]
+/// beside it when `managed` is set (`config.ui = "managed"`); without it, as
+/// under `config.ui = "off"`, no revision route exists and each of their
+/// paths is `404`.
+pub fn managed_router(
+    state: Arc<AppState>,
+    access: Access,
+    managed: Option<Arc<Managed>>,
+) -> Router {
     let access = Arc::new(access);
     let metrics = metrics::routes(Arc::clone(state.metrics()))
         .route_layer(middleware::from_fn_with_state(Arc::clone(&access), scrape));
-    Router::new()
+    let mut app = Router::new()
         .route(DISTRIBUTE, post(distribute))
         .route(CLEAR_EHR_ID, post(clear_ehr_id))
         .route(EXPORT_IDENTITY_STATE, post(export_identity_state))
-        .route_layer(middleware::from_fn_with_state(access, operator_only))
+        .route_layer(middleware::from_fn_with_state(
+            Arc::clone(&access),
+            operator_only,
+        ))
         .with_state(state)
-        .merge(metrics)
-        .fallback(|| async { StatusCode::NOT_FOUND })
+        .merge(metrics);
+    if let Some(managed) = managed {
+        let writes = revision::routes::writes(Arc::clone(&managed)).route_layer(
+            middleware::from_fn_with_state(Arc::clone(&access), operator_only),
+        );
+        let reads = revision::routes::reads(managed)
+            .route_layer(middleware::from_fn_with_state(access, operator_read));
+        app = app.merge(writes).merge(reads);
+    }
+    app.fallback(|| async { StatusCode::NOT_FOUND })
 }
 
 /// Returns the address and the application of the admin listener
@@ -272,10 +301,22 @@ pub fn router(state: Arc<AppState>, access: Access) -> Router {
 /// unset, so no admin route exists.
 #[must_use]
 pub fn listener(settings: &Settings, state: &Arc<AppState>) -> Option<(SocketAddr, Router)> {
-    settings
-        .metrics
-        .listen
-        .map(|address| (address, router(Arc::clone(state), Access::of(settings))))
+    managed_listener(settings, state, None)
+}
+
+/// Returns the address and the application of the admin listener as
+/// [`listener`] does, with the configuration revisions `managed` serves
+/// ([`managed_router`]).
+#[must_use]
+pub fn managed_listener(
+    settings: &Settings,
+    state: &Arc<AppState>,
+    managed: Option<Arc<Managed>>,
+) -> Option<(SocketAddr, Router)> {
+    settings.metrics.listen.map(|address| {
+        let app = managed_router(Arc::clone(state), Access::of(settings), managed);
+        (address, app)
+    })
 }
 
 /// Serves the admin listener's `app` on `listener`, plain or TLS, recording
@@ -306,7 +347,7 @@ where
 pub async fn operator_only(
     State(access): State<Arc<Access>>,
     peer: Result<ConnectInfo<SocketAddr>, ExtensionRejection>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     // NOTE: no specification governs this: our own design; a peer the server did
@@ -319,11 +360,30 @@ pub async fn operator_only(
                 .get::<MatchedPath>()
                 .map_or("unmatched", MatchedPath::as_str);
             let action = format!("{} {template}", request.method());
+            request.extensions_mut().insert(operator.clone());
             let mut running = Running::begin(operator, action);
             let response = next.run(request).await;
             running.answered(response.status());
             response
         }
+        Err(refusal) => refuse(refusal, request.headers()),
+    }
+}
+
+/// The middleware in front of every read of the configuration revisions.
+///
+/// A caller the gate admits with the operator scope passes, as in front of
+/// a write action ([`Access::admit_operator`]), and the read is not
+/// recorded as an action.
+pub async fn operator_read(
+    State(access): State<Arc<Access>>,
+    peer: Result<ConnectInfo<SocketAddr>, ExtensionRejection>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let peer = peer.ok().map(|ConnectInfo(peer)| peer);
+    match access.admit_operator(peer, request.headers()).await {
+        Ok(_operator) => next.run(request).await,
         Err(refusal) => refuse(refusal, request.headers()),
     }
 }

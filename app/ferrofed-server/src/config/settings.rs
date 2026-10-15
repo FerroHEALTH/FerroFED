@@ -96,6 +96,8 @@ pub struct Settings {
     pub access_log: crate::access::config::AccessLogSettings,
     /// Where the access records and the IHE binding's BALP records go.
     pub audit: crate::audit::config::AuditSettings,
+    /// The store of the configuration revisions, under `config.ui = "managed"`.
+    pub revisions: Option<crate::config::revisions::Store>,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
     pub deprecated: Vec<crate::config::deprecated::Deprecated>,

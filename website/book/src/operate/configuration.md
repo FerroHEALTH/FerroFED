@@ -158,7 +158,7 @@ The sections, and the page that covers each:
 | `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `federation.offset_strategy`, `federation.max_offset_window`, `federation.max_node_rows` | paging across nodes, and the most rows read of one node for a query with no `LIMIT`, 9999 by default (a node is asked for one row more, so set it one under the largest page your nodes serve) | [Queries and API areas](queries-and-areas.md#paging-with-offset) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
-| `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
+| `[metrics]`, `[config]` | the admin listener and the OTLP push; `config.ui`, `off` by default, and the store of the configuration revisions the admin listener serves under `managed` | [Metrics](metrics.md), [Configuration revisions](configuration-revisions.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from; a member's own exchange-format endpoint is an `hl7-fhir-rest` endpoint of the document | [The registry](registry.md), [A member's own exchange-format endpoint](registry.md#a-members-own-exchange-format-endpoint) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |

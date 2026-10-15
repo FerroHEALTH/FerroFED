@@ -28,11 +28,13 @@ use crate::conformance::safety::{self, Refusal};
 use crate::federation::Federation;
 use crate::listener::TlsListener;
 use crate::listener::certificates::{Certificates, TlsFiles};
+use crate::revision::routes::Managed;
+use crate::revision::service::Revisions;
 use crate::state::AppState;
 use crate::support::Support;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
-    metrics, panic, reload, report, router, serve, state, telemetry,
+    metrics, panic, reload, report, revision, router, serve, state, telemetry,
 };
 
 /// Runs the binary with `args` and returns the process exit code.
@@ -63,8 +65,11 @@ where
         );
         return ExitCode::from(EXIT_USAGE);
     }
-    let loaded = Config::load_with_tree(cli.config.as_deref())
-        .and_then(|(config, tree)| config.resolve().map(|settings| (settings, tree)));
+    let loaded = Config::load_with_tree(cli.config.as_deref()).and_then(|(config, tree)| {
+        let settings = config.resolve()?;
+        config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
+        Ok((settings, tree))
+    });
     let (settings, tree) = match loaded {
         Ok(loaded) => loaded,
         Err(error) if cli.command == Command::Healthcheck => {
@@ -103,7 +108,7 @@ where
             command: ConformanceCommand::Run(args),
         } => conformance_command(&settings, args),
         Command::Report(args) => report_command(&settings, &tree, &args),
-        Command::Serve => serve_job(settings, cli.config),
+        Command::Serve => serve_job(settings, &tree, cli.config),
     }
 }
 
@@ -192,7 +197,14 @@ fn report_command(settings: &Settings, tree: &toml::Table, args: &ReportArgs) ->
     clippy::print_stderr,
     reason = "a refused log filter, runtime or trace exporter is reported before any log subscriber exists"
 )]
-fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
+fn serve_job(settings: Settings, tree: &toml::Table, config: Option<PathBuf>) -> ExitCode {
+    let (settings, revisions) = match revision::service::boot(settings, tree) {
+        Ok(booted) => booted,
+        Err(error) => {
+            eprintln!("ferrofed: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
     let stdout_is_terminal = std::io::stdout().is_terminal();
     let no_color = std::env::var_os("NO_COLOR");
     let format = settings.telemetry.format;
@@ -272,7 +284,7 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
         }
     };
     drop(entered);
-    let code = match serve_command(&runtime, settings, &state, config) {
+    let code = match serve_command(&runtime, settings, &state, (config, revisions)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -597,10 +609,14 @@ fn serve_command(
     runtime: &tokio::runtime::Runtime,
     settings: Settings,
     state: &Arc<AppState>,
-    config: Option<PathBuf>,
+    (config, revisions): (Option<PathBuf>, Option<Arc<Revisions>>),
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
-    let admin = admin::listener(&settings, state);
+    let admin = settings
+        .metrics
+        .listen
+        .map(|address| (address, admin::Access::of(&settings)));
+    let admin_tls_files = settings.metrics.tls.clone();
     let outcome = runtime.block_on(async {
         use anyhow::Context;
 
@@ -619,8 +635,20 @@ fn serve_command(
         tracing::info!(listen = %server.listen, tls = client_tls.is_some(), "listening");
         let mut listener_certificates: Vec<Arc<Certificates>> =
             client_tls.iter().cloned().collect();
-        if let Some((address, app)) = admin {
-            let admin_tls = certificates(settings.metrics.tls.as_ref())?;
+        let admin_tls = match admin {
+            Some(_) => certificates(admin_tls_files.as_ref())?,
+            None => None,
+        };
+        listener_certificates.extend(admin_tls.iter().cloned());
+        let reloader = Arc::new(
+            reload::Reloader::new(config, settings, Arc::clone(state))
+                .with_certificates(listener_certificates)
+                .with_revisions(revisions.clone()),
+        );
+        if let Some((address, access)) = admin {
+            let managed = revisions
+                .map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
+            let app = admin::managed_router(Arc::clone(state), access, managed);
             let metrics = TcpListener::bind(address)
                 .await
                 .with_context(|| format!("binding metrics.listen {address}"))?;
@@ -633,7 +661,6 @@ fn serve_command(
                 export_identity_state = admin::EXPORT_IDENTITY_STATE,
                 "serving the admin listener"
             );
-            listener_certificates.extend(admin_tls.iter().cloned());
             tokio::spawn(async move {
                 let stopped = match admin_tls {
                     None => admin::serve(metrics, app).await,
@@ -647,10 +674,6 @@ fn serve_command(
                 }
             });
         }
-        let reloader = Arc::new(
-            reload::Reloader::new(config, settings, Arc::clone(state))
-                .with_certificates(listener_certificates),
-        );
         let running = state.processes().start(&reloader);
         tokio::spawn(reload::on_hangup(reloader));
         let app = router(Arc::clone(state), &server);

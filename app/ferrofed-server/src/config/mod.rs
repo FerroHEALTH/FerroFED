@@ -30,6 +30,7 @@ pub mod limits;
 mod load;
 pub mod public_url;
 pub(crate) mod resolve;
+pub mod revisions;
 pub(crate) mod secrets;
 pub mod server;
 #[cfg(feature = "binding-ihe")]
@@ -132,6 +133,9 @@ pub struct Config {
     /// Where the access records and the IHE binding's BALP records go
     /// (`[audit]`, #486, #697).
     pub audit: crate::audit::config::Audit,
+    /// Configuration revisions (`[config]`): `ui`, off by default, and the store.
+    #[serde(rename = "config")]
+    pub revisions: revisions::Revisions,
     /// The deprecated keys the configuration set, already read under their
     /// new names; never read from the file itself.
     #[serde(skip)]
@@ -166,6 +170,7 @@ impl Default for Config {
             auth: auth::Auth::default(),
             access_log: crate::access::config::AccessLog::default(),
             audit: crate::audit::config::Audit::default(),
+            revisions: revisions::Revisions::default(),
             deprecated: Vec::new(),
         }
     }

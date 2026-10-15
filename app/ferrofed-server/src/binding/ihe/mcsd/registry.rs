@@ -271,7 +271,8 @@ fn fault_of(error: &ReloadError) -> DirectoryFault {
         | ReloadError::Config(_)
         | ReloadError::RegistryPresence
         | ReloadError::Profile
-        | ReloadError::Cleartext(_) => DirectoryFault::ConfigurationMismatch,
+        | ReloadError::Cleartext(_)
+        | ReloadError::Revisions(_) => DirectoryFault::ConfigurationMismatch,
     }
 }
 

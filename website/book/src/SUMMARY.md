@@ -55,6 +55,7 @@
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)
   - [Onward credentials](operate/onward-credentials.md)
   - [Queries and API areas](operate/queries-and-areas.md)
+  - [Configuration revisions](operate/configuration-revisions.md)
 - [Admitting a node](operate/admission.md)
 - [Exporting the identity state](operate/identity-state-export.md)
 - [Scoring a deployment](operate/conformance-run.md)

@@ -111,6 +111,7 @@ mod report;
 mod request_log;
 #[cfg(feature = "binding-ihe")]
 mod resolution;
+mod revisions;
 mod route_log;
 mod routing;
 mod routing_log;

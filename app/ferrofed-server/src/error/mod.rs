@@ -246,6 +246,17 @@ pub enum Code {
     /// The national contact point's correlation header is repeated, empty,
     /// too long, or not visible ASCII.
     CorrelationInvalid,
+    /// A configuration revision is refused as `config check` refuses a
+    /// configuration, or the reload refused it; nothing changes.
+    ConfigurationInvalid,
+    /// A configuration revision was saved, applied or rolled back from a
+    /// state another operator or replica changed first.
+    RevisionStale,
+    /// No configuration revision has the number named.
+    RevisionUnknown,
+    /// The running configuration revision has no earlier one to roll back
+    /// to.
+    RollbackUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind

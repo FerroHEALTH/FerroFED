@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 59] = [
+    pub const GATEWAY: [Self; 63] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -71,6 +71,10 @@ impl Code {
         Self::AuthenticationAssuranceInsufficient,
         Self::ContactPointAttributesRequired,
         Self::CorrelationInvalid,
+        Self::ConfigurationInvalid,
+        Self::RevisionStale,
+        Self::RevisionUnknown,
+        Self::RollbackUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -163,6 +167,10 @@ impl Code {
             Self::AuthenticationAssuranceInsufficient => "authentication-assurance-insufficient",
             Self::ContactPointAttributesRequired => "contact-point-attributes-required",
             Self::CorrelationInvalid => "correlation-invalid",
+            Self::ConfigurationInvalid => "configuration-invalid",
+            Self::RevisionStale => "revision-stale",
+            Self::RevisionUnknown => "revision-unknown",
+            Self::RollbackUnavailable => "rollback-unavailable",
         }
     }
 
@@ -198,12 +206,16 @@ impl Code {
             Self::NoDestination
             | Self::NotFound
             | Self::StoredQueryUnknown
-            | Self::SubjectUnavailable => StatusCode::NOT_FOUND,
+            | Self::SubjectUnavailable
+            | Self::RevisionUnknown => StatusCode::NOT_FOUND,
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
             | Self::StoredQueryReserved
-            | Self::EhrIdHeld => StatusCode::CONFLICT,
+            | Self::EhrIdHeld
+            | Self::RevisionStale
+            | Self::RollbackUnavailable => StatusCode::CONFLICT,
+            Self::ConfigurationInvalid => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
@@ -379,6 +391,16 @@ impl Code {
             Self::CorrelationInvalid => {
                 "the national contact point's correlation header is sent once, as 1 to 128 visible ASCII characters"
             }
+            Self::ConfigurationInvalid => {
+                "the configuration revision is refused as config check refuses a configuration, and nothing changes"
+            }
+            Self::RevisionStale => {
+                "the configuration revisions changed since the request read them; read them again"
+            }
+            Self::RevisionUnknown => "no configuration revision has that number",
+            Self::RollbackUnavailable => {
+                "the running configuration revision has no earlier revision to roll back to"
+            }
         }
     }
 }
@@ -456,6 +478,10 @@ mod tests {
             Code::AuthenticationAssuranceInsufficient => Some(56),
             Code::ContactPointAttributesRequired => Some(57),
             Code::CorrelationInvalid => Some(58),
+            Code::ConfigurationInvalid => Some(59),
+            Code::RevisionStale => Some(60),
+            Code::RevisionUnknown => Some(61),
+            Code::RollbackUnavailable => Some(62),
         }
     }
 
@@ -588,6 +614,10 @@ mod tests {
             ),
             (Code::ContactPointAttributesRequired, StatusCode::FORBIDDEN),
             (Code::CorrelationInvalid, StatusCode::BAD_REQUEST),
+            (Code::ConfigurationInvalid, StatusCode::UNPROCESSABLE_ENTITY),
+            (Code::RevisionStale, StatusCode::CONFLICT),
+            (Code::RevisionUnknown, StatusCode::NOT_FOUND),
+            (Code::RollbackUnavailable, StatusCode::CONFLICT),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {
