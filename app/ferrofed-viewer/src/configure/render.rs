@@ -74,7 +74,13 @@ pub fn page(
     let queries = queries_section(&resources.stored_queries);
     let history = history_section(history);
     ConfigView {
-        html: view! { {revisions} {members} {queries} {history} }.to_html(),
+        html: view! {
+            {revisions}
+            {members}
+            {queries}
+            {history}
+        }
+        .to_html(),
         forms: forms(standing, resources).iter().map(form_html).collect(),
     }
 }
@@ -652,12 +658,26 @@ fn query_form() -> FormView {
             "version is immutable: it is never edited or removed."
         </p>
         {field("store-query", ("name", "Qualified name"), String::new(), (true, false))}
-        {field("store-query", ("version", "Version, major.minor.patch"), String::new(), (true, false))}
+        {field(
+            "store-query",
+            ("version", "Version, major.minor.patch"),
+            String::new(),
+            (true, false),
+        )}
         <p>
             <label for="store-query-aql">"AQL"</label>
-            <textarea id="store-query-aql" name="form[aql]" rows="6" spellcheck="false" required></textarea>
+            <textarea
+                id="store-query-aql"
+                name="form[aql]"
+                rows="6"
+                spellcheck="false"
+                required
+            ></textarea>
         </p>
-        {confirm("store-query", "I confirm storing this version, which cannot be changed afterwards")}
+        {confirm(
+            "store-query",
+            "I confirm storing this version, which cannot be changed afterwards",
+        )}
     };
     FormView {
         id: String::from("store-query"),
