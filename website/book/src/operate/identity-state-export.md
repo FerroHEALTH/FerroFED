@@ -60,7 +60,9 @@ also logs how many mappings the export held, never a value.
 Each replica learns its own mappings and shares them with no other replica
 ([Running several replicas](deployment-shape.md#running-several-replicas)). Export every replica,
 one request to the admin listener of each, and keep every file. The files
-of two replicas can disagree, because each saw different answers.
+of two replicas can disagree, because each saw different answers. Each
+file names its replica in `replica`, so give each replica a name you can
+tell apart (`[server] replica`, or the pod name Kubernetes gives it).
 
 ## The format
 
@@ -69,7 +71,7 @@ of two replicas can disagree, because each saw different answers.
   "format_version": 1,
   "federation_id": "example-federation",
   "exported_at": "2026-10-15T09:30:00Z",
-  "scope": "replica",
+  "replica": "ferrofed-7d9c4b5f6-x2k8q",
   "learned_creating_systems": [
     {
       "creating_system_id": "legacy-x.example.org",
@@ -99,7 +101,7 @@ of two replicas can disagree, because each saw different answers.
 | `format_version` | The version of this format, `1`. A change that removes a field or changes what a field means raises it. A reader refuses a version it does not know. |
 | `federation_id` | The `[federation] id` the gateway declares in `OPTIONS {base}/` (§7a.2, N30). |
 | `exported_at` | When the process took the export, as an RFC 3339 timestamp in UTC. |
-| `scope` | Always `replica`: the export holds the state of the one process that answered. |
+| `replica` | The name of the process whose state the export holds: `[server] replica`, or the host name the process runs with, which Kubernetes sets to the pod's name, or `unnamed` without either ([Configuration](configuration.md)). Each file names the replica it came from. |
 | `learned_creating_systems` | Every mapping the process learned, ordered by `creating_system_id`. It is empty when the process learned none. |
 | `learned_creating_systems[].creating_system_id` | The `creating_system_id` of the versions, as their version uid spells it. |
 | `learned_creating_systems[].status` | `learned`: the process saw versions of this `creating_system_id` at one member only and routes follow-up reads there. `withdrawn`: an integrity incident withdrew the mapping, because the versions were seen at two members or the registry document names another member, and the process routes nothing by it ([Integrity incidents](registry.md#integrity-incidents)). |

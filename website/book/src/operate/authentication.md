@@ -326,6 +326,16 @@ which the operator console reads as well, and the stored query is the
 `openehr-its` `StoredQuery`, so the gateway and the console share one
 definition of each.
 
+Each gateway process keeps its own incidents, learned routing table and
+dependency states, so every answer of the four routes names the replica
+that gave it: in the `ferrofed-replica` response header, on a `400` as
+well, and in a `replica` member of each report, such as `"replica":
+"ferrofed-7d9c4b5f6-x2k8q"`. The name is `[server] replica`, or the host
+name the process runs with, which Kubernetes sets to the pod's name, or
+`unnamed` without either ([Configuration](configuration.md#the-replica-name)).
+Behind a load balancer each request reaches one replica, so read a report
+as that replica's view; to see every replica, ask each at its own address.
+
 A caller reaches them only with a token whose `scope` holds the
 `operator_scope` its issuer's entry names, as one whole scope token:
 

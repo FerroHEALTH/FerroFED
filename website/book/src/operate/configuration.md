@@ -226,6 +226,7 @@ bindings_drain_timeout_ms = 5000  # then the bindings stop their processes withi
 body_limit_bytes = 1048576    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
 overload_retry_after_s = 1    # the Retry-After of that 503, in seconds
+# replica = "gateway-eu-1"    # the name every operator report carries; unset, HOSTNAME, else "unnamed"; see The replica name
 
 # A per-caller rate, off unless set; see Overload protection.
 [server.caller_rate]
@@ -556,7 +557,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
 | `GET {base}/health` | `200` while the process is up |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
-| `GET {base}/operator/dependencies` | to a caller with the operator scope, always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `degraded`, `failing`, `down` or `unknown`, with `directory_fault` while the directory is `degraded`; endpoint ids, states and the fault's class only |
+| `GET {base}/operator/dependencies` | to a caller with the operator scope, always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `degraded`, `failing`, `down` or `unknown`, with `directory_fault` while the directory is `degraded`; endpoint ids, states, the fault's class and the [replica name](#the-replica-name) only |
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
@@ -570,6 +571,23 @@ printable ASCII, the gateway's own id otherwise.
 
 The metrics are not on this surface: they have a listener of their own, off
 by default ([Metrics](metrics.md)).
+
+## The replica name
+
+Each gateway process keeps its integrity incidents, its learned routing
+table and its dependency states to itself, so every report of the
+[operator surface](authentication.md#the-operator-surface) and the
+[export of the identity state](identity-state-export.md) names the process
+that produced it. `[server] replica` sets the name: 1 to 64 ASCII letters,
+digits, `.`, `_` and `-`. Any other value is refused at load with
+`server.replica is no replica name`. Unset, the name is the `HOSTNAME` the
+process runs with, which Kubernetes sets to the pod's own name, and
+`unnamed` when `HOSTNAME` is unset or is no such name. A start is never
+refused for its host name.
+
+Give each replica a name you can tell apart, or leave it to the pod name.
+The name is not a secret and names no patient, and it never reaches a
+node.
 
 ## TLS on the listeners
 

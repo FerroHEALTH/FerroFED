@@ -258,6 +258,7 @@ pub(crate) fn settings() -> ServerSettings {
             .resolve_overload()
             .expect("the default limits should resolve"),
         tls: None,
+        replica: ferrofed_registry::replica::Replica::default(),
     }
 }
 

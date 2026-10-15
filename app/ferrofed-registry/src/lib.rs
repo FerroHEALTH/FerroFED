@@ -60,7 +60,8 @@
 //! [`EhrIndex`](ehr_index::EhrIndex) learns which member holds an `ehr_id`,
 //! the third step of path `ehr_id` routing (§12.5.1). [`operator`] holds
 //! the reports the gateway's read-only operator surface answers with, and
-//! [`health`] the body of the gateway's `GET {base}/operator/dependencies`.
+//! [`health`] the body of the gateway's `GET {base}/operator/dependencies`. Each of them names
+//! the process that produced it, a [`replica::Replica`].
 //!
 //! Every credential FerroFED is configured with, and every URL that may carry
 //! one in its userinfo, is held in a [`Secret`](secret::Secret) or a
@@ -91,6 +92,7 @@ pub mod incident;
 pub mod manufacturer;
 pub mod native;
 pub mod operator;
+pub mod replica;
 pub mod resource;
 pub mod revision;
 pub mod secret;

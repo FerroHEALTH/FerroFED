@@ -51,19 +51,24 @@ creating_system_id = "legacy-a.example.org"
 endpoint = "node-a-pub"
 "#;
 
+/// The name of the replica [`gateway`] runs as.
+const REPLICA: &str = "ferrofed-2";
+
 /// A gateway over [`REGISTRY`].
 fn gateway(dir: &std::path::Path) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, REGISTRY)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[server]\nreplica = \"{REPLICA}\"\n"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
     Ok(ferrofed_server::router(
-        Arc::new(AppState::with_federation(federation)),
+        Arc::new(
+            AppState::with_federation(federation).with_replica(settings.server.replica.clone()),
+        ),
         &settings_with_room(),
     ))
 }
@@ -202,11 +207,11 @@ async fn a_gateway_without_a_registry_answers_an_empty_table_and_no_stored_queri
     for (path, empty) in [
         (
             "/operator/creating-systems",
-            r#"{"items":[],"offset":0,"total":0}"#,
+            r#"{"items":[],"offset":0,"total":0,"replica":"unnamed"}"#,
         ),
         (
             "/operator/stored-queries",
-            r#"{"items":[],"offset":0,"total":0}"#,
+            r#"{"items":[],"offset":0,"total":0,"replica":"unnamed"}"#,
         ),
     ] {
         let mut request = Request::get(path).body(Body::empty())?;
@@ -323,5 +328,71 @@ async fn no_dependency_report_reaches_a_caller_who_is_no_operator() -> TestResul
     let (status, text) = answer(app, open).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     assert!(!text.contains("node-a-pub"), "{text}");
+    Ok(())
+}
+
+/// The `ferrofed-replica` header of `response`.
+fn replica_header(response: &http::Response<Body>) -> Option<&str> {
+    response
+        .headers()
+        .get(ferrofed_registry::replica::HEADER)
+        .and_then(|value| value.to_str().ok())
+}
+
+/// A report's `replica` member, whatever else it holds.
+#[derive(serde::Deserialize)]
+struct Named {
+    replica: Option<String>,
+}
+
+/// Each process holds its own incidents, routing table and dependency
+/// states, so every report of the operator surface names the replica that
+/// produced it, in its body and in the `ferrofed-replica` header.
+#[tokio::test]
+async fn every_operator_report_names_the_replica_that_produced_it() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path())?;
+    for path in [
+        "/operator/incidents",
+        "/operator/creating-systems",
+        "/operator/stored-queries",
+        "/operator/dependencies",
+    ] {
+        let response = send_as_is(app.clone(), get(path, &operator_bearer()?)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{path}");
+        assert_eq!(Some(REPLICA), replica_header(&response), "{path}");
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+        let named: Named = serde_json::from_slice(&bytes)?;
+        assert_eq!(Some(REPLICA), named.replica.as_deref(), "{path}");
+    }
+    Ok(())
+}
+
+/// A refused page carries the gateway's ITS-REST error, and the header
+/// still names the replica that refused it.
+#[tokio::test]
+async fn a_refused_page_names_its_replica_in_the_header() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let response = send_as_is(
+        gateway(dir.path())?,
+        get("/operator/creating-systems?limit=0", &operator_bearer()?)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::BAD_REQUEST, response.status());
+    assert_eq!(Some(REPLICA), replica_header(&response));
+    Ok(())
+}
+
+/// The replica name sits on the operator surface alone: the health family
+/// answers without it.
+#[tokio::test]
+async fn no_answer_outside_the_operator_surface_names_the_replica() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let response = send_as_is(
+        gateway(dir.path())?,
+        Request::get("/health").body(Body::empty())?,
+    )
+    .await?;
+    assert_eq!(None, replica_header(&response));
     Ok(())
 }

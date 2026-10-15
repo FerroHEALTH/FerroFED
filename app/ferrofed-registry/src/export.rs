@@ -35,7 +35,8 @@
 //!     "#,
 //! )?;
 //! let (learned, at) = (LearnedMap::new(), jiff::Timestamp::UNIX_EPOCH);
-//! let export = IdentityStateExport::of("example-federation", &registry, &learned, at);
+//! let replica = "ferrofed-0".parse()?;
+//! let export = IdentityStateExport::of("example-federation", &replica, &registry, &learned, at);
 //! assert_eq!(FORMAT_VERSION, export.format_version);
 //! assert!(export.learned_creating_systems.is_empty());
 //! # Ok::<(), Box<dyn std::error::Error>>(())
@@ -47,6 +48,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::creating_system::LearnedMap;
+use crate::replica::Replica;
 use crate::snapshot::RegistrySnapshot;
 
 /// The version of the export format this crate writes.
@@ -64,8 +66,10 @@ pub struct IdentityStateExport {
     pub federation_id: String,
     /// When the process took the export, RFC 3339.
     pub exported_at: String,
-    /// Whose state the export holds.
-    pub scope: StateScope,
+    /// The replica whose state the export holds: each replica learns its
+    /// own maps, so a deployment of several replicas is exported at each of
+    /// them.
+    pub replica: Replica,
     /// Every `creating_system_id` mapping the process learned from answers,
     /// ordered by `creating_system_id`.
     pub learned_creating_systems: Vec<LearnedCreatingSystem>,
@@ -76,10 +80,11 @@ pub struct IdentityStateExport {
 
 impl IdentityStateExport {
     /// The export of `learned`, read against `snapshot`, for the federation
-    /// `federation_id`, taken `at`.
+    /// `federation_id`, taken `at` at `replica`.
     #[must_use]
     pub fn of(
         federation_id: &str,
+        replica: &Replica,
         snapshot: &RegistrySnapshot,
         learned: &LearnedMap,
         at: Timestamp,
@@ -105,20 +110,11 @@ impl IdentityStateExport {
             format_version: FORMAT_VERSION,
             federation_id: federation_id.to_owned(),
             exported_at: at.to_string(),
-            scope: StateScope::Replica,
+            replica: replica.clone(),
             learned_creating_systems,
             not_exported: NotExported::ALL.to_vec(),
         }
     }
-}
-
-/// Whose state an export holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StateScope {
-    /// The one process that answered: each replica learns its own maps, so
-    /// a deployment of several replicas is exported at each of them.
-    Replica,
 }
 
 /// Whether a learned mapping routes.
@@ -246,8 +242,10 @@ mod tests {
                 &at("node-b-pub"),
             )
             .expect("withdrawn");
+        let replica = "ferrofed-0".parse().expect("a replica");
         let export = IdentityStateExport::of(
             "example-federation",
+            &replica,
             &snapshot,
             &learned,
             jiff::Timestamp::UNIX_EPOCH,
@@ -278,5 +276,6 @@ mod tests {
         );
         assert_eq!(NotExported::ALL.to_vec(), export.not_exported);
         assert_eq!("1970-01-01T00:00:00Z", export.exported_at);
+        assert_eq!("ferrofed-0", export.replica.as_str());
     }
 }

@@ -176,6 +176,9 @@ pub enum Error {
         #[source]
         source: std::net::AddrParseError,
     },
+    /// `server.replica` is no replica name.
+    #[error("server.replica is no replica name")]
+    Replica(#[source] ferrofed_registry::replica::ReplicaError),
     /// The base path is not one a request can be served under (§4.1, N28).
     #[error("{key} is not a base path")]
     BasePath {

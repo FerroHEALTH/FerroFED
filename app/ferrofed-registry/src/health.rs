@@ -73,6 +73,10 @@ impl Indication {
 /// their states, and nothing else.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DependencyReport {
+    /// The replica whose observations these are: each process observes
+    /// its own dependencies. Absent from a report no surface answered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replica: Option<String>,
     /// Every member endpoint by id, in id order.
     pub endpoints: BTreeMap<String, Observed>,
     /// The resolver's state, absent when no resolver is configured.

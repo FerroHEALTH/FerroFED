@@ -17,6 +17,7 @@ use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_identity::dev::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::replica::Replica;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
@@ -260,6 +261,8 @@ pub struct ServerSettings {
     /// The TLS the listener serves, from `[server.tls]`; `None` serves plain
     /// HTTP.
     pub tls: Option<TlsFiles>,
+    /// The name of this process, which every operator report names.
+    pub replica: Replica,
 }
 
 /// The console and the trace export, resolved.

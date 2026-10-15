@@ -10,7 +10,9 @@
 //! `SsrMode::Async`: the server waits for every answer and sends the whole
 //! page at once, so the view is in the HTML the browser receives and needs
 //! no script to be read (the Leptos book, `ssr/23_ssr_modes`). None renders
-//! a patient identifier or clinical data (§5.4.1, N33).
+//! a patient identifier or clinical data (§5.4.1, N33). Each view that reads
+//! the operator surface names the replica that answered it, because the
+//! health, the incidents and the routing table are each process's own.
 
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
@@ -130,6 +132,7 @@ pub fn MembersPage() -> impl IntoView {
 
 /// The members table and the other services.
 fn members_section(view: MembersView) -> AnyView {
+    let answered_by = replica_line(view.answered_by);
     let rows = view
         .members
         .into_iter()
@@ -166,6 +169,7 @@ fn members_section(view: MembersView) -> AnyView {
         })
         .collect_view();
     view! {
+        {answered_by}
         <table>
             <caption>"Member endpoints"</caption>
             <thead>
@@ -216,6 +220,7 @@ pub fn IntegrityPage() -> impl IntoView {
 
 /// The incident counts, the recent incidents and the routing table.
 fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> AnyView {
+    let answered_by = replica_line(view.answered_by);
     let counts = view
         .counts
         .into_iter()
@@ -282,6 +287,7 @@ fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> An
         })
         .collect_view();
     view! {
+        {answered_by}
         <table>
             <caption>"Incidents since the gateway started"</caption>
             <thead>
@@ -367,8 +373,13 @@ pub fn StoredQueriesPage() -> impl IntoView {
 
 /// Every held version with its text.
 fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView {
+    let answered_by = replica_line(view.answered_by);
     if view.total == 0 {
-        return view! { <p>"The gateway holds no stored query."</p> }.into_any();
+        return view! {
+            {answered_by}
+            <p>"The gateway holds no stored query."</p>
+        }
+        .into_any();
     }
     let stored_pager = pager(
         STORED_QUERIES,
@@ -394,6 +405,7 @@ fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyVie
         })
         .collect_view();
     view! {
+        {answered_by}
         <table>
             <caption>"Held versions"</caption>
             <thead>
@@ -410,6 +422,11 @@ fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyVie
         {repair}
     }
     .into_any()
+}
+
+/// The line naming the replica, or the replicas, that answered a view.
+fn replica_line(line: String) -> AnyView {
+    view! { <p>{line}</p> }.into_any()
 }
 
 /// The gateway's self-description, `OPTIONS {base}/`.

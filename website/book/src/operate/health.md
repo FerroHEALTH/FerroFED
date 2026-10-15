@@ -51,9 +51,13 @@ one. A report reads:
   "endpoints": { "node-a-query": "up", "node-b-query": "down" },
   "resolver": "up",
   "consent": "down",
-  "localizer": "up"
+  "localizer": "up",
+  "replica": "ferrofed-0"
 }
 ```
+
+`replica` names the gateway process that observed the states, since each
+replica observes its own ([The replica name](configuration.md#the-replica-name)).
 
 Each state is the one the last request the gateway made for a client
 observed, and it reports the member's reachability and health, never whether

@@ -48,12 +48,14 @@ struct Indicator {
     state: String,
 }
 
-/// The dependency document: endpoint ids and states, and nothing else.
+/// The dependency document: endpoint ids and states, and the replica that
+/// observed them, and nothing else.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Dependencies {
     endpoints: BTreeMap<String, String>,
     resolver: Option<String>,
+    replica: Option<String>,
 }
 
 /// The registry document of node A and node B at `a` and `b`.
@@ -266,5 +268,10 @@ async fn without_a_registry_the_dependency_report_is_empty() -> TestResult {
     assert_eq!(StatusCode::OK, status);
     assert!(report.endpoints.is_empty());
     assert_eq!(None, report.resolver, "no resolver is configured: {text}");
+    assert_eq!(
+        Some(ferrofed_registry::replica::UNNAMED),
+        report.replica.as_deref(),
+        "{text}"
+    );
     Ok(())
 }
