@@ -142,6 +142,17 @@ pub struct IncidentRow {
     pub description: String,
 }
 
+/// One collision the operator cleared.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClearedRow {
+    /// When it was cleared.
+    pub at: String,
+    /// The `ehr_id` cleared, only when it is a bare UUID.
+    pub ehr_id: Option<String>,
+    /// The members the gateway held it at, by `node_id`.
+    pub claimants: Vec<String>,
+}
+
 /// One row of the `creating_system_id` routing table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RouteRow {
@@ -165,6 +176,8 @@ pub struct IntegrityView {
     pub counts: Vec<(String, u64)>,
     /// The most recent incidents, newest first.
     pub recent: Vec<IncidentRow>,
+    /// The collisions the operator cleared most recently, newest first.
+    pub cleared: Vec<ClearedRow>,
     /// One page of the `creating_system_id` routing table.
     pub routes: Vec<RouteRow>,
     /// Where that page starts in the table.

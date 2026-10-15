@@ -109,7 +109,10 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
                "recent":[{"kind":"EhrIdCollision","at":"2026-10-05T08:00:00Z",
                "description":"ehr_id 7d44b88c-4199-4bad-97dc-d78268e01398 is claimed by endpoints [node-a-pub, node-b-pub], found by the ask-all probe",
                "creating_system_id":null,"ehr_id":"7d44b88c-4199-4bad-97dc-d78268e01398","detection":"ask-all",
-               "endpoints":["node-a-pub","node-b-pub"],"nodes":[]}]}"#,
+               "endpoints":["node-a-pub","node-b-pub"],"nodes":[]}],
+               "cleared":[{"at":"2026-10-05T09:00:00Z","ehr_id":"7d44b88c-4199-4bad-97dc-d78268e01398",
+               "claimants":["node-a","node-b"]},
+               {"at":"2026-10-05T10:00:00Z","ehr_id":null,"claimants":["node-a","node-c"]}]}"#,
         ),
     )
     .await;
@@ -195,6 +198,42 @@ async fn the_integrity_view_shows_the_counts_the_incidents_and_the_routing_table
         "{body}"
     );
     assert!(body.contains("<td>learned</td>"), "{body}");
+    Ok(())
+}
+
+// The gateway lists the collisions the operator cleared beside the
+// incidents, which a clear never removes, and the view shows each, newest
+// first, naming the ehr_id only when the gateway does.
+#[tokio::test]
+async fn the_integrity_view_lists_the_collisions_cleared_recently_newest_first()
+-> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(
+        body.contains("<caption>Collisions cleared recently, newest first</caption>"),
+        "{body}"
+    );
+    let newer = body
+        .find(r#"<td>2026-10-05T10:00:00Z</td><th scope="row">not a bare UUID</th><td>node-a, node-c</td>"#)
+        .ok_or("the newer clear")?;
+    let older = body
+        .find(r#"<td>2026-10-05T09:00:00Z</td><th scope="row">7d44b88c-4199-4bad-97dc-d78268e01398</th><td>node-a, node-b</td>"#)
+        .ok_or("the older clear")?;
+    assert!(newer < older, "newest first: {body}");
+    assert!(
+        body.contains("found by the ask-all probe"),
+        "the incident stays: {body}"
+    );
+
+    let none = paged_gateway(0, 2).await;
+    let (_state, service, session) = signed_in_console(&none)?;
+    let (_response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    assert!(
+        body.contains("No collision cleared since the gateway started."),
+        "{body}"
+    );
     Ok(())
 }
 

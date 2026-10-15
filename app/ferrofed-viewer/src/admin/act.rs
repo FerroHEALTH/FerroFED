@@ -85,7 +85,7 @@ pub mod server {
     use crate::gateway::GatewayError;
     use crate::gateway::admin::{Distribution, Redistribution};
     use crate::query::model::EndpointLine;
-    use crate::views::load::server::Stop;
+    use crate::views::load::server::{Asked, Stop, stopped};
     use crate::views::model::{Refusal, ViewError};
 
     /// The value of the replica field that names every replica.
@@ -258,7 +258,7 @@ pub mod server {
                 tracing::info!(replica, action = what, "an operator's admin action ran");
                 Acted::Done(read(report))
             }
-            Err(error) => match crate::views::load::server::refused(&error) {
+            Err(error) => match stopped(&error, Asked::Action { what, replica }) {
                 Stop::Refused(refusal) => Acted::Refused(refusal),
                 Stop::Fault(fault) => Acted::Fault(fault),
             },

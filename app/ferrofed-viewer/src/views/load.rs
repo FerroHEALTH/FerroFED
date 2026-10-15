@@ -117,8 +117,8 @@ pub mod server {
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
-        FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, Outcome, PAGE_SIZE,
-        Refusal, RouteRow, StoredRow, StoredView, ViewError,
+        ClearedRow, FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, Outcome,
+        PAGE_SIZE, Refusal, RouteRow, StoredRow, StoredView, ViewError,
     };
 
     /// Why a server function stops short of its view: an expected refusal,
@@ -187,19 +187,64 @@ pub mod server {
         Ok((state, AccessToken::new(token)))
     }
 
-    /// What stopped a gateway call that failed, logged with no token and no
-    /// body: the gateway's refusal, or the console's fault of a body it
-    /// cannot read or a gateway it cannot reach.
+    /// What a failed gateway call asked for, as its log line names it.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Asked<'a> {
+        /// A view's read of the gateway.
+        View,
+        /// An operator's admin action at a replica's admin listener.
+        Action {
+            /// The action, `clear` or `drift repair`.
+            what: &'a str,
+            /// The replica's name.
+            replica: &'a str,
+        },
+    }
+
+    /// What stopped a view's gateway call that failed, as [`stopped`] logs
+    /// and splits it.
     #[must_use]
     pub fn refused(error: &GatewayError) -> Stop {
+        stopped(error, Asked::View)
+    }
+
+    /// What stopped the gateway call `asked` that failed.
+    ///
+    /// It is the gateway's refusal, or the console's fault of a body it
+    /// cannot read or a gateway it cannot reach, logged by what the call
+    /// asked for, with no token, no body and nothing the call named.
+    #[must_use]
+    pub fn stopped(error: &GatewayError, asked: Asked<'_>) -> Stop {
         if let Some(status) = error.unreadable() {
-            tracing::error!(%status, "the gateway answered a view with a body this console cannot read");
+            match asked {
+                Asked::View => tracing::error!(
+                    %status,
+                    "the gateway answered a view with a body this console cannot read"
+                ),
+                Asked::Action { what, replica } => tracing::error!(
+                    %status,
+                    replica,
+                    action = what,
+                    "a replica answered an operator's admin action with a body this console cannot read"
+                ),
+            }
             return Stop::Fault(ViewError::Unreadable {
                 status: status.as_u16(),
             });
         }
         if let Some((status, code)) = error.refusal() {
-            tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
+            match asked {
+                Asked::View => {
+                    tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
+                }
+                Asked::Action { what, replica } => tracing::warn!(
+                    %status,
+                    code = code.as_deref(),
+                    replica,
+                    action = what,
+                    "a replica refused an operator's admin action"
+                ),
+            }
             if status == http::StatusCode::UNAUTHORIZED {
                 return Stop::Refused(Refusal::NotAuthenticated { code });
             }
@@ -208,7 +253,17 @@ pub mod server {
                 code,
             })
         } else {
-            tracing::error!(error = %error, "the gateway could not be reached for a view");
+            match asked {
+                Asked::View => {
+                    tracing::error!(error = %error, "the gateway could not be reached for a view");
+                }
+                Asked::Action { what, replica } => tracing::error!(
+                    error = %error,
+                    replica,
+                    action = what,
+                    "a replica's admin listener could not be reached for an operator's admin action"
+                ),
+            }
             Stop::Fault(ViewError::Unreachable)
         }
     }
@@ -250,8 +305,10 @@ pub mod server {
         }
     }
 
-    /// The integrity view of `incidents` and `routes`, offering the collision
-    /// clear at `replicas`.
+    /// The integrity view of `incidents` and `routes`.
+    ///
+    /// It lists the incidents and the collisions cleared beside them, and
+    /// offers the collision clear at `replicas`.
     #[must_use]
     pub fn integrity(
         incidents: &IncidentReport,
@@ -278,6 +335,16 @@ pub mod server {
                     at: recorded.at.clone(),
                     kind: recorded.kind.clone(),
                     description: recorded.description.clone(),
+                })
+                .collect(),
+            cleared: incidents
+                .cleared
+                .iter()
+                .rev()
+                .map(|cleared| ClearedRow {
+                    at: cleared.at.clone(),
+                    ehr_id: cleared.ehr_id.clone(),
+                    claimants: cleared.claimants.clone(),
                 })
                 .collect(),
             routes_offset: routes.offset,

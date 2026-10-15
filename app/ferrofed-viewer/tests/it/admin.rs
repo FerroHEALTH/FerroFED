@@ -17,7 +17,7 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{OPERATOR_TOKEN, console, get_as, send, signed_in};
+use crate::support::{Captured, OPERATOR_TOKEN, console, get_as, send, signed_in};
 
 /// A synthetic `ehr_id` two members claim.
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
@@ -388,6 +388,60 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
     }
     for raw in ["<script", "<img"] {
         assert!(!html.contains(raw), "{raw}: {html}");
+    }
+    Ok(())
+}
+
+// A refused or unreachable action is logged as the action it is, naming the
+// replica, the status and the code, and never the ehr_id or the stored query
+// the operator named.
+#[tokio::test]
+async fn a_refused_action_is_logged_as_that_action_with_no_identifier() -> Result<(), Box<dyn Error>>
+{
+    let captured = Captured::default();
+    let _logging = captured.logging();
+    let refusing = Server::start().await;
+    answers(
+        &refusing,
+        &clear_path(),
+        403,
+        String::from(r#"{"code":"scope-insufficient"}"#),
+    )
+    .await;
+    answers(
+        &refusing,
+        DISTRIBUTE,
+        409,
+        String::from(r#"{"code":"conflict"}"#),
+    )
+    .await;
+    let replicas = [
+        ("gateway-0", refusing.uri()),
+        ("gateway-1", String::from("http://127.0.0.1:9/")),
+    ];
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    acted(&service, &session, "/api/clear-ehr-id", clear_at("*")).await?;
+    acted(
+        &service,
+        &session,
+        "/api/repair-drift",
+        repair_every_member(),
+    )
+    .await?;
+
+    let logged = captured.text();
+    for line in [
+        r#"a replica refused an operator's admin action status=403 Forbidden code="scope-insufficient" replica="gateway-0" action="clear""#,
+        r#"a replica refused an operator's admin action status=409 Conflict code="conflict" replica="gateway-0" action="drift repair""#,
+        r#"a replica's admin listener could not be reached for an operator's admin action error=the gateway call failed replica="gateway-1" action="clear""#,
+    ] {
+        assert!(logged.contains(line), "{line}: {logged}");
+    }
+    for as_a_view in ["refused a view", "for a view", "answered a view"] {
+        assert!(!logged.contains(as_a_view), "{as_a_view}: {logged}");
+    }
+    for named in [EHR_ID, "org.example::compositions", OPERATOR_TOKEN] {
+        assert!(!logged.contains(named), "{named}: {logged}");
     }
     Ok(())
 }
