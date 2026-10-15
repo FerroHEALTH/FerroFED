@@ -30,6 +30,10 @@
 //! redirect_uri = "https://console.example.org/auth/callback"
 //! end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
 //! post_logout_redirect_uri = "https://console.example.org/"
+//!
+//! [[admin.replicas]]
+//! name = "gateway-0"
+//! admin_url = "http://ferrofed-0.ferrofed-admin.internal:9464/"
 //! ```
 
 pub mod error;
@@ -61,6 +65,10 @@ pub struct Config {
     /// `[oidc]`: the OpenID Provider operators sign in with; without it the
     /// console offers no sign-in.
     pub oidc: Option<Oidc>,
+    /// `[admin]`: the gateway replicas whose admin listener the console
+    /// reaches for the operator's admin actions; without one the console
+    /// offers none.
+    pub admin: Admin,
 }
 
 /// `[server]`.
@@ -190,4 +198,31 @@ impl Default for Oidc {
             post_logout_redirect_uri: None,
         }
     }
+}
+
+/// `[admin]`: the admin listeners of the gateway's replicas, which the
+/// console's server calls with the operator's own access token for the
+/// collision clear and the stored-query drift repair.
+///
+/// Each admin listener must be reachable from the console's server on an
+/// internal network, never a public one, so the gateway's `[metrics] listen`
+/// binds a non-loopback internal address.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Admin {
+    /// Every replica, in the order the console names them; the drift
+    /// repair, which acts on the store the replicas share, goes to the
+    /// first.
+    pub replicas: Vec<Replica>,
+}
+
+/// One gateway replica's admin listener.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Replica {
+    /// The name the console shows for the replica and the operator picks it
+    /// by: letters, digits, `.`, `_` and `-`, at most 64 of them.
+    pub name: String,
+    /// The root of the replica's admin listener, an `http` or `https` URL.
+    pub admin_url: String,
 }

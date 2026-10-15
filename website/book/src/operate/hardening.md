@@ -146,7 +146,13 @@ page: our own design.
   listens.
 - [ ] **Keep it on loopback.** Set `allow_remote = true` only when the
   address is reachable from your scraper and your operators and nothing
-  else ([Metrics](metrics.md#who-the-admin-listener-serves)).
+  else ([Metrics](metrics.md#who-the-admin-listener-serves)). An operator
+  console configured with `[admin]` reaches it from its own server, so bind
+  it to an internal address the console's server can reach and no public
+  network can ([The operator console](operator-console.md#configuration)).
+  The console presents no client certificate: guard the scrape with
+  `scrape_token_file` on a listener the console calls, never with a
+  `client_ca_file`.
 - [ ] **Authenticate the scrape off loopback.** Set `scrape_token_file` to
   a file holding a long random token, such as `openssl rand -hex 32`, and
   give your Prometheus the same token with `authorization.credentials_file`;

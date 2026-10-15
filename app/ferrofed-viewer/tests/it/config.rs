@@ -80,7 +80,80 @@ fn the_example_configuration_in_the_book_resolves() -> Result<(), Box<dyn Error>
     let settings = settings(&example)?;
     assert_eq!("0.0.0.0:3000", settings.listen.to_string());
     assert!(settings.oidc.is_some());
+    let replicas: Vec<&str> = settings
+        .admin
+        .iter()
+        .map(|replica| replica.name.as_str())
+        .collect();
+    assert_eq!(vec!["gateway-0", "gateway-1"], replicas);
     Ok(())
+}
+
+#[test]
+fn a_console_with_no_admin_table_offers_no_admin_action() -> Result<(), Box<dyn Error>> {
+    let settings = Config::from_sources(None, &BTreeMap::new())?.resolve()?;
+    assert!(settings.admin.is_empty());
+    Ok(())
+}
+
+#[test]
+fn the_replicas_can_be_set_from_the_environment() -> Result<(), Box<dyn Error>> {
+    let environment = BTreeMap::from([(
+        String::from("FERROFED_VIEWER__ADMIN__REPLICAS"),
+        String::from(
+            r#"[{ name = "gateway-0", admin_url = "https://ferrofed-0.internal:9464/" }]"#,
+        ),
+    )]);
+    let settings = Config::from_sources(None, &environment)?.resolve()?;
+    let replica = settings.admin.first().ok_or("one replica")?;
+    assert_eq!("gateway-0", replica.name);
+    assert_eq!("https://ferrofed-0.internal:9464/", replica.url.as_str());
+    Ok(())
+}
+
+#[test]
+fn a_replica_name_that_is_not_plain_or_given_twice_is_refused() {
+    for names in [
+        vec![""],
+        vec!["gateway 0"],
+        vec!["<b>gateway</b>"],
+        vec!["*"],
+        vec!["gateway-0", "gateway-0"],
+    ] {
+        let text: String = names
+            .iter()
+            .map(|name| {
+                [
+                    "[[admin.replicas]]\nname = \"",
+                    name,
+                    "\"\nadmin_url = \"http://10.0.0.5:9464/\"\n",
+                ]
+                .concat()
+            })
+            .collect();
+        let error = refused(&text);
+        assert!(
+            matches!(&error, error::Error::ReplicaName { key, .. } | error::Error::Missing { key } if key == "admin.replicas.name"),
+            "{names:?}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_replica_url_that_is_not_http_or_carries_userinfo_is_refused() {
+    for url in [
+        "",
+        "ftp://10.0.0.5/",
+        "https://operator:secret@10.0.0.5:9464/",
+    ] {
+        let error = refused(&format!(
+            "[[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{url}\"\n"
+        ));
+        assert!(
+            matches!(&error, error::Error::UrlShape { key, .. } | error::Error::Missing { key } if key == "admin.replicas.admin_url"),
+            "{url}: {error:?}"
+        );
+    }
 }
 
 #[test]

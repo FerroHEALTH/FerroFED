@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The console's client of the FerroFED gateway: the gateway's public surface
-//! over HTTP, and nothing else.
+//! and its replicas' admin listeners over HTTP, and nothing else.
 //!
 //! Every call goes through the `openehr-its` client, sent as the signed-in
 //! operator with the operator's own access token, so the gateway
@@ -17,6 +17,12 @@
 //! typed [`GatewayError`] carrying the gateway's status, never an empty
 //! answer. [`Gateway::query`] runs an AQL or a stored query and reads the
 //! federated `RESULT_SET` with its `meta.federation` (§9.1, §11.4).
+//!
+//! [`admin`] calls the operator's admin actions on a replica's admin
+//! listener, at the URL the console is configured with, through the same
+//! client.
+
+pub mod admin;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -104,6 +110,16 @@ pub enum GatewayError {
         #[source]
         source: WireError,
     },
+    /// A replica's admin listener answered an action with a body this
+    /// console cannot read as that action's report.
+    #[error("the admin listener answered {status} with no readable report")]
+    Report {
+        /// The status the admin listener answered with.
+        status: StatusCode,
+        /// What the JSON reader refused.
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 impl GatewayError {
@@ -127,7 +143,8 @@ impl GatewayError {
             Self::Transport { .. }
             | Self::Base { .. }
             | Self::Call { .. }
-            | Self::Envelope { .. } => return None,
+            | Self::Envelope { .. }
+            | Self::Report { .. } => return None,
         };
         Some((status, code_of(body)))
     }
@@ -140,7 +157,8 @@ impl GatewayError {
             Self::Call {
                 source: ClientError::Body { status, .. },
             }
-            | Self::Envelope { status, .. } => Some(*status),
+            | Self::Envelope { status, .. }
+            | Self::Report { status, .. } => Some(*status),
             _ => None,
         }
     }

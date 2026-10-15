@@ -301,7 +301,7 @@ pub mod server {
 
     /// The text of an endpoint's error: a message as itself, an object as
     /// its JSON.
-    fn error_text(error: &ErrorDetail) -> String {
+    pub(crate) fn error_text(error: &ErrorDetail) -> String {
         match error {
             ErrorDetail::Text(message) => message.clone(),
             ErrorDetail::Object(_) => serde_json::to_string(error).unwrap_or_else(|_unprintable| {

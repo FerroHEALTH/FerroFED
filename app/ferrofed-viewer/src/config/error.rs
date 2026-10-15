@@ -261,6 +261,14 @@ pub enum Error {
         /// What the URL lacks, as a predicate.
         reason: &'static str,
     },
+    /// A replica's name is not one the console admits.
+    #[error("{key} {reason}")]
+    ReplicaName {
+        /// The key.
+        key: String,
+        /// What is wrong with it, as a predicate.
+        reason: &'static str,
+    },
     /// A number is out of its range.
     #[error("{key} must be at least 1")]
     Zero {

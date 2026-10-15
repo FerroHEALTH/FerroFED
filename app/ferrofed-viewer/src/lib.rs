@@ -9,7 +9,9 @@
 //! the gateway over HTTP alone, through [`gateway`], and never links the
 //! engine. It holds the operator's sign-in session on the server
 //! ([`session`], [`oidc`]), so the browser carries an opaque cookie and never
-//! a token, and it holds no clinical data. [`app`] is the page tree both
+//! a token, and it holds no clinical data. [`admin`] runs the operator's
+//! admin actions on the replicas' admin listeners its configuration names.
+//! [`app`] is the page tree both
 //! halves share, with [`manufacturer`] named in its footer; [`server`] serves it with the health route and the sign-in
 //! routes, [`config`] reads the TOML configuration, [`cli`] and [`command`]
 //! run the binary, and [`healthcheck`] is the job a container runtime runs
@@ -20,6 +22,7 @@
 //! between them.
 #![doc(test(attr(deny(warnings))))]
 
+pub mod admin;
 pub mod app;
 // NOTE: Regulation (EU) 2025/327 Art 30(1)(g): the browser half links no FerroFED crate,
 // so the console compiles the registry's own file (the Rust reference, the `path` attribute).

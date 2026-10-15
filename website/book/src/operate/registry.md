@@ -688,6 +688,10 @@ POST /admin/ehr-ids/7d44b88c-4199-4bad-97dc-d78268e01398/clear
 Authorization: Bearer <an access token with the operator scope>
 ```
 
+The operator console sends the same request from its integrity view, to one
+replica or to each in turn, when its `[admin]` table names the replicas'
+admin listeners ([The operator console](operator-console.md)).
+
 - The gateway forgets that `ehr_id` from the `ehr_id` index and from the
   resolution bindings of every caller. The request takes the node-local
   `ehr_id` from the `claimants` incident and nothing else: no body and no

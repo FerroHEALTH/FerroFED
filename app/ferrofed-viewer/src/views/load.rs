@@ -55,7 +55,11 @@ pub async fn integrity(
         let routes = gateway
             .creating_systems(&token, server::page(offset))
             .await?;
-        Ok(server::integrity(&incidents, &routes))
+        Ok(server::integrity(
+            &incidents,
+            &routes,
+            &state.settings().admin,
+        ))
     })
     .await
 }
@@ -75,7 +79,7 @@ pub async fn stored_queries(
             .gateway()
             .stored_queries(&token, server::page(offset))
             .await?;
-        Ok(server::stored(&report))
+        Ok(server::stored(&report, &state.settings().admin))
     })
     .await
 }
@@ -107,6 +111,9 @@ pub mod server {
     use openehr_federation::options::OptionsRoot;
     use openehr_its::rest::generated::definition::StoredQuery;
 
+    use std::collections::BTreeSet;
+
+    use crate::config::settings::ReplicaSettings;
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
@@ -243,12 +250,20 @@ pub mod server {
         }
     }
 
-    /// The integrity view of `incidents` and `routes`.
+    /// The integrity view of `incidents` and `routes`, offering the collision
+    /// clear at `replicas`.
     #[must_use]
     pub fn integrity(
         incidents: &IncidentReport,
         routes: &Page<CreatingSystemEntry>,
+        replicas: &[ReplicaSettings],
     ) -> IntegrityView {
+        let ehr_ids: BTreeSet<String> = incidents
+            .recent
+            .iter()
+            .filter_map(|recorded| recorded.ehr_id.clone())
+            .collect();
+        let ehr_ids: Vec<String> = ehr_ids.into_iter().collect();
         IntegrityView {
             counts: incidents
                 .counts
@@ -283,12 +298,21 @@ pub mod server {
                     endpoint: entry.endpoint.clone(),
                 })
                 .collect(),
+            clear_form: (!replicas.is_empty())
+                .then(|| crate::admin::fields::clear(replicas, &ehr_ids)),
         }
     }
 
-    /// The stored-query view of `report`.
+    /// The stored-query view of `report`, offering the drift repair at the
+    /// first of `replicas`.
     #[must_use]
-    pub fn stored(report: &Page<StoredQuery>) -> StoredView {
+    pub fn stored(report: &Page<StoredQuery>, replicas: &[ReplicaSettings]) -> StoredView {
+        let names: BTreeSet<String> = report
+            .items
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect();
+        let names: Vec<String> = names.into_iter().collect();
         StoredView {
             definitions: report
                 .items
@@ -302,6 +326,9 @@ pub mod server {
                 .collect(),
             offset: report.offset,
             total: report.total,
+            repair_form: replicas
+                .first()
+                .map(|replica| crate::admin::fields::repair(replica, &names)),
         }
     }
 

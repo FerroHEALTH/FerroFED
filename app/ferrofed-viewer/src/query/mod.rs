@@ -300,7 +300,7 @@ fn answer_section(action: ServerAction<RunQuery>) -> AnyView {
 pub mod answer {
     use leptos::prelude::*;
 
-    use crate::query::model::{QueryAnswer, RenderedAnswer};
+    use crate::query::model::{EndpointLine, QueryAnswer, RenderedAnswer};
     use crate::views::model::Refusal;
 
     /// The HTML of `answer`.
@@ -395,8 +395,13 @@ pub mod answer {
 
     /// Every endpoint's status, latency, rows and error (§9.5, §11.1).
     fn endpoints_section(answer: &QueryAnswer) -> AnyView {
-        let rows = answer
-        .endpoints
+        endpoints_table(&answer.endpoints)
+    }
+
+    /// The table of `endpoints`, each with its status, latency, rows and
+    /// error (§9.5, §11.1).
+    pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
+        let rows = endpoints
         .iter()
         .map(|endpoint| {
             view! {

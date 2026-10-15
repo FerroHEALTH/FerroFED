@@ -708,7 +708,9 @@ loopback unless you allow otherwise, and never sits under the base path.
 Off loopback, the scrape needs a token, which your Prometheus sends with
 `authorization.credentials_file`, and a write action such as the
 stored-query distribution needs an access token with your issuer's
-`operator_scope` ([Metrics](metrics.md#who-the-admin-listener-serves)):
+`operator_scope` ([Metrics](metrics.md#who-the-admin-listener-serves)). A
+console with `[admin]` needs it on an internal address its server reaches
+and no public network does ([Console](operator-console.md#configuration)):
 
 ```toml
 # ferrofed.toml

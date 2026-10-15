@@ -12,6 +12,8 @@
 )]
 
 #[cfg(test)]
+mod admin;
+#[cfg(test)]
 mod config;
 #[cfg(test)]
 mod exchange;
