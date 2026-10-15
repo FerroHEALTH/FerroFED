@@ -47,6 +47,7 @@
 - [The container image and the quickstart](operate/container.md)
 - [Upgrading](operate/upgrading.md)
   - [Rollback](operate/rollback.md)
+- [Decommissioning](operate/decommissioning.md)
 - [Configuration](operate/configuration.md)
   - [The public address](operate/public-address.md)
   - [What the gateway sends a node](operate/node-requests.md)
