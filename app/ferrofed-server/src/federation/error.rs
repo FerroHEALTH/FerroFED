@@ -143,6 +143,34 @@ pub enum FederationError {
         /// The profile the face asks for.
         profile: &'static str,
     },
+    /// A `[[fhir.serve]]` names a member the registry does not hold.
+    #[error(
+        "fhir.serve names {member} as a member that serves the category {category}, which is no node of the registry"
+    )]
+    ServingMemberUnknown {
+        /// The category's code.
+        category: &'static str,
+        /// The member as given.
+        member: String,
+    },
+    /// A `[[fhir.serve]]` names a member with no endpoint of its own that
+    /// serves the category, so the face could not ask it.
+    #[error(
+        "fhir.serve names {member} for the category {category}, and the registry declares no hl7-fhir-rest endpoint of it serving that category"
+    )]
+    ServingWithoutEndpoint {
+        /// The category's code.
+        category: &'static str,
+        /// The member.
+        member: String,
+    },
+    /// A category is served but no resolver is configured, so a patient
+    /// cannot be resolved to the serving members' `ehr_id`s (§5.2).
+    #[error(
+        "[[fhir.serve]] needs a cross-reference resolver, {}, to resolve a patient at the members that serve prescriptions (§5.2)",
+        crate::binding::resolver_list()
+    )]
+    ServingWithoutResolver,
     /// A category is received but no resolver is configured, so a received
     /// document's patient cannot be resolved to its member's `ehr_id` (§5.2).
     #[error(

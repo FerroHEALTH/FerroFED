@@ -25,6 +25,8 @@
 //!   mapped for the one member the deployment declares for its category
 //!   (Annex II 2.2 and 2.3), its required bindings held to the expansions of
 //!   its package and its codings displayed;
+//! - [`serving`]: the members the deployment declares to serve electronic
+//!   prescriptions and dispensations on that face, each on its own endpoint;
 //! - [`terminology`]: the FHIR terminology server the component asks, over
 //!   HTTP;
 //! - [`transformation`]: the code systems a coded element is transcoded
@@ -52,6 +54,7 @@ pub mod list;
 pub mod patient_summary;
 pub mod receive;
 pub mod reserved;
+pub mod serving;
 pub mod summary;
 pub mod terminology;
 pub mod transformation;

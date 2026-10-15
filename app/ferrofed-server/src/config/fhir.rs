@@ -16,7 +16,10 @@
 //! Art 14(1) category, with the package whose profiles a document of it is
 //! checked against and the mapping that turns it into a composition, and
 //! `receive_namespaces` the identifier systems its patient is resolved in;
-//! a member the registry does not hold refuses the start. The section
+//! a member the registry does not hold refuses the start. Each
+//! `[[fhir.serve]]` names the members that serve electronic prescriptions
+//! or dispensations, each on its own endpoint; a category no entry names is
+//! answered as not served. The section
 //! queries the face runs are the gateway's own, compiled into it, so the
 //! face does not need `[stored_queries]`. No specification governs the
 //! configuration: our own design.
@@ -28,6 +31,7 @@ use eehrxf::category::Category;
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
+use ferrofed_eehrxf::serving::{Serving, ServingError};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
@@ -57,6 +61,9 @@ pub struct Fhir {
     pub receive_namespaces: Vec<String>,
     /// The categories the face receives documents of, one member each.
     pub receive: Vec<ReceiveEntry>,
+    /// The members that serve electronic prescriptions and dispensations,
+    /// one entry per category.
+    pub serve: Vec<ServeEntry>,
     /// How long, in seconds, the URL of a member's document in the
     /// document list stays valid.
     pub document_url_lifetime_secs: u64,
@@ -70,13 +77,14 @@ impl Default for Fhir {
             mapping: Vec::new(),
             receive_namespaces: Vec::new(),
             receive: Vec::new(),
+            serve: Vec::new(),
             document_url_lifetime_secs: 300,
         }
     }
 }
 
 /// One `[[fhir.receive]]` entry: the member that stores the documents of
-/// one , and how a document of it is checked and mapped.
+/// one Art 14(1) category, and how a document of it is checked and mapped.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ReceiveEntry {
@@ -98,6 +106,18 @@ pub struct ReceiveEntry {
     pub language: String,
     /// The territory each composition is written in, an ISO 3166-1 code.
     pub territory: String,
+}
+
+/// One `[[fhir.serve]]` entry: the members that serve one Art 14(1)
+/// category resource by resource, each on its own endpoint.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ServeEntry {
+    /// The category, by its HL7 Europe priority category code:
+    /// `Electronic-Prescriptions` or `Electronic-Dispensations`.
+    pub category: String,
+    /// The node ids of the members that serve it.
+    pub members: Vec<String>,
 }
 
 /// The `[fhir.operator]` table.
@@ -142,6 +162,8 @@ pub struct FhirSettings {
     pub receivers: Arc<Receivers>,
     /// The identifier systems a received document's patient is resolved in.
     pub receive_namespaces: Vec<IdentifierNamespace>,
+    /// The members that serve electronic prescriptions and dispensations.
+    pub serving: Arc<Serving>,
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
@@ -158,10 +180,11 @@ pub struct FhirSettings {
 impl FhirSettings {
     /// Returns the notes `config check` prints about the face: each Art
     /// 14(1) category received, with its member, then the categories this
-    /// build carries that no member receives.
+    /// build carries that no member receives, then each category served
+    /// resource by resource, with its members, and those no member serves.
     ///
     /// The categories are those the capability statement names, read from
-    /// the same [`Receivers`].
+    /// the same [`Receivers`] and [`Serving`].
     #[must_use]
     pub fn notes(&self) -> Vec<String> {
         let mut notes: Vec<String> = self
@@ -184,6 +207,38 @@ impl FhirSettings {
             notes.push(format!(
                 "[[fhir.receive]] names no receiving member for {}: the FHIR face refuses a document of {which}",
                 unreceived.join(", ")
+            ));
+        }
+        notes.extend(self.serving_notes());
+        notes
+    }
+
+    /// Returns the notes `config check` prints about the categories served
+    /// resource by resource: each served category with its members, then the
+    /// categories no member serves, which the face answers as not served.
+    fn serving_notes(&self) -> Vec<String> {
+        let mut notes: Vec<String> = self
+            .serving
+            .members()
+            .map(|(category, members)| {
+                let members: Vec<&str> = members.iter().map(String::as_str).collect();
+                format!(
+                    "[[fhir.serve]] {}: the FHIR face serves this Art 14(1) category from the members {}, each on its own endpoint",
+                    category.code(),
+                    members.join(", ")
+                )
+            })
+            .collect();
+        let unserved: Vec<&str> = self.serving.unserved().map(Category::code).collect();
+        if !unserved.is_empty() {
+            let which = if unserved.len() == 1 {
+                "this Art 14(1) category"
+            } else {
+                "each of these Art 14(1) categories"
+            };
+            notes.push(format!(
+                "[[fhir.serve]] names no member for {}: the FHIR face answers {which} as not served",
+                unserved.join(", ")
             ));
         }
         notes
@@ -271,6 +326,9 @@ pub enum FhirError {
     /// A received category cannot be checked or mapped.
     #[error("a [[fhir.receive]] is refused")]
     Receivers(#[from] ReceiversError),
+    /// A served category cannot be declared as written.
+    #[error("a [[fhir.serve]] is refused")]
+    Serving(#[from] ServingError),
     /// `fhir.document_url_lifetime_secs` is zero.
     #[error("fhir.document_url_lifetime_secs is at least one second")]
     DocumentUrlLifetime,
@@ -397,6 +455,7 @@ impl Fhir {
             mappings,
             receivers: Arc::new(self.receivers()?),
             receive_namespaces: self.namespaces()?,
+            serving: Arc::new(self.serving()?),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
             terminology_written: None,
@@ -439,6 +498,23 @@ impl Fhir {
             });
         }
         Ok(Receivers::compile(&sources)?)
+    }
+
+    /// Reads the `[[fhir.serve]]` entries.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::Serving`] for the first entry that is refused.
+    fn serving(&self) -> Result<Serving, FhirError> {
+        let sources: Vec<ferrofed_eehrxf::serving::Source> = self
+            .serve
+            .iter()
+            .map(|entry| ferrofed_eehrxf::serving::Source {
+                category: entry.category.clone(),
+                members: entry.members.clone(),
+            })
+            .collect();
+        Ok(Serving::compile(&sources)?)
     }
 
     /// The identifier systems a received document's patient is resolved in,

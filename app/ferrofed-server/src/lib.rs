@@ -182,7 +182,7 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// caller with the operator scope ([`operator`]). With `[fhir]` set,
 /// `{fhir-base}/metadata` and `{fhir-base}/Patient/$summary` answer the FHIR
 /// face ([`fhir`]), and every error under `{fhir-base}` is an
-/// `OperationOutcome` ([`fhir::outcomes`]). Every other path under
+/// `OperationOutcome` ([`fhir::errors::outcomes`]). Every other path under
 /// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
 /// or outside the base, answers `404`. Under a base other than `/`, the base
 /// itself and the base with a trailing `/` are both `{base}/`.
@@ -292,7 +292,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
         ))
         .layer(axum::middleware::from_fn_with_state(
             fhir_state,
-            fhir::outcomes,
+            fhir::errors::outcomes,
         ));
     layered(
         guarded,

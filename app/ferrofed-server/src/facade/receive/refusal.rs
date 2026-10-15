@@ -413,7 +413,7 @@ managing_organisation = "org-a"
             .route(&format!("{FHIR}/Bundle"), post(answer))
             .layer(axum::middleware::from_fn_with_state(
                 Arc::clone(state),
-                crate::fhir::outcomes,
+                crate::fhir::errors::outcomes,
             ));
         let request = Request::builder()
             .method(Method::POST)

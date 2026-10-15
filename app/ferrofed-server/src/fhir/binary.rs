@@ -55,6 +55,9 @@ use crate::state::AppState;
 /// The path prefix of a member's document under `{fhir-base}`.
 pub(super) const BINARY: &str = "/Binary/";
 
+/// The route of a member's document under `{fhir-base}`.
+pub(super) const ROUTE: &str = "/Binary/{token}";
+
 /// The JOSE `typ` of the token (RFC 8725 §3.11).
 pub(super) const TYPE: &str = "ferrofed-document-url+jwt";
 

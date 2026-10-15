@@ -487,8 +487,8 @@ impl Gate {
     /// What `method` on `path` does with patient data at a node: a query
     /// execution, a request in the EHR area, the creation of an EHR, a
     /// DEMOGRAPHIC request, or the read of an EHR by subject reaches it; a
-    /// `POST`, `PUT` or `DELETE` among them but a query, or a document
-    /// received on the FHIR face, writes it.
+    /// `POST`, `PUT` or `DELETE` among them but a query, or a document or a
+    /// dispensation received on the FHIR face, writes it.
     fn reach(&self, method: &Method, path: &str) -> Reach {
         // NOTE: Regulation (EU) 2025/327 Annex II 3.2: every path under the FHIR face but its
         // capability statement is held to a record, so no variant answers data unrecorded.
@@ -499,7 +499,10 @@ impl Gate {
         {
             return match face {
                 crate::fhir::FacePath::Metadata => Reach::None,
-                crate::fhir::FacePath::Bundle if *method == Method::POST => Reach::Write,
+                crate::fhir::FacePath::Bundle
+                | crate::fhir::FacePath::Medication(
+                    crate::fhir::medication::Addressed::Dispensations,
+                ) if *method == Method::POST => Reach::Write,
                 _ => Reach::Read,
             };
         }

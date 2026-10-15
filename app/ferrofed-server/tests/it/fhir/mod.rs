@@ -27,6 +27,7 @@ mod patient_grant;
 mod receipt;
 mod receive;
 mod refusals;
+mod serving;
 mod summary;
 #[cfg(feature = "binding-ihe")]
 mod transformation;

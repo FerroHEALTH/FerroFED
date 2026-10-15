@@ -90,6 +90,16 @@ A face with no `[[fhir.receive]]` entry prints this line instead:
 ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category
 ```
 
+It also prints a line for each category served resource by resource,
+naming the members its `[[fhir.serve]]` entry declares, and one line naming
+the categories no member serves, which the face answers as not served
+([Prescriptions and dispensations](../integrate/patient-summary.md#prescriptions-and-dispensations)):
+
+```text
+ferrofed: note: [[fhir.serve]] Electronic-Prescriptions: the FHIR face serves this Art 14(1) category from the members node-a, each on its own endpoint
+ferrofed: note: [[fhir.serve]] names no member for Electronic-Dispensations: the FHIR face answers this Art 14(1) category as not served
+```
+
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first

@@ -65,8 +65,14 @@ clap.workspace = true
 ehds-logging = { workspace = true, features = ["balp"] }
 # The interoperability component's terminology seam (#687), which the face holds
 # the configured terminology server behind, and the mark of a received
-# document a person inserted (#992), which reads its openEHR composition.
-eehrxf = { workspace = true, features = ["fhir-r4", "openehr"] }
+# document a person inserted (#992), which reads its openEHR composition; the
+# prescription and dispensation categories the face serves (#1039).
+eehrxf = { workspace = true, features = [
+  "fhir-r4",
+  "openehr",
+  "prescription",
+  "dispensation",
+] }
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
 # the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
 ferrofed-engine.workspace = true

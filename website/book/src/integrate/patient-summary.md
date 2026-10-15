@@ -403,6 +403,36 @@ categories received. `ferrofed config check` prints the same categories,
 each received one with its member
 ([Running it](../operate/configuration.md#running-it)).
 
+## Prescriptions and dispensations
+
+Electronic prescriptions and dispensations, Art 14(1)(b) and (c), are served
+resource by resource: the HL7 Europe Medication Prescription and Dispense
+(MPD) 1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd`. The
+member that holds a prescription serves it on its own `hl7-fhir-rest`
+endpoint ([A member's own exchange-format endpoint](../operate/registry.md#a-members-own-exchange-format-endpoint)), and the face
+passes on what that member says. The member decides whether a prescription
+can still be dispensed and counts the dispensations it has left; the gateway
+computes neither and holds no lock.
+
+You declare in `[[fhir.serve]]` the members that meet that contract, per
+category. A category no member is declared for is not served, and every
+route of it answers `404` with an `OperationOutcome` of the issue type
+`not-supported` that says so. No member is asked, and the answer is never an
+empty search result, which a client could read as a patient with no
+prescriptions:
+
+| Route | Category |
+|---|---|
+| `GET {fhir-base}/MedicationRequest?patient.identifier=` | `Electronic-Prescriptions` |
+| `GET {fhir-base}/MedicationRequest/{id}` | `Electronic-Prescriptions` |
+| `POST {fhir-base}/MedicationDispense` | `Electronic-Dispensations` |
+
+`GET {fhir-base}/metadata` lists `MedicationRequest` and
+`MedicationDispense` only for a category a member is declared for, each with
+its MPD profile. The search, the read and the receipt of a dispensation at a
+declared member are planned for this release (#1040, #1041, #1042); until
+they ship, a declared category answers `501`.
+
 ## Terminology
 
 Regulation (EU) 2025/327 Art 2(2)(f) defines interoperability as an
@@ -551,6 +581,14 @@ files = [
 context = "example_received_summary.context"
 language = "en"                              # the composition's language, ISO 639-1
 territory = "NL"                             # the composition's territory, ISO 3166-1
+
+[[fhir.serve]]
+category = "Electronic-Prescriptions"        # Electronic-Prescriptions or Electronic-Dispensations
+members = ["node-a"]                         # node ids, each with its own MPD endpoint
+
+[[fhir.serve]]
+category = "Electronic-Dispensations"
+members = ["node-a"]                         # each also serves Electronic-Prescriptions
 ```
 
 The terminology server, when you configure one:
@@ -597,6 +635,15 @@ systems a received document's patient is resolved in.
   `ferrofed config check` are refused. The package is the vendored HL7
   Europe package whose profiles the category's documents are held to, and
   the mapping compiles when the configuration is read.
+- Each `[[fhir.serve]]` declares one category, once, with at least one
+  member, each named once. Configuration load refuses any other category and
+  a member of `Electronic-Dispensations` that does not also serve
+  `Electronic-Prescriptions`, because a dispensation is written only at the
+  member that owns its prescription. The start and `ferrofed config check`
+  are refused for a member that is no node of the registry, one with no
+  `hl7-fhir-rest` endpoint of its own whose `categories` name the category,
+  and a face with no resolver. With no entry, both categories are answered
+  as not served ([Prescriptions and dispensations](#prescriptions-and-dispensations)).
 - `[eehrxf.terminology]` needs `[fhir]`: configuration load refuses it
   alone, and refuses a URL that carries a user name or a password.
 - A change to `[fhir]` or to `[eehrxf.terminology]` takes a restart.

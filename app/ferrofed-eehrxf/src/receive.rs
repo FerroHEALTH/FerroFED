@@ -232,12 +232,17 @@ impl Receivers {
             .map(|(category, receiver)| (*category, receiver.member.as_str()))
     }
 
-    /// Returns every category this build carries that no member receives,
-    /// in the order of Art 14(1).
+    /// Returns every category this build carries that can arrive as a
+    /// document and that no member receives, in the order of Art 14(1).
+    ///
+    /// A category with no document profile, such as an electronic
+    /// prescription or dispensation, which HL7 Europe MPD 1.0.0 carries as
+    /// single resources, never arrives as a document and is not named.
     pub fn unreceived(&self) -> impl Iterator<Item = Category> {
         Category::ENABLED
             .iter()
             .copied()
+            .filter(|category| category.profiles().is_some())
             .filter(|category| !self.by.contains_key(category))
     }
 
