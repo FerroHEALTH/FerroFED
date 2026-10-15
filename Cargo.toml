@@ -365,6 +365,15 @@ deref_by_slicing = "warn"
 # A clean 500 relies on catch_unwind, which only catches unwinding panics, and
 # tests ignore the panic setting, so abort would be untestable
 # (https://doc.rust-lang.org/cargo/reference/profiles.html#panic).
+#
+# The macOS linker warns that __eh_frame is too large (max 16MB) when a debug
+# build outgrows the 24-bit offset a compact unwind entry carries. Unwinding
+# still works: a function whose DWARF entry lies past 16 MiB gets offset zero
+# (lld/MachO/UnwindInfoSection.cpp, relocateCompactUnwind, llvmorg-21.1.0),
+# and libunwind then scans the whole __eh_frame for it and caches the result
+# (Apple libunwind-201, libunwind/src/UnwindCursor.hpp,
+# getInfoFromDwarfSection). The cost is a slower first unwind through such a
+# function. A release build of the binary stays under 16 MiB and links clean.
 [profile.release]
 panic = "unwind"
 overflow-checks = true
