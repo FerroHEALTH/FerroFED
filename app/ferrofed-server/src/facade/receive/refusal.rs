@@ -7,6 +7,7 @@
 
 use axum::response::Response;
 use eehrxf::receive::displays::DisplayError;
+use eehrxf::receive::openehr::SubjectInsertionError;
 use ehds_logging::record::WrittenVersion;
 use ferrofed_eehrxf::face;
 use ferrofed_eehrxf::receive::{self, Prepared, Unreceived};
@@ -214,6 +215,31 @@ pub(super) fn unprepared(unreceived: &Unreceived, logged: &str) -> Response {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "exception",
                 "the document could not be checked against its profiles",
+            )
+        }
+    }
+}
+
+/// The answer to a person's document whose composition cannot be marked as
+/// inserted by them (Regulation (EU) 2025/327 Art 5), with nothing sent to
+/// any member.
+pub(super) fn unmarked(unmarked: &SubjectInsertionError, logged: &str) -> Response {
+    match unmarked {
+        SubjectInsertionError::NoEntry | SubjectInsertionError::GenericEntry => refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "processing",
+            &format!("the document cannot be marked as inserted by the person: {unmarked}"),
+        ),
+        _ => {
+            tracing::error!(
+                error = %crate::chain(unmarked),
+                request_id = logged,
+                "a person's composition could not be marked as inserted by them"
+            );
+            refused(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "exception",
+                "the composition could not be marked as inserted by the person",
             )
         }
     }
@@ -433,6 +459,7 @@ managing_organisation = "org-a"
                 namespace: NAMESPACE.to_owned(),
                 value: SecretString::from(PATIENT),
             },
+            inserted: false,
         };
         Ok(failed(&federation, &prepared, &at, error, "outbound-1"))
     }

@@ -348,5 +348,6 @@ fn accessed(federation: &Federation, native: &Native) -> Option<Accessed> {
         delivered: Some(usize::from(delivered)),
         origins: native::origins(federation.snapshot(), natives, true).collect(),
         consent_set_aside: std::collections::BTreeSet::new(),
+        subject_inserted: false,
     })
 }

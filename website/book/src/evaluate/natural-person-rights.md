@@ -34,7 +34,7 @@ This page is not legal advice.
 | Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them; the other five categories have no interface | partial |
 | Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
 | Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants and records who acted | not the gateway's |
-| Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR; nothing marks the entry as the person's | partial |
+| Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's, and the record says so; the member keeps a person from changing a professional's entry | met |
 | Art 6, rectification | the access service and the controller | routes the controller's correction | not the gateway's |
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
 | Art 7(2), cross-border transmission | the national contact point | the national route is planned | partial |
@@ -140,15 +140,28 @@ receipt is recorded with the caller who sent it
 (`fhir/receive/audit.rs`:
 `a_receipt_is_recorded_once_as_a_creation_of_its_category`).
 
+A document the person sends under their own grant is written so that it
+can be told from a professional's: every entry names the record's subject,
+a `PARTY_SELF` with no identifier, as its `provider`, the RM attribute for
+"the agent who provided the information"
+([Inserted by the person](receiving-documents.md#inserted-by-the-person);
+`fhir/receive/inserted.rs`:
+`a_persons_own_document_is_marked_as_inserted_by_them_with_no_identifier_added`),
+while a professional's document names no provider
+(`a_professionals_document_names_no_provider`). The access record of the
+person's receipt carries the `ehds-subject-inserted` entity, and a
+professional's does not (`fhir/receive/audit.rs`:
+`a_receipt_a_person_inserted_is_recorded_as_inserted_by_them`). A
+representative who holds the person's grant is marked the same way, as Art
+5 allows, and the record names who acted.
+
 The routed ITS-REST writes are outside the harmonised components. Under a
 patient grant whose scopes cover an update or a delete, the gateway sends it
-to the member as for any caller, and the member, which records who wrote
-each version, decides whether the person may change it.
-
-**The gap.** Nothing the component writes marks the composition as
-inserted by the person, and no test shows the member or the composition
-telling a person's entry from a professional's. It is planned
-([#992](https://github.com/FerroHEALTH/FerroFED/issues/992)).
+to the member as for any caller, with the body the client composed, and
+the member, which records who committed each version and is told that a
+person acts, decides whether the person may change it
+([Patient grants](../operate/authentication.md#patient-grants)). Keeping a
+person from altering a professional's entry over ITS-REST is the member's.
 
 ## Art 6: rectification
 

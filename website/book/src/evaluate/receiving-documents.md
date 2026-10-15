@@ -168,6 +168,35 @@ document, which is the clinical content the client sent. A member that
 refuses the composition or does not answer is an error that names it, never
 a success.
 
+## Inserted by the person
+
+Regulation (EU) 2025/327 Art 5 asks that information a person inserts in
+their own EHR "be clearly distinguishable as having been inserted by the
+natural person". When the caller is a person acting under their own grant,
+a token whose `sub` names the person and whose `patient/` scopes are
+confined to them ([Patient grants](../operate/authentication.md#patient-grants)),
+the component marks the composition before it is sent: every entry, in
+the composition and in each of its sections, names the record's subject
+as its `provider`. The openEHR RM defines `ENTRY.provider` as "the agent
+who provided the information", which "is usually the patient or the
+clinician" (RM 1.1.0, EHR Information Model, "Entry and its Subclasses"),
+and refers to the subject of the record with a `PARTY_SELF` (Common
+Information Model, "PARTY_SELF and Referring to the Patient from the EHR").
+The mark is a `PARTY_SELF` with no `external_ref`, so it names no
+identifier of the person. A provider the mapping wrote is replaced; the
+document as received stays in the original content.
+
+A composition with no entry, or with a `GENERIC_ENTRY`, which has no
+provider, cannot carry the mark, so a person's document that maps to one is
+refused `422` with nothing sent. A professional's document is written as
+before, with no provider set. The access record of a person's receipt
+carries the `ehds-subject-inserted` entity ([Information a person
+inserted](../operate/access-log.md#information-a-person-inserted)).
+
+The component only creates compositions, so it never changes an entry a
+professional wrote. What a person changes over ITS-REST is the member's to
+refuse ([Patient grants](../operate/authentication.md#patient-grants)).
+
 ## Hazards
 
 The [clinical safety risk file](clinical-safety.md) lists the receive path

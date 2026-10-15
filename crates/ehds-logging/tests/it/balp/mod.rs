@@ -35,6 +35,8 @@ use super::support::{LAB_REPORT, map};
 #[cfg(test)]
 mod emergency;
 #[cfg(test)]
+mod inserted;
+#[cfg(test)]
 mod labels;
 #[cfg(test)]
 mod population;
@@ -125,6 +127,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         retention,
         labels,
         emergency: None,
+        subject_inserted: false,
     }
 }
 

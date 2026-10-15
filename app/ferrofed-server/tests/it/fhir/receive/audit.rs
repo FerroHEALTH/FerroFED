@@ -69,3 +69,44 @@ async fn a_receipt_is_recorded_once_as_a_creation_of_its_category() -> TestResul
     );
     Ok(())
 }
+
+/// Regulation (EU) 2025/327 Art 5: the record of a document a person
+/// inserted under their own grant says so, and a professional's does not.
+#[tokio::test]
+async fn a_receipt_a_person_inserted_is_recorded_as_inserted_by_them() -> TestResult {
+    use crate::feed_audit::{SETTLE, audit_tables};
+    use ehds_logging::balp::inserted::ENTITY;
+    use ferrofed_testkit::atna_feed::FeedRepository;
+
+    use super::inserted::{PERSON, own_grant, person_gateway};
+    use crate::auth::{bearing, minted};
+
+    let (a, b) = (creating().await, Server::start().await);
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = person_gateway(dir.path(), (&a, &b), &audit_tables(&repository, ""))?;
+    let token = minted(&own_grant())?;
+    let (status, text) = call(app.clone(), bearing(post(&document())?, &token)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let (status, text) = call(app, post(&document())?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let records = repository.wait_for(2, SETTLE).await;
+    let records = crate::access::accesses(&records)?;
+    assert_eq!(2, records.len(), "one record per receipt: {records:#?}");
+    let (marked, unmarked): (Vec<_>, Vec<_>) = records
+        .iter()
+        .partition(|record| !crate::access::named(record, ENTITY).is_empty());
+    let ([person], [professional]) = (marked.as_slice(), unmarked.as_slice()) else {
+        return Err(format!("one marked record and one not: {records:#?}").into());
+    };
+    assert_eq!(
+        vec!["true"],
+        crate::access::details(person, ENTITY, ENTITY),
+        "the person's receipt is recorded as inserted by them: {person}"
+    );
+    assert!(
+        person.to_string().contains(PERSON) && !professional.to_string().contains(PERSON),
+        "the marked record is the person's own, a professional's carries no such mark"
+    );
+    Ok(())
+}

@@ -64,8 +64,9 @@ clap.workspace = true
 # AuditEvent to the audit spool, in every build whatever its bindings (#697).
 ehds-logging = { workspace = true, features = ["balp"] }
 # The interoperability component's terminology seam (#687), which the face holds
-# the configured terminology server behind.
-eehrxf = { workspace = true, features = ["fhir-r4"] }
+# the configured terminology server behind, and the mark of a received
+# document a person inserted (#992), which reads its openEHR composition.
+eehrxf = { workspace = true, features = ["fhir-r4", "openehr"] }
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
 # the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
 ferrofed-engine.workspace = true
