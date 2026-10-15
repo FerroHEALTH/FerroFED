@@ -29,6 +29,7 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::parameters::{Parameters, ParametersParameterValue};
 
 use crate::receive::Receivers;
+use crate::serving::Serving;
 
 /// The canonical URL of the International Patient Summary `$summary`
 /// operation.
@@ -177,19 +178,36 @@ impl SummaryRequest {
 
 /// Returns the face's `CapabilityStatement`, written at `date`, for the
 /// product `product` at `version`, receiving documents as `receivers`
-/// declares.
+/// declares and serving the categories `serving` declares.
 ///
 /// It describes a server that serves `$summary` on `Patient`, the
 /// `DocumentReference` search of the document list ([`crate::list`]), the
-/// `Binary` read of a member's document and the `create` of a received
-/// document on `Bundle` ([`bundle`]), in FHIR JSON.
+/// `Binary` read of a member's document, the `create` of a received
+/// document on `Bundle` ([`bundle`]) and, only for a category a member is
+/// declared for, `MedicationRequest` and `MedicationDispense`
+/// ([`Serving::resources`]), in FHIR JSON.
 #[must_use]
 pub fn capability(
     product: &str,
     version: &str,
     date: &str,
-    receivers: &Receivers,
+    (receivers, serving): (&Receivers, &Serving),
 ) -> CapabilityStatement {
+    let mut resource = vec![
+        CapabilityStatementRestResource {
+            r#type: "Patient".into(),
+            operation: vec![CapabilityStatementRestResourceOperation {
+                name: "summary".into(),
+                definition: SUMMARY_OPERATION.into(),
+                ..CapabilityStatementRestResourceOperation::default()
+            }],
+            ..CapabilityStatementRestResource::default()
+        },
+        documents(),
+        binary(),
+        bundle(receivers),
+    ];
+    resource.extend(serving.resources());
     CapabilityStatement {
         status: "active".into(),
         date: date.into(),
@@ -203,20 +221,7 @@ pub fn capability(
         format: vec![FHIR_JSON.into()],
         rest: vec![CapabilityStatementRest {
             mode: "server".into(),
-            resource: vec![
-                CapabilityStatementRestResource {
-                    r#type: "Patient".into(),
-                    operation: vec![CapabilityStatementRestResourceOperation {
-                        name: "summary".into(),
-                        definition: SUMMARY_OPERATION.into(),
-                        ..CapabilityStatementRestResourceOperation::default()
-                    }],
-                    ..CapabilityStatementRestResource::default()
-                },
-                documents(),
-                binary(),
-                bundle(receivers),
-            ],
+            resource,
             ..CapabilityStatementRest::default()
         }],
         ..CapabilityStatement::default()

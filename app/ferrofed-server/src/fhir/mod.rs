@@ -11,7 +11,9 @@
 //! document in the exchange format, at the `Bundle` end-point FHIR R4
 //! documents §3.3.4 names (Annex II 2.2 and 2.3), and
 //! `GET {fhir-base}/DocumentReference` lists the summaries that exist for a
-//! patient ([`ferrofed_eehrxf::list`]). Every other path under the base is a
+//! patient ([`ferrofed_eehrxf::list`]). `MedicationRequest` and
+//! `MedicationDispense` answer a category no member is declared for as not
+//! served ([`medication`]). Every other path under the base is a
 //! `404`. A summary runs the gateway's own section queries over
 //! the members (`facade::summary`), maps each composition through the
 //! deployment's FHIRconnect mappings and writes the document
@@ -23,7 +25,7 @@
 //! Every request is authenticated at the same gate as the ITS-REST face
 //! (§13.1, N25), and every summary, list or document that reached a member
 //! is recorded in the access log, naming the verified caller (Annex II 3.2).
-//! Every error the face answers is an `OperationOutcome` ([`outcomes`]): the gateway's own
+//! Every error the face answers is an `OperationOutcome` ([`errors::outcomes`]): the gateway's own
 //! refusals keep their status and their headers, and the error body is
 //! rewritten as the outcome. No specification governs the mapping of the
 //! gateway's errors to issue types: our own design, over the FHIR R4
@@ -36,12 +38,12 @@ use std::time::Instant;
 use axum::Extension;
 use axum::Router;
 use axum::body::{Body, Bytes};
-use axum::extract::{OriginalUri, Request, State};
-use axum::middleware::Next;
+use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, Refusal, SummaryRequest};
 use ferrofed_eehrxf::receive::Receivers;
+use ferrofed_eehrxf::serving::Serving;
 use ferrofed_eehrxf::summary::{self, Author, Request as SummaryDocument};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
@@ -63,7 +65,9 @@ use crate::state::AppState;
 
 mod admission;
 mod binary;
+pub mod errors;
 mod list;
+pub mod medication;
 
 /// The path of the summary operation under `{fhir-base}`.
 pub const SUMMARY: &str = "/Patient/$summary";
@@ -83,10 +87,6 @@ pub const DOCUMENTS: &str = "/DocumentReference";
 /// statement carry.
 const PRODUCT: &str = "FerroFED";
 
-/// The largest error body the face rewrites as an `OperationOutcome`; the
-/// gateway's own error bodies are far smaller.
-const ERROR_BODY_LIMIT: usize = 64 * 1024;
-
 /// The routes of the face, which the router nests under `{fhir-base}`.
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -95,6 +95,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route(BUNDLE, post(bundle_post))
         .route(DOCUMENTS, get(list::documents))
         .route("/Binary/{token}", get(binary::read))
+        .route(medication::PRESCRIPTIONS, get(medication::search))
+        .route(medication::PRESCRIPTION, get(medication::read))
+        .route(medication::DISPENSATIONS, post(medication::dispense))
         .fallback(unserved)
 }
 
@@ -112,7 +115,9 @@ pub enum FacePath {
     /// `{fhir-base}/Binary/{token}`, its token one segment of the compact
     /// JWS alphabet.
     Binary,
-    /// Any other path under the base, a variant of the five above included:
+    /// A path of the electronic prescriptions and dispensations, exactly.
+    Medication(medication::Addressed),
+    /// Any other path under the base, a variant of the six above included:
     /// another letter case, a percent-encoded character, a trailing or a
     /// doubled slash.
     Other,
@@ -123,7 +128,7 @@ pub enum FacePath {
 ///
 /// A path is under the face when its letters, ASCII case ignored, start
 /// with the base, so a variant of the base is never read as a path outside
-/// the face; only the five paths are named, and every other one is
+/// the face; only the six paths are named, and every other one is
 /// [`FacePath::Other`], which the gate refuses.
 #[must_use]
 pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
@@ -146,6 +151,8 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
         FacePath::Documents
     } else if is_binary(fhir, path) {
         FacePath::Binary
+    } else if let Some(addressed) = medication::addressed(fhir, path) {
+        FacePath::Medication(addressed)
     } else {
         FacePath::Other
     })
@@ -168,12 +175,14 @@ fn is_binary(fhir: &FhirSettings, path: &str) -> bool {
 /// The capability statement takes a verified caller, a `GET` or `POST` of a
 /// summary, a `GET` of the document list or of a listed document the `aql-` search of every
 /// section query, a `POST` of a document
-/// the `composition-` create of every template, and every other method and
-/// path is refused, so no variant of a path is let through on a weaker
-/// requirement.
+/// the `composition-` create of every template, a prescription or
+/// dispensation path what [`medication::requirement`] says, and every other
+/// method and path is refused, so no variant of a path is let through on a
+/// weaker requirement.
 #[must_use]
 pub fn requirement(face: FacePath, method: &Method) -> Requirement {
     match face {
+        FacePath::Medication(addressed) => medication::requirement(addressed, method),
         FacePath::Metadata if matches!(*method, Method::GET | Method::HEAD) => Requirement::Caller,
         // NOTE: no specification governs the scope of the FHIR face: our own design; a
         // summary runs the section queries, so it takes the `aql-` search of each.
@@ -206,14 +215,24 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
 }
 
 /// `GET {fhir-base}/metadata`: the face's `CapabilityStatement`, with the
-/// categories the deployment receives documents of.
+/// categories the deployment receives documents of and those it serves.
 async fn metadata(State(state): State<Arc<AppState>>) -> Response {
     let date = jiff::Timestamp::now().strftime("%Y-%m-%d").to_string();
-    let none = Receivers::default();
-    let receivers = state.fhir().map_or(&none, |fhir| fhir.receivers.as_ref());
+    let (no_receivers, no_serving) = (Receivers::default(), Serving::default());
+    let receivers = state
+        .fhir()
+        .map_or(&no_receivers, |fhir| fhir.receivers.as_ref());
+    let serving = state
+        .fhir()
+        .map_or(&no_serving, |fhir| fhir.serving.as_ref());
     fhir_json(
         StatusCode::OK,
-        &face::capability(PRODUCT, env!("CARGO_PKG_VERSION"), &date, receivers),
+        &face::capability(
+            PRODUCT,
+            env!("CARGO_PKG_VERSION"),
+            &date,
+            (receivers, serving),
+        ),
     )
 }
 
@@ -656,89 +675,4 @@ pub(crate) fn fhir_json(status: StatusCode, resource: &impl Serialize) -> Respon
 /// with `status`.
 fn outcome(status: StatusCode, code: &str, diagnostics: &str) -> Response {
     fhir_json(status, &face::outcome(code, diagnostics))
-}
-
-/// The FHIR R4 `issue-type` of an error answered with `status`.
-fn issue_type(status: StatusCode) -> &'static str {
-    match status {
-        StatusCode::BAD_REQUEST => "invalid",
-        StatusCode::UNAUTHORIZED => "login",
-        StatusCode::FORBIDDEN => "forbidden",
-        StatusCode::NOT_FOUND => "not-found",
-        StatusCode::METHOD_NOT_ALLOWED
-        | StatusCode::NOT_ACCEPTABLE
-        | StatusCode::UNSUPPORTED_MEDIA_TYPE
-        | StatusCode::NOT_IMPLEMENTED => "not-supported",
-        StatusCode::REQUEST_TIMEOUT | StatusCode::GATEWAY_TIMEOUT => "timeout",
-        StatusCode::CONFLICT => "conflict",
-        StatusCode::FAILED_DEPENDENCY => "incomplete",
-        StatusCode::TOO_MANY_REQUESTS => "throttled",
-        StatusCode::SERVICE_UNAVAILABLE => "transient",
-        _ => "exception",
-    }
-}
-
-/// The gateway's error body, as far as the outcome reads it.
-#[derive(serde::Deserialize)]
-struct GatewayError {
-    /// The message.
-    message: String,
-    /// The stable code.
-    code: Option<String>,
-}
-
-/// The layer that rewrites every error the gateway answers under
-/// `{fhir-base}` with its own error body as an `OperationOutcome`, keeping
-/// its status and its headers.
-///
-/// An answer that is already FHIR JSON, a success, or an answer outside the
-/// face passes unchanged.
-pub async fn outcomes(
-    State(state): State<Arc<AppState>>,
-    request: Request,
-    next: Next,
-) -> Response {
-    let path = request
-        .extensions()
-        .get::<OriginalUri>()
-        .map_or_else(|| request.uri().path(), |original| original.path())
-        .to_owned();
-    let under = state
-        .fhir()
-        .is_some_and(|fhir| classify(fhir, &path).is_some());
-    let head = request.method() == Method::HEAD;
-    let response = next.run(request).await;
-    if !under
-        || head
-        || !response.status().is_client_error() && !response.status().is_server_error()
-    {
-        return response;
-    }
-    let is_fhir = response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.starts_with(FHIR_JSON));
-    if is_fhir {
-        return response;
-    }
-    let (mut parts, body) = response.into_parts();
-    let read = axum::body::to_bytes(body, ERROR_BODY_LIMIT).await;
-    let message = read
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<GatewayError>(&bytes).ok())
-        .map_or_else(
-            || String::from("the request was refused"),
-            |error| match error.code {
-                Some(code) => format!("{code}: {}", error.message),
-                None => error.message,
-            },
-        );
-    let rewritten = outcome(parts.status, issue_type(parts.status), &message);
-    let (rewritten_parts, rewritten_body) = rewritten.into_parts();
-    parts.headers.remove(header::CONTENT_LENGTH);
-    for (name, value) in &rewritten_parts.headers {
-        parts.headers.insert(name.clone(), value.clone());
-    }
-    Response::from_parts(parts, rewritten_body)
 }

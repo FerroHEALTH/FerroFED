@@ -18,8 +18,14 @@ publish = false
 [dependencies]
 # The patient summary crosswalk, whose sections the stored queries feed, the
 # document, and the FHIRconnect mapping each composition runs through; the
+# prescription and dispensation profiles the members serve them in; the
 # component itself links nothing of FerroFED.
-eehrxf = { workspace = true, features = ["patient-summary", "openehr"] }
+eehrxf = { workspace = true, features = [
+  "patient-summary",
+  "prescription",
+  "dispensation",
+  "openehr",
+] }
 # The R4 resources the document and the face write.
 fhir-types = { workspace = true, features = ["r4", "resources"] }
 # The call context and run settings of a mapping run.

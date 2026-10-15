@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
+use ferrofed_eehrxf::serving;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::resolver::Resolver;
@@ -160,8 +161,7 @@ impl Federation {
             .as_ref()
             .map(|seam| -> Arc<dyn Resolver> { Arc::clone(&seam.resolver) });
         patient_bound(settings, &snapshot, resolver.is_some())?;
-        receiving(settings, &snapshot, resolver.is_some())?;
-        natives(&snapshot)?;
+        faced(settings, &snapshot, resolver.is_some())?;
         let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
         if selection == NodeSelection::Localized {
             binding::single(&offers, Role::Localizer)?;
@@ -508,15 +508,85 @@ fn receiving(
     Ok(())
 }
 
+/// Holds the FHIR face of `settings` to the registry `snapshot`, and to a
+/// configured resolver when `resolving`: the receiving members, every
+/// member's own endpoint and the serving members, in that order.
+///
+/// # Errors
+///
+/// The [`FederationError`] of [`receiving`], [`natives`] or [`served`].
+fn faced(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+    resolving: bool,
+) -> Result<(), FederationError> {
+    receiving(settings, snapshot, resolving)?;
+    natives(snapshot)?;
+    served(settings, snapshot, resolving)
+}
+
+/// Holds every `[[fhir.serve]]` member of `settings` to the registry
+/// `snapshot`, to an endpoint of its own there that serves the category,
+/// and to a configured resolver when `resolving`.
+///
+/// # Errors
+///
+/// Returns [`FederationError::ServingWithoutResolver`] when a category is
+/// served and no resolver is configured,
+/// [`FederationError::ServingMemberUnknown`] for a member that is no node
+/// of the registry, and [`FederationError::ServingWithoutEndpoint`] for one
+/// with no `hl7-fhir-rest` endpoint serving the category.
+fn served(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+    resolving: bool,
+) -> Result<(), FederationError> {
+    let Some(fhir) = &settings.fhir else {
+        return Ok(());
+    };
+    if !resolving && !fhir.serving.is_empty() {
+        return Err(FederationError::ServingWithoutResolver);
+    }
+    for (category, members) in fhir.serving.members() {
+        let code = category.code();
+        for member in members {
+            let Some(node) = NodeId::new(member)
+                .ok()
+                .filter(|node| snapshot.node(node).is_some())
+            else {
+                return Err(FederationError::ServingMemberUnknown {
+                    category: code,
+                    member: member.clone(),
+                });
+            };
+            // NOTE: no specification governs this: our own design; a member serves the
+            // category on its own endpoint, whose profile `natives` holds, and nowhere else.
+            let endpoint = snapshot
+                .native_endpoints()
+                .any(|native| native.node() == &node && native.serves(code));
+            if !endpoint {
+                return Err(FederationError::ServingWithoutEndpoint {
+                    category: code,
+                    member: member.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Holds every member's own exchange-format endpoint of `snapshot` to the
 /// priority categories of Regulation (EU) 2025/327 Art 14(1), and one that
-/// serves patient summaries to the profile the face asks every summary in.
+/// serves patient summaries, prescriptions or dispensations to the profile
+/// the face asks for them in.
 ///
 /// # Errors
 ///
 /// Returns [`FederationError::NativeCategoryUnknown`] for a code that is no
 /// priority category, and [`FederationError::NativeProfileMissing`] for a
-/// patient summary endpoint that does not declare the EPS composition.
+/// patient summary endpoint that does not declare the EPS composition, or a
+/// prescription or dispensation one that does not declare its HL7 Europe
+/// MPD profile.
 fn natives(snapshot: &RegistrySnapshot) -> Result<(), FederationError> {
     for native in snapshot.native_endpoints() {
         for code in native.categories() {
@@ -526,10 +596,14 @@ fn natives(snapshot: &RegistrySnapshot) -> Result<(), FederationError> {
                     category: code.clone(),
                 });
             };
-            // NOTE: IPS OperationDefinition-summary `profile`; the face asks every member
-            // for the profile it answers in itself, so a native one must declare it.
-            let profile = EPS_COMPOSITION;
-            if category == Category::PatientSummary
+            // NOTE: IPS OperationDefinition-summary `profile`, HL7 Europe MPD 1.0.0; the face
+            // asks every member for the profile it answers in itself, so a native one declares it.
+            let profile = if category == Category::PatientSummary {
+                Some(EPS_COMPOSITION)
+            } else {
+                eehrxf::category::Category::of_code(code).and_then(serving::profile)
+            };
+            if let Some(profile) = profile
                 && !native.profiles().iter().any(|declared| declared == profile)
             {
                 return Err(FederationError::NativeProfileMissing {

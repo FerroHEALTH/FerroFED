@@ -104,8 +104,8 @@ shows.
   (`Patient-Summaries`, `Electronic-Prescriptions`,
   `Electronic-Dispensations`, `Medical-Imaging`, `Laboratory-Reports`,
   `Discharge-Reports`);
-- a `Patient-Summaries` endpoint whose profiles leave out the EPS composition
-  profile, the one the face asks every summary in.
+- an endpoint whose profiles leave out the one the face asks its category in:
+  the EPS composition, `MedicationRequest-eu-mpd` or `MedicationDispense-eu-mpd`.
 
 A suspended native endpoint serves nothing, and the member's data for its
 categories are mapped as any other member's. The `native` mode and its keys
