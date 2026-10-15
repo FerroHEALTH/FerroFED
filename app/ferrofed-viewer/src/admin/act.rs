@@ -114,7 +114,14 @@ pub mod server {
         pub replica: String,
         /// What it did.
         pub acted: Acted<T>,
+        /// The gateway's message of a `configuration-invalid` refusal, which
+        /// names the key refused and, as `config check` does, never a value.
+        pub said: Option<String>,
     }
+
+    /// The stable code of a configuration the gateway refuses as `config
+    /// check` does, whose message the page shows.
+    pub const CONFIGURATION_INVALID: &str = "configuration-invalid";
 
     /// What a replica reports of a clear.
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,6 +266,7 @@ pub mod server {
         answered: Result<A, GatewayError>,
         read: fn(A) -> T,
     ) -> ReplicaAnswer<T> {
+        let mut said = None;
         let acted = match answered {
             Ok(report) => {
                 tracing::info!(replica, action = what, "an operator's {} ran", kind.noun());
@@ -272,13 +280,23 @@ pub mod server {
                     replica,
                 },
             ) {
-                Stop::Refused(refusal) => Acted::Refused(refusal),
+                Stop::Refused(refusal) => {
+                    if let Refusal::Gateway {
+                        code: Some(code), ..
+                    } = &refusal
+                        && code == CONFIGURATION_INVALID
+                    {
+                        said = error.message();
+                    }
+                    Acted::Refused(refusal)
+                }
                 Stop::Fault(fault) => Acted::Fault(fault),
             },
         };
         ReplicaAnswer {
             replica: replica.to_owned(),
             acted,
+            said,
         }
     }
 
