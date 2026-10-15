@@ -51,12 +51,22 @@ fn a_received_category_is_named_with_its_member() -> TestResult {
 #[test]
 fn a_category_with_no_member_is_named() -> TestResult {
     let stdout = checked(&fhir_tables(UNREACHED_SUPPLIER))?;
-    assert!(
-        stdout.contains(
-            "ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category\n"
-        ),
-        "{stdout}"
-    );
+    let prefix = "ferrofed: note: [[fhir.receive]] names no receiving member for ";
+    let note = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix(prefix))
+        .ok_or_else(|| format!("no unreceived note: {stdout}"))?;
+    let (codes, consequence) = note
+        .split_once(": ")
+        .ok_or_else(|| format!("a note with no consequence: {note}"))?;
+    let codes: Vec<&str> = codes.split(", ").collect();
+    assert!(codes.contains(&"Patient-Summaries"), "{note}");
+    let expected = if codes.len() == 1 {
+        "the FHIR face refuses a document of this Art 14(1) category"
+    } else {
+        "the FHIR face refuses a document of any of these Art 14(1) categories"
+    };
+    assert_eq!(expected, consequence, "{note}");
     assert!(!stdout.contains("writes them to the member"), "{stdout}");
     Ok(())
 }
