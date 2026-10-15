@@ -306,15 +306,16 @@ fn limited(
         .with_row_ceiling(federation.max_node_rows)
 }
 
-/// The access log `settings` describe: the category map and the retention,
-/// over the `[audit]` trail every build carries; `None` under development
-/// with the records off.
+/// The access log `settings` describe: the category map, the retention and
+/// the labels, over the `[audit]` trail every build carries; `None` under
+/// development with the records off.
 ///
 /// # Errors
 ///
 /// [`FederationError::RetentionEndpointUnknown`] for a retention origin
-/// `snapshot` does not hold, [`FederationError::Audit`] for a trail that
-/// cannot start, and [`FederationError::AccessLogUnavailable`] outside
+/// `snapshot` does not hold, [`FederationError::LabelEndpointUnknown`] for a
+/// labelled origin it does not hold, [`FederationError::Audit`] for a trail
+/// that cannot start, and [`FederationError::AccessLogUnavailable`] outside
 /// development when the records go nowhere (Regulation (EU) 2025/327 Annex II
 /// 3.2).
 fn access_log(
@@ -322,12 +323,19 @@ fn access_log(
     snapshot: &RegistrySnapshot,
 ) -> Result<Option<AccessLog>, FederationError> {
     let retention = &settings.access_log.retention;
-    if let Some(endpoint) = retention.origins().find(|origin| {
+    let labels = &settings.access_log.labels;
+    let unknown = |origin: &&str| {
         !snapshot
             .endpoints()
             .any(|endpoint| endpoint.id().as_str() == *origin)
-    }) {
+    };
+    if let Some(endpoint) = retention.origins().find(unknown) {
         return Err(FederationError::RetentionEndpointUnknown {
+            endpoint: endpoint.to_owned(),
+        });
+    }
+    if let Some(endpoint) = labels.origins().find(unknown) {
+        return Err(FederationError::LabelEndpointUnknown {
             endpoint: endpoint.to_owned(),
         });
     }
@@ -337,6 +345,7 @@ fn access_log(
         return Ok(Some(
             AccessLog::new(settings.access_log.map.clone(), sink)
                 .with_retention(retention.clone())
+                .with_labels(labels.clone())
                 .with_emergency(settings.access_log.emergency.clone())
                 .with_patient_namespaces(settings.access_log.patient_namespaces.clone()),
         ));

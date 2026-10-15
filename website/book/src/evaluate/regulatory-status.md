@@ -383,9 +383,10 @@ them:
   9(2); [Reading the log](../operate/audit.md#reading-the-log)). A request
   addressed by `ehr_id` names the patient the identity binding holds under
   it, so a search by the person's identifier finds it (Art 9(1)); a query
-  over many patients' data names none. Access rights by origin and
-  category are planned
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)).
+  over many patients' data names none. Each record carries a security
+  label per category and per origin, which the repository applies as
+  access rights by origin and category (point 3.4;
+  [Labelling the access records](../operate/access-labels.md)).
 - The European interoperability component has a library, `crates/eehrxf`:
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the

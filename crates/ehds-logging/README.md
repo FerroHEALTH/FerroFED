@@ -24,6 +24,11 @@ what classifies it.
   declared anywhere for an unclassified access. The record states the
   period, the first date it may be deleted on and what called for it, so the
   store that holds it can apply it.
+- `label`: the security labels a record carries per category and per
+  origin of the data (Annex II 3.4), by default each category's own code
+  and each origin's endpoint in a code system the deployment names, and
+  every category's label for an unclassified access, so the store that
+  holds the record can limit who reads it.
 - `sink`: where records go, and the error a sink returns when it cannot
   store one.
 - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`

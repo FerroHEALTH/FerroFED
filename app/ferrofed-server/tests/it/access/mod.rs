@@ -19,6 +19,7 @@ mod address;
 mod emergency;
 mod emergency_consent;
 mod gate;
+mod labels;
 mod limits;
 mod origins;
 mod patient;

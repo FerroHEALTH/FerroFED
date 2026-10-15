@@ -51,6 +51,7 @@
   - [Consent](operate/consent.md)
     - [Withholding consent exclusions](operate/consent-exclusions.md)
   - [The audit trail](operate/audit.md)
+    - [Labelling the access records](operate/access-labels.md)
   - [Client authentication](operate/authentication.md)
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)
   - [Onward credentials](operate/onward-credentials.md)

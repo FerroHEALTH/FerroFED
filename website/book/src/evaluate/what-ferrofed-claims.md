@@ -379,8 +379,9 @@ These are the ones to know before you deploy FerroFED; the
   Repository with ITI-81 (point 3.3), each record stating its retention by
   origin and category (point 3.4). A query over many patients' data names
   no patient in its record, so a search by the person's identifier does
-  not find it, and access rights by origin and category are planned
-  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797)). The
+  not find it. Each record carries a security label per category and per
+  origin, which your repository applies as access rights
+  ([Labelling the access records](../operate/access-labels.md)). The
   European interoperability software component writes the patient
   summary and receives a document in the exchange format on the gateway's
   FHIR face; the other priority categories are planned
