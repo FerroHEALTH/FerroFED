@@ -246,6 +246,8 @@ with its end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with its support period, five years from its release
 date, and its end date. FerroFED 0.0.10 is supported until 2031-10-15.
+The rest of the information the Cyber Resilience Act's Annex II asks for is
+on [CRA information to the user](cra-user-information.md).
 
 ## Economic operators supplied
 

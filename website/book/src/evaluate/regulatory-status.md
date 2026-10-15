@@ -373,6 +373,10 @@ part:
   single point of contact (Art 13(16)).
 - A published release cannot be changed or deleted, so every update stays
   available (Art 13(9)).
+- The [cybersecurity risk assessment](cra-risk-assessment.md) reads the
+  threat model and the clinical safety risk file against Annex I (Art
+  13(2), (3)), and [CRA information to the user](cra-user-information.md)
+  gives the points of Annex II (Art 13(18)).
 
 ## What is built and what is planned
 
