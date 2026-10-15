@@ -228,6 +228,18 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 Europe Hospital Discharge Report | package `hl7.fhir.eu.hdr` 0.1.0-ballot, pin-set digest `2bc6073aedf1a6e4630b3763c2058ed5bbec53c29bc2e74ef5a9c2a60f0af918`, tarball sha256 `458b8ba0edcf22d75d455d6149c9264d486bb8ec052251a90afd8654410482ee` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-hdr/PROVENANCE.md` |
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/eehrxf.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
 
+### FHIR R4 core specification (#1053)
+
+The pages of FHIR R4 4.0.1 that govern an extension the exchange format
+defines: Extensibility, Defining Extensions, the StructureDefinition resource
+and the licence page, each pinned in `scripts/vendor/fhir-r4.sh` by its
+versioned URL and sha256 through `scripts/vendor/lib/pinned.sh`. The
+extension definitions under `crates/eehrxf/src/` are tested against them.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| FHIR R4 core specification pages | `hl7.org/fhir/R4/` 4.0.1, pin-set digest `f83b3f5adeb29f74a8c465292689bbdbbf7c6b609b9d5a643ab6954b483244a7`, the Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition and License and Legal Terms (2.20) pages | `scripts/vendor/fhir-r4.sh`, `docs/specs/fhir-r4/PROVENANCE.md` |
+
 ### openEHR clinical models (#776, #980)
 
 The openEHR International Patient Summary template of the openEHR

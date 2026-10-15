@@ -47,7 +47,9 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   `receive` check. The number of dispensations an item has left travels in
   the extension
   `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` on
-  `dispenseRequest`, written only when a value is given.
+  `dispenseRequest`, written only when a value is given; its FHIR R4
+  `StructureDefinition` is `REMAINING_DISPENSATIONS_DEFINITION`, which the
+  documentation site serves at that URL.
 - `receive` (feature `fhir-r4`): a document received in the exchange format
   (Annex II 2.2 and 2.3). `ReceivedDocument::read` decodes it against FHIR R4,
   holds it to the document rules of the R4 `Bundle` (`bdl-9`, `bdl-10`,

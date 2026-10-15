@@ -85,6 +85,19 @@ cp -R assets/brand "$OUT/assets/"
 # that makes it useful.
 cp llms.txt "$OUT/llms.txt"
 
+# Each extension eehrxf defines is served at its canonical URL, the site
+# root's fhir/StructureDefinition/<id>, and beside it as <id>.json, which
+# GitHub Pages serves as application/json (FHIR R4 2.5.1: the definition SHALL
+# be available to every party that exchanges the extension).
+readonly DEFINITIONS=crates/eehrxf/src/medication
+mkdir -p "$OUT/fhir/StructureDefinition"
+for definition in "$DEFINITIONS"/StructureDefinition-*.json; do
+  id="$(basename "$definition" .json)"
+  id="${id#StructureDefinition-}"
+  cp "$definition" "$OUT/fhir/StructureDefinition/$id"
+  cp "$definition" "$OUT/fhir/StructureDefinition/$id.json"
+done
+
 if [[ "${SITE_ROADMAP:-on}" == off ]]; then
   echo "assemble: SITE_ROADMAP=off, so the roadmap block stays empty."
 elif roadmap > "$block" 2>/dev/null && [[ -s "$block" ]]; then
