@@ -20,7 +20,7 @@ use eehrxf::terminology::ehn;
 use eehrxf::transformation::{Direction, Pin, Report};
 use fhir_types::codec::{Json as _, Path, Value};
 use fhir_types::r4::resource::Resource;
-use fhirconnect::engine::outcome::{SkipReason, Warning};
+use fhirconnect::engine::outcome::{Location, Loss, SkipReason, Warning};
 use fhirconnect::operations::issues;
 
 /// A code value no path may carry.
@@ -126,26 +126,41 @@ fn a_report_carries_no_code_value_or_text() -> Result<(), Box<dyn Error>> {
 /// The outcome of a run that declared each kind of loss once.
 fn losses() -> Option<fhir_types::r4::operation_outcome::OperationOutcome> {
     issues::of_warnings(&[
-        Warning::LastOfMany {
-            path: "AllergyIntolerance.note".to_owned(),
-            dropped: 2,
-        },
-        Warning::Skipped {
-            mapping: "allergy.reaction".to_owned(),
-            reason: SkipReason::UnresolvedReference {
+        Warning::new(
+            Loss::LastOfMany {
+                path: "AllergyIntolerance.note".to_owned(),
+                dropped: 2,
+            },
+            Location::default(),
+        ),
+        Warning::new(
+            Loss::Skipped {
+                mapping: "allergy.reaction".to_owned(),
+                reason: SkipReason::UnresolvedReference {
+                    reference: REFERENCE.to_owned(),
+                },
+            },
+            Location::default(),
+        ),
+        Warning::new(
+            Loss::OneWayFallback {
+                cell: "DV_QUANTITY".to_owned(),
+                field: "precision".to_owned(),
+            },
+            Location::default(),
+        ),
+        Warning::new(
+            Loss::DeferredReference {
                 reference: REFERENCE.to_owned(),
             },
-        },
-        Warning::OneWayFallback {
-            cell: "DV_QUANTITY".to_owned(),
-            field: "precision".to_owned(),
-        },
-        Warning::DeferredReference {
-            reference: REFERENCE.to_owned(),
-        },
-        Warning::Defaulted {
-            field: "/language".to_owned(),
-        },
+            Location::default(),
+        ),
+        Warning::new(
+            Loss::Defaulted {
+                field: "/language".to_owned(),
+            },
+            Location::default(),
+        ),
     ])
 }
 

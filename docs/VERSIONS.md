@@ -334,14 +334,14 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.108 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.1.109 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
 `Bundle`). The `pdqm` feature takes `r4` and `resources`, every R4 resource,
 because ITI-78 answers with `Patient` resources, which only `resources`
 carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
-from the same set. 0.1.108 is the release the FHIRconnect engine builds on
+from the same set. 0.1.109 is the release the FHIRconnect engine builds on
 (#684), so the build carries one `fhir-types`.
 
 ## FHIRconnect engine (crates.io)
@@ -355,8 +355,8 @@ on the `openehr-*` line above.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhirconnect` | =0.1.108 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.108 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhirconnect` | =0.1.111 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.109 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
