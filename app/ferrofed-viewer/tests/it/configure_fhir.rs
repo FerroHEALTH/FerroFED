@@ -281,6 +281,38 @@ async fn a_hostile_fhir_endpoint_is_escaped_in_the_edit_form() -> Result<(), Box
     assert!(page.contains("&quot; onfocus=&quot;alert(2)"), "{page}");
     Ok(())
 }
+
+// NOTE: no specification governs this: our own design; a `;` is legal in a URL
+// (RFC 3986 §3.3), so the field writes it `%3B` and a save reads it back once.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_url_holding_a_semicolon_round_trips_through_the_edit_form() -> Result<(), Box<dyn Error>>
+{
+    let held = r#",{"id":"node-c-fhir","url":"https://cdr-c.example.org/fhir;v=4","connection_type":"hl7-fhir-rest",
+        "categories":["Patient-Summaries"],"profiles":["http://example.org/ps;1","http://example.org/%3Bq"],
+        "ehr_id_system":"urn:oid:2.999.1"}"#;
+    let listener = listener(held).await;
+    let (service, session) = signed_in_console(&listener)?;
+    let (_response, page) = send(&service, get_as("/configuration", &session)?).await?;
+    let shown = "node-c-fhir https://cdr-c.example.org/fhir%3Bv=4 system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps%3B1,http://example.org/%253Bq";
+    assert!(
+        page.contains(&format!(r#"name="form[fhir_endpoints]" value="{shown}""#)),
+        "{page}"
+    );
+    configured(&service, &session, save_c(shown)).await?;
+    let fhir = saved_fhir(&listener).await?;
+    let [saved] = fhir.as_slice() else {
+        return Err(format!("one FHIR endpoint, not {}", fhir.len()).into());
+    };
+    assert_eq!("https://cdr-c.example.org/fhir;v=4", saved.url);
+    assert_eq!(
+        vec![
+            String::from("http://example.org/ps;1"),
+            String::from("http://example.org/%3Bq")
+        ],
+        saved.profiles
+    );
+    Ok(())
+}
 /// The save of console member C a form posts with `action` and `fields`
 /// beside the member's own, which carry no FHIR endpoints field.
 fn posted(action: &str, fields: &[(&str, &str)]) -> String {

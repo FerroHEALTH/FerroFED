@@ -8,6 +8,7 @@ use ferrofed_registry::revision::{RevisionId, Standing};
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 use leptos::prelude::*;
 
+use crate::configure::member::escaped;
 use crate::configure::render::{FormView, base, confirm, field, hidden};
 
 /// The forms the page offers for `standing` and `resources`.
@@ -114,7 +115,11 @@ fn endpoints_text(member: &ConsoleMember) -> String {
             } else {
                 ""
             };
-            format!("{} {}{status}", endpoint.id.as_str(), endpoint.url)
+            escaped(&format!(
+                "{} {}{status}",
+                endpoint.id.as_str(),
+                endpoint.url
+            ))
         })
         .collect::<Vec<_>>()
         .join("; ")
@@ -132,14 +137,14 @@ fn fhir_text(member: &ConsoleMember) -> String {
             } else {
                 ""
             };
-            format!(
+            escaped(&format!(
                 "{} {} system={} categories={} profiles={}{status}",
                 endpoint.id.as_str(),
                 endpoint.url,
                 endpoint.ehr_id_system.as_deref().unwrap_or_default(),
                 endpoint.categories.join(","),
                 endpoint.profiles.join(","),
-            )
+            ))
         })
         .collect::<Vec<_>>()
         .join("; ")
@@ -165,7 +170,7 @@ fn fhir_field(form: &str, value: String) -> impl IntoView {
             />
         </p>
         <p id=hint>
-            "Each endpoint is its endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service. Separate endpoints with a semicolon."
+            "Each endpoint is its endpoint_id and base URL, then system= the identifier system of the ehr_id, categories= and profiles=, each a list separated by commas, then suspended if it is out of service. Separate endpoints with a semicolon, and write a semicolon inside an endpoint as %3B."
         </p>
     }
 }
@@ -217,7 +222,7 @@ fn member_form(
             id,
             (
                 "endpoints",
-                "Query API endpoints: endpoint_id and base URL, then suspended if it is out of service; separate endpoints with a semicolon",
+                "Query API endpoints: endpoint_id and base URL, then suspended if it is out of service; separate endpoints with a semicolon, and write one inside an endpoint as %3B",
             ),
             value(endpoints_text),
             (true, false),
