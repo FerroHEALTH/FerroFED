@@ -36,7 +36,9 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::store::{
+    DefinitionStore, Field, FieldFault, Insertion, StoreError,
+};
 use ferrofed_registry::definition::{QueryName, StoredDefinition};
 use ferrofed_registry::secret::SecretUrl;
 use jiff::Timestamp;
@@ -404,16 +406,16 @@ async fn prepare(client: &mut Client) -> Result<(), StoreError> {
         .map_err(backend)?
         .map(|row| row.try_get::<usize, i32>(0))
         .transpose()
-        .map_err(corrupt)?
+        .map_err(fault(Field::Layout, FieldFault::Type))?
         .unwrap_or(0);
-    let found = u32::try_from(found).map_err(corrupt)?;
+    let found = u32::try_from(found).map_err(fault(Field::Layout, FieldFault::Range))?;
     let pending = schema::pending("PostgreSQL", found).map_err(schema_error)?;
     for step in pending {
         transaction
             .batch_execute(migration(step)?)
             .await
             .map_err(backend)?;
-        let reached = i32::try_from(step).map_err(corrupt)?;
+        let reached = i32::try_from(step).map_err(fault(Field::Layout, FieldFault::Range))?;
         transaction
             .execute(RECORD_VERSION, &[&LAYOUT, &reached])
             .await
@@ -476,12 +478,21 @@ async fn load(
 
 /// The definition one row holds.
 fn definition(row: &Row) -> Result<StoredDefinition, StoreError> {
-    let text = |index: usize| row.try_get::<usize, &str>(index).map_err(corrupt);
+    let text = |(index, field): (usize, Field)| {
+        row.try_get::<usize, &str>(index)
+            .map_err(fault(field, FieldFault::Type))
+    };
     Ok(StoredDefinition::new(
-        text(0)?.parse().map_err(corrupt)?,
-        text(1)?.parse().map_err(corrupt)?,
-        text(3)?.to_owned(),
-        text(2)?.parse::<Timestamp>().map_err(corrupt)?,
+        text((0, Field::Name))?
+            .parse()
+            .map_err(fault(Field::Name, FieldFault::Form))?,
+        text((1, Field::Version))?
+            .parse()
+            .map_err(fault(Field::Version, FieldFault::Form))?,
+        text((3, Field::Aql))?.to_owned(),
+        text((2, Field::Saved))?
+            .parse::<Timestamp>()
+            .map_err(fault(Field::Saved, FieldFault::Form))?,
     ))
 }
 
@@ -501,9 +512,12 @@ fn backend(error: impl std::error::Error + Send + Sync + 'static) -> StoreError 
     StoreError::Backend(Box::new(error))
 }
 
-/// A held row that does not read as a definition, for `error`.
-fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
-    StoreError::Corrupt(Box::new(error))
+/// The damaged-store error of a held `field` with the fault `kind`, for any
+/// reader error.
+fn fault<E>(field: Field, kind: FieldFault) -> impl FnOnce(E) -> StoreError {
+    // NOTE: no specification governs this: our own design; the reader's error
+    // is dropped because it can quote the held text, and the fault names it.
+    move |_| StoreError::unreadable(field, kind)
 }
 
 #[cfg(test)]

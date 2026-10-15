@@ -33,7 +33,8 @@ use crate::facade::{
     registry, settings_with_room, statuses,
 };
 use crate::stored::suite::SCENARIOS;
-use crate::support::{call, chain, error_body};
+use crate::support::{Logs, call, chain, error_body};
+use ferrofed_server::telemetry::{Rendering, subscriber};
 
 /// The qualified name the race stores under.
 const NAME: &str = "org.example::raced";
@@ -331,6 +332,47 @@ async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestR
     );
     assert!(line.contains(NAME), "names the definition: {line}");
     assert!(!line.contains(PATIENT_TAIL), "§5.4.3: never quoted: {line}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_row_that_does_not_read_is_logged_by_field_and_kind_never_by_its_text() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let planted = "synthetic-planted-6613";
+    let server = database::postgres("stored_unreadable", &[]).await?;
+    let url = server.url("stored_unreadable");
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), ("http://a.invalid", "http://b.invalid"), &url)?;
+    executed(
+        &url,
+        &format!(
+            "INSERT INTO {TABLE} (name, version, saved, aql) \
+             VALUES ('{NAME}', '1.0.0', '{planted}', '{planted}')"
+        ),
+    )
+    .await?;
+
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "error", false, logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
+    let (status, text) = call(app, get(&format!("{NAME}/1.0.0"))?).await?;
+    drop(guard);
+    assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status, "{text}");
+    assert!(!text.contains(planted), "the answer carries the row");
+    let logged = logs.text();
+    assert!(
+        logged.contains("the stored-query store could not be read")
+            && logged.contains("the saved instant"),
+        "the log names the field"
+    );
+    for line in logged.lines() {
+        assert!(
+            !line.contains(planted),
+            "a log line carries the planted value"
+        );
+    }
     Ok(())
 }
 

@@ -18,6 +18,7 @@
 
 mod assigned;
 mod backends;
+mod corrupt;
 mod declaration;
 mod files;
 mod held;
