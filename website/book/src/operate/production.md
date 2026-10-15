@@ -660,9 +660,8 @@ and reload the registry:
 docker compose kill -s SIGHUP ferrofed
 ```
 
-The Kubernetes example has no reload path into the pod yet
-([#636](https://github.com/FerroHEALTH/FerroFED/issues/636)): change the
-ConfigMap and restart the StatefulSet's pods.
+In Kubernetes, change the ConfigMap and send each pod `POST /admin/reload`
+([Reloading over the admin listener](metrics.md#reloading-over-the-admin-listener)).
 
 ## 10. The first federated query
 

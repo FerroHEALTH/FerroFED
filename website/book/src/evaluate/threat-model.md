@@ -162,7 +162,7 @@ front of it.
 |---|---|---|---|---|
 | S | a key set fetched in the clear and substituted | P3 | every `jwks_uri` and `introspection_endpoint` is `https`, or `http` to loopback, under every profile | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted) |
 | D | tokens naming unknown keys make the gateway flood the issuer | P1 | an unknown `kid` refetches at most once per `key_set_refetch_s`; an unavailable key set is `503`, never a pass | `auth.key_set_refetch_s`; `app/ferrofed-server/tests/it/auth/keys.rs` |
-| S, E | an issuer compromised: any token it signs is admitted | P5 | none in the gateway: a trusted issuer is trusted for every caller it vouches for | **carried by the deployment:** a short trust list, per-issuer `backend_clients`, `demographic_clients` and `operator_scope`, and removing an issuer at once; reloading `[auth]` without a restart is [#636](https://github.com/FerroHEALTH/FerroFED/issues/636) |
+| S, E | an issuer compromised: any token it signs is admitted | P5 | none in the gateway: a trusted issuer is trusted for every caller it vouches for | **carried by the deployment:** a short trust list, per-issuer `backend_clients`, `demographic_clients` and `operator_scope`, and removing an issuer at once, which a reload applies without a restart ([Reloading the registry](../operate/registry.md#reloading-the-registry)) |
 
 ## B8: configuration and secrets
 
@@ -196,9 +196,9 @@ control from you, or an issue that is open:
 4. **Bearer replay.** An onward token or a caller token stolen at a node can
    be replayed at that node until it expires (§13.4). DPoP or mutual TLS
    narrows it for onward tokens; the caller token lives 60 seconds.
-5. **A compromised issuer** is admitted for every caller it vouches for,
-   and changing `[auth]` takes a restart
-   ([#636](https://github.com/FerroHEALTH/FerroFED/issues/636)).
+5. **A compromised issuer** is admitted for every caller it vouches for
+   until you remove it from `[auth]` and reload
+   ([Reloading the registry](../operate/registry.md#reloading-the-registry)).
 6. **A node that ignores the conveyed caller** releases what its own
    credential allows. Admission is where you check that each node verifies
    the token ([Admitting a node](../operate/admission.md)).

@@ -10,14 +10,16 @@
 //! registry holds to the members that miss it at `POST`
 //! [`DISTRIBUTE`], and the clear of one `ehr_id` from this process's
 //! routing state at `POST` [`CLEAR_EHR_ID`], and the export of the routing
-//! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`]. Under
+//! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`], and the
+//! reload `SIGHUP` asks for at `POST` [`RELOAD`], for a container no
+//! signal reaches ([`serving_router`]). Under
 //! `config.ui = "managed"` it also serves the configuration revisions under
 //! `/admin/config` ([`revision::routes`], [`managed_router`]), whose reads
 //! pass [`operator_read`]. Every other path is `404`. No route is on the
 //! gateway's client listener, and none is part of the ITS-REST surface.
 //!
-//! Every write or administrative action, the distribution, the clear and the export among them, is
-//! admitted by the gateway's client authentication ([`Gate`], built from
+//! Every write or administrative action, the distribution, the clear, the export and the reload among them, is
+//! admitted by the gateway's client authentication ([`Gate`](crate::auth::Gate), built from
 //! `[auth]`) only for a caller whose token carries the operator scope its
 //! issuer's entry names, from any peer ([`operator_only`]). Under
 //! `profile = "development"` a loopback peer that presents no credential is
@@ -46,16 +48,19 @@ use ferrofed_registry::id::EhrId;
 use ferrofed_registry::secret::Secret;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 
-use crate::auth::Gate;
 use crate::auth::caller::Caller;
 use crate::auth::permission::Requirement;
 use crate::auth::refusal::{REALM, Refusal};
+use crate::auth::trust::Trust;
 use crate::config::auth::AuthSettings;
 use crate::config::settings::Settings;
 use crate::error::{self, Code};
 use crate::facade::stored;
+use crate::listener::TlsListener;
+use crate::listener::certificates::Certificates;
 use crate::metrics;
 use crate::metrics::security::Event;
+use crate::reload::{self, Reloader};
 use crate::request_id;
 use crate::revision;
 use crate::revision::routes::Managed;
@@ -73,6 +78,10 @@ pub const CLEAR_EHR_ID: &str = "/admin/ehr-ids/{ehr_id}/clear";
 /// The path of the operator's export of the routing state this process
 /// learned, for a system that replaces the gateway.
 pub const EXPORT_IDENTITY_STATE: &str = "/admin/identity-state/export";
+
+/// The path of the operator's reload of the configuration file, the same
+/// reload `SIGHUP` asks for ([`Reloader::reload`]).
+pub const RELOAD: &str = "/admin/reload";
 
 /// Why the admin listener refused a request before its route read anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -170,8 +179,9 @@ impl Operator {
 /// profile, and the scrape token.
 #[derive(Debug)]
 pub struct Access {
-    /// The verifier of every write action's caller.
-    gate: Gate,
+    /// The verifier of every write action's caller, replaced whole on a
+    /// reload.
+    trust: Arc<Trust>,
     /// The deployment profile.
     profile: Profile,
     /// The bearer token a scrape must carry, when one is set.
@@ -183,8 +193,16 @@ impl Access {
     /// describes, under `profile`, with `scrape_token` guarding the scrape.
     #[must_use]
     pub fn new(auth: &AuthSettings, profile: Profile, scrape_token: Option<Secret>) -> Self {
+        Self::sharing(Arc::new(Trust::new(auth)), profile, scrape_token)
+    }
+
+    /// Returns the access that verifies a write action's caller with the
+    /// gate `trust` holds when the request arrives, the one the client
+    /// listener shares, so a reload of `[auth]` reaches both.
+    #[must_use]
+    pub fn sharing(trust: Arc<Trust>, profile: Profile, scrape_token: Option<Secret>) -> Self {
         Self {
-            gate: Gate::new(auth),
+            trust,
             profile,
             scrape_token,
         }
@@ -211,16 +229,16 @@ impl Access {
         peer: Option<SocketAddr>,
         headers: &HeaderMap,
     ) -> Result<Operator, AdminRefusal> {
+        let gate = self.trust.gate();
         // NOTE: no specification governs this: our own design; development keeps the
         // credential-less loopback operator, and every other profile asks the gate.
         if self.profile == Profile::Development
-            && !self.gate.presents_credential(headers)
+            && !gate.presents_credential(headers)
             && peer.is_some_and(|peer| peer.ip().is_loopback())
         {
             return Ok(Operator::DevelopmentLoopback);
         }
-        self.gate
-            .admit(headers, (Requirement::Operator, None), false)
+        gate.admit(headers, (Requirement::Operator, None), false)
             .await
             .map(|caller| Operator::Verified(Box::new(caller)))
             .map_err(AdminRefusal::Caller)
@@ -272,6 +290,21 @@ pub fn managed_router(
     access: Access,
     managed: Option<Arc<Managed>>,
 ) -> Router {
+    serving_router(state, access, managed, None)
+}
+
+/// Returns the admin listener's application as [`managed_router`] does,
+/// with `POST` [`RELOAD`] beside it when `reloader` is set.
+///
+/// The reload is a write action: admitted for the operator scope and
+/// recorded with its operator ([`operator_only`]). Without `reloader` its
+/// path is `404`.
+pub fn serving_router(
+    state: Arc<AppState>,
+    access: Access,
+    managed: Option<Arc<Managed>>,
+    reloader: Option<Arc<Reloader>>,
+) -> Router {
     let access = Arc::new(access);
     let metrics = metrics::routes(Arc::clone(state.metrics()))
         .route_layer(middleware::from_fn_with_state(Arc::clone(&access), scrape));
@@ -285,6 +318,16 @@ pub fn managed_router(
         ))
         .with_state(state)
         .merge(metrics);
+    if let Some(reloader) = reloader {
+        let reloading = Router::new()
+            .route(RELOAD, post(reload::action::reload))
+            .route_layer(middleware::from_fn_with_state(
+                Arc::clone(&access),
+                operator_only,
+            ))
+            .with_state(reloader);
+        app = app.merge(reloading);
+    }
     if let Some(managed) = managed {
         let writes = revision::routes::writes(Arc::clone(&managed)).route_layer(
             middleware::from_fn_with_state(Arc::clone(&access), operator_only),
@@ -324,6 +367,42 @@ pub fn managed_listener(
         let app = managed_router(Arc::clone(state), Access::of(settings), managed);
         (address, app)
     })
+}
+
+/// Binds the admin listener at `address` and serves `app` on it, plain or
+/// over `tls`, in a task of its own.
+///
+/// # Errors
+/// Returns the I/O error of binding `address`.
+pub async fn start(
+    address: SocketAddr,
+    app: Router,
+    tls: Option<Arc<Certificates>>,
+) -> std::io::Result<()> {
+    let bound = tokio::net::TcpListener::bind(address).await?;
+    tracing::info!(
+        listen = %address,
+        tls = tls.is_some(),
+        path = metrics::PATH,
+        distribute = DISTRIBUTE,
+        clear_ehr_id = CLEAR_EHR_ID,
+        export_identity_state = EXPORT_IDENTITY_STATE,
+        reload = RELOAD,
+        "serving the admin listener"
+    );
+    tokio::spawn(async move {
+        let stopped = match tls {
+            None => serve(bound, app).await,
+            Some(certificates) => match TlsListener::new(bound, certificates) {
+                Ok(tls) => serve(tls, app).await,
+                Err(error) => Err(error),
+            },
+        };
+        if let Err(error) = stopped {
+            tracing::error!(%error, "the metrics listener stopped");
+        }
+    });
+    Ok(())
 }
 
 /// Serves the admin listener's `app` on `listener`, plain or TLS, recording

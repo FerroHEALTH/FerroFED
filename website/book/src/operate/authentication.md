@@ -109,6 +109,13 @@ An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
 that federates and lists no issuer refuses to start, with exit code `78`,
 because it could admit no one. Each bad value refuses to start under its key.
 
+A [reload](registry.md#reloading-the-registry), on `SIGHUP` or
+`POST /admin/reload`, applies a changed `[auth]` to every request that
+arrives after it, on the client face and the admin listener, and reads each
+key set again; `auth.audience` alone waits for a restart. A reload whose
+`[auth]` does not load, or trusts no issuer of a federating gateway, is
+refused and the running issuers stay.
+
 ### The key set
 
 The gateway reads an issuer's key set when a token first needs it, and again

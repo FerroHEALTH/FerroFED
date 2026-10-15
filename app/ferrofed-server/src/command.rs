@@ -16,6 +16,7 @@ use clap::Parser;
 use ferrofed_identity::dev::Profile;
 use tokio::net::TcpListener;
 
+use crate::auth::trust::Trust;
 use crate::binding::process::Drained;
 use crate::cli::{
     AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs, RunArgs,
@@ -35,7 +36,7 @@ use crate::state::AppState;
 use crate::support::Support;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
-    metrics, panic, reload, report, revision, router, serve, state, telemetry,
+    metrics, panic, reload, report, revision, serve, state, telemetry, trusted_router,
 };
 
 /// Runs the binary with `args` and returns the process exit code.
@@ -636,10 +637,17 @@ fn serve_command(
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let revision_poll = settings.revision_poll;
-    let admin = settings
-        .metrics
-        .listen
-        .map(|address| (address, admin::Access::of(&settings)));
+    // NOTE: no specification governs this: our own design; the client and the admin
+    // listener share one gate, so a reload of `[auth]` reaches both at once.
+    let trust = Arc::new(Trust::new(&server.auth));
+    let admin = settings.metrics.listen.map(|address| {
+        let access = admin::Access::sharing(
+            Arc::clone(&trust),
+            settings.profile,
+            settings.metrics.scrape_token.clone(),
+        );
+        (address, access)
+    });
     let admin_tls_files = settings.metrics.tls.clone();
     let outcome = runtime.block_on(async {
         use anyhow::Context;
@@ -667,41 +675,26 @@ fn serve_command(
         let reloader = Arc::new(
             reload::Reloader::new(config, settings, Arc::clone(state))
                 .with_certificates(listener_certificates)
-                .with_revisions(revisions.clone()),
+                .with_revisions(revisions.clone())
+                .with_trust(Arc::clone(&trust)),
         );
         let watch = revision::watch::start(revisions.as_ref(), &reloader, state, revision_poll);
         if let Some((address, access)) = admin {
             let managed = revisions
                 .map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
-            let app = admin::managed_router(Arc::clone(state), access, managed);
-            let metrics = TcpListener::bind(address)
+            let app = admin::serving_router(
+                Arc::clone(state),
+                access,
+                managed,
+                Some(Arc::clone(&reloader)),
+            );
+            admin::start(address, app, admin_tls)
                 .await
                 .with_context(|| format!("binding metrics.listen {address}"))?;
-            tracing::info!(
-                listen = %address,
-                tls = admin_tls.is_some(),
-                path = metrics::PATH,
-                distribute = admin::DISTRIBUTE,
-                clear_ehr_id = admin::CLEAR_EHR_ID,
-                export_identity_state = admin::EXPORT_IDENTITY_STATE,
-                "serving the admin listener"
-            );
-            tokio::spawn(async move {
-                let stopped = match admin_tls {
-                    None => admin::serve(metrics, app).await,
-                    Some(certificates) => match TlsListener::new(metrics, certificates) {
-                        Ok(tls) => admin::serve(tls, app).await,
-                        Err(error) => Err(error),
-                    },
-                };
-                if let Err(error) = stopped {
-                    tracing::error!(%error, "the metrics listener stopped");
-                }
-            });
         }
         let running = state.processes().start(&reloader);
         tokio::spawn(reload::on_hangup(reloader));
-        let app = router(Arc::clone(state), &server);
+        let app = trusted_router(Arc::clone(state), &server, trust);
         state.lifecycle().booted();
         let lifecycle = state.lifecycle().clone();
         let stopped = match client_tls {

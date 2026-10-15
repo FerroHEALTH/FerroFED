@@ -98,9 +98,10 @@ page: our own design.
 - [ ] **Use the edge mode only with a signing proxy.** `auth.mode = "edge"`
   verifies a signed assertion and nothing else; never configure a proxy that
   forwards an unsigned identity header (RFC 7239 §8.1).
-- [ ] **Know how to remove an issuer.** A change to `[auth]` takes a restart
-  today ([#636](https://github.com/FerroHEALTH/FerroFED/issues/636)); write
-  the steps into your incident runbook.
+- [ ] **Know how to remove an issuer.** Remove its `[[auth.issuer]]` and
+  reload, with `SIGHUP` or `POST /admin/reload`
+  ([Reloading the registry](registry.md#reloading-the-registry)); write the
+  steps into your incident runbook.
 
 ## Secrets
 

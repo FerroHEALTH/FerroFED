@@ -17,6 +17,7 @@ mod admin;
 mod clients;
 mod config;
 mod hangup;
+mod reloaded;
 mod swap;
 mod versions;
 

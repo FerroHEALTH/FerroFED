@@ -637,8 +637,10 @@ To renew the certificate, write the new files over the old ones and send
 `SIGHUP`, as for [a registry reload](registry.md). Every handshake after the
 signal presents the new certificate and checks clients against the new CA
 file; connections already open keep the certificate they began with. Files
-that do not form a valid pair are refused, logged with their table, and the
-running certificate stays. A changed path in `[server.tls]` or
+that do not form a valid pair refuse the whole reload, logged with their
+table, and the running certificate, registry and `[auth]` stay. Where no
+signal reaches the process, `POST /admin/reload` on the admin listener runs
+the same reload. A changed path in `[server.tls]` or
 `[metrics.tls]` takes a restart.
 
 `ferrofed healthcheck` follows `[server.tls]`: it asks over `https` on
