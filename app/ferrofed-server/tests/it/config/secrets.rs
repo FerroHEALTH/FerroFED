@@ -7,6 +7,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::basic::BasicFault;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::settings::Scheme;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use std::collections::BTreeMap;
@@ -112,7 +113,10 @@ fn a_secret_set_inline_and_through_its_file_refuses_to_boot() -> Result<(), Box<
 )]
 fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[credentials.\"a\"]\nbearer_token = \"t\"\nuser = \"u\"\n")?;
-    assert!(matches!(error, Error::Scheme { .. }), "{error:?}");
+    assert!(
+        matches!(error, Error::Credentials(CredentialsFault::Scheme { .. })),
+        "{error:?}"
+    );
     let error = refusal("[credentials.\"a\"]\nuser = \"u\"\n")?;
     assert!(
         matches!(&error, Error::Missing { key } if key == "credentials.a.password"),
@@ -124,9 +128,18 @@ fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), B
         "{error:?}"
     );
     let error = refusal("[credentials.\"a\"]\n")?;
-    assert!(matches!(error, Error::NoScheme { .. }), "{error:?}");
+    assert!(
+        matches!(error, Error::Credentials(CredentialsFault::NoScheme { .. })),
+        "{error:?}"
+    );
     let error = refusal("[credentials.\"node a\"]\nbearer_token = \"t\"\n")?;
-    assert!(matches!(error, Error::EndpointId { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            Error::Credentials(CredentialsFault::EndpointId { .. })
+        ),
+        "{error:?}"
+    );
     Ok(())
 }
 
@@ -198,7 +211,7 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
 -> Result<(), Box<dyn StdError>> {
     let error = refusal("[credentials.\"a\"]\nbearer_token = \"Qz7left\\rQz7right\"\n")?;
     assert!(
-        matches!(&error, Error::Authorization { key, .. } if key == "credentials.a.bearer_token"),
+        matches!(&error, Error::Credentials(CredentialsFault::Authorization { key, .. }) if key == "credentials.a.bearer_token"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");
@@ -207,11 +220,11 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
         "[credentials.\"a\"]\nuser = \"gateway\"\npassword = \"Qz7left\\u0000Qz7right\"\n",
     )?;
     assert!(
-        matches!(&error, Error::Basic {
+        matches!(&error, Error::Credentials(CredentialsFault::Basic {
                 key,
                 fault: BasicFault::ControlCharacter,
                 source: InvalidCredentials::ControlCharacter(BasicPart::Password),
-            } if key == "credentials.a.password"),
+            }) if key == "credentials.a.password"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");
@@ -222,7 +235,7 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
                        [pixm.manager.credentials]\nbearer_token = \"Qz7left\\nQz7right\"\n";
         let error = refusal(manager)?;
         assert!(
-            matches!(&error, Error::Authorization { key, .. }
+            matches!(&error, Error::Credentials(CredentialsFault::Authorization { key, .. })
                 if key == "pixm.manager[0].credentials.bearer_token"),
             "a PIX Manager credential is held to the same rule: {error:?}"
         );
@@ -249,10 +262,10 @@ fn a_bearer_token_that_is_no_b64token_is_refused_by_its_key() -> Result<(), Box<
             "[credentials.\"a\"]\nbearer_token = \"{token}\"\n"
         ))?;
         assert!(
-            matches!(&error, Error::Authorization {
+            matches!(&error, Error::Credentials(CredentialsFault::Authorization {
                     key,
                     source: InvalidCredentials::NotB64Token,
-                } if key == "credentials.a.bearer_token"),
+                }) if key == "credentials.a.bearer_token"),
             "{token}: {error:?}"
         );
         assert!(!everything(&error).contains("Qz7"), "{error}");
@@ -281,11 +294,11 @@ fn a_bearer_token_that_is_no_b64token_is_refused_by_its_key() -> Result<(), Box<
 fn a_basic_user_holding_a_colon_is_refused_by_its_key() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[credentials.\"a\"]\nuser = \"gate:way\"\npassword = \"Qz7left\"\n")?;
     assert!(
-        matches!(&error, Error::Basic {
+        matches!(&error, Error::Credentials(CredentialsFault::Basic {
                 key,
                 fault: BasicFault::Colon,
                 source: InvalidCredentials::ColonInUserId,
-            } if key == "credentials.a.user"),
+            }) if key == "credentials.a.user"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");

@@ -689,10 +689,12 @@ fn a_localization_table_under_ask_all_refuses_to_boot() -> TestResult {
 fn a_localization_budget_past_the_overall_budget_refuses_to_boot() -> TestResult {
     let text = "[federation]\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\n\n[federation.localization]\ntimeout_ms = 3000\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve() {
-        Err(ferrofed_server::config::error::Error::LocalizationBudget {
-            timeout_ms: 3000,
-            overall_ms: 3000,
-        }) => Ok(()),
+        Err(ferrofed_server::config::error::Error::Federation(
+            ferrofed_server::config::error::federation::FederationFault::LocalizationBudget {
+                timeout_ms: 3000,
+                overall_ms: 3000,
+            },
+        )) => Ok(()),
         other => {
             Err(format!("the localizer's budget is a part of the overall one: {other:?}").into())
         }

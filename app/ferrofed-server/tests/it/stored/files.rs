@@ -23,6 +23,7 @@ use ferrofed_eehrxf::reserved;
 use ferrofed_registry::definition::store::StoreError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Backend;
 use ferrofed_server::state::{AppState, StateError};
@@ -490,7 +491,10 @@ fn a_read_only_registry_refuses_to_distribute_definitions() -> TestResult {
         .downcast_ref::<ConfigError>()
         .ok_or("a configuration error")?;
     assert!(
-        matches!(refused, ConfigError::StoredQueryFanOutReadOnly),
+        matches!(
+            refused,
+            ConfigError::Federation(FederationFault::StoredQueryFanOutReadOnly)
+        ),
         "§12.7: {refused:?}"
     );
     Ok(())

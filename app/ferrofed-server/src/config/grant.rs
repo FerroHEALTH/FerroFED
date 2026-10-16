@@ -48,6 +48,7 @@ use oauth_server_metadata::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
 use serde::Deserialize;
 
 use crate::config::error::Error;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::secrets::secret;
 use crate::config::tls::TlsFault;
 use crate::config::{ClientAuth, OAuth2};
@@ -467,9 +468,11 @@ pub(super) fn resolve_fapi2(
         .scope
         .as_deref()
         .map(|scope| {
-            Scope::parse(scope).map_err(|source| Error::Scope {
-                key: format!("{section}.scope"),
-                source,
+            Scope::parse(scope).map_err(|source| {
+                Error::Credentials(CredentialsFault::Scope {
+                    key: format!("{section}.scope"),
+                    source,
+                })
             })
         })
         .transpose()?;
@@ -562,5 +565,6 @@ fn dpop_key(section: &str, fapi2: &Fapi2) -> Result<Prover, Error> {
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
     let pem = secret::<Secret>(&format!("{section}.dpop_key"), None, Some(path))?
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
-    Prover::from_pem(&pem.to_secret_string()).map_err(|source| Error::DpopKey { key, source })
+    Prover::from_pem(&pem.to_secret_string())
+        .map_err(|source| Error::Credentials(CredentialsFault::DpopKey { key, source }))
 }

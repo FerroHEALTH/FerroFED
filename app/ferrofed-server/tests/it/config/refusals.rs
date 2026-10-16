@@ -8,6 +8,7 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::server::ServerFault;
 #[cfg(feature = "binding-ihe")]
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -74,7 +75,10 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
     let error = refusal("[telemetry]\nformat = \"xml\"\n")?;
     assert!(matches!(error, Error::Parse { .. }), "{error:?}");
     let error = refusal("[telemetry]\nfilter = \"info,=,,\"\n")?;
-    assert!(matches!(error, Error::Filter { .. }), "{error:?}");
+    assert!(
+        matches!(error, Error::Server(ServerFault::Filter { .. })),
+        "{error:?}"
+    );
     Ok(())
 }
 

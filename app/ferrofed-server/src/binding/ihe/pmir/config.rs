@@ -41,6 +41,8 @@ use url::Url;
 
 use crate::ITS_REST_PREFIX;
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::secret;
 use crate::config::service_grant::{ServiceContext, resolve_service};
@@ -243,13 +245,16 @@ pub fn sites(
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `callback_url` or no feed
 /// token; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
-/// or is no `http(s)` URL without credentials; [`Error::PublicUrlDisagrees`]
-/// for a `callback_url` that names another route than the feed's under
-/// `public`; [`Error::Cleartext`] for one
+/// or is no `http(s)` URL without credentials;
+/// [`ServerFault::PublicUrlDisagrees`] for a `callback_url` that names another
+/// route than the feed's under `public`; [`Error::Cleartext`] for one
 /// that is not `https` outside the development profile;
-/// [`Error::Authorization`] for a feed token that is no RFC 6750 `b64token`;
-/// [`Error::FeedPath`]; [`Error::GrantNotHere`] for OAuth 2.0 credentials;
-/// [`Error::Zero`]; and the errors of a secret that cannot be read.
+/// [`CredentialsFault::Authorization`] for a feed token that is no RFC 6750
+/// `b64token`; [`BindingFault::FeedPath`]; [`CredentialsFault::GrantNotHere`]
+/// for OAuth 2.0 credentials; [`Error::Zero`]; and the errors of a secret that
+/// cannot be read.
+///
+/// [`ServerFault::PublicUrlDisagrees`]: crate::config::error::server::ServerFault::PublicUrlDisagrees
 pub(crate) fn resolve(
     config: &Config,
     context: &ServiceContext<'_>,
@@ -304,9 +309,11 @@ pub(crate) fn resolve(
     };
     openehr_its::rest::client::Credentials::bearer(feed_token.to_secret_string())
         .header_value()
-        .map_err(|source| Error::Authorization {
-            key: token_key.to_owned(),
-            source,
+        .map_err(|source| {
+            Error::Credentials(CredentialsFault::Authorization {
+                key: token_key.to_owned(),
+                source,
+            })
         })?;
     let section = String::from("pmir.credentials");
     let credentials = pmir
@@ -378,9 +385,9 @@ fn feed_path(path: &str) -> Result<String, Error> {
     if own {
         Ok(path.to_owned())
     } else {
-        Err(Error::FeedPath {
+        Err(Error::Binding(BindingFault::FeedPath {
             key: String::from("pmir.path"),
-        })
+        }))
     }
 }
 

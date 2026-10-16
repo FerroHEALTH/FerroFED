@@ -70,14 +70,18 @@ pub struct NlGfSettings {
 /// every secret and file read.
 ///
 /// # Errors
-/// [`Error::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
+/// [`BindingFault::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
 /// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
-/// `https` outside the development profile, [`Error::NviGrant`] for an
-/// OAuth 2.0 or FAPI 2.0 grant for the NVI, [`Error::GrantNotHere`] for a
-/// grant for Mitz, the errors of a Nuts grant that cannot be built, and the
-/// errors of a secret or a file that cannot be read.
+/// `https` outside the development profile, [`BindingFault::NviGrant`] for an
+/// OAuth 2.0 or FAPI 2.0 grant for the NVI, [`CredentialsFault::GrantNotHere`]
+/// for a grant for Mitz, the errors of a Nuts grant that cannot be built, and
+/// the errors of a secret or a file that cannot be read.
+///
+/// [`BindingFault::BsnAsPseudonym`]: crate::config::error::binding::BindingFault::BsnAsPseudonym
+/// [`BindingFault::NviGrant`]: crate::config::error::binding::BindingFault::NviGrant
+/// [`CredentialsFault::GrantNotHere`]: crate::config::error::credentials::CredentialsFault::GrantNotHere
 fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
     let Some(nl_gf) = &config.nl_gf else {
         return Ok(None);

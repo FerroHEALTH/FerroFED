@@ -69,6 +69,8 @@ use serde::Deserialize;
 use super::nuts::{self, NutsOnward};
 use crate::binding::seam::{LocalizerSeam, OnwardGrant};
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
@@ -177,9 +179,9 @@ fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
         ("fapi2", table.fapi2.is_some()),
     ];
     if let Some((grant, _)) = other_grant.into_iter().find(|(_, set)| *set) {
-        return Err(Error::NviGrant {
+        return Err(Error::Binding(BindingFault::NviGrant {
             key: format!("{CREDENTIALS_KEY}.{grant}"),
-        });
+        }));
     }
     if let Some(grant) = &table.nuts {
         let header = table.bearer_token.is_some()
@@ -188,18 +190,18 @@ fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
             || table.password.is_some()
             || table.password_file.is_some();
         if header {
-            return Err(Error::Scheme {
+            return Err(Error::Credentials(CredentialsFault::Scheme {
                 section: CREDENTIALS_KEY.to_owned(),
-            });
+            }));
         }
         return nuts::resolve(&format!("{CREDENTIALS_KEY}.{}", nuts::KEY), grant)
             .map(NviCredentials::Nuts);
     }
     let scheme = resolve_credentials(CREDENTIALS_KEY, table)?;
     if scheme.is_grant() {
-        return Err(Error::GrantNotHere {
+        return Err(Error::Credentials(CredentialsFault::GrantNotHere {
             section: CREDENTIALS_KEY.to_owned(),
-        });
+        }));
     }
     Ok(NviCredentials::Header(scheme))
 }
@@ -236,9 +238,9 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
         .iter()
         .find(|namespace| is_bsn_system(namespace))
     {
-        return Err(Error::BsnAsPseudonym {
+        return Err(Error::Binding(BindingFault::BsnAsPseudonym {
             namespace: bsn.clone(),
-        });
+        }));
     }
     let credentials = nvi.credentials.as_ref().map(credentials).transpose()?;
     // NOTE: Annex B §B.7: the pseudonym is personal data like the BSN, so the

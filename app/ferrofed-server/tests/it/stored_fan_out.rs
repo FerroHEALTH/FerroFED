@@ -25,6 +25,7 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
@@ -361,7 +362,10 @@ fn config_check_refuses_definition_fan_out_without_the_registry() -> TestResult 
         .err()
         .ok_or("§12.7: fan-out without the registry is refused")?;
     assert!(
-        matches!(refused, ConfigError::StoredQueryFanOutWithoutRegistry),
+        matches!(
+            refused,
+            ConfigError::Federation(FederationFault::StoredQueryFanOutWithoutRegistry)
+        ),
         "{refused:?}"
     );
     Ok(())

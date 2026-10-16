@@ -28,6 +28,7 @@ use ferrofed_engine::onward::grant::fapi2::Fapi2GrantError;
 use ferrofed_engine::onward::keys::SigningKey;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::transport;
@@ -268,7 +269,13 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
 
     let both = format!("{tables}\n[credentials.\"node-a-pub\".oauth2]\nclient_id = \"x\"\n");
     let error = refused(&both)?;
-    assert!(matches!(error, ConfigError::Scheme { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::Scheme { .. })
+        ),
+        "{error:?}"
+    );
 
     let error = refused(&with_line(
         tables,

@@ -16,6 +16,7 @@ use std::error::Error;
 
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::settings::Settings;
 
 use crate::support::{JWKS_URI, signing_key_file};
@@ -84,7 +85,7 @@ fn a_jwk_set_url_that_misses_the_base_path_is_refused_by_its_key() -> TestResult
     .err()
     .ok_or("a JWK Set URL outside the base is refused")?;
     match &refused {
-        ConfigError::PublicUrlDisagrees { key, served } => {
+        ConfigError::Server(ServerFault::PublicUrlDisagrees { key, served }) => {
             assert_eq!("signing.jwks_uri", key);
             assert_eq!(
                 "https://gateway.example.org/fed/.well-known/jwks.json",
@@ -102,7 +103,10 @@ fn a_public_url_whose_path_is_not_the_base_path_is_refused() -> TestResult {
         .err()
         .ok_or("a public URL outside the base is refused")?;
     assert!(
-        matches!(refused, ConfigError::PublicUrlPath { .. }),
+        matches!(
+            refused,
+            ConfigError::Server(ServerFault::PublicUrlPath { .. })
+        ),
         "{refused}"
     );
     assert!(
@@ -112,7 +116,10 @@ fn a_public_url_whose_path_is_not_the_base_path_is_refused() -> TestResult {
     let refused = resolve(&gateway("/", "https://gateway.example.org/?a=1", ""))?
         .err()
         .ok_or("a public URL with a query is refused")?;
-    assert!(matches!(refused, ConfigError::PublicUrlForm), "{refused}");
+    assert!(
+        matches!(refused, ConfigError::Server(ServerFault::PublicUrlForm)),
+        "{refused}"
+    );
     Ok(())
 }
 
@@ -135,6 +142,7 @@ fn without_a_public_url_each_copy_is_read_as_written() -> TestResult {
 mod pmir {
     use super::{TestResult, resolve};
     use ferrofed_server::config::error::Error as ConfigError;
+    use ferrofed_server::config::error::server::ServerFault;
 
     /// A development gateway at `public` with `[pmir]` sending to `callback`.
     fn gateway(
@@ -175,7 +183,7 @@ mod pmir {
             .err()
             .ok_or("a callback outside the base is refused")?;
         assert!(
-            matches!(&refused, ConfigError::PublicUrlDisagrees { key, .. } if key == "pmir.callback_url"),
+            matches!(&refused, ConfigError::Server(ServerFault::PublicUrlDisagrees { key, .. }) if key == "pmir.callback_url"),
             "{refused}"
         );
         Ok(())

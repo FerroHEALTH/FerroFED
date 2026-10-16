@@ -15,6 +15,7 @@ use std::error::Error as StdError;
 use ferrofed_registry::replica::{ReplicaError, UNNAMED};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::server::Server;
 
 type TestResult = Result<(), Box<dyn StdError>>;
@@ -65,7 +66,7 @@ fn a_configured_name_outside_the_form_is_refused_at_load() -> TestResult {
             .err()
             .ok_or("a bad replica name is refused")?;
         assert!(
-            matches!(&refused, Error::Replica(reason) if *reason == expected),
+            matches!(&refused, Error::Server(ServerFault::Replica(reason)) if *reason == expected),
             "{written:?}: {refused:?}"
         );
     }

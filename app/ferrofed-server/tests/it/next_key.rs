@@ -21,6 +21,7 @@ use axum::body::Body;
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::oauth;
@@ -158,7 +159,7 @@ async fn a_next_key_on_another_curve_is_refused_unless_intended() -> TestResult 
     assert!(
         matches!(
             &error,
-            ConfigError::NextKeyAlgorithm { key, found: "ES256", intended: "ES384" }
+            ConfigError::Credentials(CredentialsFault::NextKeyAlgorithm { key, found: "ES256", intended: "ES384" })
                 if key == "signing.next_key_file"
         ),
         "{error:?}"
@@ -173,11 +174,11 @@ async fn a_next_key_on_another_curve_is_refused_unless_intended() -> TestResult 
     assert!(
         matches!(
             &error,
-            ConfigError::NextKeyAlgorithm {
+            ConfigError::Credentials(CredentialsFault::NextKeyAlgorithm {
                 found: "ES384",
                 intended: "ES256",
                 ..
-            }
+            })
         ),
         "{error:?}"
     );
@@ -206,7 +207,7 @@ fn a_reused_or_missing_next_key_is_refused() -> TestResult {
     assert!(
         matches!(
             &error,
-            ConfigError::SigningKey { key, source: KeyError::NextReused { .. } }
+            ConfigError::Credentials(CredentialsFault::SigningKey { key, source: KeyError::NextReused { .. } })
                 if key == "signing.next_key_file"
         ),
         "{error:?}"

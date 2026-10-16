@@ -49,6 +49,8 @@ use serde::Deserialize;
 
 use crate::binding::nl::NlGfSettings;
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::{Scheme, Settings};
@@ -162,11 +164,11 @@ impl fmt::Debug for MitzSettings {
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `purpose`, no
 /// `data_categories`, a data user key left empty or a zero timeout,
-/// [`Error::Mitz`] for a purpose other than `TREAT` or `COC` or the
+/// [`BindingFault::Mitz`] for a purpose other than `TREAT` or `COC` or the
 /// pseudonymised BSN listed in `namespaces`, [`Error::Url`],
 /// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL,
-/// [`Error::GrantNotHere`] for an OAuth 2.0 grant,
-/// [`Error::PrefilterBudget`] for a budget that, with the demographics
+/// [`CredentialsFault::GrantNotHere`] for an OAuth 2.0 grant,
+/// [`BindingFault::PrefilterBudget`] for a budget that, with the demographics
 /// step's and the localizer's, leaves no time to resolve, and the errors of a
 /// secret or a file that cannot be read.
 pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Error> {
@@ -203,7 +205,9 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
     if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::GrantNotHere { section });
+        return Err(Error::Credentials(CredentialsFault::GrantNotHere {
+            section,
+        }));
     }
     // NOTE: Implementatiehandleiding §3.3: the question travels over TLS, and it carries
     // the BSN, so the URL is a protected-payload site; one admitted under development is reported.
@@ -253,12 +257,12 @@ fn budget(config: &Config, mitz: &Mitz) -> Result<(), Error> {
         .saturating_add(localization_ms)
         >= overall_ms
     {
-        return Err(Error::PrefilterBudget {
+        return Err(Error::Binding(BindingFault::PrefilterBudget {
             timeout_ms: mitz.timeout_ms,
             demographics_ms,
             localization_ms,
             overall_ms,
-        });
+        }));
     }
     Ok(())
 }
@@ -276,10 +280,10 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
     // NOTE: Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2 §3.2.4.2:
     // the consultation situation is TREAT or COC, and nothing else.
     if !is_purpose(&mitz.purpose) {
-        return Err(Error::Mitz {
+        return Err(Error::Binding(BindingFault::Mitz {
             key: format!("{MITZ_KEY}.purpose"),
             fault: "is neither TREAT nor COC (Implementatiehandleiding §3.2.4.2)",
-        });
+        }));
     }
     if mitz.data_categories.is_empty() {
         return Err(missing("data_categories"));
@@ -291,10 +295,10 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
         .iter()
         .any(|namespace| namespace.as_str() == PSEUDO_BSN_SYSTEM)
     {
-        return Err(Error::Mitz {
+        return Err(Error::Binding(BindingFault::Mitz {
             key: format!("{MITZ_KEY}.namespaces"),
             fault: "lists the pseudonymised BSN, which cannot stand for the BSN Mitz is asked by",
-        });
+        }));
     }
     if mitz.timeout_ms == 0 {
         return Err(Error::Zero {

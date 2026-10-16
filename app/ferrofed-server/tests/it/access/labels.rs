@@ -19,6 +19,7 @@ use std::sync::Arc;
 use ehds_logging::label::LabelError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::access_log::AccessLogFault;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_testkit::atna_feed::FeedRepository;
@@ -244,7 +245,7 @@ fn a_label_the_logging_component_refuses_is_refused_at_load() {
         let refused = Config::from_sources(Some(&text), &BTreeMap::new())
             .and_then(|config| config.resolve().map(|_| ()));
         assert!(
-            matches!(&refused, Err(Error::AccessLogLabels(error)) if kind(error) == expected),
+            matches!(&refused, Err(Error::AccessLog(AccessLogFault::Labels(error))) if kind(error) == expected),
             "{table}: {refused:?}"
         );
     }

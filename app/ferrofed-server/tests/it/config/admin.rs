@@ -16,6 +16,7 @@ use std::error::Error as StdError;
 
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_testkit::listener::ListenerCertificates;
 
@@ -50,7 +51,7 @@ fn production_refuses_a_remote_listener_nothing_authenticates() -> TestResult {
     for listen in REMOTE {
         let refused = refusal(&remote(listen, ""))?;
         assert!(
-            matches!(refused, Error::MetricsUnauthenticated { address } if address == listen.parse()?),
+            matches!(refused, Error::Server(ServerFault::MetricsUnauthenticated { address }) if address == listen.parse()?),
             "{listen}: {refused}"
         );
         let shown = refused.to_string();
@@ -139,7 +140,10 @@ fn a_client_ca_admits_a_remote_listener() -> TestResult {
     );
     let without_ca = refusal(&remote("0.0.0.0:9464", &tls))?;
     assert!(
-        matches!(without_ca, Error::MetricsUnauthenticated { .. }),
+        matches!(
+            without_ca,
+            Error::Server(ServerFault::MetricsUnauthenticated { .. })
+        ),
         "TLS without a client CA authenticates no one: {without_ca}"
     );
     let mutual = format!("{tls}client_ca_file = {}\n", quoted(&files.client_ca));

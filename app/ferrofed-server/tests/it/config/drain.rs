@@ -8,6 +8,7 @@
 
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::server::ServerFault;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::time::Duration;
@@ -50,10 +51,10 @@ fn a_drain_shorter_than_the_request_timeout_refuses_to_boot_naming_both_keys()
         assert!(
             matches!(
                 error,
-                Error::Drain {
+                Error::Server(ServerFault::Drain {
                     shutdown_ms: refused,
                     request_ms: 30_000,
-                } if refused == shutdown_ms
+                }) if refused == shutdown_ms
             ),
             "{error:?}"
         );

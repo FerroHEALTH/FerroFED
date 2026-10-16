@@ -47,6 +47,7 @@ use crate::binding::ihe::audit::repository::{AuditRepository, AuditRepositorySet
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::{Indicator, LocalizerSeam};
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
 use crate::config::secrets::secret;
 use crate::config::{Config, transport};
 use crate::localization::LocalizationError;
@@ -154,7 +155,7 @@ impl fmt::Debug for XcpdSettings {
 /// [`Error::Url`]
 /// for a gateway URL that does not parse, [`Error::Cleartext`] for a gateway
 /// URL that is not `https` outside the development profile,
-/// [`Error::AuditOff`] for `audit = "off"` outside it, and the errors of a
+/// [`BindingFault::AuditOff`] for `audit = "off"` outside it, and the errors of a
 /// secret or a file that cannot be read.
 pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
     let Some(xcpd) = &config.xcpd else {
@@ -250,9 +251,9 @@ fn audit(
             });
         }
         Some(AuditDestination::Off) if profile != Profile::Development => {
-            return Err(Error::AuditOff {
+            return Err(Error::Binding(BindingFault::AuditOff {
                 key: String::from("xcpd.audit"),
-            });
+            }));
         }
         Some(destination) => destination,
     };
@@ -276,7 +277,7 @@ fn audit(
                 key: String::from("xcpd.audit_repository"),
             });
         }
-        (_, Some(_)) => return Err(Error::AuditRepositoryUnused),
+        (_, Some(_)) => return Err(Error::Binding(BindingFault::AuditRepositoryUnused)),
         (_, None) => None,
     };
     Ok((audit, repository))

@@ -454,7 +454,11 @@ fn audit_off_outside_development_refuses_to_boot() -> TestResult {
         .unwrap_or_default()
         .to_owned();
     match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
-        Err(error::Error::AuditOff { key }) if key == "xcpd.audit" => Ok(()),
+        Err(error::Error::Binding(error::binding::BindingFault::AuditOff { key }))
+            if key == "xcpd.audit" =>
+        {
+            Ok(())
+        }
         other => Err(format!("no ITI-55 audit outside development: {other:?}").into()),
     }
 }

@@ -14,6 +14,7 @@ use std::error::Error;
 
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::mcsd::HarnessDirectory;
@@ -127,7 +128,7 @@ fn a_document_and_a_directory_together_are_refused() -> TestResult {
     assert!(
         matches!(
             error.downcast_ref::<ConfigError>(),
-            Some(ConfigError::TwoRegistrySources)
+            Some(ConfigError::Federation(FederationFault::TwoRegistrySources))
         ),
         "{error}"
     );

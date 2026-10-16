@@ -23,6 +23,7 @@ use axum::body::Body;
 use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_server::telemetry::{Rendering, subscriber};
@@ -434,7 +435,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
 
     let error = resolve(&format!("{}{grant}", signing_with("", &p521)))?;
     assert!(
-        matches!(&error, ConfigError::SigningKey { key, .. } if key == "signing.key_file"),
+        matches!(&error, ConfigError::Credentials(CredentialsFault::SigningKey { key, .. }) if key == "signing.key_file"),
         "{error:?}"
     );
     let error = resolve(&format!(
@@ -448,7 +449,10 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     );
     let error = resolve(&grant)?;
     assert!(
-        matches!(error, ConfigError::GrantWithoutSigning { .. }),
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::GrantWithoutSigning { .. })
+        ),
         "{error:?}"
     );
     let error = resolve(&format!(
@@ -456,15 +460,27 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         signing_with("", &good_key),
         grant.replace(SCOPE, "patient/aql-*.s")
     ))?;
-    assert!(matches!(error, ConfigError::Scope { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::Scope { .. })
+        ),
+        "{error:?}"
+    );
     let error = resolve(&signing_with("assertion_lifetime_s = 301", &good_key))?;
     assert!(
-        matches!(error, ConfigError::AssertionLifetime { .. }),
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::AssertionLifetime { .. })
+        ),
         "{error:?}"
     );
     let error = resolve(&signing_with("rotation_overlap_s = 3899", &good_key))?;
     assert!(
-        matches!(error, ConfigError::RotationOverlap { .. }),
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::RotationOverlap { .. })
+        ),
         "{error:?}"
     );
     let error = resolve(&format!(
@@ -472,7 +488,13 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         signing_with("", &good_key),
         oauth2("https://idp.example.org/token?secret=x")
     ))?;
-    assert!(matches!(error, ConfigError::Grant { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::Grant { .. })
+        ),
+        "{error:?}"
+    );
     let error = resolve(&format!(
         "[signing]\nkey_file = {good_key}\njwks_uri = \"jwks.json\"\n"
     ))?;

@@ -24,6 +24,7 @@ use crate::binding::seam::ResolverSeam;
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
 use crate::config::settings::Settings;
 use crate::federation::error::FederationError;
 
@@ -53,12 +54,12 @@ impl DevSection {
     /// Reads the table as the static cross-reference's configuration.
     ///
     /// # Errors
-    /// Returns [`Error::DevTable`] when the table does not have the shape of
+    /// Returns [`BindingFault::DevTable`] when the table does not have the shape of
     /// `[[dev.crossref]]` rows. The error names the shape, never a value.
     pub fn table(&self) -> Result<DevTable, Error> {
         toml::Value::Table(self.0.clone())
             .try_into::<DevTable>()
-            .map_err(|_shape| Error::DevTable)
+            .map_err(|_shape| Error::Binding(BindingFault::DevTable))
     }
 
     /// Whether the table has `[[dev.consent_denied]]` rows, which the static

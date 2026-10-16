@@ -5,6 +5,7 @@
 
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::telemetry::Format;
@@ -189,11 +190,11 @@ fn a_request_timeout_not_past_the_budget_and_the_margin_refuses_to_boot()
         assert!(
             matches!(
                 error,
-                Error::Budget {
+                Error::Server(ServerFault::Budget {
                     overall_ms: 25_000,
                     margin_ms: COMBINING_MARGIN_MS,
                     request_ms: refused,
-                } if refused == request_ms
+                }) if refused == request_ms
             ),
             "{error:?}"
         );
