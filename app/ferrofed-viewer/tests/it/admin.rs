@@ -646,7 +646,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     assert!(integrity.contains("Recent incidents"), "{integrity}");
     assert!(!integrity.contains("Clear a held ehr_id"), "{integrity}");
     assert!(!integrity.contains("/api/clear-ehr-id"), "{integrity}");
-    assert!(stored.contains("Held versions"), "{stored}");
+    assert!(stored.contains(r#"aria-label="Namespaces""#), "{stored}");
     assert!(!stored.contains("Repair stored-query drift"), "{stored}");
     assert!(!stored.contains("/api/repair-drift"), "{stored}");
 

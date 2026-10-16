@@ -234,17 +234,25 @@ async fn the_integrity_view_lists_the_collisions_cleared_recently_newest_first()
 }
 
 #[tokio::test]
-async fn the_stored_query_view_lists_each_version_with_its_text() -> Result<(), Box<dyn Error>> {
+async fn the_stored_query_view_groups_each_version_by_namespace_without_its_text()
+-> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
     let (_state, service, session) = signed_in_console(&gateway)?;
     let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("org.example::compositions"), "{body}");
-    assert!(body.contains("<td>1.0.0</td>"), "{body}");
+    assert!(body.contains(">org.example</h2>"), "{body}");
+    assert!(body.contains(">1 version</span>"), "{body}");
     assert!(
-        body.contains("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"),
+        body.contains(r#"href="/stored-queries/org.example::compositions?version=1.0.0""#),
         "{body}"
     );
+    assert!(
+        body.contains(
+            ">compositions</span><span class=\"whitespace-nowrap text-muted\">@1.0.0</span></a>"
+        ),
+        "{body}"
+    );
+    assert!(!body.contains("CONTAINS COMPOSITION"), "{body}");
     Ok(())
 }
 
@@ -365,7 +373,7 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
 
 /// Every server function a view or the shell loads through or an admin action posts to,
 /// with the form body it takes.
-const SERVER_FUNCTIONS: [(&str, &str); 14] = [
+const SERVER_FUNCTIONS: [(&str, &str); 15] = [
     ("/api/gateway", ""),
     ("/api/deployment", ""),
     ("/api/theme", "theme=dark"),
@@ -375,6 +383,7 @@ const SERVER_FUNCTIONS: [(&str, &str); 14] = [
     ("/api/routing", "offset=0"),
     ("/api/dashboard", ""),
     ("/api/stored-queries", "offset=0"),
+    ("/api/stored-query", "name=org.example%3A%3Acompositions"),
     ("/api/federation", ""),
     ("/api/clear-ehr-id", "form%5Bconfirm%5D=yes"),
     ("/api/repair-drift", "form%5Bconfirm%5D=yes"),
@@ -676,8 +685,8 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
                 "/routing",
                 "<caption>The creating_system_id routing table</caption>",
             ),
-            ("/stored-queries", "<caption>Held versions</caption>"),
-            ("/federation", "<dt>Federation</dt>"),
+            ("/stored-queries", r#"aria-label="Namespaces""#),
+            ("/federation", "<caption>Declared endpoints</caption>"),
             ("/query", r#"<button type="submit" disabled class="#),
         ] {
             for round in 1..=10 {

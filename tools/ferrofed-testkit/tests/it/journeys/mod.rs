@@ -31,6 +31,7 @@ mod shell;
 mod sign_in;
 mod sign_out;
 mod stack;
+mod stored;
 mod views;
 
 /// The environment variable that opts in to the browser journeys.

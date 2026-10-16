@@ -202,36 +202,6 @@ pub struct RoutingView {
     pub answered_by: Option<String>,
 }
 
-/// One held stored-query version.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredRow {
-    /// The qualified name.
-    pub name: String,
-    /// The version.
-    pub version: String,
-    /// When it was stored.
-    pub saved: String,
-    /// The AQL text.
-    pub aql: String,
-}
-
-/// The stored-query view.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredView {
-    /// One page of the held versions, by name and then by version.
-    pub definitions: Vec<StoredRow>,
-    /// Where that page starts in the registry.
-    pub offset: u64,
-    /// How many versions the registry holds.
-    pub total: u64,
-    /// The drift repair's fields, rendered on the server; `None` when the
-    /// console is configured with no admin listener.
-    pub repair_form: Option<String>,
-    /// Which replica answered the page, as the view says it; `None` when
-    /// the replica has no name.
-    pub answered_by: Option<String>,
-}
-
 /// What the top bar says of the gateway that answered the console.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GatewayView {
@@ -254,17 +224,4 @@ pub struct DeploymentView {
     pub version: String,
     /// The replica that answered; `None` when it has no name.
     pub replica: Option<String>,
-}
-
-/// The self-description view, `OPTIONS {base}/`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FederationView {
-    /// The federation's identifier.
-    pub id: String,
-    /// The specification version the gateway implements.
-    pub spec_version: String,
-    /// How many member endpoints it declares.
-    pub endpoints: u32,
-    /// The `federation` object as the gateway declares it, pretty-printed.
-    pub document: String,
 }

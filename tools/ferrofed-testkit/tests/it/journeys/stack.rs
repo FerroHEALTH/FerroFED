@@ -41,12 +41,22 @@ pub(crate) const ROUTES: u64 = REGISTERED + 2;
 /// How many stored queries the deployment's definition files hold.
 pub(crate) const STORED: u64 = 101;
 
-/// How many stored-query versions the gateway holds: the deployment's and
-/// its own read-only section queries, more than a page of the stored-query
-/// view.
+/// The stored query the deployment holds at a second version,
+/// [`SECOND_VERSION`], beside its first, `1.0.0`.
+pub(crate) const VERSIONED: &str = "org.example::journey_001";
+
+/// The second version of [`VERSIONED`].
+pub(crate) const SECOND_VERSION: &str = "1.0.1";
+
+/// The text of [`VERSIONED`] at [`SECOND_VERSION`], which names no patient.
+pub(crate) const SECOND_TEXT: &str = "SELECT c/name/value FROM EHR e CONTAINS COMPOSITION c";
+
+/// How many stored-query versions the gateway holds: the deployment's, with
+/// the second version of [`VERSIONED`], and its own read-only section
+/// queries, more than a page of the stored-query view.
 pub(crate) fn held() -> Result<u64, Box<dyn Error>> {
     let own = u64::try_from(ferrofed_eehrxf::patient_summary::Section::ALL.len())?;
-    Ok(STORED + own)
+    Ok(STORED + 1 + own)
 }
 
 /// The synthetic patient the query journeys name, visibly synthetic, under
@@ -227,13 +237,16 @@ fn registry(a: &str, b: &str) -> String {
     text
 }
 
-/// Writes [`STORED`] stored queries under `definitions`, one version each.
+/// Writes [`STORED`] stored queries under `definitions`, one version each,
+/// and the second version of [`VERSIONED`].
 fn stored_queries(definitions: &Path) -> Result<(), Box<dyn Error>> {
     for number in 1..=STORED {
         let named = definitions.join(format!("org.example::journey_{number:03}"));
         std::fs::create_dir_all(&named)?;
         std::fs::write(named.join("1.0.0.aql"), patient_query())?;
     }
+    let versioned = definitions.join(VERSIONED);
+    std::fs::write(versioned.join(format!("{SECOND_VERSION}.aql")), SECOND_TEXT)?;
     Ok(())
 }
 

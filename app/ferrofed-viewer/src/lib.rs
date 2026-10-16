@@ -62,6 +62,8 @@ pub mod gateway;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod healthcheck;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod highlight;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod oidc;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server;

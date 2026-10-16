@@ -924,3 +924,88 @@
   transition-timing-function: ease-out;
   transition-duration: 120ms;
 }
+
+/* A block of AQL or JSON the server highlighted: each token's colour
+   decorates text that reads the same without it, and a keyword and a
+   parameter are also set in bold. Every colour meets 4.5:1 on the block's
+   `inset` ground in its theme
+   (https://www.w3.org/TR/WCAG22/#contrast-minimum). */
+:root {
+  --tok-keyword: #6d28d9;
+  --tok-path: #9f1239;
+  --tok-string: #047857;
+  --tok-parameter: #0369a1;
+  --tok-number: #9a3412;
+  --tok-comment: #475569;
+  --tok-key: #1d4ed8;
+}
+
+:root[data-theme="dark"] {
+  --tok-keyword: #c4b5fd;
+  --tok-path: #f9a8d4;
+  --tok-string: #6ee7b7;
+  --tok-parameter: #7dd3fc;
+  --tok-number: #fdba74;
+  --tok-comment: #94a3b8;
+  --tok-key: #93c5fd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"], [data-theme="dark"]) {
+    --tok-keyword: #c4b5fd;
+    --tok-path: #f9a8d4;
+    --tok-string: #6ee7b7;
+    --tok-parameter: #7dd3fc;
+    --tok-number: #fdba74;
+    --tok-comment: #94a3b8;
+    --tok-key: #93c5fd;
+  }
+}
+
+@layer components {
+  .code-block {
+    margin: 0;
+    max-height: min(70vh, 40rem);
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--inset);
+    padding: 0.75rem 1rem;
+    color: var(--ink);
+    line-height: 1.375rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+  }
+
+  .tok-keyword {
+    color: var(--tok-keyword);
+    font-weight: 600;
+  }
+
+  .tok-path {
+    color: var(--tok-path);
+  }
+
+  .tok-string {
+    color: var(--tok-string);
+  }
+
+  .tok-parameter {
+    color: var(--tok-parameter);
+    font-weight: 600;
+  }
+
+  .tok-number {
+    color: var(--tok-number);
+  }
+
+  .tok-comment {
+    color: var(--tok-comment);
+    font-style: italic;
+  }
+
+  .tok-key {
+    color: var(--tok-key);
+  }
+}
