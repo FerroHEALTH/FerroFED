@@ -19,9 +19,14 @@ mod body_limit;
 mod config;
 #[cfg(test)]
 mod configure;
+#[cfg(test)]
 mod configure_fhir;
+#[cfg(test)]
 mod configure_revisions;
+#[cfg(test)]
 mod configure_sections;
+#[cfg(test)]
+mod contrast;
 #[cfg(test)]
 mod exchange;
 #[cfg(test)]

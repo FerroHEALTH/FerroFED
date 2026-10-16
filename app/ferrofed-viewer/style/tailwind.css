@@ -47,7 +47,9 @@
      (https://www.w3.org/TR/WCAG22/#non-text-contrast). */
   --control: #64748b;
   --ink: #0f172a;
-  --muted: #64748b;
+  /* Darker than slate-500 by just enough for 4.5:1 on the accent tint laid
+     over the inset ground, its worst; tests/it/contrast.rs measures it. */
+  --muted: #58687d;
   --accent: #0369a1;
   --accent-hover: #075985;
   --accent-fg: #ffffff;
