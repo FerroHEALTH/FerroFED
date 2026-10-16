@@ -30,7 +30,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use ferrofed_registry::health::DependencyReport;
-use ferrofed_registry::operator::{CreatingSystemEntry, IncidentReport, Page, PageRequest};
+use ferrofed_registry::operator::{
+    CreatingSystemEntry, DeploymentReport, IncidentReport, Page, PageRequest,
+};
 use http::{Method, StatusCode};
 use openehr_federation::error::WireError;
 use openehr_federation::meta::FederationMeta;
@@ -415,6 +417,16 @@ impl Gateway {
     ) -> Result<DependencyReport, GatewayError> {
         self.read(Method::GET, "/operator/dependencies", token)
             .await
+    }
+
+    /// Reads how the gateway is deployed: its profile, whether the
+    /// development cross-reference is in service, its product version and
+    /// its replica, `GET {base}/operator/deployment`.
+    ///
+    /// # Errors
+    /// As [`Gateway::incidents`].
+    pub async fn deployment(&self, token: &AccessToken) -> Result<DeploymentReport, GatewayError> {
+        self.read(Method::GET, "/operator/deployment", token).await
     }
 
     /// Reads the integrity incidents, `GET {base}/operator/incidents`.

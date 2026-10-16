@@ -474,6 +474,11 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   rows the page loaded, and the decoding of the new server functions'
   answers. Every one of those `inner_html` sinks carries its hostile-content
   test (`dashboard`, `views::members`, `views::integrity`).
+- **The development banner (#1096) measured 331058 bytes**
+  brotli-compressed (2026-10-16), 7179 more than the overview: the
+  deployment's server function and the decoding of its `Outcome`, the
+  banner and its icon, and the version in the gateway pill, all drawn in
+  the shell the browser hydrates on every page.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

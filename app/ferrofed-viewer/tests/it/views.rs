@@ -365,8 +365,9 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
 
 /// Every server function a view or the shell loads through or an admin action posts to,
 /// with the form body it takes.
-const SERVER_FUNCTIONS: [(&str, &str); 13] = [
+const SERVER_FUNCTIONS: [(&str, &str); 14] = [
     ("/api/gateway", ""),
+    ("/api/deployment", ""),
     ("/api/theme", "theme=dark"),
     ("/api/members", ""),
     ("/api/integrity", "show="),

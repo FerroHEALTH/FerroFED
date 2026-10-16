@@ -16,7 +16,8 @@
 use leptos::prelude::*;
 
 use crate::views::model::{
-    FederationView, GatewayView, IntegrityView, Outcome, RoutingView, StoredView, ViewError,
+    DeploymentView, FederationView, GatewayView, IntegrityView, Outcome, RoutingView, StoredView,
+    ViewError,
 };
 
 /// Loads the members view, rendered on the server: `OPTIONS {base}/` and
@@ -166,6 +167,27 @@ pub async fn gateway_status() -> Result<Outcome<GatewayView>, ViewError> {
     .await
 }
 
+/// Loads how the gateway is deployed, `GET {base}/operator/deployment`,
+/// read as the operator: the development banner and the version in the
+/// top bar's pill.
+///
+/// # Errors
+/// As [`members`]; an operator without the operator scope gets the
+/// gateway's refusal, which the top bar shows as no banner and no version.
+#[server(endpoint = "deployment")]
+pub async fn deployment() -> Result<Outcome<DeploymentView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let report = state
+            .gateway()
+            .deployment(&token)
+            .await
+            .map_err(|error| server::stopped(&error, server::Asked::Status))?;
+        Ok(server::deployment(&report))
+    })
+    .await
+}
+
 /// The server half of the views: the session check, the split of a failed
 /// gateway call into a refusal or a fault, and the mapping of the gateway's
 /// bodies onto the view models.
@@ -174,8 +196,8 @@ pub mod server {
     use ferrofed_registry::health::DependencyReport;
     use ferrofed_registry::id::{EndpointId, NodeId};
     use ferrofed_registry::operator::{
-        CreatingSystemEntry, IncidentReport, MAX_PAGE, Page, PageRequest, RecordedClear,
-        RecordedIncident, RouteSource,
+        CreatingSystemEntry, DeploymentMode, DeploymentReport, IncidentReport, MAX_PAGE, Page,
+        PageRequest, RecordedClear, RecordedIncident, RouteSource,
     };
     use ferrofed_registry::replica::UNNAMED;
     use leptos::context::use_context;
@@ -189,9 +211,9 @@ pub mod server {
     use crate::server::ViewerState;
     use crate::views::integrity::Incidents;
     use crate::views::model::{
-        ClearedRow, FederationView, GatewayView, IncidentRow, IntegrityView, MemberRow,
-        MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, RoutingView, StoredRow, StoredView,
-        ViewError,
+        ClearedRow, DeploymentView, FederationView, GatewayView, IncidentRow, IntegrityView,
+        MemberRow, MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, RoutingView, StoredRow,
+        StoredView, ViewError,
     };
 
     /// Why a server function stops short of its view: an expected refusal,
@@ -675,6 +697,17 @@ pub mod server {
         PageRequest {
             offset,
             limit: PAGE_SIZE,
+        }
+    }
+
+    /// What the top bar and its banner say of the deployment `report`.
+    #[must_use]
+    pub fn deployment(report: &DeploymentReport) -> DeploymentView {
+        DeploymentView {
+            development: report.mode == DeploymentMode::Development,
+            development_crossref: report.development_crossref,
+            version: report.version.clone(),
+            replica: (report.replica != UNNAMED).then(|| report.replica.clone()),
         }
     }
 

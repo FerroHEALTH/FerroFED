@@ -241,6 +241,21 @@ pub struct GatewayView {
     pub federation: String,
 }
 
+/// How the gateway that answered the console is deployed, as the top bar
+/// and the banner under it say it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeploymentView {
+    /// Whether the gateway runs the development profile.
+    pub development: bool,
+    /// Whether patients resolve through the static development
+    /// cross-reference.
+    pub development_crossref: bool,
+    /// The gateway's product version.
+    pub version: String,
+    /// The replica that answered; `None` when it has no name.
+    pub replica: Option<String>,
+}
+
 /// The self-description view, `OPTIONS {base}/`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FederationView {

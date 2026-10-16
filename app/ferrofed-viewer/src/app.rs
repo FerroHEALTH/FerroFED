@@ -72,6 +72,7 @@ pub fn App() -> impl IntoView {
         operator: SharedValue::new_str(operator_name).into_inner(),
         theme: RwSignal::new(theme),
         gateway: Resource::new_blocking(|| (), |()| views::load::gateway_status()),
+        deployment: Resource::new_blocking(|| (), |()| views::load::deployment()),
     });
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
@@ -103,6 +104,7 @@ fn layout(
 /// The shell of a signed-in operator: the top bar, the navigation beside
 /// the page, and the footer.
 fn signed_in(bar: shell::Bar, administered: bool, routes: AnyView) -> impl IntoView {
+    let deployment = bar.deployment;
     view! {
         <div class=styles::PAGE>
             <a
@@ -111,7 +113,9 @@ fn signed_in(bar: shell::Bar, administered: bool, routes: AnyView) -> impl IntoV
             >
                 "Skip to the page"
             </a>
+
             {shell::topbar(bar)}
+            {shell::banner(deployment)}
             <div class=styles::BODY>
                 {shell::sidebar(administered)} <main id="main" class=styles::MAIN>
                     <div class=styles::COLUMN>{routes}</div>

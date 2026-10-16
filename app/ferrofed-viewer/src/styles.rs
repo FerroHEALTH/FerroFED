@@ -202,7 +202,6 @@ pub const DISCLOSURE: &str = "rounded-card border border-line bg-raised shadow-c
 /// What a disclosure holds once open.
 pub const DISCLOSURE_BODY: &str = "border-t border-line px-4 py-3";
 
-// TODO(#1096): the banner under the top bar once the gateway reports its deployment mode.
 /// The sandbox banner under the top bar: amber, as the family's viewers
 /// draw it.
 pub const BANNER: &str = "tone-warn border-b border-line bg-warn-bg px-4 py-2 text-sm \
