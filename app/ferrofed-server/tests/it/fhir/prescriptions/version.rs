@@ -1,17 +1,19 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The version the read of one prescription answers: the member's
-//! `meta.versionId`, when it gives one that is a FHIR `id`, is the read's
-//! weak `ETag` (FHIR R4 `http.html` §3.1.0.2, §3.1.0.1.3 and §3.1.0.5); a
-//! prescription with none, or with one that is no FHIR `id`, is answered
-//! with no `ETag`, and the second is logged by its shape alone.
+//! The version the read of one prescription answers (FHIR R4 `http.html`
+//! §3.1.0.2, §3.1.0.1.3 and §3.1.0.5): the member's `meta.versionId`, when
+//! it is a FHIR `id`, is the read's weak `ETag`, and its `meta.lastUpdated`,
+//! when it is a FHIR `instant`, is the read's `Last-Modified` as an RFC 9110
+//! §5.6.7 HTTP-date; a prescription with neither is answered with no such
+//! header, and one whose value has another form is too, logged by its shape
+//! alone.
 
 use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_server::telemetry::{Rendering, subscriber};
-use http::{Request, StatusCode, header};
+use http::{HeaderName, Request, Response, StatusCode, header};
 
 use super::{AT_A, Members, RX_A, RX_B, face_id, page, searchset};
 use crate::fhir::{FHIR, TestResult};
@@ -24,9 +26,23 @@ const RX_A_VERSIONED: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a1"
 /// quote and a slash.
 const UNFIT: &str = "SYNTHETIC v\\\"3/x";
 
-/// What the read answered: the status, the `ETag`, the body and everything
-/// logged.
-type Answered = (StatusCode, Option<String>, String, String);
+/// What the read answered, and everything logged while it ran.
+struct Answered {
+    status: StatusCode,
+    etag: Option<String>,
+    modified: Option<String>,
+    text: String,
+    logs: String,
+}
+
+/// The value of the field `name` of `response`, when it has one.
+fn field(response: &Response<Body>, name: &HeaderName) -> Result<Option<String>, Box<dyn Error>> {
+    Ok(response
+        .headers()
+        .get(name)
+        .map(|value| value.to_str().map(str::to_owned))
+        .transpose()?)
+}
 
 /// The read of `rx-a1` at node A when its own endpoint answers the
 /// prescription `resource`.
@@ -47,27 +63,30 @@ async fn read_of(resource: &str) -> Result<Answered, Box<dyn Error>> {
     drop(guard);
     let response = response?;
     let status = response.status();
-    let etag = response
-        .headers()
-        .get(header::ETAG)
-        .map(|value| value.to_str().map(str::to_owned))
-        .transpose()?;
+    let etag = field(&response, &header::ETAG)?;
+    let modified = field(&response, &header::LAST_MODIFIED)?;
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
-    Ok((
+    Ok(Answered {
         status,
         etag,
-        String::from_utf8(bytes.to_vec())?,
-        logs.text(),
-    ))
+        modified,
+        text: String::from_utf8(bytes.to_vec())?,
+        logs: logs.text(),
+    })
+}
+
+/// [`RX_A_VERSIONED`] with the `meta` member `meta` in place of its own.
+fn with_meta(meta: &str) -> String {
+    RX_A_VERSIONED.replace(r#""meta":{"versionId":"3"}"#, &format!(r#""meta":{meta}"#))
 }
 
 #[tokio::test]
 async fn a_prescription_at_a_version_is_read_with_its_weak_etag() -> TestResult {
-    let (status, etag, text, _) = read_of(RX_A_VERSIONED).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    let read = read_of(RX_A_VERSIONED).await?;
+    assert_eq!(StatusCode::OK, read.status, "{}", read.text);
     assert_eq!(
         Some("W/\"3\""),
-        etag.as_deref(),
+        read.etag.as_deref(),
         "FHIR R4 http.html §3.1.0.2, §3.1.0.1.3: the member's versionId as a weak ETag"
     );
     Ok(())
@@ -75,25 +94,26 @@ async fn a_prescription_at_a_version_is_read_with_its_weak_etag() -> TestResult 
 
 #[tokio::test]
 async fn a_prescription_with_no_version_is_read_with_no_etag() -> TestResult {
-    let (status, etag, text, _) = read_of(RX_A).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(None, etag, "no versionId, no ETag");
+    let read = read_of(RX_A).await?;
+    assert_eq!(StatusCode::OK, read.status, "{}", read.text);
+    assert_eq!(None, read.etag, "no versionId, no ETag");
     Ok(())
 }
 
 #[tokio::test]
 async fn a_version_that_is_no_fhir_id_gives_no_etag_and_is_logged_by_shape() -> TestResult {
-    let unfit = RX_A_VERSIONED.replace(r#""versionId":"3""#, &format!(r#""versionId":"{UNFIT}""#));
-    let (status, etag, text, logs) = read_of(&unfit).await?;
+    let read = read_of(&with_meta(&format!(r#"{{"versionId":"{UNFIT}"}}"#))).await?;
     assert_eq!(
         StatusCode::OK,
-        status,
-        "the prescription is answered: {text}"
+        read.status,
+        "the prescription is answered: {}",
+        read.text
     );
     assert_eq!(
-        None, etag,
+        None, read.etag,
         "FHIR R4 http.html §3.1.0.5: a versionId is valid as the id data type is"
     );
+    let logs = &read.logs;
     assert!(logs.contains("no FHIR id"), "the shape is logged: {logs}");
     assert!(
         !logs.contains("SYNTHETIC v"),
@@ -104,14 +124,76 @@ async fn a_version_that_is_no_fhir_id_gives_no_etag_and_is_logged_by_shape() -> 
 
 #[tokio::test]
 async fn a_version_that_is_no_string_gives_no_etag_and_is_logged_by_shape() -> TestResult {
-    let unfit = RX_A_VERSIONED.replace(r#""versionId":"3""#, r#""versionId":3"#);
-    let (status, etag, text, logs) = read_of(&unfit).await?;
+    let read = read_of(&with_meta(r#"{"versionId":3}"#)).await?;
     assert_eq!(
         StatusCode::OK,
-        status,
-        "the prescription is answered: {text}"
+        read.status,
+        "the prescription is answered: {}",
+        read.text
     );
-    assert_eq!(None, etag, "a versionId that is no string gives no ETag");
+    assert_eq!(
+        None, read.etag,
+        "a versionId that is no string gives no ETag"
+    );
+    let logs = &read.logs;
     assert!(logs.contains("no string"), "the shape is logged: {logs}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_prescription_updated_at_an_instant_is_read_with_its_http_date() -> TestResult {
+    let read = read_of(&with_meta(
+        r#"{"lastUpdated":"2026-03-01T10:15:30.250+01:00"}"#,
+    ))
+    .await?;
+    assert_eq!(StatusCode::OK, read.status, "{}", read.text);
+    assert_eq!(
+        Some("Sun, 01 Mar 2026 09:15:30 GMT"),
+        read.modified.as_deref(),
+        "FHIR R4 http.html §3.1.0.2, §3.1.0.1.3: lastUpdated as an RFC 9110 §5.6.7 HTTP-date"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_prescription_with_no_last_updated_is_read_with_no_last_modified() -> TestResult {
+    let read = read_of(RX_A_VERSIONED).await?;
+    assert_eq!(StatusCode::OK, read.status, "{}", read.text);
+    assert_eq!(None, read.modified, "no lastUpdated, no Last-Modified");
+    let read = read_of(RX_A).await?;
+    assert_eq!(None, read.modified, "no meta, no Last-Modified");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_last_updated_that_is_no_fhir_instant_gives_no_last_modified_and_is_logged_by_shape()
+-> TestResult {
+    for unfit in [
+        r#""2026-03-01""#,
+        r#""2026-03-01T10:15:30""#,
+        r#""2026-03-01T10:15Z""#,
+        "20260301",
+    ] {
+        let read = read_of(&with_meta(&format!(r#"{{"lastUpdated":{unfit}}}"#))).await?;
+        assert_eq!(
+            StatusCode::OK,
+            read.status,
+            "the prescription is answered: {}",
+            read.text
+        );
+        assert_eq!(
+            None, read.modified,
+            "FHIR R4 datatypes instant: {unfit} is no instant, so no Last-Modified"
+        );
+        let logs = &read.logs;
+        assert!(
+            logs.contains("no FHIR instant"),
+            "the shape is logged: {logs}"
+        );
+        assert!(
+            !logs.contains("2026-03-01") && !logs.contains("20260301"),
+            "the lastUpdated never reaches the log: {logs}"
+        );
+    }
     Ok(())
 }

@@ -513,12 +513,12 @@ another patient's `ehr_id` is refused `403` and nothing is sent.
 The answer is the member's `MedicationRequest` as it sent it, with its `id`
 the one you read, as FHIR R4 asks of a read. The
 `openEHR-federation-endpoint` and `openEHR-federation-system-id` headers
-name the member that answered. When the member's prescription carries
-`meta.versionId`, the answer carries it as a weak `ETag`, `W/"3"` for
-version `3`, so you can make a conditional read. A prescription with no
-`meta.versionId` is answered with no `ETag`, and so is one whose
-`versionId` is not a valid FHIR `id`; the gateway logs that it left the
-second out, and never logs the value. The other answers:
+name the member that answered. A `meta.versionId` that is a valid FHIR `id`
+is answered as a weak `ETag` (`W/"3"` for version `3`), and a
+`meta.lastUpdated` that is a valid FHIR `instant` as `Last-Modified`, an
+HTTP-date in GMT, so you can make a conditional read. Either one absent, or
+of another form, gives no such header; the gateway logs the second case by
+its shape and never logs the value. The other answers:
 
 | Answer | When |
 |---|---|
