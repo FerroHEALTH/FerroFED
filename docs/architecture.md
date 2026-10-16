@@ -268,8 +268,9 @@ its public AST. FerroFED has no AQL parser, no printer and no text splicing.
    track 10 (#90) is the backstop.
 
 `columns[]` is rendered once, from the façade AST, with
-`IdentifiedPath::column_path_text` and the select alias (or `#i`), never from a
-node's answer (§9.2, N17, CP-35). Rows are positional, so the merge maps each
+`IdentifiedPath::column_path_with_variable`, which keeps the AQL variable as
+the §9.4 example does (`c/uid/value`), and the select alias (or `#i`), never
+from a node's answer (§9.2, N17, CP-35). Rows are positional, so the merge maps each
 node column to its façade index and inserts the re-injected subject constant
 (N5) and any selected ENDPOINT attribute (N12, N18) at theirs.
 

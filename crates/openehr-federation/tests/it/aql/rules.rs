@@ -667,11 +667,14 @@ fn columns_are_the_gateways_rendering_of_the_facade_query_whatever_the_node() {
     assert_eq!(
         names,
         [
-            ("patient", Some("/ehr_status/subject/external_ref/id/value")),
-            ("#1", Some("/uid/value")),
-            ("start", Some("/context/start_time/value")),
+            (
+                "patient",
+                Some("e/ehr_status/subject/external_ref/id/value")
+            ),
+            ("#1", Some("c/uid/value")),
+            ("start", Some("c/context/start_time/value")),
         ],
-        "N17, §9.2"
+        "N17, §9.2: the AQL variable kept, as §9.4 renders it"
     );
     let first = query.for_node(&HierObjectId::new(EHR_ID).unwrap());
     let second =

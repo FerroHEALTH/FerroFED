@@ -49,12 +49,12 @@ fn the_example_query_names_its_attributes_and_asks_no_node_for_them() {
     let analysis = analysed(EXAMPLE, &directed(2)).expect("§9.4");
     assert_eq!(
         vec![
-            ("endpoint_id", Some("/id")),
-            ("system_id", Some("/system_id")),
-            ("composition_id", Some("/uid/value")),
+            ("endpoint_id", Some("p/id")),
+            ("system_id", Some("p/system_id")),
+            ("composition_id", Some("c/uid/value")),
         ],
         columns(&analysis),
-        "§9.2: the gateway's rendering of the submitted AQL, in the ITS-REST path form"
+        "§9.2: the gateway's rendering of the submitted AQL, the AQL variable kept as §9.4 renders it"
     );
     assert_eq!(
         [
@@ -129,7 +129,7 @@ fn a_query_selecting_no_attribute_keeps_the_single_cdr_shape() {
     let analysis =
         analysed(&selecting("c/uid/value AS composition_id"), &directed(2)).expect("§8.1");
     assert_eq!(
-        vec![("composition_id", Some("/uid/value"))],
+        vec![("composition_id", Some("c/uid/value"))],
         columns(&analysis)
     );
     assert_eq!([ColumnSource::Node(0)], analysis.sources(), "N17");
@@ -146,8 +146,8 @@ fn an_alias_resolves_the_collision_and_both_columns_survive() {
     .expect("N18: the alias resolves the collision");
     assert_eq!(
         vec![
-            ("node_system", Some("/system_id")),
-            ("system_id", Some("/system_id/value")),
+            ("node_system", Some("p/system_id")),
+            ("system_id", Some("e/system_id/value")),
         ],
         columns(&analysis)
     );
@@ -162,7 +162,10 @@ fn an_alias_resolves_the_collision_and_both_columns_survive() {
     let unaliased = analysed(&selecting("p/system_id, e/system_id/value"), &directed(2))
         .expect("an unaliased column is named by its index, so none collides");
     assert_eq!(
-        vec![("#0", Some("/system_id")), ("#1", Some("/system_id/value")),],
+        vec![
+            ("#0", Some("p/system_id")),
+            ("#1", Some("e/system_id/value"))
+        ],
         columns(&unaliased)
     );
 }

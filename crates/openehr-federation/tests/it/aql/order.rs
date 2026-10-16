@@ -500,7 +500,7 @@ fn an_ehr_only_query_is_tie_broken_on_the_ehr_id() {
     );
     assert_eq!(
         columns,
-        [Some("/ehr_status/uid/value".to_owned())],
+        [Some("e/ehr_status/uid/value".to_owned())],
         "N17, §9.2: columns[] is the client's query, without the pushed key"
     );
     let Ok(Analysis::Unscoped(query)) = analysed(aql, &ask_all()) else {

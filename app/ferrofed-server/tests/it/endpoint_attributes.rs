@@ -250,12 +250,12 @@ async fn the_example_query_answers_the_example_columns_and_rows() -> TestResult 
     let answer = rows_of(nodes.gateway(dir.path(), "org-b")?, EXAMPLE).await?;
     assert_eq!(
         vec![
-            ("endpoint_id", Some("/id")),
-            ("system_id", Some("/system_id")),
-            ("composition_id", Some("/uid/value")),
+            ("endpoint_id", Some("p/id")),
+            ("system_id", Some("p/system_id")),
+            ("composition_id", Some("c/uid/value")),
         ],
         columns(&answer),
-        "§9.4 names, in the gateway's ITS-REST path rendering (§9.2)"
+        "§9.4 names and paths, in the gateway's own rendering (§9.2)"
     );
     assert_eq!(
         vec![
@@ -359,7 +359,7 @@ async fn a_query_selecting_no_attribute_keeps_the_single_cdr_row_shape() -> Test
     let query = selecting("c/uid/value AS composition_id");
     let answer = rows_of(nodes.gateway(dir.path(), "org-b")?, &query).await?;
     assert_eq!(
-        vec![("composition_id", Some("/uid/value"))],
+        vec![("composition_id", Some("c/uid/value"))],
         columns(&answer)
     );
     assert_eq!(
@@ -379,8 +379,8 @@ async fn an_alias_resolves_a_collision_and_both_columns_survive() -> TestResult 
     let answer = rows_of(nodes.gateway(dir.path(), "org-b")?, &query).await?;
     assert_eq!(
         vec![
-            ("node_system", Some("/system_id")),
-            ("system_id", Some("/system_id/value")),
+            ("node_system", Some("p/system_id")),
+            ("system_id", Some("e/system_id/value")),
         ],
         columns(&answer)
     );
