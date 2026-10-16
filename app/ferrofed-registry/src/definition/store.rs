@@ -69,12 +69,83 @@ pub enum StoreError {
     /// The backend could not read or write.
     #[error("the stored-query store could not be read or written")]
     Backend(#[source] Box<dyn Error + Send + Sync>),
-    /// A held row does not read as a definition: the store is damaged.
+    /// A held definition the gateway refuses: the store is damaged.
+    ///
+    /// The cause is a refusal of the gateway's own, which names the
+    /// definition and the rule it breaks, never its text.
     #[error("the stored-query store holds a row that is not a stored definition")]
     Corrupt(#[source] Box<dyn Error + Send + Sync>),
+    /// A field of a held row does not read: the store is damaged.
+    #[error("the stored-query store holds a row that does not read: {0}")]
+    Unreadable(RowFault),
     /// The store is read-only, so nothing is inserted.
     #[error("the stored-query store is read-only")]
     ReadOnly,
+}
+
+/// Which field of a held row a [`RowFault`] is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Field {
+    /// The qualified query name.
+    Name,
+    /// The version.
+    Version,
+    /// The instant it was saved.
+    Saved,
+    /// The AQL text.
+    Aql,
+    /// The schema version the store's layout records.
+    Layout,
+}
+
+/// What is wrong with the field a [`RowFault`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldFault {
+    /// The text does not read as the field's form.
+    Form,
+    /// The column does not hold the field's type.
+    Type,
+    /// The number is outside the field's range.
+    Range,
+}
+
+/// Where a held row fails to read and how.
+///
+/// It names the field and the kind of fault only, never the row's text or
+/// a reader error that quotes it, so it is safe in a log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowFault {
+    /// The field that does not read.
+    pub field: Field,
+    /// What is wrong with it.
+    pub kind: FieldFault,
+}
+
+impl fmt::Display for RowFault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let field = match self.field {
+            Field::Name => "the name",
+            Field::Version => "the version",
+            Field::Saved => "the saved instant",
+            Field::Aql => "the AQL text",
+            Field::Layout => "the layout's schema version",
+        };
+        let kind = match self.kind {
+            FieldFault::Form => "does not read as its form",
+            FieldFault::Type => "is not of its type",
+            FieldFault::Range => "is outside its range",
+        };
+        write!(f, "{field} {kind}")
+    }
+}
+
+impl StoreError {
+    /// Returns the damaged-store error of `field`, which has the fault
+    /// `kind`.
+    #[must_use]
+    pub fn unreadable(field: Field, kind: FieldFault) -> Self {
+        Self::Unreadable(RowFault { field, kind })
+    }
 }
 
 /// The durable store of stored-query definitions.

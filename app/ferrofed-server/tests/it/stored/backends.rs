@@ -140,7 +140,7 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
         &BTreeMap::new(),
     );
     assert!(
-        matches!(&unknown, Err(ConfigError::Parse { fault }) if fault.key.as_deref() == Some("stored_queries.backend")),
+        matches!(&unknown, Err(ConfigError::Parse { fault }) if fault.key() == Some("stored_queries.backend")),
         "an unknown backend is refused at its key: {unknown:?}"
     );
     Ok(())

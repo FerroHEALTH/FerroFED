@@ -20,7 +20,9 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
+use ferrofed_registry::definition::store::{
+    Assignment, DefinitionStore, Field, FieldFault, Insertion, StoreError,
+};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
@@ -150,10 +152,12 @@ impl DefinitionStore for RedbStore {
             let (name, version) = key.value();
             let (saved, aql) = value.value();
             definitions.push(StoredDefinition::new(
-                name.parse().map_err(corrupt)?,
-                version.parse().map_err(corrupt)?,
+                name.parse().map_err(unreadable(Field::Name))?,
+                version.parse().map_err(unreadable(Field::Version))?,
                 aql.to_owned(),
-                saved.parse::<Timestamp>().map_err(corrupt)?,
+                saved
+                    .parse::<Timestamp>()
+                    .map_err(unreadable(Field::Saved))?,
             ));
         }
         Ok(definitions)
@@ -172,7 +176,9 @@ fn newest(
         if held != name {
             break;
         }
-        let version = version.parse::<QueryVersion>().map_err(corrupt)?;
+        let version = version
+            .parse::<QueryVersion>()
+            .map_err(unreadable(Field::Version))?;
         newest = newest.max(Some(version));
     }
     Ok(newest)
@@ -212,9 +218,12 @@ fn backend(error: impl Into<redb::Error>) -> StoreError {
     StoreError::Backend(Box::new(error.into()))
 }
 
-/// A held row that does not read as a definition, for `error`.
-fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
-    StoreError::Corrupt(Box::new(error))
+/// The damaged-store error of a held `field` that does not read as its
+/// form, for any reader error.
+fn unreadable<E>(field: Field) -> impl FnOnce(E) -> StoreError {
+    // NOTE: no specification governs this: our own design; the reader's error
+    // is dropped because it can quote the held text, and the fault names it.
+    move |_| StoreError::unreadable(field, FieldFault::Form)
 }
 
 #[cfg(test)]

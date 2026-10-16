@@ -23,9 +23,11 @@
 use std::error::Error;
 use std::fmt;
 
+use ferrofed_registry::error::document::DocumentFault;
 use ferrofed_registry::resource::Resource;
 use ferrofed_registry::revision::{Author, Current, Origin, Revision, RevisionId, Signed};
 use jiff::Timestamp;
+use serde_json::error::Category;
 
 use crate::admin::Operator;
 use crate::config::revisions::Store;
@@ -130,7 +132,7 @@ pub enum StoreError {
     Backend(#[source] Box<dyn Error + Send + Sync>),
     /// A held row does not read as a revision: the store is damaged.
     #[error("the configuration revision store holds a row that is not a revision")]
-    Corrupt(#[source] Box<dyn Error + Send + Sync>),
+    Corrupt(#[source] Corruption),
     /// The store records a newer layout than this binary knows.
     #[error(
         "the configuration revision store is at schema version {found}, and this FerroFED knows versions up to {supported}: a newer FerroFED wrote it"
@@ -141,6 +143,76 @@ pub enum StoreError {
         /// The newest version this binary knows.
         supported: u32,
     },
+}
+
+/// How a held row fails to read as a revision.
+///
+/// It names a position, a key path and a closed kind, never the row's text
+/// or a reader error that quotes it: a revision's configuration can hold a
+/// URL whose query carries a credential, and the fault is logged.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Corruption {
+    /// A revision's configuration does not read as a TOML table of the
+    /// expected shape.
+    #[error("a revision's configuration does not read: {0}")]
+    Configuration(DocumentFault),
+    /// A held row is not JSON of the shape the store writes.
+    #[error(
+        "a held row is not JSON of its shape: {} (line {line}, column {column})",
+        row_fault(*category)
+    )]
+    Row {
+        /// What kind of fault the JSON reader met.
+        category: Category,
+        /// The 1-based line of the fault in the row.
+        line: usize,
+        /// The 1-based column of the fault in the row.
+        column: usize,
+    },
+    /// A revision is numbered zero, which no save writes.
+    #[error("a revision is numbered zero")]
+    ZeroNumber,
+    /// A held number is no revision number.
+    #[error("the revision store holds the number {0}, which is no revision number")]
+    NotARevision(i64),
+    /// A held column does not read as its type; the cause names the column
+    /// and the types, never the value.
+    #[error("a held column does not read as its type")]
+    Column(#[source] Box<dyn Error + Send + Sync>),
+}
+
+impl From<serde_json::Error> for Corruption {
+    /// Returns the fault of a row the JSON reader refused with `error`,
+    /// keeping its position and kind and none of the text it quotes.
+    fn from(error: serde_json::Error) -> Self {
+        Self::Row {
+            category: error.classify(),
+            line: error.line(),
+            column: error.column(),
+        }
+    }
+}
+
+impl StoreError {
+    /// Returns the damaged-store error of a revision's configuration `text`
+    /// the TOML reader refused with `error`.
+    #[must_use]
+    pub fn configuration(error: &toml::de::Error, text: &str) -> Self {
+        Self::Corrupt(Corruption::Configuration(DocumentFault::from_toml(
+            error, text,
+        )))
+    }
+}
+
+/// The words for a JSON reader fault of `category`.
+fn row_fault(category: Category) -> &'static str {
+    match category {
+        Category::Io => "the row could not be read",
+        Category::Syntax => "the text is not JSON",
+        Category::Data => "a value of the wrong type or shape",
+        Category::Eof => "the row ends early",
+    }
 }
 
 /// The durable store of configuration revisions.

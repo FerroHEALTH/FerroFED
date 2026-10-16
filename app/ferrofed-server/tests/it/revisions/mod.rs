@@ -15,6 +15,7 @@
 
 mod api;
 mod console;
+mod corrupt;
 mod credentials;
 mod exchange;
 mod file_reload;

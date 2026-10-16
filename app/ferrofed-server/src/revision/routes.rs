@@ -57,7 +57,7 @@ use crate::error::{self, Code};
 use crate::reload::Reloader;
 use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
-use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED};
+use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED, held_table};
 use crate::revision::tree::diff;
 use ferrofed_registry::revision::{Applied, Author, Diff, Origin, Revision, RevisionId, Standing};
 
@@ -335,17 +335,10 @@ async fn difference(
         Ok(Diff {
             from: from.id,
             to: to.id,
-            changes: diff(&table(&from)?, &table(&to)?),
+            changes: diff(&held_table(&from)?, &held_table(&to)?),
         })
     })
     .await
-}
-
-/// The configuration `revision` holds, as a table.
-fn table(revision: &Revision) -> Result<toml::Table, RevisionError> {
-    toml::from_str(&revision.toml).map_err(|error| {
-        RevisionError::Store(crate::revision::StoreError::Corrupt(Box::new(error)))
-    })
 }
 
 /// The `400` of a body that does not read as `shape`, the JSON object the
