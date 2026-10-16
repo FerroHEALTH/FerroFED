@@ -336,19 +336,10 @@ fn queries(managed: &Managed) -> Result<Vec<QueryResource>, RevisionError> {
     Ok(definitions
         .list("")
         .iter()
-        .map(|definition| {
-            let owner = if reserved::reserves(definition.name()) {
-                Owner::Gateway
-            } else if read_only {
-                Owner::File
-            } else {
-                Owner::Store
-            };
-            QueryResource {
-                name: definition.name().as_str().to_owned(),
-                version: definition.version().to_string(),
-                owner,
-            }
+        .map(|definition| QueryResource {
+            name: definition.name().as_str().to_owned(),
+            version: definition.version().to_string(),
+            owner: stored::owner(definition.name(), read_only),
         })
         .collect())
 }

@@ -25,7 +25,6 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use ferrofed_eehrxf::reserved;
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::definition::QueryName;
 use ferrofed_registry::operator::{
@@ -259,7 +258,7 @@ async fn held(state: &AppState, name: Option<QueryName>) -> Result<Vec<Listed>, 
             held.iter()
                 .map(|definition| StoredVersion {
                     definition: crate::facade::stored::its_rest(definition),
-                    read_only: store_read_only || reserved::reserves(definition.name()),
+                    read_only: crate::stored::is_read_only(definition.name(), store_read_only),
                 })
                 .collect::<Vec<_>>()
         })
