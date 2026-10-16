@@ -65,6 +65,54 @@ async fn a_nodes_hostile_values_reach_the_page_escaped() -> Result<(), Box<dyn E
     Ok(())
 }
 
+/// [`HOSTILE`] with 60 hostile rows, so the answer spans three pages of its
+/// table, and a row count on each endpoint, which its chip shows.
+fn hostile_pages() -> Result<String, Box<dyn Error>> {
+    let rows: Vec<&str> = (0..30)
+        .flat_map(|_| {
+            [
+                r#"["<script>alert(1)</script>"]"#,
+                r#"["<img src=x onerror=alert(1)>"]"#,
+            ]
+        })
+        .collect();
+    let from = r#""rows": [ ["<script>alert(1)</script>"], ["<img src=x onerror=alert(1)>"] ],"#;
+    if !HOSTILE.contains(from) {
+        return Err("the hostile answer no longer carries its two rows".into());
+    }
+    Ok(HOSTILE
+        .replacen(from, &format!(r#""rows": [ {} ],"#, rows.join(", ")), 1)
+        .replace(
+            r#""latency_ms": 5,"#,
+            r#""latency_ms": 5, "row_count": 60,"#,
+        ))
+}
+
+// The redesigned answer adds a summary strip, a chip per node and hidden
+// pages of rows, each a further place a node's value lands in the
+// `inner_html` sink, and each must hold it escaped.
+#[tokio::test]
+async fn hostile_values_on_every_page_chip_and_strip_reach_the_page_escaped()
+-> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, hostile_pages()?).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let answer = answered(&service, &session, patient_query()).await?;
+    assert_eq!(60, answer.rows);
+    let html = &answer.html;
+    assert_eq!(2, html.matches("<tbody hidden>").count(), "{html}");
+    assert_eq!(
+        30,
+        html.matches("&lt;img src=x onerror=alert(1)&gt;").count(),
+        "{html}"
+    );
+    assert!(html.contains("&lt;i&gt;mode&lt;/i&gt;"), "{html}");
+    assert!(html.contains("60 rows"), "{html}");
+    for raw in ["<script", "<img", "onmouseover=\"", "<b>", "<i>"] {
+        assert!(!html.contains(raw), "{raw}: {html}");
+    }
+    Ok(())
+}
+
 /// A `POST` of the query function as the console's own page sends it,
 /// asking for `encoding`.
 fn run_accepting(

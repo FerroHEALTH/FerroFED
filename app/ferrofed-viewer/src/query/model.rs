@@ -41,9 +41,20 @@ pub struct QueryForm {
     pub dedup: String,
     /// The endpoints to target, comma-separated (§8.4).
     pub endpoints: String,
-    /// The organisation to target (§8.4).
+    /// The organisations to target, comma-separated (§8.1, §8.4).
     pub organisation: String,
 }
+
+/// How many rows the answer's table shows at a time.
+///
+/// The console pages the rows the gateway answered, in the page, and asks
+/// the gateway for no further page: an `OFFSET` across nodes is refused or
+/// served from a cursor only where the gateway declares one (§11.6.2, N39).
+pub const PAGE_ROWS: u32 = 25;
+
+/// The id of the answer's rows table, whose `tbody` elements, one a page,
+/// the page shows one at a time.
+pub const ROWS_TABLE: &str = "query-rows";
 
 impl fmt::Debug for QueryForm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -81,8 +92,9 @@ pub struct QueryOptionsView {
 /// and completeness the answer carries, and its HTML, or the refusal that
 /// kept the query from running, rendered the same way.
 ///
-/// Its `Debug` output names the status, the completeness and the size of the
-/// HTML alone: the HTML holds the rows, which can name a patient (N33).
+/// Its `Debug` output names the status, the completeness and the sizes
+/// alone: the HTML and the raw result set hold the rows, which can name a
+/// patient (N33).
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderedAnswer {
     /// The status the gateway answered with, or `None` when the console
@@ -90,9 +102,17 @@ pub struct RenderedAnswer {
     pub status: Option<u16>,
     /// `meta.federation.complete` (§11.4, N37).
     pub complete: bool,
+    /// Whether the query was refused, by the gateway or by the console,
+    /// so the HTML is the refusal and there is no answer to page.
+    pub refused: bool,
+    /// How many rows the answer holds, which the page pages through.
+    pub rows: u32,
     /// The answer rendered as HTML: its status and completeness in words,
-    /// every endpoint, and the rows.
+    /// every endpoint, and the rows, [`PAGE_ROWS`] to a `tbody`.
     pub html: String,
+    /// The federated result set as the gateway answered it, as indented
+    /// JSON, or empty for a refusal.
+    pub raw: String,
 }
 
 /// One column of the answer, as `columns[]` names it (§9.4).
@@ -151,6 +171,8 @@ pub struct QueryAnswer {
     /// The rows, each cell as text: a string as itself, any other value as
     /// its JSON.
     pub rows: Vec<Vec<String>>,
+    /// How long the gateway took to answer the console, in milliseconds.
+    pub elapsed_ms: Option<u64>,
 }
 
 impl fmt::Debug for RenderedAnswer {
@@ -158,7 +180,10 @@ impl fmt::Debug for RenderedAnswer {
         f.debug_struct("RenderedAnswer")
             .field("status", &self.status)
             .field("complete", &self.complete)
+            .field("refused", &self.refused)
+            .field("rows", &self.rows)
             .field("html_bytes", &self.html.len())
+            .field("raw_bytes", &self.raw.len())
             .finish()
     }
 }
@@ -213,7 +238,10 @@ mod tests {
         let rendered = RenderedAnswer {
             status: Some(200),
             complete: true,
+            refused: false,
+            rows: 1,
             html: format!("<td>{PATIENT}</td>"),
+            raw: format!(r#"{{"rows":[["{PATIENT}"]]}}"#),
         };
         let form = QueryForm {
             kind: PATIENT.to_owned(),

@@ -662,10 +662,7 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
             ),
             ("/stored-queries", "<caption>Held versions</caption>"),
             ("/federation", "<dt>Federation</dt>"),
-            (
-                "/query",
-                r#"<button type="submit" disabled>Run the query</button>"#,
-            ),
+            ("/query", r#"<button type="submit" disabled class="#),
         ] {
             for round in 1..=10 {
                 let (response, body) = send(&service, get_as(page, &session)?).await?;

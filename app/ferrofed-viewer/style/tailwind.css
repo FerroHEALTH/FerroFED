@@ -564,6 +564,252 @@
     --tone-dot: var(--warn-dot);
   }
 
+  /* The query console's editor: a tall monospace editor, and the run bar,
+     which stays in view at the foot of the window while the form is. */
+  .query-editor textarea.query-aql {
+    min-height: 16rem;
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  .query-editor ::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  /* A control scrolled to the foot of the window stays clear of the run bar
+     (https://www.w3.org/TR/WCAG22/#focus-not-obscured-minimum). */
+  html:has(.run-bar) {
+    scroll-padding-bottom: 4.5rem;
+  }
+
+  .run-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    border-top: 1px solid var(--line);
+    border-end-start-radius: var(--radius-card);
+    border-end-end-radius: var(--radius-card);
+    background: var(--raised);
+    padding: 0.75rem 1.25rem;
+  }
+
+  /* The federation options: a disclosure inside the editor card. */
+  .federation-options {
+    margin-block-start: 1.25rem;
+    border-top: 1px solid var(--line);
+    padding-block-start: 0.75rem;
+  }
+
+  .federation-options > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  /* A target chip: a real checkbox and its label in a rounded box, edged in
+     the accent once ticked, so the tick and the edge both say so. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 9999px;
+    background: var(--raised);
+    padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .chip:hover {
+    background: var(--inset);
+  }
+
+  .chip:has(:checked) {
+    border-color: var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent);
+  }
+
+  .chip input[type="checkbox"] {
+    margin: 0;
+  }
+
+  /* A switch: a checkbox drawn as a track and a knob, whose place says on
+     or off as well as its colour (https://www.w3.org/TR/WCAG22/#use-of-color). */
+  input.switch {
+    appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 1.25rem;
+    margin: 0.125rem 0 0;
+    border: 1px solid var(--control);
+    border-radius: 9999px;
+    background: var(--inset);
+    cursor: pointer;
+  }
+
+  input.switch::before {
+    content: "";
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 9999px;
+    background: var(--control);
+    transition: transform 120ms ease-out;
+  }
+
+  input.switch:checked {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  input.switch:checked::before {
+    transform: translateX(1rem);
+    background: var(--accent-fg);
+  }
+
+  input.switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* The answer: a summary strip, one chip per node, the endpoint details,
+     and the rows; the completeness sentence of a complete answer reads as
+     one quiet line under the strip. */
+  .query-answer > * + * {
+    margin-block-start: 0.75rem;
+  }
+
+  .summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.625rem;
+    color: var(--muted);
+  }
+
+  /* The completeness in words, at the end of the strip after its pill. */
+  .summary-strip .complete-note {
+    color: var(--muted);
+  }
+
+  .summary-strip [role="alert"].incomplete-note {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--warn-fg);
+  }
+
+  .query-answer p {
+    margin-block-end: 0;
+  }
+
+  .node-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .node-chip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    padding: 0.375rem 0.75rem;
+  }
+
+  .endpoint-details > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* An endpoint's id, status, latency and rows stay on one line; its
+     organisation and error wrap, and the box scrolls sideways when needed. */
+  .endpoint-details :is(th, td):not(:nth-child(n + 5)) {
+    white-space: nowrap;
+  }
+
+  .endpoint-details td:last-child {
+    min-width: 16rem;
+  }
+
+  .endpoint-details > summary:hover {
+    color: var(--ink);
+  }
+
+  /* The rows table's caption repeats the strip's count, so it is read and
+     not shown. */
+  #query-rows > caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* A column is headed by its name or its AQL path as the gateway wrote it,
+     and a path is case-sensitive, so the header keeps its case. */
+  #query-rows thead th {
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .query-answer .table-scroll {
+    margin-block-end: 0.75rem;
+  }
+
+  /* The raw result set, in a box it scrolls in. */
+  pre.raw-json {
+    max-height: min(70vh, 40rem);
+    margin: 0;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--inset);
+    padding: 0.75rem 1rem;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+
+  /* A refused query: the error state of the results card. */
+  .query-refusal {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--danger-fg);
+    border-left-width: 0.25rem;
+    border-radius: var(--radius-card);
+    background: var(--danger-bg);
+    padding: 0.75rem 1rem;
+  }
+
+  .query-refusal [role="alert"] {
+    margin: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
   /* The drawer the navigation is below `md`: a popover the menu button opens,
      which the browser closes on Escape and returns the focus from. From `md`
      up it is the column beside the page. */
