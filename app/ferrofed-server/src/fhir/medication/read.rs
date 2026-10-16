@@ -51,7 +51,7 @@ pub(in crate::fhir) async fn read(
     headers: http::HeaderMap,
 ) -> Response {
     read_of(
-        Readable::Prescription,
+        (Readable::Prescription, None),
         state,
         (outbound, caller),
         id,
@@ -73,7 +73,7 @@ pub(in crate::fhir) async fn read_dispensation(
     headers: http::HeaderMap,
 ) -> Response {
     read_of(
-        Readable::Dispensation,
+        (Readable::Dispensation, None),
         state,
         (outbound, caller),
         id,
@@ -82,9 +82,58 @@ pub(in crate::fhir) async fn read_dispensation(
     .await
 }
 
-/// The read of `readable` by the id `id`, for the request of `headers`.
+/// `GET {fhir-base}/MedicationRequest/{id}/_history/{vid}`: one version of
+/// a prescription, read as [`read`] reads it and answered only when the
+/// member holds it at that version now.
+///
+/// The returned resource has the `id` and the `meta.versionId` the request
+/// named (FHIR R4 `http.html` §3.1.0.3). The face reads the version the
+/// member holds now, which the read's `ETag` names, and answers any other
+/// version `404`, saying that the face keeps no history.
+pub(in crate::fhir) async fn vread(
+    state: State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
+    Path((id, version)): Path<(String, String)>,
+    headers: http::HeaderMap,
+) -> Response {
+    read_of(
+        (Readable::Prescription, Some(&version)),
+        state,
+        (outbound, caller),
+        Path(id),
+        headers,
+    )
+    .await
+}
+
+/// `GET {fhir-base}/MedicationDispense/{id}/_history/{vid}`: one version
+/// of a dispensation, read as [`vread`] reads a prescription.
+///
+/// It is the form of the `Location` a dispensation's receipt answers when
+/// its member names the version it created (FHIR R4 `http.html` §3.1.0.8),
+/// so the face can read back what it located.
+pub(in crate::fhir) async fn vread_dispensation(
+    state: State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
+    Path((id, version)): Path<(String, String)>,
+    headers: http::HeaderMap,
+) -> Response {
+    read_of(
+        (Readable::Dispensation, Some(&version)),
+        state,
+        (outbound, caller),
+        Path(id),
+        headers,
+    )
+    .await
+}
+
+/// The read of `readable` by the id `id`, of the version `version` when one
+/// is named, for the request of `headers`.
 async fn read_of(
-    readable: Readable,
+    (readable, version): (Readable, Option<&str>),
     State(state): State<Arc<AppState>>,
     (outbound, caller): (Option<Extension<OutboundId>>, Option<Extension<Caller>>),
     Path(id): Path<String>,
@@ -122,17 +171,18 @@ async fn read_of(
     let read = prescription::read(federation, &arrived, (readable, &id), declared).await;
     answered(
         federation,
-        (readable, read),
+        (readable, read, version),
         (&id, admitted.request_id, admitted.outbound),
     )
 }
 
-/// The answer to the read of the prescription `id` that settled as `read`,
-/// to the request of the exchange id `request_id` and the gateway's id
-/// `outbound`, with the access it records.
+/// The answer to the read of the prescription `id`, of the version
+/// `version` when one is named, that settled as `read`, to the request of
+/// the exchange id `request_id` and the gateway's id `outbound`, with the
+/// access it records.
 fn answered(
     federation: &Federation,
-    (readable, read): (Readable, Result<prescription::Read, Unfound>),
+    (readable, read, version): (Readable, Result<prescription::Read, Unfound>, Option<&str>),
     (id, request_id, outbound): (&str, &str, OutboundId),
 ) -> Response {
     let named = |endpoints: &[EndpointId]| {
@@ -143,6 +193,22 @@ fn answered(
             .join(", ")
     };
     match read {
+        Ok(read) if version.is_some_and(|version| !holds(&read, version)) => {
+            tracing::info!(request_id = %outbound, "a version read names a version its member does not hold now");
+            let mut response = outcome(
+                StatusCode::NOT_FOUND,
+                "not-found",
+                &format!(
+                    "the member holds this {} at another version, and the face keeps no history of it (FHIR R4 http.html §3.1.0.3)",
+                    noun(readable)
+                ),
+            );
+            attach(
+                &mut response,
+                prescription::accessed_withheld(federation, &read),
+            );
+            response
+        }
         Ok(read) => found(federation, &read, id, request_id),
         Err(Unfound::NoOwner(read)) => {
             tracing::info!(request_id = %outbound, "a prescription or dispensation id has no owner");
@@ -275,6 +341,18 @@ fn version_tag(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
         "a member's resource has a versionId the read cannot give as its ETag"
     );
     None
+}
+
+/// Whether the one resource `read` found carries `version` as its
+/// `meta.versionId`.
+///
+/// A resource with no `versionId` holds no version, so a version read of it
+/// finds nothing (FHIR R4 `http.html` §3.1.0.3: the returned resource "SHALL
+/// have ... a meta.versionId element with a value of \[vid\]").
+fn holds(read: &prescription::Read, version: &str) -> bool {
+    read.resource()
+        .and_then(|kept| kept.resource.get("meta")?.get("versionId")?.as_str())
+        .is_some_and(|held| held == version)
 }
 
 /// The `Last-Modified` of the member's version of `kept`, its

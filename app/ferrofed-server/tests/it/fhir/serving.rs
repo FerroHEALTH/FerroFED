@@ -204,13 +204,19 @@ async fn a_declared_member_lists_both_resources_in_their_mpd_profiles() -> TestR
         .flatten()
         .filter_map(|interaction| interaction["code"].as_str())
         .collect();
-    assert_eq!(vec!["search-type", "read"], codes);
+    assert_eq!(vec!["search-type", "read", "vread"], codes);
     let dispenses = resource("MedicationDispense")?;
     assert_eq!(
         Value::from(vec![MPD_MEDICATION_DISPENSE]),
         dispenses["supportedProfile"]
     );
-    assert_eq!("create", dispenses["interaction"][0]["code"]);
+    let codes: Vec<&str> = dispenses["interaction"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|interaction| interaction["code"].as_str())
+        .collect();
+    assert_eq!(vec!["create", "read", "vread"], codes);
     Ok(())
 }
 
@@ -264,6 +270,8 @@ async fn every_interaction_declared_for_a_prescription_or_dispensation_is_one_th
     };
     assert!(named("MedicationRequest", "read"), "{declared:?}");
     assert!(named("MedicationDispense", "create"), "{declared:?}");
+    assert!(named("MedicationRequest", "vread"), "{declared:?}");
+    assert!(named("MedicationDispense", "vread"), "{declared:?}");
     for (kind, code) in &declared {
         let request = exercising(kind, code)?
             .ok_or_else(|| format!("{kind} {code} is declared and no route serves it"))?;
@@ -593,6 +601,21 @@ fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn E
         }
         ("MedicationRequest", "search-type") => search()?,
         ("MedicationRequest", "read") => read()?,
+        ("MedicationRequest", "vread") => {
+            let id = Locator::new(
+                EndpointId::new("node-a-mpd")?,
+                EhrId::new(EHR_A)?,
+                "synthetic-rx-1",
+            )
+            .id()
+            .ok_or("the parts fit an id")?;
+            Request::get(format!("{FHIR}/MedicationRequest/{id}/_history/1")).body(Body::empty())?
+        }
+        ("MedicationDispense", "vread") => Request::get(format!(
+            "{FHIR}/MedicationDispense/{}/_history/1",
+            dispensation_id()?
+        ))
+        .body(Body::empty())?,
         ("MedicationDispense", "create") => fhir_json(
             http::Method::POST,
             "/MedicationDispense",

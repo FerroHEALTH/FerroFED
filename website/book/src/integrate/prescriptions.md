@@ -100,6 +100,8 @@ prescriptions (`fhir/serving.rs`:
 | `GET {fhir-base}/MedicationRequest/{id}` | `Electronic-Prescriptions` |
 | `POST {fhir-base}/MedicationDispense` | `Electronic-Dispensations` |
 | `GET {fhir-base}/MedicationDispense/{id}` | `Electronic-Dispensations` |
+| `GET {fhir-base}/MedicationRequest/{id}/_history/{vid}` | `Electronic-Prescriptions` |
+| `GET {fhir-base}/MedicationDispense/{id}/_history/{vid}` | `Electronic-Dispensations` |
 
 ## The member contract
 
@@ -300,9 +302,21 @@ the one you read, its `ETag` and `Last-Modified` from the member's
 `a_member_that_does_not_answer_the_dispensation_read_is_named`). Its other
 answers are a prescription read's, with "dispensation" in their text.
 
-The face serves no version read: a `Location` that carries
-`/_history/{version}` is read without that part, at
-`{fhir-base}/MedicationDispense/{id}`.
+## Reading a version
+
+`GET {fhir-base}/MedicationDispense/{id}/_history/{vid}` and
+`GET {fhir-base}/MedicationRequest/{id}/_history/{vid}` are the FHIR R4
+`vread`, so the `Location` of a receipt that carries the member's version
+reads back the dispensation it named. The gateway reads the resource as
+the read does, with the same scope, headers, answers and access record,
+and answers it when the member's `meta.versionId` is `{vid}`. The gateway
+keeps no history, so any other version, and a resource with no
+`meta.versionId`, is `404` `not-found`. A `{vid}` that is no FHIR `id` is
+refused before any member is asked (`fhir/prescriptions/vread.rs`:
+`the_location_a_receipt_answered_reads_back_the_dispensation_it_located`,
+`a_version_the_member_does_not_hold_now_is_not_found`,
+`a_version_that_is_no_fhir_id_asks_no_member`,
+`a_prescription_is_read_at_the_version_it_holds_and_no_other`).
 
 ## The locator ids
 
@@ -348,12 +362,13 @@ and another method on any of these paths is refused `403`
 |---|---|---|
 | search | `200` | The `searchset`, empty for a patient no declared member holds or none may say anything about. |
 | read | `200` | The member's prescription or dispensation, with the headers [Reading one prescription](#reading-one-prescription) names. |
-| receipt | `201 Created` | The owner created the dispensation. `Location` names it by its locator id, `{fhir-base}/MedicationDispense/{id}`, with `/_history/{version}` when the member named a version, and the `OperationOutcome` names the member and every profile constraint the check did not evaluate. |
+| receipt | `201 Created` | The owner created the dispensation. `Location` names it by its locator id, `{fhir-base}/MedicationDispense/{id}`, with `/_history/{version}` when the member named a version that is a FHIR `id`, which the [version read](#reading-a-version) takes, and the `OperationOutcome` names the member and every profile constraint the check did not evaluate. |
 | search | `400` | A parameter other than `patient.identifier`, `_count`, `-offset` and `_format`, no patient, or two. |
 | receipt | `400` | A body that is no `MedicationDispense` or no UTF-8 text; or an `openEHR-federation-endpoint` header naming another member's endpoint, or one the registry does not hold. |
 | every route | `403` | No granted scope covers the route, or a `patient/` grant reaches beyond its patient (`patient-confinement`). |
 | every route | `404` `not-supported` | No member is declared for the route's category. |
 | read | `404` `not-found` | The gateway did not write the id, it names no declared member, the gateway already places its `ehr_id` at another member, or the member holds no such resource for that `ehr_id`. Every case gets the same text. |
+| version read | `404` `not-found` | As a read; or the member holds the resource at another version, or with no `meta.versionId`, and the gateway keeps no history. |
 | receipt | `404` `not-found` | No member holds the patient, none may say so, or no member holds the prescription. Every case gets the same text. |
 | read | `409` `conflict` | Two members claim the `ehr_id` the id names, which also raises the integrity incident; the id's endpoint part matches two endpoints; or the member answered more than one resource for one id, with no incident. Nothing is passed on. |
 | receipt | `409` `conflict` | Two members hold the prescription, which also raises the `PrescriptionIdentifierCollision` integrity incident; one member holds it twice, with no incident; or the owner refused the dispensation, named with its status. |
@@ -438,6 +453,7 @@ Each request that reached a member writes one access record
 | prescription read | a read under `Electronic-Prescriptions`, naming the member and the `ehr_id` it was asked by | `fhir/prescriptions/read.rs`: `a_read_is_recorded_once_under_electronic_prescriptions_naming_its_member` |
 | receipt | a creation under `Electronic-Dispensations` and `Electronic-Prescriptions`, naming every member the lookup asked and the owner | `fhir/prescriptions/dispense.rs`: `a_dispensation_is_recorded_as_a_creation_of_both_categories` |
 | dispensation read | a read under `Electronic-Dispensations` | `fhir/prescriptions/dispense.rs`: `a_dispensation_read_is_recorded_as_a_read_of_dispensations` |
+| version read | a read as the read of the same resource records it | `fhir/prescriptions/dispense.rs`: `a_dispensation_version_read_is_recorded_as_a_read_of_dispensations` |
 
 A not-served answer, and a request refused before any member was asked,
 write no record. A receipt takes its record's place before the owner is
@@ -463,11 +479,11 @@ members hold also raises the integrity incident
 
 `GET {fhir-base}/metadata` lists `MedicationRequest` only when a member is
 declared for `Electronic-Prescriptions`, with the profile
-`MedicationRequest-eu-mpd`, the `search-type` and `read` interactions and
-the `patient.identifier` search parameter. It lists `MedicationDispense`
-only when a member is declared for `Electronic-Dispensations`, with the
-profile `MedicationDispense-eu-mpd` and the `create` and `read`
-interactions. Each interaction it declares is one its route serves
+`MedicationRequest-eu-mpd`, the `search-type`, `read` and `vread`
+interactions and the `patient.identifier` search parameter. It lists
+`MedicationDispense` only when a member is declared for
+`Electronic-Dispensations`, with the profile `MedicationDispense-eu-mpd` and
+the `create`, `read` and `vread` interactions. Each interaction it declares is one its route serves
 (`fhir/serving.rs`:
 `with_no_member_declared_the_capability_statement_lists_neither_resource`,
 `a_declared_member_lists_both_resources_in_their_mpd_profiles`,

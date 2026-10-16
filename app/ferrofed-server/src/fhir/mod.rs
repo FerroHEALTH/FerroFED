@@ -100,7 +100,7 @@ static UNSERVED: LazyLock<String> = LazyLock::new(|| {
 
 /// Every path of the face with its handlers, the one list the router is
 /// built from and the `404` of any other path names.
-fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 9] {
+fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 11] {
     [
         (METADATA, get(metadata)),
         (SUMMARY, get(summary_get).post(summary_post)),
@@ -110,12 +110,20 @@ fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 9] {
         (medication::PRESCRIPTIONS, get(medication::search::search)),
         (medication::PRESCRIPTION, get(medication::read::read)),
         (
+            medication::PRESCRIPTION_VERSION,
+            get(medication::read::vread),
+        ),
+        (
             medication::DISPENSATIONS,
             post(medication::dispense::dispense),
         ),
         (
             medication::DISPENSATION,
             get(medication::read::read_dispensation),
+        ),
+        (
+            medication::DISPENSATION_VERSION,
+            get(medication::read::vread_dispensation),
         ),
     ]
 }
@@ -146,9 +154,9 @@ pub enum FacePath {
     Binary,
     /// A path of the electronic prescriptions and dispensations, exactly.
     Medication(medication::Addressed),
-    /// Any other path under the base, a variant of the six above included:
-    /// another letter case, a percent-encoded character, a trailing or a
-    /// doubled slash.
+    /// Any other path under the base, a variant of a path the face's route
+    /// table (`table`) names included: another letter case, a
+    /// percent-encoded character, a trailing or a doubled slash.
     Other,
 }
 
@@ -157,8 +165,8 @@ pub enum FacePath {
 ///
 /// A path is under the face when its letters, ASCII case ignored, start
 /// with the base, so a variant of the base is never read as a path outside
-/// the face; only the six paths are named, and every other one is
-/// [`FacePath::Other`], which the gate refuses.
+/// the face; only the paths of the face's route table (`table`) are named,
+/// and every other one is [`FacePath::Other`], which the gate refuses.
 #[must_use]
 pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
     let base = fhir.base.as_str().to_ascii_lowercase();
@@ -712,8 +720,9 @@ mod tests {
         assert_eq!(
             UNSERVED.as_str(),
             "the FHIR face serves metadata, Patient/$summary, Bundle, DocumentReference, \
-             Binary/{token}, MedicationRequest, MedicationRequest/{id}, MedicationDispense, \
-             MedicationDispense/{id} alone"
+             Binary/{token}, MedicationRequest, MedicationRequest/{id}, \
+             MedicationRequest/{id}/_history/{vid}, MedicationDispense, MedicationDispense/{id}, \
+             MedicationDispense/{id}/_history/{vid} alone"
         );
     }
 }

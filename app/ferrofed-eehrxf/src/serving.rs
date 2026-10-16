@@ -192,8 +192,9 @@ impl Serving {
     ///
     /// The interactions are those the face serves for each: the search by
     /// the patient's identifier and the read of `MedicationRequest`, after
-    /// the HL7 Europe EU Health Data API `EEHRxF-ResourceAccessProvider`, and
-    /// the create of `MedicationDispense`.
+    /// the HL7 Europe EU Health Data API `EEHRxF-ResourceAccessProvider`, the
+    /// create and the read of `MedicationDispense`, and for both the vread
+    /// of the version the member holds now (FHIR R4 `http.html` §3.1.0.3).
     #[must_use]
     pub fn resources(&self) -> Vec<CapabilityStatementRestResource> {
         let mut resources = Vec::new();
@@ -219,7 +220,11 @@ fn prescriptions() -> CapabilityStatementRestResource {
         documentation: Some(
             "A patient's prescriptions as the members that hold them state them, each passed through as the member states it; the members decide dispensability and the remaining dispensations.".into(),
         ),
-        interaction: vec![interaction("search-type"), interaction("read")],
+        interaction: vec![
+            interaction("search-type"),
+            interaction("read"),
+            interaction("vread"),
+        ],
         search_param: vec![CapabilityStatementRestResourceSearchParam {
             name: "patient.identifier".into(),
             r#type: "token".into(),
@@ -238,7 +243,7 @@ fn dispensations() -> CapabilityStatementRestResource {
         documentation: Some(
             "A dispensation is written to the one member that owns the prescription it names; the answer is 201 with a Location naming it by the face's id, which the read takes, and an OperationOutcome naming that member.".into(),
         ),
-        interaction: ["create", "read"]
+        interaction: ["create", "read", "vread"]
             .into_iter()
             .map(|code| CapabilityStatementRestResourceInteraction {
                 code: code.into(),
