@@ -148,6 +148,14 @@ impl<T: Transport + Clone> NodeClient<T> {
                 );
                 Created::Made(Forwarded::bare(status))
             }
+            // NOTE: no specification governs this: our own design; an answer past the body bound
+            // (`ClientError::AnswerTooLarge`) is read by its status as any other answer is.
+            Some(Err(ForwardError::Oversized { status, .. }))
+                if status.is_client_error() && status != StatusCode::UNAUTHORIZED =>
+            {
+                Created::Refused(status)
+            }
+            Some(Err(ForwardError::Oversized { status, .. })) => Created::Erred(status),
             Some(Err(failure)) => Created::Failed(failure),
             Some(Ok(answer)) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Created::Failed(ForwardError::Refused {
