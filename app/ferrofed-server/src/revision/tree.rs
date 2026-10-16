@@ -9,6 +9,7 @@
 
 use std::collections::BTreeMap;
 
+use ferrofed_registry::resource::SECRETS;
 use ferrofed_registry::revision::{Change, Difference};
 
 /// The top-level keys of the bootstrap core, which only the file sets and a
@@ -79,18 +80,6 @@ pub fn with_console_of(tree: &toml::Table, from: &toml::Table) -> toml::Table {
     }
     tree
 }
-
-/// The keys whose value is a secret with a `_file` sibling, wherever they
-/// sit: an inline value is refused, and the `_file` reference is kept.
-pub const SECRETS: [&str; 7] = [
-    "bearer_token",
-    "password",
-    "client_identity",
-    "client_secret",
-    "assertion",
-    "feed_token",
-    "scrape_token",
-];
 
 /// The dotted keys whose value is a secret connection string with a `_file`
 /// sibling.
@@ -320,5 +309,72 @@ mod tests {
         );
         assert_eq!(Some("true"), changes[0].from.as_deref());
         assert_eq!(Some("false"), changes[0].to.as_deref());
+    }
+
+    /// Every configuration field of `text` that holds a secret of type
+    /// `kind` and has a `_file` sibling the gateway reads it from.
+    fn read_through_file<'a>(text: &'a str, kind: &str) -> Vec<&'a str> {
+        let held = format!(": Option<{kind}>,");
+        text.lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_prefix("pub ")?
+                    .strip_suffix(held.as_str())
+            })
+            .filter(|name| text.contains(&format!("pub {name}_file: Option<PathBuf>,")))
+            .collect()
+    }
+
+    /// Every `.rs` file under `dir`, with its path and its text.
+    fn sources(dir: &std::path::Path, found: &mut Vec<(std::path::PathBuf, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                sources(&path, found);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                found.push((path, text));
+            }
+        }
+    }
+
+    // A secret the gateway reads inline or through its `_file` sibling is
+    // one the revision refuses inline and the console never shows, so a
+    // configuration field of that shape missing from the list fails here.
+    #[test]
+    fn every_secret_the_gateway_reads_through_a_file_is_listed() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&root, &mut files);
+        let mut seen = std::collections::BTreeSet::new();
+        for (path, text) in &files {
+            for name in read_through_file(text, "Secret") {
+                assert!(
+                    super::SECRETS.contains(&name),
+                    "{name} of {} is read through {name}_file and missing from SECRETS",
+                    path.display()
+                );
+                seen.insert(name);
+            }
+            for name in read_through_file(text, "SecretUrl") {
+                let relative = path.strip_prefix(&root).unwrap().to_string_lossy();
+                let listed = match relative.as_ref() {
+                    "config/stored_queries.rs" => {
+                        super::SECRET_URLS.contains(&format!("stored_queries.{name}").as_str())
+                    }
+                    "config/revisions.rs" => super::CORE.contains(&"config"),
+                    _ => false,
+                };
+                assert!(
+                    listed,
+                    "{name} of {relative} is a secret URL read through {name}_file, in no list"
+                );
+            }
+        }
+        let unseen: Vec<&&str> = super::SECRETS
+            .iter()
+            .filter(|name| !seen.contains(**name))
+            .collect();
+        assert!(unseen.is_empty(), "listed but read nowhere: {unseen:?}");
     }
 }

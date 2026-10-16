@@ -5,7 +5,7 @@
 //! as the one TOML inline table the gateway takes, and the secret changes
 //! it asks for.
 
-use ferrofed_registry::resource::SecretChange;
+use ferrofed_registry::resource::{SECRETS, SecretChange};
 use ferrofed_registry::secret::WriteOnly;
 
 use crate::configure::model::{SecretInput, SettingInput};
@@ -292,18 +292,6 @@ fn typed(text: &str, was: Option<&toml::Value>) -> Option<toml::Value> {
         ),
     }
 }
-
-/// The keys the gateway holds as secrets, never as settings, each with its
-/// `_file` sibling.
-const SECRETS: [&str; 7] = [
-    "bearer_token",
-    "password",
-    "client_identity",
-    "client_secret",
-    "assertion",
-    "feed_token",
-    "scrape_token",
-];
 
 /// Whether the dotted `key` names a secret or its reference.
 #[must_use]

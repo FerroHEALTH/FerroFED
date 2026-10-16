@@ -125,6 +125,23 @@ impl fmt::Display for Resource {
     }
 }
 
+/// The keys whose value is a secret with a `_file` sibling, wherever they
+/// sit in the configuration.
+///
+/// The gateway refuses an inline value of one in a revision and keeps its
+/// `_file` reference, and the console asks for one through a password field
+/// and never shows it as a setting. The gateway's tests fail on a secret it
+/// reads through `_file` that is missing here.
+pub const SECRETS: [&str; 7] = [
+    "bearer_token",
+    "password",
+    "client_identity",
+    "client_secret",
+    "assertion",
+    "feed_token",
+    "scrape_token",
+];
+
 /// One secret of a resource: its key inside the resource, and the file it
 /// is read from when it is set. Never its value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
