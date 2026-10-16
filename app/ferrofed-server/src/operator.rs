@@ -5,9 +5,10 @@
 //! `{base}/operator/`.
 //!
 //! It serves the integrity incidents, the `creating_system_id` routing
-//! table, the stored-query registry, and the last observed state of each
-//! dependency. Every route is admitted by client authentication only for a caller whose
-//! token carries the operator scope its issuer's entry names
+//! table, the stored-query registry, the last observed state of each
+//! dependency, and how the process is deployed. Every route is admitted by
+//! client authentication only for a caller whose token carries the operator
+//! scope its issuer's entry names
 //! ([`Requirement::Operator`](crate::auth::permission::Requirement::Operator)).
 //! It answers routing ids, states, counts and stored definitions only, the
 //! bodies of [`ferrofed_registry::operator`], [`ferrofed_registry::health`]
@@ -24,7 +25,9 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use ferrofed_registry::creating_system::LearnedMap;
-use ferrofed_registry::operator::{IncidentReport, MAX_PAGE, Page, PageRequest, routing_table};
+use ferrofed_registry::operator::{
+    DeploymentReport, IncidentReport, MAX_PAGE, Page, PageRequest, routing_table,
+};
 use ferrofed_registry::replica::{HEADER, Replica};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -50,6 +53,11 @@ pub const STORED_QUERIES: &str = "/operator/stored-queries";
 // NOTE: no specification governs this: our own design; the report names every member
 // and which are down, so it is the operator's, behind the operator scope.
 pub const DEPENDENCIES: &str = "/operator/dependencies";
+
+/// The path of the deployment report, below `{base}`.
+// NOTE: no specification governs this: our own design; the report names the profile, the
+// development cross-reference, the version and the replica, and no setting value.
+pub const DEPLOYMENT: &str = "/operator/deployment";
 
 /// Whether `path` is the operator surface, or below it, under `base`.
 #[must_use]
@@ -78,6 +86,7 @@ pub fn routes(
         .route(CREATING_SYSTEMS, axum::routing::get(creating_systems))
         .route(STORED_QUERIES, axum::routing::get(stored_queries))
         .route(DEPENDENCIES, axum::routing::get(dependencies))
+        .route(DEPLOYMENT, axum::routing::get(deployment))
         .route_layer(axum::middleware::map_response(
             move |mut response: Response| {
                 if let Some(value) = &named {
@@ -98,6 +107,21 @@ async fn dependencies(
     State(state): State<Arc<AppState>>,
 ) -> Json<ferrofed_registry::health::DependencyReport> {
     Json(state.dependencies())
+}
+
+/// `GET {base}/operator/deployment`: the deployment profile, whether the
+/// federation resolves through the static development cross-reference,
+/// the product version, and the replica that answered; always `200`.
+async fn deployment(State(state): State<Arc<AppState>>) -> Json<DeploymentReport> {
+    Json(DeploymentReport {
+        mode: state.mode(),
+        development_crossref: state
+            .federation()
+            .is_some_and(|federation| federation.development_crossref()),
+        product: crate::body::PRODUCT.to_owned(),
+        version: crate::body::VERSION.to_owned(),
+        replica: state.replica().to_string(),
+    })
 }
 
 /// `GET {base}/operator/incidents`: every kind's count since the process

@@ -4,10 +4,11 @@
 //! The bodies of the gateway's read-only operator surface.
 //!
 //! The gateway writes and the operator console reads the integrity
-//! incidents, the `creating_system_id` routing table, and pages of the
-//! stored-query registry, and the body of the operator's clear of an
-//! `ehr_id` on the admin listener. Every report carries routing ids, counts and
-//! stored definitions only. An `ehr_id` is named only when it is a bare
+//! incidents, the `creating_system_id` routing table, pages of the
+//! stored-query registry, the deployment report, and the body of the
+//! operator's clear of an `ehr_id` on the admin listener. Every report
+//! carries routing ids, counts, stored definitions and the deployment
+//! profile only. An `ehr_id` is named only when it is a bare
 //! UUID, which cannot spell a patient identifier, and a stored definition
 //! names no patient, because one that does is refused before it is held
 //! (§5.4.1, N33, §12.7). Each report of the surface names the
@@ -383,6 +384,45 @@ impl PageRequest {
     pub const fn is_valid(&self) -> bool {
         self.limit >= 1 && self.limit <= MAX_PAGE
     }
+}
+
+/// The deployment profile a gateway runs under, as the operator surface
+/// names it.
+// NOTE: no specification governs this: our own design; the set is the configuration's
+// `profile`, and a deployment marked for nothing else is never reported as one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeploymentMode {
+    /// A deployment that serves real requests, `profile = "production"`.
+    #[default]
+    Production,
+    /// A deployment marked for development and testing,
+    /// `profile = "development"`, which admits what production refuses,
+    /// such as the static cross-reference and cleartext credentials.
+    Development,
+}
+
+/// The body of `GET {base}/operator/deployment`: how this process is
+/// deployed, so a console can warn that it reads a development gateway.
+///
+/// It names the profile, whether patients resolve through the static
+/// development cross-reference, the product and its version, and the
+/// replica. It carries no setting value, URL, credential or identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeploymentReport {
+    /// The deployment profile the process started with, which only a
+    /// restart changes.
+    pub mode: DeploymentMode,
+    /// Whether the federation resolves patients through the static
+    /// development cross-reference (`[dev]`), which only the development
+    /// profile admits.
+    pub development_crossref: bool,
+    /// The product name, as `GET {base}/` reports it.
+    pub product: String,
+    /// The product version, as `GET {base}/` reports it.
+    pub version: String,
+    /// The replica that answered.
+    pub replica: String,
 }
 
 /// One page of a listing, with where it starts and how many there are in
