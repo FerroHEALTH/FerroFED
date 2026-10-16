@@ -31,7 +31,7 @@ use crate::stored::schema::{self, SchemaError};
 
 /// The qualified name and the version, to the RFC 3339 instant the
 /// definition was stored and its AQL.
-const DEFINITIONS: TableDefinition<'static, (&str, &str), (&str, &str)> =
+pub const DEFINITIONS: TableDefinition<'static, (&str, &str), (&str, &str)> =
     TableDefinition::new("stored_query_definitions");
 
 /// The schema version each layout the file holds is at, by the name of its
