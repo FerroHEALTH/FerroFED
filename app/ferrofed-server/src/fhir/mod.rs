@@ -154,9 +154,9 @@ pub enum FacePath {
     Binary,
     /// A path of the electronic prescriptions and dispensations, exactly.
     Medication(medication::Addressed),
-    /// Any other path under the base, a variant of the six above included:
-    /// another letter case, a percent-encoded character, a trailing or a
-    /// doubled slash.
+    /// Any other path under the base, a variant of a path the face's route
+    /// table (`table`) names included: another letter case, a
+    /// percent-encoded character, a trailing or a doubled slash.
     Other,
 }
 
@@ -165,8 +165,8 @@ pub enum FacePath {
 ///
 /// A path is under the face when its letters, ASCII case ignored, start
 /// with the base, so a variant of the base is never read as a path outside
-/// the face; only the six paths are named, and every other one is
-/// [`FacePath::Other`], which the gate refuses.
+/// the face; only the paths of the face's route table (`table`) are named,
+/// and every other one is [`FacePath::Other`], which the gate refuses.
 #[must_use]
 pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
     let base = fhir.base.as_str().to_ascii_lowercase();

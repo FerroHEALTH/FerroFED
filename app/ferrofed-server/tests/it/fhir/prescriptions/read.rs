@@ -30,7 +30,7 @@ use super::{
 };
 use crate::auth::{bearing, claims, minted};
 use crate::ehr_id_collision::{captured, incidents};
-use crate::facade::{EHR_A, EHR_B, PATIENT, PATIENT_TAIL, wire};
+use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::receive::{OTHER_A, bound, rows};
 use crate::fhir::{FHIR, TestResult, UNREACHED_SUPPLIER, text_registered};
 use crate::support::{call, issuer};
@@ -333,14 +333,27 @@ async fn the_read_takes_the_composition_read_scope() -> TestResult {
     Ok(())
 }
 
+/// The identifier, in [`NAMESPACE`], of the patient a confined token names,
+/// distinct from every `ehr_id`, so a search by it is dispatched by the
+/// `ehr_id` alone.
+const CONFINED: &str = "SYNTHETIC-CONFINED-1";
+
+/// The identifier, in [`NAMESPACE`], of another patient, distinct from
+/// every `ehr_id`.
+const ANOTHER: &str = "SYNTHETIC-ANOTHER-1";
+
 /// The gateway over `members`, its issuer's patient tokens bound to node A
 /// and the cross-reference knowing the token's patient at both members and
-/// another patient at node A.
+/// another patient at node A, each by its `ehr_id` in the binding's system
+/// and by an identifier in [`NAMESPACE`] that is no `ehr_id`.
 fn confined_gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
     let crossref = rows(&[
         (crate::fhir::receive::EHR_SYSTEM, EHR_A, "node-a", EHR_A),
         (crate::fhir::receive::EHR_SYSTEM, EHR_A, "node-b", EHR_B),
         (crate::fhir::receive::EHR_SYSTEM, OTHER_A, "node-a", OTHER_A),
+        (NAMESPACE, CONFINED, "node-a", EHR_A),
+        (NAMESPACE, CONFINED, "node-b", EHR_B),
+        (NAMESPACE, ANOTHER, "node-a", OTHER_A),
     ]);
     let own = format!(
         "{}{}",
@@ -386,9 +399,9 @@ async fn a_caller_confined_to_one_patient_reads_that_patients_prescription_alone
 }
 
 /// `GET {fhir-base}/MedicationRequest?patient.identifier=` of the patient
-/// `value` in the cross-reference's system.
+/// `value` in [`NAMESPACE`].
 fn search_of(value: &str) -> Result<Request<Body>, http::Error> {
-    let system = crate::fhir::receive::EHR_SYSTEM.replace(':', "%3A");
+    let system = NAMESPACE.replace(':', "%3A");
     Request::get(format!(
         "{FHIR}/MedicationRequest?patient.identifier={system}%7C{value}"
     ))
@@ -396,7 +409,8 @@ fn search_of(value: &str) -> Result<Request<Body>, http::Error> {
 }
 
 #[tokio::test]
-async fn a_caller_confined_to_one_patient_is_refused_a_search_for_another() -> TestResult {
+async fn a_caller_confined_to_one_patient_searches_that_patients_prescriptions_alone() -> TestResult
+{
     let members = answering().await?;
     let dir = tempfile::tempdir()?;
     let app = confined_gateway(&members, dir.path())?;
@@ -404,14 +418,35 @@ async fn a_caller_confined_to_one_patient_is_refused_a_search_for_another() -> T
     granted.scope = Some("patient/composition-*.s".to_owned());
     granted.ehr_id = Some(EHR_A.to_owned());
     let token = minted(&granted)?;
-    let (status, text) = call(app, bearing(search_of(OTHER_A)?, &token)?).await?;
+    let (status, text) = call(app.clone(), bearing(search_of(CONFINED)?, &token)?).await?;
+    assert_eq!(StatusCode::OK, status, "the patient's own: {text}");
+    assert!(
+        !members.proxy_a.journal().is_empty(),
+        "the patient's own search reaches its member"
+    );
+    let asked = (
+        members.proxy_a.journal().len(),
+        members.proxy_b.journal().len(),
+    );
+    let (status, text) = call(app, bearing(search_of(ANOTHER)?, &token)?).await?;
     assert_eq!(StatusCode::FORBIDDEN, status, "§5.2: {text}");
     assert!(text.contains("patient-confinement"), "{text}");
-    assert!(
-        members.unasked(),
+    assert_eq!(
+        asked,
+        (
+            members.proxy_a.journal().len(),
+            members.proxy_b.journal().len()
+        ),
         "a search for another patient is sent to no member's own endpoint"
     );
     assert!(members.no_query().await?, "nor to any member's Query API");
+    for proxy in [&members.proxy_a, &members.proxy_b] {
+        assert!(
+            !proxy.journal_contains(CONFINED.as_bytes())
+                && !proxy.journal_contains(ANOTHER.as_bytes()),
+            "N33: no patient identifier reaches a member"
+        );
+    }
     Ok(())
 }
 

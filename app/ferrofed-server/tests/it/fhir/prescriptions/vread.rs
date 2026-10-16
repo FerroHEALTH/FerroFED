@@ -170,6 +170,51 @@ async fn the_location_a_receipt_answered_reads_back_the_dispensation_it_located(
 }
 
 #[tokio::test]
+async fn a_created_version_that_is_no_fhir_id_leaves_an_unversioned_location_that_reads_back()
+-> TestResult {
+    let unfit = ResponseTemplate::new(201).insert_header(
+        "location",
+        format!("https://cdr.example.org/fhir/MedicationDispense/{CREATED}/_history/1_2"),
+    );
+    let members = members((&[RX_A], &[RX_B]), unfit).await?;
+    holding(&members, HELD).await;
+    let dir = tempfile::tempdir()?;
+    let response = send(
+        gateway(&members, dir.path())?,
+        post(&dispensation(BY_IDENTIFIER))?,
+    )
+    .await?;
+    assert_eq!(StatusCode::CREATED, response.status());
+    let location = response
+        .headers()
+        .get(header::LOCATION)
+        .ok_or("a Location")?
+        .to_str()?
+        .to_owned();
+    let located = url::Url::parse(&location)?;
+    let id = face_id("node-a-mpd", EHR_A, CREATED)?;
+    assert_eq!(
+        format!("{FHIR}/MedicationDispense/{id}"),
+        located.path(),
+        "FHIR R4 http.html §3.1.0.3: a vid that is no id is left out of the Location"
+    );
+    assert_eq!(None, located.query());
+    let (status, text) = call(
+        gateway(&members, dir.path())?,
+        Request::get(located.path()).body(Body::empty())?,
+    )
+    .await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the unversioned Location reads back: {text}"
+    );
+    let resource: Value = serde_json::from_str(&text)?;
+    assert_eq!(Value::from(id.as_str()), resource["id"]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_version_the_member_does_not_hold_now_is_not_found() -> TestResult {
     let members = members((&[RX_A], &[RX_B]), created()).await?;
     holding(&members, HELD).await;
