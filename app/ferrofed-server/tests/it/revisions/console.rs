@@ -9,11 +9,17 @@
 //! the file never sets one, and a stored-query version is stored once
 //! (§12.7, N44). No specification governs the ownership: our own design.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use axum::body::Body;
 use ferrofed_registry::console::{ConsoleMember, ConsoleState, Owner, QueryRegistry, Resources};
 use ferrofed_registry::id::NodeId;
+use ferrofed_registry::operator::{Page, StoredVersion};
 use ferrofed_registry::revision::{Origin, Revision, RevisionId};
 use ferrofed_server::config::Config;
-use http::{Method, StatusCode};
+use http::{Method, Request, StatusCode, header};
+use openehr_its::rest::generated::definition::StoredQuery;
 
 use super::{Diff, Gateway, TestResult, member, operator};
 use crate::support::error_body;
@@ -93,6 +99,67 @@ async fn the_report_names_the_owner_of_every_member_and_stored_query() -> TestRe
         "only the reserved namespace is held: {:?}",
         resources.stored_queries
     );
+    Ok(())
+}
+
+/// The console report and the operator listing read one rule, so a version
+/// the console names as the store's is the one the listing calls writable.
+#[tokio::test]
+async fn the_console_owner_and_the_operator_read_only_flag_agree() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let store = toml::Value::String(dir.path().join("q.redb").display().to_string());
+    let gateway = Gateway::start(&format!("\n[stored_queries]\npath = {store}\n"))?;
+    let body = r#"{"aql": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}"#;
+    let (status, text) = gateway
+        .put(
+            "/admin/config/stored-queries/org.example::compositions/1.0.0",
+            body.to_owned(),
+        )
+        .await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let owners: BTreeMap<(String, String), Owner> = gateway
+        .resources()
+        .await?
+        .stored_queries
+        .into_iter()
+        .map(|query| ((query.name, query.version), query.owner))
+        .collect();
+
+    let client = ferrofed_server::router(
+        Arc::clone(&gateway.state),
+        &crate::facade::settings_with_room(),
+    );
+    let request = Request::get("/operator/stored-queries")
+        .header(header::AUTHORIZATION, crate::support::operator_bearer()?)
+        .body(Body::empty())?;
+    let (status, text) = crate::support::call(client, request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let page: Page<StoredVersion<StoredQuery>> = serde_json::from_str(&text)?;
+    let flags: BTreeMap<(String, String), bool> = page
+        .items
+        .into_iter()
+        .map(|entry| {
+            (
+                (entry.definition.name, entry.definition.version),
+                entry.read_only,
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        owners.keys().collect::<Vec<_>>(),
+        flags.keys().collect::<Vec<_>>(),
+        "both name every held version"
+    );
+    for (version, owner) in &owners {
+        assert_eq!(
+            Some(&(*owner != Owner::Store)),
+            flags.get(version),
+            "{version:?} is {owner:?}"
+        );
+    }
+    assert!(owners.values().any(|owner| *owner == Owner::Store));
+    assert!(owners.values().any(|owner| *owner == Owner::Gateway));
     Ok(())
 }
 

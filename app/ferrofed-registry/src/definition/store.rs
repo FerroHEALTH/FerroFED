@@ -388,6 +388,16 @@ impl Definitions {
             .collect()
     }
 
+    /// Every version of the definition named `name` exactly, lowest first;
+    /// empty when none is held.
+    #[must_use]
+    pub fn versions(&self, name: &QueryName) -> Vec<Arc<StoredDefinition>> {
+        self.read()
+            .get(name)
+            .map(|versions| versions.values().map(Arc::clone).collect())
+            .unwrap_or_default()
+    }
+
     /// How many definitions are held, every version counted.
     #[must_use]
     pub fn len(&self) -> usize {

@@ -173,6 +173,7 @@ async fn a_caller_without_the_operator_scope_is_refused() -> TestResult {
         "/operator/incidents",
         "/operator/creating-systems",
         "/operator/stored-queries",
+        "/operator/stored-queries/org.example::patient_compositions",
         "/operator/deployment",
     ] {
         let (status, text) = answer(app.clone(), get(path, &bearer()?)?).await?;

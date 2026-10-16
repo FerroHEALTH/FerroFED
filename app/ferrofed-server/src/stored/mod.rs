@@ -23,6 +23,7 @@
 use std::fmt;
 use std::ops::Range;
 
+use ferrofed_registry::console::Owner;
 use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
@@ -162,6 +163,31 @@ impl fmt::Debug for Admitted {
     }
 }
 
+/// Returns who holds the stored query `name`.
+///
+/// It is the gateway for its reserved namespace, else the read-only
+/// definition files when `store_read_only` says the store refuses every
+/// insert, else the store a `PUT` writes.
+// NOTE: no specification governs this: our own design; the operator listing and
+// the console report both read this one rule, so they never disagree.
+#[must_use]
+pub fn owner(name: &QueryName, store_read_only: bool) -> Owner {
+    if ferrofed_eehrxf::reserved::reserves(name) {
+        Owner::Gateway
+    } else if store_read_only {
+        Owner::File
+    } else {
+        Owner::Store
+    }
+}
+
+/// Whether the gateway refuses a write under `name`, by [`owner`]: every
+/// holder but the store is read-only.
+#[must_use]
+pub fn is_read_only(name: &QueryName, store_read_only: bool) -> bool {
+    owner(name, store_read_only) != Owner::Store
+}
+
 /// Opens the store `store` names, admitting what it reads under `context`.
 ///
 /// The gateway's own read-only definitions sit beside it
@@ -200,7 +226,29 @@ mod tests {
     use openehr_federation::aql::definition::SubjectOrigin;
     use openehr_federation::aql::{Context, Targeting};
 
-    use super::admit;
+    use ferrofed_registry::console::Owner;
+    use ferrofed_registry::definition::QueryName;
+
+    use super::{admit, is_read_only, owner};
+
+    #[test]
+    fn the_reserved_namespace_outranks_the_store_and_only_the_store_is_writable() {
+        let reserved = QueryName::new("eu.ferrofed.eehrxf::patient-summary-problems").unwrap();
+        let own = QueryName::new("org.example::compositions").unwrap();
+        for (name, store_read_only, holder) in [
+            (&reserved, false, Owner::Gateway),
+            (&reserved, true, Owner::Gateway),
+            (&own, true, Owner::File),
+            (&own, false, Owner::Store),
+        ] {
+            assert_eq!(holder, owner(name, store_read_only), "{name}");
+            assert_eq!(
+                holder != Owner::Store,
+                is_read_only(name, store_read_only),
+                "{name}"
+            );
+        }
+    }
 
     // NOTE: §12.7, §5.4.1, N33; each section query passes the admission a PUT
     // passes, names its patient by a parameter, and is held as it is printed.
