@@ -322,13 +322,6 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   `crates/eehrxf` as a library ([#809](https://github.com/FerroHEALTH/FerroFED/issues/809), [#810](https://github.com/FerroHEALTH/FerroFED/issues/810), [#802](https://github.com/FerroHEALTH/FerroFED/issues/802), [#803](https://github.com/FerroHEALTH/FerroFED/issues/803),
   [The patient summary over FHIR](../integrate/patient-summary.md),
   [Receiving a document](receiving-documents.md)).
-- Electronic prescriptions and dispensations on the FHIR face, in the HL7
-  Europe MPD profiles, passed through from the members that serve them: the
-  search and the read of a patient's prescriptions, and a received
-  dispensation written to the member that owns its prescription and read
-  back, with no dispensability, count or lock computed at the gateway
-  ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
-  [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
 - The [information sheet](information-sheet.md), the
   [instructions for use](../operate/instructions-for-use.md), the
   [clinical safety risk file](clinical-safety.md), this page's
@@ -345,21 +338,74 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   troubleshooting pages ([#624](https://github.com/FerroHEALTH/FerroFED/issues/624), [#630](https://github.com/FerroHEALTH/FerroFED/issues/630), [#633](https://github.com/FerroHEALTH/FerroFED/issues/633), [#634](https://github.com/FerroHEALTH/FerroFED/issues/634), [#640](https://github.com/FerroHEALTH/FerroFED/issues/640),
   [A production deployment](../operate/production.md)).
 
+### v0.0.11: prescriptions, configuration revisions and the console
+
+Released on 2026-10-16.
+
+- Electronic prescriptions and dispensations on the FHIR face, in the HL7
+  Europe MPD profiles, passed through from the members that serve them: the
+  search and the read of a patient's prescriptions, and a received
+  dispensation written to the member that owns its prescription and read
+  back, with no dispensability, count or lock computed at the gateway
+  ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
+  [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+- A received document written under a person's own grant, or under a
+  representative's, marked as theirs in every entry and in its access
+  record, and a person's own patient summary through an electronic health
+  data access service
+  ([#992](https://github.com/FerroHEALTH/FerroFED/issues/992), [#1003](https://github.com/FerroHEALTH/FerroFED/issues/1003), [#991](https://github.com/FerroHEALTH/FerroFED/issues/991)).
+- Access records that carry a security label per category and origin, name
+  the patients a population query read up to a bound, name the version a
+  write and the EHR a create left at the member, and log each semantic
+  transformation the FHIR face applies
+  ([#797](https://github.com/FerroHEALTH/FerroFED/issues/797), [#819](https://github.com/FerroHEALTH/FerroFED/issues/819), [#946](https://github.com/FerroHEALTH/FerroFED/issues/946), [#983](https://github.com/FerroHEALTH/FerroFED/issues/983), [#985](https://github.com/FerroHEALTH/FerroFED/issues/985),
+  [Labelling the access records](../operate/access-labels.md)).
+- The export of the routing state a gateway learned, for a system that
+  replaces it (Annex II, point 2.6;
+  [#798](https://github.com/FerroHEALTH/FerroFED/issues/798),
+  [Exporting the identity state](../operate/identity-state-export.md)).
+- Configuration as versioned revisions under `config.ui = "managed"`:
+  saved, compared, applied, confirmed and rolled back on the admin
+  listener and from the operator console, exported and imported as TOML,
+  and followed by every replica on the store; `[auth]` and the listener
+  certificates reload without a restart
+  ([#576](https://github.com/FerroHEALTH/FerroFED/issues/576), [#577](https://github.com/FerroHEALTH/FerroFED/issues/577), [#578](https://github.com/FerroHEALTH/FerroFED/issues/578), [#579](https://github.com/FerroHEALTH/FerroFED/issues/579), [#954](https://github.com/FerroHEALTH/FerroFED/issues/954), [#636](https://github.com/FerroHEALTH/FerroFED/issues/636),
+  [Configuration revisions](../operate/configuration-revisions.md)).
+- The operator console redesigned, with a dashboard, a page per member,
+  the routing table, the stored queries by namespace, the query console as
+  an editor and a results card, the configuration in tabs, a light and a
+  dark theme, and the operator's two admin actions
+  ([#1074](https://github.com/FerroHEALTH/FerroFED/issues/1074), [#909](https://github.com/FerroHEALTH/FerroFED/issues/909),
+  [The operator console](../operate/operator-console.md)).
+- The Annex II checklist, the technical documentation with its Annex III
+  index, the EU declaration of conformity written for each release once the
+  manufacturer issues it, the register of economic operators, the rights of
+  natural persons, the cybersecurity risk assessment, the CRA information
+  to the user, the decommissioning page, and security fixes as patch
+  releases on each supported line
+  ([#941](https://github.com/FerroHEALTH/FerroFED/issues/941), [#671](https://github.com/FerroHEALTH/FerroFED/issues/671), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [#787](https://github.com/FerroHEALTH/FerroFED/issues/787), [#961](https://github.com/FerroHEALTH/FerroFED/issues/961), [#1058](https://github.com/FerroHEALTH/FerroFED/issues/1058), [#1059](https://github.com/FerroHEALTH/FerroFED/issues/1059), [#1063](https://github.com/FerroHEALTH/FerroFED/issues/1063), [#1064](https://github.com/FerroHEALTH/FerroFED/issues/1064),
+  [Annex II checklist](annex-ii.md),
+  [Technical documentation](technical-documentation.md)).
+- The `openehr-*` crates at 0.0.87 with FHIRconnect 0.1.117 on the same
+  release ([#714](https://github.com/FerroHEALTH/FerroFED/issues/714)).
+
 ## Planned
 
 Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.11: FerroFED's choices revisited where the upstream reports bear on
-them ([#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and more of EHDS readiness
-([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's log access interface against the Art 36(1)
-common specifications ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660), [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the
-interoperability component ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523)), the national contact
-point's connector ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), and the manufacturer's conformity work
-([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)). It also brings
-configuration from the file and from the console as one set of versioned
-revisions ([#575](https://github.com/FerroHEALTH/FerroFED/issues/575)). The changelog fragments in
+v0.0.12: the national contact point's connector, serving MyHealth@EU's
+national infrastructure from federated openEHR data, with a harness
+connector and its end-to-end test ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)).
+
+v0.0.13: the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's log
+access interface against the Art 36(1) common specifications ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660),
+[#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the interoperability component
+and prescriptions from openEHR medication data through a FHIRconnect
+mapping ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
+conformity work ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)); and
+operations packaging ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#645](https://github.com/FerroHEALTH/FerroFED/issues/645)). The changelog fragments in
 [`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
 list what is merged on `main` for the next release.
 
@@ -394,9 +440,11 @@ These are the ones to know before you deploy FerroFED; the
   European interoperability software component writes the patient
   summary and receives a document in the exchange format on the gateway's
   FHIR face, and passes prescriptions and dispensations through from the
-  members that serve them
+  members that serve them in the HL7 Europe MPD profiles on their own FHIR
+  endpoint
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md));
-  imaging, test results and discharge reports are planned
+  a member that holds its prescriptions only as openEHR data is not served
+  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and imaging, test results and discharge reports are planned
   ([#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
   [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
   [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)). No EU

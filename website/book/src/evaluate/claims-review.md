@@ -63,6 +63,7 @@ as a broken command, is fixed in the same change.
 | v0.0.10 | 2026-10-06 | see below | 16, below | [#674](https://github.com/FerroHEALTH/FerroFED/issues/674), except finding 16 |
 | v0.0.10 | 2026-10-15 | see below | 17 to 30, below | the v0.0.10 version bump, except finding 16, which stands |
 | v0.0.11 | 2026-10-15 | this page and the clinical safety risk file | 31 and 32, below | [#962](https://github.com/FerroHEALTH/FerroFED/issues/962) |
+| v0.0.11 | 2026-10-16 | see below | 33 to 43, below | the v0.0.11 version bump, except finding 16, which stands |
 
 ### Findings of 2026-10-06
 
@@ -217,6 +218,69 @@ runs:
 32. The clinical safety risk file held L-07 open until #660, although the
     review of the records with ITI-81 is built and tested. L-07 is re-rated
     and its review row records it.
+
+### Findings of 2026-10-16
+
+The review at the v0.0.11 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the prescriptions page, the Upgrading page, and the
+assembled release notes. Every other page of the book, `SUPPORT.md`,
+`SECURITY.md` and the README and manifest description of each crate was
+searched for "planned", "not yet" and "v0.0.1" next to an issue that is
+closed or a release that has shipped.
+
+Against Art 28(a), a function or property FerroFED lacks:
+
+33. The claims page listed electronic prescriptions and dispensations among
+    what v0.0.10 shipped. They ship in v0.0.11 ([#1039](https://github.com/FerroHEALTH/FerroFED/issues/1039), [#1040](https://github.com/FerroHEALTH/FerroFED/issues/1040),
+    [#1041](https://github.com/FerroHEALTH/FerroFED/issues/1041), [#1042](https://github.com/FerroHEALTH/FerroFED/issues/1042)), and the bullet moved to a new v0.0.11 section.
+34. The instructions for use said the record of a query over many patients'
+    data names no patient. Since [#819](https://github.com/FerroHEALTH/FerroFED/issues/819) it names the patients behind the
+    `ehr_id`s its rows project, up to a bound, and records only its scope
+    otherwise. Now said that way.
+
+Against Art 28(b), a limitation left out:
+
+35. The instructions for use and the claims page did not say that a member
+    holding its prescriptions only as openEHR data is not served
+    ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), that the gateway offers no log access interface of its own
+    ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)), or which settings stay in the file under `config.ui =
+    "managed"` and that the console reads one replica at a time. All are
+    now listed.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+36. `README.md` named v0.0.10 as current and planned the rest of the
+    interoperability component with no word of prescriptions. It now names
+    v0.0.11, what it adds, and the planned work by issue.
+37. The landing page named v0.0.10 as current and v0.0.11 as planned. It
+    now names v0.0.11 and has a card for it.
+38. `llms.txt` said every priority category other than the patient summary
+    is planned. Prescriptions and dispensations are passed through from the
+    members that serve them.
+39. The claims page planned for v0.0.11 work that shipped in it or moved to
+    v0.0.12 and v0.0.13; the regulatory status page put the remaining EHDS
+    issues in the v0.0.11 milestone, left prescriptions out of what the
+    interoperability component does, and planned the Annex II checklist and
+    the technical documentation, which are written. Each now says where the
+    work stands.
+40. The configuration page planned the export and import of a revision
+    ([#579](https://github.com/FerroHEALTH/FerroFED/issues/579)), which ships.
+41. The information sheet listed the HL7 Europe MPD package twice in its
+    standards table. It is listed once, and the operator console's OpenID
+    Connect sign-in is added beside the standards.
+42. The release notes described the console's top bar, navigation and
+    system theme as the styling change of [#1037](https://github.com/FerroHEALTH/FerroFED/issues/1037) left them; the new shell
+    of [#1075](https://github.com/FerroHEALTH/FerroFED/issues/1075) in the same release replaced all three. The entry now
+    describes the styling and points at the shell.
+43. The release notes named `fhirconnect` 0.1.111 on `openehr-*` 0.0.86 as
+    where the mapping engine moves ([#1028](https://github.com/FerroHEALTH/FerroFED/issues/1028)); the release ships the later
+    versions of [#714](https://github.com/FerroHEALTH/FerroFED/issues/714). The entry now says so.
+
+Not fixed here: finding 16 stands.
+
+No text suggested a use outside the intended purpose, (c).
 
 ## Annex II, point 2.5
 

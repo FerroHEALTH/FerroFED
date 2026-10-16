@@ -529,7 +529,9 @@ The console manages members and stored queries (#577), and onward
 credentials and binding sections with write-only secrets, a confirmation
 after a change applies and a second operator's approval (#578;
 [Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
-Export to and import from TOML is planned (#579).
+Any revision exports as TOML, and TOML imports as a revision you check
+before you apply it (#579;
+[Export and import](configuration-revisions.md#export-and-import)).
 
 ## The base path
 

@@ -499,6 +499,11 @@ them:
   same face lists the summaries that exist for a patient, the members' own
   ones included
   ([The document list](../integrate/patient-summary.md#the-document-list)).
+  It also searches and reads a patient's electronic prescriptions and
+  receives a dispensation into the member that owns its prescription,
+  passed through in the HL7 Europe MPD profiles from the members that serve
+  them on their own FHIR endpoint
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
 
 Seven of the manufacturer's obligations have a first answer:
 
@@ -532,21 +537,25 @@ Seven of the manufacturer's obligations have a first answer:
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
-issues are in the v0.0.11 milestone, before the Regulation applies on 26 March
-2027:
+issues are in the v0.0.12 and v0.0.13 milestones, before the Regulation
+applies on 26 March 2027:
 
 - [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the rest of
   the European logging software component, its review, retention and export.
 - [#522](https://github.com/FerroHEALTH/FerroFED/issues/522): the rest of
   the European interoperability software component for the patient summary,
   built from federated openEHR data.
-- [#523](https://github.com/FerroHEALTH/FerroFED/issues/523): the
-  interoperability component for electronic prescriptions and dispensations.
+- [#523](https://github.com/FerroHEALTH/FerroFED/issues/523): the rest of
+  the interoperability component for electronic prescriptions and
+  dispensations, serving them from openEHR medication data through a
+  FHIRconnect mapping
+  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)).
 - [#524](https://github.com/FerroHEALTH/FerroFED/issues/524): serving a
   national contact point for digital health.
-- [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the Annex II
-  checklist, the technical documentation, the EU declaration of conformity,
-  the CE marking and the registration.
+- [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
+  the conformity work: the points the [Annex II checklist](annex-ii.md)
+  leaves open, the EU declaration of conformity, which each release writes
+  once the manufacturer issues it, the CE marking and the registration.
 - [#526](https://github.com/FerroHEALTH/FerroFED/issues/526): tracking and
   vendoring the implementing acts the components depend on.
 
