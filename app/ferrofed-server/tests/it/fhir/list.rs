@@ -52,7 +52,7 @@ const SUMMARY_TYPE: &str = "http%3A%2F%2Floinc.org%7C60591-5";
 
 /// The native endpoint `id` of `node`, of the organisation `organisation`,
 /// at `base`.
-fn native_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
+pub(super) fn native_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
     format!(
         "\n[[endpoint]]\nid = \"{id}\"\nnode = \"{node}\"\nurl = \"{base}/fhir\"\n\
          connection_type = \"hl7-fhir-rest\"\nmanaging_organisation = \"{organisation}\"\n\

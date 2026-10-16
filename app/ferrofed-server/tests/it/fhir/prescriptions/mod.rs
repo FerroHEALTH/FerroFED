@@ -42,7 +42,7 @@ use crate::facade::{
 use crate::support::call;
 
 /// The `[[fhir.serve]]` table declaring both members for prescriptions.
-const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n";
+pub(super) const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n";
 
 /// Node A's prescription: an extension of a profile no package defines,
 /// nested arrays, and decimals whose text a number type would not keep.
@@ -108,7 +108,7 @@ fn page(body: String) -> ResponseTemplate {
 }
 
 /// The own endpoint `id` of `node`, at `base`, serving prescriptions.
-fn own_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
+pub(super) fn own_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
     format!(
         "\n[[endpoint]]\nid = \"{id}\"\nnode = \"{node}\"\nurl = \"{base}/fhir\"\n\
          connection_type = \"hl7-fhir-rest\"\nmanaging_organisation = \"{organisation}\"\n\
@@ -226,7 +226,7 @@ fn built(
 
 /// `GET {fhir-base}/MedicationRequest` for the test patient, with the query
 /// `extra` added.
-fn search(extra: &str) -> Result<Request<Body>, http::Error> {
+pub(super) fn search(extra: &str) -> Result<Request<Body>, http::Error> {
     Request::get(format!(
         "{FHIR}/MedicationRequest?patient.identifier={}%7C{PATIENT}{extra}",
         NAMESPACE.replace(':', "%3A")
