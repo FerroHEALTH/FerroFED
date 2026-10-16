@@ -187,7 +187,7 @@ fn listed(
 }
 
 /// The pages `pages` of the member `chosen`, each prescription named by the
-/// id the face reads it by ([`locator`]), on the face `fhir`.
+/// id the face reads it by (`fhir::locator`), on the face `fhir`.
 ///
 /// A prescription named so has that id and a `fullUrl` of the face's read
 /// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it;

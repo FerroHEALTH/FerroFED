@@ -152,6 +152,19 @@ names:
 | `gateway` | a stored query of the reserved namespace `eu.ferrofed.eehrxf` | nobody |
 | `store` | a stored-query version in the stored-query store | nobody: a held version is immutable (§12.7, N44) |
 
+The console's Members tab lists each member with its owner and state, and a
+console member is added on a form of its own
+([the console's screens](operator-console.md#configuration-page) show every
+tab).
+
+![The Members tab of the configuration page: node-a read-only from the file and node-b a console member saved and not applied, under the card that shows what the saved revision 2 changes.](img/console/configuration-members.png)
+
+[The Members tab in the dark theme](img/console/configuration-members-dark.png)
+
+![The member form: the organisation, the node with its system_id and CDR product, one Query API endpoint row, the buttons that add a Query API or a FHIR endpoint, a reason, and Save as revision 3.](img/console/configuration-member-form.png)
+
+[The member form in the dark theme](img/console/configuration-member-form-dark.png)
+
 A member is owned whole. A console member is held in the revisions as one
 `[[registry.members]]` entry and joined to the registry document's members,
 so a revision stays the whole configuration and nothing is written back to
@@ -227,6 +240,10 @@ as a member is:
 | the Dutch Generic Functions, the NVI localizer and the Mitz pre-filter | `[nl_gf]` | `identity-services`, `localization`, `consent` |
 | the localization failure policy | `[federation.localization]` | `localization` |
 | consent disclosure | `[federation.consent]` | `consent` |
+
+![The Credentials and bindings tab: the console's credentials of node-a-pub, running, with its bearer_token set and read from a file, never shown by value.](img/console/configuration-credentials.png)
+
+[The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
 
 The binding sections a build lacks, by its `binding-ihe` and `binding-nl`
 features, are not offered. A resource the configuration file sets is the
@@ -377,6 +394,10 @@ configuration moves between the console and version control (#579).
 |---|---|
 | `GET /admin/config/revisions/{id}/export` | the revision as TOML, `Content-Type: application/toml`, as the attachment `ferrofed-revision-{id}.toml` with `Cache-Control: no-store` |
 | `POST /admin/config/import?base=<newest>&reason=<text>` | saves the TOML body as a revision on `base`, `201` with `{"revision": …, "diff": …}`: the revision, and each key it changes against the running revision, as the diff route writes them |
+
+![The Import and export tab: the download of the running configuration as TOML, and the form that imports TOML with a reason as a dry-run revision.](img/console/configuration-import-export.png)
+
+[The Import and export tab in the dark theme](img/console/configuration-import-export-dark.png)
 
 The export is the revision's TOML text under a comment header that names
 the revision, who made it, when, and where it came from. It holds the whole
