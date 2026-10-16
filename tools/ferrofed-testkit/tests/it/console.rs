@@ -278,3 +278,26 @@ async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(
     }
     Ok(())
 }
+
+// A stored query's detail reads its name from the route for the page title,
+// which the server renders after the page itself; fetched again and again,
+// the page is whole with its title every time and the render never panics.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stored_querys_detail_renders_with_its_title_every_time() -> Result<(), Box<dyn Error>> {
+    let running = Running::start().await?;
+    let path = "/stored-queries/org.example::compositions?version=1.0.0";
+    for round in 1..=50 {
+        let (status, page) = running.view(path).await?;
+        assert_eq!(reqwest::StatusCode::OK, status, "{path} #{round}: {page}");
+        assert!(
+            page.contains("<title>org.example::compositions · "),
+            "{path} #{round}: {page}"
+        );
+        assert!(
+            page.contains("The gateway holds no stored query named org.example::compositions."),
+            "{path} #{round}: {page}"
+        );
+        assert!(!page.contains("<template id="), "{path} #{round}: {page}");
+    }
+    Ok(())
+}

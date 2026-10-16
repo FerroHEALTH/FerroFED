@@ -155,8 +155,16 @@ fn members_section(view: MembersView) -> AnyView {
 #[component]
 pub fn MemberPage() -> impl IntoView {
     let params = use_params_map();
-    let key = move || params.read().get("node").unwrap_or_default();
-    let loaded = Resource::new_blocking(key, load::member);
+    // NOTE: the Leptos book, appendix_life_cycle, "Signals can be used after they are
+    // disposed"; the title is read after the route's owner can be gone, so a read
+    // tries the params and falls back to the value the page rendered with.
+    let rendered = params.with_untracked(|params| params.get("node").unwrap_or_default());
+    let key = move || {
+        params
+            .try_with(|params| params.get("node"))
+            .map_or_else(|| rendered.clone(), Option::unwrap_or_default)
+    };
+    let loaded = Resource::new_blocking(key.clone(), load::member);
     view! {
         <Title text=move || titled(&format!("Member {}", key())) />
         <Transition fallback=|| {
