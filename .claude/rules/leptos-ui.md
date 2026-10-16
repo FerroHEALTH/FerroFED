@@ -294,6 +294,43 @@ and the dark theme of `style/tailwind.css`, whose colours are the "Azure & Iron"
 tokens of `assets/brand/tokens.css`; motion respects
 `prefers-reduced-motion`.
 
+`tests/it/contrast.rs` reads the colour custom properties of the three theme
+blocks of `style/tailwind.css` and computes the WCAG 2.2 contrast ratio of
+every text and ground pair a view can draw, at 4.5:1 for text (SC 1.4.3)
+and 3:1 for a control's edge (SC 1.4.11). A translucent ground is laid over
+each opaque ground (`surface`, `raised`, `inset`, `head`, `neutral-bg`) and
+the worst result counts. A new token or pairing joins the test's lists. The
+ratios, measured 2026-10-16 (#1112):
+
+| Muted text on | Light | Dark |
+|---|---:|---:|
+| `surface` | 5.44 | 7.38 |
+| `raised` | 5.69 | 6.96 |
+| `inset` | 5.19 | 5.71 |
+| `head` | 5.44 | 6.61 |
+| `neutral-bg` | 5.19 | 5.71 |
+| `accent-tint` | 4.51 | 4.54 |
+| `ok-bg` | 5.40 | 4.70 |
+| `warn-bg` | 5.49 | 4.64 |
+| `danger-bg` | 5.20 | 5.14 |
+
+The light `--muted` is `#58687d`, slate-500 darkened just enough for the
+accent tint; slate-500 itself (`#64748b`) measured 4.34 on `inset` and 3.77
+on the tint, and one step lighter, `#59697e`, measures 4.44 on the tint.
+
+| Worst pair of each other role | Minimum | Light | Dark |
+|---|---:|---:|---:|
+| `ink` on `accent-tint` | 4.5 | 14.15 | 10.62 |
+| `accent` on `accent-tint` | 4.5 | 4.70 | 6.98 |
+| `accent-hover` on `accent-tint` | 4.5 | 6.00 | 8.77 |
+| `accent-fg` on `accent` | 4.5 | 5.93 | 10.71 |
+| `neutral-fg` on `inset` | 4.5 | 9.45 | 9.85 |
+| `ok-fg` on `ok-bg` | 4.5 | 5.21 | 7.90 |
+| `warn-fg` on `warn-bg` | 4.5 | 4.84 | 8.25 |
+| `danger-fg` on `danger-bg` | 4.5 | 5.91 | 6.95 |
+| `control` edge on `inset` | 3 | 4.34 | 3.07 |
+| `accent` edge on `inset` | 3 | 5.42 | 8.77 |
+
 ## 11. Testing and gates
 
 - **Business logic lives outside components**, in plain types with ordinary

@@ -23,6 +23,8 @@ mod configure_fhir;
 mod configure_revisions;
 mod configure_sections;
 #[cfg(test)]
+mod contrast;
+#[cfg(test)]
 mod exchange;
 #[cfg(test)]
 mod gateway;
