@@ -1,0 +1,15 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "access-log-origin",
+  "url": "https://ferrofed.eu/fhir/CodeSystem/access-log-origin",
+  "name": "AccessLogOrigin",
+  "title": "Access log origin",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The origin of the data an access record of a FerroFED gateway reached, as a security label: each code is the endpoint id of an endpoint in the deployment's registry. The codes belong to each deployment, so this resource lists none.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "caseSensitive": true,
+  "content": "not-present"
+}

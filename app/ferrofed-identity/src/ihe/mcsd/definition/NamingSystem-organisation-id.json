@@ -1,0 +1,18 @@
+{
+  "resourceType": "NamingSystem",
+  "id": "organisation-id",
+  "name": "FerroFEDOrganisationId",
+  "status": "active",
+  "kind": "identifier",
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The registry id of an organisation of a FerroFED federation registry.",
+  "usage": "`Organization.identifier` in the registry document in FHIR form, exactly once per organisation.",
+  "uniqueId": [
+    {
+      "type": "uri",
+      "value": "https://ferrofed.eu/fhir/sid/organisation-id",
+      "preferred": true
+    }
+  ]
+}

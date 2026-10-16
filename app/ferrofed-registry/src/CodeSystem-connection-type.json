@@ -1,0 +1,23 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "connection-type",
+  "url": "https://ferrofed.eu/fhir/CodeSystem/connection-type",
+  "name": "ConnectionType",
+  "title": "Connection type",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The connection type of an openEHR ITS-REST Query API endpoint in the registry document in FHIR form, for `Endpoint.connectionType`. No openEHR or HL7 code for it is registered.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 1,
+  "concept": [
+    {
+      "code": "openehr-rest-query",
+      "display": "openEHR ITS-REST Query API",
+      "definition": "The endpoint serves the openEHR ITS-REST Query API."
+    }
+  ]
+}

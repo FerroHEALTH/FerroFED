@@ -22,6 +22,7 @@ mod emergency_consent;
 mod gate;
 mod labels;
 mod limits;
+mod origin_system;
 mod origins;
 mod patient;
 mod population;

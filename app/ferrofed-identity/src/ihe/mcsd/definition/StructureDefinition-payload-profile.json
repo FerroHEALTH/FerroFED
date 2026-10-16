@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "payload-profile",
+  "url": "https://ferrofed.eu/fhir/StructureDefinition/payload-profile",
+  "name": "PayloadProfile",
+  "title": "Payload profile",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "One profile the documents of a member's own FHIR endpoint (`connectionType` `hl7-fhir-rest`) follow, in the registry document in FHIR form. The extension repeats once per profile, and such an endpoint carries at least one. FHIR R4 `Endpoint.payloadMimeType` names a serialisation, and no element of FHIR R4 `Endpoint` names a profile.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Endpoint"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "A profile the endpoint's documents follow",
+        "definition": "One profile the documents served at the endpoint follow.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://ferrofed.eu/fhir/StructureDefinition/payload-profile"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "The profile's canonical URL",
+        "definition": "The canonical URL of a profile the endpoint's documents follow.",
+        "min": 1,
+        "type": [
+          {
+            "code": "canonical"
+          }
+        ]
+      }
+    ]
+  }
+}

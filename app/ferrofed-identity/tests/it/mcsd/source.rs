@@ -13,12 +13,11 @@ use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 use ferrofed_identity::ihe::mcsd::source::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
 };
-use ferrofed_identity::ihe::mcsd::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrofed_testkit::mcsd::{self, HarnessDirectory, Member};
+use ferrofed_testkit::mcsd::{HarnessDirectory, Member};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -42,12 +41,6 @@ fn source(harness: &HarnessDirectory) -> Result<DirectorySource, Box<dyn Error>>
         bytes: 64 << 20,
         entries: 50_000,
     })?)
-}
-
-#[test]
-fn the_harness_spells_the_identifier_systems_of_the_fhir_form() {
-    assert_eq!(ORGANISATION_ID_SYSTEM, mcsd::ORGANISATION_ID);
-    assert_eq!(ENDPOINT_ID_SYSTEM, mcsd::ENDPOINT_ID);
 }
 
 /// A directory shared with other services holds the IG's own examples, XCA

@@ -1,0 +1,18 @@
+{
+  "resourceType": "NamingSystem",
+  "id": "creating-system-id",
+  "name": "FerroFEDCreatingSystemId",
+  "status": "active",
+  "kind": "identifier",
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "An openEHR `creating_system_id` an endpoint of a FerroFED federation registry answers for, other than its node's own `system_id`.",
+  "usage": "`Endpoint.identifier` in the registry document in FHIR form, zero or more times per endpoint.",
+  "uniqueId": [
+    {
+      "type": "uri",
+      "value": "https://ferrofed.eu/fhir/sid/creating-system-id",
+      "preferred": true
+    }
+  ]
+}

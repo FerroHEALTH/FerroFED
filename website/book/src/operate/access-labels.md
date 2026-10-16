@@ -53,7 +53,10 @@ No adopted act fixes a label vocabulary for a category or an origin, so
 the defaults and the rule for an unclassified access are FerroFED's own
 design. The default origin system,
 `https://ferrofed.eu/fhir/CodeSystem/access-log-origin`, is a code system
-FerroFED owns whose codes are your registry's endpoint ids.
+FerroFED owns whose codes are your registry's endpoint ids. Its FHIR R4
+`CodeSystem` is served at that URL with `content` `not-present`, because
+the codes belong to each deployment
+([The definitions behind FerroFED's URLs](registry-fhir.md#the-definitions-behind-ferrofeds-urls)).
 
 ## `[access_log.labels]`
 

@@ -85,17 +85,37 @@ cp -R assets/brand "$OUT/assets/"
 # that makes it useful.
 cp llms.txt "$OUT/llms.txt"
 
-# Each extension eehrxf defines is served at its canonical URL, the site
-# root's fhir/StructureDefinition/<id>, and beside it as <id>.json, which
-# GitHub Pages serves as application/json (FHIR R4 2.5.1: the definition SHALL
-# be available to every party that exchanges the extension).
-readonly DEFINITIONS=crates/eehrxf/src/medication
-mkdir -p "$OUT/fhir/StructureDefinition"
-for definition in "$DEFINITIONS"/StructureDefinition-*.json; do
-  id="$(basename "$definition" .json)"
-  id="${id#StructureDefinition-}"
-  cp "$definition" "$OUT/fhir/StructureDefinition/$id"
-  cp "$definition" "$OUT/fhir/StructureDefinition/$id.json"
+# Each FHIR definition FerroFED publishes, a <Type>-<id>.json beside the code
+# that reads it, is served at its ferrofed.eu URL, fhir/<Type>/<id> from the
+# site root, and beside it as <id>.json, which GitHub Pages serves as
+# application/json (FHIR R4 2.5.1: the definition SHALL be available to every
+# party that exchanges the extension). A NamingSystem has no canonical URL in
+# R4, so it is served at the identifier system it names, fhir/sid/<id>.
+readonly DEFINITIONS=(
+  crates/eehrxf/src/medication
+  app/ferrofed-identity/src/ihe/mcsd/definition
+  app/ferrofed-registry/src
+  app/ferrofed-server/src/access
+)
+for dir in "${DEFINITIONS[@]}"; do
+  for definition in "$dir"/StructureDefinition-*.json "$dir"/CodeSystem-*.json \
+    "$dir"/NamingSystem-*.json; do
+    [[ -e "$definition" ]] || continue
+    name="$(basename "$definition" .json)"
+    type="${name%%-*}"
+    id="${name#*-}"
+    case "$type" in
+      NamingSystem) path="fhir/sid" ;;
+      *) path="fhir/$type" ;;
+    esac
+    if [[ -e "$OUT/$path/$id" ]]; then
+      echo "assemble: two definitions are served at $path/$id" >&2
+      exit 1
+    fi
+    mkdir -p "$OUT/$path"
+    cp "$definition" "$OUT/$path/$id"
+    cp "$definition" "$OUT/$path/$id.json"
+  done
 done
 
 if [[ "${SITE_ROADMAP:-on}" == off ]]; then

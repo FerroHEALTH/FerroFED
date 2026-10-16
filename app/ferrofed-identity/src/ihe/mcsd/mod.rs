@@ -87,6 +87,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod definition;
 pub mod error;
 pub mod source;
 

@@ -50,6 +50,11 @@ tonic = { workspace = true, features = ["server", "router"] }
 # syslog over TLS with them.
 rcgen.workspace = true
 tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
+# The identifier systems, extensions and connection type the harness mCSD
+# directory writes its members with, as the FHIR form of the registry reads
+# them (#1072).
+ferrofed-identity = { workspace = true, features = ["ihe"] }
+ferrofed-registry.workspace = true
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
 # The canonical JSON writer the seed's EHR_STATUS is written with.
@@ -75,7 +80,6 @@ wiremock.workspace = true
 # check of the gateway and reads the registry's refusal before it admits a
 # candidate node (#91), and runs the gateway's node profile checks against
 # its CDR products over a node client (#93, #573).
-ferrofed-registry.workspace = true
 ferrofed-server.workspace = true
 # The gateway's own read-only stored queries, which the console's stored-query
 # view lists beside the deployment's (#776).

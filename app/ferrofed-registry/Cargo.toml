@@ -26,6 +26,7 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+fhir-types = { workspace = true, features = ["r4", "resources"] }
 jiff.workspace = true
 proptest.workspace = true
 # The health report read back from the JSON it is written as.

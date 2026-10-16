@@ -8,6 +8,7 @@
     reason = "the test seam: the fixtures build FHIR JSON as values"
 )]
 
+mod definition;
 mod equivalence;
 mod identifiers;
 mod native;
