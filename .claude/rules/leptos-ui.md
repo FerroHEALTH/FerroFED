@@ -73,7 +73,8 @@ the orchestrator, never made in a slice.
   this UI calls it. **Every server function is a `POST`**: the server's
   same-origin check passes safe methods, and the session cookie travels on a
   cross-site top-level `GET`, so a `GetUrl` server function would run for
-  any site. `tests/it/views.rs` holds every registered function to it.
+  any site. `tests/it/server_functions.rs` holds every registered function
+  to it.
 
 ## 1. Crate and build discipline
 

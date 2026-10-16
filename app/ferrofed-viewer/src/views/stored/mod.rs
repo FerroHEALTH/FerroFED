@@ -163,8 +163,19 @@ fn list_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView 
 pub fn StoredQueryPage() -> impl IntoView {
     let params = use_params_map();
     let query = use_query_map();
-    let name = move || params.read().get("name").unwrap_or_default();
-    let asked = move || (name(), query.read().get(VERSION));
+    // NOTE: the Leptos book, appendix_life_cycle, "Signals can be used after they are
+    // disposed"; the title is read after the route's owner can be gone, so a read
+    // tries the params and falls back to the value the page rendered with.
+    let rendered = params.with_untracked(|params| params.get("name").unwrap_or_default());
+    let name = move || {
+        params
+            .try_with(|params| params.get("name"))
+            .map_or_else(|| rendered.clone(), Option::unwrap_or_default)
+    };
+    let asked = {
+        let name = name.clone();
+        move || (name(), query.read().get(VERSION))
+    };
     let loaded = Resource::new_blocking(asked, |(name, version)| stored_query(name, version));
     view! {
         <Title text=move || titled(&name()) />
