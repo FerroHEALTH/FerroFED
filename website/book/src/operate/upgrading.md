@@ -229,3 +229,9 @@ to the security patch release of your line to get the fix
 The pending notes are the `*.upgrade.md` files under
 [`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d),
 which the next release lists under its Upgrade notes.
+
+Check before upgrading: a receiving member's template that admits several
+`COMPOSITION.category` codes and assumes none now refuses every received
+document of its category (`MissingRequiredSuffix` on `<root>/category|code`),
+where the composition took `event` before. Give the template's category an
+assumed value ([The template's category](../integrate/patient-summary.md#the-templates-category)).
