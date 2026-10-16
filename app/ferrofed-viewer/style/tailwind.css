@@ -11,149 +11,209 @@
 @import "tailwindcss" source(none);
 @source "../src/**/*.rs";
 
-/* The "Azure & Iron" palette (assets/brand/tokens.css). Azure and azure-light
-   are steps 700 and 300 of the scale below. */
-@theme {
-  --color-azure-50: #f0f9ff;
-  --color-azure-100: #e0f2fe;
-  --color-azure-300: #7dd3fc;
-  --color-azure-400: #38bdf8;
-  --color-azure-700: #0369a1;
-  --color-azure-800: #075985;
-  --color-azure-900: #0c4a6e;
-  --color-ink: #0f172a;
-  --color-mist: #f1f5f9;
-  --color-tile: #0b1020;
-  --color-surface-light: #f8fafc;
+/* The theme the operator chose is the server's `data-theme` on <html>:
+   `light`, `dark`, or `system`, which follows the operating system. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
 }
 
-/* The role layer: what a colour is for. A view names a role and never a
-   palette entry, so the palette is measured once and a theme is one block.
-   Each pairing a view draws meets WCAG 2.2 AA in both themes
+/* The role layer, from the "Azure & Iron" tokens of assets/brand/tokens.css:
+   the ground is `surface` in light and `tile` in dark, the text `ink` and
+   `mist`, the accent `azure` and `azure-light`. A view names a role and
+   never a palette entry, so the palette is measured once and a theme is one
+   block. Each pairing a view draws meets WCAG 2.2 AA in both themes
    (https://www.w3.org/TR/WCAG22/#contrast-minimum). */
 :root {
-  color-scheme: light dark;
-  --role-fg: #0f172a;
-  --role-fg-muted: #475569;
-  --role-surface: #f8fafc;
-  --role-raised: #ffffff;
-  --role-inset: #f1f5f9;
-  --role-line: #e2e8f0;
-  --role-line-strong: #cbd5e1;
+  color-scheme: light;
+  /* The top bar's height from `md` up, where it is one row and stays in
+     view: the navigation sits under it and the scroll padding keeps a
+     focused control out from under it (WCAG 2.2 SC 2.4.11). */
+  --bar: 3.5rem;
+  --surface: #f8fafc;
+  --raised: #ffffff;
+  --inset: #f1f5f9;
+  --head: #f8fafc;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
   /* The edge of a control, held to 3:1 against its ground
      (https://www.w3.org/TR/WCAG22/#non-text-contrast). */
-  --role-control: #64748b;
-  --role-accent: #0369a1;
-  --role-accent-fg: #ffffff;
-  --role-accent-soft: #f0f9ff;
-  --role-accent-soft-fg: #075985;
-  --role-ok-soft: #ecfdf5;
-  --role-ok-soft-fg: #14532d;
-  --role-warn-soft: #fffbeb;
-  --role-warn-soft-fg: #713f12;
-  --role-danger-soft: #fef2f2;
-  --role-danger-soft-fg: #7f1d1d;
+  --control: #64748b;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --accent: #0369a1;
+  --accent-hover: #075985;
+  --accent-fg: #ffffff;
+  --accent-tint: rgb(3 105 161 / 0.1);
+  --ok-bg: #ecfdf5;
+  --ok-fg: #047857;
+  --ok-dot: #10b981;
+  --warn-bg: #fffbeb;
+  --warn-fg: #b45309;
+  --warn-dot: #f59e0b;
+  --danger-bg: #fef2f2;
+  --danger-fg: #b91c1c;
+  --danger-dot: #ef4444;
+  --neutral-bg: #f1f5f9;
+  --neutral-fg: #334155;
+  --neutral-dot: #94a3b8;
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.04);
+  --scrim: rgb(2 6 23 / 0.4);
+}
+
+/* The dark block, written twice: once for an operator who chose dark, and
+   once for one who follows a system that asks for it. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #0b1020;
+  --raised: #0f172a;
+  --inset: #1e293b;
+  --head: #131c31;
+  --line: #1e293b;
+  --line-strong: #334155;
+  --control: #64748b;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #7dd3fc;
+  --accent-hover: #bae6fd;
+  --accent-fg: #0f172a;
+  --accent-tint: rgb(125 211 252 / 0.1);
+  --ok-bg: rgb(16 185 129 / 0.12);
+  --ok-fg: #6ee7b7;
+  --ok-dot: #34d399;
+  --warn-bg: rgb(245 158 11 / 0.12);
+  --warn-fg: #fcd34d;
+  --warn-dot: #fbbf24;
+  --danger-bg: rgb(239 68 68 / 0.12);
+  --danger-fg: #fca5a5;
+  --danger-dot: #f87171;
+  --neutral-bg: #1e293b;
+  --neutral-fg: #cbd5e1;
+  --neutral-dot: #94a3b8;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --scrim: rgb(2 6 23 / 0.7);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --role-fg: #f1f5f9;
-    --role-fg-muted: #cbd5e1;
-    --role-surface: #0b1020;
-    --role-raised: #0f172a;
-    --role-inset: #1e293b;
-    --role-line: #1e293b;
-    --role-line-strong: #334155;
-    --role-control: #94a3b8;
-    --role-accent: #7dd3fc;
-    --role-accent-fg: #0f172a;
-    --role-accent-soft: #0c4a6e;
-    --role-accent-soft-fg: #e0f2fe;
-    --role-ok-soft: #052e16;
-    --role-ok-soft-fg: #bbf7d0;
-    --role-warn-soft: #422006;
-    --role-warn-soft-fg: #fde68a;
-    --role-danger-soft: #450a0a;
-    --role-danger-soft-fg: #fecaca;
+  :root:not([data-theme="light"], [data-theme="dark"]) {
+    color-scheme: dark;
+    --surface: #0b1020;
+    --raised: #0f172a;
+    --inset: #1e293b;
+    --head: #131c31;
+    --line: #1e293b;
+    --line-strong: #334155;
+    --control: #64748b;
+    --ink: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #7dd3fc;
+    --accent-hover: #bae6fd;
+    --accent-fg: #0f172a;
+    --accent-tint: rgb(125 211 252 / 0.1);
+    --ok-bg: rgb(16 185 129 / 0.12);
+    --ok-fg: #6ee7b7;
+    --ok-dot: #34d399;
+    --warn-bg: rgb(245 158 11 / 0.12);
+    --warn-fg: #fcd34d;
+    --warn-dot: #fbbf24;
+    --danger-bg: rgb(239 68 68 / 0.12);
+    --danger-fg: #fca5a5;
+    --danger-dot: #f87171;
+    --neutral-bg: #1e293b;
+    --neutral-fg: #cbd5e1;
+    --neutral-dot: #94a3b8;
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --scrim: rgb(2 6 23 / 0.7);
   }
 }
 
 @theme inline {
-  --color-fg: var(--role-fg);
-  --color-muted: var(--role-fg-muted);
-  --color-surface: var(--role-surface);
-  --color-raised: var(--role-raised);
-  --color-inset: var(--role-inset);
-  --color-line: var(--role-line);
-  --color-line-strong: var(--role-line-strong);
-  --color-control: var(--role-control);
-  --color-accent: var(--role-accent);
-  --color-accent-fg: var(--role-accent-fg);
-  --color-accent-soft: var(--role-accent-soft);
-  --color-accent-soft-fg: var(--role-accent-soft-fg);
-
-  /* Six type steps, FerroTERM's: size carries the top two, weight the rest. */
-  --text-display: 1.75rem;
-  --text-display--line-height: 2.125rem;
-  --text-title: 1.25rem;
-  --text-title--line-height: 1.75rem;
-  --text-heading: 1rem;
-  --text-heading--line-height: 1.5rem;
-  --text-body: 0.9375rem;
-  --text-body--line-height: 1.4375rem;
-  --text-small: 0.8125rem;
-  --text-small--line-height: 1.1875rem;
-  --text-micro: 0.6875rem;
-  --text-micro--line-height: 1rem;
-
-  /* Four spacing steps on an 8-point grid, and nothing between them. */
-  --spacing-tight: 0.25rem;
-  --spacing-default: 0.5rem;
-  --spacing-loose: 1rem;
-  --spacing-section: 2rem;
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-inset: var(--inset);
+  --color-head: var(--head);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-control: var(--control);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-tint: var(--accent-tint);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-fg: var(--ok-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-scrim: var(--scrim);
+  --shadow-card: var(--shadow-card);
+  --radius-card: 0.5rem;
+  --radius-control: 0.375rem;
 }
 
 /* The views write plain semantic HTML, much of it rendered on the server and
    checked by tests as it stands, so the elements carry the design here and
-   the shell alone paints with utilities. */
+   the shell and the components paint with utilities. */
 @layer base {
+  html {
+    background: var(--surface);
+  }
+
+  @media (width >= 48rem) {
+    html {
+      scroll-padding-top: calc(var(--bar) + 0.5rem);
+    }
+  }
+
   body {
-    background: var(--role-surface);
-    color: var(--role-fg);
-    font-size: var(--text-body);
-    line-height: var(--text-body--line-height);
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
   }
 
   h1 {
-    margin-block-end: var(--spacing-loose);
-    font-size: var(--text-display);
-    line-height: var(--text-display--line-height);
+    font-size: 1.5rem;
+    line-height: 2rem;
     font-weight: 600;
   }
 
+  main h1 {
+    margin-block-end: 1rem;
+  }
+
   h2 {
-    margin-block: var(--spacing-section) var(--spacing-default);
-    font-size: var(--text-title);
-    line-height: var(--text-title--line-height);
-    font-weight: 500;
+    margin-block: 1.5rem 0.5rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
   }
 
   h3,
   h4 {
-    margin-block: var(--spacing-loose) var(--spacing-default);
-    font-size: var(--text-heading);
-    line-height: var(--text-heading--line-height);
+    margin-block: 1rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
     font-weight: 600;
   }
 
-  p,
-  ul,
-  ol,
-  dl,
-  pre,
-  table,
-  fieldset {
-    margin-block: var(--spacing-default) var(--spacing-loose);
+  main p,
+  main ul,
+  main ol,
+  main dl,
+  main pre,
+  main fieldset {
+    margin-block: 0.5rem 1rem;
   }
 
   main ul {
@@ -171,13 +231,17 @@
   }
 
   dd {
-    margin-inline-start: var(--spacing-loose);
+    margin-inline-start: 1rem;
   }
 
   a {
-    color: var(--role-accent);
+    color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  a:hover {
+    color: var(--accent-hover);
   }
 
   strong {
@@ -188,7 +252,7 @@
   pre,
   textarea {
     font-family: var(--font-mono);
-    font-size: var(--text-small);
+    font-size: 0.8125rem;
   }
 
   pre {
@@ -198,45 +262,51 @@
   }
 
   main > pre,
-  section > pre {
-    border: 1px solid var(--role-line);
-    border-radius: var(--radius-md);
-    background: var(--role-inset);
-    padding: var(--spacing-default);
+  section > pre,
+  main > div > pre {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--inset);
+    padding: 0.75rem;
   }
 
-  /* Tables: a caption above, a header row on an inset ground, a separator
-     under each row. */
+  /* Tables: a caption above, a header row on its own ground, a hairline
+     under each row; rows are about 40 px. */
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--text-body);
   }
 
   caption {
     caption-side: top;
-    padding-block-end: var(--spacing-default);
+    padding: 0.75rem 1rem;
     text-align: left;
-    font-size: var(--text-small);
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--role-fg-muted);
+    color: var(--ink);
   }
 
   th,
   td {
-    border-bottom: 1px solid var(--role-line);
-    padding: var(--spacing-default);
+    border-bottom: 1px solid var(--line);
+    padding: 0.625rem 1rem;
     text-align: left;
     vertical-align: top;
   }
 
   thead th {
-    border-bottom-color: var(--role-line-strong);
-    background: var(--role-inset);
-    font-size: var(--text-small);
+    border-bottom-color: var(--line);
+    background: var(--head);
+    font-size: 0.75rem;
     font-weight: 600;
-    color: var(--role-fg-muted);
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    color: var(--muted);
     white-space: nowrap;
+  }
+
+  tbody tr:last-child > * {
+    border-bottom: 0;
   }
 
   tbody th {
@@ -247,34 +317,43 @@
     margin: 0;
   }
 
-  /* Forms: a label above its field, a box around each group. */
+  /* Forms: a label above its field, a card around each group. */
   fieldset {
-    border: 1px solid var(--role-line-strong);
-    border-radius: var(--radius-lg);
-    background: var(--role-raised);
-    padding: var(--spacing-loose);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--raised);
+    box-shadow: var(--shadow-card);
+    padding: 1rem 1.25rem;
   }
 
+  /* The legend reads as the card's title, inside it rather than on its
+     edge. */
   legend {
-    padding-inline: var(--spacing-tight);
-    font-size: var(--text-small);
+    float: left;
+    width: 100%;
+    margin-block-end: 0.75rem;
+    padding: 0;
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--role-fg-muted);
+  }
+
+  legend + * {
+    clear: both;
   }
 
   label {
-    font-size: var(--text-small);
+    font-size: 0.875rem;
     font-weight: 500;
   }
 
   input:not([type="checkbox"], [type="radio"], [type="hidden"]),
   select,
   textarea {
-    border: 1px solid var(--role-control);
-    border-radius: var(--radius-md);
-    background: var(--role-raised);
-    padding: var(--spacing-tight) var(--spacing-default);
-    color: var(--role-fg);
+    border: 1px solid var(--control);
+    border-radius: var(--radius-control);
+    background: var(--raised);
+    padding: 0.375rem 0.625rem;
+    color: var(--ink);
   }
 
   label + input:not([type="checkbox"], [type="radio"]),
@@ -284,7 +363,7 @@
     display: block;
     box-sizing: border-box;
     width: 100%;
-    margin-block-start: var(--spacing-tight);
+    margin-block-start: 0.25rem;
   }
 
   label + input:not([type="checkbox"], [type="radio"]),
@@ -294,56 +373,53 @@
 
   :is(input:not([type="checkbox"], [type="radio"]), select, textarea) + label {
     display: inline-block;
-    margin-block-start: var(--spacing-default);
+    margin-block-start: 0.5rem;
   }
 
   input[type="checkbox"],
   input[type="radio"] {
-    margin-inline-end: var(--spacing-tight);
-    accent-color: var(--role-accent);
+    margin-inline-end: 0.25rem;
+    accent-color: var(--accent);
   }
 
   input[type="radio"] + label {
-    margin-inline-end: var(--spacing-loose);
+    margin-inline-end: 1rem;
   }
 
   button {
-    border-radius: var(--radius-md);
-    background: var(--role-accent);
-    padding: var(--spacing-tight) var(--spacing-loose);
-    font-size: var(--text-small);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
     font-weight: 500;
-    color: var(--role-accent-fg);
+    color: var(--accent-fg);
     cursor: pointer;
   }
 
+  button:hover {
+    background: var(--accent-hover);
+  }
+
   button:disabled {
-    border: 1px solid var(--role-control);
-    background: var(--role-inset);
-    color: var(--role-fg-muted);
+    border: 1px solid var(--line-strong);
+    background: var(--inset);
+    color: var(--muted);
     cursor: not-allowed;
   }
 
   /* A refusal or a fault the page reports, as words in a box. */
   [role="alert"] {
     border: 1px solid currentColor;
-    border-radius: var(--radius-md);
-    background: var(--role-danger-soft);
-    padding: var(--spacing-default) var(--spacing-loose);
-    color: var(--role-danger-soft-fg);
-  }
-
-  footer {
-    border-top: 1px solid var(--role-line);
-    padding: var(--spacing-loose);
-    font-size: var(--text-small);
-    color: var(--role-fg-muted);
+    border-radius: var(--radius-card);
+    background: var(--danger-bg);
+    padding: 0.625rem 1rem;
+    color: var(--danger-fg);
   }
 
   /* A visible focus indicator on every control, at 3:1 or more against each
      ground (https://www.w3.org/TR/WCAG22/#focus-appearance). */
   :focus-visible {
-    outline: 2px solid var(--role-accent);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 
@@ -365,57 +441,200 @@
      a solid edge for complete and a double one for incomplete. */
   .complete,
   .incomplete {
-    border-radius: var(--radius-md);
-    padding: var(--spacing-default) var(--spacing-loose);
+    border-radius: var(--radius-card);
+    padding: 0.625rem 1rem;
   }
 
   .complete {
     border: 1px solid currentColor;
     border-left-width: 0.25rem;
-    background: var(--role-ok-soft);
-    color: var(--role-ok-soft-fg);
+    background: var(--ok-bg);
+    color: var(--ok-fg);
   }
 
   [role="alert"].incomplete {
     border: 1px solid currentColor;
     border-left: 0.5rem double currentColor;
-    background: var(--role-warn-soft);
-    color: var(--role-warn-soft-fg);
+    background: var(--warn-bg);
+    color: var(--warn-fg);
   }
 
-  /* A cell holding a state word: the word carries the meaning, the tint of
-     the cell and its edge repeat it. */
-  .state {
-    border-left: 0.25rem solid currentColor;
-    font-weight: 600;
+  /* A tone: the ground, the text and the dot of a status, each repeating the
+     word it sits beside, never standing for it. */
+  .tone-ok {
+    --tone-bg: var(--ok-bg);
+    --tone-fg: var(--ok-fg);
+    --tone-dot: var(--ok-dot);
+  }
+
+  .tone-warn {
+    --tone-bg: var(--warn-bg);
+    --tone-fg: var(--warn-fg);
+    --tone-dot: var(--warn-dot);
+  }
+
+  .tone-danger {
+    --tone-bg: var(--danger-bg);
+    --tone-fg: var(--danger-fg);
+    --tone-dot: var(--danger-dot);
+  }
+
+  .tone-neutral {
+    --tone-bg: var(--neutral-bg);
+    --tone-fg: var(--neutral-fg);
+    --tone-dot: var(--neutral-dot);
+  }
+
+  .tone-accent {
+    --tone-bg: var(--accent-tint);
+    --tone-fg: var(--accent);
+    --tone-dot: var(--accent);
+  }
+
+  /* A status pill: a dot and a word on the tone's ground. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid color-mix(in srgb, var(--tone-fg) 25%, transparent);
+    border-radius: 9999px;
+    background: var(--tone-bg);
+    padding: 0.125rem 0.625rem;
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    font-weight: 500;
+    color: var(--tone-fg);
     white-space: nowrap;
   }
 
+  .pill::before {
+    content: "";
+    width: 0.4375rem;
+    height: 0.4375rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background: var(--tone-dot);
+  }
+
+  /* A badge: a word on the tone's ground, with no dot. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-control);
+    background: var(--tone-bg);
+    padding: 0 0.375rem;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    color: var(--tone-fg);
+    white-space: nowrap;
+  }
+
+  /* A cell holding a state word: the dot and the colour of the word repeat
+     what it says. */
+  .state {
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--tone-fg, var(--ink));
+  }
+
+  .state::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-inline-end: 0.375rem;
+    border-radius: 9999px;
+    background: var(--tone-dot, var(--neutral-dot));
+    vertical-align: 0.0625rem;
+  }
+
   .state-up {
-    background: var(--role-ok-soft);
-    color: var(--role-ok-soft-fg);
+    --tone-fg: var(--ok-fg);
+    --tone-dot: var(--ok-dot);
   }
 
   .state-failing {
-    background: var(--role-danger-soft);
-    color: var(--role-danger-soft-fg);
+    --tone-fg: var(--danger-fg);
+    --tone-dot: var(--danger-dot);
   }
 
   .state-unknown {
-    background: var(--role-warn-soft);
-    color: var(--role-warn-soft-fg);
+    --tone-fg: var(--warn-fg);
+    --tone-dot: var(--warn-dot);
+  }
+
+  /* The drawer the navigation is below `md`: a popover the menu button opens,
+     which the browser closes on Escape and returns the focus from. From `md`
+     up it is the column beside the page. */
+  .drawer:popover-open {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(18rem, 85vw);
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+  }
+
+  .drawer::backdrop {
+    background: var(--scrim);
+  }
+
+  @media (width >= 48rem) {
+    .drawer {
+      display: block;
+      position: sticky;
+      inset: var(--bar) auto auto auto;
+      align-self: flex-start;
+      width: 15rem;
+      height: calc(100dvh - var(--bar));
+      margin: 0;
+      overflow-y: auto;
+      border: 0;
+      border-right: 1px solid var(--line);
+    }
+  }
+
+  /* The operator menu: a popover under the top bar's far end. */
+  .menu:popover-open {
+    position: fixed;
+    inset: 6.5rem 1rem auto auto;
+    margin: 0;
+    min-width: 13rem;
+    max-width: calc(100vw - 2rem);
+  }
+
+  @media (width >= 48rem) {
+    .menu:popover-open {
+      inset-block-start: calc(var(--bar) + 0.25rem);
+    }
   }
 }
 
-/* A wide table scrolls inside its own box, so the page never scrolls
-   sideways at 320 px; the box takes the keyboard focus to scroll. */
+/* A wide table scrolls inside its own card, so the page never scrolls
+   sideways at 320 px, and a long one scrolls down under a header that stays;
+   the box takes the keyboard focus to scroll. */
 @utility table-scroll {
   max-width: 100%;
-  overflow-x: auto;
-  margin-block: var(--spacing-default) var(--spacing-loose);
+  max-height: min(70vh, 40rem);
+  overflow: auto;
+  margin-block: 0.5rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
 
   & > table {
     margin-block: 0;
+  }
+
+  & thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 }
 
@@ -424,13 +643,19 @@
 @utility brand-mark {
   display: inline-block;
   flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   background: center / contain no-repeat
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg stroke='%230369A1' stroke-width='4.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M3 32H16'/%3E%3Cpath d='M11 26.5 16.5 32 11 37.5' stroke-linejoin='round'/%3E%3Cpath d='M27 32 48 14M27 32H50M27 32 48 50'/%3E%3C/g%3E%3Ccircle cx='27' cy='32' r='8' fill='%230369A1'/%3E%3Cg fill='%237DD3FC'%3E%3Crect x='45' y='7' width='14' height='14' rx='3.5'/%3E%3Crect x='47' y='25' width='14' height='14' rx='3.5'/%3E%3Crect x='45' y='43' width='14' height='14' rx='3.5'/%3E%3C/g%3E%3C/svg%3E");
 
-  @media (prefers-color-scheme: dark) {
+  :root[data-theme="dark"] & {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg stroke='%2338BDF8' stroke-width='4.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M3 32H16'/%3E%3Cpath d='M11 26.5 16.5 32 11 37.5' stroke-linejoin='round'/%3E%3Cpath d='M27 32 48 14M27 32H50M27 32 48 50'/%3E%3C/g%3E%3Ccircle cx='27' cy='32' r='8' fill='%2338BDF8'/%3E%3Cg fill='%237DD3FC'%3E%3Crect x='45' y='7' width='14' height='14' rx='3.5'/%3E%3Crect x='47' y='25' width='14' height='14' rx='3.5'/%3E%3Crect x='45' y='43' width='14' height='14' rx='3.5'/%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"], [data-theme="dark"]) & {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg stroke='%2338BDF8' stroke-width='4.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M3 32H16'/%3E%3Cpath d='M11 26.5 16.5 32 11 37.5' stroke-linejoin='round'/%3E%3Cpath d='M27 32 48 14M27 32H50M27 32 48 50'/%3E%3C/g%3E%3Ccircle cx='27' cy='32' r='8' fill='%2338BDF8'/%3E%3Cg fill='%237DD3FC'%3E%3Crect x='45' y='7' width='14' height='14' rx='3.5'/%3E%3Crect x='47' y='25' width='14' height='14' rx='3.5'/%3E%3Crect x='45' y='43' width='14' height='14' rx='3.5'/%3E%3C/g%3E%3C/svg%3E");
+    }
   }
 }
 

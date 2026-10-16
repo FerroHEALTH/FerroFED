@@ -18,8 +18,19 @@ service worker or a URL.
 
 ## What is built
 
-- **A landing page** that names the console and offers sign-in, and a
-  navigation bar to the four operator views and the query console.
+- **A sign-in page and a shell.** A visitor reads a sign-in card. A
+  signed-in operator lands on a dashboard and reads every page in a shell: a
+  top bar with the gateway's status (`OPTIONS {base}/`), a light, dark and
+  system theme switch, and the operator's name, which opens a menu holding
+  Sign out; and a navigation grouped under Overview, Federation, Queries and
+  Gateway that marks the page you are on. On a narrow screen the navigation
+  is a drawer the Menu button opens. The theme is light until you choose
+  another; the console keeps your choice in a second `HttpOnly` cookie,
+  `ferrofed_viewer_theme`, which holds the word `light`, `dark` or `system`
+  and nothing else, for 400 days, and draws each page in it on the server.
+  The footer of every page names the product, its version and Cadasto B.V.,
+  and links the About page, which names the manufacturer in full with the
+  gateway the console reads.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
   code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
@@ -57,7 +68,8 @@ service worker or a URL.
   `offline_access = true` in `[oidc]` to ask for the `offline_access` scope
   and the `prompt=consent` it requires (OpenID Connect Core 1.0 §11), for a
   provider that issues a refresh token only then.
-- **Operator sign-out:** the navigation bar's "Sign out" button posts to
+- **Operator sign-out:** the "Sign out" button in the operator's menu,
+  which the operator's name in the top bar opens, posts to
   `POST /logout`, which ends the signed-in session on the console's server
   and removes the session cookie. Where `[oidc]` names the provider's
   `end_session_endpoint`, the console then redirects the browser there with

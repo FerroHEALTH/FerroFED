@@ -51,7 +51,9 @@ the orchestrator, never made in a slice.
   session storage, IndexedDB), no service worker, no cache (every page and
   every server function answer is `Cache-Control: no-store`, held by a
   test), and no URL. The operator's session is server-side
-  (`crate::session`); the browser carries one opaque `HttpOnly` cookie. An
+  (`crate::session`); the browser carries one opaque `HttpOnly` session
+  cookie, and a second `HttpOnly` cookie that holds the operator's theme
+  word (`light`, `dark` or `system`) and nothing else (`crate::theme`). An
   access token, a client secret, or a PKCE verifier never reaches a signal,
   a prop, a serialized resource, the page HTML, or a log.
   A secret the operator types for the gateway (a credential set through the
@@ -434,6 +436,24 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   the bundle to 254426 bytes, 578 below the tree without the boxes. The brand
   mark is a background the stylesheet draws, since an inline SVG brings the
   SVG rendering (§13). A tinted cell for a state word cost about 1 KB.
+- **The redesign's shell (#1075) measured 303998 bytes** brotli-compressed
+  (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Tailwind CSS
+  4.3.3), 49572 more than the 254426 of the tree it was built on. Each part
+  was measured by building without it, against the 316760 of the shell with
+  its pages hydrated: the Lucide icons about 5.7 KB; the router's links that
+  mark the current page (`<A>`) 3481; the theme switch's `ServerAction`, its
+  `Outcome<()>` and the notice of a choice not kept 3956; the gateway pill's
+  rendering 1547, while its resource's server function call costs nothing
+  measurable beside the decoding every resource carries; and the sign-in,
+  the dashboard and the About page 13647. Those three pages are static, so
+  the server now renders their markup and the page shows that HTML, as the
+  admin actions' fields are shown, which saved 12762, and every link to
+  them is a full load (`rel="external"`), since a client navigation would
+  have no markup to show. The rest is the shell's own drawing: the top bar,
+  the grouped navigation, the operator's menu, the theme state and the
+  empty states. The drawer and the operator's menu are HTML popovers, so
+  the browser opens and closes them and the bundle carries only the focus
+  move and the close on a followed link.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

@@ -271,8 +271,8 @@ jobs:
           # labels name this tag's copies release.yml attaches, so they are
           # set here alone.
           labels: |
-            org.opencontainers.image.title=FerroFED operator console
-            org.opencontainers.image.description=The FerroFED operator console: a web client of the gateway's public surface
+            org.opencontainers.image.title=FerroFED Console
+            org.opencontainers.image.description=The FerroFED Console: a web client of the gateway's public surface
             org.opencontainers.image.url=https://ferrofed.eu
             org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/operator-console.html
             org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED
@@ -283,8 +283,8 @@ jobs:
             eu.ferrofed.instructions-for-use=https://github.com/FerroHEALTH/FerroFED/releases/download/${{ inputs.tag }}/ferrofed-${{ inputs.tag }}-instructions-for-use.md
             org.opencontainers.image.licenses=BUSL-1.1
           annotations: |
-            org.opencontainers.image.title=FerroFED operator console
-            org.opencontainers.image.description=The FerroFED operator console: a web client of the gateway's public surface
+            org.opencontainers.image.title=FerroFED Console
+            org.opencontainers.image.description=The FerroFED Console: a web client of the gateway's public surface
             org.opencontainers.image.url=https://ferrofed.eu
             org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/operator-console.html
             org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED

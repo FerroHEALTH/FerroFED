@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The FerroFED operator console image: one static binary and its site bundle
+# The FerroFED Console image: one static binary and its site bundle
 # on distroless static, per platform. Nothing is compiled here. The release
 # lane builds the musl binaries and the site bundle and stages them under
 # dist/viewer/ before this file is built for linux/amd64 and linux/arm64
@@ -54,8 +54,8 @@ CMD ["serve"]
 # Build-independent labels only. The release lane sets the version, revision
 # and created labels at build time, and eu.ferrofed.information-sheet and
 # eu.ferrofed.instructions-for-use, the URLs of the release's two copies.
-LABEL org.opencontainers.image.title="FerroFED operator console" \
-      org.opencontainers.image.description="The FerroFED operator console: a web client of the gateway's public surface" \
+LABEL org.opencontainers.image.title="FerroFED Console" \
+      org.opencontainers.image.description="The FerroFED Console: a web client of the gateway's public surface" \
       org.opencontainers.image.url="https://ferrofed.eu" \
       org.opencontainers.image.documentation="https://ferrofed.eu/docs/operate/operator-console.html" \
       org.opencontainers.image.source="https://github.com/FerroHEALTH/FerroFED" \

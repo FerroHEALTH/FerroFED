@@ -13,8 +13,8 @@
 //! This file is the one place those details are written. The gateway's
 //! `GET {base}/` and `OPTIONS {base}/`, its startup banner and `--version`
 //! read [`MANUFACTURER`] from this module, and the operator console compiles
-//! this same file for its footer, on the server and in the browser, since
-//! the browser half links no FerroFED crate. The container image labels
+//! this same file for its footer and its About page, on the server and in
+//! the browser, since the browser half links no FerroFED crate. The container image labels
 //! repeat the values, and a test holds them to this file.
 
 /// The manufacturer of an EHR system, as Art 30(1)(g) asks it to be named.

@@ -16,7 +16,7 @@
 use leptos::prelude::*;
 
 use crate::views::model::{
-    FederationView, IntegrityView, MembersView, Outcome, StoredView, ViewError,
+    FederationView, GatewayView, IntegrityView, MembersView, Outcome, StoredView, ViewError,
 };
 
 /// Loads the members view: `OPTIONS {base}/` and the health of every member
@@ -98,6 +98,25 @@ pub async fn federation() -> Result<Outcome<FederationView>, ViewError> {
     .await
 }
 
+/// Loads what the top bar says of the gateway: its self-description,
+/// `OPTIONS {base}/`, read as the operator.
+///
+/// # Errors
+/// As [`members`].
+#[server(endpoint = "gateway")]
+pub async fn gateway_status() -> Result<Outcome<GatewayView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let description = state
+            .gateway()
+            .self_description(&token)
+            .await
+            .map_err(|error| server::stopped(&error, server::Asked::Status))?;
+        Ok(server::gateway(&description))
+    })
+    .await
+}
+
 /// The server half of the views: the session check, the split of a failed
 /// gateway call into a refusal or a fault, and the mapping of the gateway's
 /// bodies onto the view models.
@@ -117,8 +136,8 @@ pub mod server {
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
-        ClearedRow, FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, Outcome,
-        PAGE_SIZE, Refusal, RouteRow, StoredRow, StoredView, ViewError,
+        ClearedRow, FederationView, GatewayView, IncidentRow, IntegrityView, MemberRow,
+        MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, StoredRow, StoredView, ViewError,
     };
 
     /// Why a server function stops short of its view: an expected refusal,
@@ -187,11 +206,29 @@ pub mod server {
         Ok((state, AccessToken::new(token)))
     }
 
+    /// The name of the operator of the request's live signed-in session, as
+    /// the provider gave it.
+    #[must_use]
+    pub fn operator() -> Option<String> {
+        let state = use_context::<ViewerState>()?;
+        let parts = use_context::<http::request::Parts>()?;
+        let id = crate::oidc::cookie_named(
+            &parts.headers,
+            &state.sessions().cookie_name(crate::session::COOKIE),
+        )?;
+        // NOTE: no specification governs this: our own design; a store that
+        // cannot be read names no operator, and the session check of every
+        // page and server function reports that fault itself.
+        state.sessions().operator(&id).ok().flatten()
+    }
+
     /// What a failed gateway call asked for, as its log line names it.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Asked<'a> {
         /// A view's read of the gateway.
         View,
+        /// The top bar's read of the gateway's status.
+        Status,
         /// An operator's AQL or stored query through the gateway.
         Query,
         /// An operator's action at a replica's admin listener.
@@ -246,6 +283,10 @@ pub mod server {
                     %status,
                     "the gateway answered a view with a body this console cannot read"
                 ),
+                Asked::Status => tracing::error!(
+                    %status,
+                    "the gateway answered the status read with a body this console cannot read"
+                ),
                 Asked::Query => tracing::error!(
                     %status,
                     "the gateway answered a query with a body this console cannot read"
@@ -270,6 +311,13 @@ pub mod server {
             match asked {
                 Asked::View => {
                     tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
+                }
+                Asked::Status => {
+                    tracing::warn!(
+                        %status,
+                        code = code.as_deref(),
+                        "the gateway refused the status read"
+                    );
                 }
                 Asked::Query => {
                     tracing::warn!(%status, code = code.as_deref(), "the gateway refused a query");
@@ -298,6 +346,12 @@ pub mod server {
             match asked {
                 Asked::View => {
                     tracing::error!(error = %error, "the gateway could not be reached for a view");
+                }
+                Asked::Status => {
+                    tracing::error!(
+                        error = %error,
+                        "the gateway could not be reached for the status read"
+                    );
                 }
                 Asked::Query => {
                     tracing::error!(error = %error, "the gateway could not be reached for a query");
@@ -493,6 +547,15 @@ pub mod server {
         PageRequest {
             offset,
             limit: PAGE_SIZE,
+        }
+    }
+
+    /// What the top bar says of the gateway that answered `description`.
+    #[must_use]
+    pub fn gateway(description: &OptionsRoot) -> GatewayView {
+        GatewayView {
+            spec_version: description.federation.spec_version.to_string(),
+            federation: description.federation.id.to_string(),
         }
     }
 

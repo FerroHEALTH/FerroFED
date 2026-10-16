@@ -123,6 +123,7 @@ impl Running {
             expires_in: None,
             refresh_token: None,
             id_token: None,
+            operator: None,
         })?;
         let console = TcpListener::bind("127.0.0.1:0").await?;
         let console_address = console.local_addr()?;

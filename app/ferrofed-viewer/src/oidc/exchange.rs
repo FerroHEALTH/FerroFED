@@ -131,6 +131,20 @@ struct IdTokenClaims {
     aud: Audience,
     nonce: Option<String>,
     azp: Option<String>,
+    name: Option<String>,
+    preferred_username: Option<String>,
+}
+
+impl IdTokenClaims {
+    /// The operator's name the console shows: `name`, else
+    /// `preferred_username` (OpenID Connect Core 1.0 §5.1).
+    fn operator(self) -> Option<String> {
+        [self.name, self.preferred_username]
+            .into_iter()
+            .flatten()
+            .map(|name| name.trim().to_owned())
+            .find(|name| !name.is_empty())
+    }
 }
 
 /// An ID Token's `aud`: one string, or an array (OpenID Connect Core 1.0
@@ -171,12 +185,13 @@ pub async fn exchange(
     ];
     let tokens = token_request(client, oidc, &grant).await?;
     let id_token = tokens.id_token.ok_or(ExchangeError::NoIdToken)?;
-    verify_id_token(client, oidc, pending, &id_token).await?;
+    let operator = verify_id_token(client, oidc, pending, &id_token).await?;
     Ok(SignedIn {
         access_token: SecretString::from(tokens.access_token),
         expires_in: tokens.expires_in.map(Duration::from_secs),
         refresh_token: tokens.refresh_token.map(SecretString::from),
         id_token: Some(SecretString::from(id_token)),
+        operator,
     })
 }
 
@@ -247,13 +262,14 @@ fn grant_form(oidc: &OidcSettings, grant: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// Checks `id_token` against the provider's keys and `pending`.
+/// Checks `id_token` against the provider's keys and `pending`, and returns
+/// the operator's name it carries.
 async fn verify_id_token(
     client: &reqwest::Client,
     oidc: &OidcSettings,
     pending: &PendingSignIn,
     id_token: &str,
-) -> Result<(), ExchangeError> {
+) -> Result<Option<String>, ExchangeError> {
     let header = jsonwebtoken::decode_header(id_token).map_err(|_unreadable| ExchangeError::Key)?;
     if !ALGORITHMS.contains(&header.alg) {
         return Err(ExchangeError::Key);
@@ -293,7 +309,7 @@ async fn verify_id_token(
     }
     // NOTE: OpenID Connect Core 1.0 §3.1.3.7 item 11: the `nonce` must be the
     // one the authorization request sent, so a replayed ID Token is refused.
-    let nonce = claims.nonce.ok_or(ExchangeError::Nonce)?;
+    let nonce = claims.nonce.as_deref().ok_or(ExchangeError::Nonce)?;
     if aws_lc_rs::constant_time::verify_slices_are_equal(
         nonce.as_bytes(),
         pending.nonce().as_bytes(),
@@ -302,7 +318,7 @@ async fn verify_id_token(
     {
         return Err(ExchangeError::Nonce);
     }
-    Ok(())
+    Ok(claims.operator())
 }
 
 /// Reads the provider's JWK Set.

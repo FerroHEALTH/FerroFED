@@ -17,7 +17,7 @@ use thirtyfour::By;
 
 use crate::journeys::browser::{until, with_browser};
 use crate::journeys::journeys_enabled;
-use crate::journeys::provider::{CLIENT_ID, END_SESSION};
+use crate::journeys::provider::{CLIENT_ID, END_SESSION, OPERATOR};
 use crate::journeys::sign_in::{sign_in, signed_out_shell};
 use crate::journeys::stack::Stack;
 
@@ -37,8 +37,19 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
             .await?
             .ok_or("the session cookie")?;
 
+        // The sign-out sits in the operator's menu, which the button with the
+        // operator's name opens.
         browser
-            .element(By::XPath("//header//form//button[. = 'Sign out']"))
+            .element(By::XPath(format!(
+                "//header//button[@popovertarget = 'operator-menu'][contains(., '{OPERATOR}')]"
+            )))
+            .await?
+            .click()
+            .await?;
+        browser
+            .element(By::XPath(
+                "//header//form//button[normalize-space(.) = 'Sign out']",
+            ))
             .await?
             .click()
             .await?;
@@ -47,7 +58,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
         })
         .await?;
         browser.at(&stack.url("/")).await?;
-        browser.titled(PRODUCT).await?;
+        browser.titled(&format!("Sign in · {PRODUCT}")).await?;
         signed_out_shell(browser).await?;
 
         let ended = stack.provider().requests_at(END_SESSION).await?;

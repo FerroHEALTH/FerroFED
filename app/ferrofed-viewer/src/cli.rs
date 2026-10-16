@@ -29,7 +29,7 @@ pub static LONG_VERSION: LazyLock<String> =
     name = "ferrofed-viewer",
     version,
     long_version = LONG_VERSION.as_str(),
-    about = "The FerroFED operator console"
+    about = "The FerroFED Console"
 )]
 pub struct Cli {
     /// The configuration file to read, overriding `FERROFED_VIEWER_CONFIG`.

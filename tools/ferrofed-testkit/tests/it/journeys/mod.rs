@@ -26,6 +26,7 @@ mod configure_import;
 mod provider;
 mod query;
 mod reflow;
+mod shell;
 mod sign_in;
 mod sign_out;
 mod stack;

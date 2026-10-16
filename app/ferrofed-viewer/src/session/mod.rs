@@ -3,9 +3,9 @@
 
 //! The operator's sign-in state, held on the server in two separate pools.
 //!
-//! The browser carries opaque, random ids in `HttpOnly` cookies and nothing
-//! else; every fact behind them stays in this process (RFC 6749 §10.12,
-//! RFC 7636 §4.1).
+//! The browser carries opaque, random ids in `HttpOnly` cookies, and the
+//! operator's theme word in one more, and nothing else; every fact behind
+//! the ids stays in this process (RFC 6749 §10.12, RFC 7636 §4.1).
 //!
 //! - **Sign-ins** are the pre-login state of `GET /login`: the `state`, the
 //!   OpenID Connect `nonce` and the PKCE verifier. They live for a short
@@ -45,6 +45,10 @@ pub const COOKIE: &str = "ferrofed_viewer_session";
 /// The name of the short-lived cookie that carries a pending sign-in, under
 /// the `__Host-` prefix when the cookie is `Secure`.
 pub const SIGN_IN_COOKIE: &str = "ferrofed_viewer_sign_in";
+
+/// The name of the cookie that carries the operator's theme choice, under
+/// the `__Host-` prefix when the cookie is `Secure`.
+pub const THEME_COOKIE: &str = "ferrofed_viewer_theme";
 
 /// The cookie name prefix that binds a cookie to the host that set it.
 ///
@@ -199,6 +203,8 @@ struct Session {
     refresh_gate: Arc<tokio::sync::Mutex<()>>,
     /// The ID Token of the sign-in, the hint a sign-out sends the provider.
     id_token: Option<SecretString>,
+    /// The operator's name as the provider gave it, which the top bar shows.
+    operator: Option<String>,
 }
 
 /// What a completed sign-in leaves the session.
@@ -216,12 +222,16 @@ pub struct SignedIn {
     pub refresh_token: Option<SecretString>,
     /// The verified ID Token of the sign-in.
     pub id_token: Option<SecretString>,
+    /// The operator's name, from the verified ID Token's `name` or
+    /// `preferred_username` claim (OpenID Connect Core 1.0 §5.1).
+    pub operator: Option<String>,
 }
 
 impl fmt::Debug for SignedIn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SignedIn")
             .field("expires_in", &self.expires_in)
+            .field("operator", &self.operator)
             .finish_non_exhaustive()
     }
 }
@@ -365,6 +375,7 @@ impl Sessions {
                 refresh_token: signed_in.refresh_token,
                 refresh_gate: Arc::default(),
                 id_token: signed_in.id_token,
+                operator: signed_in.operator,
             },
         );
         Ok(id)
@@ -393,6 +404,22 @@ impl Sessions {
             store.sessions.remove(id);
             Ok(None)
         }
+    }
+
+    /// The name of the operator of the live signed-in session `id`, as the
+    /// provider gave it; `None` for a session that is not live, or whose
+    /// provider gave no name.
+    ///
+    /// # Errors
+    /// Returns [`SessionError::Poisoned`] when the store is unusable.
+    pub fn operator(&self, id: &SessionId) -> Result<Option<String>, SessionError> {
+        let now = Instant::now();
+        let store = self.lock()?;
+        Ok(store
+            .sessions
+            .get(id)
+            .filter(|session| live(&self.settings, session, now))
+            .and_then(|session| session.operator.clone()))
     }
 
     /// How many entries each pool holds.
@@ -485,6 +512,7 @@ mod tests {
             expires_in: None,
             refresh_token: None,
             id_token: Some(SecretString::from("synthetic-id-token")),
+            operator: Some(String::from("Synthetic Operator")),
         }
     }
 
@@ -639,7 +667,10 @@ mod tests {
             session.as_str()
         );
         let service = crate::server::router(state);
-        for path in ["/", "/no/such/page", "/members"] {
+        let paths = ["/", "/no/such/page"]
+            .into_iter()
+            .chain(crate::views::PATHS);
+        for path in paths {
             let request = http::Request::get(path)
                 .header("cookie", &cookie)
                 .body(axum::body::Body::empty())
@@ -654,7 +685,7 @@ mod tests {
                 .await
                 .expect("the body");
             let body = String::from_utf8(body.to_vec()).expect("UTF-8");
-            assert!(body.contains(r#"<p role="alert">"#), "{path}: {body}");
+            assert!(body.contains(r#"<p role="alert""#), "{path}: {body}");
             assert!(body.contains("session store"), "{path}: {body}");
             assert!(!body.contains(r#"href="/login""#), "{path}: {body}");
             assert!(!body.contains("<nav"), "{path}: {body}");

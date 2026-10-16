@@ -1,20 +1,25 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The page tree the server renders and the browser hydrates: the document
-//! shell, the landing page, the page for a path the console does not serve,
-//! and the footer every page carries.
+//! The page tree the server renders and the browser hydrates.
+//!
+//! It holds the document in the operator's theme, the shell a signed-in
+//! operator reads, the centred pages a visitor reads, the routes, and the
+//! pages for a path the console does not serve and for a session store it
+//! cannot read.
 
+use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::{SsrMode, path};
 
-use crate::manufacturer::MANUFACTURER;
-use crate::{shell, styles, views};
+use crate::components::{empty_state, icon};
+use crate::theme::Theme;
+use crate::{about, home, shell, styles, views};
 
 /// The product name as an operator reads it.
-pub const PRODUCT: &str = "FerroFED operator console";
+pub const PRODUCT: &str = "FerroFED Console";
 
 /// The product version the footer names.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -25,13 +30,19 @@ pub const SIGN_IN: &str = "/login";
 /// The path of the sign-out route the server serves.
 pub const SIGN_OUT: &str = "/logout";
 
-/// The whole HTML document the server renders around [`App`].
+/// The path of the About page, which every page's footer links to.
+pub const ABOUT: &str = "/about";
+
+/// The whole HTML document the server renders around [`App`], in the theme
+/// the request's cookie names, so the page arrives in it before any script
+/// runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn shell(options: LeptosOptions) -> impl IntoView {
+    let theme = crate::theme::server::requested().key();
     view! {
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="en" data-theme=theme>
             <head>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -46,148 +57,195 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
     }
 }
 
-/// The root component: the stylesheet, the document title and the routes.
+/// The root component: the stylesheet, the document title, and the shell
+/// the request's session is drawn in.
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
     // NOTE: the Leptos book, `ssr/22_life_cycle`: a value the server decides reaches
-    // the hydrating page serialized, so both halves draw the same navigation.
+    // the hydrating page serialized, so both halves draw the same shell.
     let administered = *SharedValue::new_str(administered);
     let session = *SharedValue::new_str(session_state);
-    let signed_in = session == SessionState::SignedIn;
-    let sidebar = signed_in.then(|| shell::sidebar(administered));
-    let unreadable = (session == SessionState::Unreadable).then(unreadable);
+    let theme = *SharedValue::new_str(theme_requested);
+    let gateway = SharedValue::new_str(gateway_base).into_inner();
+    let bar = (session == SessionState::SignedIn).then(|| shell::Bar {
+        operator: SharedValue::new_str(operator_name).into_inner(),
+        theme: RwSignal::new(theme),
+        gateway: Resource::new_blocking(|| (), |()| views::load::gateway_status()),
+    });
     view! {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
-        <Router>
-            <div class=styles::PAGE>
-                {shell::topbar(signed_in)}
-                <div class=styles::BODY>
-                    {sidebar} <main class=styles::MAIN>
-                        <div class=styles::COLUMN>
-                            {unreadable}
-                            // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills
-                            // renders `Async`, whole in one sweep, so no content waits on a script.
-                            <Routes fallback=NotFound>
-                                <Route path=path!("/") view=move || view! { <Landing session /> } />
-                                <Route
-                                    path=path!("/members")
-                                    view=views::MembersPage
-                                    ssr=SsrMode::Async
-                                />
-                                <Route
-                                    path=path!("/integrity")
-                                    view=views::IntegrityPage
-                                    ssr=SsrMode::Async
-                                />
-                                <Route
-                                    path=path!("/stored-queries")
-                                    view=views::StoredQueriesPage
-                                    ssr=SsrMode::Async
-                                />
-                                <Route
-                                    path=path!("/federation")
-                                    view=views::FederationPage
-                                    ssr=SsrMode::Async
-                                />
-                                <Route
-                                    path=path!("/query")
-                                    view=crate::query::QueryPage
-                                    ssr=SsrMode::Async
-                                />
-                                <Route
-                                    path=path!("/configuration")
-                                    view=crate::configure::ConfigurationPage
-                                    ssr=SsrMode::Async
-                                />
-                            </Routes>
-                        </div>
-                    </main>
-                </div> <Footer />
-            </div>
-        </Router>
+        <Router>{layout(session, bar, administered, gateway)}</Router>
     }
 }
 
-/// The footer of every page: the product, its version and its manufacturer,
-/// named in the system as Regulation (EU) 2025/327 Art 30(1)(g) asks.
-#[component]
-fn Footer() -> impl IntoView {
+/// The page for a request whose session is `session`: the shell of a
+/// signed-in operator with its `bar`, or the page alone for a visitor and
+/// for a session store the console cannot read.
+///
+/// It is built inside the router, whose context the routes and the
+/// navigation's links read.
+fn layout(
+    session: SessionState,
+    bar: Option<shell::Bar>,
+    administered: bool,
+    gateway: String,
+) -> AnyView {
+    // NOTE: leptos_axum, `generate_route_list`: the server lists its routes by
+    // rendering the app with no request, so every shell draws the same routes.
+    match bar {
+        Some(bar) => signed_in(bar, administered, routes(session, gateway)).into_any(),
+        None => visitor(routes(session, gateway)).into_any(),
+    }
+}
+
+/// The shell of a signed-in operator: the top bar, the navigation beside
+/// the page, and the footer.
+fn signed_in(bar: shell::Bar, administered: bool, routes: AnyView) -> impl IntoView {
     view! {
-        <footer>
-            <p>
-                {PRODUCT} " v" {VERSION} ". Manufactured by " {MANUFACTURER.name} ", "
-                {MANUFACTURER.postal_address} ". Contact: "
-                <a href=format!("mailto:{}", MANUFACTURER.email)>{MANUFACTURER.email}</a> ", "
-                <a href=MANUFACTURER.website>{MANUFACTURER.website}</a> "."
-            </p>
-        </footer>
+        <div class=styles::PAGE>
+            <a
+                href="#main"
+                class="sr-only rounded-control bg-raised px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
+            >
+                "Skip to the page"
+            </a>
+            {shell::topbar(bar)}
+            <div class=styles::BODY>
+                {shell::sidebar(administered)} <main id="main" class=styles::MAIN>
+                    <div class=styles::COLUMN>{routes}</div>
+                </main>
+            </div>
+            {shell::footer()}
+        </div>
     }
 }
 
-/// The notice a page carries when the console cannot read its session store,
-/// in place of the sign-in a visitor would be offered.
+/// The shell of a visitor: the page alone, and the footer.
+fn visitor(page: AnyView) -> impl IntoView {
+    view! {
+        <div class=styles::PAGE>
+            <main id="main" class="flex flex-1 flex-col px-4 py-8">
+                {page}
+            </main>
+            {shell::footer()}
+        </div>
+    }
+}
+
+/// The routes, for a request whose session is `session`; `gateway` is the
+/// gateway's `{base}` the About page shows a signed-in operator.
+fn routes(session: SessionState, gateway: String) -> AnyView {
+    // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills
+    // renders `Async`, whole in one sweep, so no content waits on a script.
+    view! {
+        <Routes fallback=move || {
+            if session == SessionState::Unreadable {
+                Either::Left(unreadable())
+            } else {
+                Either::Right(view! { <NotFound /> })
+            }
+        }>
+            <Route
+                path=path!("/")
+                view=move || match session {
+                    SessionState::SignedIn => EitherOf3::A(view! { <home::DashboardPage /> }),
+                    SessionState::SignedOut => EitherOf3::B(view! { <home::SignInPage /> }),
+                    SessionState::Unreadable => EitherOf3::C(unreadable()),
+                }
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/about")
+                view=move || view! { <about::AboutPage gateway=gateway.clone() /> }
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/members")
+                view=guarded(session, views::MembersPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/integrity")
+                view=guarded(session, views::IntegrityPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/stored-queries")
+                view=guarded(session, views::StoredQueriesPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/federation")
+                view=guarded(session, views::FederationPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/query")
+                view=guarded(session, crate::query::QueryPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/configuration")
+                view=guarded(session, crate::configure::ConfigurationPage)
+                ssr=SsrMode::Async
+            />
+        </Routes>
+    }
+    .into_any()
+}
+
+/// The view `page` for a request whose session is `session`, or the
+/// unreadable store's page when the console cannot read its session store,
+/// so a view never answers that fault with its own generic notice.
+fn guarded<V>(session: SessionState, page: fn() -> V) -> impl Fn() -> AnyView + Clone + Send + Sync
+where
+    V: IntoView + 'static,
+{
+    move || {
+        if session == SessionState::Unreadable {
+            unreadable().into_any()
+        } else {
+            page().into_any()
+        }
+    }
+}
+
+/// The page a visitor reads when the console cannot read its session store:
+/// it cannot tell whether they are signed in, so it offers neither the
+/// sign-in nor the views, and answers `500`.
 fn unreadable() -> impl IntoView {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
         response.set_status(http::StatusCode::INTERNAL_SERVER_ERROR);
     }
-    view! {
-        <p role="alert">
-            "The console cannot read its session store, so it cannot tell whether you are "
-            "signed in: 500. Ask the console's operator to restart it."
+    let again = view! {
+        <a href="/" rel="external" class=styles::BUTTON_SECONDARY>
+            {icon(icondata_lu::LuRotateCw, "16")}
+            "Try again"
+        </a>
+    };
+    let body = view! {
+        <p role="alert" class=styles::EMPTY_BODY>
+            "500: the console cannot read its session store, so it cannot tell whether you "
+            "are signed in. Ask the console's operator to restart it."
         </p>
-    }
-}
-
-/// The landing page: what the console is, and the way to sign in, or for a
-/// signed-in operator what the navigation leads to.
-#[component]
-fn Landing(
-    /// What the server knows of the request's session.
-    session: SessionState,
-) -> impl IntoView {
-    let next = if session == SessionState::Unreadable {
-        ().into_any()
-    } else if session == SessionState::SignedIn {
-        view! {
-            <p>
-                "The navigation leads to the members and their health, the integrity incidents "
-                "and the creating_system_id routing table, the stored queries, the gateway's "
-                "self-description, and the query console, which runs an AQL or a stored query "
-                "through the gateway and shows every node's status beside the rows."
-            </p>
-        }
-        .into_any()
-    } else {
-        view! {
-            <p>
-                "Sign in to see the members and their health, the integrity incidents and the "
-                "creating_system_id routing table, the stored queries, the gateway's "
-                "self-description, and the query console."
-            </p>
-            <p>
-                // The sign-in route is the server's, so the client router must not
-                // take the click once the page has hydrated.
-                <a href=SIGN_IN rel="external">
-                    "Sign in"
-                </a>
-            </p>
-        }
-        .into_any()
     };
     view! {
-        <h1>{PRODUCT}</h1>
-        <p>
-            "The console shows an operator the state of a FerroFED federation through the "
-            "gateway's own public surface. It holds no clinical data."
-        </p>
-        {next}
+        <Title text=views::titled("Fault") />
+        <div class=styles::CENTRED>
+            {empty_state(
+                icondata_lu::LuServerCrash,
+                "The console cannot read its sessions",
+                body,
+                again,
+            )}
+        </div>
     }
 }
 
-/// The page for a path the console does not serve.
+/// The page for a path the console does not serve: `404`, and the way back.
 #[component]
 fn NotFound() -> impl IntoView {
     // NOTE: RFC 9110 §15.6: an unreadable session store is the server's own
@@ -204,12 +262,19 @@ fn NotFound() -> impl IntoView {
             response.set_status(http::StatusCode::NOT_FOUND);
         }
     }
+    let back = view! {
+        <a href="/" rel="external" class=styles::BUTTON_PRIMARY>
+            {icon(icondata_lu::LuArrowLeft, "16")}
+            "Back to the console"
+        </a>
+    };
+    let body =
+        view! { <p class=styles::EMPTY_BODY>"404: the console has no page at this address."</p> };
     view! {
-        <Title text=format!("Not found · {PRODUCT}") />
-        <h1>"Not found"</h1>
-        <p>
-            <a href="/">"Back to the console"</a>
-        </p>
+        <Title text=views::titled("Not found") />
+        <div class=styles::CENTRED>
+            {empty_state(icondata_lu::LuCompass, "Not found", body, back)}
+        </div>
     }
 }
 
@@ -226,6 +291,57 @@ fn administered() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
         true
+    }
+}
+
+/// The theme the request's cookie names.
+fn theme_requested() -> Theme {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::theme::server::requested()
+    }
+    // NOTE: the browser reads the value the server decided; this runs only if
+    // that value is missing, and then marks the theme that follows the system.
+    #[cfg(target_arch = "wasm32")]
+    {
+        Theme::default()
+    }
+}
+
+/// The name the top bar shows for a signed-in operator: the provider's name
+/// for them, or `Operator` when it gave none.
+fn operator_name() -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        views::load::server::operator().unwrap_or_else(|| String::from(OPERATOR))
+    }
+    // NOTE: the browser reads the value the server decided; this runs only if
+    // that value is missing, and then shows the word a nameless sign-in shows.
+    #[cfg(target_arch = "wasm32")]
+    {
+        String::from(OPERATOR)
+    }
+}
+
+/// The word the top bar shows for an operator the provider gave no name.
+const OPERATOR: &str = "Operator";
+
+/// The gateway's `{base}`, which the About page shows a signed-in operator,
+/// and empty for a visitor.
+fn gateway_base() -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let signed_in = session_state() == SessionState::SignedIn;
+        use_context::<crate::server::ViewerState>()
+            .filter(|_state| signed_in)
+            .map(|state| state.settings().gateway.base.to_string())
+            .unwrap_or_default()
+    }
+    // NOTE: the browser reads the value the server decided; this runs only if
+    // that value is missing, and then shows no gateway.
+    #[cfg(target_arch = "wasm32")]
+    {
+        String::new()
     }
 }
 
