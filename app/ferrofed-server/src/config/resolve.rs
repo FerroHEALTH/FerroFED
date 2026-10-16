@@ -54,8 +54,9 @@ impl Config {
     /// [`Error::StoredQueryFanOutReadOnly`] when definitions would be
     /// distributed with no registry, or no `PUT`, to distribute from. The
     /// metrics surface refuses a remote listener without `metrics.allow_remote`
-    /// ([`Error::MetricsRemote`]), a listener on `server.listen`
-    /// ([`Error::MetricsShared`]), a remote listener outside the development
+    /// ([`Error::MetricsRemote`]), a listener on the address `server.listen`
+    /// binds at a port other than 0 ([`Error::MetricsShared`]), a remote
+    /// listener outside the development
     /// profile whose scrape neither a scrape token nor a client CA
     /// authenticates ([`Error::MetricsUnauthenticated`]), and the metrics push and the trace export
     /// each refuse a collector that is no `http://` URL
@@ -407,7 +408,9 @@ fn resolve_metrics(
         if !address.ip().is_loopback() && !metrics.allow_remote {
             return Err(Error::MetricsRemote { address });
         }
-        if address == server {
+        // NOTE: no specification governs this: our own design; port 0 asks the system for
+        // a free port at each bind, so two listeners on port 0 never share one.
+        if address == server && address.port() != 0 {
             return Err(Error::MetricsShared { address });
         }
         let mutual = tls.as_ref().is_some_and(|tls| tls.client_ca.is_some());

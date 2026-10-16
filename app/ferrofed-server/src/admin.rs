@@ -370,18 +370,22 @@ pub fn managed_listener(
 }
 
 /// Binds the admin listener at `address` and serves `app` on it, plain or
-/// over `tls`, in a task of its own.
+/// over `tls`, in a task of its own, logging the address it bound.
 ///
 /// # Errors
-/// Returns the I/O error of binding `address`.
+/// Returns the I/O error of binding `address` or of reading the address
+/// bound.
 pub async fn start(
     address: SocketAddr,
     app: Router,
     tls: Option<Arc<Certificates>>,
 ) -> std::io::Result<()> {
     let bound = tokio::net::TcpListener::bind(address).await?;
+    // NOTE: no specification governs this: our own design; the bound address, so a
+    // listener configured on port 0 names the port the system gave it.
+    let local = bound.local_addr()?;
     tracing::info!(
-        listen = %address,
+        listen = %local,
         tls = tls.is_some(),
         path = metrics::PATH,
         distribute = DISTRIBUTE,

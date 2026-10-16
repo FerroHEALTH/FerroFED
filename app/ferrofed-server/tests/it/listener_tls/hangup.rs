@@ -13,8 +13,8 @@ use ferrofed_server::healthcheck::READINESS;
 use ferrofed_testkit::listener::ListenerCertificates;
 use http::StatusCode;
 
-use super::{TestResult, client, ferrofed, presented, quoted, written};
-use crate::support::auth_toml;
+use super::{TestResult, client, presented, quoted, written};
+use crate::support::{auth_toml, serving};
 
 /// How long the process may take to listen, and to take the new files.
 const PATIENCE: Duration = Duration::from_secs(20);
@@ -46,26 +46,27 @@ async fn sighup_presents_the_replaced_certificate_without_a_restart() -> TestRes
     let dir = tempfile::tempdir()?;
     let first = ListenerCertificates::generate()?;
     let files = first.write(dir.path())?;
-    let listen = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?;
     let config = dir.path().join("ferrofed.toml");
     std::fs::write(
         &config,
         format!(
-            "[server]\nlisten = \"{listen}\"\n\n[server.tls]\ncertificate_file = {}\nkey_file = {}\n{}",
+            "[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\n\n[server.tls]\ncertificate_file = {}\nkey_file = {}\n{}",
             quoted(&files.certificate),
             quoted(&files.key),
             auth_toml()?,
         ),
     )?;
-    let serving = Serving(
+    let mut serving = Serving(
         Command::new(env!("CARGO_BIN_EXE_ferrofed"))
             .args(["serve", "--config"])
             .arg(&config)
             .env_remove("FERROFED_CONFIG")
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,
     );
+    let stdout = serving.0.stdout.take().ok_or("the process's stdout")?;
+    let listen = serving::bound(stdout, serving::GATEWAY).await?;
     let trusting_first = client(first.ca(), None)?;
     let started = Instant::now();
     let leaf = loop {
@@ -81,7 +82,16 @@ async fn sighup_presents_the_replaced_certificate_without_a_restart() -> TestRes
 
     let healthcheck = || {
         let config = config.clone();
-        tokio::task::spawn_blocking(move || ferrofed(&["healthcheck"], &config))
+        // The healthcheck asks the port the process bound, as an operator who
+        // configured port 0 would tell it through the environment.
+        tokio::task::spawn_blocking(move || {
+            Command::new(env!("CARGO_BIN_EXE_ferrofed"))
+                .args(["healthcheck", "--config"])
+                .arg(&config)
+                .env_remove("FERROFED_CONFIG")
+                .env("FERROFED__SERVER__LISTEN", listen.to_string())
+                .output()
+        })
     };
     let output = healthcheck().await??;
     assert_eq!(Some(0), output.status.code(), "{}", written(&output));

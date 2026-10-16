@@ -26,7 +26,7 @@ use http::{Request, StatusCode, header};
 
 use crate::metrics::{count, parse};
 use crate::run::binary;
-use crate::support::{app, call, send};
+use crate::support::{app, call, send, serving};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -171,6 +171,14 @@ fn the_listener_never_shares_the_gateway_address() -> TestResult {
 }
 
 #[test]
+fn two_listeners_on_port_zero_each_get_a_port_of_their_own() -> TestResult {
+    let settings =
+        resolved("[server]\nlisten = \"127.0.0.1:0\"\n\n[metrics]\nlisten = \"127.0.0.1:0\"\n")?;
+    assert_eq!(Some("127.0.0.1:0".parse()?), settings.metrics.listen);
+    Ok(())
+}
+
+#[test]
 fn the_otlp_push_takes_an_http_collector_and_refuses_any_other() -> TestResult {
     let settings = resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?;
     assert_eq!(
@@ -264,23 +272,23 @@ impl Drop for Serving {
 
 #[tokio::test]
 async fn serve_answers_the_exposition_on_the_admin_listener() -> TestResult {
-    let free = TcpListener::bind("127.0.0.1:0")?;
-    let address = free.local_addr()?;
-    drop(free);
     let mut file = tempfile::NamedTempFile::new()?;
     write!(
         file,
-        "[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\n\n[metrics]\nlisten = \"{address}\"\n"
+        "[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\n\n[metrics]\nlisten = \"127.0.0.1:0\"\n"
     )?;
-    let _serving = Serving(
+    let mut serving = Serving(
         Command::new(env!("CARGO_BIN_EXE_ferrofed"))
             .args(["serve", "--config"])
             .arg(file.path())
             .env_remove("FERROFED_CONFIG")
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,
     );
+    let stdout = serving.0.stdout.take().ok_or("the process's stdout")?;
+    let address = serving::bound(stdout, serving::ADMIN).await?;
+    assert_ne!(0, address.port(), "the log names the port the system gave");
     let client = reqwest::Client::new();
     let url = format!("http://{address}{}", metrics::PATH);
     let started = Instant::now();
