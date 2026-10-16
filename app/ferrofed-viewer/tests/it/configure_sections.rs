@@ -13,10 +13,10 @@ use std::error::Error;
 
 use ferrofed_registry::resource::SectionRequest;
 use ferrofed_testkit::mock::Server;
-use http::StatusCode;
 
-use crate::configure::{answers, bodies, changes, configured, form, signed_in_console};
-use crate::support::{get_as, send};
+use crate::configure::{
+    answered, answers, bodies, changes, configured, form, form_with, page, signed_in_console,
+};
 
 /// A synthetic secret value no page, answer or log may hold.
 const VALUE: &str = "synthetic-console-secret-91f2";
@@ -76,45 +76,8 @@ async fn listener() -> Server {
     .await;
     listener
 }
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
--> Result<(), Box<dyn Error>> {
-    let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
-    let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("Credentials and bindings"), "{body}");
-    assert!(
-        body.contains("password: set, read from /run/secrets/node-a"),
-        "{body}"
-    );
-    assert!(body.contains("Add onward credentials"), "{body}");
-    assert!(
-        body.contains("Edit the onward credentials of node-c-pub"),
-        "{body}"
-    );
-    assert!(
-        !body.contains("Edit the onward credentials of node-a-pub"),
-        "{body}"
-    );
-    assert!(body.contains("Add a binding section"), "{body}");
-    assert!(body.contains(r#"<option value="consent">"#), "{body}");
-    assert!(
-        body.contains(r#"<option value="credentials:node-c-pub">"#),
-        "{body}"
-    );
-    assert!(
-        !body.contains(r#"value="credentials:node-a-pub""#),
-        "{body}"
-    );
-    assert!(body.contains("Confirm revision 2"), "{body}");
-    assert!(
-        body.contains("runs awaiting its confirmation until 2026-10-15T09:02:00Z"),
-        "{body}"
-    );
-    assert!(body.contains("Approve revision 3"), "{body}");
-    assert!(body.contains("Approved by: none yet"), "{body}");
+/// Asserts that no password field of `body` is filled.
+fn no_password_filled(body: &str) {
     for input in body.split("<input").skip(1) {
         let tag = input.split('>').next().unwrap_or_default();
         if tag.contains(r#"type="password""#) {
@@ -124,6 +87,58 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
             );
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
+-> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let body = page(&service, &session, "/configuration/credentials").await?;
+    assert!(body.contains("Credentials and bindings"), "{body}");
+    assert!(
+        body.contains("<code>password</code>: set, read from <code>/run/secrets/node-a</code>"),
+        "{body}"
+    );
+    assert!(body.contains("Add credentials"), "{body}");
+    assert!(
+        body.contains(r#"href="/configuration/credentials/node-c-pub""#),
+        "{body}"
+    );
+    assert!(
+        !body.contains(r#"href="/configuration/credentials/node-a-pub""#),
+        "{body}"
+    );
+    assert!(body.contains("Add binding section"), "{body}");
+    assert!(
+        body.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
+        "{body}"
+    );
+    assert!(
+        !body.contains(r#"value="credentials:node-a-pub""#),
+        "{body}"
+    );
+    assert!(
+        body.contains("Revision 2 awaits your confirmation"),
+        "{body}"
+    );
+    assert!(body.contains("2026-10-15 09:02 UTC"), "{body}");
+    assert!(body.contains(r#"id="confirm-countdown""#), "{body}");
+    assert!(body.contains("Approve revision 3"), "{body}");
+    assert!(body.contains("Approved by: none yet"), "{body}");
+    no_password_filled(&body);
+    let binding = page(&service, &session, "/configuration/bindings/new").await?;
+    assert!(binding.contains(r#"<option value="consent">"#), "{binding}");
+    let edit = page(&service, &session, "/configuration/credentials/node-c-pub").await?;
+    assert!(
+        edit.contains(r#"<option value="basic" selected>"#),
+        "the held grant is chosen: {edit}"
+    );
+    assert!(edit.contains(r#"type="password""#), "{edit}");
+    assert!(edit.contains("Read from a file"), "{edit}");
+    no_password_filled(&edit);
+    let added = page(&service, &session, "/configuration/credentials/new").await?;
+    no_password_filled(&added);
     assert_eq!(0, changes(&listener).await?);
     Ok(())
 }
@@ -134,12 +149,43 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
 async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
+    let mut body = page(&service, &session, "/configuration/credentials").await?;
+    body.push_str(&page(&service, &session, "/configuration/credentials/node-c-pub").await?);
     for raw in ["<script>u</script>", "<img src=x onerror=1>", "<b>1</b>"] {
         assert!(!body.contains(raw), "{raw} reached the page raw: {body}");
     }
     assert!(body.contains("&lt;script&gt;u&lt;/script&gt;"), "{body}");
     Ok(())
+}
+
+/// The save of node C's credentials as basic authentication, the user `u`,
+/// with the secret rows `secrets`.
+fn save_credentials(secrets: &[(&str, &str, &str, &str)]) -> String {
+    let mut fields: Vec<(String, String)> = vec![
+        (String::from("settings][0][row"), String::from("c0")),
+        (String::from("settings][0][key"), String::from("user")),
+        (String::from("settings][0][value"), String::from("u")),
+    ];
+    for (row, (key, choice, value, file)) in secrets.iter().enumerate() {
+        let at = |part: &str| format!("secrets][{row}][{part}");
+        fields.extend([
+            (at("row"), format!("x{row}")),
+            (at("key"), (*key).to_owned()),
+            (at("choice"), (*choice).to_owned()),
+            (at("value"), (*value).to_owned()),
+            (at("file"), (*file).to_owned()),
+        ]);
+    }
+    form_with(
+        &[
+            ("action", "save-credentials"),
+            ("base", "3"),
+            ("endpoint", "node-c-pub"),
+            ("grant", "basic"),
+            ("reason", "rotate the token"),
+        ],
+        &fields,
+    )
 }
 
 #[tokio::test]
@@ -164,15 +210,9 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
     let html = configured(
         &service,
         &session,
-        form(&[
-            ("action", "save-credentials"),
-            ("base", "3"),
-            ("endpoint", "node-c-pub"),
-            ("settings", "{ user = \"u\" }"),
-            ("secret_key", "bearer_token"),
-            ("secret_value", VALUE),
-            ("reason", "rotate the token"),
-            ("confirm", "yes"),
+        save_credentials(&[
+            ("password", "set", VALUE, ""),
+            ("client_identity", "keep", "", ""),
         ]),
     )
     .await?;
@@ -187,19 +227,31 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
     };
     let request: SectionRequest = serde_json::from_str(sent)?;
     assert_eq!("{ user = \"u\" }", request.settings);
-    let [change] = request.secrets.as_slice() else {
-        return Err("one secret change".into());
-    };
-    assert_eq!("bearer_token", change.key);
+    let changes: Vec<(&str, bool, bool)> = request
+        .secrets
+        .iter()
+        .map(|change| (change.key.as_str(), change.value.is_some(), change.clear))
+        .collect();
+    assert_eq!(
+        vec![("password", true, false), ("bearer_token", false, true)],
+        changes,
+        "the value is set, and the bearer token basic authentication no longer uses is cleared"
+    );
     assert_eq!(
         Some(VALUE),
-        change
-            .value
-            .as_ref()
+        request
+            .secrets
+            .first()
+            .and_then(|change| change.value.as_ref())
             .map(ferrofed_registry::secret::WriteOnly::expose)
     );
-    let (_response, page) = send(&service, get_as("/configuration", &session)?).await?;
-    assert!(!page.contains(VALUE), "{page}");
+    for path in [
+        "/configuration/credentials",
+        "/configuration/credentials/node-c-pub",
+    ] {
+        let shown = page(&service, &session, path).await?;
+        assert!(!shown.contains(VALUE), "{shown}");
+    }
     let text = String::from_utf8_lossy(
         &logs
             .0
@@ -215,38 +267,55 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
 async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    for (fields, said) in [
-        (vec![("secret_value", VALUE)], "Name the key of the secret"),
+    for (secret, said, at) in [
         (
-            vec![("secret_key", "bearer_token")],
-            "Give the secret's value",
+            ("password", "set", "", ""),
+            "Type the value of password",
+            "cfg-x-x0-value",
         ),
         (
-            vec![
-                ("secret_key", "bearer_token"),
-                ("secret_value", VALUE),
-                ("secret_file", "/run/secrets/t"),
-            ],
-            "exactly one of the secret",
+            ("password", "file", VALUE, "secrets/p"),
+            "is not an absolute path",
+            "cfg-x-x0-file",
         ),
-        (vec![("endpoint", "node c")], "The endpoint_id is not"),
+        (
+            ("password", "file", "", ""),
+            "Give the absolute path",
+            "cfg-x-x0-file",
+        ),
+        (
+            ("user", "set", VALUE, ""),
+            "Name a secret this resource takes",
+            "cfg-x-x0-key",
+        ),
+        (
+            ("password", "guess", VALUE, ""),
+            "Choose Keep, Set a value",
+            "cfg-x-x0-choice",
+        ),
     ] {
-        let mut all = vec![
-            ("action", "save-credentials"),
-            ("base", "3"),
-            ("endpoint", "node-c-pub"),
-            ("reason", "r"),
-            ("confirm", "yes"),
-        ];
-        for (name, value) in fields {
-            match all.iter_mut().find(|slot| slot.0 == name) {
-                Some(slot) => slot.1 = value,
-                None => all.push((name, value)),
-            }
-        }
-        let html = configured(&service, &session, form(&all)).await?;
-        assert!(html.contains(said), "{said}: {html}");
-        assert!(!html.contains(VALUE), "{html}");
+        let answer = answered(&service, &session, save_credentials(&[secret])).await?;
+        assert!(answer.html.contains(said), "{said}: {}", answer.html);
+        assert!(!answer.html.contains(VALUE), "{}", answer.html);
+        assert_eq!(Some(at), answer.field.as_ref().map(|note| note.id.as_str()));
+    }
+    for (fields, said, at) in [
+        (
+            [("endpoint", "node c"), ("grant", "basic")],
+            "The endpoint_id is not",
+            "cfg-endpoint",
+        ),
+        (
+            [("endpoint", "node-c-pub"), ("grant", "carrier-pigeon")],
+            "Choose how the gateway reaches the endpoint.",
+            "cfg-grant",
+        ),
+    ] {
+        let mut all = vec![("action", "save-credentials"), ("reason", "r")];
+        all.extend(fields);
+        let answer = answered(&service, &session, form(&all)).await?;
+        assert!(answer.html.contains(said), "{said}: {}", answer.html);
+        assert_eq!(Some(at), answer.field.as_ref().map(|note| note.id.as_str()));
     }
     let html = configured(
         &service,
@@ -255,7 +324,6 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
             ("action", "save-binding"),
             ("section", "auth"),
             ("reason", "r"),
-            ("confirm", "yes"),
         ]),
     )
     .await?;
@@ -263,7 +331,6 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
     assert_eq!(0, changes(&listener).await?);
     Ok(())
 }
-
 /// The running revision 2, confirmed.
 const CONFIRMED: &str = r#"{"revision":2,"previous":1,"outcome":"applied","needs_restart":[],
     "applied_by":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},

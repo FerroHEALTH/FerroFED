@@ -22,6 +22,8 @@ mod configure;
 #[cfg(test)]
 mod configure_fhir;
 #[cfg(test)]
+mod configure_pages;
+#[cfg(test)]
 mod configure_revisions;
 #[cfg(test)]
 mod configure_sections;

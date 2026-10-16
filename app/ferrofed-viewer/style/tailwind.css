@@ -853,6 +853,26 @@
     }
   }
 
+  /* The configuration forms show the part a choice names alone: the
+     fields of the grant the select names, and a secret's value or file
+     field once Set a value or Read from a file is chosen. Hidden parts are
+     out of the accessibility tree; the server reads the chosen part alone. */
+  .grant-part,
+  .secret-set,
+  .secret-file {
+    display: none;
+  }
+
+  form:has(select[data-grant] option[value="oauth2"]:checked) .grant-part[data-grant="oauth2"],
+  form:has(select[data-grant] option[value="fapi2"]:checked) .grant-part[data-grant="fapi2"],
+  form:has(select[data-grant] option[value="nuts"]:checked) .grant-part[data-grant="nuts"],
+  form:has(select[data-grant] option[value="bearer"]:checked) .grant-part[data-grant="bearer"],
+  form:has(select[data-grant] option[value="basic"]:checked) .grant-part[data-grant="basic"],
+  .secret:has(input[value="set"]:checked) .secret-set,
+  .secret:has(input[value="file"]:checked) .secret-file {
+    display: block;
+  }
+
   /* The operator menu: a popover under the top bar's far end. */
   .menu:popover-open {
     position: fixed;

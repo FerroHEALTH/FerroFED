@@ -89,18 +89,29 @@ async fn each_revision_offers_its_download_and_the_page_offers_an_import()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
+    let (response, body) = send(&service, get_as("/configuration/history", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     for id in [1, 2] {
-        let link = format!(
-            r#"<a href="/configuration/revisions/{id}/export" rel="external">Export revision {id} as TOML</a>"#
-        );
+        let link = format!(r#"<a href="/configuration/revisions/{id}/export" rel="external""#);
         assert!(body.contains(&link), "{body}");
+        assert!(
+            body.contains(&format!("Export revision {id} as TOML")),
+            "{body}"
+        );
     }
-    assert!(body.contains("import, a dry run until applied"), "{body}");
-    assert!(body.contains("Import a configuration as TOML"), "{body}");
     assert!(
-        body.contains(r#"<textarea id="import-toml" name="form[toml]""#),
+        body.contains(r#"<span class="badge tone-neutral">import</span>"#),
+        "{body}"
+    );
+    let (_response, body) =
+        send(&service, get_as("/configuration/import-export", &session)?).await?;
+    assert!(
+        body.contains("Download the running configuration as TOML"),
+        "{body}"
+    );
+    assert!(body.contains("Import as a dry-run revision"), "{body}");
+    assert!(
+        body.contains(r#"<textarea id="cfg-toml" name="form[toml]""#),
         "{body}"
     );
     assert_eq!(0, changes(&listener).await?);

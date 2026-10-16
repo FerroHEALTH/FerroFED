@@ -19,6 +19,7 @@ use crate::views::model::{Refusal, ViewError};
 pub fn refused(refused: &Refusal) -> ActionAnswer {
     ActionAnswer {
         changed: false,
+        field: None,
         html: crate::views::refusal(refused).to_html(),
     }
 }
@@ -35,6 +36,7 @@ pub fn cleared(answers: &[ReplicaAnswer<ClearLine>]) -> ActionAnswer {
         .collect_view();
     ActionAnswer {
         changed: false,
+        field: None,
         html: view! { <ul>{items}</ul> }.to_html(),
     }
 }
@@ -44,6 +46,7 @@ pub fn cleared(answers: &[ReplicaAnswer<ClearLine>]) -> ActionAnswer {
 pub fn repaired(answer: &ReplicaAnswer<RepairLine>) -> ActionAnswer {
     ActionAnswer {
         changed: false,
+        field: None,
         html: replica_said(answer, "drift repair", repair_line).to_html(),
     }
 }

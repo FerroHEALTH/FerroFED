@@ -27,7 +27,7 @@ use crate::journeys::stack::Stack;
 const WIDTH: u32 = 320;
 
 /// The pages a signed-in operator reads.
-const PAGES: [&str; 11] = [
+const PAGES: [&str; 19] = [
     "/about",
     "/",
     "/members",
@@ -39,6 +39,14 @@ const PAGES: [&str; 11] = [
     "/federation",
     "/query",
     "/configuration",
+    "/configuration/members/new",
+    "/configuration/members/node-b",
+    "/configuration/credentials",
+    "/configuration/credentials/new",
+    "/configuration/bindings/new",
+    "/configuration/stored-queries/new",
+    "/configuration/history",
+    "/configuration/import-export",
 ];
 
 /// Makes the window `WIDTH` CSS pixels wide (the Chrome `DevTools` Protocol,

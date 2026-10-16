@@ -60,4 +60,18 @@ pub struct ActionAnswer {
     /// it again; a refusal changes nothing and keeps the forms as they are.
     #[serde(default)]
     pub changed: bool,
+    /// The field a refusal names, which the page marks where it stands;
+    /// `None` for an answer that names no field.
+    #[serde(default)]
+    pub field: Option<FieldNote>,
+}
+
+/// The refusal of one field of a form: the field's id on the page and what
+/// is wrong with it, never what it holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldNote {
+    /// The id of the field on the page.
+    pub id: String,
+    /// What is wrong with it.
+    pub message: String,
 }

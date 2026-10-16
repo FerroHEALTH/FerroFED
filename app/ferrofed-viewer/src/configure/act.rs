@@ -6,29 +6,37 @@
 //!
 //! Each is a public HTTP endpoint of the console, so each checks the
 //! operator's session itself before anything else; a form's function then
-//! checks that the request came from the hydrated page, then the form and
-//! its confirmation, before any replica is asked (`server/25_server_functions`,
-//! the Leptos book). The first replica configured is called with the
-//! operator's own access token, which never leaves the server.
+//! checks that the request came from the hydrated page, then the form and,
+//! for an action that changes the running gateway or the stored-query
+//! store, that the operator took its confirmation step, before any replica
+//! is asked (`server/25_server_functions`, the Leptos book). The first
+//! replica configured is called with the operator's own access token,
+//! which never leaves the server.
 
 use leptos::prelude::*;
 
 use crate::admin::model::ActionAnswer;
-use crate::configure::model::{ConfigForm, ConfigView};
+use crate::configure::model::{ConfigForm, ConfigView, Screen};
 use crate::views::model::{Outcome, ViewError};
 
-/// Loads the configuration page from the first replica's admin listener.
+/// Loads the part of the configuration page `screen` names from the first
+/// replica's admin listener.
 ///
 /// # Errors
 /// Returns [`ViewError::SignedOut`] without a live session, and the
-/// console's fault as its [`ViewError`]; the gateway's refusal, and a
-/// console configured with no admin listener, are an [`Outcome::Refused`].
+/// console's fault as its [`ViewError`]; the gateway's refusal, a part of
+/// the page the path does not name, and a console configured with no admin
+/// listener, are an [`Outcome::Refused`].
 #[server(endpoint = "configuration")]
-pub async fn configuration() -> Result<Outcome<ConfigView>, ViewError> {
+pub async fn configuration(
+    /// The part of the page the path names.
+    #[server(default)]
+    screen: Screen,
+) -> Result<Outcome<ConfigView>, ViewError> {
     crate::views::load::server::settled(async {
         let (state, token) = crate::views::load::server::signed_in()?;
         let replica = server::replica(&state.settings().admin)?;
-        server::page(state.gateway(), replica, &token).await
+        server::page(state.gateway(), replica, &token, &screen).await
     })
     .await
 }
@@ -50,10 +58,11 @@ pub async fn configure(
     crate::query::run::server::from_the_hydrated_page()?;
     let mut form = form;
     let planned = server::replica(&state.settings().admin)
-        .and_then(|replica| server::plan(&mut form).map(|plan| (replica, plan)));
+        .map_err(crate::configure::plan::Refused::from)
+        .and_then(|replica| crate::configure::plan::plan(&mut form).map(|plan| (replica, plan)));
     let (replica, plan) = match planned {
         Ok(planned) => planned,
-        Err(refused) => return Ok(crate::admin::answer::refused(&refused)),
+        Err(refused) => return Ok(crate::configure::render::answers::refused(&refused)),
     };
     Ok(server::run(state.gateway(), replica, &token, plan).await)
 }
@@ -62,22 +71,20 @@ pub async fn configure(
 /// sent, the gateway's answers read into what the page renders.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
-    use std::fmt;
-
     use ferrofed_registry::console::ConsoleMember;
-    use ferrofed_registry::id::EndpointId;
     use ferrofed_registry::operator::PageRequest;
-    use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
+    use ferrofed_registry::resource::{Resource, SecretChange, SectionRequest, SectionResource};
     use ferrofed_registry::revision::{Revision, RevisionId};
-    use ferrofed_registry::secret::WriteOnly;
 
     use crate::admin::act::server::acted;
     use crate::admin::model::ActionAnswer;
     use crate::config::settings::ReplicaSettings;
     use crate::configure::member::Shown;
-    use crate::configure::model::{ConfigForm, ConfigView};
-    use crate::configure::render::{self, SavedLine, StoredLine};
+    use crate::configure::model::{ConfigView, Screen};
+    use crate::configure::plan::{Plan, Refused, Settings, at, invalid};
+    use crate::configure::render::{self, Loaded, SavedLine, StoredLine};
     use crate::configure::sections;
+    use crate::configure::settings;
     use crate::gateway::config::Change;
     use crate::gateway::{AccessToken, Gateway, GatewayError};
     use crate::views::load::server::{ActionKind, Stop};
@@ -88,154 +95,6 @@ pub mod server {
 
     /// The stable code of a gateway whose configuration is not managed.
     pub const UNMANAGED: &str = "configuration-unmanaged";
-
-    /// The longest reason a revision records, in characters, as the
-    /// gateway holds it.
-    const REASON_LIMIT: usize = 1_000;
-
-    /// What a form asks for, read and checked.
-    ///
-    /// Its `Debug` output names the action and the revisions alone, never a
-    /// reason, a member or an AQL text.
-    #[derive(Clone, PartialEq, Eq)]
-    pub enum Plan {
-        /// Save a revision with `member` in place of the console's member
-        /// of its `node_id`.
-        SaveMember {
-            /// The revision the change is based on.
-            base: Option<RevisionId>,
-            /// Why.
-            reason: String,
-            /// The member as the form gives it.
-            member: Box<ConsoleMember>,
-            /// How the member form was drawn.
-            shown: Shown,
-        },
-        /// Save a revision without the console's member `node`.
-        RemoveMember {
-            /// The revision the change is based on.
-            base: Option<RevisionId>,
-            /// Why.
-            reason: String,
-            /// The member's `node_id`.
-            node: String,
-        },
-        /// Apply revision `revision`.
-        Apply {
-            /// The revision.
-            revision: RevisionId,
-        },
-        /// Roll the running revision `current` back.
-        Rollback {
-            /// The running revision the operator read.
-            current: RevisionId,
-            /// Why.
-            reason: String,
-        },
-        /// Store a stored-query version.
-        StoreQuery {
-            /// The qualified name.
-            name: String,
-            /// The version.
-            version: String,
-            /// The AQL.
-            aql: String,
-        },
-        /// Save a revision with a credential or a binding section.
-        SaveSection {
-            /// The credential or binding section.
-            resource: Resource,
-            /// The save as the gateway takes it, a secret value among it.
-            request: Box<SectionRequest>,
-        },
-        /// Save a revision without a credential or a binding section.
-        RemoveSection {
-            /// The revision the change is based on.
-            base: Option<RevisionId>,
-            /// Why.
-            reason: String,
-            /// The credential or binding section.
-            resource: Resource,
-        },
-        /// Confirm the running revision `revision`.
-        Confirm {
-            /// The revision.
-            revision: RevisionId,
-        },
-        /// Approve revision `revision` as an operator other than its
-        /// author.
-        Approve {
-            /// The revision.
-            revision: RevisionId,
-        },
-        /// Save `toml` as a dry-run revision.
-        Import {
-            /// The revision the import is based on.
-            base: Option<RevisionId>,
-            /// Why.
-            reason: String,
-            /// The configuration as TOML.
-            toml: String,
-        },
-    }
-
-    impl fmt::Debug for Plan {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                Self::SaveMember { base, .. } => f
-                    .debug_struct("SaveMember")
-                    .field("base", base)
-                    .finish_non_exhaustive(),
-                Self::RemoveMember { base, .. } => f
-                    .debug_struct("RemoveMember")
-                    .field("base", base)
-                    .finish_non_exhaustive(),
-                Self::Apply { revision } => {
-                    f.debug_struct("Apply").field("revision", revision).finish()
-                }
-                Self::Rollback { current, .. } => f
-                    .debug_struct("Rollback")
-                    .field("current", current)
-                    .finish_non_exhaustive(),
-                Self::StoreQuery { .. } => f.debug_struct("StoreQuery").finish_non_exhaustive(),
-                Self::SaveSection { resource, request } => f
-                    .debug_struct("SaveSection")
-                    .field("resource", resource)
-                    .field("base", &request.base)
-                    .finish_non_exhaustive(),
-                Self::RemoveSection { base, resource, .. } => f
-                    .debug_struct("RemoveSection")
-                    .field("resource", resource)
-                    .field("base", base)
-                    .finish_non_exhaustive(),
-                Self::Confirm { revision } => f
-                    .debug_struct("Confirm")
-                    .field("revision", revision)
-                    .finish(),
-                Self::Approve { revision } => f
-                    .debug_struct("Approve")
-                    .field("revision", revision)
-                    .finish(),
-                Self::Import { base, .. } => f
-                    .debug_struct("Import")
-                    .field("base", base)
-                    .finish_non_exhaustive(),
-            }
-        }
-    }
-
-    /// A refusal of the form, naming the field and never its value.
-    pub(crate) fn invalid(reason: &str) -> Refusal {
-        Refusal::Invalid {
-            reason: reason.to_owned(),
-        }
-    }
-
-    /// The text of `field`, trimmed, or `None` when it is empty.
-    pub(crate) fn given(field: &str) -> Option<&str> {
-        let text = field.trim();
-        (!text.is_empty()).then_some(text)
-    }
 
     /// The first of `replicas`, which the configuration page reads and
     /// changes.
@@ -250,214 +109,45 @@ pub mod server {
         })
     }
 
-    /// The revision number `field` holds, `None` for an empty field.
-    fn revision(field: &str, what: &str) -> Result<Option<RevisionId>, Refusal> {
-        given(field)
-            .map(|text| {
-                text.parse::<RevisionId>()
-                    .map_err(|_not_a_number| Refusal::Invalid {
-                        reason: format!("The {what} is not a revision number."),
-                    })
-            })
-            .transpose()
-    }
-
-    /// The reason the form gives, 1 to the limit of characters.
-    fn reason(form: &ConfigForm) -> Result<String, Refusal> {
-        let reason =
-            given(&form.reason).ok_or_else(|| invalid("Give the reason for the change."))?;
-        if reason.chars().count() > REASON_LIMIT {
-            return Err(invalid("The reason is longer than 1000 characters."));
-        }
-        Ok(reason.to_owned())
-    }
-
-    /// What `form` asks for.
+    /// The part of the configuration page `screen` names, as `replica`
+    /// answers it, or the page saying its configuration is not managed.
     ///
     /// # Errors
-    /// Returns [`Refusal::Invalid`] for a form not confirmed, an action the
-    /// page does not offer, or a field that does not read, naming the field
-    /// and never what it holds.
-    pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refusal> {
-        if given(&form.confirm).is_none() {
-            return Err(invalid("Tick the confirmation to run this change."));
-        }
-        match form.action.as_str() {
-            "add-member" | "save-member" => {
-                let (member, shown) = crate::configure::member::member(form)?;
-                Ok(Plan::SaveMember {
-                    base: revision(&form.base, "base revision")?,
-                    reason: reason(form)?,
-                    member: Box::new(member),
-                    shown,
-                })
-            }
-            "remove-member" => Ok(Plan::RemoveMember {
-                base: revision(&form.base, "base revision")?,
-                reason: reason(form)?,
-                node: given(&form.node)
-                    .ok_or_else(|| invalid("Choose the console member to remove."))?
-                    .to_owned(),
-            }),
-            "apply" => Ok(Plan::Apply {
-                revision: revision(&form.revision, "revision to apply")?
-                    .ok_or_else(|| invalid("Name the revision to apply."))?,
-            }),
-            "rollback" => Ok(Plan::Rollback {
-                current: revision(&form.current, "running revision")?
-                    .ok_or_else(|| invalid("Name the running revision to roll back."))?,
-                reason: reason(form)?,
-            }),
-            "store-query" => Ok(Plan::StoreQuery {
-                name: given(&form.name)
-                    .ok_or_else(|| invalid("Name the stored query."))?
-                    .to_owned(),
-                version: given(&form.version)
-                    .ok_or_else(|| invalid("Name the version to store."))?
-                    .to_owned(),
-                aql: given(&form.aql)
-                    .ok_or_else(|| invalid("Give the AQL to store."))?
-                    .to_owned(),
-            }),
-            "save-credentials" => {
-                let endpoint = given(&form.endpoint)
-                    .ok_or_else(|| invalid("Name the endpoint_id of the credentials."))?;
-                EndpointId::new(endpoint).map_err(|_bad| {
-                    invalid("The endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.")
-                })?;
-                Ok(Plan::SaveSection {
-                    resource: Resource::Credentials(endpoint.to_owned()),
-                    request: Box::new(section_request(form)?),
-                })
-            }
-            "save-binding" => {
-                let section = BindingSection::named(form.section.trim())
-                    .ok_or_else(|| invalid("Choose the binding section."))?;
-                Ok(Plan::SaveSection {
-                    resource: Resource::Binding(section),
-                    request: Box::new(section_request(form)?),
-                })
-            }
-            "remove-section" => Ok(Plan::RemoveSection {
-                base: revision(&form.base, "base revision")?,
-                reason: reason(form)?,
-                resource: chosen(&form.resource)?,
-            }),
-            "confirm" => Ok(Plan::Confirm {
-                revision: revision(&form.revision, "revision to confirm")?
-                    .ok_or_else(|| invalid("Name the revision to confirm."))?,
-            }),
-            "approve" => Ok(Plan::Approve {
-                revision: revision(&form.revision, "revision to approve")?
-                    .ok_or_else(|| invalid("Name the revision to approve."))?,
-            }),
-            "import" => Ok(Plan::Import {
-                base: revision(&form.base, "base revision")?,
-                reason: reason(form)?,
-                toml: toml(form)?,
-            }),
-            _ => Err(invalid("The form names no action this page offers.")),
-        }
-    }
-
-    /// The TOML an import sends, not empty and within the gateway's limit.
-    fn toml(form: &mut ConfigForm) -> Result<String, Refusal> {
-        let text = std::mem::take(&mut form.toml);
-        if text.trim().is_empty() {
-            return Err(invalid("Paste the TOML to import."));
-        }
-        if text.len() > crate::configure::import::IMPORT_LIMIT {
-            return Err(Refusal::Invalid {
-                reason: format!(
-                    "The TOML is larger than {} bytes.",
-                    crate::configure::import::IMPORT_LIMIT
-                ),
-            });
-        }
-        Ok(text)
-    }
-
-    /// The credential or binding section a removal names, as
-    /// [`crate::configure::sections::choice`] writes it.
-    fn chosen(field: &str) -> Result<Resource, Refusal> {
-        let refused = || invalid("Choose the credential or binding section to remove.");
-        match given(field).and_then(|text| text.split_once(':')) {
-            Some(("credentials", endpoint)) if EndpointId::new(endpoint).is_ok() => {
-                Ok(Resource::Credentials(endpoint.to_owned()))
-            }
-            Some(("binding", section)) => BindingSection::named(section)
-                .map(Resource::Binding)
-                .ok_or_else(refused),
-            _ => Err(refused()),
-        }
-    }
-
-    /// The save of a credential or a binding section the form gives: its
-    /// settings, and at most one secret set by its value or a file, or
-    /// cleared.
-    fn section_request(form: &mut ConfigForm) -> Result<SectionRequest, Refusal> {
-        let typed = std::mem::take(&mut form.secret_value);
-        let value = (!typed.is_empty()).then(|| WriteOnly::from(typed.into_secret()));
-        let file = given(&form.secret_file).map(str::to_owned);
-        let clear = given(&form.secret_clear).is_some();
-        let named = [value.is_some(), file.is_some(), clear]
-            .into_iter()
-            .filter(|named| *named)
-            .count();
-        let secrets = match (given(&form.secret_key), named) {
-            (None, 0) => Vec::new(),
-            (None, _) => return Err(invalid("Name the key of the secret to set or clear.")),
-            (Some(_), 0) => {
-                return Err(invalid(
-                    "Give the secret's value or file, or tick its clear, for the key you named.",
-                ));
-            }
-            (Some(key), 1) => vec![SecretChange {
-                key: key.to_owned(),
-                value,
-                file,
-                clear,
-            }],
-            (Some(_), _) => {
-                return Err(invalid(
-                    "Give exactly one of the secret's value, its file and its clear.",
-                ));
-            }
-        };
-        Ok(SectionRequest {
-            base: revision(&form.base, "base revision")?,
-            reason: reason(form)?,
-            settings: form.settings.trim().to_owned(),
-            secrets,
-        })
-    }
-
-    /// The configuration page `replica` answers, or the page saying its
-    /// configuration is not managed.
-    ///
-    /// # Errors
-    /// Returns the [`Stop`] of a refused or failed read.
+    /// Returns the [`Stop`] of a refused or failed read, and of a path that
+    /// names no part of the page.
     pub async fn page(
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
+        screen: &Screen,
     ) -> Result<ConfigView, Stop> {
+        let shown = render::Shown::of(screen).ok_or_else(|| {
+            Stop::Refused(invalid(
+                "This path names no part of the configuration page.",
+            ))
+        })?;
         let standing = match gateway.config_standing(replica, token).await {
             Ok(standing) => standing,
             Err(error) if unmanaged(&error) => return Ok(render::unmanaged(replica)),
             Err(error) => return Err(error.into()),
         };
         let resources = gateway.config_resources(replica, token).await?;
-        let history = gateway
-            .config_history(
-                replica,
-                token,
-                PageRequest {
-                    offset: 0,
-                    limit: HISTORY,
-                },
+        let history = if shown.reads_history() {
+            Some(
+                gateway
+                    .config_history(
+                        replica,
+                        token,
+                        PageRequest {
+                            offset: 0,
+                            limit: HISTORY,
+                        },
+                    )
+                    .await?,
             )
-            .await?;
+        } else {
+            None
+        };
         let running = standing.current.as_ref().map(|mark| mark.revision);
         let pending = match (running, standing.head) {
             (Some(running), Some(head)) if running != head => Some(
@@ -468,12 +158,27 @@ pub mod server {
             ),
             _ => None,
         };
-        Ok(render::page(
+        let compared = match (running, shown.compared()) {
+            (Some(running), Some(other)) if running != other => Some((
+                other,
+                gateway
+                    .config_diff(replica, token, (running, other))
+                    .await?
+                    .changes,
+            )),
+            _ => None,
+        };
+        let loaded = Loaded {
             replica,
-            &standing,
-            &resources,
-            (&history, pending.as_deref()),
-        ))
+            standing: &standing,
+            resources: &resources,
+            history: history.as_ref(),
+            pending: pending.as_deref(),
+            compared: compared
+                .as_ref()
+                .map(|(other, changes)| (*other, changes.as_slice())),
+        };
+        render::page(&loaded, &shown).map_err(Stop::Refused)
     }
 
     /// Whether `error` is the `404` (`configuration-unmanaged`) of an admin
@@ -534,26 +239,16 @@ pub mod server {
                 name: query,
                 version,
                 aql,
+            } => store(gateway, (replica, token), (&query, &version, &aql)).await,
+            Plan::SaveSection {
+                resource,
+                base,
+                reason,
+                settings,
+                secrets,
             } => {
-                let stored = gateway
-                    .store_query(replica, token, (&query, &version), &aql)
-                    .await;
-                render::answers::stored(&acted(
-                    config,
-                    (name, "stored-query store"),
-                    stored,
-                    |stored| StoredLine {
-                        name: stored.name,
-                        version: stored.version,
-                    },
-                ))
-            }
-            Plan::SaveSection { resource, request } => {
-                let saved = gateway
-                    .save_section(replica, token, &resource, &request)
-                    .await;
-                let saved = previewed(gateway, replica, token, saved).await;
-                render::answers::saved(&acted(config, (name, "section save"), saved, |line| line))
+                let change = (base, reason, settings, secrets);
+                save_section(gateway, (replica, token), &resource, change).await
             }
             Plan::RemoveSection {
                 base,
@@ -587,6 +282,126 @@ pub mod server {
             Plan::Import { base, reason, toml } => {
                 import(gateway, (replica, token), (base, &reason, &toml)).await
             }
+        }
+    }
+
+    /// Stores the stored-query version `query` names with its AQL at
+    /// `replica` as the operator, and renders the answer.
+    async fn store(
+        gateway: &Gateway,
+        (replica, token): (&ReplicaSettings, &AccessToken),
+        (query, version, aql): (&str, &str, &str),
+    ) -> ActionAnswer {
+        let stored = gateway
+            .store_query(replica, token, (query, version), aql)
+            .await;
+        render::answers::stored(&acted(
+            ActionKind::Configuration,
+            (replica.name.as_str(), "stored-query store"),
+            stored,
+            |stored| StoredLine {
+                name: stored.name,
+                version: stored.version,
+            },
+        ))
+    }
+
+    /// Saves `resource` with the settings and secrets `change` gives,
+    /// merged onto what the newest revision holds, and renders the answer
+    /// with its preview.
+    async fn save_section(
+        gateway: &Gateway,
+        (replica, token): (&ReplicaSettings, &AccessToken),
+        resource: &Resource,
+        (base, reason, settings, secrets): (
+            Option<RevisionId>,
+            String,
+            Settings,
+            Vec<SecretChange>,
+        ),
+    ) -> ActionAnswer {
+        let at = (replica.name.as_str(), "section save");
+        let config = ActionKind::Configuration;
+        let (settings, cleared) =
+            match section_request(gateway, (replica, token), resource, settings).await {
+                Ok(Ok(made)) => made,
+                Ok(Err(refused)) => return render::answers::refused(&refused),
+                Err(error) => {
+                    let failed = Err::<SavedLine, GatewayError>(error);
+                    return render::answers::saved(&acted(config, at, failed, |line| line));
+                }
+            };
+        let mut changes = secrets;
+        for key in cleared {
+            if !changes.iter().any(|change| change.key == key) {
+                changes.push(SecretChange {
+                    key,
+                    value: None,
+                    file: None,
+                    clear: true,
+                });
+            }
+        }
+        let request = SectionRequest {
+            base,
+            reason,
+            settings,
+            secrets: changes,
+        };
+        let saved = gateway
+            .save_section(replica, token, resource, &request)
+            .await;
+        let saved = previewed(gateway, replica, token, saved).await;
+        render::answers::saved(&acted(config, at, saved, |line| line))
+    }
+
+    /// The settings `settings` give `resource`, merged onto those the
+    /// newest revision holds, and the held secrets a change of grant leaves
+    /// behind, which are cleared.
+    ///
+    /// # Errors
+    /// Returns the gateway's failure when the resources cannot be read: a
+    /// save without the held settings would drop the keys the form does
+    /// not show. A form that does not read is the inner [`Refused`].
+    async fn section_request(
+        gateway: &Gateway,
+        (replica, token): (&ReplicaSettings, &AccessToken),
+        resource: &Resource,
+        settings: Settings,
+    ) -> Result<Result<(String, Vec<String>), Refused>, GatewayError> {
+        let resources = gateway.config_resources(replica, token).await?;
+        let held: Option<&SectionResource> = resources
+            .sections
+            .iter()
+            .find(|section| &section.resource == resource);
+        Ok(merged_settings(held, settings))
+    }
+
+    /// The settings `settings` give, merged onto `held`, and the held
+    /// secrets the chosen grant does not use.
+    fn merged_settings(
+        held: Option<&SectionResource>,
+        settings: Settings,
+    ) -> Result<(String, Vec<String>), Refused> {
+        let table = settings::build::held(held.and_then(|held| held.settings.as_deref()))?;
+        let slots = held.map(|held| held.secrets.as_slice()).unwrap_or_default();
+        match settings {
+            Settings::Credentials(grant, rows) => {
+                let text = settings::build::credentials(&table, grant, &rows)?;
+                let kept: Vec<&str> = grant
+                    .secrets()
+                    .iter()
+                    .map(|secret| secret.key)
+                    .chain([settings::TLS_SECRET.key])
+                    .collect();
+                let cleared = slots
+                    .iter()
+                    .filter(|slot| !kept.contains(&slot.key.as_str()))
+                    .map(|slot| slot.key.clone())
+                    .collect();
+                Ok((text, cleared))
+            }
+            Settings::Binding(rows) => Ok((settings::build::binding(&table, &rows)?, Vec::new())),
         }
     }
 
@@ -626,7 +441,7 @@ pub mod server {
                 let at = (replica.name.as_str(), what);
                 render::answers::saved(&acted(ActionKind::Configuration, at, saved, |line| line))
             }
-            Err(refused) => crate::admin::answer::refused(&refused),
+            Err(refused) => render::answers::refused(&refused),
         }
     }
 
@@ -637,14 +452,15 @@ pub mod server {
     /// form does not show.
     ///
     /// # Errors
-    /// Returns [`Refusal::Invalid`], asking nothing more, for the form that
-    /// adds a member naming a `node_id` the gateway already holds.
+    /// Returns a [`Refused`] at the `node_id` field, asking nothing more,
+    /// for the form that adds a member naming a `node_id` the gateway
+    /// already holds.
     async fn save(
         gateway: &Gateway,
         replica: &ReplicaSettings,
         token: &AccessToken,
         (change, member, shown): (Change<'_>, ConsoleMember, Shown),
-    ) -> Result<Result<Revision, GatewayError>, Refusal> {
+    ) -> Result<Result<Revision, GatewayError>, Refused> {
         let resources = match gateway.config_resources(replica, token).await {
             Ok(resources) => resources,
             Err(error) => return Ok(Err(error)),
@@ -656,7 +472,8 @@ pub mod server {
                 .iter()
                 .any(|resource| resource.node.as_str() == node)
         {
-            return Err(invalid(
+            return Err(at(
+                crate::configure::member::field("node"),
                 "A member with this node_id exists: change it with its own edit form.",
             ));
         }
@@ -668,6 +485,7 @@ pub mod server {
         let member = crate::configure::member::merged(member, held, shown.fhir);
         Ok(gateway.save_member(replica, token, change, &member).await)
     }
+
     /// The saved revision `saved` with the preview of what it changes
     /// against the running revision.
     async fn previewed(

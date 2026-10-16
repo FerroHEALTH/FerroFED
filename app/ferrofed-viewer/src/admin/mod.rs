@@ -8,11 +8,13 @@
 //! The console's server calls each on a gateway replica's admin listener,
 //! at the URL its `[admin]` configuration names, with the operator's own
 //! access token. A console configured with no replica shows neither form.
-//! Each form asks for a confirmation, which its server function checks
-//! again, and posts to the server function of [`act`] in a request body.
-//! Its fields are rendered on the server ([`fields`]), and so is its
-//! answer ([`answer`]), which names every replica the action went to. No
-//! specification governs the admin actions: our own design.
+//! Each action is a card whose button opens a confirmation step, whose
+//! server function checks the confirmation again, and which posts to the
+//! server function of [`act`] in a request body. Its fields are rendered on
+//! the server ([`fields`]), and so is its answer ([`answer`]), which names
+//! every replica the action went to and shows at the top of the card, the
+//! focus moved there. No specification governs the admin actions: our own
+//! design.
 
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
@@ -30,28 +32,37 @@ pub mod answer;
 pub mod fields;
 pub mod model;
 
-use leptos::html::Form;
+use leptos::html::{Div, Form};
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::admin::model::{ActionAnswer, AdminForm};
+use crate::styles;
 use crate::views::fault;
 use crate::views::model::ViewError;
 
-/// What one action's section names: its heading, the server function it
-/// posts to, and its submit button.
+/// The book page that explains the operator console's admin actions.
+const LEARN: &str = "https://ferrofed.eu/docs/operate/operator-console.html";
+
+/// What one action's card names: its heading, its one line, the server
+/// function it posts to, its button and its confirmation.
 struct Action {
-    /// The id of the section's heading.
+    /// The id of the card's heading; the confirmation is `{id}-confirm`.
     id: &'static str,
-    /// The id of the heading of its outcome.
+    /// The id of its outcome, which the focus moves to.
     outcome: &'static str,
-    /// The section's heading.
+    /// The card's heading.
     heading: &'static str,
+    /// The one line under it.
+    line: &'static str,
     /// The path of the server function the form posts to.
     url: &'static str,
-    /// The submit button's label.
+    /// The label of the button that opens the confirmation and of the one
+    /// that runs the action.
     label: &'static str,
+    /// What the confirmation asks.
+    question: &'static str,
 }
 
 /// The admin action form `data` holds, by the field names the forms post.
@@ -69,11 +80,25 @@ fn submitted(data: &leptos::web_sys::FormData) -> AdminForm {
     }
 }
 
-/// The section of `action`: the server-rendered `fields` in a form that
-/// hands what it holds to `dispatch` once the page has hydrated, and the
-/// outcome `value` holds while `pending` says whether one is running.
+/// Closes the confirmation step `popover` once its form is sent.
+fn closed(popover: NodeRef<Div>) {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(popover) = popover.get_untracked()
+        && popover.matches(":popover-open").unwrap_or(false)
+        && popover.hide_popover().is_err()
+    {
+        leptos::logging::warn!("the browser refused to close the confirmation");
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _: NodeRef<Div> = popover;
+}
+
+/// The card of `action`: the server-rendered `fields` in a form that hands
+/// what it holds to `dispatch` once the page has hydrated and its
+/// confirmation step is taken, and the outcome `value` holds at the top of
+/// the card while `pending` says whether one is running.
 ///
-/// The form runs only once hydrated: its submit stays disabled until then,
+/// The form runs only once hydrated: its buttons stay disabled until then,
 /// and the server function refuses a plain form post before any replica is
 /// asked.
 fn action_section(
@@ -83,10 +108,24 @@ fn action_section(
     outcome: Outcome,
 ) -> AnyView {
     let form = NodeRef::<Form>::new();
+    let popover = NodeRef::<Div>::new();
+    let shown = NodeRef::<Div>::new();
     // NOTE: the Leptos book, `ssr/24_hydration_bugs`: an effect runs only in the
     // browser, once hydrated, so the server and the hydration render alike.
     let hydrated = RwSignal::new(false);
     Effect::new(move |_| hydrated.set(true));
+    let (value, pending) = outcome;
+    // NOTE: WCAG 2.2 SC 2.4.3: focus follows an answer to the top of its card.
+    Effect::new(move |_| {
+        let answered = value.with(Option::is_some);
+        if let Some(shown) = shown.get()
+            && answered
+        {
+            match shown.focus() {
+                Ok(()) | Err(_) => {}
+            }
+        }
+    });
     let submit = move |event: leptos::ev::SubmitEvent| {
         let data = form
             .get_untracked()
@@ -95,24 +134,72 @@ fn action_section(
         // browser cannot give leaves the plain post, which the server refuses.
         if let Some(data) = data {
             event.prevent_default();
+            closed(popover);
             dispatch.run(submitted(&data));
         }
     };
-    let pending = outcome.1;
+    let confirm = format!("{}-confirm", action.id);
+    let question = format!("{}-question", action.id);
+    let (opens, closes, labelled) = (confirm.clone(), confirm.clone(), question.clone());
     view! {
-        <section aria-labelledby=action.id>
-            <h2 id=action.id>{action.heading}</h2>
+        <section class=format!("{} mb-6", styles::CARD_PAD) aria-labelledby=action.id>
+            <h2 id=action.id class="mt-0 mb-1 text-base font-semibold text-ink">
+                {action.heading}
+            </h2>
+            <p class="mt-0 mb-4 text-sm text-muted">
+                {action.line} " " <a href=LEARN rel="external">
+                    "Learn more"
+                </a>
+            </p>
+            <div
+                id=action.outcome
+                node_ref=shown
+                tabindex="-1"
+                aria-busy=move || pending.get().to_string()
+            >
+                {answered((value, pending))}
+            </div>
             <form method="post" action=action.url node_ref=form on:submit=submit>
                 <div inner_html=fields></div>
-                <button type="submit" disabled=move || !hydrated.get()>
+                <button
+                    type="button"
+                    class=styles::BUTTON_PRIMARY
+                    popovertarget=opens
+                    aria-haspopup="dialog"
+                    disabled=move || !hydrated.get()
+                >
                     {action.label}
                 </button>
-                <p role="status">{move || ready(hydrated.get())}</p>
+                <div
+                    id=confirm
+                    popover="auto"
+                    role="dialog"
+                    aria-labelledby=labelled
+                    node_ref=popover
+                    class="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-card border border-line bg-raised p-5 text-ink shadow-card backdrop:bg-scrim"
+                >
+                    <p id=question class="mt-0 mb-3 font-medium">
+                        {action.question}
+                    </p>
+                    <input type="hidden" name="form[confirm]" value="yes" />
+                    <div class="mt-4 flex flex-wrap justify-end gap-2">
+                        <button
+                            type="button"
+                            class=styles::BUTTON_SECONDARY
+                            popovertarget=closes
+                            popovertargetaction="hide"
+                        >
+                            "Cancel"
+                        </button>
+                        <button type="submit" autofocus disabled=move || !hydrated.get()>
+                            {action.label}
+                        </button>
+                    </div>
+                </div>
+                <p role="status" class="mt-2 mb-0 text-sm text-muted">
+                    {move || ready(hydrated.get())}
+                </p>
             </form>
-            <section aria-labelledby=action.outcome aria-busy=move || pending.get().to_string()>
-                <h3 id=action.outcome>"Outcome"</h3>
-                {answered(outcome)}
-            </section>
         </section>
     }
     .into_any()
@@ -135,17 +222,33 @@ pub(crate) type Outcome = (
 );
 
 /// Whether an action runs, and the answer the server rendered for the last
-/// one, or the console's fault.
+/// one, or the console's fault; nothing before the first.
 pub(crate) fn answered((value, pending): Outcome) -> AnyView {
     view! {
-        <p role="status">{move || if pending.get() { "Running the action." } else { "" }}</p>
+        {move || {
+            pending
+                .get()
+                .then(|| {
+                    view! {
+                        <p role="status" class="mt-0 mb-4 text-sm text-muted">
+                            "Running the action."
+                        </p>
+                    }
+                })
+        }}
         {move || {
             value
                 .with(|answer| match answer {
-                    None => view! { <p>"No action has run yet."</p> }.into_any(),
+                    None => ().into_any(),
                     Some(Ok(rendered)) => {
                         let html = rendered.html.clone();
-                        view! { <div inner_html=html></div> }.into_any()
+                        view! {
+                            <div
+                                class="mb-4 rounded-card border border-line bg-surface p-4"
+                                inner_html=html
+                            ></div>
+                        }
+                            .into_any()
                     }
                     Some(Err(error)) => fault(error),
                 })
@@ -164,8 +267,10 @@ pub(crate) fn clear_section(action: ServerAction<ClearEhrId>, fields: Option<Str
         id: "clear",
         outcome: "clear-outcome",
         heading: "Clear a held ehr_id",
+        line: "Forgets a remedied collision at a replica, so the next request finds the owner again.",
         url: ClearEhrId::url(),
         label: "Clear the ehr_id",
+        question: "Clear this ehr_id at the replica chosen? Each replica holds its own routing state.",
     };
     let dispatch = Callback::new(move |form| {
         action.dispatch(ClearEhrId { form });
@@ -183,8 +288,10 @@ pub(crate) fn repair_section(action: ServerAction<RepairDrift>, fields: Option<S
         id: "repair",
         outcome: "repair-outcome",
         heading: "Repair stored-query drift",
+        line: "Sends the registry's held copy of a version again to the members named.",
         url: RepairDrift::url(),
         label: "Send the version again",
+        question: "Send this version again to the members named? The registry's copy stays as it is.",
     };
     let dispatch = Callback::new(move |form| {
         action.dispatch(RepairDrift { form });
