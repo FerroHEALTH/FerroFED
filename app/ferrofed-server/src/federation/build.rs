@@ -37,7 +37,7 @@ use ferrofed_identity::dev::Profile;
 
 use super::error::FederationError;
 use super::registry::read_registry;
-use super::{DemographicsStep, Federation, Observed, Reconciled, widened};
+use super::{CrossReference, DemographicsStep, Federation, Observed, Reconciled, widened};
 
 impl Federation {
     /// Builds the federation `settings` describe, or `None` when no registry
@@ -207,6 +207,9 @@ impl Federation {
             id,
             snapshot: Arc::new(snapshot),
             clients,
+            // NOTE: no specification governs this: our own design; one binding offers the resolver,
+            // so a resolver with `[dev]` set is the static development cross-reference.
+            cross_reference: CrossReference::of(settings.dev.is_some() && resolver.is_some()),
             resolver,
             demographics,
             localization,
@@ -264,6 +267,7 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            cross_reference: CrossReference::default(),
             demographics: None,
             localization: LocalizationPolicy::none(),
             consent: None,

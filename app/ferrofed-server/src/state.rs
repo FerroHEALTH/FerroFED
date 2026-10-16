@@ -7,7 +7,9 @@
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
+use ferrofed_identity::dev::Profile;
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
+use ferrofed_registry::operator::DeploymentMode;
 use ferrofed_registry::replica::Replica;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
@@ -59,6 +61,9 @@ pub struct AppState {
     /// The name of this process, which every operator report names; fixed
     /// for the life of the process.
     replica: Replica,
+    /// The deployment profile the process started with, which a reload
+    /// never changes.
+    mode: DeploymentMode,
 }
 
 /// A state that cannot be built from the settings.
@@ -168,6 +173,10 @@ impl AppState {
             metrics,
             processes: Processes::build(settings)?,
             replica: settings.server.replica.clone(),
+            mode: match settings.profile {
+                Profile::Production => DeploymentMode::Production,
+                Profile::Development => DeploymentMode::Development,
+            },
         })
     }
 
@@ -221,6 +230,7 @@ impl AppState {
             metrics: Arc::default(),
             processes: Processes::default(),
             replica: Replica::default(),
+            mode: DeploymentMode::default(),
         }
     }
 
@@ -239,6 +249,7 @@ impl AppState {
             metrics,
             processes: Processes::default(),
             replica: Replica::default(),
+            mode: DeploymentMode::default(),
         }
     }
 
@@ -274,6 +285,13 @@ impl AppState {
     #[must_use]
     pub const fn replica(&self) -> &Replica {
         &self.replica
+    }
+
+    /// Returns the deployment profile the process started with, which the
+    /// operator surface reports.
+    #[must_use]
+    pub const fn mode(&self) -> DeploymentMode {
+        self.mode
     }
 
     /// Returns where the process is in its life, which gates readiness.

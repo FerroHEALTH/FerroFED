@@ -154,7 +154,7 @@ addresses, only `*` or `**` covers it.
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
-| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries` and `/operator/dependencies` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
+| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries`, `/operator/dependencies` and `/operator/deployment` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
 | A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear`, and the export `POST /admin/identity-state/export` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
@@ -313,7 +313,7 @@ its tokens, and only when your cross-reference service holds that member's
 
 ## The operator surface
 
-Four read-only routes on the client listener give the
+Five read-only routes on the client listener give the
 [operator console](operator-console.md) and your monitoring what no other
 surface carries:
 
@@ -323,6 +323,7 @@ surface carries:
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
 | `GET {base}/operator/dependencies` | the state the gateway last observed of each member endpoint and service ([Health probes](health.md#the-dependency-report)) |
+| `GET {base}/operator/deployment` | how the process is deployed: its profile, whether patients resolve through the `[dev]` cross-reference, and the product version |
 
 The incident report is `{"counts": {...}, "recent": [...], "cleared":
 [...]}`: `counts` names every incident kind with how many the gateway
@@ -347,8 +348,31 @@ which the operator console reads as well, and the stored query is the
 `openehr-its` `StoredQuery`, so the gateway and the console share one
 definition of each.
 
+The deployment report is one object:
+
+```json
+{
+  "mode": "development",
+  "development_crossref": true,
+  "product": "FerroFED",
+  "version": "0.0.11",
+  "replica": "ferrofed-7d9c4b5f6-x2k8q"
+}
+```
+
+`mode` is the `profile` the process started with, `production` or
+`development`, and a reload never changes it
+([Configuration](configuration.md#the-startup-banner)). The gateway knows no
+other profile, so the report names no other. `development_crossref` is
+`true` while the federation resolves patients through the static
+[`[dev]` cross-reference](identity.md#the-development-cross-reference-dev),
+which only the development profile admits; a reload that adds or removes
+`[dev]` changes it. `product` and `version` are those of `GET {base}/`.
+The report carries no setting value, URL, credential or patient
+identifier.
+
 Each gateway process keeps its own incidents, learned routing table and
-dependency states, so every answer of the four routes names the replica
+dependency states, so every answer of the five routes names the replica
 that gave it: in the `ferrofed-replica` response header, on a `400` as
 well, and in a `replica` member of each report, such as `"replica":
 "ferrofed-7d9c4b5f6-x2k8q"`. The name is `[server] replica`, or the host
