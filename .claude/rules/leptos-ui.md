@@ -454,6 +454,14 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   empty states. The drawer and the operator's menu are HTML popovers, so
   the browser opens and closes them and the bundle carries only the focus
   move and the close on a followed link.
+- **The redesigned query console (#1078) measured 346738 bytes**
+  brotli-compressed (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen 0.2.129),
+  about 43 KB over the shell it was built on. The answer, its summary strip,
+  node chips and pages of rows stay rendered on the server; the browser adds
+  the two tab lists, the paging and the focus move (about 14 KB), the editor
+  and its federation options, and the parameter rows. Those rows first cost
+  15 KB as a keyed `<For>` with a remove button on each; eight rows rendered
+  once and shown one by one cost about 7 KB.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

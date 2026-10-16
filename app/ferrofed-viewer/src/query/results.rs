@@ -1,0 +1,245 @@
+// SPDX-FileCopyrightText: Cadasto B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The results card: the answer of the last query run, its table and its
+//! raw result set on two tabs, the table's pages, or what kept the query
+//! from running.
+//!
+//! The answer is the HTML the server rendered ([`super::answer`]), so the
+//! browser carries only this frame: the tabs, the paging and the move of the
+//! focus to the card once an answer arrives (WCAG 2.2 SC 2.4.3).
+
+use leptos::prelude::*;
+
+use super::tabs::{TabPair, tab_list};
+use crate::components::icon;
+use crate::query::model::{PAGE_ROWS, RenderedAnswer};
+use crate::query::run::RunQuery;
+use crate::styles;
+use crate::views::fault;
+
+/// The results card of `action`.
+pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
+    let value = action.value();
+    let pending = action.pending();
+    let version = action.version();
+    let heading = NodeRef::<leptos::html::H2>::new();
+    // NOTE: WCAG 2.2 SC 2.4.3: once a run has an answer or a refusal, the
+    // focus moves to the card that shows it.
+    Effect::new(move |_| {
+        let answered = value.with(Option::is_some);
+        if let Some(heading) = heading.get()
+            && answered
+            && heading.focus().is_err()
+        {
+            leptos::logging::warn!("the browser refused the focus on the results");
+        }
+    });
+    let raw = RwSignal::new(false);
+    let paged = Paged {
+        turned: RwSignal::new((0, 0)),
+        version,
+        rows: NodeRef::new(),
+    };
+    let tabs = move || {
+        value.with(|answer| {
+            matches!(answer, Some(Ok(answer)) if !answer.refused).then(|| {
+                tab_list(
+                    TabPair {
+                        label: "Answer",
+                        tabs: ["query-tab-table", "query-tab-raw"],
+                        panels: ["query-panel-table", "query-panel-raw"],
+                        names: ["Table", "Raw"],
+                    },
+                    raw,
+                )
+            })
+        })
+    };
+    view! {
+        <section
+            class=styles::CARD
+            aria-labelledby="query-results-title"
+            aria-busy=move || pending.get().to_string()
+        >
+            <div class="flex flex-wrap items-end justify-between gap-x-4 border-b border-line px-5 pt-3">
+                <h2
+                    id="query-results-title"
+                    tabindex="-1"
+                    node_ref=heading
+                    class="m-0 pb-3 text-sm font-semibold text-ink"
+                >
+                    "Results"
+                </h2>
+                {tabs}
+            </div>
+            <div class="p-5">
+                <p role="status" class=styles::HELP>
+                    {move || if pending.get() { "Running the query." } else { "" }}
+                </p>
+                {move || {
+                    value
+                        .with(|answer| match answer {
+                            None => waiting(),
+                            Some(Ok(rendered)) if rendered.refused => refusal(rendered),
+                            Some(Ok(rendered)) => shown(rendered, raw, paged),
+                            Some(Err(error)) => fault(error),
+                        })
+                }}
+            </div>
+        </section>
+    }
+    .into_any()
+}
+
+/// What the card shows before any query has run.
+fn waiting() -> AnyView {
+    view! {
+        <div class="flex flex-col items-center px-4 py-10 text-center">
+            <span class="mb-3 flex size-12 items-center justify-center rounded-full bg-inset text-muted">
+                {icon(icondata_lu::LuSquareTerminal, "24")}
+            </span>
+            <p class="m-0 font-medium text-ink">"No query has run yet."</p>
+            <p class="m-0 mt-1 text-sm text-muted">
+                "Write AQL or name a stored query, then run it."
+            </p>
+        </div>
+    }
+    .into_any()
+}
+
+/// The refusal `rendered` holds, which the server rendered as the error
+/// state of the card.
+fn refusal(rendered: &RenderedAnswer) -> AnyView {
+    let html = rendered.html.clone();
+    view! { <div inner_html=html></div> }.into_any()
+}
+
+/// The paging of an answer's rows.
+#[derive(Clone, Copy)]
+struct Paged {
+    /// The page turned to, and the run of the action it was turned for.
+    turned: RwSignal<(usize, u32)>,
+    /// The run of the action that is shown.
+    version: RwSignal<usize>,
+    /// What holds the answer the server rendered.
+    rows: NodeRef<leptos::html::Div>,
+}
+
+impl Paged {
+    /// The page shown: the one turned to for this run, or the first.
+    fn current(self) -> u32 {
+        let (at, page) = self.turned.get();
+        if at == self.version.get() { page } else { 0 }
+    }
+
+    /// Shows the page `to` of the rows and hides every other.
+    fn turn(self, to: u32) {
+        self.turned.set((self.version.get_untracked(), to));
+        show_page(self.rows, to);
+    }
+}
+
+/// An answer `rendered` holds: its table, which the server rendered, and its
+/// raw result set, on the tab `raw` chooses.
+fn shown(rendered: &RenderedAnswer, raw: RwSignal<bool>, paged: Paged) -> AnyView {
+    let html = rendered.html.clone();
+    let text = rendered.raw.clone();
+    let paging = (rendered.rows > PAGE_ROWS).then(|| pages_section(rendered.rows, paged));
+    view! {
+        <div
+            role="tabpanel"
+            id="query-panel-table"
+            aria-labelledby="query-tab-table"
+            hidden=move || raw.get()
+        >
+            <div inner_html=html node_ref=paged.rows></div>
+            {paging}
+        </div>
+        <div
+            role="tabpanel"
+            id="query-panel-raw"
+            aria-labelledby="query-tab-raw"
+            hidden=move || !raw.get()
+        >
+            <pre class="raw-json" tabindex="0" aria-label="The federated result set as JSON">
+                {text}
+            </pre>
+        </div>
+    }
+    .into_any()
+}
+
+/// The pages of `rows` rows: which rows are shown, and the buttons that
+/// turn to the page before and the page after.
+fn pages_section(rows: u32, paged: Paged) -> AnyView {
+    let last = rows.saturating_sub(1).checked_div(PAGE_ROWS).unwrap_or(0);
+    let at_last = move || paged.current() >= last;
+    let shown = move || {
+        let first = paged.current().saturating_mul(PAGE_ROWS);
+        let end = first.saturating_add(PAGE_ROWS).min(rows);
+        format!("Rows {} to {end} of {rows}", first.saturating_add(1))
+    };
+    view! {
+        <nav aria-label="Pages of rows" class="flex flex-wrap items-center justify-between gap-3">
+            <p class="m-0 text-sm text-muted tabular-nums" aria-live="polite">
+                {shown}
+            </p>
+            <div class="flex gap-2">
+                <button
+                    type="button"
+                    class=styles::BUTTON_SECONDARY
+                    disabled=move || paged.current() == 0
+                    on:click=move |_| paged.turn(paged.current().saturating_sub(1))
+                >
+                    {icon(icondata_lu::LuChevronLeft, "16")}
+                    "Previous"
+                </button>
+                <button
+                    type="button"
+                    class=styles::BUTTON_SECONDARY
+                    disabled=at_last
+                    on:click=move |_| paged.turn(paged.current().saturating_add(1).min(last))
+                >
+                    "Next"
+                    {icon(icondata_lu::LuChevronRight, "16")}
+                </button>
+            </div>
+        </nav>
+    }
+    .into_any()
+}
+
+/// Shows the `tbody` of page `to` in the rows table `rows` holds and hides
+/// the others, and scrolls the table back to its first row.
+fn show_page(rows: NodeRef<leptos::html::Div>, to: u32) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(rows) = rows.get_untracked() else {
+            return;
+        };
+        let selector = format!("#{}", crate::query::model::ROWS_TABLE);
+        let Ok(Some(table)) = rows.query_selector(&selector) else {
+            return;
+        };
+        let mut index = 0_u32;
+        let mut child = table.first_element_child();
+        while let Some(element) = child {
+            if element.tag_name().eq_ignore_ascii_case("tbody") {
+                if element
+                    .toggle_attribute_with_force("hidden", index != to)
+                    .is_err()
+                {
+                    leptos::logging::warn!("the browser refused to turn the page");
+                }
+                index = index.saturating_add(1);
+            }
+            child = element.next_element_sibling();
+        }
+        if let Ok(Some(region)) = rows.query_selector("[role=region]") {
+            region.set_scroll_top(0);
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _: (NodeRef<leptos::html::Div>, u32) = (rows, to);
+}

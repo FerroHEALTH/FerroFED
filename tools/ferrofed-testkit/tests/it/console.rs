@@ -233,10 +233,7 @@ async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(
         ),
         ("/stored-queries", "The gateway holds no stored query."),
         ("/federation", "example-federation"),
-        (
-            "/query",
-            r#"<button type="submit" disabled>Run the query</button>"#,
-        ),
+        ("/query", r#"<button type="submit" disabled class="#),
     ] {
         for round in 1..=10 {
             let (status, page) = running.view(path).await?;

@@ -57,7 +57,8 @@ pub async fn run_query(
         Ok(call) => call,
         Err(refused) => return Ok(crate::query::answer::refused(&refused)),
     };
-    let answer = match state.gateway().query(&token, &call).await {
+    let started = std::time::Instant::now();
+    let federated = match state.gateway().query(&token, &call).await {
         Ok(answer) => answer,
         Err(error) => {
             return match stopped(&error, Asked::Query) {
@@ -66,11 +67,15 @@ pub async fn run_query(
             };
         }
     };
-    let answer = server::answer(&answer);
+    let mut answer = server::answer(&federated);
+    answer.elapsed_ms = u64::try_from(started.elapsed().as_millis()).ok();
     Ok(RenderedAnswer {
         status: Some(answer.status),
         complete: answer.complete,
+        refused: false,
+        rows: u32::try_from(answer.rows.len()).unwrap_or(u32::MAX),
         html: crate::query::answer::html(&answer),
+        raw: server::raw(&federated),
     })
 }
 
@@ -170,17 +175,11 @@ pub mod server {
             _ => return Err(invalid("Choose an AQL query or a stored query.")),
         };
         let mut headers = Vec::new();
-        let endpoints: Vec<&str> = form
-            .endpoints
-            .split(',')
-            .map(str::trim)
-            .filter(|endpoint| !endpoint.is_empty())
-            .collect();
-        if !endpoints.is_empty() {
-            headers.push((ENDPOINT, header_value("endpoints", &endpoints.join(", "))?));
+        if let Some(endpoints) = listed(&form.endpoints) {
+            headers.push((ENDPOINT, header_value("endpoints", &endpoints)?));
         }
-        if let Some(organisation) = given(&form.organisation) {
-            headers.push((ORGANISATION, header_value("organisation", organisation)?));
+        if let Some(organisations) = listed(&form.organisation) {
+            headers.push((ORGANISATION, header_value("organisations", &organisations)?));
         }
         if let Some(dedup) = given(&form.dedup) {
             headers.push((DEDUP, header_value("dedup mode", dedup)?));
@@ -195,6 +194,18 @@ pub mod server {
             parameters: parameters(&form.parameters)?,
             headers,
         })
+    }
+
+    /// The comma-separated identifiers `text` holds, each trimmed and the
+    /// empty ones dropped, as one header value, or `None` when it names none
+    /// (§8.4, the header value is a comma-separated list).
+    fn listed(text: &str) -> Option<String> {
+        let ids: Vec<&str> = text
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .collect();
+        (!ids.is_empty()).then(|| ids.join(", "))
     }
 
     /// `value` as the value of the header the form calls `field`.
@@ -215,8 +226,8 @@ pub mod server {
         }
     }
 
-    /// The query parameters `text` holds, one `name=value` per line, each
-    /// value sent as a string.
+    /// The query parameters `text` holds, one `name=value` per line, as the
+    /// page writes its parameter rows, each value sent as a string.
     fn parameters(text: &str) -> Result<QueryParameters, Refusal> {
         let mut parameters = BTreeMap::new();
         for (index, line) in text.lines().enumerate() {
@@ -225,27 +236,33 @@ pub mod server {
                 continue;
             }
             let Some((name, value)) = line.split_once('=') else {
-                return Err(invalid(format!(
-                    "Parameter line {number} is not name=value."
-                )));
+                return Err(invalid(format!("Parameter {number} is not name=value.")));
             };
             let name = name.trim();
             let name = name.strip_prefix('$').unwrap_or(name);
             if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 return Err(invalid(format!(
-                    "Parameter line {number} does not start with a parameter name."
+                    "Parameter {number} has no name of letters, digits and underscores."
                 )));
             }
-            let value = serde_json::to_value(value.trim()).map_err(|_unencodable| {
-                invalid(format!("Parameter line {number} cannot be sent."))
-            })?;
+            let value = serde_json::to_value(value.trim())
+                .map_err(|_unencodable| invalid(format!("Parameter {number} cannot be sent.")))?;
             if parameters.insert(name.to_owned(), value).is_some() {
                 return Err(invalid(format!(
-                    "Parameter line {number} names a parameter given before."
+                    "Parameter {number} names a parameter given before."
                 )));
             }
         }
         Ok(parameters)
+    }
+
+    /// The result set `answer` carries, as indented JSON, the way the
+    /// gateway answered it with its `meta.federation` (§9).
+    #[must_use]
+    pub fn raw(answer: &FederatedAnswer) -> String {
+        serde_json::to_string_pretty(&answer.result_set).unwrap_or_else(|_unprintable| {
+            String::from("The console cannot print this result set as JSON.")
+        })
     }
 
     /// What the console renders of `answer`.
@@ -296,6 +313,7 @@ pub mod server {
             suppressed_rows: federation.dedup().and_then(|dedup| dedup.suppressed_rows),
             columns,
             rows,
+            elapsed_ms: None,
         }
     }
 

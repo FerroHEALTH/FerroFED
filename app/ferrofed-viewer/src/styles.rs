@@ -160,6 +160,19 @@ pub const TAB: &str = "state-change -mb-px border-b-2 border-transparent px-3 py
                        aria-[current=page]:border-accent aria-[current=page]:text-accent \
                        aria-selected:border-accent aria-selected:text-accent";
 
+/// A tab list of the ARIA tabs pattern, whose tabs are buttons.
+pub const TAB_LIST: &str = "flex gap-1 overflow-x-auto border-b border-line";
+
+/// One tab of a tab list: a button drawn as a [`TAB`], underlined while it
+/// is the one shown.
+pub const TAB_BUTTON: &str = "state-change -mb-px rounded-none border-b-2 border-transparent \
+                              bg-transparent px-3 py-2 text-sm font-medium whitespace-nowrap \
+                              text-muted hover:bg-transparent hover:text-ink \
+                              aria-selected:border-accent aria-selected:text-accent";
+
+/// A group of fields inside a card: a fieldset with no card of its own.
+pub const GROUP: &str = "m-0 min-w-0 border-0 bg-transparent p-0 shadow-none";
+
 /// A form row: the label, the field and its one line of help.
 pub const FIELD: &str = "mb-4 flex flex-col gap-1";
 

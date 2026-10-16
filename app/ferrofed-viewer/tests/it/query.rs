@@ -504,18 +504,53 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
         page.contains("<title>Query · FerroFED Console</title>"),
         "{page}"
     );
-    assert!(page.contains("Declared: node_1, node_2"), "{page}");
-    assert!(page.contains("Declared: Org A, Org B"), "{page}");
+    // Each declared endpoint and organisation is a checkbox chip with its
+    // label, never a field the operator types identifiers into.
+    for (index, endpoint) in ["node_1", "node_2"].into_iter().enumerate() {
+        let id = format!("query-endpoint-{index}");
+        assert!(
+            page.contains(&format!(
+                r#"<label for="{id}" class="chip"><input type="checkbox" id="{id}" name="form[endpoints]" value="{endpoint}">"#
+            )),
+            "{endpoint}: {page}"
+        );
+    }
+    for (index, organisation) in ["Org A", "Org B"].into_iter().enumerate() {
+        let id = format!("query-organisation-{index}");
+        assert!(
+            page.contains(&format!(
+                r#"<input type="checkbox" id="{id}" name="form[organisation]" value="{organisation}">"#
+            )),
+            "{organisation}: {page}"
+        );
+    }
+    assert!(
+        !page.contains(r#"type="text" id="query-endpoints""#),
+        "{page}"
+    );
     assert!(
         page.contains(r#"<option value="version-identity">"#),
         "{page}"
     );
-    assert!(page.contains(r#"name="form[partial]""#), "{page}");
     assert!(
-        !page.contains("which this gateway does not offer"),
+        page.contains(
+            r#"<input type="checkbox" role="switch" id="query-partial" name="form[partial]""#
+        ),
         "{page}"
     );
-    assert!(page.contains(r#"<label for="query-parameters">"#), "{page}");
+    assert!(!page.contains("does not offer best effort"), "{page}");
+    assert!(
+        page.contains(r#"<label for="query-parameter-name-0""#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"<label for="query-parameter-value-0""#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"role="tablist" aria-label="Query kind""#),
+        "{page}"
+    );
     assert!(page.contains("No query has run yet."), "{page}");
     assert!(!page.contains(OPERATOR_TOKEN), "{page}");
     Ok(())
