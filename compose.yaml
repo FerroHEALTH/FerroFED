@@ -201,6 +201,8 @@ services:
       # the one docker/quickstart/registry.toml declares for node-a.
       FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      # A local stack is not an installation, so it sends no usage report.
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8080"
 
@@ -210,6 +212,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
       FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
 
@@ -219,6 +222,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
       FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
 
@@ -228,6 +232,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
       FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
 

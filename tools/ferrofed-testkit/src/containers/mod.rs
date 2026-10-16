@@ -357,19 +357,34 @@ fn ferroehr_request(
     name: &str,
     system_id: &'static str,
 ) -> ContainerRequest<GenericImage> {
+    ferroehr_on_network(database.network.clone(), &database.host, name, system_id)
+}
+
+/// The FerroEHR container as `system_id` on the database `name` of the
+/// server `host` reached over `network`, before its access posture is set.
+///
+/// The usage report is switched off: a container does not inherit the CI
+/// runner's environment, so FerroEHR's own CI detection cannot see that it
+/// runs in a test, and every run would report itself as an installation.
+fn ferroehr_on_network(
+    network: String,
+    host: &str,
+    name: &str,
+    system_id: &'static str,
+) -> ContainerRequest<GenericImage> {
     FERROEHR
         .image()
         .with_exposed_port(CDR_PORT.tcp())
-        .with_network(database.network.clone())
+        .with_network(network)
         .with_env_var(
             "FERROEHR__DB__URL",
             format!(
-                "postgres://{name}:{}@{}:{POSTGRES_PORT}/{name}",
+                "postgres://{name}:{}@{host}:{POSTGRES_PORT}/{name}",
                 role_password(name),
-                database.host
             ),
         )
         .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
+        .with_env_var("FERROEHR__USAGE_REPORT__ENABLED", "false")
 }
 
 /// A synthetic user of a node [`restricted::ferroehr_restricted`] starts.
@@ -456,4 +471,23 @@ pub(crate) async fn await_readiness(url: &str) -> Result<(), HarnessError> {
         url: url.to_owned(),
         budget: READINESS_BUDGET,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ferroehr_on_network;
+
+    #[test]
+    fn a_ferroehr_node_starts_with_its_usage_report_off() {
+        let request = ferroehr_on_network("net".to_owned(), "db", "node", "node.example.org");
+        let usage_report = request
+            .env_vars()
+            .find(|(name, _)| name == "FERROEHR__USAGE_REPORT__ENABLED")
+            .map(|(_, value)| value.into_owned());
+        assert_eq!(
+            Some("false".to_owned()),
+            usage_report,
+            "a test node must not send a usage report"
+        );
+    }
 }
