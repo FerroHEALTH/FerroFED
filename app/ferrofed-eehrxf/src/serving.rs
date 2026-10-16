@@ -157,6 +157,13 @@ impl Serving {
         self.by.contains_key(&category)
     }
 
+    /// Returns the members declared for `category`, ordered by node id, or
+    /// `None` when none is.
+    #[must_use]
+    pub fn members_of(&self, category: Category) -> Option<&BTreeSet<String>> {
+        self.by.get(&category)
+    }
+
     /// Returns each served category with its members, in the order of Art
     /// 14(1), the members ordered by node id.
     pub fn members(&self) -> impl Iterator<Item = (Category, &BTreeSet<String>)> {

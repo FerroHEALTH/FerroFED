@@ -24,6 +24,7 @@ mod independence;
 mod list;
 mod native;
 mod patient_grant;
+mod prescriptions;
 mod receipt;
 mod receive;
 mod refusals;

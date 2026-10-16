@@ -65,7 +65,17 @@ pub(crate) struct Native {
 /// itself at an endpoint `snapshot` holds, with its own `ehr_id`, in
 /// endpoint order.
 pub(crate) fn chosen(snapshot: &RegistrySnapshot, targets: &Targets) -> Vec<Chosen> {
-    let code = Category::PatientSummary.code();
+    chosen_for(snapshot, targets, Category::PatientSummary.code())
+}
+
+/// Every member `targets` dispatches to that serves the category `code`
+/// itself at an endpoint `snapshot` holds, with its own `ehr_id`, in
+/// endpoint order.
+pub(crate) fn chosen_for(
+    snapshot: &RegistrySnapshot,
+    targets: &Targets,
+    code: &str,
+) -> Vec<Chosen> {
     targets
         .plan
         .dispatched()

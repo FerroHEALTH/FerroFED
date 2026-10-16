@@ -191,7 +191,7 @@ async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
         Server::start().await,
     );
     let dir = tempfile::tempdir()?;
-    for request in routes()? {
+    for (position, request) in routes()?.into_iter().enumerate() {
         let (app, _) = gateway_registered(
             dir.path(),
             (&a.uri(), &b.uri(), UNREACHED_SUPPLIER),
@@ -202,9 +202,15 @@ async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
         let (status, text) = call(app, request).await?;
         assert_ne!(StatusCode::NOT_FOUND, status, "{text}");
         assert!(!text.contains("not served"), "{text}");
+        // The search, the first route, asks the member once; the read (#1041) and the
+        // dispensation (#1042) answer 501 and add no request.
+        assert_eq!(
+            1,
+            crate::facade::received(&own).await?.len(),
+            "route {position}: only the search reaches the member's own endpoint"
+        );
     }
     assert!(untouched(&a, &b).await?);
-    assert!(untouched(&own, &own).await?);
     Ok(())
 }
 

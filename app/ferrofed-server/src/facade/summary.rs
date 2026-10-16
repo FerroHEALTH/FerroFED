@@ -27,28 +27,29 @@ use std::sync::{Arc, Mutex, PoisonError};
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
-use ferrofed_eehrxf::patient_summary::{ISSUER, PATIENT, Section};
+use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::{
     Answer, Covered, Elsewhere, Held, Organisation, Origin, SectionAnswers,
 };
 use ferrofed_engine::fanout::reader::RowReader;
-use ferrofed_engine::fanout::{Completion, FanOutError, FederatedAnswer, Plan};
+use ferrofed_engine::fanout::{FanOutError, FederatedAnswer, Plan};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::{HeaderMap, StatusCode};
+use http::StatusCode;
 use openehr_federation::aql::{Analysis, ColumnSource, PatientQuery};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::outcome::EndpointOutcome;
 use openehr_federation::status::EndpointStatus;
-use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSetRow};
+use openehr_its::rest::generated::query::ResultSetRow;
 use secrecy::SecretString;
 use tokio::task::JoinSet;
 
 use crate::access::{Accessed, Asked};
 use crate::facade::answer::{self, Failure};
+use crate::facade::located::{Located, located};
 use crate::facade::native::{self, Native};
-use crate::facade::request::{self, Arrived, Submitted};
-use crate::facade::{cells, completeness, follow_up, intake, plan, security};
+use crate::facade::request::Arrived;
+use crate::facade::{cells, follow_up, plan, security};
 use crate::federation::Federation;
 
 /// The operation an access record names for a patient summary.
@@ -183,40 +184,12 @@ pub(crate) async fn gather(
     scope: Scope,
 ) -> Result<Gathered, Unsummarised> {
     let logged = arrived.outbound.to_string();
-    let completion =
-        completeness::of(arrived.headers, federation.best_effort()).map_err(Failure::from)?;
-    let deadline = arrived
-        .started
-        .checked_add(federation.budget().overall())
-        .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    let analyses = analysed(&federation, completion, (system, value), &logged)?;
-    let (_, first) = analyses
-        .first()
-        .ok_or(Unsummarised::Internal("no section query"))?;
-    answer::confinement::confine(
-        &federation,
-        (arrived.conveyance, arrived.on_behalf),
-        first,
-        (deadline, &logged),
-    )
-    .await?;
-    let disclosed = federation.discloses_consent_to(arrived.conveyance);
-    let (mut targets, _) = answer::planning::targeted(
-        &federation,
-        (first, plan::Selection::Undirected),
-        (arrived.requester, arrived.on_behalf),
-        (
-            deadline,
-            disclosed,
-            federation.sets_aside_consent_for(arrived.conveyance),
-        ),
-    )
-    .await?;
-    answer::confinement::held_within(&federation, arrived.conveyance, (first, &targets), &logged)?;
-    if targets.plan.has_no_destination() {
-        return Err(Failure::NoDestination.into());
-    }
-    answer::planning::remember(&federation, arrived.session, &targets);
+    let Located {
+        completion,
+        mut targets,
+        analyses,
+        disclosed,
+    } = located(&federation, &arrived, (system, value)).await?;
     let dispatched = targets.plan.dispatched().next().is_some();
     // NOTE: § The four identifiers, N33: a member asked at its own exchange-format endpoint by
     // its ehr_id is asked no section query, so its data are never in the mapped document too.
@@ -319,43 +292,6 @@ fn concluded(
         return Err(Unsummarised::NotFound(set_aside));
     }
     Ok(gathered)
-}
-
-/// Every section query, read and analysed as a stored query bound to the
-/// patient `system`|`value`, under `completion`.
-fn analysed(
-    federation: &Federation,
-    completion: Completion,
-    (system, value): (&str, &str),
-    logged: &str,
-) -> Result<Vec<(Section, Analysis)>, Unsummarised> {
-    // NOTE: §8.4; the FHIR face names no endpoint, so no targeting header is read.
-    let undirected = HeaderMap::new();
-    let mut analyses = Vec::with_capacity(Section::ALL.len());
-    for section in Section::ALL {
-        let name = section
-            .name()
-            .map_err(|_unnamed| Unsummarised::Internal("a section query has no qualified name"))?;
-        let request = AdhocQueryExecute {
-            q: section.aql(),
-            offset: None,
-            fetch: None,
-            query_parameters: Some(intake::strings([(PATIENT, value), (ISSUER, system)])),
-            additional_properties: BTreeMap::new(),
-        };
-        let submitted = Submitted::Stored {
-            request,
-            name: name.as_str(),
-        };
-        let (_, _, parsed) = request::read(
-            federation,
-            (submitted, &undirected),
-            (completion, DedupMode::None),
-            logged,
-        )?;
-        analyses.push((section, parsed));
-    }
-    Ok(analyses)
 }
 
 /// The patient query of `analysis`, which every section query is.
