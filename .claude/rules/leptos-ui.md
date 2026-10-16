@@ -528,9 +528,9 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   the server alone, so the browser drops the tables it drew for both pages
   and carries the detail's route, its server function's decoding, and the
   query console's reading of the stored query its URL names.
-- **The configuration redesign (#1079) measured 403279 bytes**
+- **The configuration redesign (#1079) measured 399001 bytes**
   brotli-compressed (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen 0.2.129),
-  about 34 KB over the 369418 of the tree it was built on. Every tab, form,
+  33625 more than the 365376 of the stored queries it was built on. Every tab, form,
   table and diff is rendered on the server and shown as HTML, the repeatable
   rows are copied from a `template` the server wrote, and the confirmation
   steps are HTML popovers. The browser adds the page's resource keyed by

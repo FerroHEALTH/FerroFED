@@ -216,14 +216,14 @@ pub(crate) fn ready(hydrated: bool) -> &'static str {
 }
 
 /// The answer an action holds and whether one is running.
-pub(crate) type Outcome = (
+type Outcome = (
     MappedSignal<Option<Result<ActionAnswer, ViewError>>>,
     Memo<bool>,
 );
 
 /// Whether an action runs, and the answer the server rendered for the last
 /// one, or the console's fault; nothing before the first.
-pub(crate) fn answered((value, pending): Outcome) -> AnyView {
+fn answered((value, pending): Outcome) -> AnyView {
     view! {
         {move || {
             pending

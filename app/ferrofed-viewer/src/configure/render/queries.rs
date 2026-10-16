@@ -98,12 +98,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {header}
         {read_only}
-        <div
-            class=format!("{} relative", styles::TABLE_SCROLL)
-            tabindex="0"
-            role="region"
-            aria-labelledby="queries-title"
-        >
+        <div class=styles::TABLE_SCROLL tabindex="0" role="region" aria-labelledby="queries-title">
             <table>
                 <caption class="sr-only">"Stored-query versions by name"</caption>
                 <thead>

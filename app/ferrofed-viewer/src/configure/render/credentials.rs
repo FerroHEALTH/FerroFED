@@ -216,7 +216,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             },
         )}
         <div
-            class=format!("{} relative", styles::TABLE_SCROLL)
+            class=styles::TABLE_SCROLL
             tabindex="0"
             role="region"
             aria-labelledby="credentials-title"
@@ -306,7 +306,7 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
             <legend class="mb-1 text-sm font-medium">{label}</legend>
             <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
             <input type="hidden" name=name("key") value=key.to_owned() />
-            <p class="clear-both mt-0 mb-2 text-xs text-muted">
+            <p class="mt-0 mb-2 text-xs text-muted">
                 <code>{key.to_owned()}</code>
                 " · "
                 {status}

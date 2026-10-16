@@ -329,7 +329,8 @@
   }
 
   /* The legend reads as the card's title, inside it rather than on its
-     edge. */
+     edge; every sibling after it clears the float, so none is laid out in
+     the width beside it. */
   legend {
     float: left;
     width: 100%;
@@ -339,7 +340,7 @@
     font-weight: 600;
   }
 
-  legend + * {
+  legend ~ * {
     clear: both;
   }
 
@@ -891,8 +892,10 @@
 
 /* A wide table scrolls inside its own card, so the page never scrolls
    sideways at 320 px, and a long one scrolls down under a header that stays;
-   the box takes the keyboard focus to scroll. */
+   the box takes the keyboard focus to scroll, and it positions what it holds,
+   so visually hidden text inside it never widens the page. */
 @utility table-scroll {
+  position: relative;
   max-width: 100%;
   max-height: min(70vh, 40rem);
   overflow: auto;

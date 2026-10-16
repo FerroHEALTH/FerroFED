@@ -183,12 +183,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
                 </a>
             },
         )}
-        <div
-            class=format!("{} relative", styles::TABLE_SCROLL)
-            tabindex="0"
-            role="region"
-            aria-labelledby="members-title"
-        >
+        <div class=styles::TABLE_SCROLL tabindex="0" role="region" aria-labelledby="members-title">
             <table>
                 <caption class="sr-only">"Members and their owners"</caption>
                 <thead>
@@ -335,7 +330,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
         <fieldset id=row.clone() class=ROW>
             <legend class=ROW_TITLE>{named.clone()}</legend>
             <input type="hidden" name="form[query_rows]" value=key.to_owned() />
-            <div class="clear-both grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 {text(
                     (&query_field(key, "id"), &name("id")),
                     String::from("Endpoint id"),
@@ -479,7 +474,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
         <fieldset id=row.clone() class=ROW>
             <legend class=ROW_TITLE>{named.clone()}</legend>
             <input type="hidden" name="form[fhir_rows]" value=key.to_owned() />
-            <div class="clear-both grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 {text(
                     (&fhir_field(key, "id"), &name("id")),
                     String::from("Endpoint id"),

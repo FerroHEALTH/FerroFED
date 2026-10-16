@@ -341,7 +341,7 @@ pub(crate) fn diff_table(
     );
     view! {
         <div
-            class=format!("{} relative", styles::TABLE_SCROLL)
+            class=styles::TABLE_SCROLL
             tabindex="0"
             role="region"
             aria-label=format!("What revision {to} changes")
