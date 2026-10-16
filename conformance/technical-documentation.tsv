@@ -21,6 +21,8 @@ item	element	target	section	status	issue
 1(b)	the categories of personal electronic health data that the EHR system has been designed to process	website/book/src/evaluate/information-sheet.md	(d) The categories of data	documented	-
 1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/operate/deployment-shape.md	The services a gateway consumes	documented	-
 1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/integrate/client-contract.md	-	documented	-
+1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/integrate/patient-summary.md	-	documented	-
+1(c)	how the EHR system interacts or can be used to interact with hardware or software that is not part of the EHR system itself	website/book/src/integrate/prescriptions.md	-	documented	-
 1(d)	the versions of relevant software or firmware and any requirement related to version update	website/book/src/evaluate/versions.md	-	documented	-
 1(d)	the versions of relevant software or firmware and any requirement related to version update	docs/VERSIONS.md	-	documented	-
 1(d)	the versions of relevant software or firmware and any requirement related to version update	website/book/src/operate/upgrading.md	The compatibility policy	documented	-
@@ -33,6 +35,7 @@ item	element	target	section	status	issue
 1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/integrate/client-contract.md	What a client gets back	documented	-
 1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/deployment-shape.md	What the gateway keeps	documented	-
 1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/configuration.md	-	documented	-
+1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/configuration-revisions.md	What a revision holds	documented	-
 1(h)	including a detailed description of the data structures, storage and input/output of data	website/book/src/operate/instructions-for-use.md	Sizing	documented	-
 1(i)	a description of any change made to the system throughout its lifecycle	CHANGELOG.md	-	documented	-
 1(i)	a description of any change made to the system throughout its lifecycle	website/book/src/evaluate/technical-documentation.md	Changes to the harmonised components	documented	-

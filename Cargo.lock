@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-viewer"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "aws-lc-rs",
  "axum",

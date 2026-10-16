@@ -42,8 +42,8 @@ The running gateway names the same details in `GET {base}/`,
 Art 38(2)(b): "the name and version of the EHR system and date of its
 release".
 
-The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.10,
-released on 2026-10-15. It ships as these forms:
+The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.11,
+released on 2026-10-16. It ships as these forms:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed`, for Linux on `x86_64`
   and `aarch64`;
@@ -82,6 +82,7 @@ says what it holds and what it waits on.
 
 | Release | Date |
 |---|---|
+| 0.0.11 | 2026-10-16 |
 | 0.0.10 | 2026-10-15 |
 | 0.0.9 | 2026-10-05 |
 | 0.0.8 | 2026-10-04 |
@@ -191,7 +192,7 @@ Item names its row in the matrix exactly.
 
 | Item | Pin | What FerroFED does with it |
 |---|---|---|
-| Product version | 0.0.10 | the FerroFED version this sheet describes |
+| Product version | 0.0.11 | the FerroFED version this sheet describes |
 | Federation Tier with AQL | 1.0.0 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved |
 | openEHR ITS-REST | 1.1.0 | the API a client calls and the API it calls at each member |
 | openEHR AQL | 1.1.0 | the query language a client sends and each member answers |
@@ -207,7 +208,6 @@ Item names its row in the matrix exactly.
 | Netherlands Generic Functions IG source | tag v0.3.0, version 0.3.0 | the Dutch binding: NVI localization, Mitz consent, LRZa addressing, Annex B of the Federation Tier |
 | Nuts specifications | commit 7c0de53 | the Nuts grant of the Dutch binding, RFC003 and RFC021 |
 | HL7 Europe Patient Summary | `hl7.fhir.eu.eps` 1.0.0-ballot | the patient summary document the FHIR face writes and receives, Annex II, points 2.1 to 2.3 |
-| HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, and the category codes of the access record |
@@ -226,6 +226,8 @@ Beside them:
   grant of the Dutch binding.
 - **SMART on openEHR**, the scope grammar of ITS-REST 1.1.0, for the scopes
   each route requires.
+- **OpenID Connect** Core 1.0, for the operator console's sign-in and the
+  refresh of the operator's access token.
 - **FHIRconnect** 1.0.0, the mapping language the interoperability
   component maps openEHR content to FHIR R4 and back with.
 - **TLS** 1.3 and 1.2 on the gateway's listeners, with the TLS 1.2 suites
@@ -259,7 +261,7 @@ The manufacturer gives every release placed on the market from 11 December
 with its end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with its support period, five years from its release
-date, and its end date. FerroFED 0.0.10 is supported until 2031-10-15.
+date, and its end date. FerroFED 0.0.11 is supported until 2031-10-16.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).
 

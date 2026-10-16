@@ -44,7 +44,7 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.10 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.11 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
@@ -71,7 +71,7 @@ node, and traces exported through OpenTelemetry shipped in v0.0.8. v0.0.9
 added the conformance statement, `ferrofed conformance run` and the operator
 console.
 
-v0.0.10 is EHDS readiness and the production gaps. Every access to patient
+v0.0.10 brought EHDS readiness and the production gaps. Every access to patient
 data is recorded with the verified caller, the professional, the assurance
 level where the issuer states one, the categories of the data and how long
 the record is kept, as Annex II, point 3.2, asks of the European logging
@@ -105,12 +105,34 @@ years from its release date
 The manufacturer's side of the CRA, the same for every FerroHEALTH product,
 is in the family book
 ([the Cyber Resilience Act](https://ferrohealth.eu/docs/cra.html)).
-Planned: the logging component's review tools and export
-([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the rest of the
-European interoperability component
+v0.0.11 continues EHDS readiness. The FHIR face searches and reads a
+patient's electronic prescriptions and receives a dispensation into the
+member that owns its prescription, passed through in the HL7 Europe MPD
+profiles from the members that serve them, which decide what can still be
+dispensed
+([prescriptions and dispensations](https://ferrofed.eu/docs/integrate/prescriptions.html)).
+A received document written under a person's own grant, or a
+representative's, is marked as theirs, and the access records carry a
+security label per category and origin, name the patients a population
+query read, and log each semantic transformation. With `config.ui =
+"managed"`, the configuration is kept as versioned revisions that an
+operator saves, applies, confirms and rolls back from the redesigned
+operator console, and every replica follows
+([#575](https://github.com/FerroHEALTH/FerroFED/issues/575)). The book adds
+the Annex II checklist, the technical documentation, the cybersecurity risk
+assessment and the CRA information to the user.
+Planned: the national contact point's connector
+([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), the logging
+component's log access interface and review tools
+([#521](https://github.com/FerroHEALTH/FerroFED/issues/521),
+[#660](https://github.com/FerroHEALTH/FerroFED/issues/660)), the rest of the
+European interoperability component, prescriptions from openEHR medication
+data among it
 ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
-[#523](https://github.com/FerroHEALTH/FerroFED/issues/523)), and the
-conformity file ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
+[#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
+[#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the
+rest of the conformity file
+([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped, what is planned, and the limitations to

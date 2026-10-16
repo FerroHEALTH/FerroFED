@@ -161,6 +161,7 @@ dates, as `SECURITY.md` lists them:
 | v0.0.8 | 2026-10-04 | 2031-10-04 |
 | v0.0.9 | 2026-10-05 | 2031-10-05 |
 | v0.0.10 | 2026-10-15 | 2031-10-15 |
+| v0.0.11 | 2026-10-16 | 2031-10-16 |
 
 `SECURITY.md` is the record. The release cut adds each new row to it and
 copies the row here, and a guard, `scripts/checks/support-periods.sh`, fails

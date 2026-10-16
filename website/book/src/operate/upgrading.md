@@ -92,6 +92,31 @@ to the security patch release of your line to get the fix
 
 ## Upgrade notes by release
 
+### To v0.0.11, from v0.0.10
+
+- If the operator console's `[oidc] scopes` lists `offline_access`, remove
+  it from the list and set `[oidc] offline_access = true` instead (#643).
+  The console now refuses the scope in the list, and the new setting asks
+  for it with `prompt=consent` so the console can refresh the operator's
+  access token.
+- Check the templates of every member that receives documents on the FHIR
+  face (`[[fhir.receive]]`) before you upgrade (#714). The mapping now
+  takes a composition's `category` from the template: its assumed value,
+  its one admitted code, or `event` when the template leaves the category
+  open. A template that admits several `COMPOSITION.category` codes and
+  assumes none now refuses every received document of its category with a
+  `422` (`MissingRequiredSuffix` on `<root>/category|code`), where `event`
+  was taken before. Give the template's `category` an assumed value (AOM
+  1.4 `assumed_value`) and upload it to the member again.
+- `ferrofed_node_requests_total` carries a new label, `class`: `member`
+  for a member's own answer or failure, `client-error` for a `4xx` it
+  answered a routed request with (#982). Such a `4xx` now counts as
+  `outcome="node-error"`, where it was `active`. The shipped
+  `FerroFEDMemberFailing` rule leaves `class="client-error"` out, so it
+  pages on the same member failures as before. A rule or a panel of your
+  own that reads `outcome="node-error"` should leave it out too; take the
+  rules and the dashboard this release attaches.
+
 ### To v0.0.10, from v0.0.9
 
 - A gateway with a registry outside the development profile must set

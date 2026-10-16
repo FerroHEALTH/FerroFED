@@ -24,6 +24,833 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-10-16
+
+Supported until 2031-10-16, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- The operator console refuses `offline_access` in `[oidc] scopes`. Remove
+  it from the list and set `[oidc] offline_access = true` instead (#643).
+- A receiving member's template that admits several `COMPOSITION.category`
+  codes and assumes none now refuses every received document of its
+  category with a `422` (`MissingRequiredSuffix` on `<root>/category|code`).
+  Give the template's `category` an assumed value (AOM 1.4 `assumed_value`)
+  (#714).
+- `ferrofed_node_requests_total` carries a new label, `class`: `member`
+  for a member's own answer or failure, `client-error` for a `4xx` it
+  answered a routed request with. Such a `4xx` now counts as
+  `outcome="node-error"`, where it was `active`. The shipped
+  `FerroFEDMemberFailing` rule leaves `class="client-error"` out, so it
+  pages on the same member failures as before; a rule or a panel of your
+  own that reads `outcome="node-error"` should leave it out too (#982).
+
+### Added
+
+- Information a representative inserts, marked as theirs (#1003,
+  Regulation (EU) 2025/327 Art 4(2) and Art 5): an issuer that sets
+  `act_is_representative = true` on `[auth.issuer.patient]` declares that
+  the RFC 8693 `act` claim of its patient tokens names a proxy or a legal
+  representative. A document the FHIR face receives under such a token is
+  written with every entry naming the representative as its `provider`, a
+  `PARTY_IDENTIFIED` whose one identifier is the `act` `sub`, never the
+  person's `PARTY_SELF`, and its access record carries the
+  `ehds-representative-inserted` entity. A token whose `act` names the
+  representative by nothing, by its own `sub` or by an identifier of the
+  document's patient is `403` with nothing sent. Without the declaration
+  the gateway reads no representative, and the person's own insertion
+  stays `PARTY_SELF`. `eehrxf` 0.0.19 adds `Representative` and
+  `ReceivedComposition::inserted_by_representative`; `ehds-logging` 0.0.24
+  replaces `AccessRecord::subject_inserted` with `inserted`, an
+  `Insertion` of the subject or a representative. RFC 8693 is vendored.
+- A `configuration-invalid` refusal on the operator console's
+  configuration page shows the gateway's message, which names the key it
+  refused and never a value, beside the status and the code.
+- The operator console is styled on the "Azure & Iron" brand tokens, in a
+  light and a dark theme: tables with a header row and row separators,
+  labelled form fields, refusals and incomplete answers in boxes that say
+  what they are, and health states as words in a tinted cell. Every page
+  fits a 320 px screen: a wide table scrolls sideways in its own box, never
+  the page. The stylesheet is Tailwind CSS 4.3.3, built by cargo-leptos with
+  no Node and no new JavaScript (#1037). The shell these pages sit in, its
+  top bar, navigation and theme switch, is the one under Changed (#1075).
+- The electronic prescription and dispensation datasets of the
+  interoperability component (#1038, Regulation (EU) 2025/327
+  Art 14(1)(b) and (c)): `eehrxf` 0.0.21 carries, under the features
+  `prescription` and `dispensation`, the crosswalks from the Xt-EHR
+  `EHDSMedicationPrescription` and `EHDSMedicationDispense` 1.0.0 models to
+  the HL7 Europe MPD 1.0.0 `MedicationRequest-eu-mpd` and
+  `MedicationDispense-eu-mpd` profiles, held to both vendored packages. With
+  `fhir-r4`, the new `medication` module reads a member's
+  `MedicationRequest` and `MedicationDispense` into the datasets with a typed
+  refusal for every rule a resource breaks, writes them back in the MPD
+  form, and checks a resource and each `Medication` it contains against the
+  vendored MPD profiles, naming what the check cannot evaluate. The number
+  of dispensations a prescription item has left travels in the extension
+  `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` on
+  `dispenseRequest`, written only when the member states a value.
+- The members that serve electronic prescriptions and dispensations on the
+  FHIR face (#1039, Regulation (EU) 2025/327 Art 14(1)(b) and (c)):
+  `[[fhir.serve]]` declares, per category, the members that serve it on
+  their own `hl7-fhir-rest` endpoint in the HL7 Europe MPD 1.0.0 profiles,
+  and `config check` names them. A category no member is declared for is
+  answered as not served on `GET {fhir-base}/MedicationRequest`,
+  `GET {fhir-base}/MedicationRequest/{id}` and
+  `POST {fhir-base}/MedicationDispense`: `404` with an `OperationOutcome`
+  of the issue type `not-supported`, never an empty list, and no member is
+  asked. `GET {fhir-base}/metadata` lists `MedicationRequest` and
+  `MedicationDispense` only for a declared category. The start is refused
+  for a declared member the registry does not hold, one with no endpoint of
+  its own serving the category, a native endpoint of either category that
+  leaves out its MPD profile, and a face with no resolver.
+- The search of a patient's prescriptions on the FHIR face (#1040,
+  Regulation (EU) 2025/327 Art 14(1)(b)):
+  `GET {fhir-base}/MedicationRequest?patient.identifier=system|value` asks
+  every member declared for `Electronic-Prescriptions` that holds the
+  patient at its own endpoint, by its own `ehr_id` alone, following the
+  member's `next` links under its own base. The answer is one `searchset`
+  with each member's `MedicationRequest` as the member sent it except its
+  `id` and its entry's `fullUrl`, which carry the face's locator, the `id`
+  the read takes (#1041); one `Provenance` naming the member, and a
+  `warning` when two members hold a prescription under the same
+  identifier. `_count` pages the answer through the gateway's own `-offset`
+  parameter. A silent member, and a member the cross-reference could not
+  answer for (`not-resolved`), fails the search under all-or-nothing and is
+  named under `partial`; an unknown patient and a patient a consent
+  decision hides get the same empty `searchset`. The search takes the
+  `composition-` search scope over every template and is recorded under
+  `Electronic-Prescriptions`.
+- The read of one prescription on the FHIR face (#1041, Regulation (EU)
+  2025/327 Art 14(1)(b)): `GET {fhir-base}/MedicationRequest/{id}` reads
+  a prescription by the `id` the search now gives it, which names the
+  member's own endpoint, its `ehr_id` and its own `id` of the prescription,
+  so the gateway holds no state between the two. The member the `id` names
+  is asked alone, by its `ehr_id` and its own `id` (`_id`), and its
+  `MedicationRequest` is answered as it sent it, with the `id` read and the
+  member named in `openEHR-federation-endpoint`. An `id` with no owner
+  answers `404` with one text whatever the reason; an `ehr_id` two members
+  claim answers `409` and raises the integrity incident; a member answering
+  two prescriptions for one `id` answers `409`; a caller confined to one
+  patient reads that patient's prescriptions alone. The read takes the
+  `composition-` read scope over every template and is recorded under
+  `Electronic-Prescriptions`. The search names each prescription by the
+  same `id`, and its `fullUrl` by the read; a prescription whose parts do
+  not fit an `id` is listed as its member sent it, with a `warning` naming
+  the member and quoting no identifier.
+- The receipt of a dispensation on the FHIR face (#1042, Regulation (EU)
+  2025/327 Art 14(1)(c)): `POST {fhir-base}/MedicationDispense` takes one
+  `MedicationDispense`, held to the HL7 Europe MPD 1.0.0 profile before any
+  member is asked, and writes it once to the one member that owns the
+  prescription it names, its body as it was sent. The gateway resolves the
+  patient from `subject`, asks every member holding the patient for its
+  prescriptions by that member's own `ehr_id`, and matches the
+  prescription's business identifier itself, so the identifier never
+  reaches a member. A prescription named by the face's
+  `MedicationRequest/{id}` alone is refused `422`, since the member
+  receives the body unchanged and can link it only by the identifier. A
+  written dispensation answers `201` with a `Location` naming it by the
+  face's id; no owner answers `404` as an unknown patient does; two members
+  holding the prescription answer `409` and raise the new
+  `PrescriptionIdentifierCollision` integrity incident; the owner's refusal
+  answers `409` and its silence `504`, the outcome unknown and the write
+  never sent again. The receipt takes the `composition-` create scope over
+  every template, is recorded under `Electronic-Dispensations` and
+  `Electronic-Prescriptions`, and is counted by outcome in
+  `ferrofed_fhir_dispensations_total`. Serving `Electronic-Dispensations`
+  now needs `fhir.receive_namespaces`, the incident report keeps the last
+  20 incidents of each kind, and the capability statement declares exactly
+  the interactions the face serves (#1110).
+- The documentation of electronic prescriptions and dispensations on the
+  FHIR face (#1045, Regulation (EU) 2025/327 Art 14(1)(b) and (c)): the
+  book's prescriptions page now carries the member contract a serving
+  member must meet, the duplicate-dispensation rule among it, every route's
+  answers in one table, the locator ids, completeness under `partial`, the
+  remaining-dispensations extension and its published definition, the
+  access records and the dispensation counter, and the capability
+  statement. The configuration reference, the instructions for use, the
+  information sheet, the Annex II checklist and the rights of natural
+  persons now name what the face serves and receives, and the information
+  sheet lists the HL7 Europe MPD 1.0.0 package among its standards.
+- The FHIR R4 `StructureDefinition` of the remaining-dispensations extension
+  (#1053): `eehrxf` 0.0.23 carries it as
+  `medication::prescription::REMAINING_DISPENSATIONS_DEFINITION`, a simple
+  extension of `MedicationRequest.dispenseRequest` with a
+  `valueUnsignedInt`, at most once, and the documentation site serves it at
+  `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` and
+  beside it as `remaining-dispensations.json`. It is tested against the
+  FHIR R4 4.0.1 Extensibility, Defining Extensions and StructureDefinition
+  pages, now vendored by `scripts/vendor/fhir-r4.sh`.
+- The cybersecurity risk assessment of the Cyber Resilience Act (#1058,
+  Regulation (EU) 2024/2847 Art 13(2) and (3), Annex VII point 3): a book
+  page reads the threat model and the clinical safety risk file against
+  each point of Annex I, Part I, with the justification where a point does
+  not apply, and is reviewed at each release. CRA information to the user
+  (#1059, Art 13(18), Annex II points 3 to 9): a book page gives the
+  identification, the intended purpose, the foreseeable risks, the support
+  end date of every release, the instructions for secure use, update and
+  decommissioning, and where the SBOMs are. The technical documentation
+  index and the information sheet link both.
+- A decommissioning page in the book (#1063, Regulation (EU) 2024/2847
+  Annex II point 8(d)): what a deployment holds and where, then the steps
+  to take it out of service, from moving what a replacement needs and
+  letting the audit spools deliver to keeping the access records for their
+  retention period, retiring the signing keys and credentials, and removing
+  the stores. CRA information to the user links it for point 8(d).
+- The technical documentation indexes every point of Annex VII of
+  Regulation (EU) 2024/2847 (#1065): each point names the page, file or
+  release attachment that answers it, or the issue that completes it, in
+  `conformance/cra-technical-documentation.tsv`, which
+  `scripts/checks/technical-documentation.sh` holds to the vendored Act and
+  the tree as it holds the Annex III index.
+- A FHIR R4 definition behind every `https://ferrofed.eu/fhir/` URL the
+  registry document in FHIR form and the access log use (#1072): the
+  `consent-refusal-code`, `payload-profile` and `ehr-id-system` extensions of
+  `Endpoint`, the `connection-type` and `access-log-origin` code systems, and
+  a `NamingSystem` for each of the five `sid/*` identifier systems. The
+  documentation site serves each at its URL and beside it as `.json`, and
+  the book's new page, The registry in FHIR form, says how a FHIR client
+  reads them from a host that sets the content type by extension, and why
+  the archetype-local code systems, one per archetype, do not resolve. Each
+  definition is tested against the FHIR R4 4.0.1 pages that govern its
+  resource type, now with the CodeSystem, NamingSystem and terminologies
+  pages vendored by `scripts/vendor/fhir-r4.sh`, and tied to the code that
+  reads it, and a test fails on any other `ferrofed.eu` FHIR URL without a
+  published definition.
+- The basis of the five-year support period, under Regulation (EU)
+  2024/2847 Art 13(8), in the book's regulatory status (#1088): the time a
+  release is expected to stay in use between upgrades of the hospital
+  platforms around it, the users' expectations, the nature of the product,
+  the five-year floor, the release cadence and the optional matters. The
+  technical documentation index marks Annex VII, point 4, documented.
+- The operator console names a development gateway in an amber banner
+  under the top bar, with the static development cross-reference when it
+  is in service, and its status pill shows the gateway's version and
+  replica. An operator without the operator scope sees the pill as before
+  (#1096).
+- `GET {base}/operator/deployment`, on the operator surface behind the
+  operator scope, reports the deployment profile the gateway started with
+  (`production` or `development`), whether patients resolve through the
+  `[dev]` cross-reference, the product version and the replica name, so
+  the operator console can warn that it reads a development gateway. It
+  carries no setting value, URL, credential or patient identifier.
+- The operator surface marks each stored-query version `read_only` when the
+  gateway takes no `PUT` under its name (its own `eu.ferrofed.eehrxf`
+  namespace, or the read-only definition files), and
+  `GET {base}/operator/stored-queries/{name}` answers one stored query's
+  versions by its qualified name, a `404` when none is held (#1111).
+- The read of one prescription on the FHIR face answers an `ETag` and a
+  `Last-Modified` (#1118, FHIR R4 `http.html` §3.1.0.2): when the member's
+  `MedicationRequest` carries `meta.versionId`,
+  `GET {fhir-base}/MedicationRequest/{id}` answers `ETag: W/"<versionId>"`,
+  and when it carries `meta.lastUpdated`, it answers `Last-Modified` with
+  that instant as an RFC 9110 HTTP-date in GMT. A prescription with no
+  `versionId` or no `lastUpdated` is answered without that header, and so
+  is one whose `versionId` is not a valid FHIR `id` or whose `lastUpdated`
+  is not a valid FHIR `instant`, which the gateway logs by its shape alone,
+  never by its value.
+- The read of a received dispensation on the FHIR face (#1129, Regulation
+  (EU) 2025/327 Art 14(1)(c)): `GET {fhir-base}/MedicationDispense/{id}`
+  reads a dispensation by the `id` its receipt's `Location` named, at the
+  member that `id` names alone, by the member's own `ehr_id` and its own
+  `id`, with the read rules, the `ETag` and the `Last-Modified` of a
+  prescription read. It takes the `composition-` read scope, is recorded
+  under `Electronic-Dispensations`, and the capability statement declares
+  it beside the `create`. A test now holds every interaction and operation
+  the capability statement declares to a route that answers it.
+- The version read of a dispensation and a prescription on the FHIR face
+  (#1136, FHIR R4 `http.html` §3.1.0.3):
+  `GET {fhir-base}/MedicationDispense/{id}/_history/{vid}` and
+  `GET {fhir-base}/MedicationRequest/{id}/_history/{vid}` read as the read
+  does, at the member the `id` names alone, with its scope, `ETag`,
+  `Last-Modified` and access record, and answer the resource when the
+  member's `meta.versionId` is `{vid}`, `404` otherwise. The `Location` a
+  dispensation's receipt answers now reads back what it named, carries the
+  member's version only when that version is a FHIR `id`, and the
+  capability statement declares `vread` for both resources.
+- Configuration revisions (#576): `config.ui = "managed"` keeps the
+  configuration, less its file-only bootstrap core (`profile`, `[server]`,
+  `[metrics]`, `[auth]`, `[config]` and `[dev]`), as a history of revisions
+  in an embedded `redb` file or a PostgreSQL database the replicas share.
+  The file load is a revision, and an operator saves, compares, applies
+  through the reload path and rolls back revisions on the admin listener
+  under `/admin/config`, behind the issuer's operator scope. Each revision
+  is checked as `config check` checks the file and records who, when and
+  why; a save on a stale base answers `409 revision-stale`; a secret is
+  held only as its `_file` reference. `config.ui = "off"`, the default,
+  changes nothing.
+- Under `config.ui = "managed"`, the operator console manages members and
+  stored queries beside the file (#577). Every member and stored-query
+  version has one owner, which `GET /admin/config/resources` names: a member
+  the registry document or a care services directory provides is read-only,
+  and a console member, its organisation, node and endpoints together, is
+  held in the revisions as `[[registry.members]]` and joined to the
+  document's. `PUT /admin/config/members/{node_id}` and
+  `POST /admin/config/members/{node_id}/remove` save a revision you preview
+  with the diff and then apply or roll back; a change to a member the file
+  provides is refused `409 resource-file-owned`, and the removal of no
+  console member `404 resource-unknown`. A console member survives a
+  `SIGHUP` reload, and when the file later provides the same member the
+  file's runs and the console's copy is reported as shadowed.
+  `PUT /admin/config/stored-queries/{name}/{version}` stores a stored-query
+  version, which is never edited or removed (§12.7, N44). The console's new
+  Configuration page shows the revisions, the owners and the history, with a
+  confirmed form for each change. The configuration file never sets
+  `registry.members`.
+- Under `config.ui = "managed"`, the operator console manages each onward
+  credential and each binding section (`[pixm]`, `[pdqm]`, `[xcpd]`,
+  `[nl_gf]`, `[federation.localization]`, `[federation.consent]`) as one
+  resource owned whole (#578): one the file sets is read-only and refused
+  `409 resource-file-owned`, and the console's survive a `SIGHUP` reload.
+  `PUT /admin/config/credentials/{endpoint_id}` and
+  `PUT /admin/config/bindings/{section}` save a revision with the resource's
+  settings and secret changes; `…/remove` saves one without it. A revision
+  holds a secret only as its `_file` reference: a secret value is written to
+  a new file of mode `0600` in the new `config.secrets_dir`, never logged,
+  echoed or answered, and refused `409 secret-store-unavailable` without
+  that directory. An applied change to a credential or a binding section
+  awaits a confirmation, `POST /admin/config/revisions/{id}/confirm`, within
+  the new `config.confirm_ms` (120000 ms by default); without one the
+  gateway rolls it back, on every replica and across a restart. The new
+  `config.approval` names resources a revision changes only once an
+  operator other than its author approved it,
+  `POST /admin/config/revisions/{id}/approve`. Client authentication stays
+  in the file. The Configuration page shows each credential and binding
+  section with its owner and its secrets by reference, and offers the
+  confirmation and the approval with their deadline and who acts.
+- Under `config.ui = "managed"`, any configuration revision exports as TOML
+  and TOML imports as a dry-run revision (#579).
+  `GET /admin/config/revisions/{id}/export` answers the revision as an
+  attachment under a comment header naming it, its author and its time,
+  with every secret as its `_file` reference and without the bootstrap core.
+  `POST /admin/config/import?base=&reason=` takes a TOML body of at most
+  1 MiB, checks it as a save, refuses a change to a resource the file
+  provides `409 resource-file-owned`, and saves it unapplied with the origin
+  `import`, answering its changes against the running revision; you apply it
+  as any revision. The Configuration page offers each revision of its
+  history as a download and an import form that shows the dry run's
+  changes. The book describes the file-first and console-first ways of
+  working and how to move between them.
+- `[auth]` and the listeners' certificates reload without a restart
+  (#636): `SIGHUP`, and the new admin listener action `POST /admin/reload`
+  for a container no signal reaches, read the configuration, `[auth]` and
+  the `[server.tls]` and `[metrics.tls]` certificate files again and apply
+  them together or not at all. An issuer a reload adds is trusted from the
+  next request on, on the client face and the admin listener alike; a
+  request already being admitted finishes on the issuers it started with.
+  A reload whose `[auth]` does not load, trusts no issuer of a federating
+  gateway (class `auth`), or whose certificate files do not form a pair
+  (class `listener-certificate`) is refused as a whole. `auth.audience`
+  waits for a restart. `POST /admin/reload` needs the operator scope, is
+  recorded with its operator, and answers what it applied, or `422`
+  (`configuration-invalid`) naming the refusal's class.
+- Every report of the operator surface names the gateway replica that
+  produced it, since each replica keeps its own incidents, routing table
+  and dependency states (#637). The name is the new `[server] replica`
+  setting, else the `HOSTNAME` the process runs with (a Kubernetes pod's
+  name), else `unnamed`; a configured name outside 1 to 64 ASCII letters,
+  digits, `.`, `_` and `-` is refused at load. Each answer under
+  `{base}/operator/` carries it in a `ferrofed-replica` header and each
+  report in a `replica` member, and the identity-state export names
+  `replica` in place of `scope`. The operator console shows on its
+  members, integrity and stored-query views which replica answered; it
+  reads one replica at a time, as the book's operator console page says.
+- The operator console refreshes the operator's access token on its server
+  when the provider issued a refresh token (RFC 6749 §6), within 60 seconds
+  of its expiry or in the second half of a shorter lifetime, so a session
+  lasts to its idle and absolute timeouts. A
+  rotated refresh token replaces the old one, the refresh token never
+  reaches the browser or a log line, and a refused or failed refresh ends
+  the session and sends the operator to sign in again. The new
+  `[oidc] offline_access` setting, off by default, asks for the
+  `offline_access` scope with `prompt=consent` (OpenID Connect Core 1.0
+  §11); `oidc.scopes` no longer admits `offline_access` itself (#643).
+- The technical documentation of Regulation (EU) 2025/327: a book page that
+  indexes every element of Annex III to where FerroFED documents it, with
+  the forms a release is placed on the market in and the hardware it runs
+  on, held by `conformance/technical-documentation.tsv` and the
+  `technical-documentation` guard in CI. A version whose harmonised
+  components changed since the previous release is not released until the
+  clinical safety risk file and the technical documentation have a review
+  row for it (Art 30(2)); the release lane's `plan` job runs the same
+  check. The page also says how each release's documentation and
+  declaration are kept for ten years (Art 30(3), Art 39(4)) and how a
+  translation is provided within 30 days of a request (Art 37(4)).
+- The register of economic operators of Regulation (EU) 2025/327 Art 35
+  and Regulation (EU) 2024/2847 Art 23: the procedure on the book's
+  Complaints and incidents page and in `docs/post-market.md` (what a row
+  holds, who enters it and when, how long it is kept, how a market
+  surveillance authority's request is answered, and why a public download
+  is not a row), the register's public format in
+  `docs/registers/economic-operators.tsv`, which holds no row because the
+  rows are kept outside the public repository, and the
+  `economic-operators` guard in CI. The guard's `--register` mode checks
+  the private register's rows and refuses, across its git history, a row
+  removed before its retention date or changed after it was entered.
+- Each access record carries a security label per category of the data it
+  reached and per origin of the data, in `meta.security` and on its
+  `ehds-categories` and `origin` entities, so your Audit Record Repository
+  can limit who reads which records by category and origin (Regulation
+  (EU) 2025/327 Annex II 3.4). A category is labelled with its own code
+  and an origin with its endpoint id in
+  `https://ferrofed.eu/fhir/CodeSystem/access-log-origin` unless
+  `[access_log.labels]` declares other labels, and an unclassified access
+  carries every category's label. A malformed label, or one for a
+  category or endpoint the gateway does not know, is refused when the
+  configuration loads (#797).
+- The operator can export the routing state a gateway process learned, for
+  a system that replaces FerroFED (Regulation (EU) 2025/327 Annex II 2.6),
+  with `POST /admin/identity-state/export` on the admin listener (#798). It
+  needs a token with the issuer's `operator_scope` and is recorded with the
+  operator who ran it. The answer is JSON with a `format_version`, the
+  federation id and every learned `creating_system_id` mapping with its
+  node and endpoint, documented on the book's "Exporting the identity
+  state" page. It leaves out the resolution bindings and the `ehr_id`
+  index, so it carries no patient identifier; each replica is exported on
+  its own.
+- The access record of a query over many patients' data (Regulation (EU)
+  2025/327 Art 9(1)): when the query projects the `ehr_id`, the record names
+  each `ehr_id` its delivered rows hold, at the member that answered it, and
+  the patient behind it, up to `[access_log] max_named_ehrs` (50 by
+  default); otherwise it carries an `ehds-population` entity stating the
+  query's scope and why no `ehr_id` is named, beside the members it asked.
+  The query each member receives is unchanged (#819).
+- The operator console runs the operator's two admin actions on the
+  gateway's admin listener (#909): the clear of a held `ehr_id` collision,
+  below the integrity incidents, at one replica or at every replica in turn,
+  and the stored-query drift repair, below the stored queries, through the
+  first replica. The console's new `[[admin.replicas]]` table names each
+  replica's `admin_url`, which its server calls with the signed-in
+  operator's own access token; without it no action is offered. Each action
+  asks for a confirmation and names the replica it acted on, and a refusal
+  shows its status and stable error code. The admin listener must then bind
+  an internal address the console's server can reach, never a public one.
+- The interoperability component renders an archetype-local code (`local`
+  terminology) with the text its operational template defines for it, in the
+  language asked, instead of sending it under eHN Patient Summary Art 10(7)
+  (#927). A template that holds the term in another language only leaves the
+  code to Art 10(7), and a local code the archetype does not define is
+  refused. The component also ships the eHN Patient Summary §4 preferred code
+  systems as URIs (`eehrxf::terminology::ehn`), and the terminology rules
+  prefer them by default.
+- `ferrofed config check` names each Art 14(1) category the FHIR face
+  receives, with the member its `[[fhir.receive]]` entry declares, and the
+  categories no member receives: the set `GET {fhir-base}/metadata` names.
+  A configuration with no `[fhir]` gets neither note (#930).
+- The EU declaration of conformity of Regulation (EU) 2025/327 Art 39,
+  with every item of Annex IV, written for each release by
+  `scripts/release/declaration-of-conformity.sh` from the records at the tag
+  and the values only the manufacturer supplies in
+  `conformance/eu-declaration-of-conformity.toml`. The release lane attaches
+  it as `ferrofed-vX.Y.Z-eu-declaration-of-conformity.md` once that file
+  issues it, and refuses a release whose declaration would hold a blank;
+  until then a release carries none and says so in a warning (#940).
+- The Annex II checklist of Regulation (EU) 2025/327: a book page that
+  holds every essential requirement of Annex II, by the Regulation's own
+  numbering, to its status (met, partial, planned or not-applicable), the
+  page and the tests that show it, and the issue for any gap. It is kept as
+  `conformance/annex-ii.tsv`, and the `annex-ii` guard in CI checks each
+  requirement against the vendored text and each named heading and test
+  against the tree. The technical documentation cites it for Annex III,
+  point 4, which stays partial while a point is unmet.
+- Under `config.ui = "managed"`, a revision applied or rolled back on one
+  replica takes effect on every replica that shares the revision store.
+  Each replica reads the running mark every `config.poll_ms` (5000 ms by
+  default, 100 to 600000) and applies a revision it does not run through
+  the reload path. A replica that refuses the revision keeps its running
+  configuration, logs the refusal and counts it in
+  `ferrofed_config_revision_follows_total`. `GET /admin/config` names the
+  revision the replica runs as `running`, whether it is the current one as
+  `in_step`, and a revision it refused as `refused`. The gauge
+  `ferrofed_config_revision_in_step` and the alert
+  `FerroFEDConfigurationDrift` report a replica out of step.
+- The book's evaluate chapter holds each right Chapter II of Regulation (EU)
+  2025/327 gives a natural person against the logging and interoperability
+  components, with who acts, the tests that show it and the gaps, and Annex II
+  point 1.3 cites it (#961).
+- The interoperability component ships NPU among the eHN Patient Summary §4
+  preferred code systems, as `http://npu-terminology.org`, the URI the HL7
+  Europe Laboratory Report 2.0.0 includes it by (`eehrxf::terminology::ehn::NPU`),
+  and the terminology rules prefer it by default (#968). EMDN is not shipped,
+  because no vendored source names its system URI.
+- The access record of a routed EHR create names the EHR it left
+  (Regulation (EU) 2025/327 Art 9(1)): the `ehr_id` the member's `ETag` or
+  `Location` named (ITS-REST 1.1.0 EHR API), held to the `HIER_OBJECT_ID`
+  form, is an `ehr` entity with the patient the identity binding holds
+  behind it, and the origin's `created-ehr`; an answer that names none, no
+  `ehr_id` or two that differ records `created-ehr-unread` as `unnamed` or
+  `malformed` and names no value. `ehds-logging` 0.0.21 adds `CreatedEhr`
+  and the origin's `created_ehr` (#983).
+- The log of each semantic transformation the FHIR face applies (#985;
+  eHealth Network General Guidelines Release 3.1 Art 6(3)): the access
+  record of a patient summary and of a received document carries one
+  `ehds-transformation` entity per transformation, naming the direction
+  (`provided` or `received`), the Art 14(1) category, the context mapping,
+  its template, profile and mapping files, the package a received document
+  was held to, the terminology releases and code system versions in force,
+  and the elements transcoded, left untranscoded (eHN PS Art 10(7)) and
+  dropped, each counted at its FHIR element path or the path a declared loss
+  names. No value, code value or patient identifier is written.
+  `eehrxf` 0.0.18 adds `transformation::Report`, `Mapping::files` and
+  `Mapping::pin`; `ehds-logging` 0.0.23 adds `transformation::Transformation`
+  and `AccessRecord::transformations`.
+- The configuration page of the operator console edits a console member's
+  FHIR endpoints (`hl7-fhir-rest`, the exchange-format endpoints) beside its
+  Query API endpoints: the member form shows each with its `endpoint_id`,
+  base URL, `ehr_id` identifier system, categories, profiles and status, and
+  a save adds, edits or removes one as the form shows them, merged onto the
+  held endpoint of the same `endpoint_id`. A form drawn without the field
+  keeps the held FHIR endpoints whole, the form that adds a member refuses a
+  `node_id` the gateway already holds, a base URL that is not an absolute
+  `http` or `https` URL is refused, and every refusal names the endpoint by
+  its position. Before, a FHIR endpoint was kept on save and changed only
+  through the admin API.
+- A person's own patient summary (#991): an electronic health data access
+  service (Regulation (EU) 2025/327 Art 3(1), Art 4) asks
+  `{fhir-base}/Patient/$summary` with a token confined to the person and
+  the scope `patient/aql-eu.ferrofed.eehrxf::*.s`, and gets the summary from
+  every member that holds them. A request for another patient is `403`
+  (`patient-confinement`) before the PDQm Supplier or any member is asked.
+  The access record names the person as the caller and as the data
+  subject. A professional's request is unchanged.
+- Information a person inserts, marked as theirs (#992, Regulation (EU)
+  2025/327 Art 5): a document the FHIR face receives under a person's own
+  grant, a token whose `sub` names the person and whose `patient/` scopes
+  are confined to them, is written with every entry naming the record's
+  subject, a `PARTY_SELF` with no identifier, as its `provider` (openEHR
+  RM `ENTRY.provider`). Its access record carries the
+  `ehds-subject-inserted` entity. A person's document that maps to no
+  entry, or to a `GENERIC_ENTRY`, is `422` with nothing sent. A
+  professional's receipt is unchanged. `eehrxf` 0.0.17 adds
+  `ReceivedComposition::inserted_by_subject`, and `ehds-logging` 0.0.22
+  adds `AccessRecord::subject_inserted` and its BALP entity, which
+  `ehds-logging` 0.0.24 replaces with `inserted` (#1003, above).
+
+### Changed
+
+- The access record of a semantic transformation counts each loss the
+  mapping run declared at the FHIR R4 element the loss is located at, read
+  from the engine's located losses, in place of the mapping, cell or output
+  path the loss's text named; a loss with no FHIR element is counted with no
+  path.
+- The harness and the quickstart run FerroEHR 4.3.9, node and database image
+  alike, pinned by digest, in place of 4.3.6 (#1012).
+- The FHIRconnect mapping engine builds on the same `openehr-*` release as
+  the rest of the gateway, so the server links one copy of that family in
+  place of two (#1028). This moved it to `fhirconnect` 0.1.111 on
+  `openehr-*` 0.0.86; the release ships the later versions the
+  `openehr-*` 0.0.87 entry below names.
+- A security fix ships as its own patch release on each supported line,
+  the releases that share a `<major>.<minor>` version, with no feature
+  changes in it (#1064, Regulation (EU) 2024/2847 Annex I Part II(2)).
+  SECURITY.md, CRA information to the user, the cybersecurity risk
+  assessment and the support sentence that opens each release's notes say
+  so.
+- The operator console reads a refused configuration file through the same
+  TOML fault classification as the gateway and the registry, so a console
+  refusal names its key, line and kind of fault by the same rules and never
+  quotes the file.
+- The operator console has a new shell. The top bar shows the gateway's
+  status as a pill, a light, dark and system theme switch, and the
+  operator's name with a menu that holds Sign out. The theme is light
+  until the operator chooses another; the server keeps the choice in a
+  second `HttpOnly` cookie, `ferrofed_viewer_theme`, which holds only the
+  theme's name, and draws each page in it, so no page shows the wrong theme
+  first. The navigation is grouped under Overview, Federation, Queries
+  and Gateway, with an icon beside each entry and the current page marked.
+  On a narrow screen it is a drawer: the keyboard opens it, Escape closes
+  it, and the focus moves in and back. The sign-in is a centred card, a
+  page the console does not serve and a fault are centred notices with the
+  status and the way back, and the landing page is a dashboard. The footer
+  is one line with the product, its version, Cadasto B.V. and a link to the
+  new About page, which names the manufacturer in full as Regulation (EU)
+  2025/327 Art 30(1)(g) asks, with the gateway the console reads (#1075).
+- The operator console's dashboard shows the federation at a glance: the
+  members active, the nodes up, the open integrity incidents, the stored
+  queries and the running configuration revision with the one pending, and
+  each endpoint's health and the recent incidents, each linking on. The
+  members page shows health as a pill and leads to a page per member with
+  its endpoints. The `creating_system_id` routing table moves to its own
+  Routing page with a filter, and the integrity page filters its incidents
+  between open and resolved. A replica with no name is no longer named
+  "unnamed" (#1076).
+- The operator console's stored queries are listed by namespace, each version a
+  chip and the gateway's own namespace marked read-only, with no AQL in the
+  list. A query's detail at `/stored-queries/{name}` shows its versions with a
+  switch between them, when each was stored, and its AQL highlighted, and
+  "Open in query console" chooses the query there by its name and version
+  alone. The self-description shows what `OPTIONS {base}/` declares as cards,
+  with the manufacturer it names, and the whole document behind a disclosure
+  (#1077).
+- The console's query console is an editor card and a results card (#1078).
+  The editor has AQL and Stored query tabs, parameters as name and value
+  rows, offset and fetch on one row, and federation options in which the
+  declared endpoints and organisations are checkbox chips and best effort is
+  a switch. The results card shows a summary strip, one chip per node with
+  its status, rows and latency, the rows in pages of 25 under a header that
+  stays, the raw result set on its own tab, and a refused query as the
+  card's error state. The focus moves to the results after a run.
+- The operator console's configuration page is redesigned: five tabs, each
+  at its own path (Members, Credentials and bindings, Stored queries,
+  History, Import and export), with the card of the revision saved and not
+  applied above each, its changes marked `−` and `+`, and its apply, a
+  running revision's confirm and roll back, a removal and a stored version
+  each confirmed in a step of their own instead of a checkbox. A member's
+  endpoints, a credential's grant settings and a binding section's
+  settings are rows of their own fields, never one line of separated or
+  escaped text, and each secret is kept, set by a value, read from a file
+  or cleared. A form's outcome shows at the top of its card with the focus
+  moved there, a refused field is marked where it stands, and the history
+  compares any revision with the running one (#1079). The Integrity page's
+  collision clear and the stored queries' drift repair confirm in the same
+  step.
+- The operator console page of the book shows every console screen in the
+  light theme, with a link to the same screen in the dark theme: the sign-in,
+  the dashboard, the members and a member's page, the routing table, the
+  integrity incidents, the query console empty and with a complete, an
+  incomplete and a refused answer, the stored queries and one query's
+  detail, the self-description, each configuration tab and the member form,
+  the About page and the page for an unknown path (#1081). The testkit takes
+  them behind `FERROFED_SCREENSHOTS=1`, and a test fails when a console
+  route has no screenshot.
+- A security patch release cut on an older supported line no longer becomes
+  the repository's latest release or moves the `latest` tag of the gateway
+  and console images: only the highest version released does. The release
+  checklist describes how a security patch is cut from a supported line's
+  last tag on a `release/<major>.<minor>.x` maintenance branch (#1087).
+- The notice for a release past its support period, in the startup banner,
+  `ferrofed config check` and the log, now says to move to the latest patch
+  release of a supported line, since a security fix ships as a patch release
+  on each supported line (#1090).
+- `ferrofed serve` logs the address each listener bound on its `listening` and
+  `serving the admin listener` lines, so a listener configured on port 0 names
+  the port the system gave it, and `server.listen` and `metrics.listen` may
+  both name port 0 on one address, since each bind takes a port of its own.
+- Hardening, the instructions for use and Upgrading state the security-fix
+  policy of `SECURITY.md` (#1095): a security fix ships as its own patch
+  release on each supported line, so an operator moves to the security
+  patch release of the line it runs. They no longer say fixes go to the
+  latest release only.
+- The capability statement of the FHIR face declares the `create` on
+  `Bundle` only when a member receives a category, as it lists the
+  prescription resources only when a member serves them (#1110); a
+  deployment with no `[[fhir.receive]]` no longer declares a `create` that
+  refuses every document.
+- The console's stored-query pages mark a version read-only as the gateway's
+  operator surface marks it, with no copy of the gateway's reserved-namespace
+  rule, and the detail of one stored query reads that name's versions with
+  `GET {base}/operator/stored-queries/{name}` instead of every page of the
+  listing (#1111).
+- The `openehr-*` crates move to 0.0.87, with `fhirconnect` 0.1.117,
+  `openehr-mapping-core` 0.1.111 and `fhir-types` 0.1.113 on the same
+  release, so the server still links one copy of each family. A received
+  document is mapped to a composition whose `category` the template decides:
+  its assumed value, or its one admitted code, or `event` when it leaves the
+  category open. A template that admits several categories and assumes none
+  now refuses the mapping, naming `<root>/category|code`, where `event` was
+  taken before.
+- The Complaints and incidents and Regulatory status pages, `SECURITY.md`
+  and the post-market procedure name Commission Delegated Regulation (EU)
+  2026/881: it sets when the CSIRT that first receives a CRA Art 14
+  notification may delay passing it on, binds that CSIRT and adds no duty
+  for the manufacturer, and a notification now says when a security update
+  or user guidance is expected, the one ground that starts with the
+  manufacturer (its Art 3(a)). Delegated Regulation (EU) 2025/1535 is read
+  and does not reach FerroFED (#844, #852).
+- `SECURITY.md`, `CONTRIBUTING.md`, the README and the book keep what is
+  particular to FerroFED and link the FerroHEALTH family book at
+  <https://ferrohealth.eu/docs/> for what every product shares: the
+  manufacturer, the vulnerability-handling policy, the Cyber Resilience Act
+  from the manufacturer's side, licensing and trademarks, and how the
+  products fit together (#848).
+- A double-quoted query parameter on `GET {base}/v1/query/aql` and
+  `GET {base}/v1/query/{qualified_query_name}[/{version}]` binds the string
+  it names, quotes removed and escapes decoded, as the same string does in a
+  `POST` body: `name="123"` binds `123`, where the quotes were kept before.
+  A patient identifier bound that way, quoted, inside text, namespace
+  qualified or spelled in JSON escapes, is still refused
+  `400 identifier-elsewhere` before any member is asked, and one bound
+  quoted as the subject now resolves as the bare identifier does.
+- `columns[].path` of a federated result set keeps the AQL variable as the
+  client wrote it, `c/uid/value` and `p/id`, as the Federation Tier §9.4
+  example renders it, where it was `/uid/value` and `/id` before. Two
+  variables of one class, such as `c1/uid/value` and `c2/uid/value`, now
+  render apart. A client that matched the stripped form reads the variable
+  first.
+- The access record of a write names the version it left at the member
+  (Regulation (EU) 2025/327 Annex II 3.2): a routed create, update or delete
+  records the `OBJECT_VERSION_ID` the node's `ETag` or `Location` names as
+  the origin's `written-version`, and the `version-uid` of the composition
+  it wrote; an answer that names no version, or no `OBJECT_VERSION_ID`,
+  records `written-version-unread` as `unnamed` or `malformed` and names no
+  value. A received document's record names its version the same way. The
+  origin `status` of a routed read or write, and of a received document, is
+  now the Federation Tier §11.1 status (`active`, `node-error`, `time-out`,
+  `offline`, `consent-denied`) a query's origins already carry, in place of
+  the HTTP status or `failed` (#946).
+- The clinical safety risk file rates hazard L-07 controlled for the access records the gateway writes, which are reviewed with ITI-81 at the Audit Record Repository and each state their retention period; keeping them for that period stays with the repository (#962).
+- `ferrofed_node_requests_total` reads the `outcome` of a routed request and
+  of an ask-all probe with the rule the access record names a routed
+  request's origin by (Federation Tier §11.1, N16): a node's `4xx` answer is
+  now `node-error` where it was `active`, so the counter and the record never
+  read one answer apart, and a new `class` label, `member` or
+  `client-error`, tells a member's failure from a client's mistake it
+  answered correctly. A probed member's `404`, which says it holds no such
+  EHR, stays `active`, and a request answered with a `DPoP` nonce challenge
+  no proof could answer is now counted as `node-error`. The dashboard's
+  member request panel splits by `class` (#982).
+
+### Fixed
+
+- The patient summary document holds no `OperationOutcome`: a mapping run
+  that declares a loss reports it in the transformation record of the
+  access, and the document `Bundle` carries only the summary's content, as
+  the HL7 Europe Patient Summary `Bundle` profile slices it (#1008).
+- A reload names a changed `server.public_url`, `server.trusted_proxies`,
+  `server.forwarded_header`, `server.replica` or `signing.rotation_overlap_s`
+  under the settings that take effect only on a restart; it kept their start
+  values without saying so. A test changes every key of a maximal
+  configuration in turn and holds each to being applied by a reload or named
+  as needing a restart (#1017).
+- The configuration page's member form writes a semicolon inside an
+  endpoint as `%3B` and reads it back once, so a member whose endpoint URL,
+  identifier system or profile holds a `;` saves back through the edit
+  form. Before, the form split such an endpoint at the semicolon and
+  refused it.
+- The operator console answers `408 Request Timeout` to a request body not
+  read whole within 30 seconds, and `400` to one that breaks off, before any
+  session check or server function runs.
+- The operator console answers `413 Payload Too Large` to a request body
+  sent chunked that grows past its limit, as it answers one whose
+  `Content-Length` declares it. Before, it answered `500`.
+- A stored configuration revision that does not read is logged by its
+  position, key and kind of fault, never by a line of the revision the TOML
+  or JSON reader quotes, so a credential in a URL query never reaches the
+  log. A configuration parse refusal now uses the same fault words as a
+  registry document refusal: `unknown field`, `duplicate key`, `invalid
+  type, expected …`.
+- The operator console draws its navigation and the Sign out button only for a
+  signed-in operator, decided by the server from the session; a visitor's
+  landing page shows what the console is and the sign-in. When the session
+  store cannot be read, a page answers 500 and says so, offering neither
+  (#1036).
+- The documentation of the receive check in `eehrxf` 0.0.23 says what the
+  code does (#1054): the `required` terminology bindings are held by
+  `ReceivedDocument::check_bindings` and `terminology::bindings::check_required`,
+  whose results convert into the check's findings, and `Category::document_type`
+  and `Category::profiles` give `None` for a prescription or a dispensation in
+  every build, because HL7 Europe MPD 1.0.0 has no document profile.
+- A stored-query row the embedded or PostgreSQL store cannot read is
+  reported by the field and the kind of fault, never by the reader's error,
+  which can quote the held text, so a damaged store's log line carries no
+  part of a stored definition.
+- The document list on the FHIR face no longer answers `200` when the
+  cross-reference could not answer for a member (#1104): under
+  all-or-nothing it fails with `424` naming that member as `not-resolved`,
+  as the patient summary and the prescription search do, and under
+  `partial` it names the member in an `outcome` entry beside the documents
+  it lists.
+- A patient the cross-reference could not answer for at any member is no
+  longer answered on the FHIR face as a patient no member holds (#1107).
+  Under `partial`, the patient summary names each such member as
+  `not-resolved` in every section, where it answered `404`, and the
+  document list names each one in an `outcome` entry, where it answered an
+  empty `searchset`. A patient summary under `partial` now also names a
+  single member the cross-reference could not answer for. A patient every
+  member answers it does not hold still gets the empty answer.
+- The operator console's muted text in the light theme is a shade darker
+  (`#58687d`), so it meets the 4.5:1 contrast of WCAG 2.2 SC 1.4.3 on every
+  ground it can sit on, the inset panels and the accent tint included. A test
+  computes the contrast of every text and ground pair of both themes from the
+  stylesheet and fails a pair below 4.5:1, or a control edge below 3:1.
+- The operator console's page of one member and the detail of a stored
+  query no longer fail now and then with a cut-off answer. Each page's
+  title read the route's parameters after the server had cleaned them up,
+  which panicked the render; the title now falls back to the name the page
+  rendered with. A test fetches the stored query's detail fifty times in a
+  row and checks its title each time.
+- The four FerroEHR nodes of the local `compose.yaml` stack, and every
+  FerroEHR container the test harness starts, run with
+  `FERROEHR__USAGE_REPORT__ENABLED=false` (#1128). A container does not
+  inherit the CI runner's environment, so FerroEHR's own CI detection never
+  fired, and each test run or local stack reported itself to FerroPULSE as an
+  installation.
+- A reload applies a change to `[federation.consent]`, and to
+  `[federation.localization]` beside the node selection and budgets the
+  process started with; it kept both at their start values without saying
+  so, and an applied configuration revision now changes them too (#578).
+- A write whose access record the audit spool has no room for is refused
+  `503 access-unrecorded` before any member is asked. Before, a routed
+  ITS-REST write or a document received on the FHIR face reached its
+  member first and was then answered `503`, so a client that sent it again
+  wrote it twice. The gateway now reserves the record's place in the spool
+  before the write, and two writes never take its last place. Once a member
+  was asked, its answer stands; a reserved record that still cannot be
+  stored raises the security event `write-unrecorded` and the alert
+  `FerroFEDWriteUnrecorded`. `AccessSink` in `ehds-logging` 0.0.17 gains
+  `reserve`, and `ihe-iti` 0.0.35 adds `Spool::reserve` and
+  `AuditRecorder::reserve`.
+- Under `config.ui = "managed"`, a changed configuration file that a
+  `SIGHUP` reload records as a revision is marked `pending-restart`, with
+  the keys a restart applies, when the reload leaves settings for the next
+  start. Before, it was marked `applied`, so `GET /admin/config` claimed a
+  configuration ran that only partly did, while a revision saved and
+  applied through the API was marked `pending-restart`.
+- The interoperability component no longer writes an openEHR terminology id
+  such as `local` as a FHIR `Coding.system` (#967). An archetype-local code
+  is written under the code system of the archetype it is defined in,
+  `https://ferrofed.eu/fhir/CodeSystem/archetype-local/` followed by the
+  archetype id; `SNOMED-CT`, `LOINC` and `ICD10` are written as their FHIR
+  URIs; and a code of a terminology with no known URI, or a local code with
+  no template context, is written as no coding: its code is in the
+  narrative, the result names it as unmapped, and the item follows eHN
+  Patient Summary Art 10(7).
+- Under `config.ui = "managed"`, a `SIGHUP` reload whose changed file the
+  reload refuses records the file's revision and a `config-revision-refused`
+  record naming the class of the refusal, and leaves the running mark where
+  it was, so no other replica on the store follows it. The revision is
+  marked running only once the reload applied it, and the same file read
+  again is tried again. A start likewise marks the file's revision only once
+  the gateway built what it runs, and one that fails leaves the mark and
+  writes the same record (#972).
+- The operator console's integrity view lists the collisions an operator
+  cleared recently, newest first, as the gateway reports them beside its
+  incidents. Before, the view left them out. A replica's refusal of an
+  admin action, a body the console cannot read, and an admin listener it
+  cannot reach are each logged as that action, with the replica, the
+  status and the code, and never the `ehr_id` or the stored query the
+  operator named. Before, each was logged as a view the gateway refused.
+- The interoperability component writes an openEHR terminology version as a
+  FHIR `Coding.version` only in the form the code system's versions take
+  (#977). A SNOMED CT version passes only as a URI naming an edition, such
+  as `http://snomed.info/sct/900000000000207008/version/20260201`, and an
+  HL7 Administrative Gender, RoleClass, RoleCode or ObservationCategoryCodes
+  version only as dot-separated digits; any other is left out. Every other
+  system's version passes as recorded, because no vendored source shows its
+  form.
+- The operator console logs a query the gateway refuses as a refused query,
+  and a configuration action a replica refuses as a refused configuration
+  action, naming the action (a member save, an apply, a rollback, a
+  stored-query store and the rest) and the replica, with no identifier,
+  AQL text or token. Before, a refused query was logged as a refused view
+  and a configuration action as an admin action.
+
+### Security
+
+- A registry error that names an endpoint's base URL, such as two endpoints
+  sharing one, shows its scheme, host, port and path alone, never a user
+  name, password, query or fragment. Since the operator console shows a
+  `configuration-invalid` message, it never shows a credential carried in
+  a URL.
+- A registry document the TOML reader refuses is reported by its position,
+  key and kind of fault, never by the line the reader quotes, so a
+  `configuration-invalid` message on the operator console never shows text
+  of the document, such as a credential in a URL query.
+- The operator console's site build installs the Tailwind CSS CLI and
+  wasm-opt at pinned releases, checks each against its pinned SHA-256
+  before it runs, and refuses to build unless the tools on PATH match those
+  digests, so cargo-leptos never downloads or runs an unchecked binary in
+  the attested release lane (#1051).
+
 ## [0.0.10] - 2026-10-15
 
 Supported until 2031-10-15, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships in the latest release, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -4375,7 +5202,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...v0.0.8
