@@ -46,6 +46,8 @@ mod secrets;
 #[cfg(test)]
 mod server;
 #[cfg(test)]
+mod server_functions;
+#[cfg(test)]
 mod shell;
 #[cfg(test)]
 mod sign_in;
