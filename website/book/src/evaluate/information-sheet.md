@@ -153,6 +153,15 @@ documents of one category:
 | (e) | `Laboratory-Reports` | no |
 | (f) | `Discharge-Reports` | no |
 
+An electronic dispensation, Art 14(1)(c), is received as one resource,
+which the table above does not count: a client sends one
+`MedicationDispense-eu-mpd` to `POST {fhir-base}/MedicationDispense`, and
+FerroFED writes it to the member that owns the prescription it names, when the deployment declares
+members for electronic dispensations in `[[fhir.serve]]`
+([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation)).
+Electronic prescriptions, Art 14(1)(b), are served by search and read and
+are never received.
+
 Which of these a deployment receives is its operator's choice: each
 `[[fhir.receive]]` table of the configuration names the one member that
 stores a category's documents
@@ -198,6 +207,8 @@ Item names its row in the matrix exactly.
 | Netherlands Generic Functions IG source | tag v0.3.0, version 0.3.0 | the Dutch binding: NVI localization, Mitz consent, LRZa addressing, Annex B of the Federation Tier |
 | Nuts specifications | commit 7c0de53 | the Nuts grant of the Dutch binding, RFC003 and RFC021 |
 | HL7 Europe Patient Summary | `hl7.fhir.eu.eps` 1.0.0-ballot | the patient summary document the FHIR face writes and receives, Annex II, points 2.1 to 2.3 |
+| HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
+| HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, and the category codes of the access record |
 | Xt-EHR EHDS Logical Information Models | `xtehr.eu.ehds.models` 1.0.0 | the EHDS dataset model the interoperability component reads |
@@ -223,8 +234,11 @@ Beside them:
 The European electronic health record exchange format of Art 15 has no
 adopted implementing act. The gateway serves the patient summary in the
 FHIR R4 form of HL7 Europe's packages and receives patient summaries in the
-same form ([The categories received](#the-categories-received)); no other
-category is produced or received
+same form ([The categories received](#the-categories-received)). It serves
+electronic prescriptions and receives electronic dispensations in the HL7
+Europe MPD profiles, through members that serve them
+([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+No other category is produced or received
 ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
 The instructions for use list this and the other
 [limitations](../operate/instructions-for-use.md#limitations).

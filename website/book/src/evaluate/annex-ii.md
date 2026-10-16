@@ -98,18 +98,26 @@ of the access log page.
   information on access (Art 9), the emergency mark (Art 11(5)),
   transmission without hindrance (Art 7(1)), information a person inserts,
   marked as theirs (Art 5), and the absence of a fee (Art 18) are met, and
-  a person's own grant gets their summary (Art 3). The other five
-  categories have no interface (Art 3); the cross-border route is planned
-  (Art 7(2)); and only patient summaries are received (Art 7(4)).
+  a person's own grant gets their summary, and their prescriptions where
+  members serve them (Art 3). Imaging, test results
+  and discharge reports have no interface (Art 3); the cross-border route
+  is planned (Art 7(2)); and only patient summaries and dispensations are
+  received (Art 7(4)).
 - **1.4:** the patient summary is validated against the vendored HL7 Europe
   profiles, but the exchange format of Art 15(1) is not adopted and the
   European digital testing environment (Art 40) has not been run, so the
   interoperability of the component cannot yet be shown against either.
-- **2.1:** the FHIR face serves the patient summary alone, with the
-  interoperability hazards open. Prescriptions, dispensations, imaging,
-  test results and discharge reports have no interface.
-- **2.2 and 2.3:** a release receives patient summaries alone, with hazard
-  I-11 open. The other five categories of Art 14(1) cannot be received.
+- **2.1:** the FHIR face serves the patient summary, and prescriptions and
+  dispensations from members that serve them in the HL7 Europe MPD
+  profiles
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)),
+  with the interoperability hazards open. Imaging, test results and
+  discharge reports have no interface.
+- **2.2 and 2.3:** a release receives patient summaries, with hazard I-11
+  open, and dispensations, written to the member that owns their
+  prescription, with hazards I-12 to I-15 open. Prescriptions are served,
+  never received, and imaging, test results and discharge reports cannot
+  be received.
 - **3.4:** each record states its retention period by its origins and
   categories, but the records carry no label a repository could limit
   access by origin and category with.

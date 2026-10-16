@@ -31,7 +31,7 @@ This page is not legal advice.
 
 | Right | Who acts | FerroFED | Status |
 |---|---|---|---|
-| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them; the other five categories have no interface | partial |
+| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them, and so are their prescriptions where members serve them; imaging, test results and discharge reports have no interface | partial |
 | Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
 | Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants, records who acted, and marks what a declared representative inserts as theirs | not the gateway's |
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
@@ -39,7 +39,7 @@ This page is not legal advice.
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
 | Art 7(2), cross-border transmission | the national contact point | the national route is planned | partial |
 | Art 7(3), transmission to social security | the healthcare provider | outside the intended purpose | not the gateway's |
-| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries only | partial |
+| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries, and dispensations where members serve them | partial |
 | Art 8, restricting access | the person, the consent service and the member | carries the restriction out and hides its fact | met |
 | Art 9, information on access | the access service | records every access for at least three years and serves the search | met |
 | Art 10, opting out | the Member State | an opt-out is carried out as a restriction is | not the gateway's |
@@ -82,10 +82,17 @@ and as the data subject (`fhir/patient_grant.rs`:
 `a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone_is_asked`,
 `the_access_record_names_the_person_as_caller_and_as_data_subject`).
 
-**The gap.** The other five categories of Art 14(1) have no interface in
-the exchange format (Annex II, point 2.1:
+A person's own grant also reads their prescriptions where the deployment
+declares members that serve them, at those members alone; a prescription
+id naming another patient's `ehr_id` is refused before any member is
+asked ([Reading one prescription](../integrate/prescriptions.md#reading-one-prescription);
+`fhir/prescriptions/read.rs`:
+`a_caller_confined_to_one_patient_reads_that_patients_prescription_alone`).
+A dispensation is read only by the id its receipt named.
+
+**The gap.** Imaging, test results and discharge reports have no interface
+in the exchange format (Annex II, point 2.1:
 [#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
-[#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
 [#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
 [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
 [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
@@ -265,10 +272,15 @@ format (Annex II, point 2.2).
 grant too (`fhir/receive/write.rs`:
 `a_caller_confined_to_one_patient_writes_only_into_its_ehr`). A category it
 cannot receive is refused, naming it (`fhir/receive/refused.rs`:
-`a_category_no_member_receives_is_refused_naming_it`). The other five
-categories are the gap of point 2.2
+`a_category_no_member_receives_is_refused_naming_it`). It receives a
+dispensation where the deployment declares members that serve them, and
+writes it to the member that owns its prescription
+([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation);
+`fhir/prescriptions/dispense.rs`:
+`a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unchanged`).
+A prescription is served, never received. Imaging, test results and
+discharge reports are the gap of point 2.2
 ([#665](https://github.com/FerroHEALTH/FerroFED/issues/665),
-[#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
 [#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
 [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
 [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).

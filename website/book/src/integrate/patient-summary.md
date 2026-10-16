@@ -452,8 +452,8 @@ one code, or leaves the category open, needs no change.
 
 The face also serves electronic prescriptions and dispensations, Art
 14(1)(b) and (c), resource by resource: the search and the read of a
-patient's prescriptions and the receipt of a dispensation, each at the member
-that holds it ([Prescriptions and dispensations over FHIR](prescriptions.md)).
+patient's prescriptions, and the receipt and the read of a dispensation, each
+at the member that holds it ([Prescriptions and dispensations over FHIR](prescriptions.md)).
 
 ## Terminology
 
