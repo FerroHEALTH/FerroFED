@@ -7,7 +7,7 @@
 //! (§5.4.1, N33).
 //!
 //! A header the route does not forward is not read here:
-//! [`hygiene::forwarded_headers`] strips it first.
+//! [`hygiene::forwarded::forwarded_headers`] strips it first.
 
 use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderMap, HeaderName, HeaderValue};
@@ -83,7 +83,7 @@ pub(super) fn composed(
     client: &HeaderMap,
     strictness: Strictness,
 ) -> Result<HeaderMap, Refusal> {
-    let forwarded = hygiene::forwarded_headers(operation, client);
+    let forwarded = hygiene::forwarded::forwarded_headers(operation, client);
     let mut sent = HeaderMap::new();
     for name in forwarded.keys() {
         if *name == CONTENT_TYPE && !operation.request_media.is_empty() {

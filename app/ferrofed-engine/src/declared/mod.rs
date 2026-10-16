@@ -54,8 +54,8 @@ use crate::declared::headers::{Strictness, body_media_type, composed};
 /// The path parameters of `operation` are read first, then each parameter of
 /// `query` the operation declares, percent-decoded, then each header of
 /// `headers` the route forwards. A parameter or header the route does not
-/// forward is not read here: [`hygiene::forwarded_query`] refuses the one and
-/// [`hygiene::forwarded_headers`] strips the other.
+/// forward is not read here: [`hygiene::forwarded::forwarded_query`] refuses the one and
+/// [`hygiene::forwarded::forwarded_headers`] strips the other.
 ///
 /// The returned headers are the forwarded ones, with `Accept`,
 /// `Content-Type` and `Prefer` composed as listed values. An operation that
@@ -67,8 +67,8 @@ use crate::declared::headers::{Strictness, body_media_type, composed};
 /// or, when the client sent none, the first media type the operation's body
 /// is declared in.
 ///
-/// [`hygiene::forwarded_query`]: crate::hygiene::forwarded_query
-/// [`hygiene::forwarded_headers`]: crate::hygiene::forwarded_headers
+/// [`hygiene::forwarded::forwarded_query`]: crate::hygiene::forwarded::forwarded_query
+/// [`hygiene::forwarded::forwarded_headers`]: crate::hygiene::forwarded::forwarded_headers
 ///
 /// # Errors
 ///

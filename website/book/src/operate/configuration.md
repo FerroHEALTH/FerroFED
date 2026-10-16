@@ -93,7 +93,7 @@ ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries
 It also prints a line for each category served resource by resource,
 naming the members its `[[fhir.serve]]` entry declares, and one line naming
 the categories no member serves, which the face answers as not served
-([Prescriptions and dispensations](../integrate/patient-summary.md#prescriptions-and-dispensations)):
+([Prescriptions and dispensations](../integrate/prescriptions.md)):
 
 ```text
 ferrofed: note: [[fhir.serve]] Electronic-Prescriptions: the FHIR face serves this Art 14(1) category from the members node-a, each on its own endpoint

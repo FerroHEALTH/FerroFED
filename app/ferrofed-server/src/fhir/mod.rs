@@ -107,9 +107,12 @@ fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 8] {
         (BUNDLE, post(bundle_post)),
         (DOCUMENTS, get(list::documents)),
         (binary::ROUTE, get(binary::read)),
-        (medication::PRESCRIPTIONS, get(medication::search)),
-        (medication::PRESCRIPTION, get(medication::read)),
-        (medication::DISPENSATIONS, post(medication::dispense)),
+        (medication::PRESCRIPTIONS, get(medication::search::search)),
+        (medication::PRESCRIPTION, get(medication::read::read)),
+        (
+            medication::DISPENSATIONS,
+            post(medication::dispense::dispense),
+        ),
     ]
 }
 

@@ -34,7 +34,7 @@
 //! | Header | Value | Source |
 //! |---|---|---|
 //! | `Accept`, `Content-Type`, `Prefer` | a value the operation lists | composed from the client request where the matched ITS-REST operation declares it: the best listed match of `Accept` (the first listed for `*/*` or none), the listed media type `Content-Type` names, the listed preferences of `Prefer` ([`crate::declared::held`]) |
-//! | `If-Match`, `openehr-version`, `openehr-audit-details`, `openehr-template-id`, `openehr-item-tag`, `openehr-version-item-tag` | the client's, byte for byte | the client request, each only where the matched ITS-REST operation declares it in `openehr-its`'s parameter table, of the kind the table states for it ([`crate::declared::held`]), and through the outbound gate ([`crate::hygiene::forwarded_headers`]) |
+//! | `If-Match`, `openehr-version`, `openehr-audit-details`, `openehr-template-id`, `openehr-item-tag`, `openehr-version-item-tag` | the client's, byte for byte | the client request, each only where the matched ITS-REST operation declares it in `openehr-its`'s parameter table, of the kind the table states for it ([`crate::declared::held`]), and through the outbound gate ([`crate::hygiene::forwarded::forwarded_headers`]) |
 //! | `Accept` | `application/json` | `openehr-its`'s client runtime, when the operation declares no `Accept` |
 //! | `Authorization` | `Basic` or `Bearer` | the endpoint's onward credential, as above; the client's own is never forwarded |
 //! | `X-Request-Id` | a version 4 UUID | [`OutboundId::mint`], one per client request; the client's own is never forwarded |
