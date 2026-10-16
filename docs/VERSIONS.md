@@ -232,14 +232,14 @@ row carries the pin-set digest first and the tarball sha256 after it.
 
 The pages of FHIR R4 4.0.1 that govern a definition FerroFED publishes:
 Extensibility, Defining Extensions, the StructureDefinition, CodeSystem and
-NamingSystem resources and the licence page, each pinned in
-`scripts/vendor/fhir-r4.sh` by its versioned URL and sha256 through
-`scripts/vendor/lib/pinned.sh`. Every `ferrofed.eu` FHIR definition is tested
+NamingSystem resources, Using Codes in Resources (4.1) and the licence page,
+each pinned in `scripts/vendor/fhir-r4.sh` by its versioned URL and sha256
+through `scripts/vendor/lib/pinned.sh`. Every `ferrofed.eu` FHIR definition is tested
 against them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| FHIR R4 core specification pages | `hl7.org/fhir/R4/` 4.0.1, pin-set digest `a8fbab9e8a0ddce4c430fa72f0bace21a5432988b7df395ec299773b3125ec57`, the Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition, CodeSystem, NamingSystem and License and Legal Terms (2.20) pages | `scripts/vendor/fhir-r4.sh`, `docs/specs/fhir-r4/PROVENANCE.md` |
+| FHIR R4 core specification pages | `hl7.org/fhir/R4/` 4.0.1, pin-set digest `02abc615bcfe44cb3e2552df63fa4efa5fe44ea964a1caf1e2b54de6fc14ef5b`, the Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition, CodeSystem, NamingSystem, Using Codes in Resources (4.1) and License and Legal Terms (2.20) pages | `scripts/vendor/fhir-r4.sh`, `docs/specs/fhir-r4/PROVENANCE.md` |
 
 ### openEHR clinical models (#776, #980)
 

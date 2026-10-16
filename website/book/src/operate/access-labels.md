@@ -56,7 +56,7 @@ design. The default origin system,
 FerroFED owns whose codes are your registry's endpoint ids. Its FHIR R4
 `CodeSystem` is served at that URL with `content` `not-present`, because
 the codes belong to each deployment
-([The definitions behind FerroFED's URLs](registry.md#the-definitions-behind-ferrofeds-urls)).
+([The definitions behind FerroFED's URLs](registry-fhir.md#the-definitions-behind-ferrofeds-urls)).
 
 ## `[access_log.labels]`
 

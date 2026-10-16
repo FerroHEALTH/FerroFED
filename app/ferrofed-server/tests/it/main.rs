@@ -16,6 +16,7 @@ mod auth;
 mod banner;
 mod base_url;
 mod caller_bindings;
+mod canonicals;
 mod client_address;
 mod collision_clear;
 mod completeness;

@@ -52,6 +52,7 @@
   - [The public address](operate/public-address.md)
   - [What the gateway sends a node](operate/node-requests.md)
   - [The registry](operate/registry.md)
+    - [The registry in FHIR form](operate/registry-fhir.md)
   - [Identity resolution](operate/identity.md)
   - [Localization](operate/localization.md)
   - [Consent](operate/consent.md)
