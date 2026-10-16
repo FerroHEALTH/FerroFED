@@ -1460,6 +1460,7 @@ dependencies = [
  "async-trait",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "fhir-types",
  "http",
  "ihe-iti",
  "jiff",
@@ -1482,6 +1483,7 @@ dependencies = [
 name = "ferrofed-registry"
 version = "0.0.2"
 dependencies = [
+ "fhir-types",
  "jiff",
  "openehr-base",
  "proptest",

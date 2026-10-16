@@ -1,0 +1,18 @@
+{
+  "resourceType": "NamingSystem",
+  "id": "node-id",
+  "name": "FerroFEDNodeId",
+  "status": "active",
+  "kind": "identifier",
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The id of the node an endpoint of a FerroFED federation registry belongs to.",
+  "usage": "`Endpoint.identifier` in the registry document in FHIR form, exactly once per endpoint.",
+  "uniqueId": [
+    {
+      "type": "uri",
+      "value": "https://ferrofed.eu/fhir/sid/node-id",
+      "preferred": true
+    }
+  ]
+}

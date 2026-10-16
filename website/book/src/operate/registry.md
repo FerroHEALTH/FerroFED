@@ -251,6 +251,38 @@ the directory, so a refresh that deletes an organisation's last endpoint is
 applied; a selector that names it then selects nothing, and the request
 answers `404` with `no-destination` (§11.2).
 
+### The definitions behind FerroFED's URLs
+
+Every `https://ferrofed.eu/fhir/` URL this page names resolves to its FHIR
+R4 definition, so a receiving system can read it and a validator can check
+a document against it:
+
+| URL | Definition |
+|---|---|
+| `…/StructureDefinition/consent-refusal-code` | an extension of `Endpoint`, zero or more, with a `valueCode` |
+| `…/StructureDefinition/payload-profile` | an extension of `Endpoint`, zero or more, with a `valueCanonical` |
+| `…/StructureDefinition/ehr-id-system` | an extension of `Endpoint`, at most once, with a `valueUri` |
+| `…/CodeSystem/connection-type` | a complete code system with the one code `openehr-rest-query` |
+| `…/sid/organisation-id`, `…/sid/endpoint-id`, `…/sid/node-id`, `…/sid/system-id`, `…/sid/creating-system-id` | a `NamingSystem` of kind `identifier` whose preferred `uri` is the URL itself |
+
+The access log's default origin system,
+[`…/CodeSystem/access-log-origin`](access-labels.md#the-labels-a-record-carries),
+and the medication extension `…/StructureDefinition/remaining-dispensations`
+resolve the same way. FHIR R4 gives a `NamingSystem` no canonical URL, so
+each identifier system's `NamingSystem` is served at the system's own URL.
+
+The documentation site is a static site on GitHub Pages, which sets the
+content type from the file extension and cannot redirect or negotiate on
+`Accept`. Each definition is therefore served twice with the same bytes: at
+its URL with no extension, which Pages sends as
+`application/octet-stream`, and at the URL plus `.json`, which Pages sends
+as `application/json; charset=utf-8` (both read from the deployed site on
+2026-10-16). A FHIR client that resolves a URL gets the definition's JSON at
+either; one that reads only a JSON content type fetches the `.json` form.
+Neither is sent as `application/fhir+json`, the FHIR media type, because
+Pages has no setting that attaches it to a file. No specification decides how a
+canonical URL is hosted: this is FerroFED's own design.
+
 ## The registry read from an mCSD directory
 
 The gateway can read its members from an IHE mCSD 4.0.0 care services

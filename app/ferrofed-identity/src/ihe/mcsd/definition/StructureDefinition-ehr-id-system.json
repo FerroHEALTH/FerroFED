@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ehr-id-system",
+  "url": "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system",
+  "name": "EhrIdSystem",
+  "title": "EHR id system",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The identifier system a member's own FHIR endpoint (`connectionType` `hl7-fhir-rest`) writes the member's openEHR `ehr_id` in when it is asked by identifier, in the registry document in FHIR form. Such an endpoint carries it once. No element of FHIR R4 `Endpoint` names it.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Endpoint"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "The identifier system of the member's ehr_id",
+        "definition": "The identifier system the member's openEHR `ehr_id` is written in when the endpoint is asked by identifier.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "The identifier system",
+        "definition": "The identifier system URI of the member's `ehr_id`.",
+        "min": 1,
+        "type": [
+          {
+            "code": "uri"
+          }
+        ]
+      }
+    ]
+  }
+}

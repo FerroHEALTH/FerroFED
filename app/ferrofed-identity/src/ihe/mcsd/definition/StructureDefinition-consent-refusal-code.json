@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "consent-refusal-code",
+  "url": "https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code",
+  "name": "ConsentRefusalCode",
+  "title": "Consent refusal code",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "One ITS-REST `Error` `code` by which the node behind an openEHR Query API endpoint marks a `403` as a consent refusal, in the registry document in FHIR form. The extension repeats once per code. No specification defines an element for it.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Endpoint"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "A consent refusal code",
+        "definition": "One ITS-REST `Error` `code` by which the endpoint's node marks a `403` as a consent refusal.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "The ITS-REST Error code",
+        "definition": "The ITS-REST `Error` `code` the node marks a consent refusal with.",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ]
+      }
+    ]
+  }
+}

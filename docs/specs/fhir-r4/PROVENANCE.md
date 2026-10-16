@@ -8,19 +8,22 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `f83b3f5adeb29f74a8c465292689bbdbbf7c6b609b9d5a643ab6954b483244a7`
-- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 4 committed, 0 cache only, 0 needing
+  the pins): `a8fbab9e8a0ddce4c430fa72f0bace21a5432988b7df395ec299773b3125ec57`
+- Fetched: 2026-10-16, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 6 committed, 0 cache only, 0 needing
   manual retrieval
-- Files in this directory: 4 besides this one, each verbatim as the
+- Files in this directory: 6 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `d99d0d5c56b0977021fc50fb9a50eeb3ab9825444d747ca70e07d348cf58649c`
+  `PROVENANCE.md` excluded): `2bc16ab44cd4dced532b604142062575e9df1d824c7c00eab611dfeeaf45af16`
 - Read by: #1053 (the StructureDefinition of the remaining-dispensations
-  extension, crates/eehrxf/src/medication/)
+  extension, crates/eehrxf/src/medication/) and #1072 (the definitions of the
+  registry's FHIR form, app/ferrofed-identity/src/ihe/mcsd/definition/ and
+  app/ferrofed-registry/src/, and of the access log origin system,
+  app/ferrofed-server/src/access/)
 
-The Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition
-and License and Legal Terms (2.20) pages of HL7 FHIR Release 4, version
+The Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition,
+CodeSystem, NamingSystem and License and Legal Terms (2.20) pages of HL7 FHIR Release 4, version
 4.0.1, as `hl7.org/fhir/R4/` serves them, committed under CC0-1.0, which
 the license page states for the specification.
 
@@ -45,6 +48,20 @@ the license page states for the specification.
 - Source: <https://hl7.org/fhir/R4/structuredefinition.html>
 - Version: 4.0.1, the StructureDefinition resource
 - sha256: `35cd9ecf45464d7f0adbc189ddd014e8641b860e4db91d1eebacc971be43c596`
+- Licence: CC0-1.0: FHIR R4 2.20.2 (license.html) licenses the specification under Creative Commons No Rights Reserved (CC0)
+
+### `codesystem.html` (committed)
+
+- Source: <https://hl7.org/fhir/R4/codesystem.html>
+- Version: 4.0.1, the CodeSystem resource
+- sha256: `6bc77ed13750d1a1fe65bdf274dfcaf7ce87c07fa23bde57ad2cdb7cdcd6b83b`
+- Licence: CC0-1.0: FHIR R4 2.20.2 (license.html) licenses the specification under Creative Commons No Rights Reserved (CC0)
+
+### `namingsystem.html` (committed)
+
+- Source: <https://hl7.org/fhir/R4/namingsystem.html>
+- Version: 4.0.1, the NamingSystem resource
+- sha256: `96b3281f6f320aa0c1b74578366296719a358151fbd9552d3a9a1b66294132f9`
 - Licence: CC0-1.0: FHIR R4 2.20.2 (license.html) licenses the specification under Creative Commons No Rights Reserved (CC0)
 
 ### `license.html` (committed)

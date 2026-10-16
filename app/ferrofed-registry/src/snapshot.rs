@@ -46,6 +46,11 @@ impl ConnectionType {
     /// `Coding.system` names it.
     pub const SYSTEM: &str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
 
+    /// The FHIR R4 `CodeSystem` of [`ConnectionType::SYSTEM`], as JSON: the
+    /// complete list of the codes [`ConnectionType::from_code`] reads, which
+    /// the documentation site serves at the system's URL.
+    pub const DEFINITION: &str = include_str!("CodeSystem-connection-type.json");
+
     /// The connection type `code` names in [`ConnectionType::SYSTEM`], or
     /// `None` when the code system defines no such code.
     #[must_use]

@@ -1,0 +1,18 @@
+{
+  "resourceType": "NamingSystem",
+  "id": "system-id",
+  "name": "FerroFEDSystemId",
+  "status": "active",
+  "kind": "identifier",
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The openEHR `system_id` of the node an endpoint of a FerroFED federation registry belongs to.",
+  "usage": "`Endpoint.identifier` in the registry document in FHIR form, exactly once per endpoint.",
+  "uniqueId": [
+    {
+      "type": "uri",
+      "value": "https://ferrofed.eu/fhir/sid/system-id",
+      "preferred": true
+    }
+  ]
+}

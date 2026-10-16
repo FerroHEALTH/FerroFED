@@ -154,6 +154,13 @@ impl Default for Retention {
     }
 }
 
+/// The FHIR R4 `CodeSystem` of the default [`Labels::origin_system`], as
+/// JSON, which the documentation site serves at the system's URL.
+///
+/// Its codes are a deployment's endpoint ids, so its `content` is
+/// `not-present` and it lists none.
+pub const ORIGIN_SYSTEM_DEFINITION: &str = include_str!("CodeSystem-access-log-origin.json");
+
 /// `[access_log.labels]`, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]

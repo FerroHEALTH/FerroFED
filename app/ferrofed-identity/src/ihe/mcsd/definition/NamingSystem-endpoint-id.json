@@ -1,0 +1,18 @@
+{
+  "resourceType": "NamingSystem",
+  "id": "endpoint-id",
+  "name": "FerroFEDEndpointId",
+  "status": "active",
+  "kind": "identifier",
+  "date": "2026-10-16",
+  "publisher": "FerroFED",
+  "description": "The stable id of an endpoint of a FerroFED federation registry, the endpoint id a directive names.",
+  "usage": "`Endpoint.identifier` in the registry document in FHIR form, exactly once per endpoint.",
+  "uniqueId": [
+    {
+      "type": "uri",
+      "value": "https://ferrofed.eu/fhir/sid/endpoint-id",
+      "preferred": true
+    }
+  ]
+}

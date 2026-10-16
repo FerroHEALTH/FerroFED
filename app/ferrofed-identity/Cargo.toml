@@ -67,6 +67,7 @@ url.workspace = true
 [dev-dependencies]
 # The mock server that drops off the runtime.
 ferrofed-testkit.workspace = true
+fhir-types = { workspace = true, features = ["r4", "resources"] }
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
