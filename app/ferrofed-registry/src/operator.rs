@@ -5,7 +5,8 @@
 //!
 //! The gateway writes and the operator console reads the integrity
 //! incidents, the `creating_system_id` routing table, pages of the
-//! stored-query registry, the deployment report, and the body of the
+//! stored-query registry, each version marked read-only or not, the
+//! deployment report, and the body of the
 //! operator's clear of an `ehr_id` on the admin listener. Every report
 //! carries routing ids, counts, stored definitions and the deployment
 //! profile only. An `ehr_id` is named only when it is a bare
@@ -425,6 +426,24 @@ pub struct DeploymentReport {
     pub replica: String,
 }
 
+/// One stored-query version as the operator surface lists it, with whether
+/// the gateway takes a write under its name.
+///
+/// `Q` is the ITS-REST `StoredQuery` of `openehr-its`, flattened, so a
+/// reader of the plain ITS-REST shape reads `read_only` as one more member.
+// NOTE: no specification governs this: our own design; the flag spares a reader
+// a copy of the gateway's reserved-namespace and read-only-store rules.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredVersion<Q> {
+    /// The version as ITS-REST names it.
+    #[serde(flatten)]
+    pub definition: Q,
+    /// Whether the gateway refuses a write under this name: it sits in the
+    /// gateway's reserved namespace, or the store refuses every insert, as
+    /// the read-only definition files do.
+    pub read_only: bool,
+}
+
 /// One page of a listing, with where it starts and how many there are in
 /// all, so a reader always knows when it holds only part of the listing.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -577,6 +596,26 @@ mod tests {
         let unnamed: EhrId = "synthetic-patient-9999".parse().expect("an ehr_id");
         let hidden = ClearedEhrId::of(&unnamed, &[node("node-a")], (0, &BTreeSet::new()));
         assert_eq!(None, hidden.ehr_id, "only a bare UUID is named");
+    }
+
+    #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct Definition {
+        name: String,
+    }
+
+    #[test]
+    fn a_stored_version_adds_read_only_beside_the_definitions_own_members() {
+        let listed = super::StoredVersion {
+            definition: Definition {
+                name: "org.example::q".to_owned(),
+            },
+            read_only: true,
+        };
+        let text = serde_json::to_string(&listed).expect("a body");
+        assert_eq!(r#"{"name":"org.example::q","read_only":true}"#, text);
+        let read: super::StoredVersion<Definition> =
+            serde_json::from_str(&text).expect("read back");
+        assert_eq!(listed, read);
     }
 
     #[test]

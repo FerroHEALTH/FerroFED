@@ -154,7 +154,7 @@ addresses, only `*` or `**` covers it.
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
-| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries`, `/operator/dependencies` and `/operator/deployment` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
+| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries`, `/operator/stored-queries/{name}`, `/operator/dependencies` and `/operator/deployment` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
 | A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear`, and the export `POST /admin/identity-state/export` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
@@ -313,7 +313,7 @@ its tokens, and only when your cross-reference service holds that member's
 
 ## The operator surface
 
-Five read-only routes on the client listener give the
+Six read-only routes on the client listener give the
 [operator console](operator-console.md) and your monitoring what no other
 surface carries:
 
@@ -321,7 +321,8 @@ surface carries:
 |---|---|
 | `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 25 of each kind |
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
-| `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
+| `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL and whether it is read-only |
+| `GET {base}/operator/stored-queries/{name}` | every version of the one stored query whose qualified name is `{name}`, such as `org.example::patient_compositions`, lowest first; a `404` (`stored-query-unknown`) when the gateway holds none, and a `400` (`query-name-invalid`) for a name ITS-REST does not admit |
 | `GET {base}/operator/dependencies` | the state the gateway last observed of each member endpoint and service ([Health probes](health.md#the-dependency-report)) |
 | `GET {base}/operator/deployment` | how the process is deployed: its profile, whether patients resolve through the `[dev]` cross-reference, and the product version |
 
@@ -337,13 +338,17 @@ first, each with its `at`, its `ehr_id` (a bare UUID, else `null`) and the
 member node ids as `claimants`; a clear removes no incident
 ([Clearing a held collision](registry.md#clearing-a-held-collision)).
 
-The routing table and the stored queries answer one page, as
+The routing table and both stored-query routes answer one page, as
 `{"items": [...], "offset": 0, "total": 2}`, where `total` counts every row
 and `items` holds at most `limit` of them from `offset`. Both query
 parameters are optional: `offset` defaults to `0` and `limit` to `100`, its
 most. A `limit` of `0` or over `100` is a `400` (`parameter-invalid`). A
-stored query is the ITS-REST `StoredQuery`: `name`, `type`, `version`,
-`saved` and `q`. The bodies are the types of `ferrofed_registry::operator`,
+stored query is the ITS-REST `StoredQuery`, `name`, `type`, `version`,
+`saved` and `q`, with one member beside them, `read_only`. It is `true` when
+the gateway takes no `PUT` under that name: the name sits in the gateway's
+own namespace `eu.ferrofed.eehrxf`, or the registry reads the read-only
+definition files (`backend = "files"`). The embedded and PostgreSQL stores
+take new versions, so a deployment's own query there is `false`. The bodies are the types of `ferrofed_registry::operator`,
 which the operator console reads as well, and the stored query is the
 `openehr-its` `StoredQuery`, so the gateway and the console share one
 definition of each.

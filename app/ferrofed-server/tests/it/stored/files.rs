@@ -21,6 +21,7 @@ use axum::body::Body;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::reserved;
 use ferrofed_registry::definition::store::StoreError;
+use ferrofed_registry::operator::{Page, StoredVersion};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::federation::FederationFault;
@@ -206,6 +207,37 @@ async fn options_on_a_read_only_definition_lists_no_put() -> TestResult {
             headers.get(header::ALLOW).and_then(|v| v.to_str().ok()),
             "§7a.2: {path}"
         );
+    }
+    Ok(())
+}
+
+/// The operator surface marks a definition file read-only, in the listing
+/// and by its name, as the registry refuses every `PUT` over the files.
+#[tokio::test]
+async fn the_operator_surface_marks_a_definition_file_read_only() -> TestResult {
+    let a = Server::start().await;
+    let b = Server::start().await;
+    let dir = tempfile::tempdir()?;
+    let definitions = dir.path().join("definitions");
+    write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
+    let app = gateway(dir.path(), (&a, &b), &definitions)?;
+    for path in [
+        String::from("/operator/stored-queries"),
+        format!("/operator/stored-queries/{NAME}"),
+    ] {
+        let request = Request::get(&path)
+            .header(header::AUTHORIZATION, crate::support::operator_bearer()?)
+            .body(Body::empty())?;
+        let (status, text) = call(app.clone(), request).await?;
+        assert_eq!(StatusCode::OK, status, "{path}: {text}");
+        let page: Page<StoredVersion<StoredQuery>> = serde_json::from_str(&text)?;
+        let file = page
+            .items
+            .iter()
+            .find(|entry| entry.definition.name == NAME)
+            .ok_or("the definition file is listed")?;
+        assert!(file.read_only, "{path}: {text}");
+        assert!(page.items.iter().all(|entry| entry.read_only), "{path}");
     }
     Ok(())
 }
