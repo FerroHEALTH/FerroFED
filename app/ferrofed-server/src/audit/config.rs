@@ -51,6 +51,7 @@ use url::Url;
 use crate::audit::AuditDestination;
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::error::access_log::AccessLogFault;
 use crate::config::secrets::secret;
 
 /// `[audit]`, as the configuration writes it.
@@ -175,9 +176,9 @@ const KEY: &str = "audit";
 /// [`Error::Missing`] for no `destination` outside development while a
 /// registry or a binding section that records here is configured, for no `[audit.repository]`
 /// under `repository`, and for no `url`, `hostname` or, outside
-/// development, `spool_dir`; [`Error::FeedAuditOff`] for `off` outside
-/// development; [`Error::AccessAuditLog`] for `log` outside development
-/// while a registry is configured; [`Error::FeedAuditRepositoryUnused`] for a repository under
+/// development, `spool_dir`; [`AccessLogFault::FeedAuditOff`] for `off` outside
+/// development; [`AccessLogFault::AccessAuditLog`] for `log` outside development
+/// while a registry is configured; [`AccessLogFault::FeedAuditRepositoryUnused`] for a repository under
 /// another destination; [`Error::Url`] for a `url` that does not parse;
 /// [`Error::Zero`] for a zero bound or timeout; and the errors of a secret or
 /// a file that cannot be read.
@@ -192,9 +193,9 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     // Regulation (EU) 2025/327 Annex II 3.2 have every exchange and access recorded.
     let destination = match table.destination {
         Some(AuditDestination::Off) if profile != Profile::Development => {
-            return Err(Error::FeedAuditOff {
+            return Err(Error::AccessLog(AccessLogFault::FeedAuditOff {
                 key: format!("{KEY}.destination"),
-            });
+            }));
         }
         Some(destination) => destination,
         None if audited && profile != Profile::Development => {
@@ -213,7 +214,7 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
                 key: format!("{KEY}.repository"),
             });
         }
-        (_, Some(_)) => return Err(Error::FeedAuditRepositoryUnused),
+        (_, Some(_)) => return Err(Error::AccessLog(AccessLogFault::FeedAuditRepositoryUnused)),
         (_, None) => None,
     };
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2 has the access log name who accessed and
@@ -222,9 +223,9 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
         && config.registry.configured()
         && profile != Profile::Development
     {
-        return Err(Error::AccessAuditLog {
+        return Err(Error::AccessLog(AccessLogFault::AccessAuditLog {
             key: format!("{KEY}.destination"),
-        });
+        }));
     }
     Ok(AuditSettings {
         destination,

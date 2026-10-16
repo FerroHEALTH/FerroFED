@@ -19,6 +19,7 @@ use std::sync::Arc;
 use ehds_logging::retention::RetentionError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::access_log::AccessLogFault;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_testkit::atna_feed::FeedRepository;
@@ -181,7 +182,7 @@ fn a_retention_under_three_years_is_refused() {
         assert!(
             matches!(
                 &refused,
-                Err(Error::AccessLogRetention(RetentionError::UnderFloor { key: named, .. }))
+                Err(Error::AccessLog(AccessLogFault::Retention(RetentionError::UnderFloor { key: named, .. })))
                     if named == key
             ),
             "{key}: {refused:?}"
@@ -198,9 +199,9 @@ fn a_retention_for_a_category_the_map_does_not_declare_is_refused() {
     assert!(
         matches!(
             refused,
-            Err(Error::AccessLogRetention(
+            Err(Error::AccessLog(AccessLogFault::Retention(
                 RetentionError::UnknownCategory { .. }
-            ))
+            )))
         ),
         "{refused:?}"
     );

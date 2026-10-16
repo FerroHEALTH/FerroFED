@@ -20,6 +20,7 @@ use std::path::Path;
 use ferrofed_server::audit::AuditDestination;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::access_log::AccessLogFault;
 use ferrofed_server::config::settings::Settings;
 
 use crate::facade::registry;
@@ -246,7 +247,7 @@ const LOG: &str = "[audit]\ndestination = \"log\"\n";
 fn log_is_refused_for_a_registry_outside_development_naming_the_key() -> TestResult {
     let dir = tempfile::tempdir()?;
     match resolve(&text(dir.path(), "production", LOG)?)? {
-        Err(ConfigError::AccessAuditLog { key }) => {
+        Err(ConfigError::AccessLog(AccessLogFault::AccessAuditLog { key })) => {
             assert_eq!("audit.destination", key);
             Ok(())
         }

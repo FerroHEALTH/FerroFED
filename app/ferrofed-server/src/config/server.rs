@@ -18,6 +18,7 @@ use serde::Deserialize;
 use crate::base_path::BasePath;
 use crate::client_address::{ForwardedHeader, Forwarding};
 use crate::config::error::Error;
+use crate::config::error::server::ServerFault;
 use crate::config::limits;
 use crate::config::public_url::PublicUrl;
 use crate::listener::certificates::{Certificates, TlsFiles};
@@ -115,16 +116,15 @@ impl Server {
     ///
     /// # Errors
     ///
-    /// [`Error::BasePath`] for a base path no request path can sit under, and
+    /// [`ServerFault::BasePath`] for a base path no request path can sit under, and
     /// the errors of [`PublicUrl::resolve`].
     pub fn resolve_base(&self) -> Result<(BasePath, Option<PublicUrl>), Error> {
-        let base_path = self
-            .base_path
-            .parse::<BasePath>()
-            .map_err(|source| Error::BasePath {
+        let base_path = self.base_path.parse::<BasePath>().map_err(|source| {
+            Error::Server(ServerFault::BasePath {
                 key: String::from("server.base_path"),
                 source,
-            })?;
+            })
+        })?;
         let public_url = self
             .public_url
             .as_deref()
@@ -139,7 +139,7 @@ impl Server {
     ///
     /// # Errors
     ///
-    /// [`Error::Replica`] for a configured name that is no replica name.
+    /// [`ServerFault::Replica`] for a configured name that is no replica name.
     pub fn resolve_replica(&self) -> Result<Replica, Error> {
         self.replica_or_host(std::env::var(HOST_NAME_ENV).ok().as_deref())
     }
@@ -153,10 +153,12 @@ impl Server {
     ///
     /// # Errors
     ///
-    /// [`Error::Replica`] for a configured name that is no replica name.
+    /// [`ServerFault::Replica`] for a configured name that is no replica name.
     pub fn replica_or_host(&self, host_name: Option<&str>) -> Result<Replica, Error> {
         match &self.replica {
-            Some(configured) => configured.parse().map_err(Error::Replica),
+            Some(configured) => configured
+                .parse()
+                .map_err(|source| Error::Server(ServerFault::Replica(source))),
             // NOTE: no specification governs this: our own design; a host name outside the
             // form is legitimately absent as a name, so the process is unnamed.
             None => Ok(host_name
@@ -170,7 +172,7 @@ impl Server {
     ///
     /// # Errors
     ///
-    /// [`Error::TrustedProxy`] naming the entry that is neither.
+    /// [`ServerFault::TrustedProxy`] naming the entry that is neither.
     pub fn resolve_forwarding(&self) -> Result<Forwarding, Error> {
         let proxies = self
             .trusted_proxies
@@ -180,9 +182,11 @@ impl Server {
                 let text = written.trim();
                 text.parse::<IpNet>()
                     .or_else(|_| text.parse::<IpAddr>().map(IpNet::from))
-                    .map_err(|source| Error::TrustedProxy {
-                        key: format!("server.trusted_proxies[{index}]"),
-                        source,
+                    .map_err(|source| {
+                        Error::Server(ServerFault::TrustedProxy {
+                            key: format!("server.trusted_proxies[{index}]"),
+                            source,
+                        })
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -254,7 +258,7 @@ impl ListenerTls {
     /// # Errors
     ///
     /// [`Error::Missing`] for an unset `certificate_file` or `key_file`,
-    /// [`Error::HealthcheckIdentityUnused`] for a healthcheck identity outside
+    /// [`ServerFault::HealthcheckIdentityUnused`] for a healthcheck identity outside
     /// `[server.tls]` or beside no `client_ca_file`, and
     /// [`Error::ListenerTls`] for a file that does not read or a key that
     /// does not match its certificate.
@@ -276,9 +280,9 @@ impl ListenerTls {
         if files.healthcheck_identity.is_some()
             && (table != SERVER_TLS || files.client_ca.is_none())
         {
-            return Err(Error::HealthcheckIdentityUnused {
+            return Err(Error::Server(ServerFault::HealthcheckIdentityUnused {
                 key: format!("{table}.healthcheck_identity_file"),
-            });
+            }));
         }
         Certificates::load(files.clone())?;
         crate::healthcheck::Tls::read(&files)?;

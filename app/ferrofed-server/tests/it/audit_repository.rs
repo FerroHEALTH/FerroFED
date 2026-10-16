@@ -550,7 +550,7 @@ fn the_repository_table_and_the_destination_go_together() -> TestResult {
     let unused = unreachable(dir.path(), "development", "url = \"tls://arr.example.org\"")?
         .replace("audit = \"repository\"", "audit = \"log\"");
     match Config::from_sources(Some(&unused), &BTreeMap::new())?.resolve() {
-        Err(error::Error::AuditRepositoryUnused) => {}
+        Err(error::Error::Binding(error::binding::BindingFault::AuditRepositoryUnused)) => {}
         other => return Err(format!("a table no message reaches: {other:?}").into()),
     }
     let text = unreachable(dir.path(), "development", "url = \"tls://arr.example.org\"")?;

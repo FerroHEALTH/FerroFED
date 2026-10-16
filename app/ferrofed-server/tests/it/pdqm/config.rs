@@ -100,7 +100,7 @@ fn a_credential_in_the_url_or_an_unsigned_assertion_grant_is_refused() -> TestRe
     assert!(
         matches!(
             &error,
-            error::Error::GrantWithoutSigning { section } if section == "pdqm.credentials.oauth2"
+            error::Error::Credentials(error::credentials::CredentialsFault::GrantWithoutSigning { section }) if section == "pdqm.credentials.oauth2"
         ),
         "{error:?}"
     );
@@ -123,7 +123,7 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
     assert!(
         matches!(
             &error,
-            error::Error::ServiceGrantNotHere { section } if section == "pdqm.credentials"
+            error::Error::Credentials(error::credentials::CredentialsFault::ServiceGrantNotHere { section }) if section == "pdqm.credentials"
         ),
         "{error:?}"
     );
@@ -137,7 +137,7 @@ fn a_namespace_the_cross_reference_maps_is_refused() -> TestResult {
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
-        matches!(&error, error::Error::Pdqm { key, .. } if key.contains(LOCAL)),
+        matches!(&error, error::Error::Binding(error::binding::BindingFault::Pdqm { key, .. }) if key.contains(LOCAL)),
         "{error:?}"
     );
     Ok(())
@@ -185,11 +185,11 @@ fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     assert!(
         matches!(
             error,
-            error::Error::DemographicsBudget {
+            error::Error::Binding(error::binding::BindingFault::DemographicsBudget {
                 timeout_ms: 1000,
                 localization_ms: 0,
                 overall_ms: 1000
-            }
+            })
         ),
         "§11.5: the step's budget is a part of the overall one: {error:?}"
     );
@@ -205,11 +205,11 @@ fn the_default_localizer_budget_counts_when_no_section_is_written() -> TestResul
     assert!(
         matches!(
             error,
-            error::Error::DemographicsBudget {
+            error::Error::Binding(error::binding::BindingFault::DemographicsBudget {
                 timeout_ms: 1000,
                 localization_ms: 5000,
                 overall_ms: 6000
-            }
+            })
         ),
         "§11.5: the localizer runs within its default budget: {error:?}"
     );

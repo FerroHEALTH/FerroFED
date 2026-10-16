@@ -89,6 +89,7 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use serde::Deserialize;
 
 use crate::config::error::Error;
+use crate::config::error::access_log::AccessLogFault;
 
 /// `[access_log]`, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -245,18 +246,18 @@ impl AccessLogSettings {
 ///
 /// # Errors
 ///
-/// [`Error::AccessLogMap`] for a map the logging component refuses,
-/// [`Error::AccessLogRetention`] for a retention it refuses,
-/// [`Error::AccessLogLabels`] for labels it refuses,
-/// [`Error::AccessLogEmergency`] for an emergency purpose it refuses, and
-/// [`Error::AccessLogNamespace`] for an empty patient namespace.
+/// [`AccessLogFault::Map`] for a map the logging component refuses,
+/// [`AccessLogFault::Retention`] for a retention it refuses,
+/// [`AccessLogFault::Labels`] for labels it refuses,
+/// [`AccessLogFault::Emergency`] for an emergency purpose it refuses, and
+/// [`AccessLogFault::Namespace`] for an empty patient namespace.
 pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
     let map = CategoryMap::declare(
         &table.national_categories,
         &table.templates,
         &table.archetypes,
     )
-    .map_err(Error::AccessLogMap)?;
+    .map_err(AccessLogFault::Map)?;
     let digest = crate::conformance::fixture::sha256(map.canonical().as_bytes());
     let map = map.with_digest(format!("sha256:{digest}"));
     let retention = RetentionPolicy::declare(
@@ -265,14 +266,14 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         &table.retention.origins,
         &map,
     )
-    .map_err(Error::AccessLogRetention)?;
+    .map_err(AccessLogFault::Retention)?;
     let labels = LabelPolicy::declare(
         Some(table.labels.origin_system.as_str()),
         &table.labels.categories,
         &table.labels.origins,
         &map,
     )
-    .map_err(Error::AccessLogLabels)?;
+    .map_err(AccessLogFault::Labels)?;
     let purposes: Vec<Purpose> = table
         .emergency_purpose
         .iter()
@@ -281,13 +282,13 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
             code: purpose.code.clone(),
         })
         .collect();
-    let emergency = EmergencyPurposes::declare(&purposes).map_err(Error::AccessLogEmergency)?;
+    let emergency = EmergencyPurposes::declare(&purposes).map_err(AccessLogFault::Emergency)?;
     let patient_namespaces = table
         .patient_namespaces
         .iter()
         .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(Error::AccessLogNamespace)?;
+        .map_err(AccessLogFault::Namespace)?;
     Ok(AccessLogSettings {
         map,
         retention,

@@ -95,7 +95,7 @@ fn a_credential_in_the_mitz_url_is_refused() -> TestResult {
 fn a_purpose_other_than_treat_or_coc_is_refused() -> TestResult {
     let (_dir, text) = edited(|table| table.replace("\"TREAT\"", "\"ETREAT\""))?;
     match resolved(&text) {
-        Err(error::Error::Mitz { key, .. }) => {
+        Err(error::Error::Binding(error::binding::BindingFault::Mitz { key, .. })) => {
             assert_eq!("nl_gf.mitz.purpose", key);
             Ok(())
         }
@@ -113,7 +113,7 @@ fn the_pseudonym_listed_as_the_bsn_is_refused() -> TestResult {
         )
     })?;
     match resolved(&text) {
-        Err(error::Error::Mitz { key, .. }) => {
+        Err(error::Error::Binding(error::binding::BindingFault::Mitz { key, .. })) => {
             assert_eq!("nl_gf.mitz.namespaces", key);
             Ok(())
         }
@@ -238,12 +238,12 @@ fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult 
     );
     match resolved(&configuration(dir.path(), "production", &tables)?) {
         Err(
-            refused @ error::Error::PrefilterBudget {
+            refused @ error::Error::Binding(error::binding::BindingFault::PrefilterBudget {
                 timeout_ms: 1000,
                 demographics_ms: 500,
                 localization_ms: 1500,
                 overall_ms: 3000,
-            },
+            }),
         ) => {
             let text = refused.to_string();
             for key in [
@@ -266,12 +266,12 @@ fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult 
 fn a_prefilter_budget_alone_past_the_overall_budget_is_refused() -> TestResult {
     let (_dir, text) = edited(|table| table.replace("timeout_ms = 1000", "timeout_ms = 25000"))?;
     match resolved(&text) {
-        Err(error::Error::PrefilterBudget {
+        Err(error::Error::Binding(error::binding::BindingFault::PrefilterBudget {
             timeout_ms: 25_000,
             demographics_ms: 0,
             localization_ms: 0,
             overall_ms: 25_000,
-        }) => Ok(()),
+        })) => Ok(()),
         other => Err(format!(
             "§11.5: the pre-filter's budget is a part of the overall one: {other:?}"
         )

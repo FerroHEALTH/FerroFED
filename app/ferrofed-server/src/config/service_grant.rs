@@ -37,6 +37,7 @@ use ferrofed_registry::secret::Secret;
 use openehr_its::rest::client::{CredentialsProvider, ReqwestTransport};
 
 use crate::config::error::Error;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::grant::{self, GrantFault};
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::{Scheme, Settings, SigningSettings};
@@ -161,8 +162,8 @@ pub fn site(key: &str) -> ProtectedSite {
 /// # Errors
 ///
 /// [`TlsFault::OnService`] for TLS material in the section,
-/// [`Error::Scheme`] for a grant beside another scheme,
-/// [`Error::ServiceGrantNotHere`] for a Nuts or FAPI 2.0 grant, and every
+/// [`CredentialsFault::Scheme`] for a grant beside another scheme,
+/// [`CredentialsFault::ServiceGrantNotHere`] for a Nuts or FAPI 2.0 grant, and every
 /// refusal of [`resolve`] and of a bearer token or basic credentials.
 pub(crate) fn resolve_service(
     section: &str,
@@ -172,9 +173,9 @@ pub(crate) fn resolve_service(
     let Some(oauth2) = &credentials.oauth2 else {
         let scheme = resolve_credentials(section, credentials)?;
         if scheme.is_grant() {
-            return Err(Error::ServiceGrantNotHere {
+            return Err(Error::Credentials(CredentialsFault::ServiceGrantNotHere {
                 section: section.to_owned(),
-            });
+            }));
         }
         return Ok(scheme);
     };
@@ -191,9 +192,9 @@ pub(crate) fn resolve_service(
         || credentials.password_file.is_some()
         || credentials.fapi2.is_some()
     {
-        return Err(Error::Scheme {
+        return Err(Error::Credentials(CredentialsFault::Scheme {
             section: section.to_owned(),
-        });
+        }));
     }
     resolve(&format!("{section}.oauth2"), oauth2, context)
         .map(|grant| Scheme::ServiceGrant(Box::new(grant)))
@@ -205,9 +206,9 @@ pub(crate) fn resolve_service(
 /// # Errors
 ///
 /// [`Error::Missing`] for a key that must be set, [`GrantFault`] for a key a
-/// service's grant does not take, [`Error::GrantWithoutSigning`] for an
-/// assertion with no `[signing]` key, [`Error::ServiceScope`] for a scope
-/// outside RFC 6749 §3.3, [`Error::Grant`] for an unusable token endpoint or
+/// service's grant does not take, [`CredentialsFault::GrantWithoutSigning`] for an
+/// assertion with no `[signing]` key, [`CredentialsFault::ServiceScope`] for a scope
+/// outside RFC 6749 §3.3, [`CredentialsFault::Grant`] for an unusable token endpoint or
 /// resource, and [`Error::Cleartext`] for a token endpoint that is not
 /// `https` outside the development profile.
 pub(crate) fn resolve(
@@ -250,13 +251,17 @@ pub(crate) fn resolve(
     if oauth2.scope.trim().is_empty() {
         return Err(missing("scope"));
     }
-    let scope = Scope::tokens(&oauth2.scope).map_err(|source| Error::ServiceScope {
-        key: format!("{key}.scope"),
-        source,
+    let scope = Scope::tokens(&oauth2.scope).map_err(|source| {
+        Error::Credentials(CredentialsFault::ServiceScope {
+            key: format!("{key}.scope"),
+            source,
+        })
     })?;
-    let refused = |source| Error::Grant {
-        section: key.to_owned(),
-        source,
+    let refused = |source| {
+        Error::Credentials(CredentialsFault::Grant {
+            section: key.to_owned(),
+            source,
+        })
     };
     let secret = secret::<Secret>(
         &format!("{key}.client_secret"),
@@ -283,8 +288,10 @@ pub(crate) fn resolve(
             .into());
         }
         (None, None) => {
-            let signing = context.signing.ok_or_else(|| Error::GrantWithoutSigning {
-                section: key.to_owned(),
+            let signing = context.signing.ok_or_else(|| {
+                Error::Credentials(CredentialsFault::GrantWithoutSigning {
+                    section: key.to_owned(),
+                })
             })?;
             Some((Arc::clone(&signing.keys), signing.assertion_lifetime))
         }

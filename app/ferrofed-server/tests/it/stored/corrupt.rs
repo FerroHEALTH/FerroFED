@@ -12,8 +12,8 @@ use std::path::Path;
 use ferrofed_registry::definition::store::{
     DefinitionStore as _, Field, FieldFault, RowFault, StoreError,
 };
-use ferrofed_server::stored::embedded::RedbStore;
-use redb::{Database, TableDefinition};
+use ferrofed_server::stored::embedded::{DEFINITIONS, RedbStore};
+use redb::Database;
 
 use super::TestResult;
 use crate::facade::{EHR_A, EHR_B, crossref, registry};
@@ -21,10 +21,6 @@ use crate::run::binary;
 
 /// A value a planted row carries, which no log line may hold.
 const PLANTED: &str = "synthetic-planted-7731";
-
-/// The embedded store's table of definitions, as the store lays it out.
-const DEFINITIONS: TableDefinition<'static, (&str, &str), (&str, &str)> =
-    TableDefinition::new("stored_query_definitions");
 
 /// What `serve` writes when its stored queries are `stored_queries`, a
 /// `[stored_queries]` table body, with the registry document in `dir`.

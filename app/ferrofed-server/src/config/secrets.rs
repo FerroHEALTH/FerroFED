@@ -23,6 +23,7 @@ use secrecy::zeroize::Zeroizing;
 use crate::binding::Binding;
 use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::grant;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{Scheme, SigningSettings};
@@ -85,7 +86,7 @@ pub(crate) fn resolve_node_credentials(
         .transpose()?;
     match scheme(section, credentials, thumbprint.as_ref()) {
         Ok(scheme) => Ok((Some(scheme), Some(material))),
-        Err(Error::NoScheme { .. }) => Ok((None, Some(material))),
+        Err(Error::Credentials(CredentialsFault::NoScheme { .. })) => Ok((None, Some(material))),
         Err(refused) => Err(refused),
     }
 }
@@ -112,8 +113,10 @@ fn scheme(
         .copied()
         .filter(|binding| binding.onward_table(credentials).is_some())
         .collect();
-    let refused = || Error::Scheme {
-        section: section.to_owned(),
+    let refused = || {
+        Error::Credentials(CredentialsFault::Scheme {
+            section: section.to_owned(),
+        })
     };
     if let Some(fapi2) = &credentials.fapi2 {
         if token.is_some()
@@ -151,17 +154,13 @@ fn scheme(
     }
     if let Some(oauth2) = &credentials.oauth2 {
         if token.is_some() || credentials.user.is_some() || password.is_some() {
-            return Err(Error::Scheme {
-                section: section.to_owned(),
-            });
+            return Err(refused());
         }
         return resolve_grant(&format!("{section}.oauth2"), oauth2, certificate)
             .map(|grant| Scheme::OAuth2(Box::new(grant)));
     }
     match (token, credentials.user.as_deref(), password) {
-        (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(Error::Scheme {
-            section: section.to_owned(),
-        }),
+        (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(refused()),
         (Some(token), None, None) => {
             let key = source_key(
                 section,
@@ -170,7 +169,7 @@ fn scheme(
             );
             openehr_its::rest::client::Credentials::bearer(token.to_secret_string())
                 .header_value()
-                .map_err(|source| Error::Authorization { key, source })?;
+                .map_err(|source| CredentialsFault::Authorization { key, source })?;
             Ok(Scheme::Bearer(token))
         }
         (None, Some(user), Some(password)) => {
@@ -190,9 +189,9 @@ fn scheme(
         (None, None, Some(_)) => Err(Error::Missing {
             key: format!("{section}.user"),
         }),
-        (None, None, None) => Err(Error::NoScheme {
+        (None, None, None) => Err(Error::Credentials(CredentialsFault::NoScheme {
             section: section.to_owned(),
-        }),
+        })),
     }
 }
 
@@ -212,27 +211,33 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
     let user = || format!("{section}.user");
     let password = || source_key(section, "password", password_file);
     match source {
-        InvalidCredentials::ColonInUserId => Error::Basic {
+        InvalidCredentials::ColonInUserId => Error::Credentials(CredentialsFault::Basic {
             key: user(),
             fault: BasicFault::Colon,
             source,
-        },
-        InvalidCredentials::ControlCharacter(BasicPart::UserId) => Error::Basic {
-            key: user(),
-            fault: BasicFault::ControlCharacter,
-            source,
-        },
-        InvalidCredentials::ControlCharacter(BasicPart::Password) => Error::Basic {
-            key: password(),
-            fault: BasicFault::ControlCharacter,
-            source,
-        },
+        }),
+        InvalidCredentials::ControlCharacter(BasicPart::UserId) => {
+            Error::Credentials(CredentialsFault::Basic {
+                key: user(),
+                fault: BasicFault::ControlCharacter,
+                source,
+            })
+        }
+        InvalidCredentials::ControlCharacter(BasicPart::Password) => {
+            Error::Credentials(CredentialsFault::Basic {
+                key: password(),
+                fault: BasicFault::ControlCharacter,
+                source,
+            })
+        }
         InvalidCredentials::NotB64Token
         | InvalidCredentials::NotToken68
-        | InvalidCredentials::NotAHeaderValue(_) => Error::Authorization {
-            key: password(),
-            source,
-        },
+        | InvalidCredentials::NotAHeaderValue(_) => {
+            Error::Credentials(CredentialsFault::Authorization {
+                key: password(),
+                source,
+            })
+        }
     }
 }
 
@@ -330,13 +335,17 @@ fn resolve_grant(
     if oauth2.scope.trim().is_empty() {
         return Err(missing("scope"));
     }
-    let scope = Scope::parse(&oauth2.scope).map_err(|source| Error::Scope {
-        key: format!("{section}.scope"),
-        source,
+    let scope = Scope::parse(&oauth2.scope).map_err(|source| {
+        Error::Credentials(CredentialsFault::Scope {
+            key: format!("{section}.scope"),
+            source,
+        })
     })?;
-    let refused = |source| Error::Grant {
-        section: section.to_owned(),
-        source,
+    let refused = |source| {
+        Error::Credentials(CredentialsFault::Grant {
+            section: section.to_owned(),
+            source,
+        })
     };
     if matches!(client_auth, ClientAuthentication::Tls(_)) || bound.is_some() {
         grant::mutual_tls_url(
@@ -371,11 +380,12 @@ fn resolve_grant(
         let pem = secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
             key: format!("{key}_file"),
         })?;
-        let prover =
-            Prover::from_pem(&pem.to_secret_string()).map_err(|source| Error::DpopKey {
+        let prover = Prover::from_pem(&pem.to_secret_string()).map_err(|source| {
+            Error::Credentials(CredentialsFault::DpopKey {
                 key: format!("{key}_file"),
                 source,
-            })?;
+            })
+        })?;
         grant = grant.with_dpop(Arc::new(prover));
     }
     Ok(grant)
@@ -395,10 +405,10 @@ pub(crate) fn resolve_signing(
 ) -> Result<SigningSettings, Error> {
     let max = MAX_ASSERTION_LIFETIME.as_secs();
     if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
-        return Err(Error::AssertionLifetime {
+        return Err(Error::Credentials(CredentialsFault::AssertionLifetime {
             seconds: signing.assertion_lifetime_s,
             max,
-        });
+        }));
     }
     // NOTE: no specification governs this: our own design; a node holding the
     // previous set still meets an assertion the previous key signed.
@@ -407,11 +417,11 @@ pub(crate) fn resolve_signing(
             .assertion_lifetime_s
             .saturating_add(signing.node_jwks_cache_s)
     {
-        return Err(Error::RotationOverlap {
+        return Err(Error::Credentials(CredentialsFault::RotationOverlap {
             overlap_s: signing.rotation_overlap_s,
             lifetime_s: signing.assertion_lifetime_s,
             cache_s: signing.node_jwks_cache_s,
-        });
+        }));
     }
     let jwks_uri = jwks_uri(signing.jwks_uri.as_deref(), public)?;
     let key_file = signing.key_file.as_deref().ok_or_else(|| Error::Missing {
@@ -439,15 +449,17 @@ pub(crate) fn resolve_signing(
     let overlap = Duration::from_secs(signing.rotation_overlap_s);
     let mut keys =
         KeyRing::new(current, previous, overlap, Arc::new(SystemClock)).map_err(|source| {
-            Error::SigningKey {
+            Error::Credentials(CredentialsFault::SigningKey {
                 key: String::from("signing.previous_key_file"),
                 source,
-            }
+            })
         })?;
     if let Some(next) = next {
-        keys = keys.with_next(next).map_err(|source| Error::SigningKey {
-            key: String::from("signing.next_key_file"),
-            source,
+        keys = keys.with_next(next).map_err(|source| {
+            Error::Credentials(CredentialsFault::SigningKey {
+                key: String::from("signing.next_key_file"),
+                source,
+            })
         })?;
     }
     Ok(SigningSettings {
@@ -487,11 +499,11 @@ fn jwks_uri(text: Option<&str>, public: Option<&PublicUrl>) -> Result<Uri, Error
 fn next_key(path: &Path, intended: Algorithm) -> Result<SigningKey, Error> {
     let next = signing_key("signing.next_key", path)?;
     if next.algorithm() != intended {
-        return Err(Error::NextKeyAlgorithm {
+        return Err(Error::Credentials(CredentialsFault::NextKeyAlgorithm {
             key: String::from("signing.next_key_file"),
             found: algorithm_name(next.algorithm()),
             intended: algorithm_name(intended),
-        });
+        }));
     }
     Ok(next)
 }
@@ -511,8 +523,10 @@ fn signing_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
     let pem = secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
         key: format!("{key}_file"),
     })?;
-    SigningKey::from_ec_pem(&pem.to_secret_string()).map_err(|source| Error::SigningKey {
-        key: format!("{key}_file"),
-        source,
+    SigningKey::from_ec_pem(&pem.to_secret_string()).map_err(|source| {
+        Error::Credentials(CredentialsFault::SigningKey {
+            key: format!("{key}_file"),
+            source,
+        })
     })
 }

@@ -28,6 +28,8 @@ use std::time::Duration;
 use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::binding::BindingFault;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport;
 use ferrofed_server::state::AppState;
@@ -441,7 +443,7 @@ fn an_oauth2_or_fapi2_grant_for_the_nvi_is_refused() -> TestResult {
     ] {
         let tables = format!("\n[nl_gf.nvi.credentials.{grant}]\n{table}");
         match resolve(dir.path(), "development", &tables)? {
-            Err(ConfigError::NviGrant { key }) => {
+            Err(ConfigError::Binding(BindingFault::NviGrant { key })) => {
                 assert_eq!(format!("nl_gf.nvi.credentials.{grant}"), key);
             }
             other => return Err(format!("{grant} for the NVI: {other:?}").into()),
@@ -462,7 +464,9 @@ async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
         grant.tables
     );
     match resolve(dir.path(), "development", &both)? {
-        Err(ConfigError::Scheme { section }) => assert_eq!("nl_gf.nvi.credentials", section),
+        Err(ConfigError::Credentials(CredentialsFault::Scheme { section })) => {
+            assert_eq!("nl_gf.nvi.credentials", section);
+        }
         other => return Err(format!("two schemes: {other:?}").into()),
     }
 
@@ -483,7 +487,8 @@ async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
         "did = \"did:key:z6MkSynthetic\"",
     );
     match resolve(dir.path(), "development", &not_web)? {
-        Err(ConfigError::NutsHolder { section, .. }) if section == SECTION => {}
+        Err(ConfigError::Credentials(CredentialsFault::NutsHolder { section, .. }))
+            if section == SECTION => {}
         other => return Err(format!("a holder that is no did:web: {other:?}").into()),
     }
     Ok(())

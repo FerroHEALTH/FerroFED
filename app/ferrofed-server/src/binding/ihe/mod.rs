@@ -36,6 +36,7 @@ use crate::binding::seam::{LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::error::federation::FederationFault;
 use crate::config::service_grant::{self, ServiceContext};
 use crate::config::settings::Scheme;
 use crate::config::settings::Settings;
@@ -115,7 +116,7 @@ impl Binding for Ihe {
             crate::config::fhir::apart(fhir, &route, "pmir.path")?;
         }
         if config.registry.document.is_some() && config.registry.mcsd.is_some() {
-            return Err(Error::TwoRegistrySources);
+            return Err(Error::Federation(FederationFault::TwoRegistrySources));
         }
         settings.registry_directory = config
             .registry

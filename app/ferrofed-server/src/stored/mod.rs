@@ -182,9 +182,11 @@ pub fn open(store: &Store, context: &Context) -> Result<Box<dyn DefinitionStore>
         #[cfg(not(feature = "postgres"))]
         Store::Postgres(_) => {
             return Err(StoreError::Backend(Box::new(
-                crate::config::error::Error::StoreBackendUnavailable {
-                    backend: store.backend(),
-                },
+                crate::config::error::Error::Federation(
+                    crate::config::error::federation::FederationFault::StoreBackendUnavailable {
+                        backend: store.backend(),
+                    },
+                ),
             )));
         }
     };

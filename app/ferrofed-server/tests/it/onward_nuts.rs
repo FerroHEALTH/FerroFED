@@ -28,6 +28,7 @@ use std::sync::Arc;
 use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::transport;
 use ferrofed_server::state::AppState;
 use ferrofed_server::telemetry::{Rendering, traced};
@@ -269,14 +270,26 @@ async fn the_configuration_refuses_a_nuts_grant_it_cannot_use() -> TestResult {
         "\n[credentials.\"node-a-pub\".oauth2]\nclient_id = \"x\"\n\n[[credentials.",
     );
     let error = resolve(&both)?;
-    assert!(matches!(error, ConfigError::Scheme { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::Scheme { .. })
+        ),
+        "{error:?}"
+    );
 
     let not_web = material.tables.replace(
         &format!("did = \"{HOLDER}\""),
         "did = \"did:key:z6MkSynthetic\"",
     );
     let error = resolve(&not_web)?;
-    assert!(matches!(error, ConfigError::NutsHolder { .. }), "{error:?}");
+    assert!(
+        matches!(
+            error,
+            ConfigError::Credentials(CredentialsFault::NutsHolder { .. })
+        ),
+        "{error:?}"
+    );
 
     let mut unbound = material
         .tables

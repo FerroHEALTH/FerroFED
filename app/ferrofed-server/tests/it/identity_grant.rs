@@ -22,6 +22,7 @@ use std::path::Path;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::atna_feed::FeedRepository;
@@ -323,12 +324,12 @@ fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
         ),
         (
             "client_auth = \"private_key_jwt\"\n",
-            |error, key| matches!(error, ConfigError::GrantWithoutSigning { section } if section == key),
+            |error, key| matches!(error, ConfigError::Credentials(CredentialsFault::GrantWithoutSigning { section }) if section == key),
             key.to_owned(),
         ),
         (
             "client_auth = \"client_secret_basic\"\nclient_secret = \"s\"\nscope = \"say\\\"hi\\\"\"\n",
-            |error, key| matches!(error, ConfigError::ServiceScope { key: named, .. } if named == key),
+            |error, key| matches!(error, ConfigError::Credentials(CredentialsFault::ServiceScope { key: named, .. }) if named == key),
             format!("{key}.scope"),
         ),
         (

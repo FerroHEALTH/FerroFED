@@ -46,6 +46,7 @@ use serde::Deserialize;
 
 use crate::audit::config::AuditSettings;
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
@@ -131,11 +132,13 @@ pub struct PdqmSettings {
 ///
 /// # Errors
 /// [`Error::Missing`] for no `url`, `master` or `namespaces`, [`Error::Zero`]
-/// for a zero timeout, [`Error::DemographicsBudget`] for a budget that leaves no
-/// time to resolve, [`Error::Url`], [`Error::UrlCredentials`] and
-/// [`Error::Cleartext`] for the URL, [`Error::GrantNotHere`] for an OAuth 2.0
-/// or Nuts grant, [`Error::Pdqm`] for a namespace `[pixm.namespaces]` maps,
-/// and the errors of a secret that cannot be read.
+/// for a zero timeout, [`BindingFault::DemographicsBudget`] for a budget that
+/// leaves no time to resolve, [`Error::Url`], [`Error::UrlCredentials`] and
+/// [`Error::Cleartext`] for the URL, [`CredentialsFault::GrantNotHere`] for an
+/// OAuth 2.0 or Nuts grant, [`BindingFault::Pdqm`] for a namespace
+/// `[pixm.namespaces]` maps, and the errors of a secret that cannot be read.
+///
+/// [`CredentialsFault::GrantNotHere`]: crate::config::error::credentials::CredentialsFault::GrantNotHere
 pub(super) fn resolve(
     config: &Config,
     context: &ServiceContext<'_>,
@@ -176,11 +179,11 @@ pub(super) fn resolve(
     let localization_ms = localization_budget_ms(config);
     let overall_ms = config.federation.overall_timeout_ms;
     if pdqm.timeout_ms.saturating_add(localization_ms) >= overall_ms {
-        return Err(Error::DemographicsBudget {
+        return Err(Error::Binding(BindingFault::DemographicsBudget {
             timeout_ms: pdqm.timeout_ms,
             localization_ms,
             overall_ms,
-        });
+        }));
     }
     // NOTE: Annex A §A.2: the step serves an identifier the cross-reference does
     // not map, so a namespace mapped in both would have two meanings.
@@ -189,10 +192,10 @@ pub(super) fn resolve(
             .keys()
             .find(|namespace| pixm.namespaces.contains_key(*namespace))
     }) {
-        return Err(Error::Pdqm {
+        return Err(Error::Binding(BindingFault::Pdqm {
             key: format!("{PDQM_KEY}.namespaces.\"{mapped}\""),
             fault: "is a namespace [pixm.namespaces] maps, so the cross-reference resolves it as it is",
-        });
+        }));
     }
     let section = format!("{PDQM_KEY}.credentials");
     let credentials = pdqm

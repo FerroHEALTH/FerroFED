@@ -25,6 +25,7 @@ use ferrofed_server::config::auth::{
     AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
 };
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::state::AppState;
 use ferrofed_server::telemetry::{Rendering, traced};
 use ferrofed_testkit::issuer::{Claims, Issuer};
@@ -403,7 +404,7 @@ fn the_configuration_refuses_an_exchange_without_a_resource_and_a_bad_dpop_key()
         &format!("resource = \"{RESOURCE}\"\ndpop_key_file = {bad}\n"),
     ))?;
     assert!(
-        matches!(&error, ConfigError::DpopKey { key, .. } if key == "credentials.node-a-pub.oauth2.dpop_key_file"),
+        matches!(&error, ConfigError::Credentials(CredentialsFault::DpopKey { key, .. }) if key == "credentials.node-a-pub.oauth2.dpop_key_file"),
         "{error:?}"
     );
     assert!(!format!("{error}").contains("Qz7"), "{error}");

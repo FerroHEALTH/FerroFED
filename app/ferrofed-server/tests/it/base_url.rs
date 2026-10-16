@@ -374,7 +374,7 @@ fn a_malformed_base_path_refuses_to_boot_naming_its_key() {
         assert!(
             matches!(
                 &refused,
-                Err(error::Error::BasePath { key, .. }) if key == "server.base_path"
+                Err(error::Error::Server(error::server::ServerFault::BasePath { key, .. })) if key == "server.base_path"
             ),
             "{base:?}: {refused:?}"
         );

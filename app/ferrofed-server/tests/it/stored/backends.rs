@@ -18,6 +18,7 @@ use std::path::Path;
 
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
@@ -131,7 +132,7 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
     ] {
         let refused = resolved(dir.path(), table)?.err().ok_or("refused")?;
         assert!(
-            matches!(&refused, ConfigError::StoreKey { key: set, backend: named } if set == key && *named == backend),
+            matches!(&refused, ConfigError::Federation(FederationFault::StoreKey { key: set, backend: named }) if set == key && *named == backend),
             "{table}: {refused:?}"
         );
     }
@@ -155,9 +156,9 @@ fn a_build_without_the_postgres_feature_refuses_the_postgres_backend() -> TestRe
     assert!(
         matches!(
             &refused,
-            ConfigError::StoreBackendUnavailable {
+            ConfigError::Federation(FederationFault::StoreBackendUnavailable {
                 backend: Backend::Postgres
-            }
+            })
         ),
         "{refused:?}"
     );
@@ -221,7 +222,7 @@ fn an_unparsable_postgres_url_is_refused_without_quoting_it() -> TestResult {
     let table = format!("backend = \"postgres\"\nurl = \"postgres://u:{PASSWORD}@h:port/d\"");
     let refused = resolved(dir.path(), &table)?.err().ok_or("refused")?;
     assert!(
-        matches!(&refused, ConfigError::StoreUrl { key } if key == "stored_queries.url"),
+        matches!(&refused, ConfigError::Federation(FederationFault::StoreUrl { key }) if key == "stored_queries.url"),
         "{refused:?}"
     );
     assert!(!refused.to_string().contains(PASSWORD), "{refused}");

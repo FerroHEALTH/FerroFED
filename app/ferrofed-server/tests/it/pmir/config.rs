@@ -18,6 +18,7 @@ use std::error::Error;
 use ferrofed_server::binding::ihe::pmir::config::OnDrain;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::binding::BindingFault;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
@@ -121,7 +122,7 @@ fn a_feed_path_on_another_surface_is_refused() -> TestResult {
         let text = text.replacen("path = \"/pmir/feed\"", &format!("path = \"{path}\""), 1);
         let error = resolve(&text)?.err().ok_or("refused")?;
         assert!(
-            matches!(error, ConfigError::FeedPath { .. }),
+            matches!(error, ConfigError::Binding(BindingFault::FeedPath { .. })),
             "{path}: {error}"
         );
     }

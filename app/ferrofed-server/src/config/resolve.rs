@@ -19,6 +19,9 @@ use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 
 use crate::config::error::Error;
+use crate::config::error::credentials::CredentialsFault;
+use crate::config::error::federation::FederationFault;
+use crate::config::error::server::ServerFault;
 use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing, secret};
 use crate::config::server::{METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
@@ -41,47 +44,47 @@ impl Config {
     /// # Errors
     /// Returns [`Error::Conflict`] when a value and its `_file` sibling are
     /// both set, [`Error::Secret`] and [`Error::EmptySecret`] when a `_file`
-    /// cannot be read or holds nothing, [`Error::Authorization`] and
-    /// [`Error::Basic`] for a credential the `Authorization` header cannot
+    /// cannot be read or holds nothing, [`CredentialsFault::Authorization`] and
+    /// [`CredentialsFault::Basic`] for a credential the `Authorization` header cannot
     /// carry, and the value errors
-    /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
-    /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
-    /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`],
-    /// [`Error::LocalizationBudget`], [`Error::Url`]),
+    /// ([`Error::Listen`], [`ServerFault::BasePath`], [`Error::Zero`], [`ServerFault::Filter`],
+    /// [`CredentialsFault::EndpointId`], [`FederationFault::DemographicEndpoint`], [`Error::Missing`],
+    /// [`CredentialsFault::Scheme`], [`CredentialsFault::NoScheme`], [`ServerFault::Budget`],
+    /// [`FederationFault::LocalizationBudget`], [`Error::Url`]),
     /// each naming the key that carries the fault, the stored-query store
     /// errors of [`stored_queries::resolve`], and
-    /// [`Error::StoredQueryFanOutWithoutRegistry`] and
-    /// [`Error::StoredQueryFanOutReadOnly`] when definitions would be
+    /// [`FederationFault::StoredQueryFanOutWithoutRegistry`] and
+    /// [`FederationFault::StoredQueryFanOutReadOnly`] when definitions would be
     /// distributed with no registry, or no `PUT`, to distribute from. The
     /// metrics surface refuses a remote listener without `metrics.allow_remote`
-    /// ([`Error::MetricsRemote`]), a listener on the address `server.listen`
-    /// binds at a port other than 0 ([`Error::MetricsShared`]), a remote
+    /// ([`ServerFault::MetricsRemote`]), a listener on the address `server.listen`
+    /// binds at a port other than 0 ([`ServerFault::MetricsShared`]), a remote
     /// listener outside the development
     /// profile whose scrape neither a scrape token nor a client CA
-    /// authenticates ([`Error::MetricsUnauthenticated`]), and the metrics push and the trace export
+    /// authenticates ([`ServerFault::MetricsUnauthenticated`]), and the metrics push and the trace export
     /// each refuse a collector that is no `http://` URL
-    /// ([`Error::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
-    /// scope outside the SMART on openEHR `system` grammar ([`Error::Scope`]),
-    /// an unusable endpoint or resource ([`Error::Grant`]), a PIX Manager
-    /// section ([`Error::GrantNotHere`]) and a missing `[signing]`
-    /// ([`Error::GrantWithoutSigning`]); `[signing]` refuses a key that is no
-    /// P-256 or P-384 key ([`Error::SigningKey`]), an assertion lifetime past five
-    /// minutes ([`Error::AssertionLifetime`]), an overlap window shorter than
-    /// that lifetime plus the nodes' cache time ([`Error::RotationOverlap`]),
+    /// ([`ServerFault::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
+    /// scope outside the SMART on openEHR `system` grammar ([`CredentialsFault::Scope`]),
+    /// an unusable endpoint or resource ([`CredentialsFault::Grant`]), a PIX Manager
+    /// section ([`CredentialsFault::GrantNotHere`]) and a missing `[signing]`
+    /// ([`CredentialsFault::GrantWithoutSigning`]); `[signing]` refuses a key that is no
+    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an assertion lifetime past five
+    /// minutes ([`CredentialsFault::AssertionLifetime`]), an overlap window shorter than
+    /// that lifetime plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
     /// a next key on another curve than it is meant for
-    /// ([`Error::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
+    /// ([`CredentialsFault::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     /// `[auth]` is refused as
     /// [`Auth::resolve`](crate::config::auth::Auth::resolve) refuses it.
     /// `[server.tls]` and `[metrics.tls]` refuse an unset certificate or key
     /// ([`Error::Missing`]), a file that does not read or a key that does not
     /// match its certificate ([`Error::ListenerTls`]), and a healthcheck
-    /// identity it never presents ([`Error::HealthcheckIdentityUnused`]).
+    /// identity it never presents ([`ServerFault::HealthcheckIdentityUnused`]).
     /// `server.public_url` is refused as
     /// [`PublicUrl::resolve`](crate::config::public_url::PublicUrl::resolve) refuses it,
     /// a `signing.jwks_uri` that names another route under it
-    /// ([`Error::PublicUrlDisagrees`]), and an entry of
+    /// ([`ServerFault::PublicUrlDisagrees`]), and an entry of
     /// `server.trusted_proxies` that is no address or CIDR block
-    /// ([`Error::TrustedProxy`]). `[fhir]` is refused as
+    /// ([`ServerFault::TrustedProxy`]). `[fhir]` is refused as
     /// [`Fhir::resolve`](crate::config::fhir::Fhir::resolve) refuses it
     /// ([`Error::Fhir`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
@@ -175,7 +178,7 @@ impl Config {
         if settings.federation.consent_emergency == EmergencyConsent::PassToNode
             && settings.access_log.emergency.is_empty()
         {
-            return Err(Error::EmergencyWithoutPurpose);
+            return Err(Error::Federation(FederationFault::EmergencyWithoutPurpose));
         }
         let audit = crate::audit::config::resolve(self);
         if let Ok(resolved) = &audit {
@@ -195,15 +198,17 @@ impl Config {
     ///
     /// # Errors
     ///
-    /// [`Error::EndpointId`] for a section name that is no endpoint id, and
+    /// [`CredentialsFault::EndpointId`] for a section name that is no endpoint id, and
     /// the errors of [`resolve_node_credentials`].
     fn resolve_credentials(&self) -> Result<OnwardCredentials, Error> {
         let mut credentials = BTreeMap::new();
         let mut onward_tls = BTreeMap::new();
         for (endpoint, section) in &self.credentials {
-            let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
-                key: endpoint.clone(),
-                source,
+            let id = EndpointId::new(endpoint.as_str()).map_err(|source| {
+                Error::Credentials(CredentialsFault::EndpointId {
+                    key: endpoint.clone(),
+                    source,
+                })
             })?;
             let (scheme, tls) =
                 resolve_node_credentials(&format!("credentials.{endpoint}"), section)?;
@@ -233,10 +238,10 @@ impl Config {
         // NOTE: no specification governs this: our own design; a request accepted
         // just before the listener closes may run its whole request timeout.
         if shutdown_timeout < request_timeout {
-            return Err(Error::Drain {
+            return Err(Error::Server(ServerFault::Drain {
                 shutdown_ms,
                 request_ms: self.server.request_timeout_ms,
-            });
+            }));
         }
         Ok((shutdown_timeout, bindings_drain))
     }
@@ -258,11 +263,11 @@ impl Config {
         if self.registry.configured()
             && request_timeout <= overall.saturating_add(Duration::from_millis(COMBINING_MARGIN_MS))
         {
-            return Err(Error::Budget {
+            return Err(Error::Server(ServerFault::Budget {
                 overall_ms: self.federation.overall_timeout_ms,
                 margin_ms: COMBINING_MARGIN_MS,
                 request_ms: self.server.request_timeout_ms,
-            });
+            }));
         }
         let budget = Budget::new(per_node, overall).map_err(|_zero| Error::Zero {
             key: String::from("federation"),
@@ -302,7 +307,7 @@ impl Config {
             .as_deref()
             .map(EndpointId::new)
             .transpose()
-            .map_err(|source| Error::DemographicEndpoint { source })?;
+            .map_err(|source| Error::Federation(FederationFault::DemographicEndpoint { source }))?;
         let localization = match (
             &self.federation.localization,
             self.federation.node_selection,
@@ -357,9 +362,9 @@ fn signed_grants(
     for (endpoint, scheme) in credentials {
         match scheme {
             Scheme::OAuth2(_) => {
-                return Err(Error::GrantWithoutSigning {
+                return Err(Error::Credentials(CredentialsFault::GrantWithoutSigning {
                     section: format!("credentials.{endpoint}.oauth2"),
-                });
+                }));
             }
             // NOTE: FAPI 2.0 Security Profile §5.4.2, the client key is published as a JWK
             // Set, which the gateway serves only beside its [signing] keys.
@@ -406,12 +411,12 @@ fn resolve_metrics(
         // NOTE: no specification governs this: our own design; the listener stays
         // on the host unless the operator says, and off it the scrape is authenticated.
         if !address.ip().is_loopback() && !metrics.allow_remote {
-            return Err(Error::MetricsRemote { address });
+            return Err(Error::Server(ServerFault::MetricsRemote { address }));
         }
         // NOTE: no specification governs this: our own design; port 0 asks the system for
         // a free port at each bind, so two listeners on port 0 never share one.
         if address == server && address.port() != 0 {
-            return Err(Error::MetricsShared { address });
+            return Err(Error::Server(ServerFault::MetricsShared { address }));
         }
         let mutual = tls.as_ref().is_some_and(|tls| tls.client_ca.is_some());
         if !address.ip().is_loopback()
@@ -419,7 +424,9 @@ fn resolve_metrics(
             && scrape_token.is_none()
             && !mutual
         {
-            return Err(Error::MetricsUnauthenticated { address });
+            return Err(Error::Server(ServerFault::MetricsUnauthenticated {
+                address,
+            }));
         }
     }
     Ok(MetricsSettings {
@@ -434,11 +441,12 @@ fn resolve_metrics(
 /// an `http://` URL, and a sample ratio from `0.0` to `1.0`.
 fn resolve_telemetry(telemetry: &Telemetry) -> Result<TelemetrySettings, Error> {
     tracing_subscriber::EnvFilter::try_new(&telemetry.filter)
-        .map_err(|source| Error::Filter { source })?;
-    let trace_sample_ratio =
-        SampleRatio::new(telemetry.trace_sample_ratio).ok_or(Error::SampleRatio {
+        .map_err(|source| Error::Server(ServerFault::Filter { source }))?;
+    let trace_sample_ratio = SampleRatio::new(telemetry.trace_sample_ratio).ok_or(
+        Error::Server(ServerFault::SampleRatio {
             value: telemetry.trace_sample_ratio,
-        })?;
+        }),
+    )?;
     Ok(TelemetrySettings {
         format: telemetry.format,
         filter: telemetry.filter.clone(),
@@ -459,9 +467,9 @@ fn otlp_collector(key: &str, endpoint: Option<&SecretUrl>) -> Result<Option<Secr
         source,
     })?;
     if parsed.scheme() != "http" {
-        return Err(Error::OtlpScheme {
+        return Err(Error::Server(ServerFault::OtlpScheme {
             key: key.to_owned(),
-        });
+        }));
     }
     Ok(Some(SecretUrl::new(String::from(parsed))))
 }
@@ -489,8 +497,8 @@ type OnwardCredentials = (
 ///
 /// # Errors
 ///
-/// [`Error::StoredQueryFanOutWithoutRegistry`] with no store, and
-/// [`Error::StoredQueryFanOutReadOnly`] with the read-only files backend.
+/// [`FederationFault::StoredQueryFanOutWithoutRegistry`] with no store, and
+/// [`FederationFault::StoredQueryFanOutReadOnly`] with the read-only files backend.
 fn stored_query_fan_out(
     federation: &FederationSettings,
     stored_queries: Option<&stored_queries::Store>,
@@ -499,9 +507,15 @@ fn stored_query_fan_out(
     // of the registry and is never offered without it.
     if federation.fan_out_stored_queries {
         match stored_queries.map(stored_queries::Store::backend) {
-            None => return Err(Error::StoredQueryFanOutWithoutRegistry),
+            None => {
+                return Err(Error::Federation(
+                    FederationFault::StoredQueryFanOutWithoutRegistry,
+                ));
+            }
             Some(stored_queries::Backend::Files) => {
-                return Err(Error::StoredQueryFanOutReadOnly);
+                return Err(Error::Federation(
+                    FederationFault::StoredQueryFanOutReadOnly,
+                ));
             }
             Some(_) => {}
         }
@@ -563,10 +577,10 @@ fn resolve_localization(
 ) -> Result<LocalizationSettings, Error> {
     let timeout = positive_ms("federation.localization.timeout_ms", section.timeout_ms)?;
     if section.timeout_ms >= federation.overall_timeout_ms {
-        return Err(Error::LocalizationBudget {
+        return Err(Error::Federation(FederationFault::LocalizationBudget {
             timeout_ms: section.timeout_ms,
             overall_ms: federation.overall_timeout_ms,
-        });
+        }));
     }
     Ok(LocalizationSettings {
         on_failure: section.on_failure,

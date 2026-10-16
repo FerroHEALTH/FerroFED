@@ -273,7 +273,7 @@ fn an_emergency_purpose_with_an_empty_code_or_system_is_refused() {
     ] {
         let refused = resolved(table);
         assert!(
-            matches!(&refused, Err(ferrofed_server::config::error::Error::AccessLogEmergency(error)) if *error == expected),
+            matches!(&refused, Err(ferrofed_server::config::error::Error::AccessLog(ferrofed_server::config::error::access_log::AccessLogFault::Emergency(error))) if *error == expected),
             "{table}: {refused:?}"
         );
     }

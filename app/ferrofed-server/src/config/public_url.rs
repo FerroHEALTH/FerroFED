@@ -16,6 +16,7 @@ use url::Url;
 
 use crate::base_path::BasePath;
 use crate::config::error::Error;
+use crate::config::error::server::ServerFault;
 
 /// The key that holds the public base URL.
 pub const KEY: &str = "server.public_url";
@@ -34,9 +35,9 @@ impl PublicUrl {
     ///
     /// # Errors
     ///
-    /// [`Error::Url`] for a value that does not parse, [`Error::PublicUrlForm`]
+    /// [`Error::Url`] for a value that does not parse, [`ServerFault::PublicUrlForm`]
     /// for one that is no `http` or `https` URL or carries a user name, a
-    /// password, a query or a fragment, and [`Error::PublicUrlPath`] for a
+    /// password, a query or a fragment, and [`ServerFault::PublicUrlPath`] for a
     /// path other than `base`.
     pub fn resolve(text: &str, base: &BasePath) -> Result<Self, Error> {
         let key = || KEY.to_owned();
@@ -47,17 +48,17 @@ impl PublicUrl {
             || parsed.query().is_some()
             || parsed.fragment().is_some()
         {
-            return Err(Error::PublicUrlForm);
+            return Err(Error::Server(ServerFault::PublicUrlForm));
         }
         let path = match parsed.path().trim_end_matches('/') {
             "" => "/",
             trimmed => trimmed,
         };
         if path != base.as_str() {
-            return Err(Error::PublicUrlPath {
+            return Err(Error::Server(ServerFault::PublicUrlPath {
                 path: path.to_owned(),
                 base: base.to_string(),
-            });
+            }));
         }
         Ok(Self {
             written: text.to_owned(),
@@ -90,17 +91,17 @@ impl PublicUrl {
     ///
     /// # Errors
     ///
-    /// [`Error::PublicUrlDisagrees`] naming `key` and the URL it should name,
+    /// [`ServerFault::PublicUrlDisagrees`] naming `key` and the URL it should name,
     /// and the errors of [`PublicUrl::route`].
     pub fn agrees(&self, key: &str, written: &Url, route: &str) -> Result<(), Error> {
         let served = self.route(key, route)?;
         if *written == served {
             Ok(())
         } else {
-            Err(Error::PublicUrlDisagrees {
+            Err(Error::Server(ServerFault::PublicUrlDisagrees {
                 key: key.to_owned(),
                 served: served.to_string(),
-            })
+            }))
         }
     }
 }
@@ -110,6 +111,7 @@ mod tests {
     use super::PublicUrl;
     use crate::base_path::BasePath;
     use crate::config::error::Error;
+    use crate::config::error::server::ServerFault;
 
     fn base(text: &str) -> BasePath {
         text.parse().expect("a base path")
@@ -125,11 +127,11 @@ mod tests {
         }
         assert!(matches!(
             PublicUrl::resolve("https://gw.example.org/", &base("/fed")),
-            Err(Error::PublicUrlPath { .. })
+            Err(Error::Server(ServerFault::PublicUrlPath { .. }))
         ));
         assert!(matches!(
             PublicUrl::resolve("https://gw.example.org/other", &base("/fed")),
-            Err(Error::PublicUrlPath { .. })
+            Err(Error::Server(ServerFault::PublicUrlPath { .. }))
         ));
     }
 
@@ -144,7 +146,7 @@ mod tests {
             assert!(
                 matches!(
                     PublicUrl::resolve(text, &base("/")),
-                    Err(Error::PublicUrlForm)
+                    Err(Error::Server(ServerFault::PublicUrlForm))
                 ),
                 "{text}"
             );

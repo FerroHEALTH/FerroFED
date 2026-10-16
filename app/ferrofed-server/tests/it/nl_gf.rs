@@ -582,7 +582,9 @@ fn a_bsn_system_listed_as_the_pseudonym_is_refused_at_load() -> TestResult {
             |text| text.replace("namespaces = [\"", &format!("namespaces = [\"{bsn}\", \"")),
         )?;
         match resolved(&text) {
-            Err(error::Error::BsnAsPseudonym { namespace }) => assert_eq!(namespace, bsn),
+            Err(error::Error::Binding(error::binding::BindingFault::BsnAsPseudonym {
+                namespace,
+            })) => assert_eq!(namespace, bsn),
             other => {
                 return Err(
                     format!("{bsn} never stands for the pseudonym (N33): {other:?}").into(),

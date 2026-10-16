@@ -38,6 +38,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::config::error::Error;
+use crate::config::error::binding::BindingFault;
 use crate::config::secrets::secret;
 use crate::config::transport;
 
@@ -138,7 +139,7 @@ pub struct AuditRepositorySettings {
 /// [`Error::Missing`] for no `url` or `hostname`, and for no `spool_dir`
 /// outside development; [`Error::Url`] for a `url` that does not parse;
 /// [`Error::Cleartext`] for a `url` that is not `tls://` outside development;
-/// [`Error::SyslogHeader`] for a `hostname` or `app_name` syslog cannot
+/// [`BindingFault::SyslogHeader`] for a `hostname` or `app_name` syslog cannot
 /// carry; [`Error::Zero`] for a zero bound or timeout; and the errors of a
 /// secret or a file that cannot be read.
 pub(crate) fn resolve(
@@ -175,16 +176,18 @@ pub(crate) fn resolve(
         &table.app_name,
         &std::process::id().to_string(),
     )
-    .map_err(|source| Error::SyslogHeader {
-        key: format!(
-            "{KEY}.{}",
-            if source.field == "APP-NAME" {
-                "app_name"
-            } else {
-                "hostname"
-            }
-        ),
-        source,
+    .map_err(|source| {
+        Error::Binding(BindingFault::SyslogHeader {
+            key: format!(
+                "{KEY}.{}",
+                if source.field == "APP-NAME" {
+                    "app_name"
+                } else {
+                    "hostname"
+                }
+            ),
+            source,
+        })
     })?;
     if table.spool_dir.is_none() && profile != Profile::Development {
         return Err(missing("spool_dir"));

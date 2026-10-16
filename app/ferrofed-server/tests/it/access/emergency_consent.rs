@@ -454,7 +454,7 @@ fn pass_to_node_without_an_emergency_purpose_is_refused() {
     assert!(
         matches!(
             refused,
-            Err(ferrofed_server::config::error::Error::EmergencyWithoutPurpose)
+            Err(ferrofed_server::config::error::Error::Federation(ferrofed_server::config::error::federation::FederationFault::EmergencyWithoutPurpose))
         ),
         "{refused:?}"
     );

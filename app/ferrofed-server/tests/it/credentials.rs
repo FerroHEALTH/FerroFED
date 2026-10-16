@@ -118,12 +118,12 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
         assert!(
             matches!(
                 &error,
-                ferrofed_server::config::error::Error::EndpointId {
+                ferrofed_server::config::error::Error::Credentials(ferrofed_server::config::error::credentials::CredentialsFault::EndpointId {
                     key: given,
                     source: IdError::Empty { .. }
                         | IdError::Malformed { .. }
                         | IdError::TooLong { .. },
-                } if given == key
+                }) if given == key
             ),
             "{key:?}: {error:?}"
         );

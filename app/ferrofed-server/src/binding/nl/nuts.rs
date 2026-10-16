@@ -31,6 +31,7 @@ use serde::Deserialize;
 
 use crate::binding::seam::{OnwardGrant, Provided, PublicDocument};
 use crate::config::error::Error;
+use crate::config::error::credentials::CredentialsFault;
 use crate::config::secrets::{read_secret, secret};
 use crate::config::settings::{Scheme, Settings};
 use crate::config::transport::{Encryption, ProtectedSite};
@@ -227,7 +228,7 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
     }
     let refused = |name: &str| {
         let key = format!("{section}.{name}");
-        move |source| Error::NutsGrant { key, source }
+        move |source| Error::Credentials(CredentialsFault::NutsGrant { key, source })
     };
     let mut grant = nl_generic_functions::nuts_auth::Grant::new(server.expose(), &nuts.scope)
         .map_err(|source| match source {
@@ -248,9 +249,11 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
     if nuts.credential.is_empty() {
         return Err(missing("credential"));
     }
-    let holder_refused = |source| Error::NutsHolder {
-        section: section.to_owned(),
-        source,
+    let holder_refused = |source| {
+        Error::Credentials(CredentialsFault::NutsHolder {
+            section: section.to_owned(),
+            source,
+        })
     };
     let did = Did::new(nuts.did.clone()).map_err(holder_refused)?;
     let key_file = nuts
@@ -278,11 +281,12 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
     let dpop_key = format!("{section}.dpop_key");
     let dpop_pem = secret::<Secret>(&dpop_key, None, Some(dpop_file))?
         .ok_or_else(|| missing("dpop_key_file"))?;
-    let prover =
-        Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| Error::DpopKey {
+    let prover = Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| {
+        Error::Credentials(CredentialsFault::DpopKey {
             key: format!("{dpop_key}_file"),
             source,
-        })?;
+        })
+    })?;
     Ok(NutsOnward(NutsGrant::new(
         grant,
         Arc::new(holder),

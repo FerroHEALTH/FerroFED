@@ -25,6 +25,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::error::federation::FederationFault;
 use crate::config::secrets::secret;
 
 /// The backend of the stored-query registry.
@@ -122,9 +123,9 @@ impl Store {
 /// when the backend needs it and it is unset or empty, and naming
 /// `registry.document` when the registry is offered with neither a registry
 /// document nor a directory, and so without the federation that executes
-/// its queries; [`Error::StoreKey`] for a key the backend does
-/// not read; [`Error::StoreBackendUnavailable`] for `postgres` in a build
-/// without it; [`Error::StoreUrl`] for a connection string that does not
+/// its queries; [`FederationFault::StoreKey`] for a key the backend does
+/// not read; [`FederationFault::StoreBackendUnavailable`] for `postgres` in a build
+/// without it; [`FederationFault::StoreUrl`] for a connection string that does not
 /// parse; and the secret errors of a `url_file`.
 pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     let section = &config.stored_queries;
@@ -156,10 +157,10 @@ fn path(section: &StoredQueries, backend: Backend) -> Result<PathBuf, Error> {
         ("stored_queries.url_file", section.url_file.is_some()),
     ] {
         if set {
-            return Err(Error::StoreKey {
+            return Err(Error::Federation(FederationFault::StoreKey {
                 key: String::from(key),
                 backend,
-            });
+            }));
         }
     }
     match &section.path {
@@ -173,15 +174,17 @@ fn path(section: &StoredQueries, backend: Backend) -> Result<PathBuf, Error> {
 /// The connection string of the `postgres` backend, checked to parse.
 fn url(section: &StoredQueries) -> Result<SecretUrl, Error> {
     if section.path.is_some() {
-        return Err(Error::StoreKey {
+        return Err(Error::Federation(FederationFault::StoreKey {
             key: String::from("stored_queries.path"),
             backend: Backend::Postgres,
-        });
+        }));
     }
     if !cfg!(feature = "postgres") {
-        return Err(Error::StoreBackendUnavailable {
-            backend: Backend::Postgres,
-        });
+        return Err(Error::Federation(
+            FederationFault::StoreBackendUnavailable {
+                backend: Backend::Postgres,
+            },
+        ));
     }
     let key = "stored_queries.url";
     let url = secret(key, section.url.as_ref(), section.url_file.as_deref())?
@@ -196,9 +199,9 @@ fn url(section: &StoredQueries) -> Result<SecretUrl, Error> {
         } else {
             key
         };
-        return Err(Error::StoreUrl {
+        return Err(Error::Federation(FederationFault::StoreUrl {
             key: String::from(key),
-        });
+        }));
     }
     Ok(url)
 }
