@@ -165,7 +165,7 @@ access record carrying the document's category and the member.
 This sheet is the same for every deployment of a release, so it cannot
 list one deployment's receiving members. Each deployment states its own:
 `GET {fhir-base}/metadata` answers a `CapabilityStatement` whose `Bundle`
-resource names, by the codes above, the categories the deployment receives
+resource, present only when the deployment receives a category, names, by the codes above, the categories the deployment receives
 and those it has no receiving member for, and lists the `Bundle` profile of
 each category received.
 

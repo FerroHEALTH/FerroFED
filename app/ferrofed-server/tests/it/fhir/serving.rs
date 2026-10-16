@@ -157,7 +157,7 @@ async fn with_no_member_declared_the_capability_statement_lists_neither_resource
     let (status, text) = call(app, metadata()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let types = listed(&text)?;
-    assert!(types.iter().any(|kind| kind == "Bundle"), "{types:?}");
+    assert!(types.iter().any(|kind| kind == "Patient"), "{types:?}");
     for kind in ["MedicationRequest", "MedicationDispense"] {
         assert!(
             !types.iter().any(|listed| listed == kind),
@@ -588,7 +588,9 @@ fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn E
         ("Binary", "read") => {
             Request::get(format!("{FHIR}/Binary/synthetic-token")).body(Body::empty())?
         }
-        ("Bundle", "create") => fhir_json(http::Method::POST, "/Bundle", "{}".to_owned())?,
+        ("Bundle", "create") => {
+            fhir_json(http::Method::POST, "/Bundle", super::receive::document())?
+        }
         ("MedicationRequest", "search-type") => search()?,
         ("MedicationRequest", "read") => read()?,
         ("MedicationDispense", "create") => fhir_json(
@@ -609,28 +611,11 @@ fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn E
     }))
 }
 
-#[tokio::test]
-async fn every_interaction_and_operation_the_statement_declares_has_a_route() -> TestResult {
-    let (a, b, own) = (
-        Server::start().await,
-        Server::start().await,
-        Server::start().await,
-    );
-    let dir = tempfile::tempdir()?;
-    let gateway = || {
-        gateway_registered(
-            dir.path(),
-            (&a.uri(), &b.uri(), UNREACHED_SUPPLIER),
-            &[("node-a", EHR_A)],
-            &mpd_endpoint(&own.uri()),
-            ("", SERVED),
-        )
-    };
-    let (app, _) = gateway()?;
-    let (status, text) = call(app, metadata()?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    let statement: Value = serde_json::from_str(&text)?;
-    let mut declared: Vec<(String, String)> = Vec::new();
+/// Every interaction and operation the capability statement `text`
+/// declares, each as its resource type and its code or name.
+fn declared_pairs(text: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let statement: Value = serde_json::from_str(text)?;
+    let mut declared = Vec::new();
     for resource in statement
         .pointer("/rest/0/resource")
         .and_then(Value::as_array)
@@ -644,22 +629,97 @@ async fn every_interaction_and_operation_the_statement_declares_has_a_route() ->
             }
         }
     }
-    assert!(declared.len() >= 8, "{declared:?}");
+    Ok(declared)
+}
+
+/// Whether the answer `status` and `text` is one the configured gateway
+/// gives a request it does not serve: `501`, the face's `404` for a path it
+/// has no route for, a `not-supported` `404` of a category no member serves,
+/// or the refusal of a document no member receives.
+fn unserved(status: StatusCode, text: &str) -> bool {
+    status == StatusCode::NOT_IMPLEMENTED
+        || text.contains("the FHIR face serves")
+        || (status == StatusCode::NOT_FOUND
+            && issue(text).is_ok_and(|(code, _)| code == "not-supported"))
+        || text.contains("no member receives documents")
+}
+
+/// Holds every interaction and operation the gateway `gateway` makes
+/// declares to an answer that serves it.
+async fn every_declared_is_served(
+    gateway: impl Fn() -> Result<axum::Router, Box<dyn Error>>,
+) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let (status, text) = call(gateway()?, metadata()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let declared = declared_pairs(&text)?;
     for (kind, code) in &declared {
         let request = exercising(kind, code)?.ok_or_else(|| {
             format!("{kind} {code} is declared and this test has no request for it")
         })?;
-        let (app, _) = gateway()?;
-        let (status, text) = call(app, request).await?;
-        assert_ne!(
-            StatusCode::NOT_IMPLEMENTED,
-            status,
-            "FHIR R4 capabilitystatement: {kind} {code} is declared, so it is served: {text}"
-        );
+        let (status, text) = call(gateway()?, request).await?;
         assert!(
-            !text.contains("the FHIR face serves"),
-            "{kind} {code} is declared, so a route answers it: {text}"
+            !unserved(status, &text),
+            "FHIR R4 capabilitystatement: {kind} {code} is declared, so this gateway serves it: {status} {text}"
         );
     }
+    Ok(declared)
+}
+
+#[tokio::test]
+async fn every_interaction_and_operation_the_statement_declares_is_served() -> TestResult {
+    let (a, b, own) = (
+        Server::start().await,
+        Server::start().await,
+        Server::start().await,
+    );
+    let dir = tempfile::tempdir()?;
+    let declared = every_declared_is_served(|| {
+        Ok(gateway_registered(
+            dir.path(),
+            (&a.uri(), &b.uri(), UNREACHED_SUPPLIER),
+            &[("node-a", EHR_A)],
+            &mpd_endpoint(&own.uri()),
+            ("", SERVED),
+        )?
+        .0)
+    })
+    .await?;
+    assert!(declared.len() >= 7, "{declared:?}");
+    assert!(
+        !declared.iter().any(|(kind, _)| kind == "Bundle"),
+        "with no [[fhir.receive]], no Bundle create is declared: {declared:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_receiving_gateway_declares_and_serves_the_bundle_create() -> TestResult {
+    let (a, b, own) = (
+        super::receive::creating().await,
+        Server::start().await,
+        Server::start().await,
+    );
+    let dir = tempfile::tempdir()?;
+    let crossref = super::receive::rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]);
+    let fhir = format!(
+        "{}{SERVED}",
+        super::receive::receiving("node-a", &[NAMESPACE])
+    );
+    let declared = every_declared_is_served(|| {
+        super::receive::gateway_listing(
+            dir.path(),
+            (&a, &b),
+            &mpd_endpoint(&own.uri()),
+            (&crossref, &fhir),
+            &crate::facade::settings_with_room(),
+        )
+    })
+    .await?;
+    assert!(
+        declared
+            .iter()
+            .any(|(kind, code)| kind == "Bundle" && code == "create"),
+        "{declared:?}"
+    );
     Ok(())
 }

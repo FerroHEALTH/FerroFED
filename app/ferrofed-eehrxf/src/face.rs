@@ -183,8 +183,8 @@ impl SummaryRequest {
 /// It describes a server that serves `$summary` on `Patient`, the
 /// `DocumentReference` search of the document list ([`crate::list`]), the
 /// `Binary` read of a member's document, the `create` of a received
-/// document on `Bundle` ([`bundle`]) and, only for a category a member is
-/// declared for, `MedicationRequest` and `MedicationDispense`
+/// document on `Bundle` ([`bundle`]) only when a member receives a category,
+/// and, only for a category a member is declared for, `MedicationRequest` and `MedicationDispense`
 /// ([`Serving::resources`]), in FHIR JSON.
 #[must_use]
 pub fn capability(
@@ -205,8 +205,12 @@ pub fn capability(
         },
         documents(),
         binary(),
-        bundle(receivers),
     ];
+    // NOTE: FHIR R4 `capabilitystatement.html`: the statement describes what the server
+    // supports, so `Bundle` create is declared only when a member receives a category.
+    if !receivers.is_empty() {
+        resource.push(bundle(receivers));
+    }
     resource.extend(serving.resources());
     CapabilityStatement {
         status: "active".into(),

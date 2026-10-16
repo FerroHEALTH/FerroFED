@@ -96,9 +96,10 @@ before the gateway reaches real patient data.
 
 ## Configuration for a deployment in the EU
 
-Four settings decide whether a deployment meets the EHDS Regulation where
-the gateway can meet it. Add them to the configuration of the production
-guide:
+The settings below decide whether a deployment meets the EHDS Regulation
+where the gateway can meet it. Add the ones the example shows to the
+configuration of the production guide, and work through each item of the
+list after it:
 
 ```toml
 # ferrofed.toml
@@ -173,7 +174,8 @@ years = 3                      # Art 9(2): at least three years from each access
   ([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
   This release receives patient summaries alone, and `GET {fhir-base}/metadata`
   names the categories your deployment receives and those it has no
-  receiving member for
+  receiving member for, and declares no `Bundle` create when it receives
+  none
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
 
 - **The prescription and dispensation members.** Declare in

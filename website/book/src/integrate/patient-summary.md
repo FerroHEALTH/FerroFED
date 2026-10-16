@@ -412,9 +412,10 @@ the spool is refused `503` before the member is asked, so sending it again
 writes it once ([Failing closed](../operate/access-log.md#failing-closed)).
 
 The capability statement, `GET {fhir-base}/metadata`, declares the
-`create` on `Bundle`. Its documentation names the categories the deployment
-receives and those it has no receiving member for, by their HL7 Europe
-codes, and its supported profiles are the `Bundle` profiles of the
+`create` on `Bundle` only when a member receives a category, as it lists a
+prescription resource only when a member serves it. Its documentation then
+names the categories the deployment receives and those it has no receiving
+member for, by their HL7 Europe codes, and its supported profiles are the `Bundle` profiles of the
 categories received. `ferrofed config check` prints the same categories,
 each received one with its member
 ([Running it](../operate/configuration.md#running-it)).

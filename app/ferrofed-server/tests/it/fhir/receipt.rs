@@ -218,16 +218,9 @@ async fn the_capability_statement_names_the_categories_received() -> TestResult 
     )?;
     let (status, text) = call(app, metadata()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let unreceived = bundle(&text)?;
-    assert_eq!(unreceived["supportedProfile"], Value::Null);
-    let documentation = unreceived["documentation"]
-        .as_str()
-        .ok_or("documentation")?;
     assert!(
-        documentation.contains(
-            "Categories received: none. Categories with no receiving member: Patient-Summaries"
-        ),
-        "{documentation}"
+        bundle(&text).is_err(),
+        "FHIR R4 capabilitystatement: with no receiving member, no Bundle create is declared: {text}"
     );
     Ok(())
 }
