@@ -60,7 +60,10 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
     let session = state.sessions().establish(signed_in())?;
     for path in ["/", "/no/such/page", "/about"] {
         let (_response, body) = send(&service, get_as(path, &session)?).await?;
-        assert!(body.contains(r#"aria-label="Views""#), "{path}: {body}");
+        assert!(
+            body.contains(r#"<nav id="sidebar" popover="auto" aria-label="Views""#),
+            "{path}: {body}"
+        );
         assert!(body.contains("Sign out"), "{path}: {body}");
         assert!(body.contains(r#"href="/members""#), "{path}: {body}");
     }
@@ -110,7 +113,7 @@ async fn every_page_links_the_about_page_which_names_the_manufacturer_in_full()
             "FerroFED Console",
             env!("CARGO_PKG_VERSION"),
             "Cadasto B.V.",
-            r#"<a href="/about">About</a>"#,
+            r#"<a href="/about" rel="external">About</a>"#,
         ] {
             assert!(footer.contains(text), "{path} {signed}: {text}: {footer}");
         }

@@ -3,9 +3,9 @@
 
 //! The operator's sign-in state, held on the server in two separate pools.
 //!
-//! The browser carries opaque, random ids in `HttpOnly` cookies and nothing
-//! else; every fact behind them stays in this process (RFC 6749 §10.12,
-//! RFC 7636 §4.1).
+//! The browser carries opaque, random ids in `HttpOnly` cookies, and the
+//! operator's theme word in one more, and nothing else; every fact behind
+//! the ids stays in this process (RFC 6749 §10.12, RFC 7636 §4.1).
 //!
 //! - **Sign-ins** are the pre-login state of `GET /login`: the `state`, the
 //!   OpenID Connect `nonce` and the PKCE verifier. They live for a short

@@ -13,7 +13,17 @@
 
 /* The theme the operator chose is the server's `data-theme` on <html>:
    `light`, `dark`, or `system`, which follows the operating system. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
+}
 
 /* The role layer, from the "Azure & Iron" tokens of assets/brand/tokens.css:
    the ground is `surface` in light and `tile` in dark, the text `ink` and
@@ -23,6 +33,10 @@
    (https://www.w3.org/TR/WCAG22/#contrast-minimum). */
 :root {
   color-scheme: light;
+  /* The top bar's height from `md` up, where it is one row and stays in
+     view: the navigation sits under it and the scroll padding keeps a
+     focused control out from under it (WCAG 2.2 SC 2.4.11). */
+  --bar: 3.5rem;
   --surface: #f8fafc;
   --raised: #ffffff;
   --inset: #f1f5f9;
@@ -152,6 +166,12 @@
 @layer base {
   html {
     background: var(--surface);
+  }
+
+  @media (width >= 48rem) {
+    html {
+      scroll-padding-top: calc(var(--bar) + 0.5rem);
+    }
   }
 
   body {
@@ -567,10 +587,10 @@
     .drawer {
       display: block;
       position: sticky;
-      inset: 3.5rem auto auto auto;
+      inset: var(--bar) auto auto auto;
       align-self: flex-start;
       width: 15rem;
-      height: calc(100dvh - 3.5rem);
+      height: calc(100dvh - var(--bar));
       margin: 0;
       overflow-y: auto;
       border: 0;
@@ -589,7 +609,7 @@
 
   @media (width >= 48rem) {
     .menu:popover-open {
-      inset-block-start: 3.75rem;
+      inset-block-start: calc(var(--bar) + 0.25rem);
     }
   }
 }

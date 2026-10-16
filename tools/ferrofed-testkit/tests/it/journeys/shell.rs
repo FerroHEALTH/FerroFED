@@ -4,13 +4,9 @@
 //! The shell in the browser: the theme switch, which draws the page at once
 //! and keeps the choice for the next page the server draws, before any
 //! script runs; the navigation drawer below `md`, which the keyboard opens,
-//! moves the focus into, closes with Escape and returns the focus from; and
-//! the operator's menu.
-#![allow(
-    clippy::panic_in_result_fn,
-    reason = "test assertions in tests that return their setup errors"
-)]
-
+//! moves the focus into, closes with Escape and returns the focus from; the
+//! operator's menu; and the sticky top bar, which never hides the control
+//! that holds the focus (WCAG 2.2 SC 2.4.11).
 use std::error::Error;
 
 use serde_json::json;
@@ -18,6 +14,7 @@ use thirtyfour::{By, Key};
 
 use crate::journeys::browser::{Browser, until, with_browser};
 use crate::journeys::journeys_enabled;
+use crate::journeys::provider::OPERATOR;
 use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -62,7 +59,7 @@ async fn the_theme_switch_draws_the_page_and_the_server_keeps_the_choice()
         sign_in(browser, &stack).await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        drawn_in(browser, "system").await?;
+        drawn_in(browser, "light").await?;
         let dark = "//header//div[@aria-label = 'Theme']//button[normalize-space(.) = 'Dark']";
         browser.element(By::XPath(dark)).await?.click().await?;
         drawn_in(browser, "dark").await?;
@@ -188,11 +185,17 @@ async fn the_operators_menu_opens_from_the_keyboard_and_escape_closes_it()
         browser
             .element(By::Css("#operator-menu:popover-open"))
             .await?;
+        // The next Tab goes into the open menu, to its sign-out.
         browser
-            .element(By::XPath(
-                "//div[@id = 'operator-menu']//button[normalize-space(.) = 'Sign out']",
-            ))
+            .driver()
+            .active_element()
+            .await?
+            .send_keys(Key::Tab)
             .await?;
+        until("Tab reaches the sign-out", async || {
+            Ok(focused(browser).await?.trim() == "Sign out")
+        })
+        .await?;
         browser
             .driver()
             .active_element()
@@ -207,7 +210,84 @@ async fn the_operators_menu_opens_from_the_keyboard_and_escape_closes_it()
                 .is_empty())
         })
         .await?;
+        until("the focus returns to the operator's button", async || {
+            Ok(focused(browser).await?.contains(OPERATOR))
+        })
+        .await?;
         browser.console_clean("the operator's menu").await
+    })
+    .await
+}
+
+/// How far below the top of the window the element `element` starts, in
+/// CSS pixels: its place in the document (`WebDriver`, Get Element Rect) less
+/// how far the page is scrolled (the Chrome `DevTools` Protocol,
+/// `Page.getLayoutMetrics`).
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the DevTools Protocol answers its layout metrics as JSON, read here alone"
+)]
+async fn from_top(
+    browser: &Browser,
+    element: &thirtyfour::WebElement,
+) -> Result<f64, Box<dyn Error>> {
+    let metrics = browser
+        .driver()
+        .cdp()
+        .send_raw("Page.getLayoutMetrics", json!({}))
+        .await?;
+    let scrolled = metrics
+        .get("cssVisualViewport")
+        .and_then(|viewport| viewport.get("pageY"))
+        .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| format!("no cssVisualViewport.pageY in {metrics}"))?;
+    Ok(element.rect().await?.y - scrolled)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<dyn Error>> {
+    if !journeys_enabled() {
+        return Ok(());
+    }
+    let stack = Stack::start().await?;
+    with_browser(async |browser| {
+        sign_in(browser, &stack).await?;
+        browser
+            .driver()
+            .cdp()
+            .send_raw(
+                "Emulation.setDeviceMetricsOverride",
+                json!({ "width": 1280, "height": 500, "deviceScaleFactor": 1, "mobile": false }),
+            )
+            .await?;
+        browser.goto(&stack.url("/query")).await?;
+        hydrated(browser).await?;
+        let bar = browser.element(By::Tag("header")).await?.rect().await?.height;
+        // The last field of the form, far down the page: focusing it scrolls
+        // the page, so the fields before it pass under the bar's place.
+        let fields = browser
+            .driver()
+            .find_all(By::Css(r#"main form input[type="text"]"#))
+            .await?;
+        let last = fields.last().ok_or("the query form has a text field")?;
+        last.click().await?;
+        for step in 1..=6 {
+            browser
+                .driver()
+                .active_element()
+                .await?
+                .send_keys(Key::Shift + Key::Tab)
+                .await?;
+            let focused = browser.driver().active_element().await?;
+            let top = from_top(browser, &focused).await?;
+            if top < bar - 0.5 {
+                return Err(format!(
+                    "Shift+Tab {step} leaves the focus {top} px from the top, under the {bar} px bar"
+                )
+                .into());
+            }
+        }
+        browser.console_clean("the focus under the top bar").await
     })
     .await
 }

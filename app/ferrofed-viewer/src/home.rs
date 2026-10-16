@@ -3,6 +3,13 @@
 
 //! The page at `/`: the sign-in card a visitor reads, and the dashboard a
 //! signed-in operator lands on.
+//!
+//! Both are static, so the server renders their markup and the page shows
+//! that HTML, the way the admin actions' fields are shown: the browser
+//! bundle carries none of their drawing. Leptos escapes
+//! every text and attribute value in them. The markup reaches the browser
+//! with the page that `/` answers, so every link to `/` is a full load
+//! (`rel="external"`), never a navigation of the client router.
 
 use leptos::prelude::*;
 use leptos_meta::Title;
@@ -12,6 +19,23 @@ use crate::components::{icon, page_header};
 use crate::styles;
 use crate::views::titled;
 
+/// The markup `render` writes on the server, which the browser reads back
+/// from the page it hydrates; empty in the browser only if the page carries
+/// none, which a full load never does.
+pub(crate) fn rendered(render: impl FnOnce() -> String) -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        render()
+    }
+    // NOTE: the Leptos book, `ssr/22_life_cycle`: the browser reads the value the
+    // server rendered, so this runs only for a page that carries none.
+    #[cfg(target_arch = "wasm32")]
+    {
+        drop(render);
+        String::new()
+    }
+}
+
 /// The sign-in: a card with the mark centred on the page, as the family's
 /// viewers draw it.
 #[component]
@@ -20,8 +44,17 @@ use crate::views::titled;
     reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
 )]
 pub fn SignInPage() -> impl IntoView {
+    let html = SharedValue::new_str(|| rendered(sign_in)).into_inner();
     view! {
         <Title text=titled("Sign in") />
+        <div class="contents" inner_html=html></div>
+    }
+}
+
+/// The markup of the sign-in card.
+#[must_use]
+pub fn sign_in() -> String {
+    view! {
         <div class=styles::CENTRED>
             <div class="w-full max-w-sm rounded-card border border-line bg-raised p-8 text-center shadow-card">
                 <div class="mb-6 flex items-center justify-center gap-2">
@@ -44,6 +77,7 @@ pub fn SignInPage() -> impl IntoView {
             </div>
         </div>
     }
+    .to_html()
 }
 
 /// One place the dashboard leads to.
@@ -80,7 +114,21 @@ fn place(place: Place) -> impl IntoView {
 /// The dashboard a signed-in operator lands on: the places of the console,
 /// each with what it shows.
 #[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
+)]
 pub fn DashboardPage() -> impl IntoView {
+    let html = SharedValue::new_str(|| rendered(dashboard)).into_inner();
+    view! {
+        <Title text=titled("Dashboard") />
+        <div class="contents" inner_html=html></div>
+    }
+}
+
+/// The markup of the dashboard.
+#[must_use]
+pub fn dashboard() -> String {
     // TODO(#1076): the stat cards, the member health and the recent incidents.
     let places = [
         Place {
@@ -118,8 +166,8 @@ pub fn DashboardPage() -> impl IntoView {
     .map(place)
     .collect_view();
     view! {
-        <Title text=titled("Dashboard") />
         {page_header("Dashboard", "The state of the federation this console reads.", ())}
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{places}</div>
     }
+    .to_html()
 }

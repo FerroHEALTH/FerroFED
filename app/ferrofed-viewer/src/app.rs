@@ -227,7 +227,7 @@ fn NotFound() -> impl IntoView {
         }
     }
     let back = view! {
-        <a href="/" class=styles::BUTTON_PRIMARY>
+        <a href="/" rel="external" class=styles::BUTTON_PRIMARY>
             {icon(icondata_lu::LuArrowLeft, "16")}
             "Back to the console"
         </a>

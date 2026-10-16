@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The FerroFED operator console: a Leptos app rendered on the server and
+//! The FerroFED Console, the operator console: a Leptos app rendered on the server and
 //! hydrated in the browser, with a backend-for-frontend in front of the
 //! gateway.
 //!

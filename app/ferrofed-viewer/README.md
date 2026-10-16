@@ -3,7 +3,7 @@
 
 # ferrofed-viewer
 
-The FerroFED operator console: the `ferrofed-viewer` binary, a Leptos app
+The FerroFED Console, the operator console: the `ferrofed-viewer` binary, a Leptos app
 rendered on the server and hydrated in the browser, with a
 backend-for-frontend in front of the gateway.
 

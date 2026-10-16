@@ -79,7 +79,7 @@ pub fn topbar(bar: Bar) -> AnyView {
 #[must_use]
 pub fn lockup() -> impl IntoView {
     view! {
-        <a href="/" class=styles::LOCKUP>
+        <a href="/" rel="external" class=styles::LOCKUP>
             // The brand mark is the stylesheet's, drawn for the theme; it is
             // decoration, and the product name stands beside it.
             <span class=styles::MARK aria-hidden="true"></span>
@@ -95,6 +95,7 @@ pub fn lockup() -> impl IntoView {
 /// error code when it refused, and `UNKNOWN` for any other fault.
 fn gateway_pill(answer: Result<Outcome<GatewayView>, ViewError>) -> AnyView {
     let (tone, word, detail) = match answer {
+        // TODO(#1096): the gateway's product version, once the operator surface reports it.
         Ok(Outcome::Shown(view)) => (
             styles::Tone::Ok,
             String::from("Gateway UP"),
@@ -131,7 +132,7 @@ fn gateway_pill(answer: Result<Outcome<GatewayView>, ViewError>) -> AnyView {
 /// server function, which keeps it and sends the browser back to the
 /// console; once hydrated, a press changes the page at once and keeps the
 /// choice through the same function.
-fn theme_switch(theme: RwSignal<Theme>) -> impl IntoView {
+fn theme_switch(theme: RwSignal<Theme>) -> AnyView {
     let keep = ServerAction::<SetTheme>::new();
     let buttons = Theme::ALL
         .into_iter()
@@ -147,30 +148,58 @@ fn theme_switch(theme: RwSignal<Theme>) -> impl IntoView {
                 show(choice);
                 keep.dispatch(SetTheme {
                     theme: choice.key().to_owned(),
+                    back: None,
                 });
             };
+            let pressed = move || theme.get() == choice;
             view! {
                 <button
                     type="submit"
                     name="theme"
                     value=choice.key()
                     class=styles::SEGMENT
-                    aria-pressed=move || (theme.get() == choice).to_string()
+                    aria-pressed=move || pressed().to_string()
                     on:click=press
                 >
                     {icon(glyph, "14")}
                     {choice.label()}
+                    // The pressed theme is marked by a check and an edge as well
+                    // as its ground, never by colour alone (WCAG 2.2 SC 1.4.1).
+                    {move || pressed().then(|| icon(icondata_lu::LuCheck, "12"))}
                 </button>
             }
         })
         .collect_view();
+    let location = leptos_router::hooks::use_location();
     view! {
-        <form method="post" action=SetTheme::url() class="m-0">
+        <form method="post" action=SetTheme::url() class="m-0 flex flex-col items-end">
+            // Before the page has hydrated, the post returns to this page,
+            // which the server checks is one of the console's own.
+            <input type="hidden" name="back" value=move || location.pathname.get() />
             <div role="group" aria-label="Theme" class=styles::SEGMENTED>
                 {buttons}
             </div>
+            {move || kept(keep)}
         </form>
     }
+    .into_any()
+}
+
+/// A notice that the last theme choice was not kept, and why; nothing while
+/// none failed (an error never renders as nothing).
+fn kept(keep: ServerAction<SetTheme>) -> Option<impl IntoView> {
+    let why = keep.value().with(|answer| match answer {
+        None | Some(Ok(Outcome::Shown(()))) => None,
+        Some(Ok(Outcome::Refused(Refusal::Invalid { reason }))) => Some(reason.clone()),
+        Some(Ok(Outcome::Refused(_))) => Some(String::from("the console refused it")),
+        Some(Err(error)) => Some(error.to_string()),
+    })?;
+    Some(view! {
+        <p role="status" class="m-0 mt-1 text-xs text-danger-fg">
+            "Theme not kept: "
+            {why}
+        </p>
+    })
 }
 
 /// Draws the page in `theme` at once, as the server draws the next page:
@@ -196,7 +225,7 @@ fn operator_menu(operator: String, theme: RwSignal<Theme>) -> impl IntoView {
     view! {
         <button type="button" class=styles::MENU_BUTTON popovertarget=MENU_ID aria-controls=MENU_ID>
             {icon(icondata_lu::LuCircleUser, "16")}
-            <span class="max-w-28 truncate sm:max-w-40">{operator}</span>
+            <span class="max-w-28 truncate sm:max-w-40 md:max-w-24 lg:max-w-40">{operator}</span>
             {icon(icondata_lu::LuChevronDown, "14")}
         </button>
         <div id=MENU_ID popover="auto" class=styles::MENU>
@@ -227,12 +256,18 @@ struct Entry {
 }
 
 /// The navigation entry `entry`, tinted while it is the page: the router's
-/// link marks itself `aria-current="page"` there.
+/// link marks itself `aria-current="page"` there. The dashboard, which the
+/// server renders whole, is a full load (`rel="external"`).
 fn entry(entry: Entry) -> impl IntoView {
     let exact = entry.href == "/";
     view! {
         <li>
-            <A href=entry.href exact=exact attr:class=styles::NAV_ENTRY>
+            <A
+                href=entry.href
+                exact=exact
+                attr:rel=exact.then_some("external")
+                attr:class=styles::NAV_ENTRY
+            >
                 {icon(entry.glyph, "16")}
                 {entry.label}
             </A>
@@ -395,7 +430,10 @@ pub fn footer() -> impl IntoView {
     view! {
         <footer class=styles::FOOTER>
             <p class="m-0">
-                {PRODUCT} " v" {VERSION} " · " {MANUFACTURER.name} " · " <a href=ABOUT>"About"</a>
+                {PRODUCT} " v" {VERSION} " · " {MANUFACTURER.name} " · "
+                <a href=ABOUT rel="external">
+                    "About"
+                </a>
             </p>
         </footer>
     }

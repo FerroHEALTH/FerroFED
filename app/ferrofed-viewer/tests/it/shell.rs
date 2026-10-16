@@ -61,14 +61,14 @@ async fn the_page_arrives_in_the_theme_its_cookie_names() -> Result<(), Box<dyn 
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(
-        body.contains(r#"<html lang="en" data-theme="system">"#),
+        body.contains(r#"<html lang="en" data-theme="light">"#),
         "{body}"
     );
     for (cookie, drawn) in [
         ("dark", "dark"),
         ("light", "light"),
         ("system", "system"),
-        ("sepia", "system"),
+        ("sepia", "light"),
     ] {
         let (_response, body) = send(&service, get_in("/members", &session, cookie)?).await?;
         assert!(
@@ -128,26 +128,50 @@ async fn the_theme_server_function_keeps_a_theme_in_its_cookie_and_refuses_any_o
 // which the server function answers by keeping the theme and sending the
 // browser back to the console.
 #[tokio::test]
-async fn a_plain_form_post_of_the_switch_keeps_the_theme_and_returns_to_the_console()
+async fn a_plain_form_post_of_the_switch_keeps_the_theme_and_returns_to_its_own_page()
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
-    let request = Request::post("/api/theme")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "text/html")
-        .header("sec-fetch-site", "same-origin")
-        .header(
-            "cookie",
-            format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
-        )
-        .body(Body::from("theme=light"))?;
-    let (response, body) = send(&service, request).await?;
-    assert!(response.status().is_redirection(), "{response:?} {body}");
-    assert_eq!("/", header(&response, "location"));
-    assert!(
-        header(&response, "set-cookie").starts_with("ferrofed_viewer_theme=light;"),
-        "{response:?}"
-    );
+    let post = |form: &str, accept: &str| -> Result<Request<Body>, Box<dyn Error>> {
+        Ok(Request::post("/api/theme")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("accept", accept)
+            .header("sec-fetch-site", "same-origin")
+            .header(
+                "cookie",
+                format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
+            )
+            .body(Body::from(form.to_owned()))?)
+    };
+    // The page the form names, when it is one of the console's own.
+    for (form, location) in [
+        ("theme=dark&back=%2Fmembers", "/members"),
+        ("theme=dark&back=%2Fconfiguration", "/configuration"),
+        ("theme=light", "/"),
+        // Never an open redirect: anything but the console's own page is `/`.
+        ("theme=dark&back=https%3A%2F%2Fattacker.example.net%2F", "/"),
+        ("theme=dark&back=%2F%2Fattacker.example.net%2F", "/"),
+        ("theme=dark&back=%2Fno%2Fsuch%2Fpage", "/"),
+    ] {
+        let (response, body) = send(&service, post(form, "text/html")?).await?;
+        assert!(
+            response.status().is_redirection(),
+            "{form}: {response:?} {body}"
+        );
+        assert_eq!(location, header(&response, "location"), "{form}");
+        assert!(
+            header(&response, "set-cookie").starts_with("ferrofed_viewer_theme="),
+            "{form}: {response:?}"
+        );
+    }
+    // The hydrated page calls the function for its answer, never a redirect.
+    let (response, body) = send(
+        &service,
+        post("theme=dark&back=%2Fmembers", "application/json")?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert_eq!("", header(&response, "location"));
     Ok(())
 }
 
@@ -210,6 +234,13 @@ async fn the_navigation_marks_the_page_and_groups_its_entries() -> Result<(), Bo
             return Err(format!("{page}: one entry marked, not {marked:?}").into());
         };
         assert!(only.contains(link), "{page}: {only}");
+        // The theme switch posts back to this page before the page hydrates.
+        assert!(
+            body.contains(&format!(
+                r#"<input type="hidden" name="back" value="{page}"#
+            )),
+            "{page}: {body}"
+        );
     }
     Ok(())
 }
@@ -226,6 +257,49 @@ async fn the_about_page_shows_the_gateway_to_a_signed_in_operator_alone()
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains(&format!("<code>{base}</code>")), "{body}");
+    Ok(())
+}
+
+// The server renders the About page's markup, which the page shows as HTML,
+// so every value in it is escaped: markup in the text and a quote breaking
+// out of an attribute arrive as text.
+#[test]
+fn the_about_markup_escapes_what_it_names() {
+    // Rendering needs a reactive owner, which a request provides.
+    leptos::prelude::Owner::new().with(|| {
+        let hostile = String::from(r#"x"><script>alert(1)</script><b onmouseover="y"#);
+        let html = ferrofed_viewer::about::about(hostile);
+        assert!(!html.contains("<script>"), "{html}");
+        assert!(!html.contains("<b onmouseover"), "{html}");
+        assert!(html.contains("&lt;script&gt;"), "{html}");
+        for page in [
+            ferrofed_viewer::home::sign_in(),
+            ferrofed_viewer::home::dashboard(),
+        ] {
+            assert!(!page.contains("<script"), "{page}");
+        }
+    });
+}
+
+#[tokio::test]
+async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
+    let (_response, body) = send(&service, get("/")?).await?;
+    assert!(body.contains(">Sign in to the console</h1>"), "{body}");
+    let session = state.sessions().establish(signed_in())?;
+    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
+    // The router never takes a link to a page the server renders whole.
+    assert!(body.contains(r#"<a href="/" rel="external""#), "{body}");
+    assert!(
+        body.contains(r#"<a href="/about" rel="external">"#),
+        "{body}"
+    );
+    let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    assert!(
+        body.contains(">Each member endpoint and its health.</span>"),
+        "{body}"
+    );
     Ok(())
 }
 

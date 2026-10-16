@@ -114,6 +114,9 @@ fn cards(gateway: String) -> Vec<(&'static str, Vec<(&'static str, Value)>)> {
 
 /// The About page; `gateway` is the gateway's `{base}` for a signed-in
 /// operator and empty for a visitor.
+///
+/// The page is static, so the server renders its markup and the page shows
+/// that HTML ([`crate::home`]); every link to it is a full load.
 #[component]
 #[expect(
     clippy::must_use_candidate,
@@ -123,15 +126,26 @@ pub fn AboutPage(
     /// The gateway's `{base}`, or empty when it is not shown.
     gateway: String,
 ) -> impl IntoView {
+    let html =
+        SharedValue::new_str(move || crate::home::rendered(move || about(gateway))).into_inner();
+    view! {
+        <Title text=titled("About") />
+        <div class="contents" inner_html=html></div>
+    }
+}
+
+/// The markup of the About page, naming `gateway` when it is not empty.
+#[must_use]
+pub fn about(gateway: String) -> String {
     let cards = cards(gateway)
         .into_iter()
         .map(|(title, rows)| facts(title, rows))
         .collect_view();
     view! {
-        <Title text=titled("About") />
         <div class="mx-auto w-full max-w-3xl">
             {page_header("About", "The product, the gateway it reads, and who makes it.", ())}
             <div class="flex flex-col gap-4">{cards}</div>
         </div>
     }
+    .to_html()
 }

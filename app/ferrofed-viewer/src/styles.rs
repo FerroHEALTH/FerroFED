@@ -20,11 +20,14 @@ pub const TOPBAR: &str = "border-b border-line bg-raised md:sticky md:top-0 md:z
 
 /// What the top bar holds: the drawer button, the lockup, and at the far end
 /// the gateway, the theme switch and the operator.
+///
+/// From `md` up it is one row of the stylesheet's `--bar` height, which the
+/// navigation and the scroll padding read.
 pub const TOPBAR_ROW: &str = "flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 \
-                              md:px-6";
+                              md:h-[calc(var(--bar)-1px)] md:flex-nowrap md:px-6";
 
 /// The far end of the top bar.
-pub const TOPBAR_END: &str = "ml-auto flex flex-wrap items-center justify-end gap-2";
+pub const TOPBAR_END: &str = "ml-auto flex flex-wrap items-center justify-end gap-2 md:flex-nowrap";
 
 /// The link the mark and the product name make together.
 pub const LOCKUP: &str = "flex items-center gap-2 text-ink no-underline hover:text-ink";
@@ -51,10 +54,13 @@ pub const NAV_GROUP: &str = "px-3 pt-4 pb-1 text-xs font-semibold tracking-wide 
 /// A list of navigation entries.
 pub const NAV_LIST: &str = "flex flex-col gap-0.5";
 
-/// A navigation entry: tinted with the accent while it is the page.
+/// A navigation entry: while it is the page, tinted with the accent, set in
+/// bold and marked by a bar at its start, so colour is never the only mark.
 pub const NAV_ENTRY: &str = "state-change flex items-center gap-3 rounded-control px-3 py-2 \
                              font-medium text-muted no-underline hover:bg-inset hover:text-ink \
-                             aria-[current=page]:bg-accent-tint aria-[current=page]:text-accent";
+                             aria-[current=page]:bg-accent-tint aria-[current=page]:text-accent \
+                             aria-[current=page]:font-semibold \
+                             aria-[current=page]:shadow-[inset_3px_0_0_var(--accent)]";
 
 /// The page itself. It never scrolls sideways: a table wider than the screen
 /// scrolls in its own [`TABLE_SCROLL`] box, so anything else that overflows
@@ -122,11 +128,14 @@ pub const BUTTON_GHOST: &str = "state-change inline-flex items-center justify-ce
 pub const SEGMENTED: &str = "inline-flex items-center gap-0.5 rounded-control border \
                              border-line bg-surface p-0.5";
 
-/// One button of the theme switch, marked while it is the theme in force.
+/// One button of the theme switch: while it is the theme in force, raised,
+/// edged at 3:1 against the switch's ground, and checked.
 pub const SEGMENT: &str = "state-change inline-flex items-center gap-1.5 rounded-[0.25rem] \
-                           bg-transparent px-2 py-1 text-xs font-medium text-muted \
+                           border border-transparent bg-transparent px-2 py-1 text-xs \
+                           font-medium text-muted \
                            hover:bg-inset hover:text-ink aria-pressed:bg-raised \
-                           aria-pressed:text-ink aria-pressed:shadow-card";
+                           aria-pressed:border-control aria-pressed:text-ink \
+                           aria-pressed:shadow-card";
 
 /// The operator's menu button in the top bar.
 pub const MENU_BUTTON: &str = "state-change inline-flex items-center gap-2 rounded-control \
@@ -165,6 +174,7 @@ pub const DISCLOSURE: &str = "rounded-card border border-line bg-raised shadow-c
 /// What a disclosure holds once open.
 pub const DISCLOSURE_BODY: &str = "border-t border-line px-4 py-3";
 
+// TODO(#1096): the banner under the top bar once the gateway reports its deployment mode.
 /// The sandbox banner under the top bar: amber, as the family's viewers
 /// draw it.
 pub const BANNER: &str = "tone-warn border-b border-line bg-warn-bg px-4 py-2 text-sm \

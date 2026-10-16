@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-viewer"
-description = "The FerroFED operator console: a Leptos server-rendered web app and backend-for-frontend over the gateway's public surface"
+description = "The FerroFED Console, the operator console: a Leptos server-rendered web app and backend-for-frontend over the gateway's public surface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
