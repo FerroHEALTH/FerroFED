@@ -100,7 +100,7 @@ static UNSERVED: LazyLock<String> = LazyLock::new(|| {
 
 /// Every path of the face with its handlers, the one list the router is
 /// built from and the `404` of any other path names.
-fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 8] {
+fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 9] {
     [
         (METADATA, get(metadata)),
         (SUMMARY, get(summary_get).post(summary_post)),
@@ -112,6 +112,10 @@ fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 8] {
         (
             medication::DISPENSATIONS,
             post(medication::dispense::dispense),
+        ),
+        (
+            medication::DISPENSATION,
+            get(medication::read::read_dispensation),
         ),
     ]
 }
@@ -708,7 +712,8 @@ mod tests {
         assert_eq!(
             UNSERVED.as_str(),
             "the FHIR face serves metadata, Patient/$summary, Bundle, DocumentReference, \
-             Binary/{token}, MedicationRequest, MedicationRequest/{id}, MedicationDispense alone"
+             Binary/{token}, MedicationRequest, MedicationRequest/{id}, MedicationDispense, \
+             MedicationDispense/{id} alone"
         );
     }
 }

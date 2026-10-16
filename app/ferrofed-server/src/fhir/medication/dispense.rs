@@ -168,6 +168,11 @@ fn unread_answer(unread: &Unread) -> Response {
             response.extensions_mut().insert(crate::access::NoAccess);
             response
         }
+        Unread::ReferenceOnly => refusal(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "business-rule",
+            &unread.to_string(),
+        ),
         Unread::Check(_) => {
             tracing::error!(error = %crate::chain(unread), "a dispensation's profiles could not be checked");
             refusal(

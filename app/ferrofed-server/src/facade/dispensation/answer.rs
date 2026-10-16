@@ -44,6 +44,7 @@ use crate::facade::provenance::Provenance;
 use crate::facade::security;
 use crate::federation::Federation;
 use crate::fhir::locator::Locator;
+use crate::metrics::dispensations::Outcome;
 
 /// What the lookup reached: the patient it was named by, each member asked
 /// and the members whose consent denial was set aside.
@@ -101,6 +102,13 @@ pub(super) fn unowned(
             .collect::<Vec<_>>()
             .join(", ")
     };
+    match &owned {
+        Owned::Claimed(_) => Outcome::Claimed,
+        Owned::Several(_) => Outcome::Several,
+        Owned::Unowned | Owned::At(_) => Outcome::Unowned,
+        Owned::Foreign | Owned::Disagree | Owned::Spanning => Outcome::Unroutable,
+    }
+    .record();
     let (status, code, diagnostics) = match owned {
         Owned::Foreign => (
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -177,6 +185,16 @@ pub(super) fn written(
 ) -> Response {
     let endpoint = &writing.native;
     let member = &writing.node;
+    match created {
+        Written::Sent(Created::Made(_)) => Outcome::Created,
+        Written::Sent(Created::Refused(_)) => Outcome::Refused,
+        Written::Sent(
+            Created::Abandoned
+            | Created::Failed(ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. }),
+        ) => Outcome::Unknown,
+        Written::Sent(_) | Written::Unsent => Outcome::Failed,
+    }
+    .record();
     let (status, code, diagnostics) = match created {
         Written::Sent(Created::Made(made)) => {
             return made_answer(

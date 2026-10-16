@@ -14,10 +14,11 @@
 //! patient, by the identifiers of `subject` (a logical reference, or a
 //! contained `Patient` its local reference names), and each prescription it
 //! was dispensed against (`authorizingPrescription`, the dataset's
-//! `relatedRequest`), by its business identifier, the literal reference the
-//! face wrote, or both. The resource itself travels on as its text, never
-//! rewritten. Which parts route it is our own design: no specification
-//! governs it.
+//! `relatedRequest`), by its business identifier, beside which the literal
+//! reference the face wrote may stand. The resource itself travels on as its
+//! text, never rewritten, so a prescription named by the face's reference
+//! alone, which the member cannot resolve, is refused. Which parts route it
+//! is our own design: no specification governs it.
 
 use eehrxf::medication::dispensation::Dispense;
 use eehrxf::medication::{Mpd, ReadError};
@@ -109,6 +110,13 @@ pub enum Unread {
         "an authorizingPrescription names its prescription by neither an identifier nor a reference"
     )]
     Unnamed,
+    /// An `authorizingPrescription` names its prescription by a reference
+    /// alone, which the member the dispensation reaches unchanged cannot
+    /// resolve.
+    #[error(
+        "name the prescription by its identifier; the member cannot resolve the gateway's reference"
+    )]
+    ReferenceOnly,
 }
 
 impl Unread {
@@ -160,6 +168,11 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
         .collect::<Result<Vec<_>, _>>()?;
     if named.is_empty() {
         return Err(Unread::NoPrescription);
+    }
+    // NOTE: Federation Tier §5.4 scope note, N33, CP-26: the body reaches its member unchanged,
+    // so a prescription is named by the identifier the member holds, never by the face's id.
+    if named.iter().any(|one| one.identifier.is_none()) {
+        return Err(Unread::ReferenceOnly);
     }
     Ok(Received {
         patient: dispense

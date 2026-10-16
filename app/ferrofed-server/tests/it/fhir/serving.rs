@@ -78,7 +78,16 @@ fn read() -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(format!("{FHIR}/MedicationRequest/{id}")).body(Body::empty())?)
 }
 
-/// The three routes of the two categories, for the test patient.
+/// The id the face names node A's dispensation `md-1` by.
+fn dispensation_id() -> Result<String, Box<dyn Error>> {
+    Ok(
+        Locator::new(EndpointId::new("node-a-mpd")?, EhrId::new(EHR_A)?, "md-1")
+            .id()
+            .ok_or("the parts fit an id")?,
+    )
+}
+
+/// The four routes of the two categories, for the test patient.
 fn routes() -> Result<Vec<Request<Body>>, Box<dyn Error>> {
     Ok(vec![
         search()?,
@@ -86,6 +95,8 @@ fn routes() -> Result<Vec<Request<Body>>, Box<dyn Error>> {
         Request::post(format!("{FHIR}/MedicationDispense"))
             .header(header::CONTENT_TYPE, "application/fhir+json")
             .body(Body::from(r#"{"resourceType":"MedicationDispense"}"#))?,
+        Request::get(format!("{FHIR}/MedicationDispense/{}", dispensation_id()?))
+            .body(Body::empty())?,
     ])
 }
 
@@ -254,16 +265,8 @@ async fn every_interaction_declared_for_a_prescription_or_dispensation_is_one_th
     assert!(named("MedicationRequest", "read"), "{declared:?}");
     assert!(named("MedicationDispense", "create"), "{declared:?}");
     for (kind, code) in &declared {
-        let request = match (kind.as_str(), code.as_str()) {
-            ("MedicationRequest", "search-type") => search()?,
-            ("MedicationRequest", "read") => read()?,
-            ("MedicationDispense", "create") => Request::post(format!("{FHIR}/MedicationDispense"))
-                .header(header::CONTENT_TYPE, "application/fhir+json")
-                .body(Body::from(super::prescriptions::dispense::dispensation(
-                    super::prescriptions::dispense::BY_IDENTIFIER,
-                )))?,
-            _ => return Err(format!("{kind} {code} is declared and no route serves it").into()),
-        };
+        let request = exercising(kind, code)?
+            .ok_or_else(|| format!("{kind} {code} is declared and no route serves it"))?;
         let before = crate::facade::received(&own).await?.len();
         let (app, _) = gateway()?;
         let (status, text) = call(app, request).await?;
@@ -299,12 +302,12 @@ async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
         let (status, text) = call(app, request).await?;
         assert_ne!(StatusCode::NOT_FOUND, status, "{text}");
         assert!(!text.contains("not served"), "{text}");
-        // The search and the read, the first two routes, each ask the member once; the
+        // The search, the read and the dispensation read each ask the member once; the
         // dispensation, held to its profile first, is refused before any member is asked.
         assert_eq!(
-            position.min(1) + 1,
+            [1, 2, 2, 3].get(position).copied().ok_or("a route")?,
             crate::facade::received(&own).await?.len(),
-            "route {position}: the search and the read reach the member's own endpoint"
+            "route {position}: the search and the reads reach the member's own endpoint"
         );
     }
     assert!(untouched(&a, &b).await?);
@@ -559,5 +562,104 @@ fn config_check_names_the_categories_no_member_serves() -> TestResult {
         ),
         "a category served resource by resource never arrives as a document: {stdout}"
     );
+    Ok(())
+}
+/// A request of the interaction or operation `code` of the resource type
+/// `kind` the capability statement declares, or `None` for a pair this test
+/// knows no request for.
+fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn Error>> {
+    let patient = format!("{}%7C{PATIENT}", NAMESPACE.replace(':', "%3A"));
+    let fhir_json = |method: http::Method, path: &str, body: String| {
+        Request::builder()
+            .method(method)
+            .uri(format!("{FHIR}{path}"))
+            .header(header::CONTENT_TYPE, "application/fhir+json")
+            .body(Body::from(body))
+    };
+    Ok(Some(match (kind, code) {
+        ("Patient", "summary") => {
+            Request::get(format!("{FHIR}/Patient/$summary?identifier={patient}"))
+                .body(Body::empty())?
+        }
+        ("DocumentReference", "search-type") => Request::get(format!(
+            "{FHIR}/DocumentReference?patient.identifier={patient}"
+        ))
+        .body(Body::empty())?,
+        ("Binary", "read") => {
+            Request::get(format!("{FHIR}/Binary/synthetic-token")).body(Body::empty())?
+        }
+        ("Bundle", "create") => fhir_json(http::Method::POST, "/Bundle", "{}".to_owned())?,
+        ("MedicationRequest", "search-type") => search()?,
+        ("MedicationRequest", "read") => read()?,
+        ("MedicationDispense", "create") => fhir_json(
+            http::Method::POST,
+            "/MedicationDispense",
+            super::prescriptions::dispense::dispensation(
+                super::prescriptions::dispense::BY_IDENTIFIER,
+            ),
+        )?,
+        ("MedicationDispense", "read") => Request::get(format!(
+            "{FHIR}/MedicationDispense/{}",
+            Locator::new(EndpointId::new("node-a-mpd")?, EhrId::new(EHR_A)?, "md-1")
+                .id()
+                .ok_or("the parts fit an id")?
+        ))
+        .body(Body::empty())?,
+        _ => return Ok(None),
+    }))
+}
+
+#[tokio::test]
+async fn every_interaction_and_operation_the_statement_declares_has_a_route() -> TestResult {
+    let (a, b, own) = (
+        Server::start().await,
+        Server::start().await,
+        Server::start().await,
+    );
+    let dir = tempfile::tempdir()?;
+    let gateway = || {
+        gateway_registered(
+            dir.path(),
+            (&a.uri(), &b.uri(), UNREACHED_SUPPLIER),
+            &[("node-a", EHR_A)],
+            &mpd_endpoint(&own.uri()),
+            ("", SERVED),
+        )
+    };
+    let (app, _) = gateway()?;
+    let (status, text) = call(app, metadata()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let statement: Value = serde_json::from_str(&text)?;
+    let mut declared: Vec<(String, String)> = Vec::new();
+    for resource in statement
+        .pointer("/rest/0/resource")
+        .and_then(Value::as_array)
+        .ok_or("rest[0].resource")?
+    {
+        let kind = resource["type"].as_str().ok_or("a type")?;
+        for (list, key) in [("interaction", "code"), ("operation", "name")] {
+            for entry in resource[list].as_array().into_iter().flatten() {
+                let code = entry[key].as_str().ok_or("a code")?;
+                declared.push((kind.to_owned(), code.to_owned()));
+            }
+        }
+    }
+    assert!(declared.len() >= 8, "{declared:?}");
+    for (kind, code) in &declared {
+        let request = exercising(kind, code)?.ok_or_else(|| {
+            format!("{kind} {code} is declared and this test has no request for it")
+        })?;
+        let (app, _) = gateway()?;
+        let (status, text) = call(app, request).await?;
+        assert_ne!(
+            StatusCode::NOT_IMPLEMENTED,
+            status,
+            "FHIR R4 capabilitystatement: {kind} {code} is declared, so it is served: {text}"
+        );
+        assert!(
+            !text.contains("the FHIR face serves"),
+            "{kind} {code} is declared, so a route answers it: {text}"
+        );
+    }
     Ok(())
 }

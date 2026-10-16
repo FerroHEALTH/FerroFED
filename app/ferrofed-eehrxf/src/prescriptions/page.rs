@@ -126,8 +126,8 @@ pub enum Unusable {
     /// An entry carries no resource.
     #[error("an entry of the searchset carries no resource")]
     Empty,
-    /// A `match` entry is no `MedicationRequest`.
-    #[error("a match of the searchset is no MedicationRequest")]
+    /// A `match` entry is not of the resource type searched.
+    #[error("a match of the searchset is not of the resource type searched")]
     Foreign,
     /// An `outcome` entry is no `OperationOutcome`.
     #[error("an outcome entry of the searchset is no OperationOutcome")]
@@ -213,6 +213,17 @@ impl Page {
     ///
     /// The [`Unusable`] that says why the body is no page of prescriptions.
     pub fn read(body: &[u8], base: &Url) -> Result<Self, Unusable> {
+        Self::read_of(body, base, RESOURCE)
+    }
+
+    /// Reads `body`, a member's answer to a search of the resource type
+    /// `matched`, as a page of the member whose base is `base`; each match is
+    /// kept in [`Page::prescriptions`] whatever its type is named.
+    ///
+    /// # Errors
+    ///
+    /// The [`Unusable`] that says why the body is no page of `matched`.
+    pub fn read_of(body: &[u8], base: &Url, matched: &str) -> Result<Self, Unusable> {
         let head: Head = serde_json::from_slice(body).map_err(Unusable::Unreadable)?;
         if head.resource_type.as_deref() != Some("Bundle") {
             return Err(Unusable::NotBundle);
@@ -227,7 +238,7 @@ impl Page {
                 serde_json::from_str(resource.get()).map_err(Unusable::Unreadable)?;
             let resource_type = read.resource_type.unwrap_or_default();
             let mode = entry.search.and_then(|search| search.mode);
-            let prescribed = resource_type == RESOURCE;
+            let prescribed = resource_type == matched;
             // NOTE: fhir-types 0.1.109 `codec::Value` reads through `RawValue`, so a number keeps
             // the text the member wrote, which `Value::from_serde_json` would not.
             let value: Value =

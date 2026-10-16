@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The read of one prescription on the FHIR face.
+//! The read of one prescription or one dispensation on the FHIR face, by
+//! the id the face names it by.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -21,7 +22,7 @@ use openehr_federation::status::EndpointStatus;
 
 use crate::auth::caller::Caller;
 use crate::error::Code;
-use crate::facade::prescription::{self, Unfound};
+use crate::facade::prescription::{self, Readable, Unfound};
 use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
 use crate::state::AppState;
@@ -43,15 +44,56 @@ use super::{not_served, serves};
 /// `ehr_id` `409` with the integrity incident of N42, and a member that
 /// does not answer `504` or `424` naming it (§11.1, §11.3).
 pub(in crate::fhir) async fn read(
-    State(state): State<Arc<AppState>>,
+    state: State<Arc<AppState>>,
     outbound: Option<Extension<OutboundId>>,
     caller: Option<Extension<Caller>>,
+    id: Path<String>,
+    headers: http::HeaderMap,
+) -> Response {
+    read_of(
+        Readable::Prescription,
+        state,
+        (outbound, caller),
+        id,
+        headers,
+    )
+    .await
+}
+
+/// `GET {fhir-base}/MedicationDispense/{id}`: one dispensation, read at the
+/// member its id names, as a prescription is read ([`read`]).
+///
+/// The id is the one the `Location` of the dispensation's receipt named
+/// (FHIR R4 `http.html` §3.1.0.8), so the face can read what it wrote.
+pub(in crate::fhir) async fn read_dispensation(
+    state: State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
+    id: Path<String>,
+    headers: http::HeaderMap,
+) -> Response {
+    read_of(
+        Readable::Dispensation,
+        state,
+        (outbound, caller),
+        id,
+        headers,
+    )
+    .await
+}
+
+/// The read of `readable` by the id `id`, for the request of `headers`.
+async fn read_of(
+    readable: Readable,
+    State(state): State<Arc<AppState>>,
+    (outbound, caller): (Option<Extension<OutboundId>>, Option<Extension<Caller>>),
     Path(id): Path<String>,
     headers: http::HeaderMap,
 ) -> Response {
     let started = Instant::now();
-    if !serves(&state, Category::Prescription) {
-        return not_served(Category::Prescription);
+    let category = served(readable);
+    if !serves(&state, category) {
+        return not_served(category);
     }
     let admitted = admission::admit(
         &state,
@@ -61,7 +103,7 @@ pub(in crate::fhir) async fn read(
             refusal(
                 StatusCode::FORBIDDEN,
                 "forbidden",
-                "the caller was not admitted to read prescriptions",
+                &format!("the caller was not admitted to read {}s", noun(readable)),
             )
         },
     );
@@ -76,15 +118,11 @@ pub(in crate::fhir) async fn read(
     let arrived = admitted.arrived(&confined);
     let federation = &admitted.federation;
     let none = BTreeSet::new();
-    let declared = admitted
-        .fhir
-        .serving
-        .members_of(Category::Prescription)
-        .unwrap_or(&none);
-    let read = prescription::read(federation, &arrived, &id, declared).await;
+    let declared = admitted.fhir.serving.members_of(category).unwrap_or(&none);
+    let read = prescription::read(federation, &arrived, (readable, &id), declared).await;
     answered(
         federation,
-        read,
+        (readable, read),
         (&id, admitted.request_id, admitted.outbound),
     )
 }
@@ -94,7 +132,7 @@ pub(in crate::fhir) async fn read(
 /// `outbound`, with the access it records.
 fn answered(
     federation: &Federation,
-    read: Result<prescription::Read, Unfound>,
+    (readable, read): (Readable, Result<prescription::Read, Unfound>),
     (id, request_id, outbound): (&str, &str, OutboundId),
 ) -> Response {
     let named = |endpoints: &[EndpointId]| {
@@ -107,11 +145,11 @@ fn answered(
     match read {
         Ok(read) => found(federation, &read, id, request_id),
         Err(Unfound::NoOwner(read)) => {
-            tracing::info!(request_id = %outbound, "a prescription id has no owner");
+            tracing::info!(request_id = %outbound, "a prescription or dispensation id has no owner");
             let mut response = outcome(
                 StatusCode::NOT_FOUND,
                 "not-found",
-                "no prescription is known by this id",
+                &format!("no {} is known by this id", noun(readable)),
             );
             attach(
                 &mut response,
@@ -140,7 +178,8 @@ fn answered(
             StatusCode::GATEWAY_TIMEOUT,
             "timeout",
             &format!(
-                "the prescription could not be read: no answer from {endpoint} ({}) (§11.3)",
+                "the {} could not be read: no answer from {endpoint} ({}) (§11.3)",
+                noun(readable),
                 EndpointStatus::Offline.as_str()
             ),
         ),
@@ -149,8 +188,9 @@ fn answered(
                 StatusCode::CONFLICT,
                 "conflict",
                 &format!(
-                    "{} answered more than one prescription for this id, and the gateway never chooses between them (FHIR R4 search §3.1.1.4.1)",
-                    read.chosen.native
+                    "{} answered more than one {} for this id, and the gateway never chooses between them (FHIR R4 search §3.1.1.4.1)",
+                    read.chosen.native,
+                    noun(readable)
                 ),
             );
             attach(&mut response, prescription::accessed(federation, &read));
@@ -168,7 +208,8 @@ fn answered(
                 answer,
                 code,
                 &format!(
-                    "the prescription could not be read: no answer from {} ({}) (§11.3)",
+                    "the {} could not be read: no answer from {} ({}) (§11.3)",
+                    noun(readable),
                     read.chosen.native,
                     status.as_str()
                 ),
@@ -188,12 +229,12 @@ fn found(
     id: &str,
     request_id: &str,
 ) -> Response {
-    let Some(kept) = read.prescription() else {
+    let Some(kept) = read.resource() else {
         return crate::error::fixed(Code::Internal, request_id);
     };
     let mut kept = kept.clone();
     // NOTE: FHIR R4 `http.html` §3.1.0.2: the returned resource's id is the [id] read, the
-    // one change the face makes to the member's prescription.
+    // one change the face makes to the member's resource.
     kept.rename(id);
     let resource = kept.unknown();
     let snapshot = federation.snapshot();
@@ -231,7 +272,7 @@ fn version_tag(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
     tracing::warn!(
         request_id,
         shape,
-        "a member's prescription has a versionId the read cannot give as its ETag"
+        "a member's resource has a versionId the read cannot give as its ETag"
     );
     None
 }
@@ -252,7 +293,7 @@ fn modified(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
     tracing::warn!(
         request_id,
         shape,
-        "a member's prescription has a lastUpdated the read cannot give as its Last-Modified"
+        "a member's resource has a lastUpdated the read cannot give as its Last-Modified"
     );
     None
 }
@@ -274,4 +315,20 @@ fn http_date(updated: &Value) -> Result<HeaderValue, &'static str> {
         .timestamp_to_rfc9110_string(&at)
         .map_err(|_unprinted| "no HTTP-date")?;
     HeaderValue::try_from(date).map_err(|_unfit| "no header value")
+}
+
+/// What `readable` is called in an answer.
+fn noun(readable: Readable) -> &'static str {
+    match readable {
+        Readable::Prescription => "prescription",
+        Readable::Dispensation => "dispensation",
+    }
+}
+
+/// The category whose members serve `readable`.
+fn served(readable: Readable) -> Category {
+    match readable {
+        Readable::Prescription => Category::Prescription,
+        Readable::Dispensation => Category::Dispensation,
+    }
 }

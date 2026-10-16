@@ -176,6 +176,20 @@ years = 3                      # Art 9(2): at least three years from each access
   receiving member for
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
 
+- **The prescription and dispensation members.** Declare in
+  `[[fhir.serve]]` only members that meet the contract FerroFED relies on,
+  because the gateway computes no dispensability, counts no remaining
+  dispensations and holds no lock
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  Each such member states each prescription's dispensing status and the
+  dispensations it has left, holds the prescriber's signature, and is the
+  member that created the prescription, never one holding a copy. It
+  refuses a dispensation its own state no longer allows, and it refuses a
+  second dispensation carrying a dispense identifier
+  (`MedicationDispense.identifier`) it already holds, so a pharmacy that
+  sends a dispensation again after a time-out cannot have it written twice.
+  Ask each member's operator to confirm this at admission.
+
 Keep two defaults, which the [claims review](../evaluate/claims-review.md#annex-ii-point-25)
 assessed against Annex II, point 2.5:
 
@@ -241,6 +255,11 @@ clinicians who use it. Each one is a control of the
   The node may have stored the write before the gateway failed to record
   the access. Read the resource before writing it again
   ([Failing closed](access-log.md#failing-closed)).
+- **Read a `504` to a dispensation as an unknown outcome.** The owner of
+  the prescription did not answer in time, and the gateway never sends a
+  dispensation again. Ask the member, or read the prescription's status,
+  before you send the dispensation once more, and send it with the same
+  dispense identifier, which the member refuses when it already holds it.
 
 ## Maintenance and its frequency
 

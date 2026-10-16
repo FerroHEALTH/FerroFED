@@ -36,7 +36,7 @@ const SERVED_BOTH: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptio
      [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n";
 
 /// The member's own id of the dispensation it creates.
-const CREATED: &str = "md-1";
+pub(super) const CREATED: &str = "md-1";
 
 /// A dispensation of the prescription `authorizing`, its patient the test
 /// patient in a contained `Patient`.
@@ -78,7 +78,7 @@ fn own_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> Str
 
 /// The gateway over `members`, both serving both categories, the patient
 /// known at both.
-fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
+pub(super) fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
     let own = format!(
         "{}{}",
         own_endpoint("node-a-mpd", ("node-a", "org-a"), members.proxy_a.origin()),
@@ -94,7 +94,7 @@ fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
 }
 
 /// Members holding `a` and `b`, each creating a dispensation with `created`.
-async fn members(
+pub(super) async fn members(
     (a, b): (&[&str], &[&str]),
     created: ResponseTemplate,
 ) -> Result<Members, Box<dyn Error>> {
@@ -114,7 +114,7 @@ async fn members(
 }
 
 /// A member's `201 Created` of the dispensation [`CREATED`].
-fn created() -> ResponseTemplate {
+pub(super) fn created() -> ResponseTemplate {
     ResponseTemplate::new(201)
         .insert_header(
             "location",
@@ -201,7 +201,24 @@ async fn a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unch
 }
 
 #[tokio::test]
-async fn a_dispensation_by_the_faces_reference_reaches_its_owner() -> TestResult {
+async fn a_dispensation_by_identifier_and_the_faces_reference_reaches_its_owner() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    let dir = tempfile::tempdir()?;
+    let both = format!(
+        r#"{{"reference":"MedicationRequest/{}","identifier":{{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}}}}"#,
+        face_id("node-b-mpd", EHR_B, "rx-b1")?
+    );
+    let (status, text) = call(gateway(&members, dir.path())?, post(&dispensation(&both))?).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    assert_eq!(1, creates(&members.own_b).await?.len());
+    assert!(creates(&members.own_a).await?.is_empty());
+    Ok(())
+}
+
+// conformance: CP-26 track-10
+#[tokio::test]
+async fn a_dispensation_naming_its_prescription_by_the_faces_reference_alone_is_refused()
+-> TestResult {
     let members = members((&[RX_A], &[RX_B]), created()).await?;
     let dir = tempfile::tempdir()?;
     let reference = format!(
@@ -213,9 +230,15 @@ async fn a_dispensation_by_the_faces_reference_reaches_its_owner() -> TestResult
         post(&dispensation(&reference))?,
     )
     .await?;
-    assert_eq!(StatusCode::CREATED, status, "{text}");
-    assert_eq!(1, creates(&members.own_b).await?.len());
-    assert!(creates(&members.own_a).await?.is_empty());
+    assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
+    let (code, diagnostics) = issue(&text)?;
+    assert_eq!("business-rule", code);
+    assert_eq!(
+        "name the prescription by its identifier; the member cannot resolve the gateway's reference",
+        diagnostics,
+        "§5.4 scope note, N33: the body reaches its member unchanged, so it must name what the member holds"
+    );
+    assert!(members.unasked(), "nothing reaches a member");
     Ok(())
 }
 
@@ -440,6 +463,59 @@ async fn a_dispensation_that_breaks_its_profile_asks_no_member() -> TestResult {
     Ok(())
 }
 
+/// The count of the dispensations that ended as `outcome`, scraped from a
+/// fresh surface: the counts are the process's, so any surface reads them.
+fn counted(outcome: &str) -> Result<u64, Box<dyn Error>> {
+    let samples = crate::metrics::parse(&ferrofed_server::metrics::Metrics::default().render()?)?;
+    for sample in samples
+        .iter()
+        .filter(|sample| sample.name == "ferrofed_fhir_dispensations_total")
+    {
+        assert_eq!(
+            vec!["outcome"],
+            sample.labels.keys().collect::<Vec<_>>(),
+            "outcome is the only label: {sample:?}"
+        );
+    }
+    Ok(crate::metrics::count(
+        &samples,
+        "ferrofed_fhir_dispensations_total",
+        &[("outcome", outcome)],
+    )
+    .ok_or("every outcome is exposed")?
+    .parse()?)
+}
+
+#[tokio::test]
+async fn a_dispensation_with_no_owner_is_counted_with_no_value() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    let dir = tempfile::tempdir()?;
+    let (unowned, created_before) = (counted("unowned")?, counted("created")?);
+    let unknown = r#"{"identifier":{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-NONE"}}"#;
+    let (status, text) = call(
+        gateway(&members, dir.path())?,
+        post(&dispensation(unknown))?,
+    )
+    .await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
+    assert_eq!(
+        unowned + 1,
+        counted("unowned")?,
+        "one dispensation with no owner"
+    );
+    assert_eq!(created_before, counted("created")?);
+    let exposed = ferrofed_server::metrics::Metrics::default().render()?;
+    for value in ["SYNTHETIC-RX-NONE", PATIENT, "node-a"] {
+        assert!(
+            !exposed
+                .lines()
+                .filter(|line| line.contains("ferrofed_fhir_dispensations_total"))
+                .any(|line| line.contains(value)),
+            "no value reaches the series: {value}"
+        );
+    }
+    Ok(())
+}
 #[cfg(feature = "binding-ihe")]
 mod recorded {
     //! The access record of a dispensation (Annex II 3.2) and its place,
@@ -511,6 +587,53 @@ mod recorded {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn a_dispensation_read_is_recorded_as_a_read_of_dispensations() -> TestResult {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let members = members((&[RX_A], &[RX_B]), created()).await?;
+        let held = r#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"MedicationDispense","id":"md-1","status":"completed"},"search":{"mode":"match"}}]}"#;
+        Mock::given(method("GET"))
+            .and(path("/fhir/MedicationDispense"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(held.as_bytes().to_vec(), "application/fhir+json"),
+            )
+            .mount(&members.own_a)
+            .await;
+        let repository = FeedRepository::start().await;
+        let dir = tempfile::tempdir()?;
+        let app = recording(&members, dir.path(), &repository, "")?;
+        let id = super::face_id("node-a-mpd", EHR_A, super::CREATED)?;
+        let request = http::Request::get(format!("{}/MedicationDispense/{id}", crate::fhir::FHIR))
+            .body(axum::body::Body::empty())?;
+        let (status, text) = call(app, request).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        let records: Vec<String> = repository
+            .wait_for(1, SETTLE)
+            .await
+            .into_iter()
+            .filter(|record| record.contains("ehds-categories"))
+            .collect();
+        let [record] = records.as_slice() else {
+            return Err(format!("one record: {records:#?}").into());
+        };
+        for expected in [
+            "eehrxf-document-priority-category-cs|Electronic-Dispensations:construction",
+            "MedicationDispense/md-1",
+            "node-a-mpd",
+            EHR_A,
+        ] {
+            assert!(record.contains(expected), "{expected}: {record}");
+        }
+        assert!(
+            !record.contains("Electronic-Prescriptions:construction"),
+            "a dispensation read reaches no prescription: {record}"
+        );
+        assert!(record.contains("\"action\":\"R\""), "a read: {record}");
+        Ok(())
+    }
     #[tokio::test]
     async fn a_dispensation_whose_record_has_no_place_reaches_no_member() -> TestResult {
         let members = members((&[RX_A], &[RX_B]), created()).await?;

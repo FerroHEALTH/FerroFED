@@ -53,6 +53,7 @@ use crate::facade::request::Arrived;
 use crate::facade::summary::Unsummarised;
 use crate::facade::{confined, security};
 use crate::federation::Federation;
+use crate::metrics::dispensations::Outcome;
 
 use answer::{Lookup, refused, refused_after};
 use lookup::Owned;
@@ -106,11 +107,7 @@ pub(crate) async fn dispense(
         Err(response) => return response,
     };
     let Some((located, withheld)) = located else {
-        tracing::info!(
-            request_id = logged,
-            "a dispensation's patient is held by no member"
-        );
-        return refused(StatusCode::NOT_FOUND, "not-found", UNOWNED);
+        return unowned(&logged);
     };
     let snapshot = federation.snapshot();
     let unresolved: Vec<&EndpointId> = located
@@ -124,6 +121,7 @@ pub(crate) async fn dispense(
         })
         .collect();
     if !unresolved.is_empty() {
+        Outcome::Silent.record();
         let named: Vec<&str> = unresolved
             .iter()
             .map(|endpoint| endpoint.as_str())
@@ -143,11 +141,7 @@ pub(crate) async fn dispense(
             .filter(|member| prescribing.contains(member.node.as_str()))
             .collect();
     if chosen.is_empty() {
-        tracing::info!(
-            request_id = logged,
-            "a dispensation's patient is held by no member serving prescriptions"
-        );
-        return refused(StatusCode::NOT_FOUND, "not-found", UNOWNED);
+        return unowned(&logged);
     }
     let members = match prescriptions::asked(federation, arrived, chosen, Arc::clone(&withheld))
         .await
@@ -190,6 +184,7 @@ async fn owned(
         .iter()
         .find(|member| member.held.status() != EndpointStatus::Active)
     {
+        Outcome::Silent.record();
         let status = silent.held.status();
         let (answer, code) = match status {
             EndpointStatus::TimeOut | EndpointStatus::Offline => {
@@ -216,6 +211,7 @@ async fn owned(
         return crate::error::fixed(Code::Internal, arrived.request_id);
     };
     let Some(writing) = writing(federation, fhir, &member.chosen) else {
+        Outcome::Failed.record();
         return refused_after(
             federation,
             lookup,
@@ -227,6 +223,7 @@ async fn owned(
         .iter()
         .find(|endpoint| !of_node(federation, endpoint, &writing.node))
     {
+        Outcome::Failed.record();
         return refused_after(
             federation,
             lookup,
@@ -237,6 +234,7 @@ async fn owned(
         );
     }
     if !confined::admits(arrived.conveyance, &writing.via, &writing.ehr_id) {
+        Outcome::Failed.record();
         return confined::refused("dispensation", arrived.request_id, &logged);
     }
     let created = write(federation, arrived, (&writing, body), withheld).await;
@@ -310,6 +308,17 @@ async fn resolved(
         (Some(_), true) => Err(disagree()),
         (Some((located, _, withheld)), false) => Ok(Some((located, Arc::new(withheld)))),
     }
+}
+
+/// The answer to a dispensation whose patient no member serving
+/// prescriptions holds, or none may say so, counted with no value.
+fn unowned(logged: &str) -> Response {
+    tracing::info!(
+        request_id = logged,
+        "a dispensation's patient is held by no member serving prescriptions"
+    );
+    Outcome::Unowned.record();
+    refused(StatusCode::NOT_FOUND, "not-found", UNOWNED)
 }
 
 /// The refusal of a dispensation whose patient identifiers name different

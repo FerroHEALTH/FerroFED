@@ -24,12 +24,13 @@ prescriptions:
 | `GET {fhir-base}/MedicationRequest?patient.identifier=` | `Electronic-Prescriptions` |
 | `GET {fhir-base}/MedicationRequest/{id}` | `Electronic-Prescriptions` |
 | `POST {fhir-base}/MedicationDispense` | `Electronic-Dispensations` |
+| `GET {fhir-base}/MedicationDispense/{id}` | `Electronic-Dispensations` |
 
 `GET {fhir-base}/metadata` lists `MedicationRequest` and
 `MedicationDispense` only for a category a member is declared for, each with
 its MPD profile, and declares for `MedicationRequest` the `search-type` and
 `read` interactions the face serves, and for `MedicationDispense` the
-`create` interaction. Each interaction the statement declares is one its
+`create` and `read` interactions. Each interaction the statement declares is one its
 route serves.
 
 ## Searching a patient's prescriptions
@@ -136,8 +137,12 @@ references by `#id`, and each identifier whose system is in
 `receive_namespaces` is resolved. Every one of them must name the same
 `ehr_id` at every member, or the dispensation is refused `422`. Each
 `authorizingPrescription` names a prescription by its business identifier,
-by the face's reference `MedicationRequest/{id}` from the search, or by
-both, which must then name the same prescription.
+and may carry the face's reference `MedicationRequest/{id}` from the search
+beside it, which must then name the same prescription. A prescription named
+by the face's reference alone is refused `422`, "name the prescription by
+its identifier; the member cannot resolve the gateway's reference": the
+member receives your body unchanged, so it can link the dispensation only by
+the identifier it holds.
 
 The gateway then asks every member declared for `Electronic-Prescriptions`
 that holds the patient for the patient's prescriptions, as the search does,
@@ -154,11 +159,11 @@ endpoint of another member than the owner, nothing is written.
 
 | Answer | When |
 |---|---|
-| `201 Created` | The owner created the dispensation. `Location` names it by the face's id, `{fhir-base}/MedicationDispense/{id}`, with the member's version when it named one, and the `OperationOutcome` names the member and every profile constraint the check did not evaluate. The face does not serve a read of that id. |
+| `201 Created` | The owner created the dispensation. `Location` names it by the face's id, `{fhir-base}/MedicationDispense/{id}`, with the member's version when it named one, and the `OperationOutcome` names the member and every profile constraint the check did not evaluate. The face reads it at that id ([Reading a dispensation](#reading-a-dispensation)). |
 | `400` | The header names another member's endpoint, or an endpoint the registry does not hold. |
 | `404` `not-found` | No member holds the patient, none may say so, or no member holds the prescription. Every case gets the same text. |
 | `409` `conflict` | Two members hold the prescription, which also raises the `PrescriptionIdentifierCollision` integrity incident; one member holds it twice, with no incident; or the owner refused the dispensation, named with its status. |
-| `422` | The patient's identifiers disagree, the prescriptions are held by different members, a reference and an identifier name different prescriptions, a reference is not to the face, or the owner is not declared for `Electronic-Dispensations`. |
+| `422` | The patient's identifiers disagree, the prescriptions are held by different members, a prescription is named by the face's reference alone, a reference and an identifier name different prescriptions, a reference is not to the face, or the owner is not declared for `Electronic-Dispensations`. |
 | `503` | A member that could hold the prescription did not answer the lookup, or the patient could not be resolved at it. Nothing was written. |
 | `504` | The owner did not answer in time. Whether it wrote the dispensation is unknown, and the gateway did not send it again: ask the member before you send it once more. |
 
@@ -170,6 +175,30 @@ taken before the owner is asked, so a dispensation whose record has no place
 is refused `503 access-unrecorded` and reaches no member. A withdrawal is a
 dispensation sent again with `status` `entered-in-error`, routed as any
 other.
+
+Every dispensation that reaches the lookup is counted once by how it ended
+in `ferrofed_fhir_dispensations_total`, labelled `outcome` alone, so a
+dispensation no member owns is counted with no value
+([The metrics](../operate/metrics.md#the-metrics)).
+
+## Reading a dispensation
+
+`GET {fhir-base}/MedicationDispense/{id}` reads a dispensation by the `id`
+its receipt's `Location` named, and takes the `composition-` read scope over
+every template (`user/composition-*.r`, for example). The `id` names the
+member's own endpoint, the member's `ehr_id` for the patient and the
+member's own `id` of the dispensation, as a prescription's `id` does. The
+gateway asks that member alone, with
+`GET {own}/MedicationDispense?patient.identifier={ehr_id_system}|{ehr_id}&_id={member's id}`,
+and answers the member's `MedicationDispense` as it sent it, with its `id`
+the one you read, its `ETag` and `Last-Modified` from the member's
+`meta.versionId` and `meta.lastUpdated`, and the member named in
+`openEHR-federation-endpoint`. Every other answer is the one the read of a
+prescription gives ([Reading one prescription](#reading-one-prescription)),
+with "dispensation" in its text: `404` alike for every `id` with no owner,
+`409` for an `ehr_id` two members claim, `403` beyond a confined grant,
+`424` and `504` for a member that does not answer. Each read that reached a
+member is recorded once under `Electronic-Dispensations`.
 
 The face's base, its authentication and the `[[fhir.serve]]` table are
 described with the patient summary ([Configuring the face](patient-summary.md#configuring-the-face)).

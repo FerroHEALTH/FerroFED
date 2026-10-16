@@ -30,7 +30,7 @@ use std::time::Instant;
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup};
-use ferrofed_eehrxf::prescriptions::RESOURCE;
+use ferrofed_eehrxf::dispensations;
 use ferrofed_eehrxf::prescriptions::page::Kept;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::FanOutError;
@@ -47,9 +47,38 @@ use crate::facade::{confined, owner};
 use crate::federation::Federation;
 use crate::fhir::locator::{Locator, Unlocated};
 
-/// One member asked for one prescription, and what it answered.
+/// What a read by the face's id reads: a prescription or a dispensation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Readable {
+    /// A `MedicationRequest`, of Art 14(1)(b).
+    Prescription,
+    /// A `MedicationDispense`, of Art 14(1)(c).
+    Dispensation,
+}
+
+impl Readable {
+    /// The FHIR resource type read.
+    pub(crate) fn resource(self) -> &'static str {
+        match self {
+            Self::Prescription => ferrofed_eehrxf::prescriptions::RESOURCE,
+            Self::Dispensation => dispensations::RESOURCE,
+        }
+    }
+
+    /// The Art 14(1) category of what is read.
+    pub(crate) fn category(self) -> Category {
+        match self {
+            Self::Prescription => Category::ElectronicPrescription,
+            Self::Dispensation => Category::ElectronicDispensation,
+        }
+    }
+}
+
+/// One member asked for one resource, and what it answered.
 #[derive(Debug)]
 pub(crate) struct Read {
+    /// What is read.
+    pub(crate) readable: Readable,
     /// The member, as the read reached it.
     pub(crate) chosen: Chosen,
     /// The id the read names the prescription by.
@@ -59,8 +88,8 @@ pub(crate) struct Read {
 }
 
 impl Read {
-    /// The prescription the member answered, when it answered exactly one.
-    pub(crate) fn prescription(&self) -> Option<&Kept> {
+    /// The resource the member answered, when it answered exactly one.
+    pub(crate) fn resource(&self) -> Option<&Kept> {
         let Held::Found(pages) = &self.held else {
             return None;
         };
@@ -118,12 +147,13 @@ pub(crate) enum Unfound {
 pub(crate) async fn read(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
-    id: &str,
+    (readable, id): (Readable, &str),
     declared: &BTreeSet<String>,
 ) -> Result<Read, Unfound> {
     let logged = arrived.outbound.to_string();
     let snapshot = federation.snapshot();
-    let code = Category::ElectronicPrescription.code();
+    let category = readable.category();
+    let code = category.code();
     let serving: Vec<EndpointId> = snapshot
         .nodes()
         .filter(|node| declared.contains(node.id().as_str()))
@@ -187,8 +217,9 @@ pub(crate) async fn read(
         native: native.id().clone(),
         ehr_id: ehr_id.clone(),
     };
-    let held = asked(federation, arrived, (&chosen, locator.resource())).await?;
+    let held = asked(federation, arrived, (&chosen, readable, locator.resource())).await?;
     let read = Read {
+        readable,
         chosen,
         locator,
         held,
@@ -228,7 +259,7 @@ fn settled(federation: &Federation, mut read: Read) -> Result<Read, Unfound> {
 async fn asked(
     federation: &Federation,
     arrived: &Arrived<'_>,
-    (chosen, resource): (&Chosen, &str),
+    (chosen, readable, resource): (&Chosen, Readable, &str),
 ) -> Result<Held, Unfound> {
     let budget = federation.budget();
     let overall = arrived
@@ -244,9 +275,14 @@ async fn asked(
         .with_request_id(arrived.outbound)
         .with_withheld(Arc::new(Withheld::none()));
     let until = tokio::time::Instant::from_std(overall);
-    prescriptions::paged(federation, (chosen, Some(resource)), &options, until)
-        .await
-        .map_err(|failure| Unfound::Failure(Failure::FanOut(failure)))
+    prescriptions::paged(
+        federation,
+        (chosen, readable.resource(), Some(resource)),
+        &options,
+        until,
+    )
+    .await
+    .map_err(|failure| Unfound::Failure(Failure::FanOut(failure)))
 }
 
 /// The access record's facts of the read `read`, or `None` when no request
@@ -261,16 +297,19 @@ pub(crate) fn accessed(federation: &Federation, read: &Read) -> Option<Accessed>
     if !read.held.left() {
         return None;
     }
-    let contributed = read.prescription().is_some();
-    let evidence = || {
-        Evidence::reached(Basis::Returned, Vec::new()).constructed(Category::ElectronicPrescription)
-    };
+    let contributed = read.resource().is_some();
+    let evidence =
+        || Evidence::reached(Basis::Returned, Vec::new()).constructed(read.readable.category());
     let chosen = &read.chosen;
     Some(Accessed {
         log: Arc::clone(log),
         action: Action::Read,
-        operation: prescriptions::OPERATION,
-        resource: Some(format!("{RESOURCE}/{}", read.locator.resource())),
+        operation: read.readable.resource(),
+        resource: Some(format!(
+            "{}/{}",
+            read.readable.resource(),
+            read.locator.resource()
+        )),
         query: None,
         stored_query: None,
         subject: DataSubject {

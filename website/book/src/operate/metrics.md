@@ -199,6 +199,7 @@ the unit after a histogram.
 | `ferrofed_demographics_request_duration_seconds` | `ferrofed.demographics.request.duration` (unit `s`) | histogram | none | the time each PDQm call took |
 | `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, an admin listener write action or scrape refused at the listener's authentication, and an admin listener write action an admitted operator ran |
 | `ferrofed_overload_refusals_total` | `ferrofed.overload.refusals` | counter | `limit`, and `endpoint` on `node-in-flight` | the requests a limit refused ([Overload protection](overload.md)) |
+| `ferrofed_fhir_dispensations_total` | `ferrofed.fhir.dispensations` | counter | `outcome` | the dispensations the FHIR face received that reached the owner lookup, once each, by `created`, `unowned` (no member holds the patient or the prescription, or none may say so), `claimed` (two members hold the prescription), `several` (one member holds it twice), `unroutable` (owners that differ, or a reference and an identifier that disagree), `silent` (a member that could own it did not answer the lookup), `refused` (the owner refused it), `unknown` (the owner did not answer, so whether it wrote it is unknown) or `failed`; no prescription, patient or member is ever a label ([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation)) |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_config_revision_follows_total` | `ferrofed.config.revision.follows` | counter | `result` | under `config.ui = "managed"`, the revisions another replica marked running that this replica `applied` or `refused` ([Configuration revisions](configuration-revisions.md#several-replicas)) |
 | `ferrofed_config_revision_in_step` | `ferrofed.config.revision.in_step` | gauge | none | under `config.ui = "managed"`, `1` while this replica runs the revision the store marks running and `0` while it does not; present from the first read of the mark |
@@ -219,7 +220,7 @@ path reaches the surface:
 |---|---|
 | `kind` | `EhrIdCollision`, `IndexInsertCollision`, `LearnedCreatingSystemConflict`, `PrescriptionIdentifierCollision`, `RegisteredCreatingSystemConflict` |
 | `endpoint` | an endpoint `id` of the registry document |
-| `outcome` | `active`, `node-error`, `time-out`, `offline`, `consent-denied` |
+| `outcome` | `active`, `node-error`, `time-out`, `offline`, `consent-denied`; on `ferrofed_fhir_dispensations_total`, `created`, `unowned`, `claimed`, `several`, `unroutable`, `silent`, `refused`, `unknown`, `failed` |
 | `class` | `member` (the member's own answer or failure), `client-error` (a `4xx`, other than a consent refusal, the member answered a request routed to it with) |
 | `result` | `applied`, `refused` |
 | `http_route` | a route template of the gateway, such as `/v1/query/aql` or `/v1/ehr/{ehr_id}/composition`, under the base path, or `<unmatched>` for a path no route names; a path identifier is written as its parameter name, never its value |
@@ -232,7 +233,7 @@ path reaches the surface:
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
 
-The incident, reload and security event counters, and the `concurrency` and
+The incident, reload, security event and dispensation counters, and the `concurrency` and
 `caller-rate` refusals, show every label value at `0` from the start, so an
 alert on their increase works from the first scrape. A node
 request series appears with the first request to that endpoint, and an
