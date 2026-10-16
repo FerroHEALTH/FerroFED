@@ -205,11 +205,13 @@ the refusal is logged by key, and the revision before it still holds them.
 The operator console's Configuration page shows all of this through the
 first replica it is configured with: the running and the newest revision
 with the newest one's changes, the members and stored queries with their
-owners, and the history, with a form, behind a confirmation, to save or
-remove a console member, apply the newest revision, roll back, and store a
-stored-query version ([The operator console](operator-console.md#configuration)). Its member form
-writes `openehr-rest-query` endpoints; a member's `hl7-fhir-rest`
-endpoints are saved through the API and kept by the console's saves.
+owners, and the history, in tabs of their own. A console member is saved or
+removed, the newest revision applied, the running one rolled back, and a
+stored-query version stored, each removal, apply, roll back and store
+confirmed in a step of its own
+([The operator console](operator-console.md#configuration)). Its member
+form writes the `openehr-rest-query` and `hl7-fhir-rest` endpoints, each a
+row of its own fields.
 
 ## Credentials and binding sections
 

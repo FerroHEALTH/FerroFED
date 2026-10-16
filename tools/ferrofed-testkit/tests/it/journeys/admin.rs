@@ -97,6 +97,23 @@ async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Err
     Ok(())
 }
 
+/// Opens the confirmation step `id` from its button and runs the action
+/// with its submit, under the heading `heading`.
+async fn confirmed(browser: &Browser, id: &str, heading: &str) -> Result<(), Box<dyn Error>> {
+    browser
+        .element(By::Css(format!(
+            r#"button[popovertarget="{id}"][aria-haspopup]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    browser
+        .element(By::Css(format!("#{id}:popover-open")))
+        .await?;
+    browser.element(submit(heading)).await?.click().await?;
+    Ok(())
+}
+
 /// Loads the view at `route`, titled `title`, and waits until the form
 /// under `heading` runs.
 async fn hydrated(
@@ -130,12 +147,7 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
             .console_clean("the hydration of the integrity page")
             .await?;
         fill(browser, "clear-ehr-id", EHR_ID).await?;
-        browser
-            .element(By::Id("clear-confirm"))
-            .await?
-            .click()
-            .await?;
-        browser.element(submit(CLEAR)).await?.click().await?;
+        confirmed(browser, "clear-confirm", CLEAR).await?;
         browser
             .text("strong", &format!("Replica gateway-0 cleared {EHR_ID}."))
             .await?;
@@ -158,12 +170,7 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
             .await?;
         fill(browser, "repair-name", NAME).await?;
         fill(browser, "repair-version", "1.0.0").await?;
-        browser
-            .element(By::Id("repair-confirm"))
-            .await?
-            .click()
-            .await?;
-        browser.element(submit(REPAIR)).await?.click().await?;
+        confirmed(browser, "repair-confirm", REPAIR).await?;
         browser
             .text(
                 "p",

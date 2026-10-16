@@ -269,7 +269,7 @@ async fn an_action_without_its_confirmation_asks_no_replica() -> Result<(), Box<
     let unconfirmed = form(&[("replica", "*"), ("ehr_id", EHR_ID)]);
     let html = acted(&service, &session, "/api/clear-ehr-id", unconfirmed).await?;
     assert!(
-        html.contains("Tick the confirmation to run the clear."),
+        html.contains("Confirm the clear in its confirmation step to run it."),
         "{html}"
     );
     let unconfirmed = form(&[
@@ -279,7 +279,7 @@ async fn an_action_without_its_confirmation_asks_no_replica() -> Result<(), Box<
     ]);
     let html = acted(&service, &session, "/api/repair-drift", unconfirmed).await?;
     assert!(
-        html.contains("Tick the confirmation to run the drift repair."),
+        html.contains("Confirm the drift repair in its confirmation step to run it."),
         "{html}"
     );
     assert_eq!(0, asked(&listener).await?);
@@ -671,7 +671,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     );
     assert!(integrity.contains(r#"id="clear-confirm""#), "{integrity}");
     assert!(
-        integrity.contains(r#"<button type="submit" disabled>Clear the ehr_id</button>"#),
+        integrity.contains(r#"<button type="submit" autofocus disabled>Clear the ehr_id</button>"#),
         "{integrity}"
     );
     let (_, stored) = send(&service, get_as("/stored-queries", &session)?).await?;

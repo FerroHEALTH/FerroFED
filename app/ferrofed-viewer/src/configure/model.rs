@@ -4,37 +4,132 @@
 //! What the configuration page renders and what its forms post.
 //!
 //! The page is rendered on the server and crosses to the browser as HTML:
-//! the revisions, the members and stored queries with their owners, the
-//! history, and each form's fields. Its forms cross to the server in a
-//! `POST` body alone, and a form's `Debug` output names which fields are
-//! filled, never what they hold: a secret's value among them, which the
-//! page never renders.
+//! the header with the revisions it names, the card of the revision saved
+//! and not applied, the tabs, and the tab's own cards with their forms. Its
+//! forms cross to the server in a `POST` body alone, as structured fields:
+//! each endpoint, setting and secret a row of its own, never one line of
+//! separated text. A form's `Debug` output names which fields are filled,
+//! never what they hold: a secret's value among them, which the page never
+//! renders.
 
 use std::fmt;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
-/// The configuration page as the server rendered it.
+/// Which part of the configuration page a path names: the tab, the item
+/// inside it, and the revision a comparison names.
+///
+/// It crosses to the server as the configuration's load names it, and the
+/// server reads it; a part it does not know is refused there.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Screen {
+    /// The tab, as its path segment names it; empty for the first tab.
+    pub tab: String,
+    /// The item inside the tab, such as `new` or a member's `node_id`.
+    pub item: String,
+    /// The revision the history compares with the running one.
+    pub compare: String,
+}
+
+/// The configuration page as the server rendered it, in the parts the page
+/// places around the outcome of its forms.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigView {
-    /// The read-only part, rendered as HTML.
-    pub html: String,
-    /// The forms the operator may submit, each rendered whole as HTML.
-    pub forms: String,
+    /// The page header: its title, its subtitle and the revision pills.
+    pub header: String,
+    /// The card of the revision saved and not applied, and of what the
+    /// running revision awaits; empty when neither applies.
+    pub pending: String,
+    /// The tabs.
+    pub tabs: String,
+    /// The id of the tab shown, which labels its panel.
+    pub tab: String,
+    /// The cards above the tab's main card.
+    pub lead: String,
+    /// The tab's main card, whose outcome the page shows at its top.
+    pub main: String,
+}
+
+/// One Query API endpoint row of the member form.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QueryEndpointInput {
+    /// The row's key on the page, which names its fields.
+    pub key: String,
+    /// The `endpoint_id`.
+    pub id: String,
+    /// The base URL.
+    pub url: String,
+    /// Whether the endpoint is in service; out of service it is
+    /// `suspended`.
+    pub in_service: bool,
+}
+
+/// One FHIR endpoint row of the member form.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FhirEndpointInput {
+    /// The row's key on the page, which names its fields.
+    pub key: String,
+    /// The `endpoint_id`.
+    pub id: String,
+    /// The base URL.
+    pub url: String,
+    /// The identifier system the endpoint is told the `ehr_id` in.
+    pub system: String,
+    /// The categories it serves, each a code.
+    pub categories: Vec<String>,
+    /// The profiles it serves, each a canonical URL.
+    pub profiles: Vec<String>,
+    /// Whether the endpoint is in service.
+    pub in_service: bool,
+}
+
+/// One setting of a credential or a binding section: its dotted key and
+/// its value, or its values for a list.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SettingInput {
+    /// The row's key on the page, which names its fields.
+    pub row: String,
+    /// The dotted key inside the resource, such as `oauth2.client_id`.
+    pub key: String,
+    /// The value as the operator entered it.
+    pub value: String,
+    /// The values of a list, each entered on its own.
+    pub values: Vec<String>,
+}
+
+/// What a form does with one secret of a resource.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SecretInput {
+    /// The row's key on the page, which names its fields.
+    pub row: String,
+    /// The dotted key inside the resource, such as `oauth2.client_secret`.
+    pub key: String,
+    /// The choice: `keep`, `set`, `file` or `clear`.
+    pub choice: String,
+    /// The secret's value for `set`, which the gateway writes to a file of
+    /// its own; zeroed when dropped, and never rendered or logged.
+    pub value: Typed,
+    /// The file the gateway reads the secret from, for `file`.
+    pub file: String,
 }
 
 /// A configuration form as the browser posts it; each form sends its own
 /// fields and names its action.
 ///
-/// Every field is the text the operator entered, read on the server; a
-/// checkbox left clear and a field a form does not send are empty.
+/// Every field is what the operator entered, read on the server; a field a
+/// form does not send is empty.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConfigForm {
-    /// The action: `save-member`, `remove-member`, `apply`, `rollback`,
-    /// `store-query`, `save-credentials`, `save-binding`, `remove-section`,
-    /// `confirm`, `approve` or `import`.
+    /// The action: `add-member`, `save-member`, `remove-member`, `apply`,
+    /// `rollback`, `store-query`, `save-credentials`, `save-binding`,
+    /// `remove-section`, `confirm`, `approve` or `import`.
     pub action: String,
     /// The revision a change is based on.
     pub base: String,
@@ -44,7 +139,7 @@ pub struct ConfigForm {
     pub current: String,
     /// Why the change is made.
     pub reason: String,
-    /// Not empty when the operator ticked the confirmation.
+    /// Not empty once the operator took the confirmation step.
     pub confirm: String,
     /// The member's organisation id.
     pub organisation: String,
@@ -58,18 +153,12 @@ pub struct ConfigForm {
     pub product: String,
     /// The product's version.
     pub product_version: String,
-    /// The node's Query API endpoints: `endpoint_id`, base URL and
-    /// optionally `suspended`, separated by spaces, each endpoint separated
-    /// by a semicolon, a semicolon inside one written `%3B`.
-    pub endpoints: String,
-    /// The node's FHIR endpoints: `endpoint_id`, base URL, `system=`,
-    /// `categories=`, `profiles=` and optionally `suspended`, separated by
-    /// spaces, each endpoint separated by a semicolon, a semicolon inside
-    /// one written `%3B`.
-    pub fhir_endpoints: String,
-    /// Not empty when the form showed the FHIR endpoints field; a form
-    /// without it, as one drawn before the field existed, keeps the held
-    /// FHIR endpoints whole.
+    /// The node's Query API endpoints, one row each.
+    pub query_endpoints: Vec<QueryEndpointInput>,
+    /// The node's FHIR endpoints, one row each.
+    pub fhir_endpoints: Vec<FhirEndpointInput>,
+    /// Not empty when the form showed the FHIR endpoints; a form without
+    /// them keeps the held FHIR endpoints whole.
     pub fhir_shown: String,
     /// The stored query's qualified name.
     pub name: String,
@@ -84,20 +173,55 @@ pub struct ConfigForm {
     /// The credential or binding section a removal names, as
     /// `credentials:<endpoint id>` or `binding:<section>`.
     pub resource: String,
-    /// The settings of a credential or a binding section less its secrets,
-    /// as one TOML inline table.
-    pub settings: String,
-    /// The dotted key of the secret a form sets or clears.
-    pub secret_key: String,
-    /// The secret's value, which the gateway writes to a file of its own;
-    /// zeroed when dropped, and never rendered or logged.
-    pub secret_value: Typed,
-    /// The file the gateway reads the secret from.
-    pub secret_file: String,
-    /// Not empty when the operator clears the secret.
-    pub secret_clear: String,
+    /// The grant a credential uses: `transport`, `bearer`, `basic`,
+    /// `oauth2`, `fapi2` or `nuts`.
+    pub grant: String,
+    /// The settings of a credential or a binding section, less its
+    /// secrets, one row each.
+    pub settings: Vec<SettingInput>,
+    /// What the form does with each secret it shows.
+    pub secrets: Vec<SecretInput>,
     /// The TOML an import saves as a dry-run revision.
     pub toml: String,
+}
+
+impl fmt::Debug for QueryEndpointInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueryEndpointInput")
+            .field("key", &self.key)
+            .field("in_service", &self.in_service)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for FhirEndpointInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FhirEndpointInput")
+            .field("key", &self.key)
+            .field("categories", &self.categories.len())
+            .field("profiles", &self.profiles.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for SettingInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SettingInput")
+            .field("key", &self.key)
+            .field("value", &!self.value.trim().is_empty())
+            .field("values", &self.values.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for SecretInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecretInput")
+            .field("choice", &self.choice)
+            .field("value", &self.value)
+            .field("file", &!self.file.trim().is_empty())
+            .finish_non_exhaustive()
+    }
 }
 
 impl fmt::Debug for ConfigForm {
@@ -108,15 +232,14 @@ impl fmt::Debug for ConfigForm {
             .field("reason", &filled(&self.reason))
             .field("confirm", &filled(&self.confirm))
             .field("node", &filled(&self.node))
-            .field("endpoints", &filled(&self.endpoints))
-            .field("fhir_endpoints", &filled(&self.fhir_endpoints))
+            .field("query_endpoints", &self.query_endpoints.len())
+            .field("fhir_endpoints", &self.fhir_endpoints.len())
             .field("fhir_shown", &filled(&self.fhir_shown))
             .field("name", &filled(&self.name))
             .field("aql", &filled(&self.aql))
-            .field("settings", &filled(&self.settings))
-            .field("secret_key", &filled(&self.secret_key))
-            .field("secret_value", &!self.secret_value.is_empty())
-            .field("secret_file", &filled(&self.secret_file))
+            .field("grant", &self.grant)
+            .field("settings", &self.settings.len())
+            .field("secrets", &self.secrets)
             .field("toml", &filled(&self.toml))
             .finish_non_exhaustive()
     }

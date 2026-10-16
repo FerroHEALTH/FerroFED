@@ -329,7 +329,8 @@
   }
 
   /* The legend reads as the card's title, inside it rather than on its
-     edge. */
+     edge; every sibling after it clears the float, so none is laid out in
+     the width beside it. */
   legend {
     float: left;
     width: 100%;
@@ -339,7 +340,7 @@
     font-weight: 600;
   }
 
-  legend + * {
+  legend ~ * {
     clear: both;
   }
 
@@ -853,6 +854,26 @@
     }
   }
 
+  /* The configuration forms show the part a choice names alone: the
+     fields of the grant the select names, and a secret's value or file
+     field once Set a value or Read from a file is chosen. Hidden parts are
+     out of the accessibility tree; the server reads the chosen part alone. */
+  .grant-part,
+  .secret-set,
+  .secret-file {
+    display: none;
+  }
+
+  form:has(select[data-grant] option[value="oauth2"]:checked) .grant-part[data-grant="oauth2"],
+  form:has(select[data-grant] option[value="fapi2"]:checked) .grant-part[data-grant="fapi2"],
+  form:has(select[data-grant] option[value="nuts"]:checked) .grant-part[data-grant="nuts"],
+  form:has(select[data-grant] option[value="bearer"]:checked) .grant-part[data-grant="bearer"],
+  form:has(select[data-grant] option[value="basic"]:checked) .grant-part[data-grant="basic"],
+  .secret:has(input[value="set"]:checked) .secret-set,
+  .secret:has(input[value="file"]:checked) .secret-file {
+    display: block;
+  }
+
   /* The operator menu: a popover under the top bar's far end. */
   .menu:popover-open {
     position: fixed;
@@ -871,8 +892,10 @@
 
 /* A wide table scrolls inside its own card, so the page never scrolls
    sideways at 320 px, and a long one scrolls down under a header that stays;
-   the box takes the keyboard focus to scroll. */
+   the box takes the keyboard focus to scroll, and it positions what it holds,
+   so visually hidden text inside it never widens the page. */
 @utility table-scroll {
+  position: relative;
   max-width: 100%;
   max-height: min(70vh, 40rem);
   overflow: auto;

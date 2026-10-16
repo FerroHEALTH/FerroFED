@@ -71,7 +71,8 @@ cookie.workspace = true
 ferrofed-registry.workspace = true
 http.workspace = true
 # The times of an incident and of a clear, compared to mark the incident
-# resolved; the registry builds on it already.
+# resolved; the registry builds on it already, and the wall clock
+# the countdown of a revision awaiting its confirmation starts from.
 jiff.workspace = true
 # Each request's body is read up to its limit before anything else reads it.
 http-body-util.workspace = true

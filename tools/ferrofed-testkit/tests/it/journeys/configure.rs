@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The configuration page in the browser, against a stub admin listener:
-//! its forms disabled until the page has hydrated, the save of a console
-//! member answered with the preview of what the saved revision changes, the
-//! edit of a console member's FHIR endpoint, and the apply of the newest
-//! revision, each without a console error.
+//! its forms disabled until the page has hydrated, the tabs moved between
+//! from the keyboard, a member added with an endpoint row added to its form
+//! and answered with the preview of what the saved revision changes, a
+//! refused field marked where it stands, the edit of a console member's
+//! FHIR endpoint, and the apply of the newest revision through its
+//! confirmation step, each without a console error.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -15,11 +17,11 @@ use std::error::Error;
 
 use ferrofed_testkit::mock::Server;
 use ferrofed_viewer::app::PRODUCT;
-use thirtyfour::By;
+use thirtyfour::{By, Key};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, with_browser};
+use crate::journeys::browser::{Browser, until, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -96,81 +98,200 @@ pub(crate) async fn listener() -> Server {
     listener
 }
 
-/// The submit of the form under the heading `heading`.
-fn submit(heading: &str) -> By {
+/// The submit button of the tab's main card whose text holds `label`.
+pub(crate) fn submit(label: &str) -> By {
     By::XPath(format!(
-        "//section[h2 = '{heading}']//button[@type = 'submit']"
+        "//button[@type = 'submit' and contains(., '{label}')]"
     ))
 }
 
 /// Replaces the text of the field `id` with `text`.
-async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Error>> {
     let field = browser.element(By::Id(id)).await?;
     field.clear().await?;
     field.send_keys(text).await?;
     Ok(())
 }
 
-/// Loads the page and waits until its forms run.
-async fn hydrated(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn Error>> {
-    browser.goto(&stack.url("/configuration")).await?;
+/// Loads the configuration page at `path` and waits until the button
+/// `ready` names runs.
+pub(crate) async fn hydrated(
+    browser: &Browser,
+    stack: &Stack,
+    (path, ready): (&str, By),
+) -> Result<(), Box<dyn Error>> {
+    browser.goto(&stack.url(path)).await?;
     browser
         .titled(&format!("Configuration · {PRODUCT}"))
         .await?;
     browser
-        .enabled(submit("Add a console member"))
+        .enabled(ready)
         .await
         .map_err(|error| format!("the configuration page never hydrated: {error}").into())
 }
 
-/// Edits console member B's FHIR endpoint: the edit form shows it with
-/// every key, and a save sends it as the operator changed it.
-async fn edit_fhir_endpoint(
-    browser: &Browser,
-    stack: &Stack,
-    admin: &Server,
-) -> Result<(), Box<dyn Error>> {
-    hydrated(browser, stack).await?;
-    let shown = browser
-        .element(By::Id("edit-node-b-fhir_endpoints"))
-        .await?
-        .value()
-        .await?;
-    assert_eq!(
-        Some(
-            "node-b-fhir https://cdr-b.example.org/fhir system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps"
-        ),
-        shown.as_deref(),
-        "the edit form shows the held FHIR endpoint"
-    );
-    fill(
-        browser,
-        "edit-node-b-fhir_endpoints",
-        "node-b-fhir https://fhir.example.org/r4 system=urn:oid:2.999.1 categories=Patient-Summaries profiles=http://example.org/ps",
-    )
-    .await?;
-    fill(browser, "edit-node-b-reason", "move B's FHIR endpoint").await?;
+/// Opens the confirmation step `id` from its button, and runs it with its
+/// submit, which the focus moved to as it opened.
+pub(crate) async fn confirmed(browser: &Browser, id: &str) -> Result<(), Box<dyn Error>> {
     browser
-        .element(By::Id("edit-node-b-confirm"))
+        .element(By::Css(format!(
+            r#"button[popovertarget="{id}"][aria-haspopup]"#
+        )))
         .await?
         .click()
         .await?;
     browser
-        .element(submit("Edit console member node-b"))
+        .element(By::Css(format!("#{id}:popover-open")))
+        .await?;
+    let focused = browser.driver().active_element().await?;
+    assert_eq!(
+        Some(String::from("submit")),
+        focused.attr("type").await?,
+        "the focus moves into the confirmation step"
+    );
+    focused.click().await?;
+    Ok(())
+}
+
+/// Waits until the focus is on the outcome of the last form.
+pub(crate) async fn focused_on_outcome(browser: &Browser) -> Result<(), Box<dyn Error>> {
+    until("the focus is on the outcome", async || {
+        Ok(browser
+            .driver()
+            .active_element()
+            .await?
+            .id()
+            .await?
+            .as_deref()
+            == Some("config-outcome"))
+    })
+    .await
+}
+
+/// The bodies `admin` received at `route`.
+pub(crate) async fn bodies(admin: &Server, route: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    Ok(admin
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?
+        .into_iter()
+        .filter(|request| request.url.path() == route)
+        .map(|request| String::from_utf8_lossy(&request.body).into_owned())
+        .collect())
+}
+
+/// Adds member C, its second Query API endpoint a row the form adds, and
+/// first has a refused `node_id` marked at its field.
+async fn add_member(
+    browser: &Browser,
+    stack: &Stack,
+    admin: &Server,
+) -> Result<(), Box<dyn Error>> {
+    hydrated(
+        browser,
+        stack,
+        ("/configuration/members/new", submit("Save as revision 3")),
+    )
+    .await?;
+    fill(browser, "cfg-organisation", "org-c").await?;
+    fill(browser, "cfg-node", "node c").await?;
+    fill(browser, "cfg-system_id", "cdr-c.example.org").await?;
+    fill(browser, "cfg-q-0-id", "node-c-pub").await?;
+    fill(browser, "cfg-q-0-url", "https://cdr-c.example.org/openehr").await?;
+    browser
+        .element(By::Id("cfg-add-query"))
+        .await?
+        .click()
+        .await?;
+    let added = browser.driver().active_element().await?;
+    let added_id = added.id().await?.unwrap_or_default();
+    assert!(
+        added_id.starts_with("cfg-q-n") && added_id.ends_with("-id"),
+        "the focus moves to the new row's first field: {added_id}"
+    );
+    added.send_keys("node-c-old").await?;
+    let url = added_id.replace("-id", "-url");
+    fill(browser, &url, "https://old.example.org/openehr").await?;
+    fill(browser, "cfg-reason", "add C").await?;
+    browser
+        .element(submit("Save as revision 3"))
+        .await?
+        .click()
+        .await?;
+    let error = browser.element(By::Id("cfg-node-error")).await?;
+    until("the refused node_id is marked", async || {
+        Ok(error.text().await?.contains("The node_id is not"))
+    })
+    .await?;
+    assert_eq!(
+        Some(String::from("true")),
+        browser
+            .element(By::Id("cfg-node"))
+            .await?
+            .attr("aria-invalid")
+            .await?,
+        "the refused field is marked invalid"
+    );
+    focused_on_outcome(browser).await?;
+    fill(browser, "cfg-node", "node-c").await?;
+    browser
+        .element(submit("Save as revision 3"))
         .await?
         .click()
         .await?;
     browser
         .text("strong", "Replica gateway-0 saved revision 3.")
         .await?;
-    let saved = admin
-        .received_requests()
-        .await
-        .ok_or("the stub records requests")?
-        .into_iter()
-        .filter(|request| request.url.path() == "/admin/config/members/node-b")
-        .map(|request| String::from_utf8_lossy(&request.body).into_owned())
-        .collect::<Vec<_>>();
+    browser
+        .text("caption", "What revision 3 changes, by key")
+        .await?;
+    focused_on_outcome(browser).await?;
+    let saved = bodies(admin, "/admin/config/members/node-c").await?;
+    let [saved] = saved.as_slice() else {
+        return Err(format!("one save of member C, not {}", saved.len()).into());
+    };
+    assert!(saved.contains(r#""id":"node-c-pub""#), "{saved}");
+    assert!(saved.contains(r#""id":"node-c-old""#), "{saved}");
+    browser.console_clean("an added member").await
+}
+
+/// Edits console member B's FHIR endpoint: the edit form shows its fields,
+/// and a save sends it as the operator changed it.
+async fn edit_fhir_endpoint(
+    browser: &Browser,
+    stack: &Stack,
+    admin: &Server,
+) -> Result<(), Box<dyn Error>> {
+    hydrated(
+        browser,
+        stack,
+        (
+            "/configuration/members/node-b",
+            submit("Save as revision 3"),
+        ),
+    )
+    .await?;
+    let shown = browser
+        .element(By::Id("cfg-f-0-url"))
+        .await?
+        .value()
+        .await?;
+    assert_eq!(
+        Some("https://cdr-b.example.org/fhir"),
+        shown.as_deref(),
+        "the edit form shows the held FHIR endpoint"
+    );
+    fill(browser, "cfg-f-0-url", "https://fhir.example.org/r4").await?;
+    fill(browser, "cfg-reason", "move B's FHIR endpoint").await?;
+    browser
+        .element(submit("Save as revision 3"))
+        .await?
+        .click()
+        .await?;
+    browser
+        .text("strong", "Replica gateway-0 saved revision 3.")
+        .await?;
+    let saved = bodies(admin, "/admin/config/members/node-b").await?;
     let [saved] = saved.as_slice() else {
         return Err(format!("one save of member B, not {}", saved.len()).into());
     };
@@ -182,7 +303,7 @@ async fn edit_fhir_endpoint(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_console_member_is_saved_previewed_and_applied() -> Result<(), Box<dyn Error>> {
+async fn a_console_member_is_added_edited_and_applied() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
         return Ok(());
     }
@@ -193,13 +314,13 @@ async fn a_console_member_is_saved_previewed_and_applied() -> Result<(), Box<dyn
 
         // Before the bundle runs, no form can be sent: the server sends the
         // forms inside a disabled fieldset, and a browser that runs no
-        // script never finds a submit enabled.
+        // script never finds a button enabled.
         let session = browser
             .cookie(stack.cookie())
             .await?
             .ok_or("the session cookie")?;
         let page = reqwest::Client::new()
-            .get(stack.url("/configuration"))
+            .get(stack.url("/configuration/members/new"))
             .header("cookie", format!("{}={}", session.name, session.value))
             .send()
             .await?
@@ -210,7 +331,9 @@ async fn a_console_member_is_saved_previewed_and_applied() -> Result<(), Box<dyn
             "the page the server sends: {page}"
         );
         browser.scripts(false).await?;
-        browser.goto(&stack.url("/configuration")).await?;
+        browser
+            .goto(&stack.url("/configuration/members/new"))
+            .await?;
         browser
             .titled(&format!("Configuration · {PRODUCT}"))
             .await?;
@@ -219,65 +342,57 @@ async fn a_console_member_is_saved_previewed_and_applied() -> Result<(), Box<dyn
             .find_all(By::XPath("//fieldset//button"))
             .await?
         {
-            assert!(!button.is_enabled().await?, "a submit before hydration");
+            assert!(!button.is_enabled().await?, "a button before hydration");
         }
         browser.scripts(true).await?;
-        hydrated(browser, &stack).await?;
-        browser.text("td", "file (read-only)").await?;
+
+        // The tabs: the arrow keys move between them.
+        hydrated(
+            browser,
+            &stack,
+            (
+                "/configuration/members",
+                By::Css(r#"button[popovertarget="apply-confirm"]"#),
+            ),
+        )
+        .await?;
+        browser.text("span", "File, read-only").await?;
         browser
             .text("caption", "What revision 2 changes, by key")
             .await?;
+        let tab = browser.element(By::Id("tab-members")).await?;
+        tab.send_keys(Key::Right).await?;
+        assert_eq!(
+            Some(String::from("tab-credentials")),
+            browser.driver().active_element().await?.id().await?,
+            "ArrowRight moves to the next tab"
+        );
         browser
             .console_clean("the hydration of the configuration page")
             .await?;
 
-        // A save is answered with the revision saved and what it changes,
-        // and is not applied.
-        fill(browser, "add-member-organisation", "org-c").await?;
-        fill(browser, "add-member-node", "node-c").await?;
-        fill(browser, "add-member-system_id", "cdr-c.example.org").await?;
-        fill(
-            browser,
-            "add-member-endpoints",
-            "node-c-pub https://cdr-c.example.org/openehr",
-        )
-        .await?;
-        fill(browser, "add-member-reason", "add C").await?;
-        browser
-            .element(By::Id("add-member-confirm"))
-            .await?
-            .click()
-            .await?;
-        browser
-            .element(submit("Add a console member"))
-            .await?
-            .click()
-            .await?;
-        browser
-            .text("strong", "Replica gateway-0 saved revision 3.")
-            .await?;
-        browser
-            .text("caption", "What revision 3 changes, by key")
-            .await?;
-        browser.console_clean("a saved revision").await?;
-
+        add_member(browser, &stack, &admin).await?;
         edit_fhir_endpoint(browser, &stack, &admin).await?;
 
-        // The apply of the newest revision the page offers.
-        hydrated(browser, &stack).await?;
-        browser
-            .element(By::Id("apply-confirm"))
-            .await?
-            .click()
-            .await?;
-        browser
-            .element(submit("Apply revision 2"))
-            .await?
-            .click()
-            .await?;
+        // The apply of the newest revision, through its confirmation step.
+        hydrated(
+            browser,
+            &stack,
+            (
+                "/configuration/members",
+                By::Css(r#"button[popovertarget="apply-confirm"]"#),
+            ),
+        )
+        .await?;
+        confirmed(browser, "apply-confirm").await?;
         browser
             .text("strong", "Replica gateway-0 applied revision 2.")
             .await?;
+        focused_on_outcome(browser).await?;
+        assert_eq!(
+            vec![String::new()],
+            bodies(&admin, "/admin/config/revisions/2/apply").await?
+        );
         browser.console_clean("an applied revision").await
     })
     .await

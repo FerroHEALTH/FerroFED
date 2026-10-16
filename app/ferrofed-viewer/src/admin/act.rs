@@ -189,7 +189,7 @@ pub mod server {
         }
         if given(&form.confirm).is_none() {
             return Err(Refusal::Invalid {
-                reason: format!("Tick the confirmation to run the {what}."),
+                reason: format!("Confirm the {what} in its confirmation step to run it."),
             });
         }
         Ok(())

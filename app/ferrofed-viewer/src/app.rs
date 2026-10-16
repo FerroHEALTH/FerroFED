@@ -210,6 +210,16 @@ fn routes(session: SessionState, gateway: String) -> AnyView {
                 view=guarded(session, crate::configure::ConfigurationPage)
                 ssr=SsrMode::Async
             />
+            <Route
+                path=path!("/configuration/:tab")
+                view=guarded(session, crate::configure::ConfigurationPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/configuration/:tab/:item")
+                view=guarded(session, crate::configure::ConfigurationPage)
+                ssr=SsrMode::Async
+            />
         </Routes>
     }
     .into_any()

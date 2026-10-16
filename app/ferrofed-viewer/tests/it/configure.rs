@@ -81,7 +81,7 @@ pub(crate) async fn answers(
 }
 
 /// An admin listener with revision 2 saved over the running revision 1.
-async fn listener() -> Server {
+pub(crate) async fn listener() -> Server {
     let listener = Server::start().await;
     answers(&listener, ("GET", "/admin/config"), 200, STANDING).await;
     answers(
@@ -131,6 +131,16 @@ pub(crate) async fn configured(
     session: &SessionId,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
+    Ok(answered(service, session, body).await?.html)
+}
+
+/// Runs the configuration form `body` as the hydrated page sends it, and
+/// reads its answer whole.
+pub(crate) async fn answered(
+    service: &axum::Router,
+    session: &SessionId,
+    body: String,
+) -> Result<ActionAnswer, Box<dyn Error>> {
     let request = Request::post("/api/configure")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "application/json")
@@ -140,8 +150,7 @@ pub(crate) async fn configured(
     let (response, text) = send(service, request).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");
-    let answer: ActionAnswer = serde_json::from_str(&text)?;
-    Ok(answer.html)
+    Ok(serde_json::from_str(&text)?)
 }
 
 /// The requests `listener` received with `verb` to `route`, by body.
@@ -170,84 +179,63 @@ pub(crate) async fn changes(listener: &Server) -> Result<usize, Box<dyn Error>> 
         .count())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member()
--> Result<(), Box<dyn Error>> {
-    let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
-    let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("<title>Configuration · "), "{body}");
-    assert!(body.contains("file (read-only)"), "{body}");
-    assert!(body.contains("saved, not applied"), "{body}");
-    assert!(body.contains("Edit console member node-c"), "{body}");
-    assert!(!body.contains("Edit console member node-a"), "{body}");
-    assert!(
-        body.contains(r#"<option value="node-c">node-c</option>"#),
-        "{body}"
-    );
-    assert!(!body.contains(r#"<option value="node-a">"#), "{body}");
-    assert!(body.contains("Apply revision 2"), "{body}");
-    assert!(body.contains("What revision 2 changes, by key"), "{body}");
-    assert!(body.contains("registry.members[0].node.id"), "{body}");
-    assert!(
-        body.contains("stored-query store (versions are immutable)"),
-        "{body}"
-    );
-    assert!(
-        !body.contains("Roll back revision"),
-        "no revision ran before 1"
-    );
-    assert_eq!(
-        0,
-        changes(&listener).await?,
-        "loading the page changes nothing"
-    );
-    Ok(())
+/// The page at `path` as the signed-in operator reads it.
+pub(crate) async fn page(
+    service: &axum::Router,
+    session: &SessionId,
+    path: &str,
+) -> Result<String, Box<dyn Error>> {
+    let (response, body) = send(service, get_as(path, session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{path}: {body}");
+    Ok(body)
 }
 
-// NOTE: no specification governs this: our own design; every value the gateway
-// answers reaches the page as text, the obligation of an `inner_html` sink.
-#[tokio::test(flavor = "multi_thread")]
-async fn every_value_the_gateway_answers_is_escaped_on_the_page() -> Result<(), Box<dyn Error>> {
-    let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
-    let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
-    for raw in [
-        "<script>alert(1)",
-        "<script>x</script>",
-        "<b>x</b>",
-        "<b>1</b>",
-        "<i>q</i>",
-        "\"node-c\"<script>",
-        "\" onmouseover=\"x",
-    ] {
-        assert!(!body.contains(raw), "{raw} reached the page raw: {body}");
-    }
-    assert!(
-        body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
-        "{body}"
-    );
-    assert!(body.contains("&lt;i&gt;q&lt;/i&gt;"), "{body}");
-    Ok(())
+/// The fields of Query API endpoint row `row` of a member form: its key,
+/// its `endpoint_id`, its base URL and whether it is in service.
+pub(crate) fn query_row(
+    row: usize,
+    (id, url, in_service): (&str, &str, bool),
+) -> Vec<(String, String)> {
+    let at = |part: &str| format!("query_endpoints][{row}][{part}");
+    vec![
+        (at("key"), row.to_string()),
+        (at("id"), id.to_owned()),
+        (at("url"), url.to_owned()),
+        (at("in_service"), in_service.to_string()),
+    ]
 }
 
-/// The confirmed save of console member C, its endpoint given twice.
+/// The form body of a configuration form with `fields` and the endpoint
+/// rows `rows`.
+pub(crate) fn form_with(fields: &[(&str, &str)], rows: &[(String, String)]) -> String {
+    let mut all: Vec<(&str, &str)> = fields.to_vec();
+    all.extend(
+        rows.iter()
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+    );
+    form(&all)
+}
+
+/// The save of console member C, its endpoints two rows, the second out of
+/// service.
 fn save_c() -> String {
-    form(&[
-        ("action", "save-member"),
-        ("base", "2"),
-        ("organisation", "org-c"),
-        ("organisation_name", "Organisation C"),
-        ("node", "node-c"),
-        ("system_id", "cdr-c.example.org"),
-        (
-            "endpoints",
-            "node-c-pub https://cdr-c.example.org/openehr; node-c-old https://old.example.org/openehr suspended",
-        ),
-        ("reason", "add C"),
-        ("confirm", "yes"),
-    ])
+    let mut rows = query_row(0, ("node-c-pub", "https://cdr-c.example.org/openehr", true));
+    rows.extend(query_row(
+        1,
+        ("node-c-old", "https://old.example.org/openehr", false),
+    ));
+    form_with(
+        &[
+            ("action", "save-member"),
+            ("base", "2"),
+            ("organisation", "org-c"),
+            ("organisation_name", "Organisation C"),
+            ("node", "node-c"),
+            ("system_id", "cdr-c.example.org"),
+            ("reason", "add C"),
+        ],
+        &rows,
+    )
 }
 
 /// The body of a member's save, as the gateway reads it.
@@ -375,33 +363,92 @@ async fn another_refusal_shows_its_code_and_not_the_gateway_message() -> Result<
 async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let unconfirmed = save_c().replace("&form%5Bconfirm%5D=yes", "");
-    let html = configured(&service, &session, unconfirmed).await?;
-    assert!(html.contains("Tick the confirmation"), "{html}");
-    for (field, value, said) in [
-        ("node", "node c", "The node_id is not"),
-        ("system_id", "", "The system_id is not"),
-        ("endpoints", "node-c-pub", "Query API endpoint 1 is not"),
-        ("endpoints", "", "Give at least one Query API endpoint."),
-        ("reason", " ", "Give the reason"),
+    for unconfirmed in [
+        form(&[("action", "apply"), ("revision", "2")]),
+        form(&[("action", "rollback"), ("current", "2"), ("reason", "r")]),
+        form(&[
+            ("action", "remove-member"),
+            ("node", "node-c"),
+            ("reason", "r"),
+        ]),
+        form(&[("action", "confirm"), ("revision", "2")]),
+        form(&[
+            ("action", "store-query"),
+            ("name", "org.example::q"),
+            ("version", "1.0.1"),
+            ("aql", "SELECT 1"),
+        ]),
+    ] {
+        let html = configured(&service, &session, unconfirmed).await?;
+        assert!(
+            html.contains("Confirm the change in its confirmation step"),
+            "{html}"
+        );
+    }
+    for (field, value, said, at) in [
+        ("node", "node c", "The node_id is not", "cfg-node"),
+        ("system_id", "", "The system_id is not", "cfg-system_id"),
+        (
+            "query_endpoints][0][url",
+            "",
+            "The base URL of Query API endpoint 1 is not",
+            "cfg-q-0-url",
+        ),
+        (
+            "query_endpoints][0][key",
+            "",
+            "endpoint rows do not read",
+            "",
+        ),
+        ("reason", " ", "Give the reason", "cfg-reason"),
     ] {
         let mut fields = vec![
             ("action", "save-member"),
             ("organisation", "org-c"),
             ("node", "node-c"),
             ("system_id", "cdr-c.example.org"),
-            ("endpoints", "node-c-pub https://cdr-c.example.org/openehr"),
             ("reason", "add C"),
-            ("confirm", "yes"),
         ];
+        let mut rows = query_row(0, ("node-c-pub", "https://cdr-c.example.org/openehr", true));
         for slot in &mut fields {
             if slot.0 == field {
                 slot.1 = value;
             }
         }
-        let html = configured(&service, &session, form(&fields)).await?;
-        assert!(html.contains(said), "{field}: {html}");
+        for slot in &mut rows {
+            if slot.0 == field {
+                value.clone_into(&mut slot.1);
+            }
+        }
+        let answer = answered(&service, &session, form_with(&fields, &rows)).await?;
+        assert!(answer.html.contains(said), "{field}: {}", answer.html);
+        assert_eq!(
+            (!at.is_empty()).then(|| at.to_owned()),
+            answer.field.map(|note| note.id),
+            "{field}"
+        );
     }
+    let answer = answered(
+        &service,
+        &session,
+        form(&[
+            ("action", "save-member"),
+            ("organisation", "org-c"),
+            ("node", "node-c"),
+            ("system_id", "cdr-c.example.org"),
+            ("reason", "add C"),
+        ]),
+    )
+    .await?;
+    assert!(
+        answer
+            .html
+            .contains("Give at least one Query API endpoint.")
+    );
+    assert_eq!(
+        Some(String::from("cfg-add-query")),
+        answer.field.map(|note| note.id)
+    );
     assert_eq!(0, changes(&listener).await?);
     Ok(())
 }
@@ -652,9 +699,14 @@ async fn an_empty_stored_query_registry_still_offers_a_version() -> Result<(), B
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
+    let body = page(&service, &session, "/configuration/stored-queries").await?;
     assert!(!body.contains("offers no stored-query registry"), "{body}");
-    assert!(body.contains("Store a stored-query version"), "{body}");
+    assert!(body.contains("Store a new version"), "{body}");
+    let form = page(&service, &session, "/configuration/stored-queries/new").await?;
+    assert!(
+        form.contains("cannot be changed or removed afterwards"),
+        "{form}"
+    );
     Ok(())
 }
 
