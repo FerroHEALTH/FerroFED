@@ -110,6 +110,9 @@ pub(crate) struct Gathered {
     /// The members that serve the patient summary themselves, each with
     /// what its own endpoint answered, in endpoint order.
     pub(crate) natives: Vec<Native>,
+    /// The Query API endpoint of each member the resolver could not answer
+    /// for, in endpoint order.
+    pub(crate) unresolved: Vec<EndpointId>,
 }
 
 /// Why the section queries give no summary.
@@ -241,9 +244,13 @@ pub(crate) async fn gather(
             status = settled;
         }
     }
+    // NOTE: no specification governs this (§11.3 covers only an answered lookup): our own
+    // design; a list asks no section query, so its failed resolution is settled here.
+    let status = answer::fan_out::settled(status, targets.resolution_failed, completion);
     let status = native::settled(&natives, status, completion);
     let mut gathered = collected(&federation, &targets.resolved, &answers, &analyses)?;
     gathered.set_aside = targets.set_aside;
+    gathered.unresolved = targets.unresolved;
     for native in &natives {
         if native.answer.contact().left() {
             gathered.sent.insert(native.chosen.native.clone());
@@ -272,11 +279,19 @@ fn concluded(
             .natives
             .iter()
             .map(|native| (&native.chosen.native, native.answer.status()));
-        let silent = queried
+        let mut silent: Vec<(String, String)> = queried
             .chain(asked)
             .filter(|(_, status)| *status != EndpointStatus::Active)
             .map(|(endpoint, status)| (endpoint.as_str().to_owned(), status.as_str().to_owned()))
             .collect();
+        for endpoint in &gathered.unresolved {
+            if !silent.iter().any(|(named, _)| named == endpoint.as_str()) {
+                silent.push((
+                    endpoint.as_str().to_owned(),
+                    EndpointStatus::NotResolved.as_str().to_owned(),
+                ));
+            }
+        }
         return Err(Unsummarised::Incomplete {
             status,
             silent,
@@ -411,6 +426,7 @@ fn collected(
         queried: queried(analyses),
         set_aside: BTreeSet::new(),
         natives: Vec::new(),
+        unresolved: Vec::new(),
     };
     for (section, answer, sources, rows) in answers {
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();

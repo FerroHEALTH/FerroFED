@@ -603,3 +603,108 @@ async fn the_capability_statement_declares_the_document_search() -> TestResult {
     );
     Ok(())
 }
+
+/// The list for a patient the PIX Manager resolves at node A, while the
+/// Manager node B is resolved through answers `500`, with the
+/// `[federation]` keys `federation` and the completeness header
+/// `completeness` when given: its status and its text.
+async fn listed_with_a_failed_resolution(
+    federation: &str,
+    completeness: Option<&str>,
+) -> Result<(StatusCode, String), Box<dyn std::error::Error>> {
+    use ferrofed_testkit::pix::PixManager;
+    use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
+    use wiremock::matchers::any;
+
+    let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
+    let pix = PixManager::start().await?;
+    let (domain, patient) = (EhrDomain::new(1), PatientId::new(1, 46));
+    let feed = CrossReferenceSeed {
+        patient,
+        ehrs: vec![(
+            domain,
+            uuid::Uuid::from_u128(0x3a3a_3a3a_3a3a_4a3a_8a3a_3a3a_3a3a_3a3a),
+        )],
+    };
+    assert_eq!(
+        StatusCode::CREATED,
+        seed::feed(&pix.base_url(), &feed).await?,
+        "ITI-104 creates the Patient"
+    );
+    let down = Server::start().await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&down)
+        .await;
+    let resolvers = format!(
+        "\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\n\
+         [[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-b\" = \"urn:oid:2.999.32\"\n",
+        pix.origin(),
+        domain.system(),
+        down.uri()
+    );
+    let own = format!(
+        "{}{}",
+        native_endpoint("node-a-eps", ("node-a", "org-a"), members.proxy_a.origin()),
+        native_endpoint("node-b-eps", ("node-b", "org-b"), members.proxy_b.origin())
+    );
+    let dir = tempfile::tempdir()?;
+    let text = text_registered(
+        dir.path(),
+        (&members.a.uri(), &members.b.uri(), &members.pdq.base_url()),
+        &[],
+        &own,
+        (federation, &resolvers),
+    )?;
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
+    let state = Arc::new(AppState::build(&settings)?);
+    let app = ferrofed_server::router(state, &settings_with_room());
+    let mut request = Request::get(format!(
+        "{FHIR}/DocumentReference?patient.identifier={}%7C{}",
+        patient.namespace().replace(':', "%3A"),
+        patient.value()
+    ))
+    .body(Body::empty())?;
+    if let Some(completeness) = completeness {
+        request
+            .headers_mut()
+            .insert("openehr-federation-completeness", completeness.parse()?);
+    }
+    call(app, request).await
+}
+
+#[tokio::test]
+async fn a_resolution_the_cross_reference_could_not_answer_fails_the_list() -> TestResult {
+    let (status, text) = listed_with_a_failed_resolution("", None).await?;
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "all-or-nothing, as the summary and the prescription search: {text}"
+    );
+    assert!(text.contains("node-b-pub (not-resolved)"), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn under_partial_a_member_whose_resolution_failed_is_named_in_an_outcome_entry() -> TestResult
+{
+    let (status, text) =
+        listed_with_a_failed_resolution("best_effort = true\n", Some("partial")).await?;
+    assert_eq!(StatusCode::OK, status, "§11.4: {text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    let own = by_custodian(&entries(&bundle, "match"), "org-a").ok_or("node A's document")?;
+    names(own, DOCUMENT_A)?;
+    let outcomes = entries(&bundle, "outcome");
+    let [outcome] = outcomes.as_slice() else {
+        return Err(format!("one outcome entry: {bundle}").into());
+    };
+    assert!(
+        outcome
+            .pointer("/issue/0/diagnostics")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("node-b-pub (not-resolved)")),
+        "{outcome}"
+    );
+    Ok(())
+}

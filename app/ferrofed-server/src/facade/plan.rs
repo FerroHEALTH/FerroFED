@@ -56,6 +56,9 @@ pub struct Targets {
     /// query under all-or-nothing (§11.3 covers only an answered lookup; no
     /// specification governs this: our own design).
     pub resolution_failed: bool,
+    /// The endpoint of each member the resolver could not answer for, in
+    /// endpoint order, which an answer that asks no query names.
+    pub unresolved: Vec<EndpointId>,
     /// The `{node, ehr_id}` set the resolution produced, for the session's
     /// resolution bindings (§12.5.1 step 2).
     pub resolved: Vec<(NodeId, EhrId)>,
@@ -258,6 +261,7 @@ pub async fn patient(
     }
     let mut sources = None;
     let mut resolution_failed = false;
+    let mut unanswered = Vec::new();
     let mut bound = Vec::new();
     for (member, endpoint) in membership.asked {
         if !located.admits(&member) {
@@ -266,6 +270,9 @@ pub async fn patient(
         }
         if let Some((error, failed)) = unidentified.as_ref().and_then(Unidentified::unresolved) {
             resolution_failed |= failed;
+            if failed {
+                unanswered.push(endpoint.clone());
+            }
             plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
             continue;
         }
@@ -284,6 +291,9 @@ pub async fn patient(
             answer => {
                 let (error, failed) = unresolved(answer, resolver.is_some(), unknown)?;
                 resolution_failed |= failed;
+                if failed {
+                    unanswered.push(endpoint.clone());
+                }
                 plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
             }
         }
@@ -295,6 +305,7 @@ pub async fn patient(
         plan,
         sources,
         resolution_failed,
+        unresolved: unanswered,
         resolved: bound,
         denied: consented.denied,
         set_aside: consented.set_aside,
@@ -574,6 +585,7 @@ pub fn unscoped(
         plan,
         sources: query.node_query().columns().to_vec(),
         resolution_failed: false,
+        unresolved: Vec::new(),
         resolved: Vec::new(),
         denied: BTreeSet::new(),
         set_aside: BTreeSet::new(),
