@@ -12,7 +12,9 @@ use serde_json::Value;
 use wiremock::Mock;
 use wiremock::matchers::{method, path, query_param};
 
-use super::{Members, RX_A, RX_A2, RX_B, entries, own, page, relays, search, searchset};
+use super::{
+    AT_A, AT_B, Members, RX_A, RX_A2, RX_B, entries, face_id, own, page, relays, search, searchset,
+};
 use crate::facade::{PATIENT, PATIENT_TAIL};
 use crate::fhir::TestResult;
 use crate::support::call;
@@ -47,7 +49,7 @@ async fn a_members_next_page_is_followed_under_its_own_base() -> TestResult {
     let bundle: Value = serde_json::from_str(&text)?;
     assert_eq!(bundle["total"], Value::from(3), "{bundle}");
     assert!(
-        relays(&text, RX_A2)?,
+        relays(&text, RX_A2, AT_A)?,
         "the second page's prescription: {text}"
     );
     let journal = members.proxy_a.journal();
@@ -105,7 +107,7 @@ async fn the_gateway_pages_its_answer_by_count() -> TestResult {
     assert_eq!(1, matched.len(), "FHIR R4 search §3.1.1.5.3: {first}");
     assert_eq!(
         matched.first().map(|resource| &resource["id"]),
-        Some(&Value::from("rx-a1"))
+        Some(&Value::from(face_id(AT_A.0, AT_A.1, "rx-a1")?))
     );
     let next = first["link"]
         .as_array()
@@ -122,7 +124,7 @@ async fn the_gateway_pages_its_answer_by_count() -> TestResult {
     let matched = entries(&second, "match");
     assert_eq!(
         matched.first().map(|resource| &resource["id"]),
-        Some(&Value::from("rx-b1"))
+        Some(&Value::from(face_id(AT_B.0, AT_B.1, "rx-b1")?))
     );
     assert!(
         !second["link"]
@@ -132,6 +134,6 @@ async fn the_gateway_pages_its_answer_by_count() -> TestResult {
             .any(|link| link["relation"] == "next"),
         "the last page has no next link: {second}"
     );
-    assert!(relays(&text, RX_B)?, "{text}");
+    assert!(relays(&text, RX_B, AT_B)?, "{text}");
     Ok(())
 }

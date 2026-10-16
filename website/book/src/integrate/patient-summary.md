@@ -439,9 +439,10 @@ prescriptions:
 
 `GET {fhir-base}/metadata` lists `MedicationRequest` and
 `MedicationDispense` only for a category a member is declared for, each with
-its MPD profile. The read and the receipt of a dispensation at a declared
-member are planned for this release (#1041, #1042); until they ship, those
-two routes answer `501`.
+its MPD profile, and declares for `MedicationRequest` the `search-type` and
+`read` interactions the face serves. The receipt of a dispensation at a
+declared member is planned for this release (#1042); until it ships, that
+route answers `501`.
 
 ### Searching a patient's prescriptions
 
@@ -463,7 +464,9 @@ under the member's own base URL. The answer is one `searchset`:
   and extension kept, and every number in the text the member wrote, such
   as `1.50`; only the order of an object's members may differ, which JSON
   gives no meaning (RFC 8259 §4). Entries are in endpoint order, then in
-  the member's own order;
+  the member's own order. Its `id` is the one the face reads it by
+  ([Reading one prescription](#reading-one-prescription)), and its
+  `fullUrl` that read, `{fhir-base}/MedicationRequest/{id}`;
 - one `Provenance` per prescription, whose agent is the member's
   `Organization`; the gateway adds no author and merges nothing;
 - a `warning` `outcome` entry when two members hold a prescription under the
@@ -485,6 +488,43 @@ timed out, `424` otherwise, with every such member named. With
 members' prescriptions come back and each silent member is named in a
 `warning` `outcome` entry. Each search is recorded once under
 `Electronic-Prescriptions`, naming every member asked.
+
+### Reading one prescription
+
+`GET {fhir-base}/MedicationRequest/{id}` reads one prescription by the `id`
+the search gave it, and takes the `composition-` read scope over every
+template (`user/composition-*.r`, for example). The `id` names the member's
+own endpoint, the member's `ehr_id` for the patient and the member's own
+`id` of the prescription, packed into the 64 characters a FHIR `id` allows,
+so the gateway holds no state between the search and the read. A
+prescription whose parts do not fit keeps the member's own `id` in the
+search and cannot be read through the face; the search then adds a
+`warning` `outcome` entry naming the member, and quoting no identifier.
+
+The `id` only locates the prescription. The gateway asks the member it
+names alone, with
+`GET {own}/MedicationRequest?patient.identifier={ehr_id_system}|{ehr_id}&_id={member's id}`,
+so the request carries the member's own `ehr_id` and its own `id` of the
+prescription, and nothing else about the patient. The member still decides
+what the caller may read. A caller whose grant is confined to one patient
+(`patient/`) reads that patient's prescriptions alone: an `id` naming
+another patient's `ehr_id` is refused `403` and nothing is sent.
+
+The answer is the member's `MedicationRequest` as it sent it, with its `id`
+the one you read, as FHIR R4 asks of a read. The
+`openEHR-federation-endpoint` and `openEHR-federation-system-id` headers
+name the member that answered. The other answers:
+
+| Answer | When |
+|---|---|
+| `404` `not-found` | The gateway did not write the `id`, it names no member declared for prescriptions, the gateway already places its `ehr_id` at another member, or the member holds no such prescription for that `ehr_id`. Every case gets the same text. |
+| `409` `conflict` | Two members claim the `ehr_id` the `id` names, which also raises the integrity incident; or the member answered more than one prescription for one `id`, with no incident. Nothing is passed on. |
+| `424` | The member answered with an error, with no `searchset`, or with another prescription. |
+| `504` | The member is offline or did not answer in time. |
+
+Each read that reached a member is recorded once under
+`Electronic-Prescriptions`, naming the member and the `ehr_id` it was asked
+by.
 
 ## Terminology
 

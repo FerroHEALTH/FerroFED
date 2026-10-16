@@ -15,7 +15,7 @@
 
 use axum::response::Response;
 use ferrofed_engine::fanout::Plan;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use http::{HeaderName, HeaderValue, StatusCode};
 use openehr_federation::headers;
@@ -51,6 +51,24 @@ impl Provenance {
             endpoint: endpoint.id().as_str().to_owned(),
             system_id: snapshot
                 .node(endpoint.node())
+                .map(|node| node.system_id().as_str().to_owned()),
+        };
+        Self {
+            acting: vec![acting],
+        }
+    }
+
+    /// The provenance of an answer the endpoint `endpoint` of the member
+    /// `node` acted for alone, its own exchange-format endpoint among them.
+    pub(crate) fn member(
+        snapshot: &RegistrySnapshot,
+        endpoint: &EndpointId,
+        node: &NodeId,
+    ) -> Self {
+        let acting = Acting {
+            endpoint: endpoint.as_str().to_owned(),
+            system_id: snapshot
+                .node(node)
                 .map(|node| node.system_id().as_str().to_owned()),
         };
         Self {

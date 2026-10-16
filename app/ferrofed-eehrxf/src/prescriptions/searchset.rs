@@ -12,7 +12,9 @@
 //! prescription whose identifier a second member also holds is listed once
 //! per member, and an `outcome` entry of severity `warning` says so; under
 //! `partial`, each member that did not answer is named in an `outcome` entry
-//! too (Federation Tier §11.3, §11.4). FHIR R4 `http.html` §3.1.0.9 allows
+//! too (Federation Tier §11.3, §11.4), and so is each member one of the
+//! page's prescriptions comes from that cannot be read by id ([`Prescription::unreadable`]).
+//! FHIR R4 `http.html` §3.1.0.9 allows
 //! no `fatal` or `error` issue in a `searchset`. The `Provenance` and the
 //! warning are our own design: no specification governs them.
 //!
@@ -29,7 +31,7 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::organization::Organization;
 use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::reference::Reference;
-use fhir_types::r4::resource::{Resource, UnknownResource};
+use fhir_types::r4::resource::Resource;
 use url::Url;
 
 use super::page::{Kept, Page, Prescription};
@@ -150,6 +152,9 @@ pub fn assemble(
     for text in duplicates(answered, &all, &matched) {
         writer.own(warning("informational", &text), "outcome");
     }
+    for text in unreadable(answered, &matched) {
+        writer.own(warning("informational", &text), "outcome");
+    }
     let outcomes = answered
         .iter()
         .flat_map(|member| member.pages.iter())
@@ -195,17 +200,12 @@ impl Writer<'_> {
     /// The member's `fullUrl` is kept when it is an absolute URL no other
     /// entry uses; otherwise the entry is named by a minted one.
     fn push(&mut self, kept: &Kept, mode: &str) -> String {
-        // TODO(#1041): name each prescription by the id the face's read routes, once it is built.
         let url = kept
             .full_url
             .as_deref()
             .filter(|url| Url::parse(url).is_ok() && !self.used.contains(*url))
             .map_or_else(|| (self.mint)(), str::to_owned);
-        let resource = Resource::Unknown(UnknownResource {
-            resource_type: kept.resource_type.clone(),
-            body: kept.resource.clone(),
-        });
-        self.add(url.clone(), resource, mode);
+        self.add(url.clone(), kept.unknown(), mode);
         url
     }
 
@@ -292,6 +292,33 @@ fn unanswered(member: &Silent) -> String {
         "the search is incomplete: no answer from {} ({}) (§11.3)",
         member.endpoint, member.status
     )
+}
+
+/// One sentence for each member of `answered` that one of the page's
+/// prescriptions, `matched`, each by its member's position, comes from and
+/// cannot be read by id.
+///
+/// The sentence names the member and how many, never an identifier.
+fn unreadable(
+    answered: &[Answered<'_>],
+    matched: &[(usize, String, &Prescription)],
+) -> Vec<String> {
+    let mut counted: BTreeMap<usize, usize> = BTreeMap::new();
+    for (index, _, prescription) in matched {
+        if prescription.unreadable {
+            *counted.entry(*index).or_insert(0) += 1;
+        }
+    }
+    counted
+        .into_iter()
+        .filter_map(|(index, count)| {
+            let member = answered.get(index)?;
+            Some(format!(
+                "{count} prescription(s) of {} on this page cannot be read by id: each is listed as that member states it, and only a new search finds it again",
+                member.endpoint
+            ))
+        })
+        .collect()
 }
 
 /// One sentence for each identifier that more than one member of

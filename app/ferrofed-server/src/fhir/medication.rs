@@ -13,19 +13,25 @@
 //! and asks no member, so the answer is never an empty `searchset` a client
 //! could read as a patient with no prescription. The status and the issue
 //! type are our own design: no specification governs them.
+//!
+//! The search names each prescription by the id the read takes
+//! ([`super::locator`]), which names the member that holds it, so a read
+//! goes to that member alone.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Extension;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
+use ferrofed_eehrxf::prescriptions::page::Page;
 use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_registry::id::EndpointId;
 use http::{Method, StatusCode, Uri};
 use openehr_federation::status::EndpointStatus;
 use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
@@ -34,11 +40,15 @@ use crate::auth::caller::Caller;
 use crate::auth::permission::{Requirement, Resource};
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
+use crate::facade::native::Chosen;
+use crate::facade::prescription::{self, Unfound};
 use crate::facade::prescriptions::{self, Held, Prescribed, Unprescribed};
+use crate::facade::provenance::Provenance;
 use crate::facade::summary::organisation;
 use crate::federation::Federation;
 use crate::state::AppState;
 
+use super::locator::{self, Locator};
 use super::{admission, attach, fhir_json, outcome, refusal};
 
 /// The path of the prescription search under `{fhir-base}`.
@@ -49,9 +59,6 @@ pub const PRESCRIPTION: &str = "/MedicationRequest/{id}";
 
 /// The path a dispensation is received at under `{fhir-base}`.
 pub const DISPENSATIONS: &str = "/MedicationDispense";
-
-/// The longest FHIR R4 resource id.
-const ID_LENGTH: usize = 64;
 
 /// What a path of the prescriptions and dispensations addresses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,18 +85,15 @@ pub fn addressed(fhir: &FhirSettings, path: &str) -> Option<Addressed> {
     let id = path.strip_prefix(prefix.as_str())?.strip_prefix('/')?;
     // NOTE: FHIR R4 Datatypes `id`, `[A-Za-z0-9\-\.]{1,64}`; any other segment names no
     // resource, so the gate refuses it as a variant of the path.
-    let resource_id = (1..=ID_LENGTH).contains(&id.len())
-        && id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.'));
-    resource_id.then_some(Addressed::Prescription)
+    locator::is_fhir_id(id).then_some(Addressed::Prescription)
 }
 
 /// Returns what a request of `method` to `addressed` requires at the gate.
 ///
 /// A search of prescriptions is a `GET` that takes the `composition-`
-/// search over every template, a read of one a `GET` and the receipt of a
-/// dispensation a `POST`, each by a verified caller; every other method is
+/// search over every template, a read of one a `GET` that takes the
+/// `composition-` read over every template, and the receipt of a
+/// dispensation a `POST` by a verified caller; every other method is
 /// refused.
 #[must_use]
 pub fn requirement(addressed: Addressed, method: &Method) -> Requirement {
@@ -101,8 +105,13 @@ pub fn requirement(addressed: Addressed, method: &Method) -> Requirement {
             permission: Permission::Search,
             resource: Resource::Unnamed,
         },
-        // TODO(#1041): require the scope a prescription read reads under.
-        Addressed::Prescription if *method == Method::GET => Requirement::Caller,
+        // NOTE: no specification governs the scope of the FHIR face: our own design; the read
+        // names no template before the member answers, so only a read of every template's covers it.
+        Addressed::Prescription if *method == Method::GET => Requirement::Scope {
+            family: ResourceFamily::Composition,
+            permission: Permission::Read,
+            resource: Resource::Unnamed,
+        },
         // TODO(#1042): require the scope a dispensation is written under.
         Addressed::Dispensations if *method == Method::POST => Requirement::Caller,
         Addressed::Prescriptions | Addressed::Prescription | Addressed::Dispensations => {
@@ -219,21 +228,24 @@ fn listed(
     (read, prescribed): (&SearchRequest, &Prescribed),
 ) -> Response {
     let snapshot = federation.snapshot();
-    let found: Vec<(&prescriptions::Member, Organisation)> = prescribed
+    let found: Vec<(&prescriptions::Member, Organisation, Vec<Page>)> = prescribed
         .members
         .iter()
-        .filter(|member| matches!(member.held, Held::Found(_)))
-        .map(|member| (member, organisation(snapshot, &member.chosen.node)))
+        .filter_map(|member| match &member.held {
+            Held::Found(pages) => Some((
+                member,
+                organisation(snapshot, &member.chosen.node),
+                named(fhir, &member.chosen, pages),
+            )),
+            Held::Unusable { .. } | Held::Silent(_) => None,
+        })
         .collect();
     let answered: Vec<Answered<'_>> = found
         .iter()
-        .filter_map(|(member, organisation)| match &member.held {
-            Held::Found(pages) => Some(Answered {
-                endpoint: member.chosen.native.as_str(),
-                organisation,
-                pages,
-            }),
-            Held::Unusable { .. } | Held::Silent(_) => None,
+        .map(|(member, organisation, pages)| Answered {
+            endpoint: member.chosen.native.as_str(),
+            organisation,
+            pages,
         })
         .collect();
     let silent: Vec<Silent> = prescribed
@@ -261,6 +273,40 @@ fn listed(
     response
 }
 
+/// The pages `pages` of the member `chosen`, each prescription named by the
+/// id the face reads it by ([`locator`]), on the face `fhir`.
+///
+/// A prescription named so has that id and a `fullUrl` of the face's read
+/// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it;
+/// one whose parts give no such id keeps the member's own id and `fullUrl`
+/// and is marked unreadable, which the searchset warns of.
+fn named(fhir: &FhirSettings, chosen: &Chosen, pages: &[Page]) -> Vec<Page> {
+    let base = fhir.absolute.trim_end_matches('/');
+    let mut pages = pages.to_vec();
+    for prescription in pages
+        .iter_mut()
+        .flat_map(|page| page.prescriptions.iter_mut())
+    {
+        let kept = &mut prescription.kept;
+        let id = kept.id().and_then(|resource| {
+            Locator::new(chosen.native.clone(), chosen.ehr_id.clone(), resource).id()
+        });
+        let Some(id) = id else {
+            // NOTE: no specification governs this: our own design; a prescription whose parts
+            // give no id is listed as its member states it, and the searchset warns it cannot be read.
+            tracing::warn!(
+                endpoint = chosen.native.as_str(),
+                "a member's prescription has no id the face can read it by"
+            );
+            prescription.unreadable = true;
+            continue;
+        };
+        kept.full_url = Some(format!("{base}{PRESCRIPTIONS}/{id}"));
+        kept.rename(&id);
+    }
+    pages
+}
+
 /// The empty `searchset` `read` is answered with when no member serving
 /// prescriptions holds the patient, or none may say so.
 fn listed_none(fhir: &FhirSettings, read: &SearchRequest) -> Response {
@@ -286,13 +332,176 @@ fn written(
     )
 }
 
-/// `GET {fhir-base}/MedicationRequest/{id}`: one prescription.
-pub(super) async fn read(State(state): State<Arc<AppState>>) -> Response {
+/// `GET {fhir-base}/MedicationRequest/{id}`: one prescription, read at the
+/// member its id names ([`crate::facade::prescription`]).
+///
+/// The prescription is answered as the member sent it, its `id` the one the
+/// request named (FHIR R4 `http.html` §3.1.0.2: "The returned resource SHALL
+/// have an id element with a value that is the \[id\]"), and the answer names
+/// the member in `openEHR-federation-endpoint` and
+/// `openEHR-federation-system-id` (§7a.3, N31). An id with no owner answers
+/// `404` with one text whatever the reason, two members claiming its
+/// `ehr_id` `409` with the integrity incident of N42, and a member that
+/// does not answer `504` or `424` naming it (§11.1, §11.3).
+pub(super) async fn read(
+    State(state): State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
+    Path(id): Path<String>,
+    headers: http::HeaderMap,
+) -> Response {
+    let started = Instant::now();
     if !serves(&state, Category::Prescription) {
         return not_served(Category::Prescription);
     }
-    // TODO(#1041): read the prescription at the member its id names.
-    unavailable("the read of a prescription")
+    let admitted = admission::admit(
+        &state,
+        (outbound, caller.as_deref()),
+        (&headers, started),
+        || {
+            refusal(
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "the caller was not admitted to read prescriptions",
+            )
+        },
+    );
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
+    };
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
+    };
+    let arrived = admitted.arrived(&confined);
+    let federation = &admitted.federation;
+    let none = BTreeSet::new();
+    let declared = admitted
+        .fhir
+        .serving
+        .members_of(Category::Prescription)
+        .unwrap_or(&none);
+    let read = prescription::read(federation, &arrived, &id, declared).await;
+    answered(
+        federation,
+        read,
+        (&id, admitted.request_id, admitted.outbound),
+    )
+}
+
+/// The answer to the read of the prescription `id` that settled as `read`,
+/// to the request of the exchange id `request_id` and the gateway's id
+/// `outbound`, with the access it records.
+fn answered(
+    federation: &Federation,
+    read: Result<prescription::Read, Unfound>,
+    (id, request_id, outbound): (&str, &str, OutboundId),
+) -> Response {
+    let named = |endpoints: &[EndpointId]| {
+        endpoints
+            .iter()
+            .map(EndpointId::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match read {
+        Ok(read) => found(federation, &read, id, request_id),
+        Err(Unfound::NoOwner(read)) => {
+            tracing::info!(request_id = %outbound, "a prescription id has no owner");
+            let mut response = outcome(
+                StatusCode::NOT_FOUND,
+                "not-found",
+                "no prescription is known by this id",
+            );
+            attach(
+                &mut response,
+                read.and_then(|read| prescription::accessed(federation, &read)),
+            );
+            response
+        }
+        Err(Unfound::Ambiguous(endpoints)) => refusal(
+            StatusCode::CONFLICT,
+            "conflict",
+            &format!(
+                "the id names the member endpoints {}, and the gateway never chooses between them",
+                named(&endpoints)
+            ),
+        ),
+        Err(Unfound::Claimed(claimants)) => refusal(
+            StatusCode::CONFLICT,
+            "conflict",
+            &format!(
+                "the ehr_id the id names is claimed by the member endpoints {}, and the gateway never chooses between them (§12.5.2, N42)",
+                named(&claimants)
+            ),
+        ),
+        Err(Unfound::Confined) => crate::error::fixed(Code::PatientConfinement, request_id),
+        Err(Unfound::Offline(endpoint)) => refusal(
+            StatusCode::GATEWAY_TIMEOUT,
+            "timeout",
+            &format!(
+                "the prescription could not be read: no answer from {endpoint} ({}) (§11.3)",
+                EndpointStatus::Offline.as_str()
+            ),
+        ),
+        Err(Unfound::Several(read)) => {
+            let mut response = outcome(
+                StatusCode::CONFLICT,
+                "conflict",
+                &format!(
+                    "{} answered more than one prescription for this id, and the gateway never chooses between them (FHIR R4 search §3.1.1.4.1)",
+                    read.chosen.native
+                ),
+            );
+            attach(&mut response, prescription::accessed(federation, &read));
+            response
+        }
+        Err(Unfound::Unanswered(read)) => {
+            let status = read.held.status();
+            let (code, answer) = match status {
+                EndpointStatus::Offline | EndpointStatus::TimeOut => {
+                    ("timeout", StatusCode::GATEWAY_TIMEOUT)
+                }
+                _ => ("incomplete", StatusCode::FAILED_DEPENDENCY),
+            };
+            let mut response = outcome(
+                answer,
+                code,
+                &format!(
+                    "the prescription could not be read: no answer from {} ({}) (§11.3)",
+                    read.chosen.native,
+                    status.as_str()
+                ),
+            );
+            attach(&mut response, prescription::accessed(federation, &read));
+            response
+        }
+        Err(Unfound::Failure(failure)) => failure.respond(request_id, outbound),
+    }
+}
+
+/// The answer of the one prescription `read` found, under the id `id` the
+/// request named, naming its member, with the access it records.
+fn found(
+    federation: &Federation,
+    read: &prescription::Read,
+    id: &str,
+    request_id: &str,
+) -> Response {
+    let Some(kept) = read.prescription() else {
+        return crate::error::fixed(Code::Internal, request_id);
+    };
+    let mut kept = kept.clone();
+    // NOTE: FHIR R4 `http.html` §3.1.0.2: the returned resource's id is the [id] read, the
+    // one change the face makes to the member's prescription.
+    kept.rename(id);
+    let resource = kept.unknown();
+    let snapshot = federation.snapshot();
+    let mut response = Provenance::member(snapshot, &read.chosen.native, &read.chosen.node)
+        .stamp(fhir_json(StatusCode::OK, &resource));
+    attach(&mut response, prescription::accessed(federation, read));
+    response
 }
 
 /// `POST {fhir-base}/MedicationDispense`: a dispensation.

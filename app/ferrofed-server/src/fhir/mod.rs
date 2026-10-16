@@ -67,6 +67,7 @@ mod admission;
 mod binary;
 pub mod errors;
 mod list;
+pub mod locator;
 pub mod medication;
 
 /// The path of the summary operation under `{fhir-base}`.
