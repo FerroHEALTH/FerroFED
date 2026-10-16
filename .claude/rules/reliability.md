@@ -68,8 +68,13 @@ the Clippy book.
 - **No panicking indexing on request paths** (deny tier: `indexing_slicing`,
   `string_slice`): `.get(..)` or pattern matching over `x[i]` and `&s[a..b]`.
   `string_slice` panics on a UTF-8 boundary and clinical text is full of
-  multi-byte content. Tests are scoped out via `clippy.toml`; a hot-path site
-  PROVEN in-bounds uses the `#[expect]` escape above.
+  multi-byte content. Only `indexing_slicing` is scoped out of tests, through
+  `allow-indexing-slicing-in-tests` in `clippy.toml`; Clippy has no test
+  option for `string_slice`
+  (<https://doc.rust-lang.org/1.98.0/clippy/lint_configuration.html>), so a
+  test slices a string with `.get(..)`, `split_once` or a narrow
+  `#[expect(clippy::string_slice, reason = "…")]`, never a crate-level
+  allow. A hot-path site PROVEN in-bounds uses the `#[expect]` escape above.
 - **Guards are never silently dropped**: `let _ = lock/handle;` is denied
   (`let_underscore_drop` plus `let_underscore_lock`): bind guards to named
   variables that live to scope end. `unused_result_ok` (deny) closes the
