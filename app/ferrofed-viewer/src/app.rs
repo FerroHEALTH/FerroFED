@@ -163,12 +163,22 @@ fn routes(session: SessionState, gateway: String) -> AnyView {
             />
             <Route
                 path=path!("/members")
-                view=guarded(session, views::MembersPage)
+                view=guarded(session, views::members::MembersPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/members/:node")
+                view=guarded(session, views::members::MemberPage)
                 ssr=SsrMode::Async
             />
             <Route
                 path=path!("/integrity")
-                view=guarded(session, views::IntegrityPage)
+                view=guarded(session, views::integrity::IntegrityPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/routing")
+                view=guarded(session, views::routing::RoutingPage)
                 ssr=SsrMode::Async
             />
             <Route

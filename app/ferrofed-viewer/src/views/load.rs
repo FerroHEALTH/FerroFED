@@ -16,50 +16,99 @@
 use leptos::prelude::*;
 
 use crate::views::model::{
-    FederationView, GatewayView, IntegrityView, MembersView, Outcome, StoredView, ViewError,
+    FederationView, GatewayView, IntegrityView, Outcome, RoutingView, StoredView, ViewError,
 };
 
-/// Loads the members view: `OPTIONS {base}/` and the health of every member
-/// and service.
+/// Loads the members view, rendered on the server: `OPTIONS {base}/` and
+/// the health of every member and service.
 ///
 /// # Errors
 /// Returns [`ViewError::SignedOut`] without a live session, and the
 /// console's fault as its [`ViewError`]; the gateway's refusal is an
 /// [`Outcome::Refused`].
 #[server(endpoint = "members")]
-pub async fn members() -> Result<Outcome<MembersView>, ViewError> {
+pub async fn members() -> Result<Outcome<String>, ViewError> {
     server::settled(async {
-        let (state, token) = server::signed_in()?;
-        let gateway = state.gateway();
-        let description = gateway.self_description(&token).await?;
-        let dependencies = gateway.dependencies(&token).await?;
-        Ok(server::members(&description, &dependencies))
+        let view = server::members_read().await?;
+        Ok(crate::views::members::members_html(view))
     })
     .await
 }
 
-/// Loads the integrity view: the incidents and the page of the routing
-/// table that starts at `offset`.
+/// Loads the page of the member keyed `key`, its `node_id` or the
+/// `endpoint_id` of an endpoint that names no node, rendered on the server;
+/// `None` when the gateway declares no such member.
+///
+/// # Errors
+/// As [`members`].
+#[server(endpoint = "member")]
+pub async fn member(
+    /// The member's key.
+    key: String,
+) -> Result<Outcome<Option<String>>, ViewError> {
+    server::settled(async {
+        let view = server::members_read().await?;
+        Ok(crate::views::members::member_html(&key, view))
+    })
+    .await
+}
+
+/// Loads the integrity view: the incidents in the state `show` names
+/// (`resolved`, or the open ones for any other word), rendered on the
+/// server, and the collision clear's fields.
 ///
 /// # Errors
 /// As [`members`].
 #[server(endpoint = "integrity")]
 pub async fn integrity(
-    /// Where the page of the routing table starts.
-    offset: u64,
+    /// Which incidents to show.
+    show: String,
 ) -> Result<Outcome<IntegrityView>, ViewError> {
     server::settled(async {
         let (state, token) = server::signed_in()?;
-        let gateway = state.gateway();
-        let incidents = gateway.incidents(&token).await?;
-        let routes = gateway
-            .creating_systems(&token, server::page(offset))
-            .await?;
+        let incidents = state.gateway().incidents(&token).await?;
         Ok(server::integrity(
             &incidents,
-            &routes,
             &state.settings().admin,
+            show == "resolved",
         ))
+    })
+    .await
+}
+
+/// Loads the page of the `creating_system_id` routing table that starts at
+/// `offset`.
+///
+/// # Errors
+/// As [`members`].
+#[server(endpoint = "routing")]
+pub async fn routing(
+    /// Where the page of the routing table starts.
+    offset: u64,
+) -> Result<Outcome<RoutingView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let routes = state
+            .gateway()
+            .creating_systems(&token, server::page(offset))
+            .await?;
+        Ok(server::routing(&routes))
+    })
+    .await
+}
+
+/// Loads the dashboard, rendered on the server: the counts of the members,
+/// the nodes, the open incidents, the stored queries and the running
+/// revision, each endpoint's health and the recent incidents.
+///
+/// # Errors
+/// As [`members`].
+#[server(endpoint = "dashboard")]
+pub async fn dashboard() -> Result<Outcome<String>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let board = crate::dashboard::gather(&state, &token).await?;
+        Ok(crate::dashboard::render(&board))
     })
     .await
 }
@@ -123,9 +172,12 @@ pub async fn gateway_status() -> Result<Outcome<GatewayView>, ViewError> {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
     use ferrofed_registry::health::DependencyReport;
+    use ferrofed_registry::id::{EndpointId, NodeId};
     use ferrofed_registry::operator::{
-        CreatingSystemEntry, IncidentReport, MAX_PAGE, Page, PageRequest, RouteSource,
+        CreatingSystemEntry, IncidentReport, MAX_PAGE, Page, PageRequest, RecordedClear,
+        RecordedIncident, RouteSource,
     };
+    use ferrofed_registry::replica::UNNAMED;
     use leptos::context::use_context;
     use openehr_federation::options::OptionsRoot;
     use openehr_its::rest::generated::definition::StoredQuery;
@@ -135,9 +187,11 @@ pub mod server {
     use crate::config::settings::ReplicaSettings;
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
+    use crate::views::integrity::Incidents;
     use crate::views::model::{
         ClearedRow, FederationView, GatewayView, IncidentRow, IntegrityView, MemberRow,
-        MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, StoredRow, StoredView, ViewError,
+        MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, RoutingView, StoredRow, StoredView,
+        ViewError,
     };
 
     /// Why a server function stops short of its view: an expected refusal,
@@ -395,6 +449,7 @@ pub mod server {
                         (None, _) => None,
                     },
                     latency_ms_p50: endpoint.latency_ms_p50,
+                    detail: detail(endpoint.node_id.as_deref(), endpoint.id.as_str()),
                 }
             })
             .collect();
@@ -409,15 +464,67 @@ pub mod server {
         }
     }
 
-    /// The integrity view of `incidents` and `routes`.
+    /// The path of the page of the member `node`, or of the endpoint
+    /// `endpoint` that names no node, when the id is one a path carries as
+    /// it stands: the registry's own form of a `node_id` or an
+    /// `endpoint_id`.
+    #[must_use]
+    pub fn detail(node: Option<&str>, endpoint: &str) -> Option<String> {
+        // NOTE: no specification governs this: our own design; an id outside the
+        // registry's form gets no page, so no path is ever escaped or guessed.
+        let key = match node {
+            Some(node) => NodeId::new(node).ok()?.to_string(),
+            None => EndpointId::new(endpoint).ok()?.to_string(),
+        };
+        Some(format!("{}/{key}", crate::views::MEMBERS))
+    }
+
+    /// The incidents of `report`, newest first, each marked resolved when
+    /// the operator cleared the `ehr_id` it is about after it was emitted.
+    #[must_use]
+    pub fn incidents(report: &IncidentReport) -> Vec<IncidentRow> {
+        report
+            .recent
+            .iter()
+            .rev()
+            .map(|recorded| IncidentRow {
+                at: recorded.at.clone(),
+                kind: recorded.kind.clone(),
+                description: recorded.description.clone(),
+                resolved: resolved(recorded, &report.cleared),
+            })
+            .collect()
+    }
+
+    /// Whether one of `cleared` clears the `ehr_id` `incident` is about, at
+    /// or after the time it was emitted.
+    fn resolved(incident: &RecordedIncident, cleared: &[RecordedClear]) -> bool {
+        let Some(ehr_id) = incident.ehr_id.as_deref() else {
+            return false;
+        };
+        // NOTE: no specification governs this: our own design; a time that does not
+        // parse proves no clear came after, so the incident stays open.
+        let Ok(emitted) = incident.at.parse::<jiff::Timestamp>() else {
+            return false;
+        };
+        cleared.iter().any(|clear| {
+            clear.ehr_id.as_deref() == Some(ehr_id)
+                && clear
+                    .at
+                    .parse::<jiff::Timestamp>()
+                    .is_ok_and(|at| at >= emitted)
+        })
+    }
+
+    /// The integrity view of `incidents`.
     ///
     /// It lists the incidents and the collisions cleared beside them, and
     /// offers the collision clear at `replicas`.
     #[must_use]
     pub fn integrity(
         incidents: &IncidentReport,
-        routes: &Page<CreatingSystemEntry>,
         replicas: &[ReplicaSettings],
+        resolved: bool,
     ) -> IntegrityView {
         let ehr_ids: BTreeSet<String> = incidents
             .recent
@@ -425,22 +532,13 @@ pub mod server {
             .filter_map(|recorded| recorded.ehr_id.clone())
             .collect();
         let ehr_ids: Vec<String> = ehr_ids.into_iter().collect();
-        IntegrityView {
+        let shown = Incidents {
             counts: incidents
                 .counts
                 .iter()
                 .map(|(kind, count)| (kind.clone(), *count))
                 .collect(),
-            recent: incidents
-                .recent
-                .iter()
-                .rev()
-                .map(|recorded| IncidentRow {
-                    at: recorded.at.clone(),
-                    kind: recorded.kind.clone(),
-                    description: recorded.description.clone(),
-                })
-                .collect(),
+            recent: self::incidents(incidents),
             cleared: incidents
                 .cleared
                 .iter()
@@ -451,8 +549,35 @@ pub mod server {
                     claimants: cleared.claimants.clone(),
                 })
                 .collect(),
-            routes_offset: routes.offset,
-            routes_total: routes.total,
+            answered_by: answered_by(&[("incidents", incidents.replica.as_deref())]),
+            resolved,
+        };
+        IntegrityView {
+            html: crate::views::integrity::integrity_html(&shown),
+            clear_form: (!replicas.is_empty())
+                .then(|| crate::admin::fields::clear(replicas, &ehr_ids)),
+        }
+    }
+
+    /// The members view, read as the operator of the request's session.
+    ///
+    /// # Errors
+    /// Returns the [`Stop`] of a missing session, or of a read the gateway
+    /// refused or did not answer.
+    pub async fn members_read() -> Result<MembersView, Stop> {
+        let (state, token) = signed_in()?;
+        let gateway = state.gateway();
+        let description = gateway.self_description(&token).await?;
+        let dependencies = gateway.dependencies(&token).await?;
+        Ok(members(&description, &dependencies))
+    }
+
+    /// The routing view of the page `routes`.
+    #[must_use]
+    pub fn routing(routes: &Page<CreatingSystemEntry>) -> RoutingView {
+        RoutingView {
+            offset: routes.offset,
+            total: routes.total,
             routes: routes
                 .items
                 .iter()
@@ -469,12 +594,7 @@ pub mod server {
                     endpoint: entry.endpoint.clone(),
                 })
                 .collect(),
-            clear_form: (!replicas.is_empty())
-                .then(|| crate::admin::fields::clear(replicas, &ehr_ids)),
-            answered_by: answered_by(&[
-                ("incidents", incidents.replica.as_deref()),
-                ("routing table", routes.replica.as_deref()),
-            ]),
+            answered_by: answered_by(&[("routing table", routes.replica.as_deref())]),
         }
     }
 
@@ -509,27 +629,35 @@ pub mod server {
     }
 
     /// The line a view shows of the replicas that answered its `reports`,
-    /// each named by what it holds with the replica its body names.
+    /// each named by what it holds with the replica its body names, or
+    /// `None` when the one replica that answered has no name.
     ///
     /// The console reads one replica through the address it is configured
     /// with, and a view that reads two reports can be answered by two
     /// replicas, so the line names each when they differ, and says so when
     /// a report names none.
     #[must_use]
-    pub fn answered_by(reports: &[(&str, Option<&str>)]) -> String {
+    pub fn answered_by(reports: &[(&str, Option<&str>)]) -> Option<String> {
         let named: BTreeSet<Option<&str>> = reports.iter().map(|(_, replica)| *replica).collect();
         match named.into_iter().collect::<Vec<_>>().as_slice() {
-            [Some(replica)] => format!("Answered by replica {replica}."),
-            [None] => String::from("The gateway did not name the replica that answered."),
+            [Some(UNNAMED)] => None,
+            [Some(replica)] => Some(format!("Answered by replica {replica}.")),
+            [None] => Some(String::from(
+                "The gateway did not name the replica that answered.",
+            )),
             _ => {
                 let parts: Vec<String> = reports
                     .iter()
                     .map(|(what, replica)| match replica {
+                        Some(UNNAMED) => format!("the {what} by a replica that has no name"),
                         Some(replica) => format!("the {what} by replica {replica}"),
                         None => format!("the {what} by a replica that gave no name"),
                     })
                     .collect();
-                format!("Each part names its replica: {}.", parts.join(", "))
+                Some(format!(
+                    "Each part names its replica: {}.",
+                    parts.join(", ")
+                ))
             }
         }
     }

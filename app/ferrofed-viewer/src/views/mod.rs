@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The operator views: the members and their health, the integrity
-//! incidents and the `creating_system_id` routing table, the stored
-//! queries, and the gateway's self-description.
+//! The operator views: the members and their health with a page per
+//! member, the integrity incidents, the `creating_system_id` routing table,
+//! the stored queries, and the gateway's self-description.
 //!
 //! Each view reads the gateway's own public surface as the signed-in
 //! operator, through a server function of [`load`]. Its route renders
@@ -14,6 +14,7 @@
 //! the operator surface names the replica that answered it, because the
 //! health, the incidents and the routing table are each process's own.
 
+pub mod integrity;
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
 #[cfg_attr(
@@ -24,23 +25,25 @@
     )
 )]
 pub mod load;
+pub mod members;
 pub mod model;
+pub mod routing;
 
 use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::use_query_map;
 
-use crate::admin::act::{ClearEhrId, RepairDrift};
-use crate::views::model::{
-    ClearedRow, FederationView, IncidentRow, IntegrityView, MembersView, Outcome, PAGE_SIZE,
-    Refusal, StoredView, ViewError,
-};
+use crate::admin::act::RepairDrift;
+use crate::views::model::{FederationView, Outcome, PAGE_SIZE, Refusal, StoredView, ViewError};
 
 /// The path of the members view.
 pub const MEMBERS: &str = "/members";
 
 /// The path of the integrity view.
 pub const INTEGRITY: &str = "/integrity";
+
+/// The path of the routing view.
+pub const ROUTING: &str = "/routing";
 
 /// The path of the stored-query view.
 pub const STORED_QUERIES: &str = "/stored-queries";
@@ -49,14 +52,26 @@ pub const STORED_QUERIES: &str = "/stored-queries";
 pub const FEDERATION: &str = "/federation";
 
 /// Every view path, each of which needs a signed-in operator.
-pub const PATHS: [&str; 6] = [
+pub const PATHS: [&str; 7] = [
     MEMBERS,
     INTEGRITY,
+    ROUTING,
     STORED_QUERIES,
     FEDERATION,
     crate::query::QUERY,
     crate::configure::CONFIGURATION,
 ];
+
+/// Whether `path`, trimmed of a trailing slash and in lower case, names a
+/// view that needs a signed-in operator: one of [`PATHS`], or the page of
+/// one member under [`MEMBERS`].
+#[must_use]
+pub fn needs_session(path: &str) -> bool {
+    PATHS.contains(&path)
+        || path
+            .strip_prefix(MEMBERS)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
 
 /// The page title of a view called `section`.
 pub(crate) fn titled(section: &str) -> String {
@@ -109,280 +124,6 @@ fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -> AnyView {
             " "
             {next}
         </nav>
-    }
-    .into_any()
-}
-
-/// The members and their health.
-#[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
-)]
-pub fn MembersPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(|| (), |()| load::members());
-    view! {
-        <Title text=titled("Members") />
-        <h1>"Members"</h1>
-        <Suspense fallback=|| {
-            view! { <p>"Loading the members."</p> }
-        }>{move || Suspend::new(async move { shown(loaded.await, members_section) })}</Suspense>
-    }
-}
-
-/// The members table and the other services.
-fn members_section(view: MembersView) -> AnyView {
-    let answered_by = replica_line(view.answered_by);
-    let rows = view
-        .members
-        .into_iter()
-        .map(|member| {
-            let state = crate::styles::state(&member.health);
-            view! {
-                <tr>
-                    <th scope="row">{member.endpoint_id}</th>
-                    <td>{member.organisation}</td>
-                    <td>{member.status}</td>
-                    <td class=state>{member.health}</td>
-                    <td>{member.node_id.unwrap_or_default()}</td>
-                    <td>{member.system_id.unwrap_or_default()}</td>
-                    <td>{member.product.unwrap_or_default()}</td>
-                    <td class=crate::styles::NUM>
-                        {member
-                            .latency_ms_p50
-                            .map(|latency| format!("{latency} ms"))
-                            .unwrap_or_default()}
-                    </td>
-                </tr>
-            }
-        })
-        .collect_view();
-    let services = view
-        .services
-        .into_iter()
-        .map(|(key, state)| {
-            let class = crate::styles::state(&state);
-            view! {
-                <tr>
-                    <th scope="row">{key}</th>
-                    <td class=class>{state}</td>
-                </tr>
-            }
-        })
-        .collect_view();
-    view! {
-        {answered_by}
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"Member endpoints"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Endpoint"</th>
-                            <th scope="col">"Organisation"</th>
-                            <th scope="col">"Membership"</th>
-                            <th scope="col">"Health"</th>
-                            <th scope="col">"Node"</th>
-                            <th scope="col">"system_id"</th>
-                            <th scope="col">"Product"</th>
-                            <th scope="col" class=crate::styles::NUM>
-                                "Median latency"
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"Other dependencies"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Dependency"</th>
-                            <th scope="col">"State"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{services}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
-    }
-    .into_any()
-}
-
-/// The integrity incidents and the `creating_system_id` routing table.
-#[component]
-pub fn IntegrityPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(offset_in_url(), load::integrity);
-    let clear = ServerAction::<ClearEhrId>::new();
-    view! {
-        <Title text=titled("Integrity") />
-        <h1>"Integrity"</h1>
-        <Transition fallback=|| {
-            view! { <p>"Loading the incidents."</p> }
-        }>
-            {move || Suspend::new(async move {
-                shown(loaded.await, move |view| integrity_section(view, clear))
-            })}
-        </Transition>
-    }
-}
-
-/// The incident counts, the recent incidents and the routing table.
-fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> AnyView {
-    let answered_by = replica_line(view.answered_by);
-    let counts = view
-        .counts
-        .into_iter()
-        .map(|(kind, count)| {
-            view! {
-                <tr>
-                    <th scope="row">{kind}</th>
-                    <td>{count}</td>
-                </tr>
-            }
-        })
-        .collect_view();
-    let clear = crate::admin::clear_section(clear, view.clear_form);
-    let recent = recent_section(view.recent);
-    let cleared = cleared_section(view.cleared);
-    let routes_pager = pager(
-        INTEGRITY,
-        view.routes_offset,
-        view.routes.len(),
-        view.routes_total,
-    );
-    let routes = view
-        .routes
-        .into_iter()
-        .map(|route| {
-            view! {
-                <tr>
-                    <th scope="row">{route.creating_system_id}</th>
-                    <td>{route.source}</td>
-                    <td>{route.node.unwrap_or_default()}</td>
-                    <td>{route.endpoint.unwrap_or_default()}</td>
-                </tr>
-            }
-        })
-        .collect_view();
-    view! {
-        {answered_by}
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"Incidents since the gateway started"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Kind"</th>
-                            <th scope="col">"Count"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{counts}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
-        {recent}
-        {cleared}
-        {clear}
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"The creating_system_id routing table"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"creating_system_id"</th>
-                            <th scope="col">"Source"</th>
-                            <th scope="col">"Node"</th>
-                            <th scope="col">"Endpoint"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{routes}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
-        {routes_pager}
-    }
-    .into_any()
-}
-
-/// The incidents since the gateway started, newest first.
-fn recent_section(recent: Vec<IncidentRow>) -> AnyView {
-    if recent.is_empty() {
-        return view! { <p>"No incident since the gateway started."</p> }.into_any();
-    }
-    let rows = recent
-        .into_iter()
-        .map(|incident| {
-            view! {
-                <tr>
-                    <td>{incident.at}</td>
-                    <th scope="row">{incident.kind}</th>
-                    <td>{incident.description}</td>
-                </tr>
-            }
-        })
-        .collect_view();
-    scrolled(
-        view! {
-            <table>
-                <caption>"Recent incidents, newest first"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"At"</th>
-                        <th scope="col">"Kind"</th>
-                        <th scope="col">"Description"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        }
-        .into_any(),
-    )
-}
-
-/// The collisions the operator cleared recently, newest first.
-fn cleared_section(cleared: Vec<ClearedRow>) -> AnyView {
-    if cleared.is_empty() {
-        return view! { <p>"No collision cleared since the gateway started."</p> }.into_any();
-    }
-    let rows = cleared
-        .into_iter()
-        .map(|cleared| {
-            view! {
-                <tr>
-                    <td>{cleared.at}</td>
-                    <th scope="row">
-                        {cleared.ehr_id.unwrap_or_else(|| String::from("not a bare UUID"))}
-                    </th>
-                    <td>{cleared.claimants.join(", ")}</td>
-                </tr>
-            }
-        })
-        .collect_view();
-    view! {
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"Collisions cleared recently, newest first"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Cleared at"</th>
-                            <th scope="col">"ehr_id"</th>
-                            <th scope="col">"Members that claimed it"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
     }
     .into_any()
 }
@@ -474,9 +215,10 @@ fn scrolled(table: AnyView) -> AnyView {
     .into_any()
 }
 
-/// The line naming the replica, or the replicas, that answered a view.
-fn replica_line(line: String) -> AnyView {
-    view! { <p>{line}</p> }.into_any()
+/// The line naming the replica, or the replicas, that answered a view;
+/// nothing when the replica has no name.
+fn replica_line(line: Option<String>) -> AnyView {
+    line.map(|line| view! { <p>{line}</p> }).into_any()
 }
 
 /// The gateway's self-description, `OPTIONS {base}/`.
@@ -578,5 +320,22 @@ pub(crate) fn fault(error: &ViewError) -> AnyView {
             let text = error.to_string();
             view! { <p role="alert">{text}</p> }.into_any()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::needs_session;
+
+    #[test]
+    fn every_view_and_each_members_page_needs_a_session_and_nothing_else_does() {
+        for path in super::PATHS {
+            assert!(needs_session(path), "{path}");
+        }
+        assert!(needs_session("/members/node-a"));
+        assert!(needs_session("/members/node-a/more"));
+        assert!(!needs_session("/membersx"));
+        assert!(!needs_session("/"));
+        assert!(!needs_session("/about"));
     }
 }

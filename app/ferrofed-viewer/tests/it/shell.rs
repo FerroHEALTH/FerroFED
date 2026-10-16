@@ -272,15 +272,17 @@ fn the_about_markup_escapes_what_it_names() {
         assert!(!html.contains("<script>"), "{html}");
         assert!(!html.contains("<b onmouseover"), "{html}");
         assert!(html.contains("&lt;script&gt;"), "{html}");
-        for page in [
-            ferrofed_viewer::home::sign_in(),
-            ferrofed_viewer::home::dashboard(),
-        ] {
-            assert!(!page.contains("<script"), "{page}");
-        }
+        // The dashboard's markup carries its own hostile-content test
+        // (`dashboard::tests::hostile_values_render_escaped`).
+        let page = ferrofed_viewer::home::sign_in();
+        assert!(!page.contains("<script"), "{page}");
     });
 }
 
+// The sign-in and the About page are static markup the server renders
+// into the page, so a link to About is a full load. The dashboard reaches
+// the page through its server function, so the router may take a link to
+// it, and the page says when the gateway could not be reached.
 #[tokio::test]
 async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
 -> Result<(), Box<dyn Error>> {
@@ -290,14 +292,15 @@ async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/members", &session)?).await?;
     // The router never takes a link to a page the server renders whole.
-    assert!(body.contains(r#"<a href="/" rel="external""#), "{body}");
     assert!(
         body.contains(r#"<a href="/about" rel="external">"#),
         "{body}"
     );
+    assert!(!body.contains(r#"<a href="/" rel="external""#), "{body}");
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    assert!(body.contains(">Dashboard</h1>"), "{body}");
     assert!(
-        body.contains(">Each member endpoint and its health.</span>"),
+        body.contains(r#"<p role="alert">the gateway could not be reached</p>"#),
         "{body}"
     );
     Ok(())

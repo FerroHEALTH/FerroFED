@@ -224,7 +224,7 @@ async fn require_session(
         .path()
         .trim_end_matches('/')
         .to_ascii_lowercase();
-    if !crate::views::PATHS.contains(&path.as_str()) {
+    if !crate::views::needs_session(&path) {
         return next.run(request).await;
     }
     let name = state.sessions().cookie_name(crate::session::COOKIE);

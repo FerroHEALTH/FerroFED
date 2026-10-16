@@ -79,7 +79,7 @@ pub fn topbar(bar: Bar) -> AnyView {
 #[must_use]
 pub fn lockup() -> impl IntoView {
     view! {
-        <a href="/" rel="external" class=styles::LOCKUP>
+        <a href="/" class=styles::LOCKUP>
             // The brand mark is the stylesheet's, drawn for the theme; it is
             // decoration, and the product name stands beside it.
             <span class=styles::MARK aria-hidden="true"></span>
@@ -256,18 +256,13 @@ struct Entry {
 }
 
 /// The navigation entry `entry`, tinted while it is the page: the router's
-/// link marks itself `aria-current="page"` there. The dashboard, which the
-/// server renders whole, is a full load (`rel="external"`).
+/// link marks itself `aria-current="page"` there, the dashboard on `/`
+/// alone.
 fn entry(entry: Entry) -> impl IntoView {
     let exact = entry.href == "/";
     view! {
         <li>
-            <A
-                href=entry.href
-                exact=exact
-                attr:rel=exact.then_some("external")
-                attr:class=styles::NAV_ENTRY
-            >
+            <A href=entry.href exact=exact attr:class=styles::NAV_ENTRY>
                 {icon(entry.glyph, "16")}
                 {entry.label}
             </A>
@@ -299,12 +294,16 @@ pub fn sidebar(administered: bool) -> AnyView {
         label: "Dashboard",
         glyph: icondata_lu::LuLayoutDashboard,
     }];
-    // TODO(#1076): the Routing entry, once the routing table has its own page.
     let federation = vec![
         Entry {
             href: crate::views::MEMBERS,
             label: "Members",
             glyph: icondata_lu::LuUsers,
+        },
+        Entry {
+            href: crate::views::ROUTING,
+            label: "Routing",
+            glyph: icondata_lu::LuRoute,
         },
         Entry {
             href: crate::views::INTEGRITY,

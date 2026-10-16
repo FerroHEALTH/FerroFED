@@ -27,6 +27,8 @@ mod exchange;
 #[cfg(test)]
 mod gateway;
 #[cfg(test)]
+mod overview;
+#[cfg(test)]
 mod query;
 #[cfg(test)]
 mod query_safety;

@@ -167,7 +167,10 @@ async fn the_members_view_renders_from_the_running_gateway() -> Result<(), Box<d
     let (status, page) = running.view("/members").await?;
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
     rendered("/members", &page)?;
-    assert!(page.contains("<th scope=\"row\">node-a-pub</th>"), "{page}");
+    assert!(
+        page.contains(r#"<a href="/members/node-a">node-a-pub</a></th>"#),
+        "{page}"
+    );
     assert!(page.contains("<td>org-a</td>"), "{page}");
     Ok(())
 }
@@ -188,10 +191,23 @@ async fn the_integrity_view_renders_the_incidents_and_the_routing_table()
     assert!(page.contains("EhrIdCollision"), "{page}");
     assert!(page.contains(EHR_ID), "{page}");
     assert!(
-        page.contains("<th scope=\"row\">legacy-a.example.org</th>"),
+        page.contains(r#"<span class="pill tone-danger">open</span>"#),
         "{page}"
     );
-    assert!(page.contains("<td>registered</td>"), "{page}");
+
+    let (status, page) = running.view("/routing").await?;
+    assert_eq!(reqwest::StatusCode::OK, status, "{page}");
+    rendered("/routing", &page)?;
+    assert!(
+        page.contains(
+            r#"<th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">legacy-a.example.org</th>"#
+        ),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"<span class="badge tone-neutral">registered</span>"#),
+        "{page}"
+    );
     assert!(page.contains("Rows 1 to 2 of 2."), "{page}");
     Ok(())
 }
@@ -226,9 +242,20 @@ async fn the_self_description_view_renders_the_gateways_options() -> Result<(), 
 async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
     for (path, content) in [
-        ("/members", "<th scope=\"row\">node-a-pub</th>"),
+        (
+            "/members",
+            r#"<a href="/members/node-a">node-a-pub</a></th>"#,
+        ),
+        (
+            "/members/node-a",
+            "<caption>Endpoints of this member</caption>",
+        ),
         (
             "/integrity",
+            "<caption>Incidents since the gateway started</caption>",
+        ),
+        (
+            "/routing",
             "<caption>The creating_system_id routing table</caption>",
         ),
         ("/stored-queries", "The gateway holds no stored query."),

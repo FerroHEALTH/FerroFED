@@ -101,6 +101,21 @@ pub const PAGE_TITLE: &str = "m-0 text-2xl font-semibold text-ink";
 /// The one line under a page's title.
 pub const PAGE_SUBTITLE: &str = "mt-1 mb-0 text-sm text-muted";
 
+/// A line of facts under a page's header, such as the replica that
+/// answered it.
+pub const PAGE_META: &str = "-mt-3 mb-5 text-xs text-muted";
+
+/// A card whose body runs to its edges: a header row with its title and a
+/// link on, then a table or a list.
+pub const PANEL: &str = "flex flex-col rounded-card border border-line bg-raised shadow-card";
+
+/// The header row of a [`PANEL`].
+pub const PANEL_HEAD: &str = "flex flex-wrap items-center justify-between gap-2 border-b \
+                              border-line px-4 py-3";
+
+/// A filter row above a table: the field and what it shows.
+pub const FILTER: &str = "mb-4 flex flex-wrap items-end gap-x-4 gap-y-2";
+
 /// The one action a screen is for.
 pub const BUTTON_PRIMARY: &str = "state-change inline-flex items-center justify-center gap-2 \
                                   rounded-control px-3.5 py-2 text-sm font-medium no-underline \
@@ -203,6 +218,10 @@ pub const NUM: &str = "num";
 
 /// An identifier, a `system_id`, AQL or a key, in the monospace stack.
 pub const MONO: &str = "font-mono text-[0.8125rem]";
+
+/// An identifier that heads a row, in the monospace stack and never broken
+/// across lines.
+pub const ID: &str = "font-mono text-[0.8125rem] whitespace-nowrap";
 
 /// The classes of the state word `word` a gateway reports for a member or a
 /// dependency: the dot and the colour repeat what the word says, and a word
