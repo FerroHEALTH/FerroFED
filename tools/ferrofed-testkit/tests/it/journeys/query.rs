@@ -187,6 +187,9 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         browser
             .text("span", "Every node in scope answered.")
             .await?;
+        // The focus moves to the answer once it is drawn, scrolling the page,
+        // so the next run starts only once it has.
+        focused(browser, "query-results-title").await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         browser.text("caption", "1 row").await?;
         browser.text("td", UID_AT_A).await?;
@@ -201,6 +204,7 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         browser
             .text("span", "Not every node in scope answered")
             .await?;
+        focused(browser, "query-results-title").await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("node-error", status_of(browser, "node-b-pub").await?);
         browser.text("caption", "1 row").await?;
@@ -214,6 +218,7 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         browser
             .text("strong", "The gateway failed the query: 424.")
             .await?;
+        focused(browser, "query-results-title").await?;
         browser
             .text("span", "Not every node in scope answered")
             .await?;

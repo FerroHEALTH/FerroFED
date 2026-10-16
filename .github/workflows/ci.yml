@@ -1323,17 +1323,13 @@ jobs:
           chrome-version: 155.0.8059.79
           install-chromedriver: true
       - run: bash scripts/release/viewer-site.sh --release
-      - name: Start chromedriver
-        env:
-          CHROMEDRIVER: ${{ steps.chrome.outputs.chromedriver-path }}
-        run: |
-          set -euo pipefail
-          "$CHROMEDRIVER" --port=9515 > "$RUNNER_TEMP/chromedriver.log" 2>&1 &
-          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
-            http://127.0.0.1:9515/status
+      # Each journey starts the pinned chromedriver on a port of its own and
+      # stops it with its session, so the journeys run at the profile's full
+      # parallelism with no driver shared between them (#1052).
       - name: Run the journeys
         env:
           FERROFED_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          FERROFED_CHROMEDRIVER: ${{ steps.chrome.outputs.chromedriver-path }}
         run: >-
           cargo nextest run --profile ci --locked -p ferrofed-testkit
           -E 'test(/^journeys::/)'

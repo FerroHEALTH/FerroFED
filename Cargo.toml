@@ -216,6 +216,11 @@ bytes = "1.12.1"
 # pinned in docs/VERSIONS.md, with no driver download and no WebSocket.
 # Verified against crates.io on 2026-10-05.
 thirtyfour = { version = "0.37.5", default-features = false, features = ["reqwest", "cdp"] }
+# Test-only for the browser journeys (#1052): stops the process group of the
+# chromedriver a journey starts, so the Chrome it launched goes with it, in
+# safe Rust. Already in the tree through testcontainers. Verified against
+# crates.io on 2026-10-16.
+rustix = { version = "1.1.5", default-features = false, features = ["std", "process"] }
 # Test-only for the wire types (#33): schema validation of every emitted body
 # (draft 2020-12, the remote resolvers off) and property tests.
 jsonschema = { version = "0.58.3", default-features = false }

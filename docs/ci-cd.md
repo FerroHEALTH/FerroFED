@@ -270,7 +270,8 @@ any other member and `features (cargo-hack)` has nothing to add for it.
 `journeys (browser)` drives the console in a browser (#608). It builds the
 same release site bundle, installs Chrome and chromedriver at the Chrome for
 Testing release `docs/VERSIONS.md` pins through `browser-actions/setup-chrome`,
-starts chromedriver, and runs the testkit's `journeys` module with
+names the chromedriver each journey starts on a port of its own, and runs
+the testkit's `journeys` module at the profile's full parallelism with
 `FERROFED_JOURNEYS=1`: sign-in at a test OpenID Provider, each operator view
 with its pagers, a query run that shows every node's status and completeness,
 a refused query, and sign-out, each against a running gateway over stub nodes

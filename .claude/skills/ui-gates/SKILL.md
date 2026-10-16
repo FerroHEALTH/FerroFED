@@ -73,8 +73,16 @@ still builds the bundle; say which version ran. CI's `viewer` job runs the
 same script at the pinned version and gates the merge, so a local skip is not
 a pass.
 
-Browser journeys are planned in #608; until a journey
-script exists, report that stage as `SKIPPED(no journeys yet)`.
+The browser journeys (#608) need Chrome for Testing and its chromedriver at
+the release CI pins. Run the install once, then run the journeys at full
+parallelism over the bundle stage 4 wrote; each journey starts its own
+chromedriver from `target/journey-tools`:
+
+```sh
+scripts/release/journey-tools.sh target/journey-tools
+FERROFED_JOURNEYS=1 cargo nextest run --locked -p ferrofed-testkit \
+  -E 'test(/^journeys::/)'
+```
 
 ## Report
 

@@ -5,7 +5,7 @@
 //! gate (#608).
 //!
 //! Each journey drives headless Chrome over `WebDriver`, through a chromedriver
-//! already running, against a running gateway over two stub nodes and a
+//! of its own, against a running gateway over two stub nodes and a
 //! running console that serves its release site bundle, so the browser
 //! hydrates the pages the server rendered. The operator signs in at a test
 //! OpenID Provider. Each journey fails on any error the browser logs to its
@@ -13,7 +13,7 @@
 //!
 //! The gate is `FERROFED_JOURNEYS=1`; without it each journey returns at
 //! once, so the ordinary suite needs no browser. The `journeys (browser)` job
-//! of `.github/workflows/ci.yml` sets it, starts the pinned chromedriver and
+//! of `.github/workflows/ci.yml` sets it, names the pinned chromedriver and
 //! builds the bundle, and `scripts/checks/e2e-placement.sh` keeps every gated
 //! journey in this module. No specification governs the journeys: our own
 //! design.
