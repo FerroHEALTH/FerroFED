@@ -4,12 +4,13 @@
 //! The page at `/`: the sign-in card a visitor reads, and the dashboard a
 //! signed-in operator lands on.
 //!
-//! Both are static, so the server renders their markup and the page shows
-//! that HTML, the way the admin actions' fields are shown: the browser
-//! bundle carries none of their drawing. Leptos escapes
-//! every text and attribute value in them. The markup reaches the browser
-//! with the page that `/` answers, so every link to `/` is a full load
-//! (`rel="external"`), never a navigation of the client router.
+//! The sign-in is static, so the server renders its markup and the page
+//! shows that HTML, the way the admin actions' fields are shown: the
+//! browser bundle carries none of its drawing. The dashboard is read from
+//! the gateway, and the server renders it too ([`crate::dashboard`]); it
+//! reaches the page through a server function, so a navigation of the
+//! client router loads it as a full load does. Leptos escapes every text
+//! and attribute value in both.
 
 use leptos::prelude::*;
 use leptos_meta::Title;
@@ -80,94 +81,31 @@ pub fn sign_in() -> String {
     .to_html()
 }
 
-/// One place the dashboard leads to.
-#[derive(Clone, Copy)]
-struct Place {
-    /// Where it leads.
-    href: &'static str,
-    /// What it is called.
-    label: &'static str,
-    /// What it shows, in one line.
-    line: &'static str,
-    /// The icon beside it.
-    glyph: icondata_core::Icon,
-}
+/// The subtitle of the dashboard.
+const DASHBOARD: &str = "The state of the federation, as this console reads it.";
 
-/// The card of `place`, which leads to it.
-fn place(place: Place) -> impl IntoView {
-    view! {
-        <a
-            href=place.href
-            class="state-change flex items-start gap-3 rounded-card border border-line bg-raised p-4 text-ink no-underline shadow-card hover:border-accent hover:text-ink"
-        >
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-control bg-accent-tint text-accent">
-                {icon(place.glyph, "20")}
-            </span>
-            <span class="min-w-0">
-                <span class="block font-semibold">{place.label}</span>
-                <span class="mt-0.5 block text-sm text-muted">{place.line}</span>
-            </span>
-        </a>
-    }
-}
-
-/// The dashboard a signed-in operator lands on: the places of the console,
-/// each with what it shows.
+/// The dashboard a signed-in operator lands on: the counts of the
+/// federation, each endpoint's health and the recent incidents, rendered on
+/// the server and read through [`crate::views::load::dashboard`].
 #[component]
 #[expect(
     clippy::must_use_candidate,
     reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
 )]
 pub fn DashboardPage() -> impl IntoView {
-    let html = SharedValue::new_str(|| rendered(dashboard)).into_inner();
+    let loaded = Resource::new_blocking(|| (), |()| crate::views::load::dashboard());
     view! {
         <Title text=titled("Dashboard") />
-        <div class="contents" inner_html=html></div>
+        {page_header("Dashboard", DASHBOARD, ())}
+        <Suspense fallback=|| {
+            view! { <p>"Loading the dashboard."</p> }
+        }>
+            {move || Suspend::new(async move {
+                crate::views::shown(
+                    loaded.await,
+                    |html| view! { <div class="contents" inner_html=html></div> }.into_any(),
+                )
+            })}
+        </Suspense>
     }
-}
-
-/// The markup of the dashboard.
-#[must_use]
-pub fn dashboard() -> String {
-    // TODO(#1076): the stat cards, the member health and the recent incidents.
-    let places = [
-        Place {
-            href: crate::views::MEMBERS,
-            label: "Members",
-            line: "Each member endpoint and its health.",
-            glyph: icondata_lu::LuUsers,
-        },
-        Place {
-            href: crate::views::INTEGRITY,
-            label: "Integrity",
-            line: "Incidents and the creating_system_id routing table.",
-            glyph: icondata_lu::LuShieldCheck,
-        },
-        Place {
-            href: crate::query::QUERY,
-            label: "Query console",
-            line: "Run AQL or a stored query across the federation.",
-            glyph: icondata_lu::LuSquareTerminal,
-        },
-        Place {
-            href: crate::views::STORED_QUERIES,
-            label: "Stored queries",
-            line: "The queries the gateway holds, by version.",
-            glyph: icondata_lu::LuDatabase,
-        },
-        Place {
-            href: crate::views::FEDERATION,
-            label: "Self-description",
-            line: "What the gateway declares of itself.",
-            glyph: icondata_lu::LuServer,
-        },
-    ]
-    .into_iter()
-    .map(place)
-    .collect_view();
-    view! {
-        {page_header("Dashboard", "The state of the federation this console reads.", ())}
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{places}</div>
-    }
-    .to_html()
 }

@@ -70,6 +70,9 @@ cookie.workspace = true
 # never renders its value, and the reports of the gateway's operator surface.
 ferrofed-registry.workspace = true
 http.workspace = true
+# The times of an incident and of a clear, compared to mark the incident
+# resolved; the registry builds on it already.
+jiff.workspace = true
 # Each request's body is read up to its limit before anything else reads it.
 http-body-util.workspace = true
 # The ID Token of a sign-in, verified against the provider's JWK Set

@@ -23,7 +23,7 @@ use crate::components::icon;
 use crate::manufacturer::MANUFACTURER;
 use crate::styles;
 use crate::theme::{SetTheme, Theme};
-use crate::views::model::{GatewayView, Outcome, Refusal, ViewError};
+use crate::views::model::{DeploymentView, GatewayView, Outcome, Refusal, ViewError};
 
 /// The id of the navigation, which the drawer button opens.
 const SIDEBAR_ID: &str = "sidebar";
@@ -40,17 +40,21 @@ pub struct Bar {
     pub theme: RwSignal<Theme>,
     /// The gateway's status, loaded once for the page.
     pub gateway: Resource<Result<Outcome<GatewayView>, ViewError>>,
+    /// How the gateway is deployed, loaded once for the page.
+    pub deployment: Resource<Result<Outcome<DeploymentView>, ViewError>>,
 }
 
 /// The top bar of a signed-in page: the drawer button, the lockup, and at
 /// the far end the gateway's status, the theme switch and the operator.
 #[must_use]
 pub fn topbar(bar: Bar) -> AnyView {
-    let gateway = bar.gateway;
+    let (gateway, deployment) = (bar.gateway, bar.deployment);
     let status = view! {
         <Suspense fallback=|| {
             view! { <span class=styles::Tone::Neutral.pill()>"Gateway"</span> }
-        }>{move || Suspend::new(async move { gateway_pill(gateway.await) })}</Suspense>
+        }>
+            {move || Suspend::new(async move { gateway_pill(gateway.await, &deployment.await) })}
+        </Suspense>
     };
     view! {
         <header class=styles::TOPBAR>
@@ -79,7 +83,7 @@ pub fn topbar(bar: Bar) -> AnyView {
 #[must_use]
 pub fn lockup() -> impl IntoView {
     view! {
-        <a href="/" rel="external" class=styles::LOCKUP>
+        <a href="/" class=styles::LOCKUP>
             // The brand mark is the stylesheet's, drawn for the theme; it is
             // decoration, and the product name stands beside it.
             <span class=styles::MARK aria-hidden="true"></span>
@@ -93,13 +97,23 @@ pub fn lockup() -> impl IntoView {
 /// The gateway's status as a pill: `UP` once the gateway answered the
 /// console, `DOWN` when the console could not reach it, its status and
 /// error code when it refused, and `UNKNOWN` for any other fault.
-fn gateway_pill(answer: Result<Outcome<GatewayView>, ViewError>) -> AnyView {
+fn gateway_pill(
+    answer: Result<Outcome<GatewayView>, ViewError>,
+    deployment: &Result<Outcome<DeploymentView>, ViewError>,
+) -> AnyView {
     let (tone, word, detail) = match answer {
-        // TODO(#1096): the gateway's product version, once the operator surface reports it.
         Ok(Outcome::Shown(view)) => (
             styles::Tone::Ok,
             String::from("Gateway UP"),
-            format!("· spec {} · {}", view.spec_version, view.federation),
+            match deployment {
+                Ok(Outcome::Shown(deployed)) => match &deployed.replica {
+                    Some(replica) => format!("· v{} · {replica}", deployed.version),
+                    None => format!("· v{}", deployed.version),
+                },
+                // NOTE: no specification governs this: our own design; an operator the
+                // deployment is refused to reads the pill without the version.
+                _ => format!("· spec {} · {}", view.spec_version, view.federation),
+            },
         ),
         Ok(Outcome::Refused(Refusal::Gateway { status, code })) => (
             styles::Tone::Danger,
@@ -124,6 +138,46 @@ fn gateway_pill(answer: Result<Outcome<GatewayView>, ViewError>) -> AnyView {
     };
     view! { <span class=tone.pill()>{word} <span class="hidden xl:inline">{detail}</span></span> }
         .into_any()
+}
+
+/// The amber banner under the top bar of a development gateway.
+///
+/// It names the development cross-reference when it is in service, and
+/// shows nothing for any other deployment, or when the gateway does not say.
+#[must_use]
+pub fn banner(deployment: Resource<Result<Outcome<DeploymentView>, ViewError>>) -> AnyView {
+    view! {
+        <Suspense fallback=|| ()>
+            {move || Suspend::new(async move {
+                match deployment.await {
+                    Ok(Outcome::Shown(deployed)) if deployed.development => {
+                        Some(development(deployed.development_crossref))
+                    }
+                    _ => None,
+                }
+            })}
+        </Suspense>
+    }
+    .into_any()
+}
+
+/// The words of the development banner, with the cross-reference when it
+/// is in service.
+fn development(crossref: bool) -> impl IntoView {
+    view! {
+        <div role="note" aria-label="Deployment" class=styles::BANNER>
+            <p class="m-0 flex items-start gap-2">
+                {icon(icondata_lu::LuTriangleAlert, "16")} <span>
+                    <strong>"Development deployment: "</strong>
+                    "this gateway runs the development profile and must not hold real patient data."
+                    {crossref
+                        .then_some(
+                            " Patients resolve through the static development cross-reference.",
+                        )}
+                </span>
+            </p>
+        </div>
+    }
 }
 
 /// The theme switch: light, dark and system, the one in force pressed.
@@ -256,18 +310,13 @@ struct Entry {
 }
 
 /// The navigation entry `entry`, tinted while it is the page: the router's
-/// link marks itself `aria-current="page"` there. The dashboard, which the
-/// server renders whole, is a full load (`rel="external"`).
+/// link marks itself `aria-current="page"` there, the dashboard on `/`
+/// alone.
 fn entry(entry: Entry) -> impl IntoView {
     let exact = entry.href == "/";
     view! {
         <li>
-            <A
-                href=entry.href
-                exact=exact
-                attr:rel=exact.then_some("external")
-                attr:class=styles::NAV_ENTRY
-            >
+            <A href=entry.href exact=exact attr:class=styles::NAV_ENTRY>
                 {icon(entry.glyph, "16")}
                 {entry.label}
             </A>
@@ -299,12 +348,16 @@ pub fn sidebar(administered: bool) -> AnyView {
         label: "Dashboard",
         glyph: icondata_lu::LuLayoutDashboard,
     }];
-    // TODO(#1076): the Routing entry, once the routing table has its own page.
     let federation = vec![
         Entry {
             href: crate::views::MEMBERS,
             label: "Members",
             glyph: icondata_lu::LuUsers,
+        },
+        Entry {
+            href: crate::views::ROUTING,
+            label: "Routing",
+            glyph: icondata_lu::LuRoute,
         },
         Entry {
             href: crate::views::INTEGRITY,

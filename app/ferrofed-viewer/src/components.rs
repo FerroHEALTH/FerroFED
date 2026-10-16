@@ -95,6 +95,64 @@ pub fn stat_card(
     }
 }
 
+/// A stat card that leads to `href`: the `value` of a measure `label`
+/// names, beside its `glyph`, with `mark` (a pill or a badge that says
+/// more) after the label.
+#[must_use]
+pub fn stat_card_marked(
+    glyph: icondata_core::Icon,
+    value: String,
+    label: &'static str,
+    href: &'static str,
+    mark: impl IntoView,
+) -> impl IntoView {
+    view! {
+        <a
+            href=href
+            class="state-change block rounded-card border border-line bg-raised p-4 text-ink no-underline shadow-card hover:border-accent hover:text-ink"
+        >
+            <div class="flex items-center gap-3">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-control bg-accent-tint text-accent">
+                    {icon(glyph, "20")}
+                </span>
+                <div class="min-w-0">
+                    <p class="m-0 text-2xl font-semibold tabular-nums text-ink">{value}</p>
+                    <p class="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+                        <span>{label}</span>
+                        {mark}
+                    </p>
+                </div>
+            </div>
+        </a>
+    }
+}
+
+/// The line under a page's header that names the replica which answered
+/// it; nothing when the replica has no name.
+#[must_use]
+pub fn replica_meta(line: Option<String>) -> impl IntoView {
+    line.map(|line| view! { <p class=styles::PAGE_META>{line}</p> })
+}
+
+/// A quiet empty state inside a card: a `glyph`, a `title` under a level-2
+/// heading, and one `line`.
+#[must_use]
+pub fn empty_card(
+    glyph: icondata_core::Icon,
+    title: &'static str,
+    line: &'static str,
+) -> impl IntoView {
+    view! {
+        <div class="flex flex-col items-center px-4 py-8 text-center">
+            <span class="mb-3 flex size-10 items-center justify-center rounded-full bg-inset text-muted">
+                {icon(glyph, "20")}
+            </span>
+            <h2 class="m-0 text-sm font-semibold text-ink">{title}</h2>
+            <p class="mt-1 mb-0 text-sm text-muted">{line}</p>
+        </div>
+    }
+}
+
 /// A table in its card, `label` naming the box it scrolls in.
 ///
 /// The header row stays while the rows scroll, and a table wider than the

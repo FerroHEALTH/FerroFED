@@ -121,7 +121,11 @@ async fn each_view_renders_and_pages_through_the_hydrated_console() -> Result<()
         browser
             .text("caption", "Incidents since the gateway started")
             .await?;
-        pages(browser, &stack, ("/integrity", ROUTING, ROUTES)).await?;
+        browser.console_clean("the integrity view").await?;
+
+        browser.follow("Routing").await?;
+        browser.titled(&titled("Routing")).await?;
+        pages(browser, &stack, ("/routing", ROUTING, ROUTES)).await?;
 
         browser.follow("Stored queries").await?;
         browser.titled(&titled("Stored queries")).await?;
@@ -149,14 +153,19 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
         row(browser, "Member endpoints", "node-a-pub").await?;
         browser.console_clean("the members view").await?;
 
-        browser
-            .goto(&stack.url(&format!("/integrity?offset={PAGE}")))
-            .await?;
+        browser.goto(&stack.url("/integrity")).await?;
         browser.titled(&titled("Integrity")).await?;
+        browser.text("h2", "No open incidents").await?;
+        browser.console_clean("the integrity view").await?;
+
+        browser
+            .goto(&stack.url(&format!("/routing?offset={PAGE}")))
+            .await?;
+        browser.titled(&titled("Routing")).await?;
         page(browser, ROUTING, PAGE, ROUTES).await?;
         browser.follow("Previous page").await?;
         page(browser, ROUTING, 0, ROUTES).await?;
-        browser.console_clean("the integrity view").await?;
+        browser.console_clean("the routing view").await?;
 
         browser
             .goto(&stack.url(&format!("/stored-queries?offset={PAGE}")))

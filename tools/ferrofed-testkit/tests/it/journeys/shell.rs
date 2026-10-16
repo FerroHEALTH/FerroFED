@@ -291,3 +291,43 @@ async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<
     })
     .await
 }
+
+// The stack's gateway runs the development profile with its static
+// cross-reference, so every signed-in page names it in the banner under the
+// top bar, before any script runs and after a navigation of the client
+// router, and the pill names the gateway's version.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_development_gateway_is_named_in_the_banner_on_every_page() -> Result<(), Box<dyn Error>>
+{
+    if !journeys_enabled() {
+        return Ok(());
+    }
+    let stack = Stack::start().await?;
+    with_browser(async |browser| {
+        sign_in(browser, &stack).await?;
+        let banner = "//div[@role = 'note' and contains(., 'Development deployment')]";
+        browser.element(By::XPath(banner)).await?;
+        browser
+            .text("div", "the static development cross-reference")
+            .await?;
+        browser
+            .text("span", &format!("· v{}", ferrofed_viewer::app::VERSION))
+            .await?;
+        browser.console_clean("the banner on the dashboard").await?;
+
+        browser.follow("Members").await?;
+        browser.element(By::XPath(banner)).await?;
+        browser
+            .console_clean("the banner after a navigation")
+            .await?;
+
+        browser.scripts(false).await?;
+        browser.goto(&stack.url("/routing")).await?;
+        browser.element(By::XPath(banner)).await?;
+        browser.scripts(true).await?;
+        browser.goto(&stack.url("/members")).await?;
+        browser.element(By::XPath(banner)).await?;
+        browser.console_clean("the banner before any script").await
+    })
+    .await
+}

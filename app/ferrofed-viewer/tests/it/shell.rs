@@ -272,15 +272,17 @@ fn the_about_markup_escapes_what_it_names() {
         assert!(!html.contains("<script>"), "{html}");
         assert!(!html.contains("<b onmouseover"), "{html}");
         assert!(html.contains("&lt;script&gt;"), "{html}");
-        for page in [
-            ferrofed_viewer::home::sign_in(),
-            ferrofed_viewer::home::dashboard(),
-        ] {
-            assert!(!page.contains("<script"), "{page}");
-        }
+        // The dashboard's markup carries its own hostile-content test
+        // (`dashboard::tests::hostile_values_render_escaped`).
+        let page = ferrofed_viewer::home::sign_in();
+        assert!(!page.contains("<script"), "{page}");
     });
 }
 
+// The sign-in and the About page are static markup the server renders
+// into the page, so a link to About is a full load. The dashboard reaches
+// the page through its server function, so the router may take a link to
+// it, and the page says when the gateway could not be reached.
 #[tokio::test]
 async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
 -> Result<(), Box<dyn Error>> {
@@ -290,14 +292,15 @@ async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/members", &session)?).await?;
     // The router never takes a link to a page the server renders whole.
-    assert!(body.contains(r#"<a href="/" rel="external""#), "{body}");
     assert!(
         body.contains(r#"<a href="/about" rel="external">"#),
         "{body}"
     );
+    assert!(!body.contains(r#"<a href="/" rel="external""#), "{body}");
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
+    assert!(body.contains(">Dashboard</h1>"), "{body}");
     assert!(
-        body.contains(">Each member endpoint and its health.</span>"),
+        body.contains(r#"<p role="alert">the gateway could not be reached</p>"#),
         "{body}"
     );
     Ok(())
@@ -318,5 +321,98 @@ async fn a_page_the_console_does_not_serve_offers_the_way_back() -> Result<(), B
         assert!(body.contains("404: the console has no page"), "{body}");
         assert!(body.contains("Back to the console"), "{body}");
     }
+    Ok(())
+}
+
+/// A stub gateway that answers its self-description and
+/// `GET {base}/operator/deployment` with `status` and `deployment`.
+async fn deployed(status: u16, deployment: &str) -> Result<MockServer, Box<dyn Error>> {
+    let up = gateway(200, options_example()?).await;
+    Mock::given(method("GET"))
+        .and(path("/operator/deployment"))
+        .respond_with(
+            ResponseTemplate::new(status)
+                .insert_header("content-type", "application/json")
+                .set_body_string(deployment.to_owned()),
+        )
+        .mount(&up)
+        .await;
+    Ok(up)
+}
+
+/// The top bar and the banner of the page at `/` over `gateway`.
+async fn top_of(gateway: &MockServer) -> Result<String, Box<dyn Error>> {
+    let (state, service) = console(&configured(&gateway.uri()))?;
+    let session = state.sessions().establish(signed_in())?;
+    let (response, body) = send(&service, get_as("/", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    let top = body
+        .split_once(r#"aria-label="Views""#)
+        .map(|(top, _)| top.to_owned())
+        .ok_or("the navigation")?;
+    Ok(top)
+}
+
+// A development gateway is named in an amber banner under the top bar,
+// with its cross-reference when that is in service, and the pill names the
+// product version and the replica.
+#[tokio::test]
+async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill()
+-> Result<(), Box<dyn Error>> {
+    let development = deployed(
+        200,
+        r#"{"mode":"development","development_crossref":true,"product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
+    )
+    .await?;
+    let top = top_of(&development).await?;
+    assert!(top.contains("Development deployment: "), "{top}");
+    assert!(
+        top.contains("Patients resolve through the static development cross-reference."),
+        "{top}"
+    );
+    assert!(top.contains(r#"class="tone-warn border-b"#), "{top}");
+    assert!(top.contains("· v0.0.11 · gateway-0"), "{top}");
+    let banner = top.find("Development deployment").ok_or("the banner")?;
+    let bar = top.find("Gateway UP").ok_or("the pill")?;
+    assert!(bar < banner, "the banner sits under the top bar: {top}");
+
+    let plain = deployed(
+        200,
+        r#"{"mode":"development","development_crossref":false,"product":"FerroFED","version":"0.0.11","replica":"unnamed"}"#,
+    )
+    .await?;
+    let top = top_of(&plain).await?;
+    assert!(top.contains("Development deployment: "), "{top}");
+    assert!(!top.contains("cross-reference"), "{top}");
+    assert!(
+        top.contains("· v0.0.11<"),
+        "an unnamed replica is not named: {top}"
+    );
+    Ok(())
+}
+
+// A production gateway has no banner, and an operator the deployment is
+// refused to reads the pill as before, with no banner and no error.
+#[tokio::test]
+async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Result<(), Box<dyn Error>>
+{
+    let production = deployed(
+        200,
+        r#"{"mode":"production","development_crossref":false,"product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
+    )
+    .await?;
+    let top = top_of(&production).await?;
+    assert!(!top.contains("Development deployment"), "{top}");
+    assert!(top.contains("· v0.0.11 · gateway-0"), "{top}");
+
+    let refused = deployed(
+        403,
+        r#"{"message":"no operator scope","code":"scope-insufficient"}"#,
+    )
+    .await?;
+    let top = top_of(&refused).await?;
+    assert!(!top.contains("Development deployment"), "{top}");
+    assert!(top.contains("· spec 1.0 · rso-zl"), "{top}");
+    assert!(!top.contains(r#"role="alert""#), "{top}");
     Ok(())
 }

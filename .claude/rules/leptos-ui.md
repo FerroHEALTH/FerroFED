@@ -462,6 +462,23 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   and its federation options, and the parameter rows. Those rows first cost
   15 KB as a keyed `<For>` with a remove button on each; eight rows rendered
   once and shown one by one cost about 7 KB.
+- **The overview (#1076) measured 323879 bytes** brotli-compressed
+  (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Tailwind CSS
+  4.3.3), 17875 more than the 306004 of the shell it was built on. Its first
+  cut, the members, the member's page and the integrity incidents drawn by
+  components in the browser, measured 372721. Those three are read-only, so
+  the server now renders their markup, as the dashboard's, and the page
+  shows that HTML through a server function, so a navigation of the client
+  router loads it and a link to the dashboard needs no full load. What the
+  browser still draws is the routing table's filter, a `<For>` over the
+  rows the page loaded, and the decoding of the new server functions'
+  answers. Every one of those `inner_html` sinks carries its hostile-content
+  test (`dashboard`, `views::members`, `views::integrity`).
+- **The development banner (#1096) measured 331058 bytes**
+  brotli-compressed (2026-10-16), 7179 more than the overview: the
+  deployment's server function and the decoding of its `Outcome`, the
+  banner and its icon, and the version in the gateway pill, all drawn in
+  the shell the browser hydrates on every page.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

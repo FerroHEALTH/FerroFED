@@ -119,6 +119,10 @@ pub struct MemberRow {
     pub latency_ms_p50: Option<u64>,
     /// The last state the gateway observed of the endpoint.
     pub health: String,
+    /// The path of the member's own page, keyed by its `node_id`, or by the
+    /// `endpoint_id` of an endpoint that names no node, when that id is one
+    /// a path carries as it stands.
+    pub detail: Option<String>,
 }
 
 /// The members view: every member endpoint, and the other services the
@@ -130,8 +134,8 @@ pub struct MembersView {
     /// Every other dependency and its state, by key.
     pub services: Vec<(String, String)>,
     /// Which replica observed the health, as the view says it: each
-    /// replica observes its own.
-    pub answered_by: String,
+    /// replica observes its own. `None` when the replica has no name.
+    pub answered_by: Option<String>,
 }
 
 /// One integrity incident.
@@ -143,6 +147,9 @@ pub struct IncidentRow {
     pub kind: String,
     /// Its description, which names an `ehr_id` only when it is a bare UUID.
     pub description: String,
+    /// Whether the operator cleared the `ehr_id` it is about after it was
+    /// emitted.
+    pub resolved: bool,
 }
 
 /// One collision the operator cleared.
@@ -170,29 +177,29 @@ pub struct RouteRow {
     pub endpoint: Option<String>,
 }
 
-/// The integrity view: the incident counts, the recent incidents, and the
-/// routing table.
+/// The integrity view: the incidents of one state, the counts and the
+/// collisions cleared, rendered on the server, and the collision clear.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IntegrityView {
-    /// How many incidents of each kind were emitted since the gateway
-    /// started.
-    pub counts: Vec<(String, u64)>,
-    /// The most recent incidents, newest first.
-    pub recent: Vec<IncidentRow>,
-    /// The collisions the operator cleared most recently, newest first.
-    pub cleared: Vec<ClearedRow>,
-    /// One page of the `creating_system_id` routing table.
-    pub routes: Vec<RouteRow>,
-    /// Where that page starts in the table.
-    pub routes_offset: u64,
-    /// How many rows the whole table holds.
-    pub routes_total: u64,
+    /// The read-only part, rendered as HTML.
+    pub html: String,
     /// The collision clear's fields, rendered on the server; `None` when
     /// the console is configured with no admin listener.
     pub clear_form: Option<String>,
-    /// Which replica answered the incidents and the routing table, as the
-    /// view says it.
-    pub answered_by: String,
+}
+
+/// The routing view: one page of the `creating_system_id` routing table.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutingView {
+    /// The rows of the page.
+    pub routes: Vec<RouteRow>,
+    /// Where that page starts in the table.
+    pub offset: u64,
+    /// How many rows the whole table holds.
+    pub total: u64,
+    /// Which replica answered the table, as the view says it; `None` when
+    /// the replica has no name.
+    pub answered_by: Option<String>,
 }
 
 /// One held stored-query version.
@@ -220,8 +227,9 @@ pub struct StoredView {
     /// The drift repair's fields, rendered on the server; `None` when the
     /// console is configured with no admin listener.
     pub repair_form: Option<String>,
-    /// Which replica answered the page, as the view says it.
-    pub answered_by: String,
+    /// Which replica answered the page, as the view says it; `None` when
+    /// the replica has no name.
+    pub answered_by: Option<String>,
 }
 
 /// What the top bar says of the gateway that answered the console.
@@ -231,6 +239,21 @@ pub struct GatewayView {
     pub spec_version: String,
     /// The federation's identifier.
     pub federation: String,
+}
+
+/// How the gateway that answered the console is deployed, as the top bar
+/// and the banner under it say it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeploymentView {
+    /// Whether the gateway runs the development profile.
+    pub development: bool,
+    /// Whether patients resolve through the static development
+    /// cross-reference.
+    pub development_crossref: bool,
+    /// The gateway's product version.
+    pub version: String,
+    /// The replica that answered; `None` when it has no name.
+    pub replica: Option<String>,
 }
 
 /// The self-description view, `OPTIONS {base}/`.

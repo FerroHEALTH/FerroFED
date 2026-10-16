@@ -27,11 +27,13 @@ use crate::journeys::stack::Stack;
 const WIDTH: u32 = 320;
 
 /// The pages a signed-in operator reads.
-const PAGES: [&str; 8] = [
+const PAGES: [&str; 10] = [
     "/about",
     "/",
     "/members",
+    "/members/node-a",
     "/integrity",
+    "/routing",
     "/stored-queries",
     "/federation",
     "/query",

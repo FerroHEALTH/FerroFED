@@ -17,6 +17,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::support::{OPERATOR_TOKEN, console, get, get_as, header, send, signed_in};
 
+/// The classes of a cell that heads a row with an identifier.
+pub(crate) const MONO: &str = "font-mono text-[0.8125rem] whitespace-nowrap";
+
 /// The vendored specification page that carries the §7a.2 example.
 const REST_FACADE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -48,7 +51,7 @@ fn example_endpoints() -> Result<Vec<String>, Box<dyn Error>> {
 
 /// Answers `GET` or `OPTIONS` of `route` with the JSON `body`, only for the
 /// operator's own token.
-async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
+pub(crate) async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
     answers_after(Duration::ZERO, gateway, verb, route, body).await;
 }
 
@@ -77,7 +80,7 @@ async fn answers_after(
 }
 
 /// A stub gateway answering every surface the views read.
-async fn gateway() -> Result<MockServer, Box<dyn Error>> {
+pub(crate) async fn gateway() -> Result<MockServer, Box<dyn Error>> {
     gateway_after(Duration::ZERO).await
 }
 
@@ -144,7 +147,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
 }
 
 /// A console over `gateway` with one signed-in operator.
-fn signed_in_console(
+pub(crate) fn signed_in_console(
     gateway: &MockServer,
 ) -> Result<
     (
@@ -172,38 +175,25 @@ async fn the_members_view_lists_every_endpoint_with_its_health() -> Result<(), B
         body.contains("<title>Members · FerroFED Console</title>"),
         "{body}"
     );
+    // Each endpoint of the example names its node, so each row leads to
+    // that member's page.
     for id in example_endpoints()? {
         assert!(
-            body.contains(&format!("<th scope=\"row\">{id}</th>")),
+            body.contains(&format!(
+                r#"<th scope="row" class="{MONO}"><a href="/members/{id}">{id}</a></th>"#
+            )),
             "{id}: {body}"
         );
     }
     assert!(
-        body.contains(r#"<td class="state state-up">up</td>"#),
+        body.contains(r#"<td><span class="pill tone-ok">up</span></td>"#),
         "{body}"
     );
     assert!(body.contains("resolver"), "{body}");
     assert!(
-        body.contains(r#"<td class="state state-failing">failing</td>"#),
+        body.contains(r#"<td><span class="pill tone-danger">failing</span></td>"#),
         "{body}"
     );
-    Ok(())
-}
-
-#[tokio::test]
-async fn the_integrity_view_shows_the_counts_the_incidents_and_the_routing_table()
--> Result<(), Box<dyn Error>> {
-    let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
-    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("EhrIdCollision"), "{body}");
-    assert!(body.contains("found by the ask-all probe"), "{body}");
-    assert!(
-        body.contains("<th scope=\"row\">legacy-a.example.org</th>"),
-        "{body}"
-    );
-    assert!(body.contains("<td>learned</td>"), "{body}");
     Ok(())
 }
 
@@ -215,17 +205,17 @@ async fn the_integrity_view_lists_the_collisions_cleared_recently_newest_first()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
     let (_state, service, session) = signed_in_console(&gateway)?;
-    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    let (response, body) = send(&service, get_as("/integrity?show=resolved", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
         body.contains("<caption>Collisions cleared recently, newest first</caption>"),
         "{body}"
     );
     let newer = body
-        .find(r#"<td>2026-10-05T10:00:00Z</td><th scope="row">not a bare UUID</th><td>node-a, node-c</td>"#)
+        .find(r#"<td class="font-mono text-[0.8125rem] whitespace-nowrap">2026-10-05T10:00:00Z</td><th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">not a bare UUID</th><td>node-a, node-c</td>"#)
         .ok_or("the newer clear")?;
     let older = body
-        .find(r#"<td>2026-10-05T09:00:00Z</td><th scope="row">7d44b88c-4199-4bad-97dc-d78268e01398</th><td>node-a, node-b</td>"#)
+        .find(r#"<td class="font-mono text-[0.8125rem] whitespace-nowrap">2026-10-05T09:00:00Z</td><th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">7d44b88c-4199-4bad-97dc-d78268e01398</th><td>node-a, node-b</td>"#)
         .ok_or("the older clear")?;
     assert!(newer < older, "newest first: {body}");
     assert!(
@@ -280,7 +270,14 @@ async fn a_view_without_a_signed_in_session_sends_the_browser_to_sign_in()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
     let (_state, service, _session) = signed_in_console(&gateway)?;
-    for view in ["/members", "/integrity", "/stored-queries", "/federation"] {
+    for view in [
+        "/members",
+        "/integrity",
+        "/routing",
+        "/members/node_1",
+        "/stored-queries",
+        "/federation",
+    ] {
         let (response, _body) = send(&service, get(view)?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status(), "{view}");
         assert_eq!("/login", header(&response, "location"), "{view}");
@@ -338,7 +335,14 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
     let (_state, service, session) = signed_in_console(&gateway)?;
-    for view in ["/members", "/integrity", "/stored-queries", "/federation"] {
+    for view in [
+        "/members",
+        "/integrity",
+        "/routing",
+        "/members/node_1",
+        "/stored-queries",
+        "/federation",
+    ] {
         let (response, body) = send(&service, get_as(view, &session)?).await?;
         assert!(!body.contains(OPERATOR_TOKEN), "{view}: {body}");
         assert!(!body.contains(session.as_str()), "{view}: {body}");
@@ -361,11 +365,15 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
 
 /// Every server function a view or the shell loads through or an admin action posts to,
 /// with the form body it takes.
-const SERVER_FUNCTIONS: [(&str, &str); 10] = [
+const SERVER_FUNCTIONS: [(&str, &str); 14] = [
     ("/api/gateway", ""),
+    ("/api/deployment", ""),
     ("/api/theme", "theme=dark"),
     ("/api/members", ""),
-    ("/api/integrity", "offset=0"),
+    ("/api/integrity", "show="),
+    ("/api/member", "key=node_1"),
+    ("/api/routing", "offset=0"),
+    ("/api/dashboard", ""),
     ("/api/stored-queries", "offset=0"),
     ("/api/federation", ""),
     ("/api/clear-ehr-id", "form%5Bconfirm%5D=yes"),
@@ -560,11 +568,11 @@ async fn paged_gateway(offset: u64, total: u64) -> MockServer {
 async fn the_routing_table_shows_its_page_and_links_the_next() -> Result<(), Box<dyn Error>> {
     let gateway = paged_gateway(0, 150).await;
     let (_state, service, session) = signed_in_console(&gateway)?;
-    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    let (response, body) = send(&service, get_as("/routing", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("Rows 1 to 2 of 150."), "{body}");
     assert!(
-        body.contains(r#"href="/integrity?offset=2" rel="next""#),
+        body.contains(r#"href="/routing?offset=2" rel="next""#),
         "{body}"
     );
     assert!(!body.contains(r#"rel="prev""#), "{body}");
@@ -576,11 +584,11 @@ async fn a_later_page_of_the_routing_table_is_asked_for_by_its_offset() -> Resul
 {
     let gateway = paged_gateway(148, 150).await;
     let (_state, service, session) = signed_in_console(&gateway)?;
-    let (response, body) = send(&service, get_as("/integrity?offset=148", &session)?).await?;
+    let (response, body) = send(&service, get_as("/routing?offset=148", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("Rows 149 to 150 of 150."), "{body}");
     assert!(
-        body.contains(r#"href="/integrity?offset=48" rel="prev""#),
+        body.contains(r#"href="/routing?offset=48" rel="prev""#),
         "{body}"
     );
     assert!(!body.contains(r#"rel="next""#), "{body}");
@@ -591,7 +599,7 @@ async fn a_later_page_of_the_routing_table_is_asked_for_by_its_offset() -> Resul
 async fn an_offset_that_is_no_number_shows_the_first_page() -> Result<(), Box<dyn Error>> {
     let gateway = paged_gateway(0, 2).await;
     let (_state, service, session) = signed_in_console(&gateway)?;
-    let (response, body) = send(&service, get_as("/integrity?offset=-1", &session)?).await?;
+    let (response, body) = send(&service, get_as("/routing?offset=-1", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("Rows 1 to 2 of 2."), "{body}");
     Ok(())
@@ -657,7 +665,15 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
             ("/", "Gateway UP"),
             ("/members", "<caption>Member endpoints</caption>"),
             (
+                "/members/node_1",
+                "<caption>Endpoints of this member</caption>",
+            ),
+            (
                 "/integrity",
+                "<caption>Incidents since the gateway started</caption>",
+            ),
+            (
+                "/routing",
                 "<caption>The creating_system_id routing table</caption>",
             ),
             ("/stored-queries", "<caption>Held versions</caption>"),
@@ -690,11 +706,22 @@ async fn each_operator_view_names_the_replica_that_answered() -> Result<(), Box<
     let gateway = gateway().await?;
     let (_state, service, session) = signed_in_console(&gateway)?;
     for (page, line) in [
-        ("/members", "<p>Answered by replica ferrofed-0.</p>"),
+        (
+            "/members",
+            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+        ),
+        (
+            "/members/node_1",
+            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+        ),
         ("/stored-queries", "<p>Answered by replica ferrofed-0.</p>"),
         (
             "/integrity",
-            "<p>Each part names its replica: the incidents by replica ferrofed-0, the routing table by replica ferrofed-1.</p>",
+            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+        ),
+        (
+            "/routing",
+            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-1.</p>"#,
         ),
     ] {
         let (response, body) = send(&service, get_as(page, &session)?).await?;
@@ -713,7 +740,7 @@ async fn a_view_whose_reports_name_no_replica_says_so() -> Result<(), Box<dyn Er
     let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
-        body.contains("<p>The gateway did not name the replica that answered.</p>"),
+        body.contains(r#"<p class="-mt-3 mb-5 text-xs text-muted">The gateway did not name the replica that answered.</p>"#),
         "{body}"
     );
     Ok(())
