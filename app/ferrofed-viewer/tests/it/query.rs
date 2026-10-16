@@ -220,7 +220,10 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
     assert_eq!(Some(200), answer.status);
     assert!(!answer.complete, "{answer:?}");
     let html = &answer.html;
-    assert!(html.contains("Incomplete answer."), "{html}");
+    assert!(
+        html.contains("Not every node in scope answered (meta.federation.complete is false)"),
+        "{html}"
+    );
     assert!(html.contains("<caption>1 row</caption>"), "{html}");
     assert!(reports(html, "node_2", "time-out"), "{html}");
     assert!(
@@ -243,7 +246,10 @@ async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
         html.contains("The gateway failed the query: 504."),
         "{html}"
     );
-    assert!(html.contains("Incomplete answer."), "{html}");
+    assert!(
+        html.contains("Not every node in scope answered (meta.federation.complete is false)"),
+        "{html}"
+    );
     assert!(html.contains("No rows."), "{html}");
     for (id, status) in [
         ("node_1", "active"),

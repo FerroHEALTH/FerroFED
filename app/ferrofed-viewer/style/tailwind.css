@@ -698,11 +698,16 @@
     color: var(--muted);
   }
 
-  .query-answer .complete {
+  /* The completeness in words, at the end of the strip after its pill. */
+  .summary-strip .complete-note {
+    color: var(--muted);
+  }
+
+  .summary-strip [role="alert"].incomplete-note {
     border: 0;
     background: transparent;
     padding: 0;
-    font-size: 0.8125rem;
+    color: var(--warn-fg);
   }
 
   .query-answer p {
@@ -760,6 +765,14 @@
     white-space: nowrap;
   }
 
+  /* A column is headed by its name or its AQL path as the gateway wrote it,
+     and a path is case-sensitive, so the header keeps its case. */
+  #query-rows thead th {
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
   .query-answer .table-scroll {
     margin-block-end: 0.75rem;
   }
@@ -779,6 +792,10 @@
 
   /* A refused query: the error state of the results card. */
   .query-refusal {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     border: 1px solid var(--danger-fg);
     border-left-width: 0.25rem;
     border-radius: var(--radius-card);
@@ -787,7 +804,7 @@
   }
 
   .query-refusal [role="alert"] {
-    margin: 0.5rem 0 0;
+    margin: 0;
     border: 0;
     background: transparent;
     padding: 0;

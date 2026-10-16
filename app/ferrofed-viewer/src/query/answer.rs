@@ -13,7 +13,9 @@ use leptos::either::Either;
 use leptos::prelude::*;
 
 use crate::components::icon;
-use crate::query::model::{EndpointLine, PAGE_ROWS, QueryAnswer, ROWS_TABLE, RenderedAnswer};
+use crate::query::model::{
+    ColumnLine, EndpointLine, PAGE_ROWS, QueryAnswer, ROWS_TABLE, RenderedAnswer,
+};
 use crate::styles::{self, Tone};
 use crate::views::model::Refusal;
 
@@ -40,36 +42,19 @@ pub fn refused(refused: &Refusal) -> RenderedAnswer {
         rows: 0,
         // NOTE: the Leptos book, `reactivity/working_with_signals`: the icon is a
         // component, which renders under a reactive owner of its own here.
-        html: Owner::new().with(|| refusal_state(refused, status).to_html()),
+        html: Owner::new().with(|| refusal_state(refused).to_html()),
         raw: String::new(),
     }
 }
 
-/// The error state of a refused query: a title, the status and code as
-/// badges, and the one line that says why.
-fn refusal_state(refused: &Refusal, status: Option<u16>) -> AnyView {
-    let (title, code) = match refused {
-        Refusal::Gateway { code, .. } | Refusal::NotAuthenticated { code } => {
-            ("The gateway refused the query", code.clone())
-        }
-        Refusal::Invalid { .. } => ("The console did not send the query", None),
-    };
-    let status = status.map(|status| {
-        view! { <span class=Tone::Danger.badge()>{status.to_string()}</span> }
-    });
-    let code = code.map(|code| {
-        view! { <code class=format!("{} {}", Tone::Neutral.badge(), styles::MONO)>{code}</code> }
-    });
+/// The error state of a refused query: the `refused` pill and the one line
+/// that says why, with the gateway's status and code.
+fn refusal_state(refused: &Refusal) -> AnyView {
     let line = crate::views::refusal(refused);
     view! {
         <div class="query-refusal">
-            <div class="flex flex-wrap items-center gap-2">
-                <span class="text-danger-fg">{icon(icondata_lu::LuCircleAlert, "18")}</span>
-                <h3 class="m-0 text-sm font-semibold text-ink">{title}</h3>
-                <span class=Tone::Danger.pill()>"refused"</span>
-                {status}
-                {code}
-            </div>
+            <span class="text-danger-fg">{icon(icondata_lu::LuCircleAlert, "18")}</span>
+            <span class=Tone::Danger.pill()>"refused"</span>
             {line}
         </div>
     }
@@ -159,6 +144,8 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
             <span class="tabular-nums">{nodes}</span>
             {elapsed}
             {dedup}
+            <span aria-hidden="true">"·"</span>
+            {completeness(answer.complete)}
         </div>
     }
     .into_any()
@@ -183,27 +170,26 @@ fn outcome_section(answer: &QueryAnswer) -> AnyView {
             </p>
         }
     });
-    let completeness = if answer.complete {
+    failed.into_any()
+}
+
+/// What `meta.federation.complete` says, in words, for the end of the
+/// summary strip, whose pill names it in one word (§11.4, N37).
+fn completeness(complete: bool) -> impl IntoView {
+    if complete {
         Either::Left(view! {
-            <p role="status" class="complete">
-                <strong>"Complete."</strong>
-                " Every node in scope answered."
-            </p>
+            <span role="status" class="complete-note">
+                "Every node in scope answered."
+            </span>
         })
     } else {
         Either::Right(view! {
-            <p role="alert" class="incomplete">
-                <strong>"Incomplete answer."</strong>
-                " Not every node in scope answered (meta.federation.complete is false), "
+            <span role="alert" class="incomplete-note">
+                "Not every node in scope answered (meta.federation.complete is false), "
                 "so these rows are not the whole answer."
-            </p>
+            </span>
         })
-    };
-    view! {
-        {failed}
-        {completeness}
     }
-    .into_any()
 }
 
 /// One chip per node: its id, its status, its rows and its latency (§9.5,
@@ -297,6 +283,25 @@ pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
     .into_any()
 }
 
+/// The heading of the column at `index`: its `name`, or its `path` when the
+/// name is only a position (`#0`) or empty, and `#index` when it has neither
+/// (§9.4, ITS-REST `RESULT_SET.columns`).
+fn heading(index: usize, column: &ColumnLine) -> String {
+    let positional = column.name.is_empty()
+        || column
+            .name
+            .strip_prefix('#')
+            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()));
+    if !positional {
+        return column.name.clone();
+    }
+    match column.path.as_deref().filter(|path| !path.is_empty()) {
+        Some(path) => path.to_owned(),
+        None if column.name.is_empty() => format!("#{index}"),
+        None => column.name.clone(),
+    }
+}
+
 /// How many rows `count` is, in words.
 fn counted(count: usize) -> String {
     if count == 1 {
@@ -325,11 +330,12 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
     let header = answer
         .columns
         .iter()
-        .map(|column| {
+        .enumerate()
+        .map(|(index, column)| {
             let title = column.path.clone().unwrap_or_default();
             view! {
                 <th scope="col" title=title>
-                    {column.name.clone()}
+                    {heading(index, column)}
                 </th>
             }
         })
@@ -412,7 +418,9 @@ mod tests {
     #[test]
     fn an_incomplete_answer_says_so_in_words_before_its_rows() {
         let html = answered(&answer(200, false)).to_html();
-        let flag = html.find("Incomplete answer.").expect("the flag");
+        let flag = html
+            .find("Not every node in scope answered (meta.federation.complete is false)")
+            .expect("the flag");
         let rows = html.find("8849182a::cdr1.rso.nl::1").expect("the rows");
         assert!(flag < rows, "{html}");
         assert!(html.contains(r#"role="alert""#), "{html}");
@@ -482,7 +490,10 @@ mod tests {
     fn a_complete_answer_says_every_node_answered() {
         let html = answered(&answer(200, true)).to_html();
         assert!(html.contains("Every node in scope answered."), "{html}");
-        assert!(!html.contains("Incomplete answer."), "{html}");
+        assert!(
+            !html.contains("Not every node in scope answered (meta.federation.complete is false)"),
+            "{html}"
+        );
         assert!(!html.contains("failed the query"), "{html}");
     }
 
@@ -553,7 +564,10 @@ mod tests {
             html.contains("The gateway failed the query: 504."),
             "{html}"
         );
-        assert!(html.contains("Incomplete answer."), "{html}");
+        assert!(
+            html.contains("Not every node in scope answered (meta.federation.complete is false)"),
+            "{html}"
+        );
         assert!(html.contains("No rows."), "{html}");
         assert!(html.contains("was asked and did not answer"), "{html}");
     }
@@ -594,7 +608,10 @@ mod tests {
             html.contains("The gateway refused this view: 400 ("),
             "{html}"
         );
-        assert!(html.contains("The gateway refused the query"), "{html}");
+        assert!(
+            html.contains(r#"<span class="pill tone-danger">refused</span>"#),
+            "{html}"
+        );
         assert!(html.contains("&lt;script&gt;x&lt;/script&gt;"), "{html}");
         assert!(!html.contains("<script"), "{html}");
         let invalid = super::refused(&Refusal::Invalid {
@@ -608,6 +625,42 @@ mod tests {
             invalid.html
         );
         assert!(!invalid.html.contains("<b>"), "{}", invalid.html);
+    }
+
+    // A node names a column `#0` when the query gave it no alias, so the
+    // header reads its path; the path reaches the header escaped.
+    #[test]
+    fn a_column_named_by_position_is_headed_by_its_path() {
+        let mut positional = answer(200, true);
+        positional.columns = vec![
+            ColumnLine {
+                name: String::from("#0"),
+                path: Some(String::from("c/uid/value")),
+            },
+            ColumnLine {
+                name: String::from("#1"),
+                path: Some(String::from("</th><script>x</script>")),
+            },
+            ColumnLine {
+                name: String::new(),
+                path: None,
+            },
+            ColumnLine {
+                name: String::from("#3"),
+                path: None,
+            },
+        ];
+        positional.rows = vec![vec![String::from("a"); 4]];
+        let html = answered(&positional).to_html();
+        assert!(html.contains(">c/uid/value</th>"), "{html}");
+        assert!(
+            html.contains(">&lt;/th&gt;&lt;script&gt;x&lt;/script&gt;</th>"),
+            "{html}"
+        );
+        assert!(html.contains(">#2</th>"), "{html}");
+        assert!(html.contains(">#3</th>"), "{html}");
+        assert!(!html.contains(">#0</th>"), "{html}");
+        assert!(!html.contains("<script"), "{html}");
     }
 
     #[test]

@@ -184,7 +184,9 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
             partial: false,
         };
         submit(browser, &run).await?;
-        browser.text("strong", "Complete.").await?;
+        browser
+            .text("span", "Every node in scope answered.")
+            .await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         browser.text("caption", "1 row").await?;
         browser.text("td", UID_AT_A).await?;
@@ -196,7 +198,9 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         run.endpoints = &[];
         run.partial = true;
         submit(browser, &run).await?;
-        browser.text("strong", "Incomplete answer.").await?;
+        browser
+            .text("span", "Not every node in scope answered")
+            .await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("node-error", status_of(browser, "node-b-pub").await?);
         browser.text("caption", "1 row").await?;
@@ -210,7 +214,9 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         browser
             .text("strong", "The gateway failed the query: 424.")
             .await?;
-        browser.text("strong", "Incomplete answer.").await?;
+        browser
+            .text("span", "Not every node in scope answered")
+            .await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("node-error", status_of(browser, "node-b-pub").await?);
         browser.text("p", "No rows.").await?;
@@ -250,7 +256,7 @@ async fn a_refused_query_shows_the_gateways_status_and_code() -> Result<(), Box<
         // follows the run to it.
         browser
             .element(By::XPath(
-                "//div[contains(@class, 'query-refusal')]//h3[. = 'The gateway refused the query']",
+                "//div[contains(@class, 'query-refusal')]/span[contains(@class, 'pill') and . = 'refused']",
             ))
             .await?;
         focused(browser, "query-results-title").await?;
@@ -346,7 +352,9 @@ async fn the_editor_tabs_the_target_chips_and_the_focus_move_work_from_the_keybo
         fill(browser, "query-parameter-name-0", "patient").await?;
         fill(browser, "query-parameter-value-0", PATIENT).await?;
         browser.element(By::XPath(SUBMIT)).await?.click().await?;
-        browser.text("strong", "Complete.").await?;
+        browser
+            .text("span", "Every node in scope answered.")
+            .await?;
         focused(browser, "query-results-title").await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("excluded", status_of(browser, "node-b-pub").await?);
