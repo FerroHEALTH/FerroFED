@@ -215,6 +215,13 @@ an `OperationOutcome` entry with `search.mode` `outcome` names each member
 that did not answer and its §11.1 status, so the list is never presented as
 whole.
 
+A member the identifier cross-reference could not answer for counts as a
+member that did not answer, named `not-resolved`. When that leaves no
+member the patient resolved at, the list fails with `424` under
+all-or-nothing, and under `partial` it holds an `outcome` entry for each
+member and no summary written on request. It is never the empty
+`searchset` of a patient no member holds.
+
 `metadata` declares the search: the `DocumentReference` resource with the
 `search-type` interaction, its supported profile and the two parameters,
 and the `Binary` read.
@@ -256,7 +263,10 @@ of them is `nilknown`.
 
 A patient no member holds is a `404`, and so is a patient whose members may
 not disclose a restriction, or one the demographics binding does not know:
-they answer alike.
+they answer alike. A patient the identifier cross-reference could not
+answer for at any member is not one of them: the summary fails with `424`,
+naming each member `not-resolved`, and under `partial` every section names
+each member and none of them is `nilknown`.
 
 The header is asked before any member, and a summary whose header cannot be
 written asks no member:

@@ -33,6 +33,7 @@ mod summary;
 #[cfg(feature = "binding-ihe")]
 mod transformation;
 mod unidentified;
+mod unresolved;
 
 use std::collections::BTreeMap;
 use std::error::Error;

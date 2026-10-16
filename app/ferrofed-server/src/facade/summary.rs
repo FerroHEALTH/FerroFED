@@ -69,8 +69,8 @@ type Planned = (Section, Plan, Vec<ColumnSource>, Rows);
 /// One answered section query.
 type Answered = (Section, FederatedAnswer, Vec<ColumnSource>, Rows);
 
-/// One member endpoint the section queries were dispatched to, and what it
-/// showed.
+/// One member endpoint the section queries were dispatched to, or that the
+/// resolver could not answer for, and what it showed.
 #[derive(Debug, Clone)]
 pub(crate) struct Reached {
     /// The endpoint.
@@ -91,8 +91,9 @@ pub(crate) struct Reached {
 /// What the section queries gathered from the members.
 #[derive(Debug)]
 pub(crate) struct Gathered {
-    /// Each member endpoint the queries were dispatched to, in endpoint
-    /// order: the origins of the summary.
+    /// Each member endpoint the queries were dispatched to, and each the
+    /// resolver could not answer for, in endpoint order: the origins of the
+    /// summary.
     pub(crate) reached: Vec<Reached>,
     /// The origins as the document names them, in the same order.
     pub(crate) origins: Vec<Origin>,
@@ -248,7 +249,12 @@ pub(crate) async fn gather(
     // design; a list asks no section query, so its failed resolution is settled here.
     let status = answer::fan_out::settled(status, targets.resolution_failed, completion);
     let status = native::settled(&natives, status, completion);
-    let mut gathered = collected(&federation, &targets.resolved, &answers, &analyses)?;
+    let mut gathered = collected(
+        &federation,
+        (&targets.resolved, &targets.unresolved),
+        &answers,
+        &analyses,
+    )?;
     gathered.set_aside = targets.set_aside;
     gathered.unresolved = targets.unresolved;
     for native in &natives {
@@ -300,7 +306,9 @@ fn concluded(
     }
     let holds = match scope {
         Scope::Summary => !gathered.reached.is_empty() || !gathered.natives.is_empty(),
-        Scope::List => dispatched,
+        // NOTE: §11.3, §11.4: a list naming a member the resolver could not answer for is never
+        // the empty list of a patient no member holds.
+        Scope::List => dispatched || !gathered.unresolved.is_empty(),
     };
     if !holds {
         let set_aside = (!gathered.set_aside.is_empty()).then(|| Box::new(gathered));
@@ -364,10 +372,39 @@ async fn fanned_out(
         .collect())
 }
 
-/// What the `answers` gathered, over the `resolved` pairs.
+/// Adds each endpoint of `unresolved`, which the resolver could not answer
+/// for, to `reached` as `not-resolved`, so every section names it.
+fn unresolved_into(
+    snapshot: &RegistrySnapshot,
+    unresolved: &[EndpointId],
+    reached: &mut BTreeMap<EndpointId, Reached>,
+) -> Result<(), Unsummarised> {
+    // NOTE: §11.1, §11.3: a member the resolver could not answer for is named in every section,
+    // so no section reads as complete without it.
+    for endpoint in unresolved {
+        let Some(node) = snapshot.endpoint(endpoint).map(|held| held.node().clone()) else {
+            return Err(Unsummarised::Internal(
+                "an unresolved endpoint is one the registry does not hold",
+            ));
+        };
+        reached.entry(endpoint.clone()).or_insert_with(|| Reached {
+            endpoint: endpoint.clone(),
+            node,
+            system_id: None,
+            status: EndpointStatus::NotResolved,
+            compositions: 0,
+            objects: Vec::new(),
+        });
+    }
+    Ok(())
+}
+
+/// What the `answers` gathered, over the `resolved` pairs, with each
+/// endpoint the resolver could not answer for, `unresolved`, silent in every
+/// section.
 fn collected(
     federation: &Federation,
-    resolved: &[(NodeId, EhrId)],
+    (resolved, unresolved): (&[(NodeId, EhrId)], &[EndpointId]),
     answers: &[Answered],
     analyses: &[(Section, Analysis)],
 ) -> Result<Gathered, Unsummarised> {
@@ -409,6 +446,7 @@ fn collected(
             }
         }
     }
+    unresolved_into(snapshot, unresolved, &mut dispatched)?;
     let reached: Vec<Reached> = dispatched.into_values().collect();
     let origins = reached
         .iter()
@@ -432,12 +470,16 @@ fn collected(
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();
         let mut section_answers = Vec::with_capacity(gathered.reached.len());
         for (index, reached) in gathered.reached.iter_mut().enumerate() {
-            let status = answer
-                .federation()
-                .endpoints()
-                .iter()
-                .find(|record| record.id().as_str() == reached.endpoint.as_str())
-                .map_or(EndpointStatus::Excluded, EndpointOutcome::status);
+            let status = if reached.status == EndpointStatus::NotResolved {
+                EndpointStatus::NotResolved
+            } else {
+                answer
+                    .federation()
+                    .endpoints()
+                    .iter()
+                    .find(|record| record.id().as_str() == reached.endpoint.as_str())
+                    .map_or(EndpointStatus::Excluded, EndpointOutcome::status)
+            };
             if status != EndpointStatus::Active {
                 section_answers.push((
                     index,

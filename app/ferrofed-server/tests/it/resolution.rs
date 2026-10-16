@@ -300,6 +300,46 @@ async fn an_unreachable_pix_manager_fails_the_query_424() -> TestResult {
     Ok(())
 }
 
+#[tokio::test]
+async fn under_partial_a_pix_manager_that_fails_is_200_naming_every_member_not_resolved()
+-> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager_answering(500, "{}".to_owned()).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "profile = \"development\"",
+        &format!("best_effort = true\n\n{}", pixm(&pix.uri())),
+    )?;
+    let mut request = post(body(&patient_query())?)?;
+    request
+        .headers_mut()
+        .insert("openehr-federation-completeness", "partial".parse()?);
+
+    let (status, text) = call(app, request).await?;
+    assert_eq!(StatusCode::OK, status, "§11.4, N37: {text}");
+    schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(!answer.meta.federation.complete, "{text}");
+    assert_eq!(
+        vec![
+            ("node-a-pub", "not-resolved"),
+            ("node-b-pub", "not-resolved")
+        ],
+        statuses(&answer),
+        "§11.1, N16: every member is named"
+    );
+    assert!(
+        text.contains("the cross-reference could not answer"),
+        "the error says the lookup failed, never that the patient is unknown: {text}"
+    );
+    assert!(answer.rows.is_empty(), "{text}");
+    assert_eq!(0, asked(&a).await? + asked(&b).await?, "no node is asked");
+    Ok(())
+}
+
 // conformance: CP-3
 #[tokio::test]
 async fn the_identifier_and_namespace_reach_the_pix_manager_and_no_node() -> TestResult {

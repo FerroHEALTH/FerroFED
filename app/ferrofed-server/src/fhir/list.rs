@@ -121,9 +121,10 @@ pub(super) async fn documents(
 }
 
 /// The `searchset` `gathered` gives for the patient `system`|`value` on the
-/// face `fhir`: the summary its operator has the gateway write, each
-/// member's own document at a URL signed for `caller`, and an `outcome` entry for each member that did not
-/// answer, with the access it records.
+/// face `fhir`: the summary its operator has the gateway write when the
+/// patient resolved at a member, each member's own document at a URL signed
+/// for `caller`, and an `outcome` entry for each member that did not answer,
+/// with the access it records.
 fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
@@ -141,10 +142,15 @@ fn listed(
     };
     let minted = || uuid::Uuid::new_v4().to_string();
     let (id, unique) = (minted(), format!("urn:uuid:{}", minted()));
-    let mut matches = vec![(
-        format!("urn:uuid:{id}"),
-        list::on_demand((&id, &unique), listing, &fhir.operator),
-    )];
+    // NOTE: §7.1, §11.3: the gateway writes a summary only from a member the patient resolved
+    // at, so a list naming every member unresolved lists none.
+    let mut matches = Vec::new();
+    if !gathered.resolved.is_empty() {
+        matches.push((
+            format!("urn:uuid:{id}"),
+            list::on_demand((&id, &unique), listing, &fhir.operator),
+        ));
+    }
     let mut outcomes = Vec::new();
     for native in &gathered.natives {
         match &native.answer {
