@@ -7,6 +7,13 @@
 //! against a running gateway, the unreachable base, the container harness
 //! behind the `FERROFED_E2E` gate, and the operator console's browser
 //! journeys behind the `FERROFED_JOURNEYS` gate.
+#![cfg_attr(
+    target_os = "macos",
+    allow(
+        linker_messages,
+        reason = "Apple's ld reports that the unoptimized binary's __eh_frame is over the 16 MB its compact unwind table can encode, so a panic unwinds through the DWARF tables at some cost in speed; only that linker prints it, and only past that size"
+    )
+)]
 
 mod console;
 mod e2e;
