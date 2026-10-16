@@ -27,12 +27,14 @@ use axum::extract::{Path, State};
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
-use ferrofed_eehrxf::prescriptions::page::Page;
+use ferrofed_eehrxf::prescriptions::page::{Kept, Page};
 use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
-use http::{Method, StatusCode, Uri};
+use fhir_types::codec::{Primitive, Value};
+use http::{HeaderValue, Method, StatusCode, Uri, header};
+use jiff::fmt::rfc2822::DateTimePrinter;
 use openehr_federation::status::EndpointStatus;
 use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
 
@@ -500,8 +502,81 @@ fn found(
     let snapshot = federation.snapshot();
     let mut response = Provenance::member(snapshot, &read.chosen.native, &read.chosen.node)
         .stamp(fhir_json(StatusCode::OK, &resource));
+    if let Some(tag) = version_tag(&kept, request_id) {
+        response.headers_mut().insert(header::ETAG, tag);
+    }
+    if let Some(date) = modified(&kept, request_id) {
+        response.headers_mut().insert(header::LAST_MODIFIED, date);
+    }
     attach(&mut response, prescription::accessed(federation, read));
     response
+}
+
+/// The weak `ETag` of the member's version of `kept`, `W/"<versionId>"`, when
+/// its `meta.versionId` is a FHIR `id`.
+///
+/// A `versionId` that is no FHIR `id` gives none, and is logged by its shape
+/// alone, never by its value.
+fn version_tag(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
+    // NOTE: FHIR R4 `http.html` §3.1.0.2, §3.1.0.1.3 and §3.1.0.5: a read SHOULD carry its
+    // versionId as a weak `ETag`, and a versionId is valid as the `id` data type is.
+    let version = kept.resource.get("meta")?.get("versionId")?;
+    let shape = match version.as_str() {
+        Some(text) if locator::is_fhir_id(text) => {
+            match HeaderValue::try_from(format!("W/\"{text}\"")) {
+                Ok(tag) => return Some(tag),
+                Err(_unfit) => "no header value",
+            }
+        }
+        Some(_) => "no FHIR id",
+        None => "no string",
+    };
+    tracing::warn!(
+        request_id,
+        shape,
+        "a member's prescription has a versionId the read cannot give as its ETag"
+    );
+    None
+}
+
+/// The `Last-Modified` of the member's version of `kept`, its
+/// `meta.lastUpdated` as an HTTP-date, when that is a FHIR `instant`.
+///
+/// A `lastUpdated` that is no FHIR `instant` gives none, and is logged by
+/// its shape alone, never by its value.
+fn modified(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
+    // NOTE: FHIR R4 `http.html` §3.1.0.2 and §3.1.0.1.3: a read SHOULD carry meta.lastUpdated
+    // as `Last-Modified`, an RFC 9110 §5.6.7 HTTP-date.
+    let updated = kept.resource.get("meta")?.get("lastUpdated")?;
+    let shape = match http_date(updated) {
+        Ok(date) => return Some(date),
+        Err(shape) => shape,
+    };
+    tracing::warn!(
+        request_id,
+        shape,
+        "a member's prescription has a lastUpdated the read cannot give as its Last-Modified"
+    );
+    None
+}
+
+/// The HTTP-date in GMT of the FHIR `instant` `updated`, or the shape that
+/// keeps it from being one.
+fn http_date(updated: &Value) -> Result<HeaderValue, &'static str> {
+    // NOTE: FHIR R4 datatypes `instant`: a value outside its lexical form is no instant, and
+    // the decode error is that answer, so it is dropped for its shape.
+    let instant = fhir_types::r4::primitives::Instant::from_json_parts(
+        Some(updated),
+        None,
+        &mut fhir_types::codec::Path::root("lastUpdated"),
+    )
+    .map_err(|_outside| "no FHIR instant")?;
+    let text = instant.value.ok_or("no FHIR instant")?;
+    let at: jiff::Timestamp = text.parse().map_err(|_unparsed| "no timestamp")?;
+    let date = DateTimePrinter::new()
+        .timestamp_to_rfc9110_string(&at)
+        .map_err(|_unprinted| "no HTTP-date")?;
+    HeaderValue::try_from(date).map_err(|_unfit| "no header value")
 }
 
 /// `POST {fhir-base}/MedicationDispense`: a dispensation.
