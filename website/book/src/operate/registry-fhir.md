@@ -160,7 +160,9 @@ The access log's default origin system,
 and the medication extension `…/StructureDefinition/remaining-dispensations`
 resolve the same way, and so does every other `https://ferrofed.eu/fhir/`
 URL FerroFED writes but one family, the
-[archetype-local code systems](#the-archetype-local-code-systems). FHIR R4
+[archetype-local code systems](#the-archetype-local-code-systems). A member
+writes the medication extension, and the gateway carries it as the member
+wrote it: no setting replaces its URL. FHIR R4
 gives a `NamingSystem` no canonical URL, so
 each identifier system's `NamingSystem` is served at the system's own URL.
 
