@@ -12,8 +12,9 @@
 //! patient is always the one an identity service confirms (§5.2, N32). Each
 //! member that serves prescriptions is asked at its own endpoint, in the HL7
 //! Europe Medication Prescription and Dispense 1.0.0 profiles, and each
-//! prescription it answers is passed through unchanged with one `Provenance`
-//! naming it ([`searchset`]). The member's pages are read by [`page`].
+//! prescription it answers is passed through as an equal JSON value, every
+//! number in the member's text, with one `Provenance` naming it
+//! ([`searchset`]). The member's pages are read by [`page`].
 //!
 //! The answer is paged by the gateway (FHIR R4 `http.html` §3.1.0.14): a
 //! `_count` bounds a page (FHIR R4 search §3.1.1.5.3) and the `next` link

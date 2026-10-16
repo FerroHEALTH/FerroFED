@@ -44,11 +44,32 @@ use crate::support::call;
 /// The `[[fhir.serve]]` table declaring both members for prescriptions.
 const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n";
 
-/// Node A's prescription, whose whitespace and unknown extension no
-/// serialiser would keep.
-const RX_A: &str = r#"{ "resourceType" : "MedicationRequest", "id":"rx-a1", "extension":[{"url":"https://example.org/fhir/StructureDefinition/synthetic","valueString":"kept as sent"}],
+/// Node A's prescription: an extension of a profile no package defines,
+/// nested arrays, and decimals whose text a number type would not keep.
+const RX_A: &str = r#"{ "resourceType" : "MedicationRequest", "id":"rx-a1", "extension":[{"url":"https://example.org/fhir/StructureDefinition/synthetic","extension":[{"url":"part","valueDecimal":0.1000}]}],
   "identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}], "status":"active","intent":"order",
-  "subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"} }"#;
+  "subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},
+  "dosageInstruction":[{"doseAndRate":[{"doseQuantity":{"value":1.50,"unit":"mg"}}],"timing":{"repeat":{"frequency":2,"period":0.1000}}}],
+  "dispenseRequest":{"quantity":{"value":1e2}} }"#;
+
+/// The decimals of [`RX_A`], each as the member wrote it.
+const DECIMALS: [&str; 3] = ["1.50", "0.1000", "1e2"];
+
+/// Whether the `searchset` `text` relays `resource` as an entry whose
+/// resource is equal to it as a JSON value (RFC 8259 §4: member order has
+/// no meaning), every number compared by its text.
+fn relays(text: &str, resource: &str) -> Result<bool, Box<dyn Error>> {
+    let sent: fhir_types::codec::Value = serde_json::from_str(resource)?;
+    let fhir_types::codec::Value::Object(bundle) = serde_json::from_str(text)? else {
+        return Ok(false);
+    };
+    let Some(fhir_types::codec::Value::Array(entries)) = bundle.get("entry") else {
+        return Ok(false);
+    };
+    Ok(entries.iter().any(|entry| {
+        matches!(entry, fhir_types::codec::Value::Object(entry) if entry.get("resource") == Some(&sent))
+    }))
+}
 
 /// Node A's second prescription, on its second page.
 const RX_A2: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a2","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A2"}],"status":"completed","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A2"}}"#;
@@ -264,10 +285,16 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
     let (status, text) = call(members.both(dir.path())?, search("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert!(
-        text.contains(RX_A),
-        "Annex II 2.1: node A's prescription byte for byte: {text}"
+        relays(&text, RX_A)?,
+        "Annex II 2.1: node A's prescription, value for value: {text}"
     );
-    assert!(text.contains(RX_B), "node B's prescription: {text}");
+    for decimal in DECIMALS {
+        assert!(
+            text.contains(&format!(":{decimal}")),
+            "the decimal {decimal} keeps the text the member wrote: {text}"
+        );
+    }
+    assert!(relays(&text, RX_B)?, "node B's prescription: {text}");
     let bundle: Value = serde_json::from_str(&text)?;
     assert_eq!(bundle["type"], "searchset");
     assert_eq!(bundle["total"], Value::from(2));
@@ -362,7 +389,10 @@ async fn a_silent_member_fails_the_search_and_is_named() -> TestResult {
         text.contains("the search is incomplete") && text.contains("node-a-mpd (node-error)"),
         "the silent member is named: {text}"
     );
-    assert!(!text.contains(RX_B), "no partial list under all-or-nothing");
+    assert!(
+        !relays(&text, RX_B)?,
+        "no partial list under all-or-nothing"
+    );
     assert!(!text.contains(PATIENT_TAIL), "{text}");
     Ok(())
 }

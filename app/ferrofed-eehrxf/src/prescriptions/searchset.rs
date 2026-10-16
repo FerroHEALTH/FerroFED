@@ -16,22 +16,20 @@
 //! no `fatal` or `error` issue in a `searchset`. The `Provenance` and the
 //! warning are our own design: no specification governs them.
 //!
-//! The generated `fhir_types` `BundleEntry` holds a typed resource, which
-//! would re-serialise the member's prescription, so the `searchset` is
-//! written here with each resource as its bytes; the gateway's own resources
-//! are the generated types, serialised once.
+//! The `searchset` is the generated `fhir_types` `Bundle`. A member's
+//! resource travels in it as `Resource::Unknown`, its JSON value as the
+//! member sent it, every number in the member's own text; only the order of
+//! an object's members may change, which RFC 8259 §4 gives no meaning.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use fhir_types::r4::bundle::{BundleEntrySearch, BundleLink};
+use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntrySearch, BundleLink};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::organization::Organization;
 use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::reference::Reference;
-use fhir_types::r4::resource::Resource;
-use serde::Serialize;
-use serde_json::value::RawValue;
+use fhir_types::r4::resource::{Resource, UnknownResource};
 use url::Url;
 
 use super::page::{Kept, Page, Prescription};
@@ -59,42 +57,11 @@ pub struct Silent {
     pub status: String,
 }
 
-/// The `searchset` of one page, with each member's own resources as the
-/// member sent them.
-#[derive(Debug, Serialize)]
-pub struct Searchset {
-    /// `Bundle`.
-    #[serde(rename = "resourceType")]
-    resource_type: &'static str,
-    /// `searchset`.
-    #[serde(rename = "type")]
-    kind: &'static str,
-    /// The number of matches over every page (FHIR R4 search §3.1.1.5.2).
-    total: usize,
-    /// The `self` link, and the `next` link when a page follows.
-    link: Vec<BundleLink>,
-    /// The entries of the page.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    entry: Vec<Entry>,
-}
-
-/// One entry of the `searchset`.
-#[derive(Debug, Serialize)]
-struct Entry {
-    /// The entry's `fullUrl`.
-    #[serde(rename = "fullUrl")]
-    full_url: String,
-    /// The resource.
-    resource: Box<RawValue>,
-    /// The search mode.
-    search: BundleEntrySearch,
-}
-
 /// What one page of the answer holds.
 #[derive(Debug)]
 pub struct Assembled {
     /// The page.
-    pub searchset: Searchset,
+    pub searchset: Bundle,
     /// How many prescriptions of each member the page carries, by the
     /// member's position among those that answered.
     pub delivered: BTreeMap<usize, usize>,
@@ -111,31 +78,18 @@ impl Assembled {
     }
 }
 
-/// Why the `searchset` cannot be written.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum AssemblyError {
-    /// A resource of the gateway's own could not be serialised.
-    #[error("a resource of the gateway's could not be serialised")]
-    Serialise(#[source] serde_json::Error),
-}
-
 /// Writes the page `request` asks for of the prescriptions `answered` holds.
 ///
 /// The links are under `base`, the face's absolute base; every member of
 /// `silent` is named; each `Provenance` is recorded at `recorded`, a FHIR
 /// `instant`; and every `fullUrl` the gateway gives is taken from `mint`.
-///
-/// # Errors
-///
-/// [`AssemblyError::Serialise`] when a resource of the gateway's cannot be
-/// serialised.
+#[must_use]
 pub fn assemble(
     (request, base): (&SearchRequest, &str),
     (answered, silent): (&[Answered<'_>], &[Silent]),
     recorded: &str,
     mint: &mut dyn FnMut() -> String,
-) -> Result<Assembled, AssemblyError> {
+) -> Assembled {
     let all: Vec<(usize, &Prescription)> = answered
         .iter()
         .enumerate()
@@ -171,13 +125,13 @@ pub fn assemble(
     let mut organisations = BTreeMap::new();
     for index in delivered.keys() {
         if let Some(member) = answered.get(*index) {
-            let url = writer.own(&organization(member.organisation), "include")?;
+            let url = writer.own(organization(member.organisation), "include");
             organisations.insert(*index, url);
         }
     }
     for (index, url, _) in &matched {
         if let Some(agent) = organisations.get(index) {
-            writer.own(&provenance(url, agent, recorded), "include")?;
+            writer.own(provenance(url, agent, recorded), "include");
         }
     }
     for index in delivered.keys() {
@@ -191,10 +145,10 @@ pub fn assemble(
         }
     }
     for member in silent {
-        writer.own(&warning("incomplete", &unanswered(member)), "outcome")?;
+        writer.own(warning("incomplete", &unanswered(member)), "outcome");
     }
     for text in duplicates(answered, &all, &matched) {
-        writer.own(&warning("informational", &text), "outcome")?;
+        writer.own(warning("informational", &text), "outcome");
     }
     let outcomes = answered
         .iter()
@@ -213,23 +167,23 @@ pub fn assemble(
     if request.count().is_some_and(|count| count > 0) && following < total {
         links.push(link("next", following));
     }
-    Ok(Assembled {
-        searchset: Searchset {
-            resource_type: "Bundle",
-            kind: "searchset",
-            total,
+    Assembled {
+        searchset: Bundle {
+            r#type: "searchset".into(),
+            total: u32::try_from(total).ok().map(Into::into),
             link: links,
             entry: writer.entries,
+            ..Bundle::default()
         },
         delivered,
         held,
-    })
+    }
 }
 
 /// The entries of a page as they are written, and every `fullUrl` they
 /// already use.
 struct Writer<'m> {
-    entries: Vec<Entry>,
+    entries: Vec<BundleEntry>,
     used: BTreeSet<String>,
     mint: &'m mut dyn FnMut() -> String,
 }
@@ -247,29 +201,33 @@ impl Writer<'_> {
             .as_deref()
             .filter(|url| Url::parse(url).is_ok() && !self.used.contains(*url))
             .map_or_else(|| (self.mint)(), str::to_owned);
-        self.add(url.clone(), kept.resource.clone(), mode);
+        let resource = Resource::Unknown(UnknownResource {
+            resource_type: kept.resource_type.clone(),
+            body: kept.resource.clone(),
+        });
+        self.add(url.clone(), resource, mode);
         url
     }
 
     /// Adds the gateway's own `resource` as an entry of the search mode
     /// `mode`, under a minted `fullUrl`, and returns that `fullUrl`.
-    fn own(&mut self, resource: &Resource, mode: &str) -> Result<String, AssemblyError> {
-        let raw = serde_json::value::to_raw_value(resource).map_err(AssemblyError::Serialise)?;
+    fn own(&mut self, resource: Resource, mode: &str) -> String {
         let url = (self.mint)();
-        self.add(url.clone(), raw, mode);
-        Ok(url)
+        self.add(url.clone(), resource, mode);
+        url
     }
 
     /// Adds the entry `resource` under `url`, of the search mode `mode`.
-    fn add(&mut self, url: String, resource: Box<RawValue>, mode: &str) {
+    fn add(&mut self, url: String, resource: Resource, mode: &str) {
         self.used.insert(url.clone());
-        self.entries.push(Entry {
-            full_url: url,
-            resource,
-            search: BundleEntrySearch {
+        self.entries.push(BundleEntry {
+            full_url: Some(url.into()),
+            resource: Some(resource),
+            search: Some(BundleEntrySearch {
                 mode: Some(mode.into()),
                 ..BundleEntrySearch::default()
-            },
+            }),
+            ..BundleEntry::default()
         });
     }
 }

@@ -6,7 +6,8 @@
 //!
 //! A page is a FHIR R4 `Bundle` of type `searchset` (`http.html` §3.1.0.9).
 //! Its `match` entries are the member's prescriptions, each a
-//! `MedicationRequest` kept as the member's bytes, never re-serialised; its
+//! `MedicationRequest` kept as the member's JSON value, every number in the
+//! text the member wrote (RFC 8259 §4 gives member order no meaning); its
 //! `include` and `outcome` entries are kept the same way; and its `next`
 //! link names the member's following page (§3.1.0.14). An entry with no
 //! search mode is a match when it is a `MedicationRequest`, and an include
@@ -15,14 +16,15 @@
 //! client could read as the member's prescriptions, so it is [`Unusable`],
 //! never an empty page.
 
+use fhir_types::codec::Value;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use url::Url;
 
 use super::RESOURCE;
 
-/// A resource of a member's page, its bytes as the member sent them, under
-/// the entry's `fullUrl` when the member gave one.
+/// A resource of a member's page, its JSON value as the member sent it,
+/// under the entry's `fullUrl` when the member gave one.
 ///
 /// `Debug` shows the resource's type alone.
 #[derive(Clone)]
@@ -30,7 +32,7 @@ pub struct Kept {
     /// The entry's `fullUrl`, as the member gave it.
     pub full_url: Option<String>,
     /// The resource, as the member sent it.
-    pub resource: Box<RawValue>,
+    pub resource: Value,
     /// The resource's type.
     pub resource_type: String,
 }
@@ -196,9 +198,13 @@ impl Page {
             let resource_type = read.resource_type.unwrap_or_default();
             let mode = entry.search.and_then(|search| search.mode);
             let prescribed = resource_type == RESOURCE;
+            // NOTE: fhir-types 0.1.109 `codec::Value` reads through `RawValue`, so a number keeps
+            // the text the member wrote, which `Value::from_serde_json` would not.
+            let value: Value =
+                serde_json::from_str(resource.get()).map_err(Unusable::Unreadable)?;
             let kept = Kept {
                 full_url: entry.full_url,
-                resource,
+                resource: value,
                 resource_type,
             };
             match (mode.as_deref(), prescribed) {
@@ -254,11 +260,11 @@ mod tests {
         let [prescription] = page.prescriptions.as_slice() else {
             panic!("one prescription: {page:?}");
         };
-        assert_eq!(
-            prescription.kept.resource.get(),
+        let sent: fhir_types::codec::Value = serde_json::from_str(
             r#"{ "resourceType" :"MedicationRequest","id":"rx-1","identifier":[{"system":"urn:oid:2.999.5","value":"rx-1"},{"value":"no-system"}]}"#,
-            "the member's bytes"
-        );
+        )
+        .unwrap();
+        assert_eq!(prescription.kept.resource, sent, "the member's value");
         assert_eq!(
             prescription.identifiers,
             [("urn:oid:2.999.5".to_owned(), "rx-1".to_owned())]

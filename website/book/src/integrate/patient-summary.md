@@ -449,8 +449,11 @@ carries, and the identifier you sent never reaches a member. The gateway
 follows each member's `next` links until its last page, and only links
 under the member's own base URL. The answer is one `searchset`:
 
-- each member's `MedicationRequest`, byte for byte as the member sent it,
-  in endpoint order and then in the member's own order;
+- each member's `MedicationRequest` as the member sent it: every element
+  and extension kept, and every number in the text the member wrote, such
+  as `1.50`; only the order of an object's members may differ, which JSON
+  gives no meaning (RFC 8259 §4). Entries are in endpoint order, then in
+  the member's own order;
 - one `Provenance` per prescription, whose agent is the member's
   `Organization`; the gateway adds no author and merges nothing;
 - a `warning` `outcome` entry when two members hold a prescription under the

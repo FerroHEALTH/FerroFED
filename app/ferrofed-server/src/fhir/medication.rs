@@ -23,9 +23,7 @@ use axum::extract::State;
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
-use ferrofed_eehrxf::prescriptions::searchset::{
-    Answered, Assembled, AssemblyError, Silent, assemble,
-};
+use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_engine::outbound_id::OutboundId;
 use http::{Method, StatusCode, Uri};
@@ -168,9 +166,9 @@ pub(super) async fn search(
     let searched = prescriptions::search(federation, &arrived, patient, declared).await;
     let (request_id, outbound) = (admitted.request_id, admitted.outbound);
     match searched {
-        Ok(prescribed) => listed(federation, fhir, (&read, &prescribed), &admitted.logged),
+        Ok(prescribed) => listed(federation, fhir, (&read, &prescribed)),
         Err(Unprescribed::NotFound(prescribed)) => {
-            let mut response = listed_none(fhir, &read, &admitted.logged);
+            let mut response = listed_none(fhir, &read);
             let accessed = prescribed.and_then(|prescribed| {
                 prescriptions::accessed(federation, &prescribed, patient, None)
             });
@@ -219,7 +217,6 @@ fn listed(
     federation: &Federation,
     fhir: &FhirSettings,
     (read, prescribed): (&SearchRequest, &Prescribed),
-    logged: &str,
 ) -> Response {
     let snapshot = federation.snapshot();
     let found: Vec<(&prescriptions::Member, Organisation)> = prescribed
@@ -253,30 +250,12 @@ fn listed(
         }))
         .collect();
     let assembled = written(fhir, read, (&answered, &silent));
-    let (mut response, assembled) = match assembled {
-        Ok(assembled) => (
-            fhir_json(StatusCode::OK, &assembled.searchset),
-            Some(assembled),
-        ),
-        Err(failure) => {
-            tracing::error!(
-                error = %crate::chain(&failure),
-                request_id = logged,
-                "the prescription searchset could not be written"
-            );
-            let response = outcome(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "exception",
-                "the prescriptions could not be listed from what the members answered",
-            );
-            (response, None)
-        }
-    };
+    let mut response = fhir_json(StatusCode::OK, &assembled.searchset);
     let accessed = prescriptions::accessed(
         federation,
         prescribed,
         (read.system(), read.value()),
-        assembled.as_ref(),
+        Some(&assembled),
     );
     attach(&mut response, accessed);
     response
@@ -284,22 +263,8 @@ fn listed(
 
 /// The empty `searchset` `read` is answered with when no member serving
 /// prescriptions holds the patient, or none may say so.
-fn listed_none(fhir: &FhirSettings, read: &SearchRequest, logged: &str) -> Response {
-    match written(fhir, read, (&[], &[])) {
-        Ok(assembled) => fhir_json(StatusCode::OK, &assembled.searchset),
-        Err(failure) => {
-            tracing::error!(
-                error = %crate::chain(&failure),
-                request_id = logged,
-                "the prescription searchset could not be written"
-            );
-            outcome(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "exception",
-                "the prescriptions could not be listed",
-            )
-        }
-    }
+fn listed_none(fhir: &FhirSettings, read: &SearchRequest) -> Response {
+    fhir_json(StatusCode::OK, &written(fhir, read, (&[], &[])).searchset)
 }
 
 /// The page `read` asks for of what `answered` holds, naming every member
@@ -308,7 +273,7 @@ fn written(
     fhir: &FhirSettings,
     read: &SearchRequest,
     (answered, silent): (&[Answered<'_>], &[Silent]),
-) -> Result<Assembled, AssemblyError> {
+) -> Assembled {
     let recorded = jiff::Timestamp::now()
         .strftime("%Y-%m-%dT%H:%M:%SZ")
         .to_string();

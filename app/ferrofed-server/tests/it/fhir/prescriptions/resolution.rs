@@ -17,7 +17,7 @@ use serde_json::Value;
 use wiremock::matchers::any;
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{Members, RX_A, RX_B, entries, page, searchset};
+use super::{Members, RX_A, RX_B, entries, page, relays, searchset};
 use crate::fhir::{FHIR, TestResult};
 use crate::support::call;
 
@@ -86,7 +86,10 @@ async fn a_member_the_cross_reference_could_not_answer_for_fails_the_search_and_
         text.contains("the search is incomplete") && text.contains("node-b-pub (not-resolved)"),
         "the member is named: {text}"
     );
-    assert!(!text.contains(RX_A), "no partial list under all-or-nothing");
+    assert!(
+        !relays(&text, RX_A)?,
+        "no partial list under all-or-nothing"
+    );
     assert!(
         members.proxy_b.journal().is_empty(),
         "node B is never asked"

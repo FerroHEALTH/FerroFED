@@ -12,7 +12,7 @@ use serde_json::Value;
 use wiremock::Mock;
 use wiremock::matchers::{method, path, query_param};
 
-use super::{Members, RX_A, RX_A2, RX_B, entries, own, page, search, searchset};
+use super::{Members, RX_A, RX_A2, RX_B, entries, own, page, relays, search, searchset};
 use crate::facade::{PATIENT, PATIENT_TAIL};
 use crate::fhir::TestResult;
 use crate::support::call;
@@ -47,7 +47,7 @@ async fn a_members_next_page_is_followed_under_its_own_base() -> TestResult {
     let bundle: Value = serde_json::from_str(&text)?;
     assert_eq!(bundle["total"], Value::from(3), "{bundle}");
     assert!(
-        text.contains(RX_A2),
+        relays(&text, RX_A2)?,
         "the second page's prescription: {text}"
     );
     let journal = members.proxy_a.journal();
@@ -132,6 +132,6 @@ async fn the_gateway_pages_its_answer_by_count() -> TestResult {
             .any(|link| link["relation"] == "next"),
         "the last page has no next link: {second}"
     );
-    assert!(text.contains(RX_B), "{text}");
+    assert!(relays(&text, RX_B)?, "{text}");
     Ok(())
 }
