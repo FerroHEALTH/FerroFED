@@ -28,6 +28,8 @@ mod configure_sections;
 #[cfg(test)]
 mod contrast;
 #[cfg(test)]
+mod describe;
+#[cfg(test)]
 mod exchange;
 #[cfg(test)]
 mod gateway;
@@ -49,6 +51,8 @@ mod shell;
 mod sign_in;
 #[cfg(test)]
 mod sign_out;
+#[cfg(test)]
+mod stored;
 #[cfg(test)]
 mod support;
 #[cfg(test)]

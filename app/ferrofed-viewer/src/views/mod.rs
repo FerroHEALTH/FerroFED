@@ -14,9 +14,17 @@
 //! the operator surface names the replica that answered it, because the
 //! health, the incidents and the routing table are each process's own.
 
-pub mod integrity;
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        clippy::unused_async_trait_impl,
+        reason = "written by the server_fn #[server] macro for the browser half, whose call awaits nothing here (https://docs.rs/server_fn/0.8/server_fn/attr.server.html)"
+    )
+)]
+pub mod describe;
+pub mod integrity;
 #[cfg_attr(
     target_arch = "wasm32",
     expect(
@@ -28,13 +36,19 @@ pub mod load;
 pub mod members;
 pub mod model;
 pub mod routing;
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        clippy::unused_async_trait_impl,
+        reason = "written by the server_fn #[server] macro for the browser half, whose call awaits nothing here (https://docs.rs/server_fn/0.8/server_fn/attr.server.html)"
+    )
+)]
+pub mod stored;
 
 use leptos::prelude::*;
-use leptos_meta::Title;
 use leptos_router::hooks::use_query_map;
 
-use crate::admin::act::RepairDrift;
-use crate::views::model::{FederationView, Outcome, PAGE_SIZE, Refusal, StoredView, ViewError};
+use crate::views::model::{Outcome, PAGE_SIZE, Refusal, ViewError};
 
 /// The path of the members view.
 pub const MEMBERS: &str = "/members";
@@ -63,14 +77,17 @@ pub const PATHS: [&str; 7] = [
 ];
 
 /// Whether `path`, trimmed of a trailing slash and in lower case, names a
-/// view that needs a signed-in operator: one of [`PATHS`], or the page of
-/// one member under [`MEMBERS`].
+/// view that needs a signed-in operator.
+///
+/// That is one of [`PATHS`], the page of one member under [`MEMBERS`], or
+/// the detail of a stored query under [`STORED_QUERIES`].
 #[must_use]
 pub fn needs_session(path: &str) -> bool {
     PATHS.contains(&path)
-        || path
-            .strip_prefix(MEMBERS)
-            .is_some_and(|rest| rest.starts_with('/'))
+        || [MEMBERS, STORED_QUERIES].into_iter().any(|parent| {
+            path.strip_prefix(parent)
+                .is_some_and(|rest| rest.starts_with('/'))
+        })
 }
 
 /// The page title of a view called `section`.
@@ -79,7 +96,7 @@ pub(crate) fn titled(section: &str) -> String {
 }
 
 /// The offset of the page the URL names in its `offset` query parameter.
-fn offset_in_url() -> impl Fn() -> u64 + Send + Sync + Clone + 'static {
+pub(crate) fn offset_in_url() -> impl Fn() -> u64 + Send + Sync + Clone + 'static {
     let query = use_query_map();
     // NOTE: no specification governs this: our own design; an offset that is
     // no number is the first page, as a link with none is.
@@ -94,7 +111,7 @@ fn offset_in_url() -> impl Fn() -> u64 + Send + Sync + Clone + 'static {
 
 /// Where a page of `shown` rows from `offset` of `total` sits, with a link to
 /// the page before it and the page after it under `path`.
-fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -> AnyView {
+pub(crate) fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -> AnyView {
     let shown = u64::try_from(shown).unwrap_or(u64::MAX);
     let end = offset.saturating_add(shown);
     let place = if shown == 0 {
@@ -128,130 +145,10 @@ fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -> AnyView {
     .into_any()
 }
 
-/// The stored queries the gateway holds.
-#[component]
-pub fn StoredQueriesPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(offset_in_url(), load::stored_queries);
-    let repair = ServerAction::<RepairDrift>::new();
-    view! {
-        <Title text=titled("Stored queries") />
-        <h1>"Stored queries"</h1>
-        <Transition fallback=|| {
-            view! { <p>"Loading the stored queries."</p> }
-        }>
-            {move || Suspend::new(async move {
-                shown(loaded.await, move |view| stored_section(view, repair))
-            })}
-        </Transition>
-    }
-}
-
-/// Every held version with its text.
-fn stored_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView {
-    let answered_by = replica_line(view.answered_by);
-    if view.total == 0 {
-        return view! {
-            {answered_by}
-            <p>"The gateway holds no stored query."</p>
-        }
-        .into_any();
-    }
-    let stored_pager = pager(
-        STORED_QUERIES,
-        view.offset,
-        view.definitions.len(),
-        view.total,
-    );
-    let repair = crate::admin::repair_section(repair, view.repair_form);
-    let rows = view
-        .definitions
-        .into_iter()
-        .map(|definition| {
-            view! {
-                <tr>
-                    <th scope="row">{definition.name}</th>
-                    <td>{definition.version}</td>
-                    <td>{definition.saved}</td>
-                    <td>
-                        <pre>{definition.aql}</pre>
-                    </td>
-                </tr>
-            }
-        })
-        .collect_view();
-    view! {
-        {answered_by}
-        {scrolled(
-            view! {
-                <table>
-                    <caption>"Held versions"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Name"</th>
-                            <th scope="col">"Version"</th>
-                            <th scope="col">"Stored"</th>
-                            <th scope="col">"AQL"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            }
-                .into_any(),
-        )}
-        {stored_pager}
-        {repair}
-    }
-    .into_any()
-}
-
-/// The table `table` in the box it scrolls sideways in, which takes the
-/// keyboard focus so a keyboard can scroll it.
-fn scrolled(table: AnyView) -> AnyView {
-    view! {
-        <div class=crate::styles::TABLE_SCROLL tabindex="0">
-            {table}
-        </div>
-    }
-    .into_any()
-}
-
 /// The line naming the replica, or the replicas, that answered a view;
 /// nothing when the replica has no name.
-fn replica_line(line: Option<String>) -> AnyView {
+pub(crate) fn replica_line(line: Option<String>) -> AnyView {
     line.map(|line| view! { <p>{line}</p> }).into_any()
-}
-
-/// The gateway's self-description, `OPTIONS {base}/`.
-#[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
-)]
-pub fn FederationPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(|| (), |()| load::federation());
-    view! {
-        <Title text=titled("Self-description") />
-        <h1>"Self-description"</h1>
-        <Suspense fallback=|| {
-            view! { <p>"Loading the self-description."</p> }
-        }>{move || Suspend::new(async move { shown(loaded.await, federation_section) })}</Suspense>
-    }
-}
-
-/// The headline facts and the whole `federation` object.
-fn federation_section(view: FederationView) -> AnyView {
-    view! {
-        <dl>
-            <dt>"Federation"</dt>
-            <dd>{view.id}</dd>
-            <dt>"Specification version"</dt>
-            <dd>{view.spec_version}</dd>
-            <dt>"Member endpoints"</dt>
-            <dd>{view.endpoints}</dd>
-        </dl>
-        <pre>{view.document}</pre>
-    }
-    .into_any()
 }
 
 /// The section `section` draws of a view `loaded`, the notice of the refusal
@@ -328,13 +225,15 @@ mod tests {
     use super::needs_session;
 
     #[test]
-    fn every_view_and_each_members_page_needs_a_session_and_nothing_else_does() {
+    fn every_view_each_members_page_and_each_stored_query_needs_a_session_and_nothing_else_does() {
         for path in super::PATHS {
             assert!(needs_session(path), "{path}");
         }
         assert!(needs_session("/members/node-a"));
         assert!(needs_session("/members/node-a/more"));
         assert!(!needs_session("/membersx"));
+        assert!(needs_session("/stored-queries/org.example::compositions"));
+        assert!(!needs_session("/stored-queriesx"));
         assert!(!needs_session("/"));
         assert!(!needs_session("/about"));
     }

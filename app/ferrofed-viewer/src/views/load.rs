@@ -16,8 +16,7 @@
 use leptos::prelude::*;
 
 use crate::views::model::{
-    DeploymentView, FederationView, GatewayView, IntegrityView, Outcome, RoutingView, StoredView,
-    ViewError,
+    DeploymentView, GatewayView, IntegrityView, Outcome, RoutingView, ViewError,
 };
 
 /// Loads the members view, rendered on the server: `OPTIONS {base}/` and
@@ -114,40 +113,6 @@ pub async fn dashboard() -> Result<Outcome<String>, ViewError> {
     .await
 }
 
-/// Loads the page of the stored-query view that starts at `offset`.
-///
-/// # Errors
-/// As [`members`].
-#[server(endpoint = "stored-queries")]
-pub async fn stored_queries(
-    /// Where the page of held versions starts.
-    offset: u64,
-) -> Result<Outcome<StoredView>, ViewError> {
-    server::settled(async {
-        let (state, token) = server::signed_in()?;
-        let report = state
-            .gateway()
-            .stored_queries(&token, server::page(offset))
-            .await?;
-        Ok(server::stored(&report, &state.settings().admin))
-    })
-    .await
-}
-
-/// Loads the self-description view, `OPTIONS {base}/`.
-///
-/// # Errors
-/// As [`members`].
-#[server(endpoint = "federation")]
-pub async fn federation() -> Result<Outcome<FederationView>, ViewError> {
-    server::settled(async {
-        let (state, token) = server::signed_in()?;
-        let description = state.gateway().self_description(&token).await?;
-        Ok(server::federation(&description)?)
-    })
-    .await
-}
-
 /// Loads what the top bar says of the gateway: its self-description,
 /// `OPTIONS {base}/`, read as the operator.
 ///
@@ -202,7 +167,6 @@ pub mod server {
     use ferrofed_registry::replica::UNNAMED;
     use leptos::context::use_context;
     use openehr_federation::options::OptionsRoot;
-    use openehr_its::rest::generated::definition::StoredQuery;
 
     use std::collections::BTreeSet;
 
@@ -211,9 +175,8 @@ pub mod server {
     use crate::server::ViewerState;
     use crate::views::integrity::Incidents;
     use crate::views::model::{
-        ClearedRow, DeploymentView, FederationView, GatewayView, IncidentRow, IntegrityView,
-        MemberRow, MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, RoutingView, StoredRow,
-        StoredView, ViewError,
+        ClearedRow, DeploymentView, GatewayView, IncidentRow, IntegrityView, MemberRow,
+        MembersView, Outcome, PAGE_SIZE, Refusal, RouteRow, RoutingView, ViewError,
     };
 
     /// Why a server function stops short of its view: an expected refusal,
@@ -620,36 +583,6 @@ pub mod server {
         }
     }
 
-    /// The stored-query view of `report`, offering the drift repair at the
-    /// first of `replicas`.
-    #[must_use]
-    pub fn stored(report: &Page<StoredQuery>, replicas: &[ReplicaSettings]) -> StoredView {
-        let names: BTreeSet<String> = report
-            .items
-            .iter()
-            .map(|entry| entry.name.clone())
-            .collect();
-        let names: Vec<String> = names.into_iter().collect();
-        StoredView {
-            definitions: report
-                .items
-                .iter()
-                .map(|entry| StoredRow {
-                    name: entry.name.clone(),
-                    version: entry.version.clone(),
-                    saved: entry.saved.clone(),
-                    aql: entry.q.clone(),
-                })
-                .collect(),
-            offset: report.offset,
-            total: report.total,
-            repair_form: replicas
-                .first()
-                .map(|replica| crate::admin::fields::repair(replica, &names)),
-            answered_by: answered_by(&[("stored queries", report.replica.as_deref())]),
-        }
-    }
-
     /// The line a view shows of the replicas that answered its `reports`,
     /// each named by what it holds with the replica its body names, or
     /// `None` when the one replica that answered has no name.
@@ -718,21 +651,5 @@ pub mod server {
             spec_version: description.federation.spec_version.to_string(),
             federation: description.federation.id.to_string(),
         }
-    }
-
-    /// The self-description view of `description`.
-    ///
-    /// # Errors
-    /// Returns [`ViewError::Unavailable`] when the description cannot be
-    /// written back as JSON.
-    pub fn federation(description: &OptionsRoot) -> Result<FederationView, ViewError> {
-        let document = serde_json::to_string_pretty(&description.federation)
-            .map_err(|_unwritable| ViewError::Unavailable)?;
-        Ok(FederationView {
-            id: description.federation.id.to_string(),
-            spec_version: description.federation.spec_version.to_string(),
-            endpoints: u32::try_from(description.endpoints.len()).unwrap_or(u32::MAX),
-            document,
-        })
     }
 }

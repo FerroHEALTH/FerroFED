@@ -73,6 +73,13 @@ const TEXT_PAIRS: &[(&str, &[&str])] = &[
     ("ok-fg", &["ok-bg"]),
     ("warn-fg", &["warn-bg"]),
     ("danger-fg", &["danger-bg"]),
+    ("tok-keyword", &["inset"]),
+    ("tok-path", &["inset"]),
+    ("tok-string", &["inset"]),
+    ("tok-parameter", &["inset"]),
+    ("tok-number", &["inset"]),
+    ("tok-comment", &["inset"]),
+    ("tok-key", &["inset"]),
 ];
 
 /// Each control edge (a field's border, a checked control, the focus ring)
@@ -134,14 +141,20 @@ fn strip_comments(css: &str) -> String {
     out
 }
 
-/// The body of the first rule whose selector is `selector`, up to its
-/// closing brace (a block of custom properties nests none).
-fn block<'a>(css: &'a str, selector: &str) -> &'a str {
+/// The bodies of every rule whose selector is `selector`, each up to its
+/// closing brace (a block of custom properties nests none), joined as one.
+fn block(css: &str, selector: &str) -> String {
     let header = format!("{selector} {{");
-    let (_, body) = css
-        .split_once(&header)
-        .unwrap_or_else(|| panic!("the stylesheet should carry `{selector}`"));
-    body.split_once('}').expect("the block should close").0
+    let bodies: Vec<&str> = css
+        .split(&header)
+        .skip(1)
+        .map(|body| body.split_once('}').expect("the block should close").0)
+        .collect();
+    assert!(
+        !bodies.is_empty(),
+        "the stylesheet should carry `{selector}`"
+    );
+    bodies.join(";")
 }
 
 fn parse_colour(value: &str) -> Option<Rgba> {
@@ -216,11 +229,11 @@ fn worst(theme: &BTreeMap<String, Rgba>, fg: &str, ground: &str) -> f64 {
 fn themes() -> Vec<(&'static str, BTreeMap<String, Rgba>)> {
     let css = strip_comments(STYLESHEET);
     vec![
-        ("light", theme(block(&css, ":root"))),
-        ("dark", theme(block(&css, ":root[data-theme=\"dark\"]"))),
+        ("light", theme(&block(&css, ":root"))),
+        ("dark", theme(&block(&css, ":root[data-theme=\"dark\"]"))),
         (
             "system dark",
-            theme(block(
+            theme(&block(
                 &css,
                 ":root:not([data-theme=\"light\"], [data-theme=\"dark\"])",
             )),

@@ -20,15 +20,13 @@ use crate::journeys::journeys_enabled;
 use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::{ROUTES, Stack, held};
+use crate::journeys::stored::list_page;
 
 /// The most rows a page of a view shows.
 const PAGE: u64 = 100;
 
 /// The caption of the routing table.
 const ROUTING: &str = "The creating_system_id routing table";
-
-/// The caption of the stored-query table.
-const HELD: &str = "Held versions";
 
 /// The title of the view called `section`.
 fn titled(section: &str) -> String {
@@ -129,7 +127,17 @@ async fn each_view_renders_and_pages_through_the_hydrated_console() -> Result<()
 
         browser.follow("Stored queries").await?;
         browser.titled(&titled("Stored queries")).await?;
-        pages(browser, &stack, ("/stored-queries", HELD, held()?)).await?;
+        list_page(browser, 0, held()?).await?;
+        browser.follow("Next page").await?;
+        list_page(browser, PAGE, held()?).await?;
+        browser
+            .at(&stack.url(&format!("/stored-queries?offset={PAGE}")))
+            .await?;
+        browser.follow("Previous page").await?;
+        list_page(browser, 0, held()?).await?;
+        browser
+            .console_clean("the pager of /stored-queries")
+            .await?;
 
         browser.follow("Self-description").await?;
         browser.titled(&titled("Self-description")).await?;
@@ -171,9 +179,9 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
             .goto(&stack.url(&format!("/stored-queries?offset={PAGE}")))
             .await?;
         browser.titled(&titled("Stored queries")).await?;
-        page(browser, HELD, PAGE, held()?).await?;
+        list_page(browser, PAGE, held()?).await?;
         browser.follow("Previous page").await?;
-        page(browser, HELD, 0, held()?).await?;
+        list_page(browser, 0, held()?).await?;
         browser.console_clean("the stored-query view").await?;
 
         browser.goto(&stack.url("/federation")).await?;

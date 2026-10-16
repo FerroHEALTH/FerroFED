@@ -516,6 +516,17 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   deployment's server function and the decoding of its `Outcome`, the
   banner and its icon, and the version in the gateway pill, all drawn in
   the shell the browser hydrates on every page.
+- **The stored queries and the self-description (#1077) measured 365376
+  bytes** brotli-compressed (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen
+  0.2.129, Tailwind CSS 4.3.3), 4042 fewer than the 369418 of the tree with
+  the query console, the overview and the development banner they were
+  built on. Over the query console alone they measured 348496, 1758 more
+  than its 346738. The namespace cards, a query's detail with its
+  highlighted AQL, and the self-description's cards and document are
+  rendered on the server, and the tokenizer (`highlight`) is compiled for
+  the server alone, so the browser drops the tables it drew for both pages
+  and carries the detail's route, its server function's decoding, and the
+  query console's reading of the stored query its URL names.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

@@ -187,12 +187,17 @@ fn routes(session: SessionState, gateway: String) -> AnyView {
             />
             <Route
                 path=path!("/stored-queries")
-                view=guarded(session, views::StoredQueriesPage)
+                view=guarded(session, views::stored::StoredQueriesPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/stored-queries/:name")
+                view=guarded(session, views::stored::StoredQueryPage)
                 ssr=SsrMode::Async
             />
             <Route
                 path=path!("/federation")
-                view=guarded(session, views::FederationPage)
+                view=guarded(session, views::describe::FederationPage)
                 ssr=SsrMode::Async
             />
             <Route

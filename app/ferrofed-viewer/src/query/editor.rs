@@ -44,7 +44,15 @@ pub(super) fn editor_section(
     // browser, once hydrated, so the server and the hydration render alike.
     let hydrated = RwSignal::new(false);
     Effect::new(move |_| hydrated.set(true));
-    let stored = RwSignal::new(false);
+    let query = leptos_router::hooks::use_query_map();
+    let chosen = move |key: &str| query.read().get(key).unwrap_or_default();
+    // NOTE: no specification governs this: our own design; a stored query's detail
+    // opens the console with a full load, so the tab starts from the URL it names.
+    let stored = RwSignal::new(query.with_untracked(|query| {
+        query
+            .get(crate::views::stored::CONSOLE_NAME)
+            .is_some_and(|name| !name.is_empty())
+    }));
     let submit = move |event: leptos::ev::SubmitEvent| {
         let data = form
             .get_untracked()
@@ -68,7 +76,7 @@ pub(super) fn editor_section(
         stored,
     )
     .into_any();
-    let query = query_section(stored);
+    let query = query_section(stored, chosen);
     let parameters = parameters_section();
     let window = window_section();
     let federation = federation_section(offered);
@@ -148,7 +156,14 @@ fn submitted(data: &leptos::web_sys::FormData) -> QueryForm {
 
 /// The two panels of the query kind tabs: the AQL text, or a stored query
 /// by name and version.
-fn query_section(stored: RwSignal<bool>) -> AnyView {
+///
+/// A link from a stored query's detail names the query and its version in
+/// the URL, never its AQL or a parameter, and `chosen` reads them there
+/// ([`crate::views::stored::console_href`]).
+fn query_section(
+    stored: RwSignal<bool>,
+    chosen: impl Fn(&str) -> String + Copy + Send + Sync + 'static,
+) -> AnyView {
     view! {
         <div
             role="tabpanel"
@@ -189,6 +204,7 @@ fn query_section(stored: RwSignal<bool>) -> AnyView {
                         autocomplete="off"
                         spellcheck="false"
                         placeholder="org.example::vital_signs"
+                        value=move || chosen(crate::views::stored::CONSOLE_NAME)
                         class=styles::MONO
                     />
                 </div>
@@ -200,6 +216,7 @@ fn query_section(stored: RwSignal<bool>) -> AnyView {
                         name="form[version]"
                         autocomplete="off"
                         placeholder="1.0.0"
+                        value=move || chosen(crate::views::stored::CONSOLE_VERSION)
                         class=styles::MONO
                     />
                 </div>
