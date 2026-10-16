@@ -109,7 +109,11 @@ async fn an_operator_reads_every_incident_kind_and_the_recent_incidents() -> Tes
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let report: IncidentReport = serde_json::from_str(&text)?;
-    assert_eq!(4, report.counts.len(), "{report:?}");
+    assert_eq!(
+        ferrofed_registry::incident::Kind::ALL.len(),
+        report.counts.len(),
+        "every kind is listed: {report:?}"
+    );
     assert!(
         report
             .recent

@@ -236,12 +236,15 @@ fn dispensations() -> CapabilityStatementRestResource {
         r#type: "MedicationDispense".into(),
         supported_profile: vec![MPD_MEDICATION_DISPENSE.into()],
         documentation: Some(
-            "A dispensation is written to the one member that owns the prescription it names; the answer is an OperationOutcome naming that member.".into(),
+            "A dispensation is written to the one member that owns the prescription it names; the answer is 201 with a Location naming it by the face's id, which the read takes, and an OperationOutcome naming that member.".into(),
         ),
-        interaction: vec![CapabilityStatementRestResourceInteraction {
-            code: "create".into(),
-            ..CapabilityStatementRestResourceInteraction::default()
-        }],
+        interaction: ["create", "read"]
+            .into_iter()
+            .map(|code| CapabilityStatementRestResourceInteraction {
+                code: code.into(),
+                ..CapabilityStatementRestResourceInteraction::default()
+            })
+            .collect(),
         ..CapabilityStatementRestResource::default()
     }
 }

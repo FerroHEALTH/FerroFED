@@ -59,6 +59,7 @@ mod confined;
 mod consent;
 pub mod dedup;
 pub(crate) mod demographics;
+pub(crate) mod dispensation;
 pub mod follow_up;
 pub mod intake;
 mod localize;

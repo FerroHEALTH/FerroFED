@@ -60,6 +60,9 @@ fn incident(kind: Kind) -> Result<Incident, Box<dyn Error>> {
             ehr_id,
             claimants: vec!["node-a".parse()?, "node-b".parse()?],
         },
+        Kind::PrescriptionIdentifierCollision => Incident::PrescriptionIdentifierCollision {
+            claimants: vec!["node-a-mpd".parse()?, "node-b-mpd".parse()?],
+        },
         _ => return Err("a kind this test does not know".into()),
     })
 }

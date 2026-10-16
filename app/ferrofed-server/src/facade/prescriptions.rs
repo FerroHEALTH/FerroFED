@@ -289,7 +289,7 @@ pub(crate) async fn search(
 /// Asks every member `chosen` names at its own endpoint, at once, under the
 /// budget of the request `arrived`, refusing to send anything carrying one
 /// of `withheld`, and returns each answer in the order of `chosen`.
-async fn asked(
+pub(crate) async fn asked(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     chosen: Vec<Chosen>,
@@ -312,7 +312,7 @@ async fn asked(
         let federation = Arc::clone(federation);
         let options = options.clone();
         tasks.spawn(async move {
-            let held = paged(&federation, (&member, None), &options, until).await;
+            let held = paged(&federation, (&member, RESOURCE, None), &options, until).await;
             held.map(|held| {
                 (
                     position,
@@ -335,8 +335,8 @@ async fn asked(
     Ok(answered.into_iter().map(|(_, member)| member).collect())
 }
 
-/// Every page of `member`'s search, for the one prescription of the logical
-/// id `id` when it is given, under `options`, abandoned when the overall
+/// Every page of `member`'s search of the resource type `searched`, for the
+/// one resource of the logical id `id` when it is given, under `options`, abandoned when the overall
 /// budget `until` runs out.
 ///
 /// # Errors
@@ -345,7 +345,7 @@ async fn asked(
 /// native endpoint.
 pub(crate) async fn paged(
     federation: &Federation,
-    (member, id): (&Chosen, Option<&str>),
+    (member, searched, id): (&Chosen, &str, Option<&str>),
     options: &DispatchOptions,
     until: tokio::time::Instant,
 ) -> Result<Held, FanOutError> {
@@ -370,7 +370,7 @@ pub(crate) async fn paged(
         let asked = SearchAsked {
             native: endpoint,
             ehr_id: &member.ehr_id,
-            resource: RESOURCE,
+            resource: searched,
             id,
             next: next.as_ref(),
         };
@@ -379,7 +379,7 @@ pub(crate) async fn paged(
             silent => return Ok(Held::Silent(silent)),
         };
         let status = page.status();
-        let read = match Page::read(page.body(), endpoint.url()) {
+        let read = match Page::read_of(page.body(), endpoint.url(), searched) {
             Ok(read) => read,
             Err(reason) => {
                 return Ok(Held::Unusable {

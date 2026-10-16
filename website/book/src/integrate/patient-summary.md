@@ -412,9 +412,10 @@ the spool is refused `503` before the member is asked, so sending it again
 writes it once ([Failing closed](../operate/access-log.md#failing-closed)).
 
 The capability statement, `GET {fhir-base}/metadata`, declares the
-`create` on `Bundle`. Its documentation names the categories the deployment
-receives and those it has no receiving member for, by their HL7 Europe
-codes, and its supported profiles are the `Bundle` profiles of the
+`create` on `Bundle` only when a member receives a category, as it lists a
+prescription resource only when a member serves it. Its documentation then
+names the categories the deployment receives and those it has no receiving
+member for, by their HL7 Europe codes, and its supported profiles are the `Bundle` profiles of the
 categories received. `ferrofed config check` prints the same categories,
 each received one with its member
 ([Running it](../operate/configuration.md#running-it)).
@@ -449,121 +450,10 @@ one code, or leaves the category open, needs no change.
 
 ## Prescriptions and dispensations
 
-Electronic prescriptions and dispensations, Art 14(1)(b) and (c), are served
-resource by resource: the HL7 Europe Medication Prescription and Dispense
-(MPD) 1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd`. The
-member that holds a prescription serves it on its own `hl7-fhir-rest`
-endpoint ([A member's own exchange-format endpoint](../operate/registry.md#a-members-own-exchange-format-endpoint)), and the face
-passes on what that member says. The member decides whether a prescription
-can still be dispensed and counts the dispensations it has left; the gateway
-computes neither and holds no lock.
-
-You declare in `[[fhir.serve]]` the members that meet that contract, per
-category. A category no member is declared for is not served, and every
-route of it answers `404` with an `OperationOutcome` of the issue type
-`not-supported` that says so. No member is asked, and the answer is never an
-empty search result, which a client could read as a patient with no
-prescriptions:
-
-| Route | Category |
-|---|---|
-| `GET {fhir-base}/MedicationRequest?patient.identifier=` | `Electronic-Prescriptions` |
-| `GET {fhir-base}/MedicationRequest/{id}` | `Electronic-Prescriptions` |
-| `POST {fhir-base}/MedicationDispense` | `Electronic-Dispensations` |
-
-`GET {fhir-base}/metadata` lists `MedicationRequest` and
-`MedicationDispense` only for a category a member is declared for, each with
-its MPD profile, and declares for `MedicationRequest` the `search-type` and
-`read` interactions the face serves. The receipt of a dispensation at a
-declared member is planned for this release (#1042); until it ships, that
-route answers `501`.
-
-### Searching a patient's prescriptions
-
-`GET {fhir-base}/MedicationRequest?patient.identifier=system|value` names
-the patient by an identifier with its system, as `$summary` does, and takes
-the `composition-` search scope over every template
-(`user/composition-*.s`, for example). The search takes `patient.identifier`, `_count` and
-`_format` alone; any other parameter, or a second patient, is a `400`.
-
-The gateway resolves the patient once, then asks each declared member that
-holds the patient at its own endpoint, with
-`GET {own}/MedicationRequest?patient.identifier={ehr_id_system}|{ehr_id}`.
-The member's own `ehr_id` is the only value about the patient the request
-carries, and the identifier you sent never reaches a member. The gateway
-follows each member's `next` links until its last page, and only links
-under the member's own base URL. The answer is one `searchset`:
-
-- each member's `MedicationRequest` as the member sent it: every element
-  and extension kept, and every number in the text the member wrote, such
-  as `1.50`; only the order of an object's members may differ, which JSON
-  gives no meaning (RFC 8259 §4). Entries are in endpoint order, then in
-  the member's own order. Its `id` is the one the face reads it by
-  ([Reading one prescription](#reading-one-prescription)), and its
-  `fullUrl` that read, `{fhir-base}/MedicationRequest/{id}`;
-- one `Provenance` per prescription, whose agent is the member's
-  `Organization`; the gateway adds no author and merges nothing;
-- a `warning` `outcome` entry when two members hold a prescription under the
-  same identifier; each member's prescription stays listed;
-- `Bundle.total`, the number of prescriptions over every page, and a `self`
-  link naming the parameters the search used.
-
-With `_count=n` the gateway pages the answer itself: each page holds at most
-`n` prescriptions, and its `next` link carries the gateway's own `-offset`
-parameter, so a page holds no state between requests. Each page asks the
-members again.
-
-A patient that no declared member holds, and a patient whom a consent
-decision hides, both get the same empty `searchset`. A member that does not
-answer, answers with no `searchset`, or links a page outside its own base
-fails the search under all-or-nothing: `504` for a member that is offline or
-timed out, `424` otherwise, with every such member named. With
-`openehr-federation-completeness: partial` and `best_effort`, the other
-members' prescriptions come back and each silent member is named in a
-`warning` `outcome` entry. Each search is recorded once under
-`Electronic-Prescriptions`, naming every member asked.
-
-### Reading one prescription
-
-`GET {fhir-base}/MedicationRequest/{id}` reads one prescription by the `id`
-the search gave it, and takes the `composition-` read scope over every
-template (`user/composition-*.r`, for example). The `id` names the member's
-own endpoint, the member's `ehr_id` for the patient and the member's own
-`id` of the prescription, packed into the 64 characters a FHIR `id` allows,
-so the gateway holds no state between the search and the read. A
-prescription whose parts do not fit keeps the member's own `id` in the
-search and cannot be read through the face; the search then adds a
-`warning` `outcome` entry naming the member, and quoting no identifier.
-
-The `id` only locates the prescription. The gateway asks the member it
-names alone, with
-`GET {own}/MedicationRequest?patient.identifier={ehr_id_system}|{ehr_id}&_id={member's id}`,
-so the request carries the member's own `ehr_id` and its own `id` of the
-prescription, and nothing else about the patient. The member still decides
-what the caller may read. A caller whose grant is confined to one patient
-(`patient/`) reads that patient's prescriptions alone: an `id` naming
-another patient's `ehr_id` is refused `403` and nothing is sent.
-
-The answer is the member's `MedicationRequest` as it sent it, with its `id`
-the one you read, as FHIR R4 asks of a read. The
-`openEHR-federation-endpoint` and `openEHR-federation-system-id` headers
-name the member that answered. A `meta.versionId` that is a valid FHIR `id`
-is answered as a weak `ETag` (`W/"3"` for version `3`), and a
-`meta.lastUpdated` that is a valid FHIR `instant` as `Last-Modified`, an
-HTTP-date in GMT, so you can make a conditional read. Either one absent, or
-of another form, gives no such header; the gateway logs the second case by
-its shape and never logs the value. The other answers:
-
-| Answer | When |
-|---|---|
-| `404` `not-found` | The gateway did not write the `id`, it names no member declared for prescriptions, the gateway already places its `ehr_id` at another member, or the member holds no such prescription for that `ehr_id`. Every case gets the same text. |
-| `409` `conflict` | Two members claim the `ehr_id` the `id` names, which also raises the integrity incident; or the member answered more than one prescription for one `id`, with no incident. Nothing is passed on. |
-| `424` | The member answered with an error, with no `searchset`, or with another prescription. |
-| `504` | The member is offline or did not answer in time. |
-
-Each read that reached a member is recorded once under
-`Electronic-Prescriptions`, naming the member and the `ehr_id` it was asked
-by.
+The face also serves electronic prescriptions and dispensations, Art
+14(1)(b) and (c), resource by resource: the search and the read of a
+patient's prescriptions and the receipt of a dispensation, each at the member
+that holds it ([Prescriptions and dispensations over FHIR](prescriptions.md)).
 
 ## Terminology
 
@@ -720,7 +610,7 @@ members = ["node-a"]                         # node ids, each with its own MPD e
 
 [[fhir.serve]]
 category = "Electronic-Dispensations"
-members = ["node-a"]                         # each also serves Electronic-Prescriptions
+members = ["node-a"]                         # each also declared for Electronic-Prescriptions
 ```
 
 The terminology server, when you configure one:
@@ -739,9 +629,11 @@ mutual TLS the server asks for, as for the identity services. Outside
 `profile = "development"` the URL must be `https`, because the server is sent
 the codes of the documents you receive.
 
-For `[[fhir.receive]]`, set `receive_namespaces` under `[fhir]` as well,
-for example `receive_namespaces = ["urn:oid:2.999.1"]`: the identifier
-systems a received document's patient is resolved in.
+For `[[fhir.receive]]` and for `Electronic-Dispensations`, set
+`receive_namespaces` under `[fhir]` as well, for example
+`receive_namespaces = ["urn:oid:2.999.1"]`: the identifier systems a
+received document's or dispensation's patient is resolved in. Configuration
+load refuses either without it.
 
 - `[fhir]` needs a demographics binding, `[pdqm]`, because every summary
   names its patient and the members federate no demographics: configuration
@@ -769,13 +661,13 @@ systems a received document's patient is resolved in.
   the mapping compiles when the configuration is read.
 - Each `[[fhir.serve]]` declares one category, once, with at least one
   member, each named once. Configuration load refuses any other category and
-  a member of `Electronic-Dispensations` that does not also serve
+  a member of `Electronic-Dispensations` that is not also declared for
   `Electronic-Prescriptions`, because a dispensation is written only at the
   member that owns its prescription. The start and `ferrofed config check`
   are refused for a member that is no node of the registry, one with no
   `hl7-fhir-rest` endpoint of its own whose `categories` name the category,
   and a face with no resolver. With no entry, both categories are answered
-  as not served ([Prescriptions and dispensations](#prescriptions-and-dispensations)).
+  as not served ([Prescriptions and dispensations over FHIR](prescriptions.md)).
 - `[eehrxf.terminology]` needs `[fhir]`: configuration load refuses it
   alone, and refuses a URL that carries a user name or a password.
 - A change to `[fhir]` or to `[eehrxf.terminology]` takes a restart.

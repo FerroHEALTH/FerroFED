@@ -96,9 +96,10 @@ before the gateway reaches real patient data.
 
 ## Configuration for a deployment in the EU
 
-Four settings decide whether a deployment meets the EHDS Regulation where
-the gateway can meet it. Add them to the configuration of the production
-guide:
+The settings below decide whether a deployment meets the EHDS Regulation
+where the gateway can meet it. Add the ones the example shows to the
+configuration of the production guide, and work through each item of the
+list after it:
 
 ```toml
 # ferrofed.toml
@@ -173,8 +174,23 @@ years = 3                      # Art 9(2): at least three years from each access
   ([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
   This release receives patient summaries alone, and `GET {fhir-base}/metadata`
   names the categories your deployment receives and those it has no
-  receiving member for
+  receiving member for, and declares no `Bundle` create when it receives
+  none
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
+
+- **The prescription and dispensation members.** Declare in
+  `[[fhir.serve]]` only members that meet the contract FerroFED relies on,
+  because the gateway computes no dispensability, counts no remaining
+  dispensations and holds no lock
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  Each such member states each prescription's dispensing status and the
+  dispensations it has left, holds the prescriber's signature, and is the
+  member that created the prescription, never one holding a copy. It
+  refuses a dispensation its own state no longer allows, and it refuses a
+  second dispensation carrying a dispense identifier
+  (`MedicationDispense.identifier`) it already holds, so a pharmacy that
+  sends a dispensation again after a time-out cannot have it written twice.
+  Ask each member's operator to confirm this at admission.
 
 Keep two defaults, which the [claims review](../evaluate/claims-review.md#annex-ii-point-25)
 assessed against Annex II, point 2.5:
@@ -241,6 +257,11 @@ clinicians who use it. Each one is a control of the
   The node may have stored the write before the gateway failed to record
   the access. Read the resource before writing it again
   ([Failing closed](access-log.md#failing-closed)).
+- **Read a `504` to a dispensation as an unknown outcome.** The owner of
+  the prescription did not answer in time, and the gateway never sends a
+  dispensation again. Ask the member, or read the prescription's status,
+  before you send the dispensation once more, and send it with the same
+  dispense identifier, which the member refuses when it already holds it.
 
 ## Maintenance and its frequency
 

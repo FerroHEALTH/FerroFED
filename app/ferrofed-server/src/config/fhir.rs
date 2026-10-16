@@ -518,14 +518,22 @@ impl Fhir {
     }
 
     /// The identifier systems a received document's patient is resolved in,
-    /// which a face that receives any category names.
+    /// which a face that receives any category or serves dispensations
+    /// names.
     ///
     /// # Errors
     ///
-    /// [`FhirError::Missing`] when a category is received and no system is
-    /// named, and [`FhirError::ReceiveNamespace`] for an empty one.
+    /// [`FhirError::Missing`] when a category is received, or dispensations
+    /// are served, and no system is named, and
+    /// [`FhirError::ReceiveNamespace`] for an empty one.
     fn namespaces(&self) -> Result<Vec<IdentifierNamespace>, FhirError> {
-        if !self.receive.is_empty() && self.receive_namespaces.is_empty() {
+        // NOTE: no specification governs this: our own design; a dispensation's patient is
+        // resolved as a received document's is, so serving dispensations needs the systems too.
+        let dispensing = self
+            .serve
+            .iter()
+            .any(|serve| serve.category == Category::Dispensation.code());
+        if (!self.receive.is_empty() || dispensing) && self.receive_namespaces.is_empty() {
             return Err(FhirError::Missing {
                 key: "fhir.receive_namespaces",
             });

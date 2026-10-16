@@ -319,7 +319,7 @@ surface carries:
 
 | Route | Answers |
 |---|---|
-| `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 25 of each kind |
+| `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 20 of each kind |
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL and whether it is read-only |
 | `GET {base}/operator/stored-queries/{name}` | every version of the one stored query whose qualified name is `{name}`, such as `org.example::patient_compositions`, lowest first; a `404` (`stored-query-unknown`) when the gateway holds none, and a `400` (`query-name-invalid`) for a name ITS-REST does not admit |
@@ -331,9 +331,9 @@ The incident report is `{"counts": {...}, "recent": [...], "cleared":
 emitted since it started, and `recent` lists the kept incidents oldest
 first, each with its `kind`, its RFC 3339 `at`, its `description`, and the
 `creating_system_id`, `ehr_id`, `detection`, `endpoints` and `nodes` it is
-about. The gateway keeps the last 25 of each of the four kinds, so the
+about. The gateway keeps the last 20 of each of the five kinds, so the
 report is one page of at most 100 incidents and takes no paging parameters.
-`cleared` lists the last 25 collisions you cleared on this replica, oldest
+`cleared` lists the last 20 collisions you cleared on this replica, oldest
 first, each with its `at`, its `ehr_id` (a bare UUID, else `null`) and the
 member node ids as `claimants`; a clear removes no incident
 ([Clearing a held collision](registry.md#clearing-a-held-collision)).

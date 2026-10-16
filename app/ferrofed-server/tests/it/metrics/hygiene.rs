@@ -86,6 +86,10 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
         .iter()
         .map(|outcome| outcome.as_str())
         .collect();
+    let dispensed: BTreeSet<&str> = ferrofed_server::metrics::dispensations::Outcome::ALL
+        .iter()
+        .map(|outcome| outcome.as_str())
+        .collect();
     let mut events: BTreeSet<&str> = Event::ALL.iter().map(|event| event.as_str()).collect();
     events.insert(CALLER_REFUSED);
     let reasons: BTreeSet<&str> = Refusal::ALL
@@ -106,6 +110,9 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
                 ("target_info", key) => RESOURCE.contains(&key),
                 ("ferrofed_resolver_requests_total", "outcome") => {
                     resolver.contains(value.as_str())
+                }
+                ("ferrofed_fhir_dispensations_total", "outcome") => {
+                    dispensed.contains(value.as_str())
                 }
                 ("ferrofed_security_events_total", "event") => events.contains(value.as_str()),
                 ("ferrofed_security_events_total", "reason") => reasons.contains(value.as_str()),

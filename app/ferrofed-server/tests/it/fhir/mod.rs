@@ -98,9 +98,9 @@ async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
 /// The `[fhir]` tables of the face, its allergies fed by the testkit's
 /// fixture mapping, and the `[pdqm]` table of the Supplier at `pdq` the
 /// summary header is asked of, whose master domain is the test patient's
-/// namespace.
+/// namespace, in which a received patient is resolved too.
 fn fhir_tables(pdq: &str) -> String {
-    fhir_tables_with(pdq, "", "")
+    fhir_tables_with(pdq, &format!("receive_namespaces = [\"{NAMESPACE}\"]"), "")
 }
 
 /// The `[fhir]` tables of [`fhir_tables`], with the keys `keys` added to

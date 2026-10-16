@@ -14,7 +14,8 @@ use openehr_its::rest::routes::RouteMatch;
 
 use super::kind::fits;
 use super::{Carrier, Expected, MalformedValue};
-use crate::hygiene::{self, UnlistedParameter};
+use crate::hygiene;
+use crate::hygiene::forwarded::UnlistedParameter;
 
 /// Checks that `operation` declares every parameter of `query`, a query
 /// string the gateway consumes and never forwards.
@@ -77,7 +78,7 @@ pub(super) fn values(operation: &RouteMatch, query: &str) -> Result<(), Malforme
 #[cfg(test)]
 mod tests {
     use super::every_declared;
-    use crate::hygiene::UnlistedParameter;
+    use crate::hygiene::forwarded::UnlistedParameter;
     use http::Method;
     use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
 

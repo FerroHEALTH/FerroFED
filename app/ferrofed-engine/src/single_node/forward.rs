@@ -10,7 +10,7 @@
 //! no right to alter (§5.4 scope note, N33). Of the client's headers and query
 //! string, only what the ITS-REST operation the method and path address
 //! declares travels, as the outbound gate admits it
-//! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]). Each path
+//! ([`hygiene::forwarded::forwarded_headers`], [`hygiene::forwarded::forwarded_query`]). Each path
 //! identifier and each value that travels matches what the operation
 //! declares for it, and `Accept`, `Content-Type` and `Prefer` travel as values
 //! the operation lists ([`declared::held`]); a body never travels without a
@@ -39,7 +39,8 @@ use crate::dispatch::cap::{Capped, Slot};
 use crate::dispatch::oversized::Oversized;
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
-use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
+use crate::hygiene::forwarded::UnlistedParameter;
+use crate::hygiene::{self, Composed, Outbound, Part};
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
@@ -121,6 +122,16 @@ impl Forwarded {
             status,
             headers,
             body: answer.into_body(),
+        }
+    }
+
+    /// A success of the status `status` whose body was not read, which
+    /// carries no header and no byte of it.
+    pub(super) fn bare(status: StatusCode) -> Self {
+        Self {
+            status,
+            headers: HeaderMap::new(),
+            body: Vec::new(),
         }
     }
 
@@ -332,7 +343,7 @@ impl HeldRequest {
             return Err(ForwardError::Unrouted);
         };
         if let Some(query) = query.as_deref() {
-            hygiene::forwarded_query(&operation, query)?;
+            hygiene::forwarded::forwarded_query(&operation, query)?;
         }
         let headers = compose(&operation, query.as_deref(), &headers, &body)?;
         Ok(Self {
@@ -534,7 +545,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// it conveys, and every header `operation` declares that the request
     /// carries (§5.4.1, N33).
     ///
-    /// Those are all the headers [`hygiene::forwarded_headers`] admits. The
+    /// Those are all the headers [`hygiene::forwarded::forwarded_headers`] admits. The
     /// minted `X-Request-Id` is exempt as in every node request
     /// ([`crate::hygiene`]), and a `Content-Type` the operation declares no
     /// parameter for is one of its listed media types, never the client's

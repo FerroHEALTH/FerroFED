@@ -30,6 +30,7 @@
 //! appends `_total` to a counter and the unit to a histogram
 //! (<https://opentelemetry.io/docs/specs/otel/compatibility/prometheus_and_openmetrics/>).
 
+pub mod dispensations;
 pub mod inbound;
 pub mod nodes;
 pub mod resolver;
@@ -212,6 +213,9 @@ pub struct Metrics {
     /// Kept for the life of the provider: its callback reads the security
     /// event counts at each collection.
     _security: ObservableCounter<u64>,
+    /// Kept for the life of the provider: its callback reads the dispensation
+    /// counts at each collection.
+    _dispensations: ObservableCounter<u64>,
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
@@ -314,6 +318,7 @@ impl Metrics {
         let nodes = Instruments::new(&meter);
         let inbound = inbound::Instruments::new(&meter);
         let security = security::observe(&meter);
+        let dispensations = dispensations::observe(&meter);
         let bindings = crate::binding::process::Instruments::new(&meter);
         Ok(Self {
             provider,
@@ -324,6 +329,7 @@ impl Metrics {
             follows,
             in_step,
             _security: security,
+            _dispensations: dispensations,
             _incidents: incidents,
             _audit: crate::audit::metrics::Instruments::new(&meter),
             bindings,

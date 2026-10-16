@@ -30,7 +30,7 @@ use crate::snapshot::RegistrySnapshot;
 
 /// How many incidents of each kind the report keeps, newest last: a burst of
 /// one kind never pushes another kind's incidents out.
-pub const RECENT_PER_KIND: usize = 25;
+pub const RECENT_PER_KIND: usize = 20;
 
 /// The most a page of the operator surface holds, and the size of a page a
 /// request does not size.
@@ -56,7 +56,7 @@ pub(crate) fn record(incident: &Incident) {
 /// The body of `GET {base}/operator/incidents`.
 ///
 /// It is one page by construction: at most [`RECENT_PER_KIND`] incidents of
-/// each of the four kinds, never more than [`MAX_PAGE`] in all, and at most
+/// each kind, never more than [`MAX_PAGE`] in all, and at most
 /// [`RECENT_PER_KIND`] cleared collisions beside them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -166,6 +166,11 @@ impl RecordedIncident {
                 None,
                 Vec::new(),
                 claimants.iter().map(ToString::to_string).collect(),
+            ),
+            Incident::PrescriptionIdentifierCollision { claimants } => (
+                None,
+                claimants.iter().map(ToString::to_string).collect(),
+                Vec::new(),
             ),
         };
         Self {
@@ -546,7 +551,7 @@ mod tests {
             record(&collision);
         }
         let report = IncidentReport::current();
-        assert_eq!(4, report.counts.len());
+        assert_eq!(Kind::ALL.len(), report.counts.len());
         let collisions = report
             .recent
             .iter()

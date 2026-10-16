@@ -13,6 +13,8 @@
 //! search takes the `composition-` search scope; and the identifier reaches
 //! neither a member nor the log.
 
+pub(super) mod dispense;
+mod dispensed;
 mod paging;
 mod read;
 mod resolution;
