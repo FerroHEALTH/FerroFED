@@ -29,6 +29,7 @@ use ferrofed_eehrxf::prescriptions::searchset::{
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_engine::outbound_id::OutboundId;
 use http::{Method, StatusCode, Uri};
+use openehr_federation::status::EndpointStatus;
 use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
 
 use crate::auth::caller::Caller;
@@ -246,6 +247,10 @@ fn listed(
             endpoint: member.chosen.native.as_str().to_owned(),
             status: member.held.status().as_str().to_owned(),
         })
+        .chain(prescribed.unresolved.iter().map(|endpoint| Silent {
+            endpoint: endpoint.as_str().to_owned(),
+            status: EndpointStatus::NotResolved.as_str().to_owned(),
+        }))
         .collect();
     let assembled = written(fhir, read, (&answered, &silent));
     let (mut response, assembled) = match assembled {

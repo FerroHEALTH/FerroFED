@@ -7,7 +7,8 @@
   with each member's `MedicationRequest` as the member sent it, one
   `Provenance` naming the member, and a `warning` when two members hold a
   prescription under the same identifier. `_count` pages the answer through
-  the gateway's own `-offset` parameter. A silent member fails the search
+  the gateway's own `-offset` parameter. A silent member, and a member the
+  cross-reference could not answer for (`not-resolved`), fails the search
   under all-or-nothing and is named under `partial`; an unknown patient
   and a patient a consent decision hides get the same empty `searchset`.
   The search takes the `composition-` search scope over every template and

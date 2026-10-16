@@ -14,6 +14,7 @@
 //! neither a member nor the log.
 
 mod paging;
+mod resolution;
 mod restricted;
 
 use std::collections::BTreeMap;

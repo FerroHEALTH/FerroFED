@@ -31,7 +31,7 @@ use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::{Completion, FanOutError};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::native_search::{Elsewhere, Next, SearchAsked, Searched};
-use ferrofed_registry::id::NodeId;
+use ferrofed_registry::id::{EndpointId, NodeId};
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 use secrecy::SecretString;
@@ -127,6 +127,9 @@ pub(crate) struct Prescribed {
     /// The members whose consent pre-filter denial was set aside for an
     /// emergency purpose.
     pub(crate) set_aside: BTreeSet<NodeId>,
+    /// The Query API endpoint of each member declared for prescriptions that
+    /// the resolver could not answer for, in endpoint order.
+    pub(crate) unresolved: Vec<EndpointId>,
 }
 
 /// Why the search gives no prescriptions.
@@ -199,13 +202,27 @@ pub(crate) async fn search(
     .into_iter()
     .filter(|member| declared.contains(member.node.as_str()))
     .collect();
+    // NOTE: no specification governs this (§11.3 covers only an answered lookup): our own design;
+    // only a member serving prescriptions whose resolution failed could hide one.
+    let snapshot = federation.snapshot();
+    let unresolved: Vec<EndpointId> = targets
+        .unresolved
+        .iter()
+        .filter(|endpoint| {
+            snapshot
+                .endpoint(endpoint)
+                .is_some_and(|held| declared.contains(held.node().as_str()))
+        })
+        .cloned()
+        .collect();
     let mut prescribed = Prescribed {
         members: Vec::new(),
         set_aside: targets.set_aside.clone(),
+        unresolved,
     };
     // NOTE: Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient no member serving
     // prescriptions holds answers as one none may disclose does, so neither is told apart.
-    if chosen.is_empty() {
+    if chosen.is_empty() && prescribed.unresolved.is_empty() {
         let set_aside = (!prescribed.set_aside.is_empty()).then(|| Box::new(prescribed));
         return Err(Unprescribed::NotFound(set_aside));
     }
@@ -221,8 +238,11 @@ pub(crate) async fn search(
             );
         }
     }
-    let mut status =
-        answer::fan_out::settled(StatusCode::OK, targets.resolution_failed, completion);
+    let mut status = answer::fan_out::settled(
+        StatusCode::OK,
+        !prescribed.unresolved.is_empty(),
+        completion,
+    );
     if completion == Completion::AllOrNothing {
         for member in &prescribed.members {
             match member.held.status() {
@@ -236,6 +256,12 @@ pub(crate) async fn search(
         }
     }
     if status != StatusCode::OK {
+        let unresolved = prescribed.unresolved.iter().map(|endpoint| {
+            (
+                endpoint.as_str().to_owned(),
+                EndpointStatus::NotResolved.as_str().to_owned(),
+            )
+        });
         let silent = prescribed
             .members
             .iter()
@@ -246,6 +272,7 @@ pub(crate) async fn search(
                     member.held.status().as_str().to_owned(),
                 )
             })
+            .chain(unresolved)
             .collect();
         return Err(Unprescribed::Incomplete {
             status,
