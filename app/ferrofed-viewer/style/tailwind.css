@@ -844,9 +844,10 @@
       display: block;
       position: sticky;
       inset: var(--bar) auto auto auto;
-      align-self: flex-start;
+      align-self: stretch;
       width: 15rem;
-      height: calc(100dvh - var(--bar));
+      height: auto;
+      max-height: calc(100dvh - var(--bar));
       margin: 0;
       overflow-y: auto;
       border: 0;
