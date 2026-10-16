@@ -22,6 +22,10 @@
 //! parameter's name and the order of the matches, member by member in
 //! endpoint order and each member's in its own order, are our own design: no
 //! specification governs them.
+//!
+//! The FHIR R4 search and `RESTful` API pages cited here are read from the
+//! vendored 4.0.1 copies, `docs/specs/fhir-r4/search.html` and
+//! `docs/specs/fhir-r4/http.html`.
 
 pub mod page;
 pub mod searchset;

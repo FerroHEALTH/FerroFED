@@ -8,8 +8,10 @@
 # the defining extensions page (2.5.1), the StructureDefinition resource page
 # with its invariants (sdf-1 to sdf-23), the CodeSystem resource page (csd-0,
 # csd-1), the NamingSystem resource page (nsd-0 to nsd-2), the terminologies
-# page (4.1, whose 4.1.2 says how a code system URI should resolve), and the
-# licence page that states the terms of the others. The exchange format is
+# page (4.1, whose 4.1.2 says how a code system URI should resolve), the
+# search page (3.1.1) and the RESTful API page (3.1.0) the FHIR face's
+# prescription search is read against, and the licence page that states the
+# terms of the others. The exchange format is
 # FHIR R4 4.0.1, the version every HL7 Europe package scripts/vendor/eehrxf.sh
 # vendors declares.
 #
@@ -40,7 +42,7 @@ pinned_begin
 
 r4=https://hl7.org/fhir/R4
 cc0='CC0-1.0: FHIR R4 2.20.2 (license.html) licenses the specification under Creative Commons No Rights Reserved (CC0)'
-read_by=$'#1053 (the StructureDefinition of the remaining-dispensations\n  extension, crates/eehrxf/src/medication/) and #1072 (the definitions of the\n  registry\'s FHIR form, app/ferrofed-identity/src/ihe/mcsd/definition/ and\n  app/ferrofed-registry/src/, and of the access log origin system,\n  app/ferrofed-server/src/access/, and the archetype-local code systems of\n  crates/eehrxf/src/terminology/, which publish none)'
+read_by=$'#1053 (the StructureDefinition of the remaining-dispensations\n  extension, crates/eehrxf/src/medication/) and #1072 (the definitions of the\n  registry\'s FHIR form, app/ferrofed-identity/src/ihe/mcsd/definition/ and\n  app/ferrofed-registry/src/, and of the access log origin system,\n  app/ferrofed-server/src/access/, and the archetype-local code systems of\n  crates/eehrxf/src/terminology/, which publish none) and #1040 (the\n  prescription search, app/ferrofed-eehrxf/src/prescriptions/)'
 
 pin commit extensibility.html "4.0.1, 2.5.0 Extensibility" "$r4/extensibility.html" \
   3c1df2fd19b10d5f7f132976dea0691e42addfaafd0bd10295ccf8ec51269eb3 "$cc0"
@@ -54,14 +56,18 @@ pin commit namingsystem.html "4.0.1, the NamingSystem resource" "$r4/namingsyste
   96b3281f6f320aa0c1b74578366296719a358151fbd9552d3a9a1b66294132f9 "$cc0"
 pin commit terminologies.html "4.0.1, 4.1 Using Codes in Resources" "$r4/terminologies.html" \
   cc79f7d0fed406375185cd93d310e3394ec6f157871cc57f6408c3b7dff1cf90 "$cc0"
+pin commit search.html "4.0.1, 3.1.1 Search" "$r4/search.html" \
+  7db9490e5723cf44a6c998471f229575d7a00d76db52ee2684014049f8e0524d "$cc0"
+pin commit http.html "4.0.1, 3.1.0 RESTful API" "$r4/http.html" \
+  cdcf4039ffa4c0c8aca35bdcb77532b8d892daf868d444ff7b191214d602be7e "$cc0"
 pin commit license.html "4.0.1, 2.20 License and Legal Terms" "$r4/license.html" \
   b2aeb02247ca2aa855ed1fce29f62600aeeb8dcc8257ec1e0b40ceaf4fd60a15 "$cc0" \
   "The licence statement of the pages beside it, vendored as their LICENSE."
 pinned_corpus fhir-r4 "FHIR R4 core specification pages" \
   "the FHIR R4 core specification pages" \
   "The Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition,
-CodeSystem, NamingSystem, Using Codes in Resources (4.1) and License and
-Legal Terms (2.20) pages of HL7 FHIR Release 4, version 4.0.1, as
+CodeSystem, NamingSystem, Using Codes in Resources (4.1), Search (3.1.1),
+RESTful API (3.1.0) and License and Legal Terms (2.20) pages of HL7 FHIR Release 4, version 4.0.1, as
 \`hl7.org/fhir/R4/\` serves them, committed under CC0-1.0, which the license
 page states for the specification." "" "$read_by"
 
