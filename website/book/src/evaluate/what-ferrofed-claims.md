@@ -322,6 +322,13 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   `crates/eehrxf` as a library ([#809](https://github.com/FerroHEALTH/FerroFED/issues/809), [#810](https://github.com/FerroHEALTH/FerroFED/issues/810), [#802](https://github.com/FerroHEALTH/FerroFED/issues/802), [#803](https://github.com/FerroHEALTH/FerroFED/issues/803),
   [The patient summary over FHIR](../integrate/patient-summary.md),
   [Receiving a document](receiving-documents.md)).
+- Electronic prescriptions and dispensations on the FHIR face, in the HL7
+  Europe MPD profiles, passed through from the members that serve them: the
+  search and the read of a patient's prescriptions, and a received
+  dispensation written to the member that owns its prescription and read
+  back, with no dispensability, count or lock computed at the gateway
+  ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
+  [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
 - The [information sheet](information-sheet.md), the
   [instructions for use](../operate/instructions-for-use.md), the
   [clinical safety risk file](clinical-safety.md), this page's
@@ -386,8 +393,13 @@ These are the ones to know before you deploy FerroFED; the
   ([Labelling the access records](../operate/access-labels.md)). The
   European interoperability software component writes the patient
   summary and receives a document in the exchange format on the gateway's
-  FHIR face; the other priority categories are planned
-  ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)). No EU
+  FHIR face, and passes prescriptions and dispensations through from the
+  members that serve them
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md));
+  imaging, test results and discharge reports are planned
+  ([#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
+  [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
+  [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).

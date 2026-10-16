@@ -172,7 +172,10 @@ years = 3                      # Art 9(2): at least three years from each access
   Declare in `[[fhir.receive]]` the member that stores each category you
   receive; a document of a category with no member declared is refused
   ([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
-  This release receives patient summaries alone, and `GET {fhir-base}/metadata`
+  This release receives patient summaries as documents, and a
+  dispensation is written to the member that owns its prescription
+  ([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation)).
+  `GET {fhir-base}/metadata`
   names the categories your deployment receives and those it has no
   receiving member for, and declares no `Bundle` create when it receives
   none
@@ -182,7 +185,7 @@ years = 3                      # Art 9(2): at least three years from each access
   `[[fhir.serve]]` only members that meet the contract FerroFED relies on,
   because the gateway computes no dispensability, counts no remaining
   dispensations and holds no lock
-  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  ([The member contract](../integrate/prescriptions.md#the-member-contract)).
   Each such member states each prescription's dispensing status and the
   dispensations it has left, holds the prescriber's signature, and is the
   member that created the prescription, never one holding a copy. It
@@ -190,7 +193,10 @@ years = 3                      # Art 9(2): at least three years from each access
   second dispensation carrying a dispense identifier
   (`MedicationDispense.identifier`) it already holds, so a pharmacy that
   sends a dispensation again after a time-out cannot have it written twice.
-  Ask each member's operator to confirm this at admission.
+  Ask each member's operator to confirm this at admission. Set
+  `receive_namespaces` under `[fhir]` once dispensations are served: it
+  names the identifier systems a dispensation's patient is resolved in.
+  A search follows at most 64 pages of each member's answer.
 
 Keep two defaults, which the [claims review](../evaluate/claims-review.md#annex-ii-point-25)
 assessed against Annex II, point 2.5:
@@ -257,11 +263,13 @@ clinicians who use it. Each one is a control of the
   The node may have stored the write before the gateway failed to record
   the access. Read the resource before writing it again
   ([Failing closed](access-log.md#failing-closed)).
-- **Read a `504` to a dispensation as an unknown outcome.** The owner of
-  the prescription did not answer in time, and the gateway never sends a
-  dispensation again. Ask the member, or read the prescription's status,
-  before you send the dispensation once more, and send it with the same
-  dispense identifier, which the member refuses when it already holds it.
+- **Read a `504` to a dispensation as an unknown outcome**, and a `502`
+  that says the owner could not be reached. The owner of the prescription
+  did not answer, and the gateway never sends a dispensation again. Ask
+  the member, or read the prescription's status, before you send the
+  dispensation once more, and send it with the same dispense identifier,
+  which the member refuses when it already holds it
+  ([Every answer](../integrate/prescriptions.md#every-answer)).
 
 ## Maintenance and its frequency
 
@@ -296,10 +304,15 @@ system in relation to its intended purpose". The full list is
 [Limitations](../evaluate/what-ferrofed-claims.md#limitations); the ones a
 deployment in the EU must plan for are:
 
-- **The European exchange format covers patient summaries alone.** The
+- **The European exchange format covers three of the six categories.** The
   gateway serves the patient summary on its FHIR R4 face and receives
-  patient summaries there (Annex II, points 2.1 to 2.3); no other Art 14(1)
-  category is produced or received
+  patient summaries there (Annex II, points 2.1 to 2.3). It serves
+  prescriptions, and receives dispensations, only through members that
+  serve both in the HL7 Europe MPD profiles themselves, and computes no
+  dispensability, remaining dispensations or lock of its own
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  Imaging, test results and discharge reports are neither produced nor
+  received
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
