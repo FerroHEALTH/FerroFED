@@ -21,7 +21,7 @@
 //! server function; the forms sit in one fieldset that stays disabled until
 //! the page has hydrated, and its listeners hand the form submitted to the
 //! server function, add and remove a form's repeatable rows, move between
-//! the tabs from the keyboard, and count an import's lines ([`browser`]).
+//! the tabs from the keyboard, and count an import's lines (`browser`).
 //! A form's answer shows at the top of its own card, and the focus moves
 //! there; a refusal of one field shows under that field. No specification
 //! governs the console: our own design.
