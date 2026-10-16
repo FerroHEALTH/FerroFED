@@ -15,8 +15,9 @@
 //! once, so the ordinary suite needs no browser. The `journeys (browser)` job
 //! of `.github/workflows/ci.yml` sets it, names the pinned chromedriver and
 //! builds the bundle, and `scripts/checks/e2e-placement.sh` keeps every gated
-//! journey in this module. No specification governs the journeys: our own
-//! design.
+//! journey in this module. The book's screenshots of the console are taken
+//! on the same stack behind a gate of their own, `FERROFED_SCREENSHOTS`
+//! (`screenshots`). No specification governs the journeys: our own design.
 
 mod admin;
 mod browser;
@@ -27,6 +28,7 @@ mod overview;
 mod provider;
 mod query;
 mod reflow;
+mod screenshots;
 mod shell;
 mod sign_in;
 mod sign_out;

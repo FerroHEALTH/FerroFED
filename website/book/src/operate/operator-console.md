@@ -254,6 +254,158 @@ console anyway is refused before the gateway is asked. The answer is
 rendered on the console's server, with every value a node sent escaped, and
 the page shows that HTML.
 
+## The screens
+
+Each screen is shown in the light theme, with a link to the same screen in
+the dark theme. The testkit takes them against a development gateway over
+two stub nodes, node A that answers and node B that fails, so every page
+carries the amber development banner. To take them again, build the site
+bundle, start chromedriver, and run the capture behind its gate:
+
+```sh
+scripts/release/viewer-site.sh --release
+FERROFED_SCREENSHOTS=1 FERROFED_WEBDRIVER=http://127.0.0.1:9515 \
+  cargo nextest run -p ferrofed-testkit -E 'test(/screenshots::/)'
+```
+
+A console route with no screenshot fails the testkit's
+`every_console_route_has_a_screenshot_in_light_and_dark`.
+
+### Sign-in
+
+A visitor reads the sign-in card, whose button starts the sign-in at the
+OpenID Provider.
+
+![The sign-in card: the FerroFED Console mark, "Sign in to the console", a Sign in button, and the line "The console holds no clinical data."](img/console/sign-in.png)
+
+[The sign-in in the dark theme](img/console/sign-in-dark.png)
+
+### Dashboard
+
+A signed-in operator lands on the dashboard: the members active, the nodes
+up, the open incidents, the stored queries and the running revision, with
+each member's health and the recent incidents.
+
+![The dashboard: five tiles reading 2 of 2 members active, 1 of 2 nodes up with 1 down, 0 open incidents, 113 stored queries and running revision r1 with revision 2 pending, over a member health table where node-a-pub is up and node-b-pub is failing, and an empty recent incidents card.](img/console/dashboard.png)
+
+[The dashboard in the dark theme](img/console/dashboard-dark.png)
+
+### Members
+
+![The members page: the member endpoints node-a-pub and node-b-pub, each active, with its organisation, health, node and system_id, and the state of the gateway's other dependencies.](img/console/members.png)
+
+[The members page in the dark theme](img/console/members-dark.png)
+
+A member's page, `/members/{node}`, shows one node with its endpoints.
+
+![The page of member node-a: its organisation, node, system_id and product, and the table of its endpoints, which holds node-a-pub.](img/console/member.png)
+
+[The member's page in the dark theme](img/console/member-dark.png)
+
+### Routing
+
+![The routing page: a filter field over the creating_system_id routing table, whose rows name each creating_system_id, its source (member or registered), its node and its endpoint, 100 rows of 101 with a link to the next page.](img/console/routing.png)
+
+[The routing page in the dark theme](img/console/routing-dark.png)
+
+### Integrity
+
+![The integrity page: Open and Resolved tabs with no open incident, the count of each incident kind since the gateway started, all 0, and the form that clears a held ehr_id at one replica or every replica.](img/console/integrity.png)
+
+[The integrity page in the dark theme](img/console/integrity-dark.png)
+
+### Query console
+
+The editor takes AQL or a stored query, the parameters that name a patient,
+and the federation options the gateway declares.
+
+![The empty query console: the AQL tab beside the Stored query tab, an empty AQL field, a parameter row, offset and fetch fields, and the federation options with endpoint and organisation chips, the deduplication choice and the best-effort switch, above a Run query button.](img/console/query.png)
+
+[The empty query console in the dark theme](img/console/query-dark.png)
+
+A run against node A alone comes back complete.
+
+![A complete answer: the results card reads 1 row, complete, 1 of 1 node answered, with node-a-pub active and node-b-pub excluded, the endpoint details table, and the row uid-at-a.](img/console/query-complete.png)
+
+[The complete answer in the dark theme](img/console/query-complete-dark.png)
+
+A best-effort run over both nodes, where node B fails, says in words that
+the answer is incomplete before its rows.
+
+![An incomplete answer: the results card reads 1 row, partial, 1 of 2 nodes answered, and "Not every node in scope answered", with node-a-pub active and node-b-pub in node-error, the error node B answered, and the row node A sent.](img/console/query-partial.png)
+
+[The incomplete answer in the dark theme](img/console/query-partial-dark.png)
+
+A query the gateway refuses shows its status and its error code.
+
+![A refused query: the AQL "SELECT FROM" and, in the results card, the refused pill with "The gateway refused this view: 400 (not-aql)."](img/console/query-refused.png)
+
+[The refused query in the dark theme](img/console/query-refused-dark.png)
+
+### Stored queries
+
+![The stored queries page: the read-only eu.ferrofed.eehrxf namespace with its 11 patient summary section queries, and the org.example namespace, each version a chip, above the pager and the form that sends a held version to the members again.](img/console/stored-queries.png)
+
+[The stored queries in the dark theme](img/console/stored-queries-dark.png)
+
+A query's detail, `/stored-queries/{name}`, shows its versions and its AQL.
+
+![The detail of org.example::journey_001: its highlighted AQL at version 1.0.1, the versions 1.0.1 and 1.0.0 with when each was stored, its details, and the Open in query console button.](img/console/stored-query.png)
+
+[The stored query's detail in the dark theme](img/console/stored-query-dark.png)
+
+### Self-description
+
+![The self-description: cards for the federation, the capabilities, the budgets and paging, and the manufacturer, the ITS-REST areas the gateway serves, the declared endpoints, and the OPTIONS document behind a disclosure.](img/console/self-description.png)
+
+[The self-description in the dark theme](img/console/self-description-dark.png)
+
+### Configuration page
+
+Every tab sits under the header that names the running and the saved
+revision, and the card that shows what the saved revision changes. The
+[configuration revisions](configuration-revisions.md) page describes what
+each tab changes.
+
+![The Members tab of the configuration page: revision 1 running and revision 2 saved, the card showing that revision 2 changes federation.per_node_timeout_ms from 2000 to 2500 with its Apply revision 2 button, and the members table with node-a read-only from the file and node-b a console member saved and not applied.](img/console/configuration-members.png)
+
+[The Members tab in the dark theme](img/console/configuration-members-dark.png)
+
+![The Credentials and bindings tab: the console's credentials of node-a-pub, running, its bearer_token set and read from a file, with the buttons that add a binding section or credentials.](img/console/configuration-credentials.png)
+
+[The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
+
+![The Stored queries tab: org.example::vital_signs at 1.0.0 and 1.1.0 and org.example::problem_list at 2.0.0, each owned by the store and immutable, with the Store a new version button.](img/console/configuration-stored-queries.png)
+
+[The Stored queries tab in the dark theme](img/console/configuration-stored-queries-dark.png)
+
+![The History tab: revision 2 by operator op-1, saved and not applied, with its reason, its TOML export and its comparison with the running revision, and revision 1 from the configuration file, running.](img/console/configuration-history.png)
+
+[The History tab in the dark theme](img/console/configuration-history-dark.png)
+
+![The Import and export tab: the button that downloads the running configuration as TOML, and the form that imports TOML with a reason as a dry-run revision.](img/console/configuration-import-export.png)
+
+[The Import and export tab in the dark theme](img/console/configuration-import-export-dark.png)
+
+A console member is added on a page of its own,
+`/configuration/members/new`.
+
+![The member form: fields for the organisation, the node with its system_id and CDR product, one Query API endpoint row with its id, base URL and in-service box, the Add endpoint and Add FHIR endpoint buttons, a reason, and the Save as revision 3 button.](img/console/configuration-member-form.png)
+
+[The member form in the dark theme](img/console/configuration-member-form-dark.png)
+
+### About and not found
+
+![The About page: the product with its version and purpose, the manufacturer Cadasto B.V. with its postal address, contact and website, and the base URL of the gateway the console reads.](img/console/about.png)
+
+[The About page in the dark theme](img/console/about-dark.png)
+
+A path the console does not serve answers `404` with a page of its own.
+
+![The not-found page: "Not found", "404: the console has no page at this address.", and a Back to the console button.](img/console/not-found.png)
+
+[The not-found page in the dark theme](img/console/not-found-dark.png)
+
 ## Why a console of its own
 
 The gateway authenticates every request by bearer token and holds no browser

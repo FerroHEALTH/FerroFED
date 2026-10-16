@@ -38,15 +38,15 @@ pub(crate) async fn hydrated(browser: &Browser) -> Result<(), Box<dyn Error>> {
 }
 
 /// What one run of the query form sends.
-struct Run<'a> {
+pub(crate) struct Run<'a> {
     /// The AQL text.
-    aql: &'a str,
+    pub(crate) aql: &'a str,
     /// The first parameter row's name and value.
-    parameter: (&'a str, &'a str),
+    pub(crate) parameter: (&'a str, &'a str),
     /// The endpoint chips to tick; every other is left clear.
-    endpoints: &'a [&'a str],
+    pub(crate) endpoints: &'a [&'a str],
     /// Whether the best-effort switch is on.
-    partial: bool,
+    pub(crate) partial: bool,
 }
 
 /// Replaces the text of the field `id` with `text`.
@@ -80,7 +80,7 @@ async fn chip(browser: &Browser, id: &str) -> Result<WebElement, Box<dyn Error>>
 }
 
 /// Fills the form with `run` and submits it.
-async fn submit(browser: &Browser, run: &Run<'_>) -> Result<(), Box<dyn Error>> {
+pub(crate) async fn submit(browser: &Browser, run: &Run<'_>) -> Result<(), Box<dyn Error>> {
     fill(browser, "query-aql", run.aql).await?;
     fill(browser, "query-parameter-name-0", run.parameter.0).await?;
     fill(browser, "query-parameter-value-0", run.parameter.1).await?;
