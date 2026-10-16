@@ -11,32 +11,54 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
 
 use http::StatusCode;
-use wiremock::matchers::{method, path, query_param};
+use openehr_its::rest::client::path_segment;
+use wiremock::matchers::{method, path, path_regex, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::support::{OPERATOR_TOKEN, console, get, get_as, header, send, signed_in};
 use crate::views::options_example;
 
-/// One held version as the operator surface lists it.
-fn held(name: &str, version: &str, saved: &str, aql: &str) -> String {
-    let text = |value: &str| serde_json::to_string(value).unwrap_or_default();
-    format!(
-        r#"{{"name":{},"type":"AQL","version":{},"saved":{},"q":{}}}"#,
-        text(name),
-        text(version),
-        text(saved),
-        text(aql)
-    )
+/// One held version the gateway takes writes under, as the operator surface
+/// lists it.
+fn held(name: &str, version: &str, saved: &str, aql: &str) -> Held {
+    listed(false, name, version, saved, aql)
 }
 
-/// Answers the page of the stored-query listing at `offset` with `items`,
-/// of `total` in all, for the operator's own token.
-async fn page(gateway: &MockServer, offset: u64, items: &[String], total: u64) {
+/// One held version as the operator surface lists it, marked `read_only`.
+fn listed(read_only: bool, name: &str, version: &str, saved: &str, aql: &str) -> Held {
+    let text = |value: &str| serde_json::to_string(value).unwrap_or_default();
+    Held {
+        name: name.to_owned(),
+        body: format!(
+            r#"{{"name":{},"type":"AQL","version":{},"saved":{},"q":{},"read_only":{read_only}}}"#,
+            text(name),
+            text(version),
+            text(saved),
+            text(aql)
+        ),
+    }
+}
+
+/// One held version: its qualified name and its body on the operator
+/// surface.
+#[derive(Debug, Clone)]
+struct Held {
+    /// The qualified name it is held under.
+    name: String,
+    /// Its body as the operator surface lists it.
+    body: String,
+}
+
+/// Answers the page at `offset` of the operator surface's `route` with
+/// `items`, of `total` in all, for the operator's own token.
+async fn page(gateway: &MockServer, route: &str, offset: u64, items: &[Held], total: u64) {
+    let items: Vec<&str> = items.iter().map(|item| item.body.as_str()).collect();
     Mock::given(method("GET"))
-        .and(path("/operator/stored-queries"))
+        .and(path(route))
         .and(query_param("offset", offset.to_string().as_str()))
         .and(wiremock::matchers::header(
             "authorization",
@@ -54,9 +76,28 @@ async fn page(gateway: &MockServer, offset: u64, items: &[String], total: u64) {
         .await;
 }
 
+/// Answers `route` with `items` over two pages, the first `split` of them
+/// on the first.
+async fn pages(
+    gateway: &MockServer,
+    route: &str,
+    items: &[Held],
+    split: usize,
+) -> Result<(), Box<dyn Error>> {
+    let total = u64::try_from(items.len())?;
+    let (first, second) = items.split_at(split.min(items.len()));
+    page(gateway, route, 0, first, total).await;
+    if !second.is_empty() {
+        page(gateway, route, u64::try_from(split)?, second, total).await;
+    }
+    Ok(())
+}
+
 /// A stub gateway whose registry holds `items` over two pages, the first
-/// `split` of them on the first, and the self-description the top bar reads.
-async fn gateway(items: &[String], split: usize) -> Result<MockServer, Box<dyn Error>> {
+/// `split` of them on the first, each name's versions answered by name over
+/// two pages the same way, a name it holds nothing under answered with its
+/// `404`, and the self-description the top bar reads.
+async fn gateway(items: &[Held], split: usize) -> Result<MockServer, Box<dyn Error>> {
     let gateway = MockServer::start().await;
     Mock::given(method("OPTIONS"))
         .and(path("/"))
@@ -67,12 +108,27 @@ async fn gateway(items: &[String], split: usize) -> Result<MockServer, Box<dyn E
         )
         .mount(&gateway)
         .await;
-    let total = u64::try_from(items.len())?;
-    let (first, second) = items.split_at(split.min(items.len()));
-    page(&gateway, 0, first, total).await;
-    if !second.is_empty() {
-        page(&gateway, u64::try_from(split)?, second, total).await;
+    pages(&gateway, "/operator/stored-queries", items, split).await?;
+    let mut named: BTreeMap<&str, Vec<Held>> = BTreeMap::new();
+    for item in items {
+        named.entry(&item.name).or_default().push(item.clone());
     }
+    for (name, versions) in named {
+        let route = format!("/operator/stored-queries/{}", path_segment(&name));
+        pages(&gateway, &route, &versions, split).await?;
+    }
+    Mock::given(method("GET"))
+        .and(path_regex("^/operator/stored-queries/.+"))
+        .respond_with(
+            ResponseTemplate::new(404)
+                .insert_header("content-type", "application/json")
+                .set_body_string(
+                    r#"{"message":"no stored query is held under that name","code":"stored-query-unknown"}"#,
+                ),
+        )
+        .with_priority(10)
+        .mount(&gateway)
+        .await;
     Ok(gateway)
 }
 
@@ -89,7 +145,7 @@ fn signed_in_console(
 }
 
 /// Three versions of one query, read over two pages, and one other query.
-fn three_versions() -> Vec<String> {
+fn three_versions() -> Vec<Held> {
     vec![
         held(
             "org.example::weights",
@@ -253,7 +309,8 @@ async fn a_query_the_gateway_does_not_hold_is_said() -> Result<(), Box<dyn Error
 #[tokio::test]
 async fn the_gateways_own_namespace_is_marked_read_only() -> Result<(), Box<dyn Error>> {
     let items = vec![
-        held(
+        listed(
+            true,
             "eu.ferrofed.eehrxf::patient-summary-problems",
             "1.0.0",
             "2026-10-06T00:00:00Z",
@@ -292,6 +349,112 @@ async fn the_gateways_own_namespace_is_marked_read_only() -> Result<(), Box<dyn 
     )
     .await?;
     assert!(!other.contains("read-only"), "{other}");
+    Ok(())
+}
+
+// The flag is the gateway's: a namespace it does not reserve is read-only
+// when the gateway says so, as over its read-only definition files.
+#[tokio::test]
+async fn a_version_the_gateway_marks_read_only_is_shown_read_only() -> Result<(), Box<dyn Error>> {
+    let items = vec![
+        listed(
+            true,
+            "org.example::weights",
+            "1.0.0",
+            "2026-10-01T08:00:00Z",
+            "SELECT 1",
+        ),
+        held(
+            "org.other::heights",
+            "1.0.0",
+            "2026-10-01T08:00:00Z",
+            "SELECT 2",
+        ),
+    ];
+    let gateway = gateway(&items, 2).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let (_, list) = send(&service, get_as("/stored-queries", &session)?).await?;
+    assert_eq!(1, list.matches(">read-only</span>").count(), "{list}");
+    let marked = list
+        .split_once(">org.example</h2>")
+        .and_then(|(_, rest)| rest.split_once("</header>"))
+        .map(|(header, _)| header)
+        .ok_or("the namespace has its card")?;
+    assert!(marked.contains("read-only"), "{marked}");
+    let (_, detail) = send(
+        &service,
+        get_as("/stored-queries/org.example::weights", &session)?,
+    )
+    .await?;
+    assert!(detail.contains(">read-only</span>"), "{detail}");
+    let (_, other) = send(
+        &service,
+        get_as("/stored-queries/org.other::heights", &session)?,
+    )
+    .await?;
+    assert!(!other.contains("read-only"), "{other}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_detail_reads_its_versions_by_name_and_never_the_listing() -> Result<(), Box<dyn Error>>
+{
+    let gateway = gateway(&three_versions(), 2).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(
+        &service,
+        get_as("/stored-queries/org.example::weights", &session)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    let paths: Vec<&str> = asked
+        .iter()
+        .map(|request| request.url.path())
+        .filter(|path| path.starts_with("/operator/stored-queries"))
+        .collect();
+    assert!(!paths.is_empty(), "the detail asks for the stored query");
+    assert!(
+        paths
+            .iter()
+            .all(|path| path.starts_with("/operator/stored-queries/")),
+        "{paths:?}"
+    );
+    Ok(())
+}
+
+// A refusal of the by-name read is the gateway's, shown with its status and
+// code, never the empty state of a name it holds nothing under.
+#[tokio::test]
+async fn a_refused_by_name_read_shows_the_refusal() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(&three_versions(), 4).await?;
+    Mock::given(method("GET"))
+        .and(path(format!(
+            "/operator/stored-queries/{}",
+            path_segment(&"org.example::denied")
+        )))
+        .respond_with(
+            ResponseTemplate::new(403)
+                .insert_header("content-type", "application/json")
+                .set_body_string(
+                    r#"{"message":"no operator scope","code":"operator-scope-missing"}"#,
+                ),
+        )
+        .with_priority(1)
+        .mount(&gateway)
+        .await;
+    let (service, session) = signed_in_console(&gateway)?;
+    let (_, body) = send(
+        &service,
+        get_as("/stored-queries/org.example::denied", &session)?,
+    )
+    .await?;
+    assert!(!body.contains("No such stored query"), "{body}");
+    assert!(body.contains("403"), "{body}");
+    assert!(body.contains("operator-scope-missing"), "{body}");
     Ok(())
 }
 

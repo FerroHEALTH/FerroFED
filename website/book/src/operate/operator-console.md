@@ -114,7 +114,8 @@ service worker or a URL.
   |---|---|---|
   | `/members` | every member endpoint, its organisation, membership standing, last observed health, node, `system_id`, product and median latency, and the state of every other dependency | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
   | `/integrity` | the integrity incidents of each kind since the gateway started, the most recent ones, and the `creating_system_id` routing table, 100 rows a page | `GET {base}/operator/incidents` and `/operator/creating-systems` |
-  | `/stored-queries` | every stored-query version the gateway holds, with its AQL, 100 versions a page | `GET {base}/operator/stored-queries` |
+  | `/stored-queries` | every stored-query version the gateway holds by namespace, 100 versions a page, a namespace the gateway takes no write under marked read-only as the gateway marks it | `GET {base}/operator/stored-queries` |
+  | `/stored-queries/{name}` | one stored query: its versions, newest first, and the AQL of the one shown, marked read-only as the gateway marks it | `GET {base}/operator/stored-queries/{name}` |
   | `/federation` | the gateway's self-description | `OPTIONS {base}/` |
 
   A paged view names the rows it shows and how many there are, and links
