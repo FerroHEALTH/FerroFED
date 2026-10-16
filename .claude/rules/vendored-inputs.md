@@ -174,10 +174,12 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
 - `docs/specs/fhir-r4/`: the Extensibility, Defining Extensions,
   StructureDefinition, CodeSystem, NamingSystem, Using Codes in Resources
-  (4.1) and License and Legal Terms pages of FHIR R4 4.0.1 (CC0-1.0, stated
+  (4.1), Search (3.1.1), RESTful API (3.1.0) and License and Legal Terms
+  pages of FHIR R4 4.0.1 (CC0-1.0, stated
   on the licence page), each pinned
   by its versioned URL and sha256 (`scripts/vendor/fhir-r4.sh`), which every
-  `ferrofed.eu` FHIR definition is tested against (#1053, #1072).
+  `ferrofed.eu` FHIR definition is tested against (#1053, #1072), and the
+  prescription search is read against (#1040).
 - `docs/specs/openehr-ckm-ips/`: the openEHR International Patient Summary
   template of the openEHR international Clinical Knowledge Manager (CKM cid
   `1013.26.376`, asset version 1): its source (OET), the operational template

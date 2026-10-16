@@ -48,7 +48,10 @@ http.workspace = true
 # The HTTP client a terminology server is asked through, built by the identity
 # crate with its credential and TLS material.
 reqwest.workspace = true
-# A FHIR Parameters body.
+# A member's searchset read for what a prescription search passes through,
+# and the searchset written with each member's resource as its bytes.
+serde.workspace = true
+# A FHIR Parameters body, and a member's resource kept as raw JSON.
 serde_json.workspace = true
 thiserror.workspace = true
 # The query string of a summary request.

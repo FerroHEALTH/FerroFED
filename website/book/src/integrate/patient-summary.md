@@ -429,9 +429,52 @@ prescriptions:
 
 `GET {fhir-base}/metadata` lists `MedicationRequest` and
 `MedicationDispense` only for a category a member is declared for, each with
-its MPD profile. The search, the read and the receipt of a dispensation at a
-declared member are planned for this release (#1040, #1041, #1042); until
-they ship, a declared category answers `501`.
+its MPD profile. The read and the receipt of a dispensation at a declared
+member are planned for this release (#1041, #1042); until they ship, those
+two routes answer `501`.
+
+### Searching a patient's prescriptions
+
+`GET {fhir-base}/MedicationRequest?patient.identifier=system|value` names
+the patient by an identifier with its system, as `$summary` does, and takes
+the `composition-` search scope over every template
+(`user/composition-*.s`, for example). The search takes `patient.identifier`, `_count` and
+`_format` alone; any other parameter, or a second patient, is a `400`.
+
+The gateway resolves the patient once, then asks each declared member that
+holds the patient at its own endpoint, with
+`GET {own}/MedicationRequest?patient.identifier={ehr_id_system}|{ehr_id}`.
+The member's own `ehr_id` is the only value about the patient the request
+carries, and the identifier you sent never reaches a member. The gateway
+follows each member's `next` links until its last page, and only links
+under the member's own base URL. The answer is one `searchset`:
+
+- each member's `MedicationRequest` as the member sent it: every element
+  and extension kept, and every number in the text the member wrote, such
+  as `1.50`; only the order of an object's members may differ, which JSON
+  gives no meaning (RFC 8259 §4). Entries are in endpoint order, then in
+  the member's own order;
+- one `Provenance` per prescription, whose agent is the member's
+  `Organization`; the gateway adds no author and merges nothing;
+- a `warning` `outcome` entry when two members hold a prescription under the
+  same identifier; each member's prescription stays listed;
+- `Bundle.total`, the number of prescriptions over every page, and a `self`
+  link naming the parameters the search used.
+
+With `_count=n` the gateway pages the answer itself: each page holds at most
+`n` prescriptions, and its `next` link carries the gateway's own `-offset`
+parameter, so a page holds no state between requests. Each page asks the
+members again.
+
+A patient that no declared member holds, and a patient whom a consent
+decision hides, both get the same empty `searchset`. A member that does not
+answer, answers with no `searchset`, or links a page outside its own base
+fails the search under all-or-nothing: `504` for a member that is offline or
+timed out, `424` otherwise, with every such member named. With
+`openehr-federation-completeness: partial` and `best_effort`, the other
+members' prescriptions come back and each silent member is named in a
+`warning` `outcome` entry. Each search is recorded once under
+`Electronic-Prescriptions`, naming every member asked.
 
 ## Terminology
 

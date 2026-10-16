@@ -27,6 +27,9 @@
 //!   its package and its codings displayed;
 //! - [`serving`]: the members the deployment declares to serve electronic
 //!   prescriptions and dispensations on that face, each on its own endpoint;
+//! - [`prescriptions`]: the search of a patient's prescriptions on that
+//!   face, each member's page read and every prescription passed through
+//!   with the `Provenance` that names its member;
 //! - [`terminology`]: the FHIR terminology server the component asks, over
 //!   HTTP;
 //! - [`transformation`]: the code systems a coded element is transcoded
@@ -52,6 +55,7 @@
 pub mod face;
 pub mod list;
 pub mod patient_summary;
+pub mod prescriptions;
 pub mod receive;
 pub mod reserved;
 pub mod serving;

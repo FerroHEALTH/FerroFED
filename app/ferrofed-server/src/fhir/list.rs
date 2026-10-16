@@ -32,6 +32,7 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use http::{StatusCode, Uri, header};
+use openehr_federation::status::EndpointStatus;
 
 use super::{admission, attach, fhir_json, outcome, refused, unadmitted};
 use crate::access::NoAccess;
@@ -186,6 +187,14 @@ fn listed(
                 list::silent(native.chosen.native.as_str(), silent.status().as_str()),
             )),
         }
+    }
+    // NOTE: Federation Tier §11.3, §11.4: under best-effort, a member the resolver could not
+    // answer for is named as a silent one, so the list never reads as complete.
+    for endpoint in &gathered.unresolved {
+        outcomes.push((
+            format!("urn:uuid:{}", minted()),
+            list::silent(endpoint.as_str(), EndpointStatus::NotResolved.as_str()),
+        ));
     }
     let mut response = fhir_json(StatusCode::OK, &list::searchset(matches, outcomes));
     attach(

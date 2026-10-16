@@ -157,6 +157,13 @@ impl Serving {
         self.by.contains_key(&category)
     }
 
+    /// Returns the members declared for `category`, ordered by node id, or
+    /// `None` when none is.
+    #[must_use]
+    pub fn members_of(&self, category: Category) -> Option<&BTreeSet<String>> {
+        self.by.get(&category)
+    }
+
     /// Returns each served category with its members, in the order of Art
     /// 14(1), the members ordered by node id.
     pub fn members(&self) -> impl Iterator<Item = (Category, &BTreeSet<String>)> {
@@ -210,7 +217,7 @@ fn prescriptions() -> CapabilityStatementRestResource {
         r#type: "MedicationRequest".into(),
         supported_profile: vec![MPD_MEDICATION_REQUEST.into()],
         documentation: Some(
-            "A patient's prescriptions as the members that hold them state them, each passed through unchanged; the members decide dispensability and the remaining dispensations.".into(),
+            "A patient's prescriptions as the members that hold them state them, each passed through as the member states it; the members decide dispensability and the remaining dispensations.".into(),
         ),
         interaction: vec![interaction("search-type"), interaction("read")],
         search_param: vec![CapabilityStatementRestResourceSearchParam {

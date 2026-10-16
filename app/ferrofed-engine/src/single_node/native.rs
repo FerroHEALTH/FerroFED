@@ -244,12 +244,53 @@ impl<T: Transport + Clone> NodeClient<T> {
         options: &DispatchOptions,
         until: tokio::time::Instant,
     ) -> Answer {
+        let outgoing = self.native_outgoing(asked, options);
+        let answered = self
+            .native_sent(asked.native, outgoing, (options, until), OPERATION)
+            .await;
+        match answered {
+            None => Answer::Abandoned,
+            Some(Err(failure)) => Answer::Failed(failure),
+            Some(Ok(answer)) if answer.status() == StatusCode::UNAUTHORIZED => {
+                Answer::Failed(ForwardError::Refused {
+                    endpoint: self.endpoint().clone(),
+                    status: answer.status(),
+                    body: answer.error_body(),
+                })
+            }
+            Some(Ok(answer)) if answer.status().is_success() => {
+                let status = answer.status();
+                match Document::read(Forwarded::of_answer(answer)) {
+                    Ok(document) => Answer::Document(document),
+                    Err(reason) => Answer::Unusable { status, reason },
+                }
+            }
+            Some(Ok(answer)) if answer.status() == StatusCode::NOT_FOUND => Answer::Absent,
+            Some(Ok(answer)) => Answer::Erred(answer.status()),
+        }
+    }
+
+    /// Sends `outgoing`, the request composed for the native endpoint
+    /// `native`, over the transport, credentials and in-flight cap of this
+    /// client, traced as `operation`, under the deadline of `options`, and
+    /// abandons it when the overall budget `until` runs out after it left.
+    ///
+    /// Returns `None` for an abandoned request, the [`ForwardError`] of one
+    /// refused at the gateway or that got no answer, and the member's answer
+    /// otherwise, whatever its status.
+    pub(super) async fn native_sent(
+        &self,
+        native: &NativeEndpoint,
+        outgoing: Result<Request, ForwardError>,
+        (options, until): (&DispatchOptions, tokio::time::Instant),
+        operation: &'static str,
+    ) -> Option<Result<openehr_its::rest::client::Answer, ForwardError>> {
         let call = async {
-            let outgoing = match self.native_outgoing(asked, options) {
+            let outgoing = match outgoing {
                 Ok(outgoing) => outgoing,
                 Err(refused) => return Some(Err(refused)),
             };
-            let client = match self.client_at(asked.native.url().clone(), options) {
+            let client = match self.client_at(native.url().clone(), options) {
                 Ok(client) => client,
                 Err(source) => {
                     return Some(Err(ForwardError::Compose {
@@ -274,7 +315,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 .ok()
                 .map(|sent| sent.map_err(|error| self.unanswered(error, options)))
         };
-        let answered = trace_context::node_request(self.endpoint(), OPERATION, call, |outcome| {
+        trace_context::node_request(self.endpoint(), operation, call, |outcome| {
             let contact = match outcome {
                 Some(Ok(answer)) => Contact::Answered(answer.status()),
                 Some(Err(error)) => Contact::of_forward_error(error),
@@ -282,27 +323,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             };
             (Some(contact), None)
         })
-        .await;
-        match answered {
-            None => Answer::Abandoned,
-            Some(Err(failure)) => Answer::Failed(failure),
-            Some(Ok(answer)) if answer.status() == StatusCode::UNAUTHORIZED => {
-                Answer::Failed(ForwardError::Refused {
-                    endpoint: self.endpoint().clone(),
-                    status: answer.status(),
-                    body: answer.error_body(),
-                })
-            }
-            Some(Ok(answer)) if answer.status().is_success() => {
-                let status = answer.status();
-                match Document::read(Forwarded::of_answer(answer)) {
-                    Ok(document) => Answer::Document(document),
-                    Err(reason) => Answer::Unusable { status, reason },
-                }
-            }
-            Some(Ok(answer)) if answer.status() == StatusCode::NOT_FOUND => Answer::Absent,
-            Some(Ok(answer)) => Answer::Erred(answer.status()),
-        }
+        .await
     }
 
     /// The request for the summary `asked` names, with the options of
@@ -312,19 +333,33 @@ impl<T: Transport + Clone> NodeClient<T> {
         asked: SummaryAsked<'_>,
         options: &DispatchOptions,
     ) -> Result<Request, ForwardError> {
-        options
-            .conveyance()
-            .holds_own(self.endpoint(), Some(asked.ehr_id))
-            .map_err(|source| ForwardError::Conveyance {
-                endpoint: self.endpoint().clone(),
-                source,
-            })?;
         let mut outgoing = Request::new(Method::GET, SUMMARY_PATH.to_owned());
         outgoing.query(
             "identifier",
             format!("{}|{}", asked.native.ehr_id_system(), asked.ehr_id),
         );
         outgoing.query("profile", asked.profile);
+        self.native_admitted(asked.native, asked.ehr_id, outgoing, options)
+    }
+
+    /// `outgoing`, a request to the native endpoint `native` that locates
+    /// the member's patient by its own `ehr_id`, with the `Accept` of FHIR
+    /// JSON and the options of `options` applied, once the conveyance is
+    /// held to that `ehr_id` and the outbound gate admitted it (§5.4.1, N33).
+    pub(super) fn native_admitted(
+        &self,
+        native: &NativeEndpoint,
+        ehr_id: &EhrId,
+        mut outgoing: Request,
+        options: &DispatchOptions,
+    ) -> Result<Request, ForwardError> {
+        options
+            .conveyance()
+            .holds_own(self.endpoint(), Some(ehr_id))
+            .map_err(|source| ForwardError::Conveyance {
+                endpoint: self.endpoint().clone(),
+                source,
+            })?;
         outgoing
             .headers_mut()
             .insert(ACCEPT, HeaderValue::from_static(FHIR_JSON));
@@ -343,20 +378,20 @@ impl<T: Transport + Clone> NodeClient<T> {
                 },
             })?;
         outgoing.apply_options(&call);
-        self.gate_native(asked, &outgoing, options)?;
+        self.gate_native(native, &outgoing, options)?;
         Ok(outgoing)
     }
 
-    /// The outbound gate over the request for a member's own summary: its
-    /// URL, the caller claims it conveys and the `Accept` it sets (§5.4.1,
-    /// N33).
+    /// The outbound gate over a request to the native endpoint `native`:
+    /// its URL, the caller claims it conveys and the `Accept` it sets
+    /// (§5.4.1, N33).
     ///
     /// The query is searched whole, the member's `ehr_id` included: an
     /// identifier that occurs inside it refuses the request, which then
     /// fails closed.
     fn gate_native(
         &self,
-        asked: SummaryAsked<'_>,
+        native: &NativeEndpoint,
         request: &Request,
         options: &DispatchOptions,
     ) -> Result<(), ForwardError> {
@@ -364,7 +399,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         if withheld.is_empty() {
             return Ok(());
         }
-        let base = asked.native.url();
+        let base = native.url();
         let mut url = base.clone();
         url.set_path(&format!(
             "{}{}",
