@@ -71,19 +71,19 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | it has no release matching 1.0.0 (its newest tag is `0.9.0`), so the pin stays. Evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
-| `openehr-query` | 0.0.86 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
-| `openehr-its` | 0.0.86 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560); 0.0.84 says the same of a DPoP proof that could not be made (FerroEHR #3565) |
+| `openehr-query` | 0.0.87 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529); 0.0.87 renders a column path with its AQL variable (FerroEHR #3782) |
+| `openehr-its` | 0.0.87 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560); 0.0.84 says the same of a DPoP proof that could not be made (FerroEHR #3565); 0.0.87 bounds the bytes the client reads of one answer and unquotes a quoted GET query parameter (FerroEHR #3600, #3781) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
-| `openehr-sdt` | 0.0.86, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar; 0.0.82 adds the `Display` that prints a scope in its canonical form (FerroEHR #3557) |
+| `openehr-sdt` | 0.0.87, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar; 0.0.82 adds the `Display` that prints a scope in its canonical form (FerroEHR #3557) |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
-| `fhir-types` | 0.1.109 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled in the binding crates and in the interoperability component `crates/eehrxf`, never in the engine (decisions A16 and A59);  0.1.109 is the release `fhirconnect` builds on (#684) |
-| `fhirconnect`, `openehr-mapping-core` | =0.1.111 and =0.1.109 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `crates/eehrxf` runs in process under `openehr` (#730), pinned exactly because FerroBRIDGE's crate line moves by patch (decision A61, #684) |
+| `fhir-types` | 0.1.113 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled in the binding crates and in the interoperability component `crates/eehrxf`, never in the engine (decisions A16 and A59); 0.1.113 is the release `fhirconnect` builds on (#684) |
+| `fhirconnect`, `openehr-mapping-core` | =0.1.117 and =0.1.111 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `crates/eehrxf` runs in process under `openehr` (#730), pinned exactly because FerroBRIDGE's crate line moves by patch (decision A61, #684) |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for inbound validation and outbound assertions |
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
-The `openehr-*` rows are the lockstep 0.0.86, published on 2026-10-06. The
+The `openehr-*` rows are the lockstep 0.0.87, published on 2026-10-15. The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
@@ -97,7 +97,9 @@ tables, 0.0.82 closes FerroEHR #3557 and #3558, the printer of a SMART
 on openEHR scope and the DPoP credential with its prover on the client,
 0.0.83 closes FerroEHR #3560, the `sent` of a client deadline, 0.0.84
 closes FerroEHR #3565, the `sent` of a DPoP proof that could not be made,
-and 0.0.86 changes only the Licensor its licence files name.
+0.0.86 changes only the Licensor its licence files name, and 0.0.87
+closes FerroEHR #3600, #3781 and #3782, the client's answer-size bound, the
+unquoted GET query parameter and the column path with its variable.
 
 ## 2. The openEHR surface: the published crates
 
@@ -266,8 +268,9 @@ its public AST. FerroFED has no AQL parser, no printer and no text splicing.
    track 10 (#90) is the backstop.
 
 `columns[]` is rendered once, from the façade AST, with
-`IdentifiedPath::column_path_text` and the select alias (or `#i`), never from a
-node's answer (§9.2, N17, CP-35). Rows are positional, so the merge maps each
+`IdentifiedPath::column_path_with_variable`, which keeps the AQL variable as
+the §9.4 example does (`c/uid/value`), and the select alias (or `#i`), never
+from a node's answer (§9.2, N17, CP-35). Rows are positional, so the merge maps each
 node column to its façade index and inserts the re-injected subject constant
 (N5) and any selected ENDPOINT attribute (N12, N18) at theirs.
 

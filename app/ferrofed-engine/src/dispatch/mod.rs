@@ -373,7 +373,8 @@ impl Contact {
             ClientError::Forbidden { .. } => Self::Answered(StatusCode::FORBIDDEN),
             ClientError::ServiceFailure { status, .. }
             | ClientError::UndocumentedStatus { status, .. }
-            | ClientError::Body { status, .. } => Self::Answered(*status),
+            | ClientError::Body { status, .. }
+            | ClientError::AnswerTooLarge { status, .. } => Self::Answered(*status),
             ClientError::Transport { .. }
             | ClientError::DeadlineElapsed { sent: true, .. }
             | ClientError::DpopProof { sent: true, .. } => Self::Silent,

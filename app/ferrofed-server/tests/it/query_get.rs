@@ -7,9 +7,11 @@
 //! request and the client the same answer (N1, CP-1; ITS-REST Query API). The
 //! query string is decoded by the generated `openehr-its` parameters, a `+`
 //! is a literal plus, and a refusal is `400 body-invalid` that asks nobody.
-//! No node request carries the patient identifier (§5.4.1, N33), not even
-//! one bound as a double-quoted value, whose quotes the decoding keeps, and
-//! the request log carries neither `q` nor a parameter value (§5.4.3).
+//! A double-quoted value is read as a JSON string, its quotes removed and
+//! its escapes decoded, so it binds what the same string binds in a `POST`
+//! body. No node request carries the patient identifier (§5.4.1, N33), not
+//! even one bound quoted or spelled in escapes, and the request log carries
+//! neither `q` nor a parameter value (§5.4.3).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -412,9 +414,19 @@ fn named_by_literal() -> String {
     )
 }
 
-/// The patient's identifier as a double-quoted query-string value, whose
-/// quotes the `GET` forms keep, each case with its name.
-fn quoted_identifiers() -> [(&'static str, String); 3] {
+/// `text` with every character written as a JSON `\u` escape (RFC 8259
+/// §7).
+fn escaped(text: &str) -> String {
+    text.chars().fold(String::new(), |mut out, c| {
+        // NOTE: writing to a String cannot fail, so the result is dropped.
+        let _written: std::fmt::Result = write!(out, "\\u{:04x}", u32::from(c));
+        out
+    })
+}
+
+/// The patient's identifier as a double-quoted query-string value, which
+/// the `GET` forms read as a JSON string, each case with its name.
+fn quoted_identifiers() -> [(&'static str, String); 5] {
     [
         ("the identifier quoted", format!("\"{PATIENT}\"")),
         (
@@ -424,6 +436,18 @@ fn quoted_identifiers() -> [(&'static str, String); 3] {
         (
             "the identifier namespace-qualified and quoted",
             format!("\"{NAMESPACE}::{PATIENT}\""),
+        ),
+        (
+            "the identifier quoted and spelled in JSON escapes",
+            format!("\"{}\"", escaped(PATIENT)),
+        ),
+        (
+            "the identifier quoted with only its tail escaped",
+            format!(
+                "\"{}{}\"",
+                PATIENT.trim_end_matches(PATIENT_TAIL),
+                escaped(PATIENT_TAIL)
+            ),
         ),
     ]
 }
@@ -491,37 +515,92 @@ async fn a_quoted_identifier_in_a_stored_get_query_parameter_is_refused_before_d
     Ok(())
 }
 
-/// A quoted identifier bound as the subject is resolution input that names
-/// no patient the cross-reference holds, so every member is `not-resolved`
-/// and none is asked (§5.4.1, §11.1, N33).
+/// The `query_parameters` of a `POST` body binding the patient and `name`,
+/// each as a JSON string.
+fn posted_parameters(name: &str) -> String {
+    format!(r#"{{"patient":"{PATIENT}","name":"{name}"}}"#)
+}
+
+/// Asserts that the `GET` of `uri` and the `POST` of `body` to `path`, each
+/// on fresh members, answer the same and send each member the same request,
+/// none of which carries the patient identifier (ITS-REST Query API, N1,
+/// §5.4.1, N33).
+async fn same_as_post(stored: bool, uri: &str, (path, body): (&str, String)) -> TestResult {
+    let members = async |dir: &Path| -> Result<(Router, Server, Server), Box<dyn Error>> {
+        let (app, a, b) = if stored {
+            registry_members(dir).await?
+        } else {
+            both_members(dir).await?
+        };
+        if stored {
+            let put = Request::put(format!("/v1/definition/query/{NAME}/1.0.0"))
+                .header(header::CONTENT_TYPE, "text/plain")
+                .body(Body::from(parameterised()))?;
+            let (status, text) = call(app.clone(), put).await?;
+            assert_eq!(StatusCode::OK, status, "§12.7: stored: {text}");
+        }
+        Ok((app, a, b))
+    };
+    let dir = tempfile::tempdir()?;
+    let (posted, a, b) = members(dir.path()).await?;
+    let request = Request::post(path)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))?;
+    let (status, text) = call(posted, request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let by_post = outcome(status, &text)?;
+    let elsewhere = tempfile::tempdir()?;
+    let (got, c, d) = members(elsewhere.path()).await?;
+    let (status, text) = call(got, get(uri)?).await?;
+    assert_eq!(StatusCode::OK, status, "{uri}: {text}");
+    assert_eq!(by_post, outcome(status, &text)?, "{uri}: the same answer");
+    assert_eq!(capture(&a).await?, capture(&c).await?, "{uri}: node A");
+    assert_eq!(capture(&b).await?, capture(&d).await?, "{uri}: node B");
+    nothing_identifying([&c, &d]).await
+}
+
+/// A quoted identifier bound as the subject is the identifier itself, so
+/// it resolves as the `POST` body's string does, and no member receives it
+/// (ITS-REST Query API, §5.4.1, N33).
 // conformance: CP-26
 #[tokio::test]
-async fn a_quoted_identifier_bound_as_the_subject_resolves_nowhere_and_asks_nobody() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let (app, a, b) = both_members(dir.path()).await?;
+async fn a_quoted_identifier_bound_as_the_subject_resolves_as_the_posted_string() -> TestResult {
     let uri = format!(
-        "/v1/query/aql?q={}&patient={}&name=x",
+        "/v1/query/aql?q={}&patient={}&name={}",
         encoded(&parameterised()),
-        encoded(&format!("\"{PATIENT}\""))
+        encoded(&format!("\"{PATIENT}\"")),
+        encoded(VISIT)
     );
-    let (status, text) = call(app, get(&uri)?).await?;
-    let (status, _, rows, endpoints) = outcome(status, &text)?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    assert!(rows.is_empty(), "{text}");
-    assert_eq!(
-        vec![
-            ("node-a-pub".to_owned(), "not-resolved".to_owned()),
-            ("node-b-pub".to_owned(), "not-resolved".to_owned()),
-        ],
-        endpoints,
-        "{text}"
+    let body = format!(
+        r#"{{"q":{},"query_parameters":{}}}"#,
+        serde_json::to_string(&parameterised())?,
+        posted_parameters(VISIT)
     );
-    for node in [&a, &b] {
-        let sent = received(node).await?;
-        assert!(
-            sent.is_empty(),
-            "a member that resolves nothing is not asked: {sent:?}"
-        );
+    same_as_post(false, &uri, ("/v1/query/aql", body)).await
+}
+
+/// `name="123"` binds the string `123`, as `{"name": "123"}` does in a
+/// `POST` body, on the ad hoc and on both stored-query `GET` forms
+/// (ITS-REST Query API).
+// conformance: CP-1
+#[tokio::test]
+async fn a_quoted_get_parameter_binds_the_string_a_post_body_binds() -> TestResult {
+    let quoted = encoded("\"123\"");
+    let uri = format!(
+        "/v1/query/aql?q={}&patient={PATIENT}&name={quoted}",
+        encoded(&parameterised())
+    );
+    let body = format!(
+        r#"{{"q":{},"query_parameters":{}}}"#,
+        serde_json::to_string(&parameterised())?,
+        posted_parameters("123")
+    );
+    same_as_post(false, &uri, ("/v1/query/aql", body)).await?;
+    let stored = format!("/v1/query/{NAME}");
+    for path in [stored.clone(), format!("/v1/query/{NAME}/1.0.0")] {
+        let uri = format!("{path}?patient={PATIENT}&name={quoted}");
+        let body = format!(r#"{{"query_parameters":{}}}"#, posted_parameters("123"));
+        same_as_post(true, &uri, (&stored, body)).await?;
     }
     Ok(())
 }

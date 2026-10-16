@@ -3,20 +3,16 @@
 
 //! A node's answer longer than the gateway reads of one answer.
 //!
-//! The HTTP engine a node client sends through ([`Transport`]) reads at most
-//! a bound the deployment sets of each answer, and ends a longer one unread,
-//! carrying [`Oversized`] as the source of a [`TransportError::Send`]. The
-//! node was reached and answered, and nothing usable came back, so the
+//! The HTTP engine a node client sends through reads at most a bound the
+//! deployment sets of each answer (`ReqwestTransport::with_max_body`), and
+//! the client ends a longer one unread with [`ClientError::AnswerTooLarge`].
+//! The node was reached and answered, and nothing usable came back, so the
 //! endpoint is `node-error` (§11.1), never `offline`: it fails the query
 //! with `424` under all-or-nothing and clears `meta.federation.complete`
 //! (§11.4). No specification governs the bound itself: our own design.
-//!
-//! [`Transport`]: openehr_its::rest::client::Transport
-
-use std::error::Error;
 
 use http::StatusCode;
-use openehr_its::rest::client::{ClientError, TransportError};
+use openehr_its::rest::client::ClientError;
 
 /// An answer of the node's whose body is longer than the bound, so the
 /// engine stopped reading it.
@@ -49,24 +45,13 @@ impl Oversized {
     }
 
     /// The [`Oversized`] a call that ended in `error` stopped at, when the
-    /// engine ended it there.
-    ///
-    /// The engine reports it as the source of a [`TransportError::Send`], or
-    /// further down that error's chain where an engine wraps another.
+    /// engine stopped reading its answer at the bound.
     #[must_use]
-    pub fn of_client_error(error: &ClientError) -> Option<&Self> {
-        let ClientError::Transport {
-            source: TransportError::Send { source },
-            ..
-        } = error
-        else {
-            return None;
-        };
-        let top: &(dyn Error + 'static) = &**source;
-        std::iter::successors(Some(top), |cause: &&(dyn Error + 'static)| {
-            (*cause).source()
-        })
-        .find_map(|cause| cause.downcast_ref::<Self>())
+    pub fn of_client_error(error: &ClientError) -> Option<Self> {
+        match error {
+            ClientError::AnswerTooLarge { status, limit, .. } => Some(Self::new(*status, *limit)),
+            _ => None,
+        }
     }
 }
 
@@ -76,47 +61,37 @@ mod tests {
     use http::{Method, StatusCode};
     use openehr_its::rest::client::{ClientError, TransportError};
 
-    /// A wrapping engine's error whose source is the bound.
-    #[derive(Debug, thiserror::Error)]
-    #[error("the wrapped engine failed")]
-    struct Wrapped(#[source] Oversized);
-
-    fn sent(source: Box<dyn std::error::Error + Send + Sync>) -> ClientError {
-        ClientError::Transport {
+    #[test]
+    fn an_answer_past_the_bound_is_the_bound() {
+        let error = ClientError::AnswerTooLarge {
             method: Method::POST,
             path: "/query/aql".to_owned(),
-            source: TransportError::Send { source },
-        }
-    }
-
-    #[test]
-    fn the_bound_is_found_at_the_top_of_a_send_error_and_down_its_chain() {
-        let bound = Oversized::new(StatusCode::OK, 1024);
+            status: StatusCode::OK,
+            limit: 1024,
+        };
         assert_eq!(
-            Some(&bound),
-            Oversized::of_client_error(&sent(Box::new(bound)))
-        );
-        assert_eq!(
-            Some(&bound),
-            Oversized::of_client_error(&sent(Box::new(Wrapped(bound))))
+            Some(Oversized::new(StatusCode::OK, 1024)),
+            Oversized::of_client_error(&error)
         );
     }
 
     #[test]
-    fn a_send_error_of_another_kind_is_not_the_bound() {
-        let refused = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
-        assert_eq!(None, Oversized::of_client_error(&sent(Box::new(refused))));
+    fn a_transport_error_is_not_the_bound() {
+        let refused = ClientError::Transport {
+            method: Method::POST,
+            path: "/query/aql".to_owned(),
+            source: TransportError::Send {
+                source: Box::new(std::io::Error::from(std::io::ErrorKind::ConnectionRefused)),
+            },
+        };
+        assert_eq!(None, Oversized::of_client_error(&refused));
         let timeout = ClientError::Transport {
             method: Method::POST,
             path: "/query/aql".to_owned(),
             source: TransportError::Timeout {
-                source: Box::new(Oversized::new(StatusCode::OK, 1)),
+                source: Box::new(std::io::Error::from(std::io::ErrorKind::TimedOut)),
             },
         };
-        assert_eq!(
-            None,
-            Oversized::of_client_error(&timeout),
-            "only a send error carries the bound"
-        );
+        assert_eq!(None, Oversized::of_client_error(&timeout));
     }
 }

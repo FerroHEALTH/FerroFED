@@ -124,7 +124,7 @@ source and run on a terminal with the development configuration of
   Federation Tier  1.0.0
   ITS-REST         1.1.0
   AQL              1.1.0
-  openehr-*        0.0.86
+  openehr-*        0.0.87
   Support          none, this build is no release
 
   Base path        /

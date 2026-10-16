@@ -378,7 +378,13 @@ category (Federation Tier §2.3, N23):
    `422` naming where it is.
 4. It is mapped into one composition by the category's FHIRconnect mapping.
    The composition keeps the whole document, as it was received, in its
-   `FEEDER_AUDIT.original_content`.
+   `FEEDER_AUDIT.original_content`. A document names no openEHR
+   `COMPOSITION.category`, so the composition takes the one the category's
+   template decides: its assumed value, or its one admitted code, or `event`
+   (openehr `433`) when the template leaves the category open. A template
+   that admits several category codes and assumes none refuses the mapping,
+   naming `<root>/category|code`; give the template's `category` an assumed
+   value ([The template's category](#the-templates-category)).
 5. The patient is resolved from every identifier of the document's `Patient`
    in a namespace `fhir.receive_namespaces` names, at the receiving member
    alone (§5.2). Every one must name the same `ehr_id` there. A patient the
@@ -412,6 +418,34 @@ codes, and its supported profiles are the `Bundle` profiles of the
 categories received. `ferrofed config check` prints the same categories,
 each received one with its member
 ([Running it](../operate/configuration.md#running-it)).
+
+### The template's category
+
+`COMPOSITION.category` is mandatory in the openEHR RM, and a received
+document never names one. The mapping takes it from the template's
+constraint on `/category`. When that constraint admits more than one code,
+`persistent` (`431`) and `event` (`433`) for example, the template must say
+which one a mapped composition carries, with an assumed value on the
+`C_CODE_PHRASE` (AOM 1.4 `assumed_value`):
+
+```xml
+<children xsi:type="C_CODE_PHRASE">
+  <rm_type_name>CODE_PHRASE</rm_type_name>
+  <!-- occurrences and node_id as the template has them -->
+  <assumed_value>
+    <terminology_id><value>openehr</value></terminology_id>
+    <code_string>433</code_string>
+  </assumed_value>
+  <terminology_id><value>openehr</value></terminology_id>
+  <code_list>431</code_list>
+  <code_list>433</code_list>
+</children>
+```
+
+Without one, every document of that category is refused: the mapping fails
+with `MissingRequiredSuffix` on `<root>/category|code`, and the document is
+a `422` with the issue code `processing`, with nothing sent to any member. A template that admits
+one code, or leaves the category open, needs no change.
 
 ## Prescriptions and dispensations
 

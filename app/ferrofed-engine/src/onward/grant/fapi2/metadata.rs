@@ -195,6 +195,7 @@ pub(crate) async fn discover<T: Transport>(
     let answer = transport.send(request).await.map_err(|error| match error {
         TransportError::Timeout { .. } => DiscoveryError::TimeOut(error),
         TransportError::Send { .. } => DiscoveryError::Unreachable(error),
+        TransportError::BodyTooLarge { limit, .. } => DiscoveryError::TooLarge { limit },
     })?;
     if answer.status() != StatusCode::OK {
         return Err(DiscoveryError::Status {

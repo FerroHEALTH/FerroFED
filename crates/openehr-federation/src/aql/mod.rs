@@ -574,7 +574,8 @@ fn first_fault(error: &ParseError) -> Option<Range<usize>> {
 }
 
 /// The `columns[]` of the façade query: each column's alias, or `#<index>`,
-/// and the path as written for a path column (N17, §9.2).
+/// and for a path column its path with the AQL variable, as the §9.4
+/// example renders `c/uid/value` (N17, §9.2, CP-35).
 fn render_columns(select: &SelectClause) -> Vec<ResultSetColumn> {
     select
         .columns
@@ -583,7 +584,7 @@ fn render_columns(select: &SelectClause) -> Vec<ResultSetColumn> {
         .map(|(index, column)| ResultSetColumn {
             name: column.alias.clone().unwrap_or_else(|| format!("#{index}")),
             path: match &column.column {
-                ColumnExpr::Path(path) => Some(path.column_path_text()),
+                ColumnExpr::Path(path) => Some(path.column_path_with_variable()),
                 ColumnExpr::Primitive(_) | ColumnExpr::Aggregate(_) | ColumnExpr::Function(_) => {
                     None
                 }

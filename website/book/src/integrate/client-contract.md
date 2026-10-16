@@ -201,8 +201,9 @@ WHERE e/ehr_status/subject/external_ref/id/value = '12345'
 - A query that selects no attribute gets exactly the columns and rows a single
   CDR would return (N17).
 - `columns[]` is the gateway's rendering of your query: an attribute column is
-  named by its alias, and its path is the ITS-REST form with the variable
-  stripped, `/id` for `p/id` (§9.2).
+  named by its alias, and its path keeps the AQL variable as you wrote it,
+  `p/id` for `p/id` and `c/uid/value` for `c/uid/value`, as the §9.4 example
+  renders it (§9.2).
 - An alias keeps an attribute apart from an EHR-derived column of the same
   name: `p/system_id AS node_system, e/system_id/value AS system_id` returns
   both (N18). Giving the attribute and an EHR-derived column the same alias is

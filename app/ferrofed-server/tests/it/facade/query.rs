@@ -50,15 +50,15 @@ async fn a_patient_query_is_one_result_set_over_both_nodes() -> TestResult {
         vec![
             Column {
                 name: "patient".to_owned(),
-                path: Some("/ehr_status/subject/external_ref/id/value".to_owned()),
+                path: Some("e/ehr_status/subject/external_ref/id/value".to_owned()),
             },
             Column {
                 name: "#1".to_owned(),
-                path: Some("/uid/value".to_owned()),
+                path: Some("c/uid/value".to_owned()),
             },
         ],
         answer.columns,
-        "columns[] renders the client's query the ITS-REST way, with no endpoint column (N17, CP-35)"
+        "columns[] renders the client's query with its AQL variables, as §9.4 does, and no endpoint column (N17, CP-35)"
     );
     assert_eq!(
         vec![

@@ -377,7 +377,7 @@ async fn rows_of(app: &axum::Router, aql: &str) -> Result<Vec<Vec<String>>, Box<
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
     assert_eq!(
-        vec![Some("/ehr_status/uid/value")],
+        vec![Some("e/ehr_status/uid/value")],
         answer.column_paths(),
         "N17, §9.2: columns[] renders the client's query, never the pushed ehr_id"
     );

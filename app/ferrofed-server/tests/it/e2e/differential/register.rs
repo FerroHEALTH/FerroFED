@@ -103,21 +103,6 @@ const STANDARD_META: &[&str] = &[
     "t9-ehr-id-from-form",
 ];
 
-/// The steps of the standard run where both gateways answer with rows.
-const STANDARD_ROWS: &[&str] = &[
-    "t1-post",
-    "t2-external-ref-carrier",
-    "t2-entry-carrier",
-    "t2-subject-column",
-    "t3-endpoint-directive",
-    "t3-organisation-directive",
-    "t3-endpoint-header",
-    "t3-named-member-unresolved",
-    "t4-partial",
-    "t9-ehr-id-where-form",
-    "t9-ehr-id-from-form",
-];
-
 /// The steps of the twin run where both gateways answer with rows.
 const TWIN_ROWS: &[&str] = &[
     "t5-duplicates",
@@ -182,22 +167,6 @@ pub(crate) const REGISTER: &[Entry] = &[
         verdict: Verdict::Permitted,
         cause: "an undirected `COUNT` is refused `400` by the reference implementation and decomposed by FerroFED; §11.6.3 permits a declared decomposable aggregate, and each gateway declares its set in `OPTIONS`.",
         recorded: "§11.6.3, N14, N39, CP-10",
-    },
-    Entry {
-        test: "standard",
-        steps: STANDARD_ROWS,
-        aspects: &["columns"],
-        verdict: Verdict::SpecificationAmbiguity,
-        cause: "`columns[].path` keeps the `FROM` variable at the reference implementation (`c/uid/value`) and drops it at FerroFED (`/uid/value`); §9.2 requires the gateway's own rendering and names both shapes without choosing one.",
-        recorded: "#212 issuecomment-5955710203",
-    },
-    Entry {
-        test: "twin",
-        steps: TWIN_ROWS,
-        aspects: &["columns"],
-        verdict: Verdict::SpecificationAmbiguity,
-        cause: "`columns[].path` keeps the `FROM` variable at the reference implementation and drops it at FerroFED; §9.2 names both shapes without choosing one.",
-        recorded: "#212 issuecomment-5955710203",
     },
     Entry {
         test: "standard",

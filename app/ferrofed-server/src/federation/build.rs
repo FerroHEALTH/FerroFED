@@ -31,7 +31,6 @@ use crate::facade::options;
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::NodeRequests;
-use crate::node_transport::BoundedTransport;
 use crate::onward::NodeTransport;
 use ferrofed_identity::dev::Profile;
 
@@ -175,11 +174,8 @@ impl Federation {
         let consent = binding::prefilter(settings, &snapshot)?;
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
-        let transport = BoundedTransport::new(
-            settings.federation.budget.overall(),
-            settings.federation.max_node_answer_bytes.get(),
-        )
-        .map_err(|source| FederationError::Transport(Box::new(source)))?;
+        let transport = crate::onward::node_transport(reqwest::Client::builder(), settings)
+            .map_err(|source| FederationError::Transport(Box::new(source)))?;
         let onward = crate::onward::onward(settings, transport, &snapshot)?;
         let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
         let clients = NodeClients::from_snapshot_over(
