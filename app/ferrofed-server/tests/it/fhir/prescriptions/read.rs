@@ -385,6 +385,53 @@ async fn a_caller_confined_to_one_patient_reads_that_patients_prescription_alone
     Ok(())
 }
 
+#[tokio::test]
+async fn a_prescription_with_no_id_to_read_it_by_is_listed_and_warned_of() -> TestResult {
+    let own = "rx".repeat(32);
+    let long = format!(
+        r#"{{"resourceType":"MedicationRequest","id":"{own}","identifier":[{{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-LONG"}}],"status":"active","intent":"order","subject":{{"reference":"Patient/p-a"}}}}"#
+    );
+    let members = Members::start(
+        page(searchset("https://cdr-a.example.org", &[&long], None)),
+        page(searchset("https://cdr-b.example.org", &[RX_B], None)),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(members.both(dir.path())?, search("")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    let matched = super::entries(&bundle, "match");
+    assert!(
+        matched
+            .iter()
+            .any(|resource| resource["id"] == own.as_str()),
+        "listed as its member states it: {bundle}"
+    );
+    let outcomes = super::entries(&bundle, "outcome");
+    let [warning] = outcomes.as_slice() else {
+        return Err(format!("one warning: {bundle}").into());
+    };
+    assert_eq!(
+        warning.pointer("/issue/0/severity"),
+        Some(&Value::from("warning"))
+    );
+    let diagnostics = warning
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    assert!(
+        diagnostics.contains("node-a-mpd") && diagnostics.contains("cannot be read by id"),
+        "the member is named: {diagnostics}"
+    );
+    for unquoted in [own.as_str(), "SYNTHETIC-RX-LONG", EHR_A] {
+        assert!(
+            !diagnostics.contains(unquoted),
+            "the warning quotes no identifier: {diagnostics}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn a_read_is_recorded_once_under_electronic_prescriptions_naming_its_member() -> TestResult {

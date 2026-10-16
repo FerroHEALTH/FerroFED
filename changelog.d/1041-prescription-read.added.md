@@ -12,4 +12,6 @@
   patient reads that patient's prescriptions alone. The read takes the
   `composition-` read scope over every template and is recorded under
   `Electronic-Prescriptions`. The search names each prescription by the
-  same `id`, and its `fullUrl` by the read.
+  same `id`, and its `fullUrl` by the read; a prescription whose parts do
+  not fit an `id` is listed as its member sent it, with a `warning` naming
+  the member and quoting no identifier.

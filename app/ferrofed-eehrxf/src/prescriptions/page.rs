@@ -82,6 +82,9 @@ pub struct Prescription {
     pub kept: Kept,
     /// Its identifiers that have both a system and a value.
     pub identifiers: Vec<(String, String)>,
+    /// Whether the face can give it no id to read it by, so it is listed
+    /// as its member states it and cannot be read by id.
+    pub unreadable: bool,
 }
 
 impl std::fmt::Debug for Prescription {
@@ -243,6 +246,7 @@ impl Page {
                         .filter_map(|identifier| Some((identifier.system?, identifier.value?)))
                         .filter(|(system, value)| !system.is_empty() && !value.is_empty())
                         .collect(),
+                    unreadable: false,
                 }),
                 (Some("match"), false) => return Err(Unusable::Foreign),
                 (Some("include") | None, _) => page.included.push(kept),

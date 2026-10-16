@@ -278,7 +278,8 @@ fn listed(
 ///
 /// A prescription named so has that id and a `fullUrl` of the face's read
 /// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it;
-/// one whose parts give no such id keeps the member's own id and `fullUrl`.
+/// one whose parts give no such id keeps the member's own id and `fullUrl`
+/// and is marked unreadable, which the searchset warns of.
 fn named(fhir: &FhirSettings, chosen: &Chosen, pages: &[Page]) -> Vec<Page> {
     let base = fhir.absolute.trim_end_matches('/');
     let mut pages = pages.to_vec();
@@ -292,11 +293,12 @@ fn named(fhir: &FhirSettings, chosen: &Chosen, pages: &[Page]) -> Vec<Page> {
         });
         let Some(id) = id else {
             // NOTE: no specification governs this: our own design; a prescription whose parts
-            // give no id is still listed as its member states it, and only the read cannot reach it.
+            // give no id is listed as its member states it, and the searchset warns it cannot be read.
             tracing::warn!(
                 endpoint = chosen.native.as_str(),
                 "a member's prescription has no id the face can read it by"
             );
+            prescription.unreadable = true;
             continue;
         };
         kept.full_url = Some(format!("{base}{PRESCRIPTIONS}/{id}"));

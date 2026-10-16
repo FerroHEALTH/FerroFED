@@ -498,7 +498,8 @@ own endpoint, the member's `ehr_id` for the patient and the member's own
 `id` of the prescription, packed into the 64 characters a FHIR `id` allows,
 so the gateway holds no state between the search and the read. A
 prescription whose parts do not fit keeps the member's own `id` in the
-search, and cannot be read through the face.
+search and cannot be read through the face; the search then adds a
+`warning` `outcome` entry naming the member, and quoting no identifier.
 
 The `id` only locates the prescription. The gateway asks the member it
 names alone, with
