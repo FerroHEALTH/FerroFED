@@ -18,6 +18,7 @@
 //! [`WAIT`] runs out, never a fixed sleep.
 
 use std::error::Error;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -32,7 +33,7 @@ use tokio::process::{Child, ChildStdout, Command};
 const WEBDRIVER_ENV: &str = "FERROFED_WEBDRIVER";
 
 /// The environment variable naming the chromedriver binary, when it is not
-/// [`CHROMEDRIVER`] on `PATH`.
+/// the one in [`installed`], or else [`CHROMEDRIVER`] on `PATH`.
 const CHROMEDRIVER_ENV: &str = "FERROFED_CHROMEDRIVER";
 
 /// The chromedriver binary looked up on `PATH`.
@@ -41,9 +42,41 @@ const CHROMEDRIVER: &str = "chromedriver";
 /// What chromedriver prints once it listens, before the port it chose.
 const LISTENING: &str = "ChromeDriver was started successfully on port ";
 
-/// The environment variable naming the Chrome binary, when chromedriver is
-/// not to find one itself.
+/// The environment variable naming the Chrome binary, when it is not the one
+/// in [`installed`], or else the one chromedriver finds itself.
 const CHROME_ENV: &str = "FERROFED_CHROME";
+
+/// Where `scripts/release/journey-tools.sh` unpacks chromedriver and Chrome
+/// for this platform, under the workspace's `target/journey-tools`: the
+/// Chrome for Testing platform name, and the Chrome binary inside its
+/// directory.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const INSTALLED: Option<(&str, &str)> = Some(("linux64", "chrome"));
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const INSTALLED: Option<(&str, &str)> = Some((
+    "mac-arm64",
+    "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+));
+#[cfg(not(any(
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64")
+)))]
+const INSTALLED: Option<(&str, &str)> = None;
+
+/// The chromedriver and the Chrome binary `scripts/release/journey-tools.sh`
+/// installed for this platform, each when it is there.
+fn installed() -> (Option<PathBuf>, Option<PathBuf>) {
+    let Some((platform, chrome)) = INSTALLED else {
+        return (None, None);
+    };
+    let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/journey-tools");
+    let driver = tools.join(format!("chromedriver-{platform}/chromedriver"));
+    let chrome = tools.join(format!("chrome-{platform}")).join(chrome);
+    (
+        driver.is_file().then_some(driver),
+        chrome.is_file().then_some(chrome),
+    )
+}
 
 /// How long a wait polls before it fails.
 pub(crate) const WAIT: Duration = Duration::from_secs(20);
@@ -71,8 +104,10 @@ impl Chromedriver {
     /// Starts a chromedriver on a port the system picks, waits until it
     /// says it listens, and returns it with its endpoint.
     async fn start() -> Result<(Self, String), Box<dyn Error>> {
-        let binary =
-            std::env::var(CHROMEDRIVER_ENV).unwrap_or_else(|_unset| CHROMEDRIVER.to_owned());
+        let binary = std::env::var_os(CHROMEDRIVER_ENV)
+            .map(PathBuf::from)
+            .or_else(|| installed().0)
+            .unwrap_or_else(|| PathBuf::from(CHROMEDRIVER));
         let mut command = Command::new(&binary);
         #[cfg(unix)]
         command.process_group(0);
@@ -85,7 +120,8 @@ impl Chromedriver {
             .spawn()
             .map_err(|error| {
                 format!(
-                    "{binary} does not start (name chromedriver in {CHROMEDRIVER_ENV}): {error}"
+                    "{} does not start (run scripts/release/journey-tools.sh target/journey-tools, or name chromedriver in {CHROMEDRIVER_ENV}): {error}",
+                    binary.display()
                 )
             })?;
         let stdout = child
@@ -150,8 +186,14 @@ impl Browser {
         capabilities.set_disable_dev_shm_usage()?;
         capabilities.add_arg("--window-size=1280,1024")?;
         capabilities.set_browser_log_level(LoggingPrefsLogLevel::Info)?;
-        if let Ok(binary) = std::env::var(CHROME_ENV) {
-            capabilities.set_binary(&binary)?;
+        let chrome = std::env::var_os(CHROME_ENV)
+            .map(PathBuf::from)
+            .or_else(|| installed().1);
+        if let Some(chrome) = chrome {
+            let chrome = chrome
+                .to_str()
+                .ok_or_else(|| format!("{} is no UTF-8 path", chrome.display()))?;
+            capabilities.set_binary(chrome)?;
         }
         let (chromedriver, endpoint) = match std::env::var(WEBDRIVER_ENV) {
             Ok(endpoint) => (None, endpoint),

@@ -71,29 +71,34 @@ A test that checks the gate lives in the `e2e` module of its crate's test
 binary (`tests/it/e2e.rs` or `tests/it/e2e/`), the one place that filter
 selects; `scripts/checks/e2e-placement.sh` refuses it anywhere else.
 
-The operator console's browser journeys need the release site bundle and a
-chromedriver whose major version matches your Chrome, on `PATH` or named in
-`FERROFED_CHROMEDRIVER`, and run behind their own gate, as the
+The operator console's browser journeys need the release site bundle, and
+Chrome for Testing with its chromedriver at the release CI pins. Run
+`journey-tools.sh` once to install both into `target/journey-tools`, where
+the journeys look first, then run the journeys behind their own gate, as the
 `journeys (browser)` job runs them:
 
 ```
 scripts/release/viewer-tools.sh "$HOME/.cache/ferrofed-viewer-tools"
 export PATH="$HOME/.cache/ferrofed-viewer-tools/bin:$PATH"
 scripts/release/viewer-site.sh --release
+scripts/release/journey-tools.sh target/journey-tools
 FERROFED_JOURNEYS=1 cargo nextest run --locked -p ferrofed-testkit \
   -E 'test(/^journeys::/)'
 ```
 
-Each journey starts that chromedriver on a port the system picks and stops
-it with its browser, so the journeys run in parallel and share no driver.
+`journey-tools.sh` takes each download from the Chrome for Testing API and
+checks it against its pinned SHA-256 (Linux x86-64 and macOS arm64). Each
+journey starts that chromedriver on a port the system picks and stops it,
+with the Chrome it launched, when its browser closes, so the journeys run in
+parallel and share no driver. `FERROFED_CHROMEDRIVER` names another
+chromedriver, and without either the journeys use the one on `PATH`.
 
 `viewer-tools.sh` installs the Tailwind CSS CLI and wasm-opt the bundle is
 built with, each checked against its pinned SHA-256 (Linux x86-64 and macOS
 arm64), and `viewer-site.sh` refuses to build until both are on `PATH`, so
 cargo-leptos never downloads either itself.
 `FERROFED_WEBDRIVER` names a running WebDriver endpoint every journey shares
-instead, and `FERROFED_CHROME`
-a Chrome binary chromedriver would not find itself. A journey lives in the
+instead, and `FERROFED_CHROME` another Chrome binary. A journey lives in the
 testkit's `tests/it/journeys/`, where the guard above keeps it.
 
 Every cargo invocation uses `--locked`, and `Cargo.lock` is committed.

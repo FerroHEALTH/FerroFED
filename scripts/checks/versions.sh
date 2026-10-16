@@ -1383,6 +1383,26 @@ if [[ -f .github/workflows/ci.yml ]]; then
     note "OK: Chrome for Testing $found"
   fi
 fi
+# The local install of that release: its version and each zip's SHA-256 in
+# the install script against their rows.
+journey_tools=scripts/release/journey-tools.sh
+for pair in \
+  "Chrome for Testing (Chrome and chromedriver)|chrome_version" \
+  "Chrome for Testing, chrome-linux64.zip SHA-256|chrome_linux64_sha256" \
+  "Chrome for Testing, chrome-mac-arm64.zip SHA-256|chrome_mac_arm64_sha256" \
+  "Chrome for Testing, chromedriver-linux64.zip SHA-256|chromedriver_linux64_sha256" \
+  "Chrome for Testing, chromedriver-mac-arm64.zip SHA-256|chromedriver_mac_arm64_sha256"; do
+  item="${pair%|*}"
+  want="$(pin_of "$item" "$matrix")"
+  found="$(sed -nE "s|^${pair#*|}=\"([^\"]+)\"\$|\1|p" "$journey_tools" 2>/dev/null)"
+  if [[ -z "$want" ]]; then
+    bad "$matrix has no '$item' row"
+  elif [[ "$found" != "$want" ]]; then
+    bad "$item: $journey_tools holds ${found:-nothing}, $matrix pins $want"
+  else
+    note "OK: $item $want"
+  fi
+done
 
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 # The reference a pin cell names: its first 40-hex token (a commit), else its
