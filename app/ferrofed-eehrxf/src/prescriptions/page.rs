@@ -17,6 +17,7 @@
 //! never an empty page.
 
 use fhir_types::codec::Value;
+use fhir_types::r4::resource::UnknownResource;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use url::Url;
@@ -35,6 +36,32 @@ pub struct Kept {
     pub resource: Value,
     /// The resource's type.
     pub resource_type: String,
+}
+
+impl Kept {
+    /// Returns the resource's logical id, when it carries one as a string.
+    #[must_use]
+    pub fn id(&self) -> Option<&str> {
+        self.resource.get("id").and_then(Value::as_str)
+    }
+
+    /// Names the resource by the logical id `id`, the one change made to it;
+    /// a resource that is no JSON object is left as it is.
+    pub fn rename(&mut self, id: &str) {
+        if let Value::Object(object) = &mut self.resource {
+            object.insert("id".to_owned(), Value::String(id.to_owned()));
+        }
+    }
+
+    /// Returns the resource as the generated `Resource::Unknown`, its JSON
+    /// value as kept.
+    #[must_use]
+    pub fn unknown(&self) -> fhir_types::r4::resource::Resource {
+        fhir_types::r4::resource::Resource::Unknown(UnknownResource {
+            resource_type: self.resource_type.clone(),
+            body: self.resource.clone(),
+        })
+    }
 }
 
 impl std::fmt::Debug for Kept {
@@ -274,6 +301,25 @@ mod tests {
         assert_eq!(
             page.next.unwrap().as_str(),
             "https://member.example.org/fhir/MedicationRequest?page=2"
+        );
+    }
+
+    #[test]
+    fn a_renamed_prescription_changes_its_id_alone() {
+        let body = br#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"MedicationRequest","id":"rx-1","dispenseRequest":{"quantity":{"value":1.50}}}}]}"#;
+        let page = Page::read(body, &base()).unwrap();
+        let mut kept = page.prescriptions.first().unwrap().kept.clone();
+        assert_eq!(Some("rx-1"), kept.id());
+        kept.rename("face-1");
+        let expected: fhir_types::codec::Value = serde_json::from_str(
+            r#"{"resourceType":"MedicationRequest","id":"face-1","dispenseRequest":{"quantity":{"value":1.50}}}"#,
+        )
+        .unwrap();
+        assert_eq!(expected, kept.resource);
+        assert!(
+            serde_json::to_string(&kept.unknown())
+                .unwrap()
+                .contains(":1.50")
         );
     }
 

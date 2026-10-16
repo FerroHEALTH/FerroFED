@@ -63,6 +63,9 @@ pub(crate) enum Unread {
     /// The member answered more pages than the search follows.
     #[error("the member answered more than {PAGES} pages")]
     Pages,
+    /// Asked for one prescription by its id, the member answered another.
+    #[error("the member answered a prescription other than the one asked for")]
+    Other,
 }
 
 /// What one member answered the search with.
@@ -309,7 +312,7 @@ async fn asked(
         let federation = Arc::clone(federation);
         let options = options.clone();
         tasks.spawn(async move {
-            let held = paged(&federation, &member, &options, until).await;
+            let held = paged(&federation, (&member, None), &options, until).await;
             held.map(|held| {
                 (
                     position,
@@ -332,16 +335,17 @@ async fn asked(
     Ok(answered.into_iter().map(|(_, member)| member).collect())
 }
 
-/// Every page of `member`'s search, under `options`, abandoned when the
-/// overall budget `until` runs out.
+/// Every page of `member`'s search, for the one prescription of the logical
+/// id `id` when it is given, under `options`, abandoned when the overall
+/// budget `until` runs out.
 ///
 /// # Errors
 ///
 /// [`FanOutError::UnknownEndpoint`] when the member has no client or no
 /// native endpoint.
-async fn paged(
+pub(crate) async fn paged(
     federation: &Federation,
-    member: &Chosen,
+    (member, id): (&Chosen, Option<&str>),
     options: &DispatchOptions,
     until: tokio::time::Instant,
 ) -> Result<Held, FanOutError> {
@@ -367,6 +371,7 @@ async fn paged(
             native: endpoint,
             ehr_id: &member.ehr_id,
             resource: RESOURCE,
+            id,
             next: next.as_ref(),
         };
         let page = match client.native_search(asked, options, until).await {

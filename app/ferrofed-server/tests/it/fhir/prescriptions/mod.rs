@@ -14,6 +14,7 @@
 //! neither a member nor the log.
 
 mod paging;
+mod read;
 mod resolution;
 mod restricted;
 
@@ -25,7 +26,9 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_server::config::Config;
+use ferrofed_server::fhir::locator::Locator;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
@@ -55,11 +58,46 @@ const RX_A: &str = r#"{ "resourceType" : "MedicationRequest", "id":"rx-a1", "ext
 /// The decimals of [`RX_A`], each as the member wrote it.
 const DECIMALS: [&str; 3] = ["1.50", "0.1000", "1e2"];
 
-/// Whether the `searchset` `text` relays `resource` as an entry whose
-/// resource is equal to it as a JSON value (RFC 8259 §4: member order has
-/// no meaning), every number compared by its text.
-fn relays(text: &str, resource: &str) -> Result<bool, Box<dyn Error>> {
-    let sent: fhir_types::codec::Value = serde_json::from_str(resource)?;
+/// Node A's own endpoint and its `ehr_id` for the test patient.
+const AT_A: (&str, &str) = ("node-a-mpd", EHR_A);
+
+/// Node B's own endpoint and its `ehr_id` for the test patient.
+const AT_B: (&str, &str) = ("node-b-mpd", EHR_B);
+
+/// The id the face names the prescription `resource`, the member's own id,
+/// by, held under `ehr_id` at the member's own endpoint `endpoint`.
+fn face_id(endpoint: &str, ehr_id: &str, resource: &str) -> Result<String, Box<dyn Error>> {
+    Ok(
+        Locator::new(EndpointId::new(endpoint)?, EhrId::new(ehr_id)?, resource)
+            .id()
+            .ok_or("the parts fit an id")?,
+    )
+}
+
+/// The prescription `resource` the member at `at`, its own endpoint and its
+/// `ehr_id`, sent, as the face answers it: equal to it as a JSON value
+/// (RFC 8259 §4: member order has no meaning), every number by its text, but
+/// for its id, the face's own (FHIR R4 `http.html` §3.1.0.2).
+fn as_face(resource: &str, at: (&str, &str)) -> Result<fhir_types::codec::Value, Box<dyn Error>> {
+    let mut sent: fhir_types::codec::Value = serde_json::from_str(resource)?;
+    if let fhir_types::codec::Value::Object(object) = &mut sent {
+        let own = object
+            .get("id")
+            .and_then(fhir_types::codec::Value::as_str)
+            .ok_or("the member's id")?
+            .to_owned();
+        object.insert(
+            "id".to_owned(),
+            fhir_types::codec::Value::String(face_id(at.0, at.1, &own)?),
+        );
+    }
+    Ok(sent)
+}
+
+/// Whether the `searchset` `text` relays `resource`, which the member at
+/// `at` sent, as an entry whose resource is [`as_face`] gives it.
+fn relays(text: &str, resource: &str, at: (&str, &str)) -> Result<bool, Box<dyn Error>> {
+    let sent = as_face(resource, at)?;
     let fhir_types::codec::Value::Object(bundle) = serde_json::from_str(text)? else {
         return Ok(false);
     };
@@ -285,7 +323,7 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
     let (status, text) = call(members.both(dir.path())?, search("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert!(
-        relays(&text, RX_A)?,
+        relays(&text, RX_A, AT_A)?,
         "Annex II 2.1: node A's prescription, value for value: {text}"
     );
     for decimal in DECIMALS {
@@ -294,7 +332,7 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
             "the decimal {decimal} keeps the text the member wrote: {text}"
         );
     }
-    assert!(relays(&text, RX_B)?, "node B's prescription: {text}");
+    assert!(relays(&text, RX_B, AT_B)?, "node B's prescription: {text}");
     let bundle: Value = serde_json::from_str(&text)?;
     assert_eq!(bundle["type"], "searchset");
     assert_eq!(bundle["total"], Value::from(2));
@@ -302,9 +340,21 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
         .into_iter()
         .map(|resource| &resource["id"])
         .collect();
-    assert_eq!(ids, [&Value::from("rx-a1"), &Value::from("rx-b1")]);
-    for (id, organisation) in [("rx-a1", "org-a"), ("rx-b1", "org-b")] {
+    let (id_a, id_b) = (
+        face_id(AT_A.0, AT_A.1, "rx-a1")?,
+        face_id(AT_B.0, AT_B.1, "rx-b1")?,
+    );
+    assert_eq!(
+        ids,
+        [&Value::from(id_a.as_str()), &Value::from(id_b.as_str())],
+        "FHIR R4 http.html §3.1.0.2: each by the id the face reads it by"
+    );
+    for (id, organisation) in [(&id_a, "org-a"), (&id_b, "org-b")] {
         let url = full_url(&bundle, id).ok_or("a fullUrl")?;
+        assert!(
+            url.ends_with(&format!("/fhir/MedicationRequest/{id}")),
+            "the entry names the face's read: {url}"
+        );
         assert_eq!(
             provenance_agent(&bundle, url).as_deref(),
             Some(organisation),
@@ -390,7 +440,7 @@ async fn a_silent_member_fails_the_search_and_is_named() -> TestResult {
         "the silent member is named: {text}"
     );
     assert!(
-        !relays(&text, RX_B)?,
+        !relays(&text, RX_B, AT_B)?,
         "no partial list under all-or-nothing"
     );
     assert!(!text.contains(PATIENT_TAIL), "{text}");

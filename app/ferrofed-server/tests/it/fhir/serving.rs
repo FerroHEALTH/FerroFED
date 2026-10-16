@@ -17,10 +17,12 @@ use axum::body::Body;
 use eehrxf::crosswalk::dispensation::MPD_MEDICATION_DISPENSE;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_eehrxf::serving::ServingError;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::fhir::FhirError;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
+use ferrofed_server::fhir::locator::Locator;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use serde_json::Value;
@@ -54,15 +56,33 @@ fn mpd_endpoint(base: &str) -> String {
     )
 }
 
-/// The three routes of the two categories, for the test patient.
-fn routes() -> Result<Vec<Request<Body>>, http::Error> {
+/// The search of the test patient's prescriptions.
+fn search() -> Result<Request<Body>, http::Error> {
     let identifier = format!("{}%7C{PATIENT}", NAMESPACE.replace(':', "%3A"));
+    Request::get(format!(
+        "{FHIR}/MedicationRequest?patient.identifier={identifier}"
+    ))
+    .body(Body::empty())
+}
+
+/// The read of node A's prescription `synthetic-rx-1` by the id the face
+/// names it by.
+fn read() -> Result<Request<Body>, Box<dyn Error>> {
+    let id = Locator::new(
+        EndpointId::new("node-a-mpd")?,
+        EhrId::new(EHR_A)?,
+        "synthetic-rx-1",
+    )
+    .id()
+    .ok_or("the parts fit an id")?;
+    Ok(Request::get(format!("{FHIR}/MedicationRequest/{id}")).body(Body::empty())?)
+}
+
+/// The three routes of the two categories, for the test patient.
+fn routes() -> Result<Vec<Request<Body>>, Box<dyn Error>> {
     Ok(vec![
-        Request::get(format!(
-            "{FHIR}/MedicationRequest?patient.identifier={identifier}"
-        ))
-        .body(Body::empty())?,
-        Request::get(format!("{FHIR}/MedicationRequest/synthetic-rx-1")).body(Body::empty())?,
+        search()?,
+        read()?,
         Request::post(format!("{FHIR}/MedicationDispense"))
             .header(header::CONTENT_TYPE, "application/fhir+json")
             .body(Body::from(r#"{"resourceType":"MedicationDispense"}"#))?,
@@ -184,6 +204,63 @@ async fn a_declared_member_lists_both_resources_in_their_mpd_profiles() -> TestR
 }
 
 #[tokio::test]
+async fn every_interaction_declared_for_medication_request_is_one_the_route_serves() -> TestResult {
+    let (a, b, own) = (
+        Server::start().await,
+        Server::start().await,
+        Server::start().await,
+    );
+    let dir = tempfile::tempdir()?;
+    let gateway = || {
+        gateway_registered(
+            dir.path(),
+            (&a.uri(), &b.uri(), UNREACHED_SUPPLIER),
+            &[("node-a", EHR_A)],
+            &mpd_endpoint(&own.uri()),
+            ("", SERVED),
+        )
+    };
+    let (app, _) = gateway()?;
+    let (status, text) = call(app, metadata()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let statement: Value = serde_json::from_str(&text)?;
+    let declared: Vec<String> = statement
+        .pointer("/rest/0/resource")
+        .and_then(Value::as_array)
+        .and_then(|resources| {
+            resources
+                .iter()
+                .find(|resource| resource["type"] == "MedicationRequest")
+        })
+        .and_then(|resource| resource["interaction"].as_array())
+        .ok_or("MedicationRequest is listed")?
+        .iter()
+        .filter_map(|interaction| interaction["code"].as_str().map(str::to_owned))
+        .collect();
+    assert!(declared.iter().any(|code| code == "read"), "{declared:?}");
+    for (served, code) in declared.iter().enumerate() {
+        let request = match code.as_str() {
+            "search-type" => search()?,
+            "read" => read()?,
+            other => return Err(format!("{other} is declared and no route serves it").into()),
+        };
+        let (app, _) = gateway()?;
+        let (status, text) = call(app, request).await?;
+        assert_ne!(
+            StatusCode::NOT_IMPLEMENTED,
+            status,
+            "FHIR R4 http.html §3.1.0.10: {code} is declared, so it is served: {text}"
+        );
+        assert_eq!(
+            served + 1,
+            crate::facade::received(&own).await?.len(),
+            "{code} reaches the member's own endpoint"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
     let (a, b, own) = (
         Server::start().await,
@@ -202,12 +279,12 @@ async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
         let (status, text) = call(app, request).await?;
         assert_ne!(StatusCode::NOT_FOUND, status, "{text}");
         assert!(!text.contains("not served"), "{text}");
-        // The search, the first route, asks the member once; the read (#1041) and the
-        // dispensation (#1042) answer 501 and add no request.
+        // The search and the read, the first two routes, each ask the member once; the
+        // dispensation (#1042) answers 501 and adds no request.
         assert_eq!(
-            1,
+            position.min(1) + 1,
             crate::facade::received(&own).await?.len(),
-            "route {position}: only the search reaches the member's own endpoint"
+            "route {position}: the search and the read reach the member's own endpoint"
         );
     }
     assert!(untouched(&a, &b).await?);

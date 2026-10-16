@@ -8,7 +8,9 @@
 //! The first page is `GET {fhir}/{type}?patient.identifier=<system>|<ehr_id>`,
 //! naming the patient by the member's own `ehr_id` in the identifier system
 //! the registry declares for it, the one value about the patient the request
-//! carries (§5.4.1, N33). A later page is the `next` link the member's own
+//! carries (§5.4.1, N33); a search for one resource adds its logical id as
+//! `_id` (FHIR R4 search §3.1.1.4.1), so a read stays held to the patient. A
+//! later page is the `next` link the member's own
 //! `searchset` gave (FHIR R4 `http.html` §3.1.0.14 Paging), and only a link
 //! under the member's own base can be named ([`Next`]). Every page leaves as
 //! the patient summary does ([`super::native`]): through the member's Query
@@ -35,6 +37,10 @@ const OPERATION: &str = "native_search";
 /// The search parameter that names the patient, chained to its identifier
 /// (FHIR R4 search §3.1.1.4.15 Chained parameters).
 pub const PATIENT_IDENTIFIER: &str = "patient.identifier";
+
+/// The search parameter that names one resource by its logical id (FHIR R4
+/// search §3.1.1.4.1 Parameters for all resources).
+pub const ID: &str = "_id";
 
 /// A member's `next` link, held to the member's own base: the path below
 /// the base and the query it names.
@@ -109,6 +115,9 @@ pub struct SearchAsked<'a> {
     pub ehr_id: &'a EhrId,
     /// The resource type searched, such as `MedicationRequest`.
     pub resource: &'a str,
+    /// The logical id of the one resource searched for, or `None` for every
+    /// resource of the patient.
+    pub id: Option<&'a str>,
     /// The `next` link of the member's previous page, or `None` for the
     /// first page.
     pub next: Option<&'a Next>,
@@ -211,6 +220,9 @@ fn search_outgoing(asked: SearchAsked<'_>) -> Request {
                 PATIENT_IDENTIFIER,
                 format!("{}|{}", asked.native.ehr_id_system(), asked.ehr_id),
             );
+            if let Some(id) = asked.id {
+                outgoing.query(ID, id);
+            }
             outgoing
         }
         Some(next) => {

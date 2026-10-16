@@ -29,7 +29,7 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::organization::Organization;
 use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::reference::Reference;
-use fhir_types::r4::resource::{Resource, UnknownResource};
+use fhir_types::r4::resource::Resource;
 use url::Url;
 
 use super::page::{Kept, Page, Prescription};
@@ -195,17 +195,12 @@ impl Writer<'_> {
     /// The member's `fullUrl` is kept when it is an absolute URL no other
     /// entry uses; otherwise the entry is named by a minted one.
     fn push(&mut self, kept: &Kept, mode: &str) -> String {
-        // TODO(#1041): name each prescription by the id the face's read routes, once it is built.
         let url = kept
             .full_url
             .as_deref()
             .filter(|url| Url::parse(url).is_ok() && !self.used.contains(*url))
             .map_or_else(|| (self.mint)(), str::to_owned);
-        let resource = Resource::Unknown(UnknownResource {
-            resource_type: kept.resource_type.clone(),
-            body: kept.resource.clone(),
-        });
-        self.add(url.clone(), resource, mode);
+        self.add(url.clone(), kept.unknown(), mode);
         url
     }
 
