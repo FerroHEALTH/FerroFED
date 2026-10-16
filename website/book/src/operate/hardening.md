@@ -273,5 +273,9 @@ page: our own design.
 - [ ] **Check every configuration before it ships.** Run
   `ferrofed config check` in your deployment pipeline; a refused file exits
   `78` naming the key.
-- [ ] **Take security fixes from the latest release.** Fixes go to the
-  latest release only ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md)).
+- [ ] **Take each security patch release of your line.** A security fix
+  ships as its own patch release on each supported line, with no feature
+  changes in it. A line is the releases that share a `<major>.<minor>`
+  version, and a published release is never changed, so move to the
+  security patch release of your line to get the fix
+  ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).

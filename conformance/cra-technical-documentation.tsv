@@ -33,8 +33,8 @@ item	element	target	section	status	issue
 2(c)	necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes	docs/ci-cd.md	The two tiers of `ci.yml`	documented	-
 2(c)	necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes	docs/post-market.md	Who does what	documented	-
 3	an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13	website/book/src/evaluate/cra-risk-assessment.md	-	documented	-
-4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	SECURITY.md	Supported versions	partial	#525
-4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	website/book/src/evaluate/regulatory-status.md	The support period	partial	#525
+4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	SECURITY.md	Supported versions	documented	-
+4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	website/book/src/evaluate/regulatory-status.md	The support period	documented	-
 5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	Annex I, Part I, point (2), point by point	partial	#525
 5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	partial	#525
 6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	partial	#525

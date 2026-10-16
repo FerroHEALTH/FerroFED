@@ -86,7 +86,7 @@ fn form_section(action: ServerAction<RunQuery>, offered: &QueryOptionsView) -> A
             .get_untracked()
             .and_then(|form| leptos::web_sys::FormData::new_with_form(&form).ok());
         // NOTE: no specification governs this: our own design; form data the
-        // browser cannot give leaves the plain post to run the query instead.
+        // browser cannot give leaves the plain post, which the server refuses.
         if let Some(data) = data {
             event.prevent_default();
             action.dispatch(RunQuery {

@@ -251,7 +251,7 @@ event, and its frequency is the event's:
 
 | Maintenance | When | Reference |
 |---|---|---|
-| Upgrade to the newest release | at each release, and as soon as you can after a security advisory: security fixes go to the latest release only | [Upgrading](upgrading.md), [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md) |
+| Upgrade to the newest release | at each release, and as soon as you can after a security advisory: a security fix ships as its own patch release on each supported line, so move to the security patch release of your line | [Upgrading](upgrading.md), [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) |
 | Run `config check` | before every start, reload and upgrade | [Running it](configuration.md#running-it) |
 | Re-run `ferrofed admission check` for a member | when the member changes its CDR product, its version, its `system_id` or how it creates `ehr_id`s | [Admitting a node](admission.md) |
 | Update the category map | when a member adds or changes a template | [`[access_log]`](access-log.md#access_log) |

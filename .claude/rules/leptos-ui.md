@@ -170,8 +170,27 @@ the orchestrator, never made in a slice.
 - Controlled inputs use `prop:value` with `on:input:target`, or the
   `bind:value`/`bind:checked`/`bind:group` sugar (`view/05_forms`). The
   `value` attribute only sets the initial value.
-- A mutating form is an `<ActionForm>` bound to a `ServerAction`, so it works
-  before the bundle loads (`progressive_enhancement/action_form`).
+- A form that calls a server function dispatches its action from the
+  browser's own form data, the shape of `query/mod.rs`, `admin/mod.rs` and
+  `configure/mod.rs`. It is a plain `<form method="post">` whose `action` is
+  the server function's URL. Its `on:submit` reads
+  `web_sys::FormData::new_with_form`, calls `prevent_default` and
+  dispatches the typed form, and it reads each field by its `name` with
+  `FormData.get`. An `<ActionForm>` would parse the URL-encoded form in the
+  browser instead, about 26 KB of compressed WebAssembly (§12).
+- Such a form has a plain-form fallback before hydration. Its submit button
+  is disabled, and a status line says the form is ready once the page has
+  loaded, until an `Effect` marks the page hydrated. A plain post that still
+  arrives, before hydration or from a browser that gives no form data, is
+  refused by the server function as `ViewError::PlainPost` before it asks
+  the gateway anything (`query::run::server::from_the_hydrated_page`), so
+  no action runs whose answer no page would show.
+- `<ActionForm>` is still right for a form that must work before the bundle
+  loads, whose server function answers a plain post with a redirect or a
+  page of its own (`progressive_enhancement/action_form`). The pull request
+  that adds the first one raises the budget in §12 by what it measures. A
+  form that posts to a server route, such as the sign-out in `shell.rs`, is
+  a plain `<form>` with no Leptos action.
 - Parse user input yourself. `type="number"` is not validation.
 - Give every input an explicit, stable `id` and `name`, and associate the
   label with `for`.

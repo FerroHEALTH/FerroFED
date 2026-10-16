@@ -83,8 +83,12 @@ configuration. These rules bound how.
   is never migrated back. A release refuses to start over a store a newer
   release migrated.
 
-Security fixes go to the latest release only ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md)),
-so stay within a release or two of the newest.
+A security fix ships as its own patch release on each supported line, with
+no feature changes in it. A line is the releases that share a
+`<major>.<minor>` version, and it is supported while a release on it is
+within its support period. A published release is never changed, so move
+to the security patch release of your line to get the fix
+([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
 ## Upgrade notes by release
 
