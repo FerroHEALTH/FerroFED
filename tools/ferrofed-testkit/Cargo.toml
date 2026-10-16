@@ -100,9 +100,10 @@ toml.workspace = true
 ihe-iti = { workspace = true, features = ["mcsd", "pdqm", "pixm", "pmir", "xcpd"] }
 secrecy.workspace = true
 # The browser journeys of the operator console, behind the FERROFED_JOURNEYS
-# gate (#608).
+# gate (#608), each through a chromedriver of its own, which tokio starts and
+# reads the port of (#1052).
 thirtyfour.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync", "process", "io-util"] }
 
 [lints]
 workspace = true

@@ -4,6 +4,12 @@
 //! One headless Chrome session over `WebDriver`, with the explicit waits and
 //! the console check every journey uses.
 //!
+//! Each session runs through a chromedriver of its own, started on a port
+//! the system picks and stopped with the session, so no journey shares a
+//! driver's listen queue or its lifetime with another run. Only when
+//! [`WEBDRIVER_ENV`] names an endpoint does a session use that driver
+//! instead.
+//!
 //! The session asks chromedriver for the browser log (`goog:loggingPrefs`),
 //! and [`Browser::console_clean`] drains it and fails on any entry at the
 //! `SEVERE` level: an error a script logged, an uncaught error or panic, a
@@ -12,18 +18,28 @@
 //! [`WAIT`] runs out, never a fixed sleep.
 
 use std::error::Error;
+use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::json;
 use thirtyfour::LoggingPrefsLogLevel;
 use thirtyfour::prelude::*;
+use tokio::io::{AsyncBufReadExt, BufReader, Lines};
+use tokio::process::{Child, ChildStdout, Command};
 
-/// The environment variable naming the `WebDriver` endpoint, when it is not
-/// [`WEBDRIVER`].
+/// The environment variable naming a running `WebDriver` endpoint to use
+/// instead of a chromedriver of the session's own.
 const WEBDRIVER_ENV: &str = "FERROFED_WEBDRIVER";
 
-/// The endpoint a chromedriver started with its defaults listens on.
-const WEBDRIVER: &str = "http://127.0.0.1:9515";
+/// The environment variable naming the chromedriver binary, when it is not
+/// [`CHROMEDRIVER`] on `PATH`.
+const CHROMEDRIVER_ENV: &str = "FERROFED_CHROMEDRIVER";
+
+/// The chromedriver binary looked up on `PATH`.
+const CHROMEDRIVER: &str = "chromedriver";
+
+/// What chromedriver prints once it listens, before the port it chose.
+const LISTENING: &str = "ChromeDriver was started successfully on port ";
 
 /// The environment variable naming the Chrome binary, when chromedriver is
 /// not to find one itself.
@@ -39,15 +55,70 @@ const POLL: Duration = Duration::from_millis(100);
 /// a failed load at.
 const SEVERE: &str = "SEVERE";
 
+/// A chromedriver one session runs through, killed when it is dropped.
+#[derive(Debug)]
+struct Chromedriver {
+    /// The chromedriver process.
+    child: Child,
+    /// Its standard output, held open so a later line never meets a closed
+    /// pipe.
+    _stdout: Lines<BufReader<ChildStdout>>,
+}
+
+impl Chromedriver {
+    /// Starts a chromedriver on a port the system picks, waits until it
+    /// says it listens, and returns it with its endpoint.
+    async fn start() -> Result<(Self, String), Box<dyn Error>> {
+        let binary =
+            std::env::var(CHROMEDRIVER_ENV).unwrap_or_else(|_unset| CHROMEDRIVER.to_owned());
+        let mut child = Command::new(&binary)
+            .arg("--port=0")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|error| {
+                format!(
+                    "{binary} does not start (name chromedriver in {CHROMEDRIVER_ENV}): {error}"
+                )
+            })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("chromedriver's standard output")?;
+        let mut lines = BufReader::new(stdout).lines();
+        let port = tokio::time::timeout(WAIT, async {
+            while let Some(line) = lines.next_line().await? {
+                if let Some(port) = line.strip_prefix(LISTENING) {
+                    return Ok(port.trim_end_matches('.').parse::<u16>()?);
+                }
+            }
+            Err::<u16, Box<dyn Error>>("chromedriver exited before it listened".into())
+        })
+        .await
+        .map_err(|_elapsed| format!("chromedriver never listened within {WAIT:?}"))??;
+        let chromedriver = Self {
+            child,
+            _stdout: lines,
+        };
+        Ok((chromedriver, format!("http://127.0.0.1:{port}")))
+    }
+}
+
 /// A browser session a journey drives.
 #[derive(Debug)]
 pub(crate) struct Browser {
     /// The `WebDriver` session.
     driver: WebDriver,
+    /// The chromedriver of this session alone, unless [`WEBDRIVER_ENV`]
+    /// named a running one.
+    chromedriver: Option<Chromedriver>,
 }
 
 impl Browser {
-    /// Starts a headless Chrome session at the `WebDriver` endpoint.
+    /// Starts a headless Chrome session through a chromedriver of its own,
+    /// or at the endpoint [`WEBDRIVER_ENV`] names.
     pub(crate) async fn open() -> Result<Self, Box<dyn Error>> {
         let mut capabilities = DesiredCapabilities::chrome();
         capabilities.set_headless()?;
@@ -58,18 +129,30 @@ impl Browser {
         if let Ok(binary) = std::env::var(CHROME_ENV) {
             capabilities.set_binary(&binary)?;
         }
-        let endpoint = std::env::var(WEBDRIVER_ENV).unwrap_or_else(|_unset| WEBDRIVER.to_owned());
+        let (chromedriver, endpoint) = match std::env::var(WEBDRIVER_ENV) {
+            Ok(endpoint) => (None, endpoint),
+            Err(_unset) => {
+                let (chromedriver, endpoint) = Chromedriver::start().await?;
+                (Some(chromedriver), endpoint)
+            }
+        };
         let driver = WebDriver::new(endpoint.as_str(), capabilities)
             .await
-            .map_err(|error| {
-                format!("no WebDriver session at {endpoint} (is chromedriver running?): {error}")
-            })?;
-        Ok(Self { driver })
+            .map_err(|error| format!("no WebDriver session at {endpoint}: {error}"))?;
+        Ok(Self {
+            driver,
+            chromedriver,
+        })
     }
 
-    /// Ends the session and closes the browser.
+    /// Ends the session, closes the browser and stops the session's own
+    /// chromedriver.
     pub(crate) async fn quit(self) -> Result<(), Box<dyn Error>> {
-        self.driver.quit().await?;
+        let quit = self.driver.quit().await;
+        if let Some(mut chromedriver) = self.chromedriver {
+            chromedriver.child.kill().await?;
+        }
+        quit?;
         Ok(())
     }
 

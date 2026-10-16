@@ -71,8 +71,9 @@ refuses it.
 
 The operator console's browser journeys (#608) follow the same model behind
 their own gate, `FERROFED_JOURNEYS=1`: they live in the testkit's
-`tests/it/journeys/`, need a chromedriver at `FERROFED_WEBDRIVER` (default
-`http://127.0.0.1:9515`) and the site bundle `scripts/release/viewer-site.sh
+`tests/it/journeys/`, each start a chromedriver of their own
+(`FERROFED_CHROMEDRIVER`, default `chromedriver` on `PATH`; #1052), or share
+the endpoint `FERROFED_WEBDRIVER` names, and need the site bundle `scripts/release/viewer-site.sh
 --release` writes, and the `journeys (browser)` job runs them with
 `test(/^journeys::/)`; the placement guard refuses a journey anywhere else.
 
