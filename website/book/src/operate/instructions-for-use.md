@@ -290,6 +290,12 @@ event, and its frequency is the event's:
 | Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
 | Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
 | Move to a supported release | before the end date of your release's support period in `SECURITY.md`; once it has passed, the startup banner and `config check` say so | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
+| Confirm an applied change to an onward credential or a binding section | under `config.ui = "managed"`, within `config.confirm_ms` (120000 ms by default) of the apply, once the gateway works with it; unconfirmed, it is rolled back | [Commit-confirm](configuration-revisions.md#commit-confirm) |
+| Bring a replica back in step | when `FerroFEDConfigurationDrift` fires: fix what the replica refused, then send it `SIGHUP` or apply a newer revision | [Several replicas](configuration-revisions.md#several-replicas) |
+| Back up the configuration revisions | under `config.ui = "managed"`, with the stored-query store and before every upgrade: the `redb` file or the PostgreSQL database, and the files of `config.secrets_dir` | [Turning it on](configuration-revisions.md#turning-it-on) |
+| Confirm a prescription member's contract | at admission, and when a member declared in `[[fhir.serve]]` changes its CDR product or version | [The member contract](../integrate/prescriptions.md#the-member-contract) |
+| Settle a prescription identifier collision | when the `PrescriptionIdentifierCollision` integrity incident is raised: two members hold one prescription identifier, and every dispensation for it is refused `409`, so agree with both members' operators which one owns it | [Every answer](../integrate/prescriptions.md#every-answer), [Integrity incidents](registry.md#integrity-incidents) |
+| Export the identity state | before a system that replaces FerroFED takes over, on each replica | [Exporting the identity state](identity-state-export.md), [Decommissioning](decommissioning.md) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its
@@ -311,6 +317,9 @@ deployment in the EU must plan for are:
   serve both in the HL7 Europe MPD profiles themselves, and computes no
   dispensability, remaining dispensations or lock of its own
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  A member that holds its prescriptions only as openEHR data, with no FHIR
+  endpoint of its own in those profiles, is not served
+  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)).
   Imaging, test results and discharge reports are neither produced nor
   received
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
@@ -321,8 +330,13 @@ deployment in the EU must plan for are:
   ITI-81, and the repository sets who may read them and keeps each for the
   period it states (Annex II, points 3.3 and 3.4;
   [Reading the log](access-log.md#reading-the-log)). A query over many
-  patients' data names no patient in its record, so a search by the
-  person's identifier does not find it. Each record carries a security
+  patients' data names the patients behind the `ehr_id`s its delivered
+  rows project, up to `[access_log] max_named_ehrs`; a query that projects
+  no `ehr_id` records only its scope, so a search by the person's
+  identifier does not find it
+  ([A query over many patients' data](access-log.md#a-query-over-many-patients-data)).
+  The gateway offers the person no log access interface of its own
+  ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)). Each record carries a security
   label per category and per origin, and the access rights by origin and
   category hold only once you configure your repository to apply them
   ([Labelling the access records](access-labels.md)).
@@ -344,6 +358,14 @@ deployment in the EU must plan for are:
   `openEHR-federation-endpoint` on every write, or keep each client on one
   replica
   ([Writes through a gateway with several replicas](../integrate/client-contract.md#writes-through-a-gateway-with-several-replicas)).
+- **The console changes only what the file leaves to it.** Under
+  `config.ui = "managed"`, the bootstrap core (`profile`, `[server]`,
+  `[metrics]`, `[auth]`, `[config]` and `[dev]`) and client authentication
+  stay in the file, and a member, credential or binding section the file
+  provides is read-only in the console. The console reads one replica at a
+  time, and each replica keeps its own incidents and routing table
+  ([Configuration revisions](configuration-revisions.md),
+  [The operator console](operator-console.md)).
 - **No EU declaration of conformity has been drawn up**, and no release
   carries the CE marking
   ([Regulatory status](../evaluate/regulatory-status.md#what-is-built-and-what-is-planned)).
