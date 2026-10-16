@@ -98,7 +98,9 @@ where it does not.
   length of time the product is expected to be in use". Each release has a
   support period of five years from its release date
   ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)),
-  and the rows below hold for that period.
+  set on the expected time in use that
+  [The basis of the five years](regulatory-status.md#the-basis-of-the-five-years)
+  records, and the rows below hold for that period.
 - **Assets.** The eight assets of the threat model
   ([Assets](threat-model.md#assets)). The patient identifier and the
   routing state weigh most: a leak of the first is a privacy breach, and a

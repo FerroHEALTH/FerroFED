@@ -368,6 +368,70 @@ knows the end date of its own release from its build: the startup banner and
 `config check` say so
 ([#782](https://github.com/FerroHEALTH/FerroFED/issues/782)).
 
+#### The basis of the five years
+
+Art 13(8), second subparagraph, has the manufacturer "determine the support
+period so that it reflects the length of time during which the product is
+expected to be in use, taking into account, in particular, reasonable user
+expectations, the nature of the product, including its intended purpose, as
+well as relevant Union law determining the lifetime of products with
+digital elements". Its fifth subparagraph puts "the information that was
+taken into account" in the technical documentation, which Annex VII, point
+4, repeats. Cadasto B.V. decided on 2026-10-16 to keep five years from each
+release date
+([#1088](https://github.com/FerroHEALTH/FerroFED/issues/1088)). It took
+these matters into account:
+
+- **The length of time in use.** A gateway sits between the hospital
+  platforms it federates: the CDRs behind it and the clients in front of
+  it. The manufacturer expects one release to stay in use until those
+  platforms are next upgraded, when the operator moves the gateway to a
+  newer release as part of the same change, and expects that interval to
+  fall within five years.
+- **Reasonable user expectations.** The users are the health institutions
+  and the operators that run the gateway for them
+  ([Intended purpose](#intended-purpose)). They can expect every
+  vulnerability found while a release is in use to be fixed in it, without
+  taking new features: a security fix ships as its own patch release on
+  each supported line
+  ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
+- **The nature of the product and its intended purpose.** FerroFED is
+  software with no hardware part, and it holds no clinical data of its own,
+  so an operator replaces a release by installing a newer one
+  ([Upgrading](../operate/upgrading.md)).
+- **Union law determining the lifetime.** Art 13(8), third subparagraph,
+  sets the floor: "the support period shall be at least five years". The
+  acts adopted under the CRA that the manufacturer holds, Regulations (EU)
+  2025/1535, 2025/2392 and 2026/881, set no support period. EHDS Art 39(4)
+  keeps a digital declaration of conformity online "for the expected
+  lifetime of the EHR system and, in any event, for at least 10 years";
+  that rule sets how long the declaration stays available, and sets no
+  support period.
+- **The release cadence.** Releases come days or weeks apart: seven between
+  2026-10-01 and 2026-10-15, in the table of `SECURITY.md`. Each release has
+  its own five years, and a line is supported while a release on it is
+  within its period, so a line that keeps receiving releases stays
+  supported until five years after its newest one.
+
+Art 13(8) also lets the manufacturer take into account "the support periods
+of products with digital elements offering a similar functionality placed on
+the market by other manufacturers, the availability of the operating
+environment, the support periods of integrated components that provide core
+functions and are sourced from third parties as well as relevant guidance
+provided by the dedicated administrative cooperation group (ADCO)". Of
+these:
+
+- **Similar products.** The manufacturer compared no other gateway's support
+  period, and the period does not rest on one.
+- **The operating environment and integrated components.** A release runs as
+  its container image or binary tarball and reaches each node over openEHR
+  ITS-REST. A vulnerability in a component the release carries, which its
+  SBOMs list, is fixed by a patch release on the line like one in the
+  gateway's own code, so no supplier's end of support ends a release's.
+- **ADCO and Commission guidance.** The manufacturer holds no ADCO or
+  Commission guidance on support periods (Art 52(16)) for this category of
+  product, and reads the period against such guidance once it is published.
+
 ### Already in place
 
 None of these is a conformity claim; each answers a CRA requirement in

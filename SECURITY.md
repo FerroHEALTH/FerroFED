@@ -27,7 +27,10 @@ vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
 - **Length:** five years from the release date, the minimum Art 13(8),
   third subparagraph, sets. Each end date in the table below is computed
   from that rule. If Cadasto B.V. sets a longer period, this page states
-  it.
+  it. The matters Art 13(8) names, and how each was taken into account,
+  are recorded in the book's
+  [basis of the five years](https://ferrofed.eu/docs/evaluate/regulatory-status.html#the-basis-of-the-five-years)
+  (Annex VII, point 4).
 - **Where fixes ship:** a security fix ships as its own patch release on
   each supported line, with no feature changes in it, so the update is
   provided separately from functionality updates (Annex I Part II(2)). A
