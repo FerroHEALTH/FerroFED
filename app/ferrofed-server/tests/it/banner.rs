@@ -220,7 +220,7 @@ fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestRe
     assert!(
         words.contains(
             "UNSUPPORTED: FerroFED v9.9.9 is past its support period, which ended on 2031-10-05: \
-             it receives no security fixes, so move to the latest release."
+             it receives no security fixes, so move to the latest patch release of a supported line."
         ),
         "{plain}"
     );
