@@ -20,9 +20,9 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.11
+## Status: building v0.0.12
 
-v0.0.10 is released (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+v0.0.11 is released (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
 membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
@@ -89,12 +89,47 @@ information sheet and instructions for use attached to every release
 #639 to #641): identity resolution in production, zero-downtime restarts,
 several replicas, metrics, overload protection, TLS on the listener, and the
 production, upgrade, data-protection and threat-model pages.
-v0.0.11, being built, carries the rest of EHDS readiness: a received
-document validated in full and handed to one chosen member (#665, #808),
-the log access interface (#660), the national contact point face (#524),
-electronic prescriptions (#523) and the conformity file (#525); and
-configuration from the file and from the console as one set of versioned
-revisions (#575). v0.0.12 plans operations packaging (#638, #644, #645). Each crate gets the rest of
+v0.0.11 carries more of EHDS readiness and the console. The ePrescription
+face (#523's children: #1038 to #1042, #1053, #1118, #1129, #1136):
+electronic prescriptions searched and read, and a dispensation received
+into the member that owns its prescription and read back, passed through in
+the HL7 Europe MPD 1.0.0 profiles from the members `[[fhir.serve]]`
+declares, with no dispensability, count or lock at the gateway. The access
+record gains labels per category and origin, the patients of a population
+query, the version a write left, the EHR a create left, insertions by the
+person or a representative, and the log of each semantic transformation
+(#797, #819, #946, #983, #992, #1003, #985), with a write's record reserved
+before the write (#945); the identity state exports for a replacement
+(#798). Configuration is one set of versioned revisions under
+`config.ui = "managed"`, saved, applied, confirmed and rolled back from the
+console and followed by every replica (#575 to #579, #954), and `[auth]`
+and the listener certificates reload without a restart (#636). The console
+is redesigned to the family's standard (#1074): its shell, dashboard,
+member pages, routing, stored queries, query console and configuration
+tabs, the admin actions (#909) and token refresh (#643), with every screen
+in the book in light and dark taken by the journey tooling, each browser
+journey on its own pinned chromedriver (#1081, #1052). The `openehr-*`
+crates move to 0.0.87 with `fhirconnect` 0.1.117, on one copy of the
+family, and a received document's category comes from its template (#714,
+#1028). The CRA documents land: the cybersecurity risk assessment, the
+information to the user, decommissioning and the Annex VII index (#1058,
+#1059, #1063, #1065), with security fixes as patch releases cut from a
+supported line's last tag (#1064, #1087); beside them the Annex II
+checklist, the technical documentation, the declaration script and the
+economic-operator register (#941, #671, #940, #787). And the fixes: an
+unresolved member named on the FHIR face (#1104, #1107), reloads that say
+what waits for a restart (#1017, #955), refusals that quote no credential
+(#1021), and the console's request bounds and contrast (#1022, #1112).
+v0.0.12, being built, carries what moved from v0.0.11: the national
+contact point face (#524) with its harness connector and end-to-end test
+(#735), the installation report to FerroPULSE (#1122), and the
+terminology rules applied to the summary the FHIR face writes, now that
+fhirconnect's term-mapping lens passes every match through (#926). v0.0.13 plans
+the rest: EHDS conformity (#525), the log access interface (#660, #521),
+a received document validated in full and handed to one chosen member
+(#665, #808), the further categories (#522, #666 to #668), operations
+packaging (#638, #644, #645), and the FHIRconnect mapping of openEHR
+medication data, blocked upstream (#1043, #523). Each crate gets the rest of
 its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
