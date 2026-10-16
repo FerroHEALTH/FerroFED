@@ -117,6 +117,15 @@ pub enum TokenError {
     /// The token endpoint could not be reached.
     #[error("the token endpoint could not be reached")]
     Unreachable(#[source] TransportError),
+    /// The token endpoint answered with a body longer than the engine reads
+    /// of one answer, so the answer was not read.
+    #[error("the token endpoint answered {status} with a body longer than {limit} bytes")]
+    TooLarge {
+        /// The status it answered.
+        status: StatusCode,
+        /// The most body bytes the engine reads of one answer.
+        limit: usize,
+    },
     /// The token endpoint refused the request with an RFC 6749 §5.2 error.
     #[error(
         "the token endpoint refused the request with {status}: {error}{}",
@@ -586,6 +595,7 @@ async fn post<T: Transport>(
     transport.send(built).await.map_err(|error| match error {
         TransportError::Timeout { .. } => TokenError::TimeOut(error),
         TransportError::Send { .. } => TokenError::Unreachable(error),
+        TransportError::BodyTooLarge { status, limit } => TokenError::TooLarge { status, limit },
     })
 }
 

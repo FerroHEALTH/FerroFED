@@ -100,7 +100,7 @@ Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
 - RFC 8693 token exchange per endpoint, which gives each verified caller a
   token of its own at a node, and node tokens bound to a key of the
   gateway's with DPoP (RFC 9449), the proof written and a node's nonce
-  answered by the `openehr-its` 0.0.86 client
+  answered by the `openehr-its` 0.0.87 client
   ([#439](https://github.com/FerroHEALTH/FerroFED/issues/439),
   [#448](https://github.com/FerroHEALTH/FerroFED/issues/448),
   [Onward credentials](../operate/onward-credentials.md)).

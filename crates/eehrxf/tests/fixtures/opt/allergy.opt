@@ -4,8 +4,9 @@
 <!-- A synthetic operational template authored for the eehrxf tests: one
      COMPOSITION holding one EVALUATION with a text element and an optional
      coded clinical status, the shape the synthetic allergy mapping beside it
-     reads. Its category admits persistent and event, the category a
-     composition built from a received document carries. No clinical content. -->
+     reads. Its category admits persistent and event, and assumes event, the
+     category a composition built from a received document carries, since a
+     document names none (AOM 1.4 assumed_value). No clinical content. -->
 <template xmlns="http://schemas.openehr.org/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <language>
     <terminology_id>
@@ -73,6 +74,12 @@
               <upper>1</upper>
             </occurrences>
             <node_id></node_id>
+            <assumed_value>
+              <terminology_id>
+                <value>openehr</value>
+              </terminology_id>
+              <code_string>433</code_string>
+            </assumed_value>
             <terminology_id>
               <value>openehr</value>
             </terminology_id>

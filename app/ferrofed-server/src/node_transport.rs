@@ -177,7 +177,7 @@ mod tests {
     fn bound_of(error: &TransportError) -> Option<Oversized> {
         match error {
             TransportError::Send { source } => source.downcast_ref::<Oversized>().copied(),
-            TransportError::Timeout { .. } => None,
+            TransportError::Timeout { .. } | TransportError::BodyTooLarge { .. } => None,
         }
     }
 
