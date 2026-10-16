@@ -480,7 +480,8 @@ pub enum Error {
         /// The address `metrics.listen` names.
         address: std::net::SocketAddr,
     },
-    /// `metrics.listen` names the address `server.listen` binds.
+    /// `metrics.listen` names the address `server.listen` binds, at a port
+    /// other than 0.
     #[error("metrics.listen is {address}, the address server.listen binds; give it its own")]
     MetricsShared {
         /// The address both keys name.

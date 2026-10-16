@@ -4,9 +4,11 @@
 //! Shared helpers: a capturing log writer, test settings, a test state, the
 //! typed shapes the tests read the server's JSON with, a mock node's routes
 //! and what it was asked, the reads of a routed answer, and the dependency
-//! report. A conveyed token as a node reads it is in [`conveyed`].
+//! report. A conveyed token as a node reads it is in [`conveyed`], and the
+//! addresses a `serve` process bound in [`serving`].
 
 pub(crate) mod conveyed;
+pub(crate) mod serving;
 
 use axum::Router;
 use axum::body::Body;
@@ -116,6 +118,8 @@ pub(crate) struct LogLine {
     pub(crate) client_named: Option<bool>,
     /// Where a thread panicked, on the panic hook's line.
     pub(crate) location: Option<String>,
+    /// The address a listener bound, on its start line.
+    pub(crate) listen: Option<String>,
 }
 
 /// Returns every JSON line in `text`, in order.

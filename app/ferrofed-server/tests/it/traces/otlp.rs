@@ -16,7 +16,6 @@
 use std::error::Error;
 use std::fmt::Write as _;
 use std::io::Write as _;
-use std::net::TcpListener;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
@@ -28,7 +27,7 @@ use opentelemetry_proto::tonic::trace::v1::Span;
 
 use super::{NAMESPACE, TestResult, resolving};
 use crate::facade::{body, node_answering, registry};
-use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, signed};
+use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, signed};
 
 /// The synthetic patient identifier, under the example OID arc.
 const PATIENT: &str = "12345";
@@ -145,11 +144,6 @@ fn hex(bytes: &[u8]) -> String {
     })
 }
 
-/// A free loopback port.
-fn free_port() -> Result<std::net::SocketAddr, std::io::Error> {
-    TcpListener::bind("127.0.0.1:0")?.local_addr()
-}
-
 #[tokio::test]
 async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the_drain()
 -> TestResult {
@@ -159,9 +153,8 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
     let dir = tempfile::tempdir()?;
     let document = dir.path().join("registry.toml");
     std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
-    let listen = free_port()?;
     let config = signed(&format!(
-        "profile = \"development\"\n\n[server]\nlisten = \"{listen}\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{}{}",
+        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{}{}",
         collector.endpoint(),
         toml::Value::String(document.display().to_string()),
         resolving(PATIENT)?,
@@ -174,10 +167,12 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
             .args(["serve", "--config"])
             .arg(file.path())
             .env_remove("FERROFED_CONFIG")
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,
     );
+    let stdout = serving.0.stdout.take().ok_or("the process's stdout")?;
+    let listen = serving::bound(stdout, serving::GATEWAY).await?;
     let client = reqwest::Client::new();
     let started = Instant::now();
     while client

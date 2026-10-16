@@ -209,7 +209,12 @@ fn serve_command(
         let listener = TcpListener::bind(server.listen)
             .await
             .with_context(|| format!("binding {}", server.listen))?;
-        tracing::info!(listen = %server.listen, tls = client_tls.is_some(), "listening");
+        // NOTE: no specification governs this: our own design; the bound address, so a
+        // listener configured on port 0 names the port the system gave it.
+        let bound = listener
+            .local_addr()
+            .with_context(|| format!("reading the address {} bound", server.listen))?;
+        tracing::info!(listen = %bound, tls = client_tls.is_some(), "listening");
         let mut listener_certificates: Vec<Arc<Certificates>> =
             client_tls.iter().cloned().collect();
         let admin_tls = match admin {
