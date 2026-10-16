@@ -25,7 +25,9 @@
 # ships the binaries and the image.
 #
 # The workflow is dormant until a `v*` tag is pushed. It does not run on a push
-# to main, on a pull request, or in a merge group.
+# to main, on a pull request, or in a merge group. A tag on a maintenance
+# branch runs it like a tag on main; plan decides whether the release becomes
+# the latest (scripts/release/latest.sh).
 name: Release
 
 on:
@@ -62,6 +64,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
       is-prerelease: ${{ steps.tag.outputs.is_prerelease }}
+      is-latest: ${{ steps.latest.outputs.latest }}
       targets: ${{ steps.targets.outputs.targets }}
       declaration: ${{ steps.declaration.outputs.issued }}
     steps:
@@ -109,6 +112,20 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+
+      - id: latest
+        name: Whether this release becomes the latest
+        # A security patch release on an older supported line is cut from a
+        # maintenance branch and published beside a newer line, so only the
+        # highest version, never a pre-release, becomes the repository's
+        # latest release and moves the latest image tags.
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          latest="$(bash scripts/release/latest.sh "$VERSION")"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "the latest release: ${latest}"
 
       - name: The tag matches the declared product version
         # Every file that declares the product version has to agree with the
@@ -498,6 +515,7 @@ jobs:
     with:
       tag: ${{ needs.plan.outputs.tag }}
       version: ${{ needs.plan.outputs.version }}
+      latest: ${{ needs.plan.outputs.is-latest == 'true' }}
 
   # ---- build-viewer: the operator console image ------------------------------
 
@@ -515,6 +533,7 @@ jobs:
     with:
       tag: ${{ needs.plan.outputs.tag }}
       version: ${{ needs.plan.outputs.version }}
+      latest: ${{ needs.plan.outputs.is-latest == 'true' }}
 
   # ---- finalize-release: verify the asset set, then PUBLISH -----------------
 
@@ -589,16 +608,20 @@ jobs:
           echo "every expected asset is attached."
 
       # `--latest` marks this release as the repository's latest, which a
-      # pre-release must never be.
+      # pre-release and a security patch on an older line must never be;
+      # plan decided which this release is.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
-          IS_PRERELEASE: ${{ needs.plan.outputs.is-prerelease }}
+          IS_LATEST: ${{ needs.plan.outputs.is-latest }}
         run: |
           set -euo pipefail
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
-          else
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-          fi
+          case "$IS_LATEST" in
+            true) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest ;;
+            false) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false ;;
+            *)
+              echo "::error::the is-latest output of plan is '$IS_LATEST', neither true nor false." >&2
+              exit 1
+              ;;
+          esac

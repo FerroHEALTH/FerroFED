@@ -21,11 +21,17 @@
 # is its own workflow (contribution-licence.yml) with its own check.
 name: CI
 
+# A maintenance branch, release/<major>.<minor>.x, carries a security patch
+# release of a supported line, so a pull request into it runs the same gates
+# as one into main. A push to it runs nothing, so no cache this workflow
+# saves is written from a release branch (zizmor's cache-poisoning audit);
+# the pull request's run is the gate. No specification governs this: our own
+# design.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, "release/*.*.x"]
     # No `labeled` or `unlabeled`: a label event would start a second run on
     # the commit under test, and the newer of two runs can be the one
     # cancelled. The guards read the escape labels (`no-crate-bump`,
@@ -676,7 +682,8 @@ jobs:
   # the copies of the information sheet and the instructions for use a
   # release attaches, over a stub tree (#769), and the EU declaration of
   # conformity, over a stub tree, with the manufacturer's file read as the
-  # release lane reads it (#940).
+  # release lane reads it (#940), and which release becomes the latest, over
+  # a stub remote (#1087).
   changelog:
     name: changelog
     runs-on: ubuntu-latest
@@ -693,6 +700,7 @@ jobs:
           bash scripts/checks/changelog-guard.sh --self-test
           bash scripts/checks/upgrade-notes.sh --self-test
           bash scripts/release/withdraw.sh --self-test
+          bash scripts/release/latest.sh --self-test
           bash scripts/release/accompanying-documents.sh --self-test
           bash scripts/release/declaration-of-conformity.sh --self-test
           bash scripts/release/declaration-of-conformity.sh status

@@ -38,6 +38,10 @@ on:
         description: The tag without its leading v, which is the image tag.
         required: true
         type: string
+      latest:
+        description: Whether the image takes the latest tag, false for a pre-release and for a patch on an older line.
+        required: true
+        type: boolean
     outputs:
       digest:
         description: The digest of the pushed image index.
@@ -248,9 +252,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # Tags: the version, and for a release that is not a pre-release also its
-      # major.minor and latest, both skipped for a pre-release by the action's
-      # own semver rule.
+      # Tags: the version, for a release that is not a pre-release also its
+      # major.minor, which the action's semver rule skips for a pre-release,
+      # and latest when the caller says so, which it never does for a
+      # pre-release or a security patch on an older line.
       - name: Image tags, labels and annotations
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -259,6 +264,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+          flavor: |
+            latest=${{ inputs.latest }}
           # These repeat the build-independent set docker/viewer/Dockerfile
           # carries, so the two never disagree. The two eu.ferrofed document
           # labels name this tag's copies release.yml attaches, so they are

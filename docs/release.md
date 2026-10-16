@@ -15,7 +15,9 @@ is `.claude/rules/ci-cd.md`.
 ## What the lane does
 
 `release.yml` is dormant until a `v*` tag is pushed. It does not run on a push
-to `main`, on a pull request, or in a merge group. `workflow_dispatch` re-runs
+to `main`, on a pull request, or in a merge group. A tag on a maintenance
+branch runs it the same way as a tag on `main` (§ Cutting a security patch
+release). `workflow_dispatch` re-runs
 it for a tag that already exists and has to be dispatched at that tag.
 
 ```text
@@ -24,7 +26,10 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the tag
-  it names, checks the tag against every file that declares the product
+  it names, decides with `scripts/release/latest.sh` whether the release
+  becomes the latest (a release with no pre-release suffix whose version no
+  `vX.Y.Z` tag of the repository exceeds), checks the tag against every
+  file that declares the product
   version, and extracts the `## [X.Y.Z]` section of `CHANGELOG.md` as the
   release notes. A tag whose tree has no root `Cargo.toml` fails here, since
   the tag cannot be checked against the workspace version. A missing or empty
@@ -85,8 +90,10 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   the tag, and the EU declaration of conformity when `plan` found it
   issued, and publishes only then, and only once both images are
   pushed. A draft missing any of them fails the check and stays a draft, so a
-  half-assembled release is never visible. A pre-release is published with
-  `--latest=false`, so it never becomes the repository's latest release.
+  half-assembled release is never visible. A release `plan` did not find the
+  latest, a pre-release or a security patch on an older line, is published
+  with `--latest=false`, so it never becomes the repository's latest
+  release.
 
 ## The build legs
 
@@ -117,8 +124,9 @@ names the called workflow as the signer, which a consumer can demand with
 - takes the two musl tarballs from this run's artifacts and verifies each
   against `release-build.yml`'s signer before extracting it;
 - builds the `linux/amd64` and `linux/arm64` index from `docker/Dockerfile` with
-  no cache and no QEMU, and pushes it by digest, tagged `<version>` and, for a
-  release that is not a pre-release, `<major>.<minor>` and `latest`;
+  no cache and no QEMU, and pushes it by digest, tagged `<version>`, for a
+  release that is not a pre-release `<major>.<minor>`, and `latest` when
+  `plan` found the release the latest;
 - labels and annotates it with `eu.ferrofed.information-sheet` and
   `eu.ferrofed.instructions-for-use`, the download URLs of the two documents
   the release attaches, so an image names the copies that describe it;
@@ -413,6 +421,153 @@ without a version bump, because a published version is immutable
    commit, which GitHub deletes when its artifact retention ends. The
    release assets include the EU declaration of conformity when the
    release carries one.
+
+## Cutting a security patch release
+
+`SECURITY.md` promises that a security fix ships as its own patch release on
+each supported line, with no feature changes in it (Regulation (EU)
+2024/2847 Annex I Part II(2)). A line is the releases that share a
+`<major>.<minor>` version, the set the `<major>.<minor>` image tag follows
+(§ Withdrawing a release). A line is supported while one of its releases is
+within its support period in the support table of `SECURITY.md`. `main`
+carries feature work, so a security patch is never tagged on `main`. It is
+cut from the line's last tag on a maintenance branch, and only its records
+come back to `main`.
+
+**While the version is 0.0.x, there is one line.** Every release from
+v0.0.1 on shares the `<major>.<minor>` `0.0`, so the 0.0 line is the only
+supported line and its last tag is the newest release. Its security patch is
+the next patch number, cut from the newest release's tag, so it carries the
+fix and nothing `main` merged since. That number is the one `main`'s next
+release was planned under, so step 1 moves that milestone on by one.
+
+The steps below are for one line. Run them for every supported line, which
+this lists from the support table:
+
+```sh
+awk -F'|' -v today="$(date -u +%F)" '/^\| v[0-9]/ {
+  for (i = 2; i <= 4; i++) gsub(/[[:space:]]/, "", $i)
+  if ($4 >= today) { split(substr($2, 2), v, "."); print v[1] "." v[2] }
+}' SECURITY.md | sort -u
+```
+
+1. **Name the patch and its branch.** The line's last tag is the highest
+   `vX.Y.Z` of the line with no pre-release suffix, and the patch is that
+   version with its patch number one higher:
+
+   ```sh
+   git fetch origin --tags
+   git tag --list 'v0.0.*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1
+   ```
+
+   The maintenance branch is `release/<major>.<minor>.x`, a `release/`
+   branch of the conventional types that the `release/vX.Y.Z`
+   version-bump branches never match, and it starts at the last tag:
+
+   ```sh
+   git branch release/0.0.x v0.0.10
+   git push origin release/0.0.x
+   ```
+
+   A branch an earlier security patch left must hold the line's last tag
+   (`git merge-base --is-ancestor v0.0.10 origin/release/0.0.x`). On the line
+   `main` still releases from, a later release may have been cut from `main`
+   since; delete the branch and push it again from the last tag, because the
+   earlier patch keeps its own tag. The patch gets its own milestone. When a
+   milestone already carries the patch's number, as `main`'s next milestone
+   always does on the 0.0 line, rename that one to the number after it
+   first (`gh api -X PATCH repos/FerroHEALTH/FerroFED/milestones/<number>
+   -f title=v0.0.12`).
+2. **The branch carries this procedure's tooling.** A pull request into the
+   branch runs CI only when the branch's own `ci.yml` lists
+   `release/*.*.x`, and the tag's lane leaves `latest` alone only when the
+   branch's `release.yml` runs `scripts/release/latest.sh`. A line whose last
+   tag predates both (#1087) gets that change cherry-picked first, in a `ci/`
+   pull request into the branch with nothing else in it. It changes no
+   product behaviour, so the patch still carries no feature.
+3. **The fix lands on `main` first,** as an ordinary pull request with a
+   `security` fragment, `changelog.d/<issue>-<slug>.security.md`
+   (`changelog.d/README.md`). Its `Closes #N` closes the issue: the keyword
+   closes nothing in a pull request into any other branch. While the
+   advisory is private, a public pull request discloses the vulnerability,
+   so the owner decides when the fix goes public.
+4. **Cherry-pick only the fix** onto a branch from the maintenance branch,
+   and open a pull request into it:
+
+   ```sh
+   git switch -c fix/<slug>-0.0 origin/release/0.0.x
+   git cherry-pick -x <the fix's squash commit on main>
+   git push origin fix/<slug>-0.0
+   gh pr create --base release/0.0.x
+   ```
+
+   The cherry-pick brings the fragment with it. Nothing else from `main`
+   goes onto the branch: when the fix conflicts with code the line does not
+   have, resolve it against the line's own code, and when the fix needs a
+   feature the line lacks, write the smallest fix of the line's code and say
+   so in the pull request. CI runs on the pull request as on one into
+   `main`, and `contribution-licence-guard` reads its body. The branch has
+   no merge queue, so merge it once `conclusion` is green.
+5. **The version bump lands on the branch** from a `release/vX.Y.Z` branch,
+   in a pull request into `release/0.0.x`, following § Before the tag steps 2
+   to 8 with the patch's version:
+   - the version files move to the patch version;
+   - `scripts/release/changelog.sh --assemble X.Y.Z YYYY-MM-DD` on the
+     branch finds only the fix's fragments, so the section it writes holds
+     the fix alone. It adds the patch's row to the support table of
+     `SECURITY.md`, and the row is copied to the book's CRA information to
+     the user as step 5 there says;
+   - the landing page names the patch, because `scripts/checks/versions.sh`
+     holds it to the newest release in the branch's `CHANGELOG.md`. The
+     site is deployed from `main`, so this copy only satisfies the guard,
+     and step 8 moves `main`'s;
+   - the claims review, the information sheet, the instructions for use and
+     the cybersecurity risk assessment get the patch's rows, and the
+     technical documentation its review rows when the fix changes a
+     harmonised component.
+6. **Tag the branch's tip** and push the tag, as § The tag does for `main`:
+
+   ```sh
+   git fetch origin
+   git tag -s vX.Y.Z -m "vX.Y.Z" origin/release/0.0.x
+   git push origin vX.Y.Z
+   ```
+
+   `release.yml` runs the whole lane. `plan` checks the tag against the
+   branch's version files and changelog, and `scripts/release/latest.sh`
+   decides whether the patch becomes the latest. A patch on an older line
+   is published with `--latest=false`, and its images get `<version>` and
+   `<major>.<minor>` but not `latest`. A patch of the 0.0 line is the newest
+   release and becomes the latest. `publish-crates.yml` runs on the same tag
+   and is the no-op it always is while the publish switch is off. Once the
+   switch is on, a crate the fix changes needs a version on the branch that
+   no other release has published, because crates.io refuses a version
+   twice (`.claude/rules/crates-publishing.md`).
+7. **After the tag** follows § After the tag, steps 1, 2 and 5, for the
+   patch. The security advisory names the patch release of each supported
+   line as the patched version.
+8. **Merge the records back to `main`** in one `chore/` pull request, once
+   the patch is published. `main` merges by squash, so the records are
+   copied, never merged as a branch:
+   - the patch's `## [X.Y.Z] - YYYY-MM-DD` section of `CHANGELOG.md`, placed
+     in version order, with its link reference; when the patch is the
+     newest release, the `[Unreleased]` reference compares from its tag;
+   - its row of the support table of `SECURITY.md`, and the copy of that
+     row on the book's CRA information to the user;
+   - the removal of the fix's fragment from `changelog.d/`, because the
+     patch's section records the fix;
+   - when the patch is the newest release, as on the 0.0 line, the landing
+     page's release note and status panel, which
+     `scripts/checks/versions.sh` holds to the newest release in
+     `CHANGELOG.md`.
+
+   `main`'s version files stay at the release they name, and its next
+   version bump moves them past the patch.
+
+**Rehearse it** with a pre-release tag on the maintenance branch
+(`v0.0.11-rc.1`), as § Rehearsing a change to the lane describes for `main`.
+`scripts/release/latest.sh --self-test` proves the latest decision over a
+stub remote, and CI runs it.
 
 ## What is immutable, and what is ours
 
