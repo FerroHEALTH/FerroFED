@@ -55,7 +55,9 @@ const POLL: Duration = Duration::from_millis(100);
 /// a failed load at.
 const SEVERE: &str = "SEVERE";
 
-/// A chromedriver one session runs through, killed when it is dropped.
+/// A chromedriver one session runs through, in a process group of its own
+/// that is killed when it is dropped, so the Chrome it launched goes with it
+/// even when a journey panics.
 #[derive(Debug)]
 struct Chromedriver {
     /// The chromedriver process.
@@ -71,7 +73,10 @@ impl Chromedriver {
     async fn start() -> Result<(Self, String), Box<dyn Error>> {
         let binary =
             std::env::var(CHROMEDRIVER_ENV).unwrap_or_else(|_unset| CHROMEDRIVER.to_owned());
-        let mut child = Command::new(&binary)
+        let mut command = Command::new(&binary);
+        #[cfg(unix)]
+        command.process_group(0);
+        let mut child = command
             .arg("--port=0")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -103,6 +108,25 @@ impl Chromedriver {
             _stdout: lines,
         };
         Ok((chromedriver, format!("http://127.0.0.1:{port}")))
+    }
+}
+
+impl Drop for Chromedriver {
+    /// Kills the chromedriver's process group: the driver, and every Chrome
+    /// process it started.
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(group) = self
+            .child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .and_then(rustix::process::Pid::from_raw)
+        {
+            // NOTE: no specification governs this: our own design; a group
+            // that has already exited (ESRCH) leaves nothing to stop.
+            let _stopped: rustix::io::Result<()> =
+                rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+        }
     }
 }
 
@@ -149,9 +173,7 @@ impl Browser {
     /// chromedriver.
     pub(crate) async fn quit(self) -> Result<(), Box<dyn Error>> {
         let quit = self.driver.quit().await;
-        if let Some(mut chromedriver) = self.chromedriver {
-            chromedriver.child.kill().await?;
-        }
+        drop(self.chromedriver);
         quit?;
         Ok(())
     }

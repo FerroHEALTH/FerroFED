@@ -105,5 +105,10 @@ secrecy.workspace = true
 thirtyfour.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync", "process", "io-util"] }
 
+# The browser journeys stop each chromedriver's process group, a Unix
+# notion (#1052).
+[target.'cfg(unix)'.dev-dependencies]
+rustix.workspace = true
+
 [lints]
 workspace = true

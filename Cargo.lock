@@ -1590,6 +1590,7 @@ dependencies = [
  "pem 3.0.6",
  "rcgen",
  "reqwest",
+ "rustix",
  "secrecy",
  "serde",
  "serde_json",
