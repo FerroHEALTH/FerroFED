@@ -667,7 +667,10 @@ mod tests {
             session.as_str()
         );
         let service = crate::server::router(state);
-        for path in ["/", "/no/such/page", "/members"] {
+        let paths = ["/", "/no/such/page"]
+            .into_iter()
+            .chain(crate::views::PATHS);
+        for path in paths {
             let request = http::Request::get(path)
                 .header("cookie", &cookie)
                 .body(axum::body::Body::empty())

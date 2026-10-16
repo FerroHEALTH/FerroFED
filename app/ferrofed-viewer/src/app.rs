@@ -161,19 +161,55 @@ fn routes(session: SessionState, gateway: String) -> AnyView {
                 view=move || view! { <about::AboutPage gateway=gateway.clone() /> }
                 ssr=SsrMode::Async
             />
-            <Route path=path!("/members") view=views::MembersPage ssr=SsrMode::Async />
-            <Route path=path!("/integrity") view=views::IntegrityPage ssr=SsrMode::Async />
-            <Route path=path!("/stored-queries") view=views::StoredQueriesPage ssr=SsrMode::Async />
-            <Route path=path!("/federation") view=views::FederationPage ssr=SsrMode::Async />
-            <Route path=path!("/query") view=crate::query::QueryPage ssr=SsrMode::Async />
+            <Route
+                path=path!("/members")
+                view=guarded(session, views::MembersPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/integrity")
+                view=guarded(session, views::IntegrityPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/stored-queries")
+                view=guarded(session, views::StoredQueriesPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/federation")
+                view=guarded(session, views::FederationPage)
+                ssr=SsrMode::Async
+            />
+            <Route
+                path=path!("/query")
+                view=guarded(session, crate::query::QueryPage)
+                ssr=SsrMode::Async
+            />
             <Route
                 path=path!("/configuration")
-                view=crate::configure::ConfigurationPage
+                view=guarded(session, crate::configure::ConfigurationPage)
                 ssr=SsrMode::Async
             />
         </Routes>
     }
     .into_any()
+}
+
+/// The view `page` for a request whose session is `session`, or the
+/// unreadable store's page when the console cannot read its session store,
+/// so a view never answers that fault with its own generic notice.
+fn guarded<V>(session: SessionState, page: fn() -> V) -> impl Fn() -> AnyView + Clone + Send + Sync
+where
+    V: IntoView + 'static,
+{
+    move || {
+        if session == SessionState::Unreadable {
+            unreadable().into_any()
+        } else {
+            page().into_any()
+        }
+    }
 }
 
 /// The page a visitor reads when the console cannot read its session store:
