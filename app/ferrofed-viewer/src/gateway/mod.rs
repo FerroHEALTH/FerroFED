@@ -31,7 +31,7 @@ use std::fmt;
 
 use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::{
-    CreatingSystemEntry, DeploymentReport, IncidentReport, Page, PageRequest,
+    CreatingSystemEntry, DeploymentReport, IncidentReport, Page, PageRequest, StoredVersion,
 };
 use http::{Method, StatusCode};
 use openehr_federation::error::WireError;
@@ -39,6 +39,7 @@ use openehr_federation::meta::FederationMeta;
 use openehr_federation::options::OptionsRoot;
 use openehr_its::rest::client::{
     CallOptions, Client, ClientError, Credentials, ErrorBody, Request, ReqwestTransport,
+    path_segment,
 };
 use openehr_its::rest::generated::definition::StoredQuery;
 use openehr_its::rest::generated::query::client::{
@@ -453,7 +454,8 @@ impl Gateway {
     }
 
     /// Reads one page of the held stored-query versions, as ITS-REST
-    /// `StoredQuery`s, `GET {base}/operator/stored-queries`.
+    /// `StoredQuery`s each marked read-only or not,
+    /// `GET {base}/operator/stored-queries`.
     ///
     /// # Errors
     /// As [`Gateway::incidents`].
@@ -461,9 +463,26 @@ impl Gateway {
         &self,
         token: &AccessToken,
         page: PageRequest,
-    ) -> Result<Page<StoredQuery>, GatewayError> {
+    ) -> Result<Page<StoredVersion<StoredQuery>>, GatewayError> {
         self.read_page("/operator/stored-queries", token, page)
             .await
+    }
+
+    /// Reads one page of the versions held under the qualified query name
+    /// `name`, each marked read-only or not,
+    /// `GET {base}/operator/stored-queries/{qualified_query_name}`.
+    ///
+    /// # Errors
+    /// As [`Gateway::incidents`]; a `404` when the gateway holds no version
+    /// under `name`.
+    pub async fn stored_query(
+        &self,
+        token: &AccessToken,
+        name: &str,
+        page: PageRequest,
+    ) -> Result<Page<StoredVersion<StoredQuery>>, GatewayError> {
+        let path = format!("/operator/stored-queries/{}", path_segment(&name));
+        self.read_page(&path, token, page).await
     }
 
     /// Runs `call` through the gateway's ITS-REST query surface as the

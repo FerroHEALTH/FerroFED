@@ -18,7 +18,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_registry::definition::store::{DefinitionStore as _, Insertion};
+use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use ferrofed_server::state::AppState;
+use ferrofed_server::stored::embedded::RedbStore;
 use ferrofed_testkit::mock::Server;
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
@@ -38,7 +41,7 @@ const REGISTERED: u64 = 99;
 /// member's own `system_id`, one more than a page of the integrity view.
 pub(crate) const ROUTES: u64 = REGISTERED + 2;
 
-/// How many stored queries the deployment's definition files hold.
+/// How many stored queries the deployment's store holds.
 pub(crate) const STORED: u64 = 101;
 
 /// The stored query the deployment holds at a second version,
@@ -237,16 +240,32 @@ fn registry(a: &str, b: &str) -> String {
     text
 }
 
-/// Writes [`STORED`] stored queries under `definitions`, one version each,
-/// and the second version of [`VERSIONED`].
+/// Writes [`STORED`] stored queries into the embedded store file
+/// `definitions`, one version each, and the second version of
+/// [`VERSIONED`].
+///
+/// The store takes writes, so the gateway marks only its own namespace
+/// read-only.
 fn stored_queries(definitions: &Path) -> Result<(), Box<dyn Error>> {
+    let store = RedbStore::open(definitions)?;
+    let saved: jiff::Timestamp = "2026-10-01T08:00:00Z".parse()?;
+    let first: QueryVersion = "1.0.0".parse()?;
+    let mut held = Vec::new();
     for number in 1..=STORED {
-        let named = definitions.join(format!("org.example::journey_{number:03}"));
-        std::fs::create_dir_all(&named)?;
-        std::fs::write(named.join("1.0.0.aql"), patient_query())?;
+        let name = QueryName::new(&format!("org.example::journey_{number:03}"))?;
+        held.push(StoredDefinition::new(name, first, patient_query(), saved));
     }
-    let versioned = definitions.join(VERSIONED);
-    std::fs::write(versioned.join(format!("{SECOND_VERSION}.aql")), SECOND_TEXT)?;
+    held.push(StoredDefinition::new(
+        QueryName::new(VERSIONED)?,
+        SECOND_VERSION.parse()?,
+        SECOND_TEXT.to_owned(),
+        saved,
+    ));
+    for definition in &held {
+        if store.insert_if_absent(definition)? != Insertion::Stored {
+            return Err(format!("{} is stored twice", definition.name()).into());
+        }
+    }
     Ok(())
 }
 
@@ -261,7 +280,7 @@ async fn gateway(
     std::fs::write(&document, registry(a, b))?;
     let key_file = dir.join("signing-key.pem");
     std::fs::write(&key_file, ferrofed_testkit::oauth::es384_pem()?)?;
-    let definitions = dir.join("stored");
+    let definitions = dir.join("stored.redb");
     stored_queries(&definitions)?;
     let [document, key_file, definitions] = [document, key_file, definitions]
         .map(|file| toml::Value::String(file.display().to_string()));
@@ -269,7 +288,7 @@ async fn gateway(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
          best_effort = true\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
-         [stored_queries]\nbackend = \"files\"\npath = {definitions}\n\n\
+         [stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
          [auth]\naudience = \"{AUDIENCE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n\
          jwks = '{}'\noperator_scope = \"{OPERATOR_SCOPE}\"\n",

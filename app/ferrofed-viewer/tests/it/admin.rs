@@ -581,7 +581,7 @@ async fn views_gateway_naming(ehr_id: &str, name: &str) -> Result<Server, Box<dy
             "/operator/stored-queries",
             format!(
                 r#"{{"items":[{{"name":{name},"type":"AQL","version":"1.0.0","saved":"2026-10-05T08:00:00Z",
-                "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}}],"offset":0,"total":1}}"#,
+                "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c","read_only":false}}],"offset":0,"total":1}}"#,
             ),
         ),
     ];

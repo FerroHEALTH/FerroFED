@@ -12,7 +12,8 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use ferrofed_registry::operator::{MAX_PAGE, Page, PageRequest};
+use ferrofed_registry::operator::{MAX_PAGE, Page, PageRequest, StoredVersion};
+use http::StatusCode;
 use leptos::prelude::*;
 use openehr_its::rest::generated::definition::StoredQuery;
 
@@ -25,11 +26,9 @@ use crate::views::STORED_QUERIES;
 use crate::views::load::server::answered_by;
 use crate::views::stored::{StoredDetail, StoredView, console_href, detail_href};
 
-/// The namespaces the gateway reserves for its own read-only definitions,
-/// with each nested under one (§12.7, N44).
-// NOTE: no specification governs this: our own design; the operator surface does
-// not mark a read-only definition, so the console names the gateway's own namespace.
-const RESERVED: &[&str] = &["eu.ferrofed.eehrxf"];
+/// One stored-query version as the operator surface lists it, with whether
+/// the gateway takes a write under its name.
+type Listed = StoredVersion<StoredQuery>;
 
 /// The separator of a qualified query name's namespace and its name
 /// (ITS-REST Query API, "Qualified query name").
@@ -45,28 +44,14 @@ pub fn split(qualified: &str) -> (Option<&str>, &str) {
     }
 }
 
-/// Whether `namespace` is one the gateway reserves, or nested under one,
-/// ASCII case ignored.
-#[must_use]
-pub fn reserved(namespace: Option<&str>) -> bool {
-    namespace.is_some_and(|namespace| {
-        let namespace = namespace.to_ascii_lowercase();
-        RESERVED.iter().any(|held| {
-            namespace
-                .strip_prefix(held)
-                .is_some_and(|tail| tail.is_empty() || tail.starts_with('.'))
-        })
-    })
-}
-
 /// The stored-query list of `report`, offering the drift repair at the
 /// first of `replicas`.
 #[must_use]
-pub fn list(report: &Page<StoredQuery>, replicas: &[ReplicaSettings]) -> StoredView {
+pub fn list(report: &Page<Listed>, replicas: &[ReplicaSettings]) -> StoredView {
     let mut names: Vec<String> = report
         .items
         .iter()
-        .map(|entry| entry.name.clone())
+        .map(|entry| entry.definition.name.clone())
         .collect();
     names.dedup();
     let html = if report.total == 0 {
@@ -98,10 +83,13 @@ fn none_held() -> String {
 }
 
 /// One card per namespace of `items`, each with its versions as chips.
-fn namespaces(items: &[StoredQuery]) -> String {
-    let mut grouped: BTreeMap<Option<&str>, Vec<&StoredQuery>> = BTreeMap::new();
+fn namespaces(items: &[Listed]) -> String {
+    let mut grouped: BTreeMap<Option<&str>, Vec<&Listed>> = BTreeMap::new();
     for entry in items {
-        grouped.entry(split(&entry.name).0).or_default().push(entry);
+        grouped
+            .entry(split(&entry.definition.name).0)
+            .or_default()
+            .push(entry);
     }
     let cards = grouped
         .into_iter()
@@ -117,11 +105,12 @@ fn namespaces(items: &[StoredQuery]) -> String {
 }
 
 /// The card of `namespace`, the `index`th of the page, with the chip of
-/// each of its `entries`.
+/// each of its `entries`, marked read-only when the gateway takes no write
+/// under any of them.
 fn namespace_card(
     index: usize,
     namespace: Option<&str>,
-    entries: &[&StoredQuery],
+    entries: &[&Listed],
 ) -> impl IntoView + use<> {
     let heading = format!("namespace-{index}");
     let labelled = heading.clone();
@@ -129,7 +118,7 @@ fn namespace_card(
         1 => String::from("1 version"),
         n => format!("{n} versions"),
     };
-    let read_only = reserved(namespace).then(|| {
+    let read_only = entries.iter().all(|entry| entry.read_only).then(|| {
         view! {
             <span class=Tone::Neutral
                 .badge()>
@@ -141,6 +130,7 @@ fn namespace_card(
     let chips = entries
         .iter()
         .map(|entry| {
+            let entry = &entry.definition;
             let (_, name) = split(&entry.name);
             let name = name.to_owned();
             let version = format!("@{}", entry.version);
@@ -177,32 +167,36 @@ const CHIP: &str = "state-change inline-flex items-center rounded-full border bo
                     hover:border-accent hover:text-accent";
 
 /// Every held version of the stored query `name`, newest first, and the
-/// replica that answered, read page by page from the operator surface.
+/// replica that answered.
+///
+/// The versions are read page by page from the operator surface's versions
+/// of that one name, and are none when the gateway holds no version under
+/// it.
 ///
 /// # Errors
 /// Returns the [`GatewayError`] of the first page the gateway did not
-/// answer.
+/// answer, other than its `404` of a name it holds nothing under.
 pub async fn versions_of(
     gateway: &Gateway,
     token: &AccessToken,
     name: &str,
-) -> Result<(Vec<StoredQuery>, Option<String>), GatewayError> {
+) -> Result<(Vec<Listed>, Option<String>), GatewayError> {
     let mut held = Vec::new();
     let mut replica = None;
     let mut offset = 0_u64;
     loop {
-        let page = gateway
-            .stored_queries(
-                token,
-                PageRequest {
-                    offset,
-                    limit: MAX_PAGE,
-                },
-            )
-            .await?;
+        let asked = PageRequest {
+            offset,
+            limit: MAX_PAGE,
+        };
+        let page = match gateway.stored_query(token, name, asked).await {
+            Ok(page) => page,
+            Err(error) if none_held_under(&error) => break,
+            Err(error) => return Err(error),
+        };
         replica = replica.or(page.replica);
         let read = u64::try_from(page.items.len()).unwrap_or(u64::MAX);
-        held.extend(page.items.into_iter().filter(|entry| entry.name == name));
+        held.extend(page.items);
         offset = offset.saturating_add(read);
         // NOTE: no specification governs this: our own design; an empty page
         // ends the walk, so a listing that shrinks while it is read cannot loop.
@@ -210,8 +204,21 @@ pub async fn versions_of(
             break;
         }
     }
-    held.sort_by(|left, right| newest_first(&left.version, &right.version));
+    held.sort_by(|left, right| newest_first(&left.definition.version, &right.definition.version));
     Ok((held, replica))
+}
+
+/// The stable error code of the gateway's `404` for a stored-query name it
+/// holds no version under.
+const STORED_QUERY_UNKNOWN: &str = "stored-query-unknown";
+
+/// Whether `error` is the gateway's answer that it holds no version under
+/// the name asked: a `404` carrying [`STORED_QUERY_UNKNOWN`]. Any other
+/// `404` is a refusal the page shows with its status and code.
+fn none_held_under(error: &GatewayError) -> bool {
+    error.refusal().is_some_and(|(status, code)| {
+        status == StatusCode::NOT_FOUND && code.as_deref() == Some(STORED_QUERY_UNKNOWN)
+    })
 }
 
 /// The order of two versions, the newer first: by their numbers where both
@@ -230,10 +237,13 @@ fn newest_first(left: &str, right: &str) -> Ordering {
 
 /// The detail of the stored query `name`, whose versions the gateway holds
 /// are `held`, newest first, showing version `asked` or the newest.
+///
+/// The detail is marked read-only when the gateway takes no write under the
+/// version shown.
 #[must_use]
 pub fn detail(
     name: &str,
-    held: &[StoredQuery],
+    held: &[Listed],
     asked: Option<&str>,
     replica: Option<&str>,
 ) -> StoredDetail {
@@ -242,7 +252,8 @@ pub fn detail(
             html: not_held(name),
         };
     };
-    let chosen = asked.and_then(|asked| held.iter().find(|entry| entry.version == asked));
+    let chosen =
+        asked.and_then(|asked| held.iter().find(|entry| entry.definition.version == asked));
     let missing = asked.filter(|_| chosen.is_none()).map(|asked| {
         view! {
             <p role="alert">
@@ -253,8 +264,9 @@ pub fn detail(
         }
     });
     let shown = chosen.unwrap_or(newest);
+    let read_only = shown.read_only.then(|| badge("read-only", Tone::Neutral));
+    let shown = &shown.definition;
     let (namespace, short) = split(name);
-    let read_only = reserved(namespace).then(|| badge("read-only", Tone::Neutral));
     let header = view! {
         <a href=STORED_QUERIES class="mb-3 inline-flex items-center gap-1 text-sm">
             {icon(icondata_lu::LuArrowLeft, "14")}
@@ -327,10 +339,11 @@ pub fn detail(
 
 /// The version switch: a link to each of `held`, the one `shown` marked as
 /// the page, in words as well as in its weight and tint.
-fn versions_nav(name: &str, held: &[StoredQuery], shown: &str) -> impl IntoView {
+fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView {
     let links = held
         .iter()
         .map(|entry| {
+            let entry = &entry.definition;
             let here = entry.version == shown;
             let current = here.then_some("page");
             let mark = here.then(|| view! { <span class="text-xs font-normal">"shown"</span> });

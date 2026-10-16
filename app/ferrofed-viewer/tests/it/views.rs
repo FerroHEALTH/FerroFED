@@ -137,7 +137,7 @@ async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
         "/operator/stored-queries",
         String::from(
             r#"{"items":[{"name":"org.example::compositions","type":"AQL","version":"1.0.0","saved":"2026-10-05T08:00:00Z",
-               "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}],
+               "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c","read_only":false}],
                "offset":0,"total":1,"replica":"ferrofed-0"}"#,
         ),
     )

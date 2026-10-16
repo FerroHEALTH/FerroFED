@@ -15,10 +15,8 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SecretSlot};
+use ferrofed_registry::resource::{BindingSection, Resource, SECRETS, SecretChange, SecretSlot};
 use ferrofed_registry::secret::{SecretUrl, WriteOnly};
-
-use crate::revision::tree::SECRETS;
 
 /// The suffix of a secret's reference to a file.
 const FILE: &str = "_file";
