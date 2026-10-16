@@ -59,7 +59,7 @@ pub(in crate::fhir) const BY_IDENTIFIER: &str =
     r#"{"identifier":{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}}"#;
 
 /// `POST {fhir-base}/MedicationDispense` of `body`.
-fn post(body: &str) -> Result<Request<Body>, http::Error> {
+pub(super) fn post(body: &str) -> Result<Request<Body>, http::Error> {
     Request::post(format!("{FHIR}/MedicationDispense"))
         .header(header::CONTENT_TYPE, "application/fhir+json")
         .body(Body::from(body.to_owned()))
@@ -634,6 +634,53 @@ mod recorded {
         assert!(record.contains("\"action\":\"R\""), "a read: {record}");
         Ok(())
     }
+
+    #[tokio::test]
+    async fn a_dispensation_version_read_is_recorded_as_a_read_of_dispensations() -> TestResult {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let members = members((&[RX_A], &[RX_B]), created()).await?;
+        let held = r#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"MedicationDispense","id":"md-1","meta":{"versionId":"1"},"status":"completed"},"search":{"mode":"match"}}]}"#;
+        Mock::given(method("GET"))
+            .and(path("/fhir/MedicationDispense"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(held.as_bytes().to_vec(), "application/fhir+json"),
+            )
+            .mount(&members.own_a)
+            .await;
+        let repository = FeedRepository::start().await;
+        let dir = tempfile::tempdir()?;
+        let app = recording(&members, dir.path(), &repository, "")?;
+        let id = super::face_id("node-a-mpd", EHR_A, super::CREATED)?;
+        let request = http::Request::get(format!(
+            "{}/MedicationDispense/{id}/_history/1",
+            crate::fhir::FHIR
+        ))
+        .body(axum::body::Body::empty())?;
+        let (status, text) = call(app, request).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        let records: Vec<String> = repository
+            .wait_for(1, SETTLE)
+            .await
+            .into_iter()
+            .filter(|record| record.contains("ehds-categories"))
+            .collect();
+        let [record] = records.as_slice() else {
+            return Err(format!("one record: {records:#?}").into());
+        };
+        for expected in [
+            "eehrxf-document-priority-category-cs|Electronic-Dispensations:construction",
+            "MedicationDispense/md-1",
+            "node-a-mpd",
+            "\"action\":\"R\"",
+        ] {
+            assert!(record.contains(expected), "{expected}: {record}");
+        }
+        Ok(())
+    }
+
     #[tokio::test]
     async fn a_dispensation_whose_record_has_no_place_reaches_no_member() -> TestResult {
         let members = members((&[RX_A], &[RX_B]), created()).await?;

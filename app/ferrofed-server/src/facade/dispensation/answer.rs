@@ -43,7 +43,7 @@ use crate::facade::prescriptions::Member;
 use crate::facade::provenance::Provenance;
 use crate::facade::security;
 use crate::federation::Federation;
-use crate::fhir::locator::Locator;
+use crate::fhir::locator::{Locator, is_fhir_id};
 use crate::metrics::dispensations::Outcome;
 
 /// What the lookup reached: the patient it was named by, each member asked
@@ -295,7 +295,9 @@ fn made_answer(
     let mut response = crate::fhir::fhir_json(StatusCode::CREATED, &outcome);
     if let Some(id) = &located {
         let base = fhir.absolute.trim_end_matches('/');
-        let location = match &version {
+        // NOTE: FHIR R4 `http.html` §3.1.0.3: a vid has the form of an `id`, and only that form
+        // is one the face's vread takes, so any other version leaves the Location unversioned.
+        let location = match version.as_deref().filter(|version| is_fhir_id(version)) {
             Some(version) => format!("{base}/{RESOURCE}/{id}/_history/{version}"),
             None => format!("{base}/{RESOURCE}/{id}"),
         };

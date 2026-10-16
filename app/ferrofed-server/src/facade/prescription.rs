@@ -293,11 +293,23 @@ async fn asked(
 /// answered the one prescription, and the record gate names the patient
 /// behind the `ehr_id`.
 pub(crate) fn accessed(federation: &Federation, read: &Read) -> Option<Accessed> {
+    recorded(federation, read, read.resource().is_some())
+}
+
+/// The access record's facts of the read `read` whose one resource the
+/// face withholds, a version read whose member holds another version, so
+/// the member contributed nothing and nothing was delivered.
+pub(crate) fn accessed_withheld(federation: &Federation, read: &Read) -> Option<Accessed> {
+    recorded(federation, read, false)
+}
+
+/// The access record's facts of the read `read`, its member contributing
+/// when `contributed`.
+fn recorded(federation: &Federation, read: &Read, contributed: bool) -> Option<Accessed> {
     let log = federation.access_log()?;
     if !read.held.left() {
         return None;
     }
-    let contributed = read.resource().is_some();
     let evidence =
         || Evidence::reached(Basis::Returned, Vec::new()).constructed(read.readable.category());
     let chosen = &read.chosen;

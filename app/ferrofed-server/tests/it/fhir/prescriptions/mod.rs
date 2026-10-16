@@ -20,6 +20,7 @@ mod read;
 mod resolution;
 mod restricted;
 mod version;
+mod vread;
 
 use std::collections::BTreeMap;
 use std::error::Error;
