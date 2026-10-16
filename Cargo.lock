@@ -1569,6 +1569,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "ferrofed-eehrxf",
+ "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-server",
  "ferrofed-viewer",

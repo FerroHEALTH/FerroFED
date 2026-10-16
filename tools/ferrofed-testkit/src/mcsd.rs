@@ -37,6 +37,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use ferrofed_identity::ihe::mcsd::{
+    CATEGORY_SYSTEM, EHR_ID_SYSTEM_EXTENSION, ENDPOINT_ID_SYSTEM, HL7_CONNECTION_TYPE_SYSTEM,
+    NODE_ID_SYSTEM, ORGANISATION_ID_SYSTEM, PROFILE_EXTENSION, SYSTEM_ID_SYSTEM,
+};
+use ferrofed_registry::snapshot::ConnectionType;
 use fhir_types::codec::{Json, Path, Value};
 use fhir_types::r4::bundle::{
     Bundle, BundleEntry, BundleEntryRequest, BundleEntryResponse, BundleEntrySearch,
@@ -60,38 +65,6 @@ const BASE: &str = "/fhir";
 
 /// The FHIR JSON media type (ITI TF-2 Appendix Z.6).
 const FHIR_JSON: &str = "application/fhir+json";
-
-/// The identifier system of an organisation's registry id.
-pub const ORGANISATION_ID: &str = "https://ferrofed.eu/fhir/sid/organisation-id";
-
-/// The identifier system of an endpoint's `endpoint_id`.
-pub const ENDPOINT_ID: &str = "https://ferrofed.eu/fhir/sid/endpoint-id";
-
-/// The identifier system of the `node_id` an endpoint belongs to.
-pub const NODE_ID: &str = "https://ferrofed.eu/fhir/sid/node-id";
-
-/// The identifier system of a node's openEHR `system_id`.
-pub const SYSTEM_ID: &str = "https://ferrofed.eu/fhir/sid/system-id";
-
-/// The code system of the openEHR Query API connection type.
-pub const CONNECTION_TYPE: &str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
-
-/// The HL7 code system of the `hl7-fhir-rest` connection type.
-pub const HL7_CONNECTION_TYPE: &str =
-    "http://terminology.hl7.org/CodeSystem/endpoint-connection-type";
-
-/// The code system of the categories a member's own FHIR endpoint serves,
-/// written as `payloadType` codings.
-pub const CATEGORY: &str =
-    "http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs";
-
-/// The extension naming one profile a member's own FHIR endpoint's documents
-/// follow.
-pub const PROFILE: &str = "https://ferrofed.eu/fhir/StructureDefinition/payload-profile";
-
-/// The extension naming the identifier system of the member's `ehr_id` at
-/// its own FHIR endpoint.
-pub const EHR_ID_SYSTEM: &str = "https://ferrofed.eu/fhir/StructureDefinition/ehr-id-system";
 
 /// The instant the device's clock starts at.
 const EPOCH: &str = "2026-01-01T00:00:00Z";
@@ -140,7 +113,7 @@ impl Member {
         organisation.id = Some(self.organisation.clone());
         organisation.name = None;
         organisation.text = None;
-        organisation.identifier = vec![identifier(ORGANISATION_ID, &self.organisation)];
+        organisation.identifier = vec![identifier(ORGANISATION_ID_SYSTEM, &self.organisation)];
         organisation.endpoint = vec![reference(&format!("Endpoint/{}", self.endpoint))];
         Ok(organisation)
     }
@@ -202,13 +175,13 @@ impl Member {
             ];
         }
         endpoint.identifier = vec![
-            identifier(ENDPOINT_ID, &self.endpoint),
-            identifier(NODE_ID, &self.node),
-            identifier(SYSTEM_ID, &self.system_id),
+            identifier(ENDPOINT_ID_SYSTEM, &self.endpoint),
+            identifier(NODE_ID_SYSTEM, &self.node),
+            identifier(SYSTEM_ID_SYSTEM, &self.system_id),
         ];
         endpoint.status = "active".into();
         endpoint.connection_type = Coding {
-            system: Some(CONNECTION_TYPE.into()),
+            system: Some(ConnectionType::SYSTEM.into()),
             code: Some("openehr-rest-query".into()),
             ..Coding::default()
         };
@@ -244,20 +217,20 @@ impl Member {
 
     /// The member's own `hl7-fhir-rest` endpoint for the exchange format,
     /// built as [`Member::endpoint`] is and spelled by `native`: its
-    /// categories as `payloadType` codings in [`CATEGORY`], its profiles in
-    /// [`PROFILE`] extensions and the identifier system of the member's
-    /// `ehr_id` in an [`EHR_ID_SYSTEM`] extension.
+    /// categories as `payloadType` codings in [`CATEGORY_SYSTEM`], its profiles in
+    /// [`PROFILE_EXTENSION`] extensions and the identifier system of the member's
+    /// `ehr_id` in an [`EHR_ID_SYSTEM_EXTENSION`] extension.
     ///
     /// # Errors
     /// [`McsdHarnessError::Example`] when the vendored example cannot be read.
     pub fn native_endpoint(&self, native: &Native<'_>) -> Result<Endpoint, McsdHarnessError> {
         let mut endpoint =
-            self.endpoint_with_connection_type(HL7_CONNECTION_TYPE, "hl7-fhir-rest")?;
+            self.endpoint_with_connection_type(HL7_CONNECTION_TYPE_SYSTEM, "hl7-fhir-rest")?;
         endpoint.id = Some(native.endpoint.to_owned());
         endpoint.identifier = vec![
-            identifier(ENDPOINT_ID, native.endpoint),
-            identifier(NODE_ID, &self.node),
-            identifier(SYSTEM_ID, &self.system_id),
+            identifier(ENDPOINT_ID_SYSTEM, native.endpoint),
+            identifier(NODE_ID_SYSTEM, &self.node),
+            identifier(SYSTEM_ID_SYSTEM, &self.system_id),
         ];
         endpoint.managing_organization = Some(reference(&format!(
             "Organization/{}",
@@ -268,7 +241,7 @@ impl Member {
                 .categories
                 .iter()
                 .map(|code| Coding {
-                    system: Some(CATEGORY.into()),
+                    system: Some(CATEGORY_SYSTEM.into()),
                     code: Some((*code).into()),
                     ..Coding::default()
                 })
@@ -281,12 +254,12 @@ impl Member {
             .profiles
             .iter()
             .map(|profile| Extension {
-                url: PROFILE.into(),
+                url: PROFILE_EXTENSION.into(),
                 value: Some(ExtensionValue::Canonical((*profile).into())),
                 ..Extension::default()
             })
             .chain(native.ehr_id_system.map(|system| Extension {
-                url: EHR_ID_SYSTEM.into(),
+                url: EHR_ID_SYSTEM_EXTENSION.into(),
                 value: Some(ExtensionValue::Uri(system.into())),
                 ..Extension::default()
             }))

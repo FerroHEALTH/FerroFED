@@ -23,7 +23,7 @@ use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::native::NativeEndpoint;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrofed_testkit::mcsd::{self as harness, HarnessDirectory, Member, Native};
+use ferrofed_testkit::mcsd::{HarnessDirectory, Member, Native};
 use serde_json::{Value, json};
 
 use super::{NATIVE, NODE_A_PUB, ORG_A, bytes, fhir, resource};
@@ -328,17 +328,6 @@ fn two_ehr_id_system_extensions_are_refused() {
         Err(FhirFormError::EhrIdSystem { endpoint: refused, fault: IdentifierFault::Repeated })
             if refused == endpoint("node-a-eps")
     ));
-}
-
-#[test]
-fn the_harness_spells_the_native_keys_of_the_fhir_form() {
-    assert_eq!(
-        mcsd::HL7_CONNECTION_TYPE_SYSTEM,
-        harness::HL7_CONNECTION_TYPE
-    );
-    assert_eq!(CATEGORY_SYSTEM, harness::CATEGORY);
-    assert_eq!(PROFILE_EXTENSION, harness::PROFILE);
-    assert_eq!(EHR_ID_SYSTEM_EXTENSION, harness::EHR_ID_SYSTEM);
 }
 
 fn member(name: &str) -> Member {

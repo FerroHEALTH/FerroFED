@@ -12,7 +12,8 @@
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_testkit::mcsd::{ENDPOINT_ID, HarnessDirectory, Member, ORGANISATION_ID, Outage};
+use ferrofed_identity::ihe::mcsd::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
+use ferrofed_testkit::mcsd::{HarnessDirectory, Member, Outage};
 use ihe_iti::mcsd::budget::{Budget, Limits};
 use ihe_iti::mcsd::client::McsdClient;
 use ihe_iti::mcsd::replica::{Refresh, Replica, Scope};
@@ -43,7 +44,7 @@ fn client(directory: &HarnessDirectory) -> Result<McsdClient, Box<dyn Error>> {
 }
 
 fn scope() -> Scope {
-    Scope::identified(ORGANISATION_ID, ENDPOINT_ID)
+    Scope::identified(ORGANISATION_ID_SYSTEM, ENDPOINT_ID_SYSTEM)
 }
 
 #[tokio::test]
