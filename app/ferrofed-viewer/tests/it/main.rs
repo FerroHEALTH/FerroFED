@@ -24,6 +24,8 @@ mod configure_fhir;
 #[cfg(test)]
 mod configure_pages;
 #[cfg(test)]
+mod configure_refusals;
+#[cfg(test)]
 mod configure_revisions;
 #[cfg(test)]
 mod configure_sections;
