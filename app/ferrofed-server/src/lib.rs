@@ -86,7 +86,6 @@ pub mod jwks;
 pub mod listener;
 pub mod localization;
 pub mod metrics;
-pub mod node_transport;
 mod onward;
 pub mod operator;
 pub mod overload;

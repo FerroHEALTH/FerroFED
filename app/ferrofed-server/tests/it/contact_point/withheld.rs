@@ -23,13 +23,13 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::auth::{AuthSettings, KeySource, Verification};
 use ferrofed_server::config::settings::ConsentDisclosure;
 use ferrofed_server::federation::Federation;
-use ferrofed_server::node_transport::BoundedTransport;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
+use openehr_its::rest::client::ReqwestTransport;
 
 use super::{declared, relaying};
 use crate::auth::{TestResult, bearing, minted, query, sent};
@@ -48,7 +48,8 @@ fn disclosing(
     auth: AuthSettings,
 ) -> Result<Router, Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
-    let transport = BoundedTransport::new(Duration::from_secs(5), 16 * 1024 * 1024)?;
+    let transport =
+        ReqwestTransport::with_timeout(Duration::from_secs(5))?.with_max_body(16 * 1024 * 1024);
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,

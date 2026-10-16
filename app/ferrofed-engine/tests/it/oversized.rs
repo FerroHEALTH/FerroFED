@@ -14,7 +14,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::dispatch::oversized::Oversized;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClients, NodeQuery};
 use ferrofed_engine::fanout::{Budget, Plan, Verdict, fan_out};
 use ferrofed_engine::outbound_id::OutboundId;
@@ -45,8 +44,9 @@ impl Transport for Bounded {
         &self,
         _request: http::Request<Vec<u8>>,
     ) -> Result<http::Response<Vec<u8>>, TransportError> {
-        Err(TransportError::Send {
-            source: Box::new(Oversized::new(StatusCode::OK, LIMIT)),
+        Err(TransportError::BodyTooLarge {
+            status: StatusCode::OK,
+            limit: LIMIT,
         })
     }
 }

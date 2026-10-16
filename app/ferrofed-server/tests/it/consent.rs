@@ -523,10 +523,9 @@ async fn a_prefilter_that_cannot_answer_leaves_every_candidate_to_its_node() -> 
         &b.uri(),
         "",
     ))?;
-    let transport = ferrofed_server::node_transport::BoundedTransport::new(
-        Duration::from_secs(5),
-        16 * 1024 * 1024,
-    )?;
+    let transport =
+        openehr_its::rest::client::ReqwestTransport::with_timeout(Duration::from_secs(5))?
+            .with_max_body(16 * 1024 * 1024);
     let clients = ferrofed_engine::dispatch::NodeClients::from_snapshot(
         &snapshot,
         &transport,

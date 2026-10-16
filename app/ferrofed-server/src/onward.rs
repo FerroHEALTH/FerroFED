@@ -34,11 +34,47 @@ use openehr_its::rest::client::Credentials;
 use crate::config::settings::{Scheme, Settings};
 use crate::config::tls::TlsSettings;
 use crate::federation::error::FederationError;
-use crate::node_transport::BoundedTransport;
+use openehr_its::rest::client::ReqwestTransport;
 
 /// The HTTP engine every request to a node and to its token endpoint is
 /// sent through: the `reqwest` engine, bounded in what it reads of an answer.
-pub(crate) type NodeTransport = BoundedTransport;
+pub(crate) type NodeTransport = ReqwestTransport;
+
+/// Returns the engine over `builder`: redirects off, `timeout` per request,
+/// which a call's deadline only shortens, and at most `limit` bytes read of
+/// one answer.
+///
+/// An answer past `limit` ends the call in `ClientError::AnswerTooLarge`,
+/// which the engine reads as the node's answer: `node-error` with its status
+/// (§11.1). No specification governs the bound: our own design.
+///
+/// # Errors
+///
+/// Returns the `reqwest` error when the client cannot be built.
+fn bounded(
+    builder: reqwest::ClientBuilder,
+    timeout: std::time::Duration,
+    limit: usize,
+) -> Result<NodeTransport, reqwest::Error> {
+    Ok(ReqwestTransport::with_builder_timeout(builder, timeout)?.with_max_body(limit))
+}
+
+/// Returns the engine over `builder` that `settings` bound: the overall
+/// budget as its timeout and `max_node_answer_bytes` read of one answer.
+///
+/// # Errors
+///
+/// Returns the `reqwest` error when the client cannot be built.
+pub(crate) fn node_transport(
+    builder: reqwest::ClientBuilder,
+    settings: &Settings,
+) -> Result<NodeTransport, reqwest::Error> {
+    bounded(
+        builder,
+        settings.federation.budget.overall(),
+        settings.federation.max_node_answer_bytes.get(),
+    )
+}
 
 /// What the node clients of one federation send each node to authenticate.
 #[derive(Debug)]
@@ -224,12 +260,7 @@ fn transport(
         };
     let builder = fhir::http_client_builder(&Authentication::None, &material)
         .map_err(|source| failed(Box::new(source)))?;
-    BoundedTransport::with_builder(
-        builder,
-        settings.federation.budget.overall(),
-        settings.federation.max_node_answer_bytes.get(),
-    )
-    .map_err(|source| failed(Box::new(source)))
+    node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
 }
 
 /// What one endpoint's grant provides its node client.
@@ -279,4 +310,65 @@ fn fapi2(
             Arc::new(SystemClock),
         )))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::bounded;
+    use http::StatusCode;
+    use openehr_its::rest::client::{Transport, TransportError};
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// A server that answers one request `200` with a chunked body that
+    /// never ends, and returns its address.
+    async fn endless() -> Result<std::net::SocketAddr, Box<dyn std::error::Error>> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        tokio::spawn(async move {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut request = [0_u8; 4096];
+            let _read = stream.read(&mut request).await;
+            let head = "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ntransfer-encoding: chunked\r\n\r\n";
+            if stream.write_all(head.as_bytes()).await.is_err() {
+                return;
+            }
+            let chunk = format!("{:x}\r\n{}\r\n", 4096, " ".repeat(4096));
+            while stream.write_all(chunk.as_bytes()).await.is_ok() {}
+        });
+        Ok(address)
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn an_answer_without_end_is_dropped_at_the_bound() -> TestResult {
+        let address = endless().await?;
+        let transport = bounded(
+            reqwest::Client::builder(),
+            Duration::from_secs(10),
+            64 * 1024,
+        )?;
+        let request = http::Request::get(format!("http://{address}/v1/ehr")).body(Vec::new())?;
+        let started = std::time::Instant::now();
+        let Err(error) = transport.send(request).await else {
+            return Err("an endless answer was read whole".into());
+        };
+        let TransportError::BodyTooLarge { status, limit } = error else {
+            return Err(format!("the read ended before the bound: {error}").into());
+        };
+        assert_eq!((StatusCode::OK, 64 * 1024), (status, limit));
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the read stopped at the bound, not at the engine's timeout"
+        );
+        Ok(())
+    }
 }
