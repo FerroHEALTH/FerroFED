@@ -577,16 +577,23 @@
     opacity: 1;
   }
 
-  /* A control scrolled to the foot of the window stays clear of the run bar
+  /* The run bar sticks to the foot of a window tall enough to spare it, and a
+     control scrolled there stays clear of it; in a shorter window it would
+     cover the form, so it closes the card in place
      (https://www.w3.org/TR/WCAG22/#focus-not-obscured-minimum). */
-  html:has(.run-bar) {
-    scroll-padding-bottom: 4.5rem;
+  @media (min-height: 40rem) {
+    html:has(.run-bar) {
+      scroll-padding-bottom: 4.5rem;
+    }
+
+    .run-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+    }
   }
 
   .run-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
