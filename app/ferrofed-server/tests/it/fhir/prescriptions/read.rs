@@ -8,8 +8,8 @@
 //! request named (FHIR R4 `http.html` §3.1.0.2); an id with no owner answers
 //! `404` alike whatever the reason, an `ehr_id` two members claim `409` with
 //! the integrity incident (§12.5.2, N42), a member answering two `409`
-//! without one, a caller confined to another patient `403`, and a silent
-//! member is named (§11.1).
+//! without one, a caller confined to another patient `403`, as is its search
+//! for another patient, and a silent member is named (§11.1).
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -382,6 +382,36 @@ async fn a_caller_confined_to_one_patient_reads_that_patients_prescription_alone
         members.proxy_a.journal().len(),
         "an id beyond the caller's patient is sent nowhere"
     );
+    Ok(())
+}
+
+/// `GET {fhir-base}/MedicationRequest?patient.identifier=` of the patient
+/// `value` in the cross-reference's system.
+fn search_of(value: &str) -> Result<Request<Body>, http::Error> {
+    let system = crate::fhir::receive::EHR_SYSTEM.replace(':', "%3A");
+    Request::get(format!(
+        "{FHIR}/MedicationRequest?patient.identifier={system}%7C{value}"
+    ))
+    .body(Body::empty())
+}
+
+#[tokio::test]
+async fn a_caller_confined_to_one_patient_is_refused_a_search_for_another() -> TestResult {
+    let members = answering().await?;
+    let dir = tempfile::tempdir()?;
+    let app = confined_gateway(&members, dir.path())?;
+    let mut granted = claims();
+    granted.scope = Some("patient/composition-*.s".to_owned());
+    granted.ehr_id = Some(EHR_A.to_owned());
+    let token = minted(&granted)?;
+    let (status, text) = call(app, bearing(search_of(OTHER_A)?, &token)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "§5.2: {text}");
+    assert!(text.contains("patient-confinement"), "{text}");
+    assert!(
+        members.unasked(),
+        "a search for another patient is sent to no member's own endpoint"
+    );
+    assert!(members.no_query().await?, "nor to any member's Query API");
     Ok(())
 }
 
