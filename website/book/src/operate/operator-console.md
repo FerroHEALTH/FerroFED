@@ -180,8 +180,10 @@ service worker or a URL.
   `POST /admin/stored-queries/{name}/{version}/distribute` with the members
   in `openEHR-federation-endpoint` (`*` for every active member) on the
   first replica configured, since the replicas share the stored-query store.
-  Each action asks you to tick a confirmation, which the console checks
-  again on its server, and runs once the page has loaded. Its answer names
+  Each action is a card whose button opens a confirmation step, which the
+  console checks again on its server, and runs once the page has loaded.
+  Its answer shows at the top of the card, with the focus moved there, and
+  names
   the replica it went to: what a clear found there (a collision and its
   claimants, one owner, or nothing), or the status of a repair, whether
   every member took the version, and each member's outcome. A replica that
@@ -192,26 +194,40 @@ service worker or a URL.
   your issuer's `operator_scope` and records you as the operator who ran it.
 - **`/configuration`**, where `[admin]` names at least one gateway replica
   whose configuration is managed (`config.ui = "managed"`). It reads the
-  first replica's configuration revisions and shows which revision runs,
-  the newest revision with what it changes against the running one, every
-  member and stored-query version with its owner, and the newest revisions.
-  A member the registry document or a care services directory provides is
-  marked read-only and offers no edit. A console member is added, edited or
-  removed as a new revision, which you then apply with its own form, and
-  the running revision rolls back in one step; a stored-query version is
-  stored once and never edited. Each onward credential and binding section
-  is shown with its owner and its secrets as set, with the file each is
-  read from, never by value; a console one is added, edited or removed as a
-  new revision, its settings as one TOML inline table and a secret by its
-  value, in a password field the page never fills, or by a file. When the
-  running revision awaits its confirmation, the page shows its deadline and
-  a form to confirm it; when the newest revision takes a second operator's
-  approval, it shows who made it, who approved it, and a form to approve it
+  first replica's configuration revisions. The header names the revision
+  that runs and the one saved and not applied, and a card above every tab
+  shows what the saved revision changes, each setting with its running
+  value marked `−` and its new value marked `+`, and its apply. Five tabs,
+  each at its own path, hold the rest: `/configuration/members`, every
+  member with its owner and state; `/configuration/credentials`, every
+  onward credential and binding section with its secrets as set, with the
+  file each is read from, never by value; `/configuration/stored-queries`,
+  the stored versions by name; `/configuration/history`, the newest
+  revisions, each with its download as TOML and its comparison with the
+  running revision; and `/configuration/import-export`, the running
+  revision's download and the import of TOML as a dry-run revision. A
+  member the registry document or a care services directory provides opens
+  as a read-only detail that names its source. A console member is added
+  or edited on a page of its own (`/configuration/members/new`,
+  `/configuration/members/{node_id}`), each Query API and FHIR endpoint a
+  row of its own fields, with its categories as checkboxes and its profiles
+  as a list, and saved as a new revision, which you then apply. A
+  credential's form shows the fields of the grant you choose, and each
+  secret is kept, set by its value in a password field the page never
+  fills, read from a file, or cleared; a binding section's form shows each
+  setting as a field of its own. When the running revision awaits its
+  confirmation, the card counts down to its deadline and offers Confirm and
+  Roll back; when the saved revision takes a second operator's approval, it
+  shows who made it, who approved it, and Approve
   ([Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
-  Each form asks for a confirmation, which
-  the console checks again, and runs once the page has loaded. A replica
-  whose configuration is not managed answers `404`, and the page says so
-  and offers no form ([Console-managed resources](configuration-revisions.md#console-managed-resources)).
+  An apply, a roll back, a confirmation, an approval, a removal and a
+  stored version each ask you to confirm in a step of their own, which the
+  console checks again; a save is not applied and asks none. A form's answer
+  shows at the top of its card with the focus moved there, and a field the
+  console refuses is marked with what is wrong under it. Every form runs once
+  the page has loaded. A replica whose configuration is not managed answers
+  `404`, and the page says so and offers no form
+  ([Console-managed resources](configuration-revisions.md#console-managed-resources)).
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 

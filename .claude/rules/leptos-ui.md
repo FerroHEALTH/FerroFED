@@ -528,6 +528,16 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   the server alone, so the browser drops the tables it drew for both pages
   and carries the detail's route, its server function's decoding, and the
   query console's reading of the stored query its URL names.
+- **The configuration redesign (#1079) measured 403279 bytes**
+  brotli-compressed (2026-10-16, cargo-leptos 0.3.11, wasm-bindgen 0.2.129),
+  about 34 KB over the 369418 of the tree it was built on. Every tab, form,
+  table and diff is rendered on the server and shown as HTML, the repeatable
+  rows are copied from a `template` the server wrote, and the confirmation
+  steps are HTML popovers. The browser adds the page's resource keyed by
+  its path, the typed form with its nested rows and their encoding, the
+  reading of every row from the form data, the row add and remove, the
+  tabs' arrow keys, the line count, the focus move and the field marks of
+  a refusal, and the countdown.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it
