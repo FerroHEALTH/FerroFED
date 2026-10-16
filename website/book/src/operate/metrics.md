@@ -217,7 +217,7 @@ path reaches the surface:
 
 | Label | Values |
 |---|---|
-| `kind` | `EhrIdCollision`, `IndexInsertCollision`, `LearnedCreatingSystemConflict`, `RegisteredCreatingSystemConflict` |
+| `kind` | `EhrIdCollision`, `IndexInsertCollision`, `LearnedCreatingSystemConflict`, `PrescriptionIdentifierCollision`, `RegisteredCreatingSystemConflict` |
 | `endpoint` | an endpoint `id` of the registry document |
 | `outcome` | `active`, `node-error`, `time-out`, `offline`, `consent-denied` |
 | `class` | `member` (the member's own answer or failure), `client-error` (a `4xx`, other than a consent refusal, the member answered a request routed to it with) |

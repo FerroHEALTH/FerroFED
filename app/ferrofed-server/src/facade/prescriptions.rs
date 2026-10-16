@@ -289,7 +289,7 @@ pub(crate) async fn search(
 /// Asks every member `chosen` names at its own endpoint, at once, under the
 /// budget of the request `arrived`, refusing to send anything carrying one
 /// of `withheld`, and returns each answer in the order of `chosen`.
-async fn asked(
+pub(crate) async fn asked(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     chosen: Vec<Chosen>,

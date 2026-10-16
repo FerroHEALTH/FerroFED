@@ -27,6 +27,8 @@
 //!   its package and its codings displayed;
 //! - [`serving`]: the members the deployment declares to serve electronic
 //!   prescriptions and dispensations on that face, each on its own endpoint;
+//! - [`dispensations`]: a dispensation received on that face, read for the
+//!   prescription it names and the member that owns it;
 //! - [`prescriptions`]: the search of a patient's prescriptions on that
 //!   face, each member's page read and every prescription passed through
 //!   with the `Provenance` that names its member;
@@ -52,6 +54,7 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+pub mod dispensations;
 pub mod face;
 pub mod list;
 pub mod patient_summary;

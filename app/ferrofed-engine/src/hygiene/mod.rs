@@ -191,6 +191,21 @@ impl Withheld {
         )
     }
 
+    /// The identifiers of this and of `other`, each once.
+    #[must_use]
+    pub fn joined(&self, other: &Self) -> Self {
+        let mut values = self.0.clone();
+        for value in &other.0 {
+            if !values
+                .iter()
+                .any(|held| held.expose_secret() == value.expose_secret())
+            {
+                values.push(value.clone());
+            }
+        }
+        Self(values)
+    }
+
     /// Whether no identifier is withheld.
     #[must_use]
     pub fn is_empty(&self) -> bool {

@@ -474,9 +474,9 @@ prescriptions:
 `GET {fhir-base}/metadata` lists `MedicationRequest` and
 `MedicationDispense` only for a category a member is declared for, each with
 its MPD profile, and declares for `MedicationRequest` the `search-type` and
-`read` interactions the face serves. The receipt of a dispensation at a
-declared member is planned for this release (#1042); until it ships, that
-route answers `501`.
+`read` interactions the face serves, and for `MedicationDispense` the
+`create` interaction. Each interaction the statement declares is one its
+route serves.
 
 ### Searching a patient's prescriptions
 
@@ -564,6 +564,58 @@ its shape and never logs the value. The other answers:
 Each read that reached a member is recorded once under
 `Electronic-Prescriptions`, naming the member and the `ehr_id` it was asked
 by.
+
+### Receiving a dispensation
+
+`POST {fhir-base}/MedicationDispense` with `application/fhir+json` takes one
+`MedicationDispense`, the FHIR R4 `create` interaction, and the
+`composition-` create scope over every template (`user/composition-*.c`,
+for example). The gateway writes it to the one member that owns the
+prescription it names, and to no other member.
+
+The dispensation is checked before any member is asked. A body that is no
+`MedicationDispense` is a `400`; one that breaks `MedicationDispense-eu-mpd`,
+or a contained `Medication` that breaks `Medication-eu-mpd`, is a `422` with
+one issue per finding. Its `subject` names the patient by an identifier,
+either a logical reference or a contained `Patient` that `subject`
+references by `#id`, and each identifier whose system is in
+`receive_namespaces` is resolved. Every one of them must name the same
+`ehr_id` at every member, or the dispensation is refused `422`. Each
+`authorizingPrescription` names a prescription by its business identifier,
+by the face's reference `MedicationRequest/{id}` from the search, or by
+both, which must then name the same prescription.
+
+The gateway then asks every member declared for `Electronic-Prescriptions`
+that holds the patient for the patient's prescriptions, as the search does,
+by the member's own `ehr_id` alone, and finds the named prescriptions in the
+answers itself. The prescription identifier never reaches a member. Every
+member asked must answer, because a silent one could be the owner. The
+dispensation is then created at the owner's own endpoint with
+`POST {own}/MedicationDispense`, once, its body exactly as you sent it. The
+member decides whether its prescription still admits the dispensation; the
+gateway holds no lock, and it never sends a dispensation again.
+
+An `openEHR-federation-endpoint` header is a check only: when it names an
+endpoint of another member than the owner, nothing is written.
+
+| Answer | When |
+|---|---|
+| `201 Created` | The owner created the dispensation. `Location` names it by the face's id, `{fhir-base}/MedicationDispense/{id}`, with the member's version when it named one, and the `OperationOutcome` names the member and every profile constraint the check did not evaluate. The face does not serve a read of that id. |
+| `400` | The header names another member's endpoint, or an endpoint the registry does not hold. |
+| `404` `not-found` | No member holds the patient, none may say so, or no member holds the prescription. Every case gets the same text. |
+| `409` `conflict` | Two members hold the prescription, which also raises the `PrescriptionIdentifierCollision` integrity incident; one member holds it twice, with no incident; or the owner refused the dispensation, named with its status. |
+| `422` | The patient's identifiers disagree, the prescriptions are held by different members, a reference and an identifier name different prescriptions, a reference is not to the face, or the owner is not declared for `Electronic-Dispensations`. |
+| `503` | A member that could hold the prescription did not answer the lookup, or the patient could not be resolved at it. Nothing was written. |
+| `504` | The owner did not answer in time. Whether it wrote the dispensation is unknown, and the gateway did not send it again: ask the member before you send it once more. |
+
+No answer but the `201` and the `504` follows a write the member could have
+made. Each dispensation that reached a member is recorded once, as a
+creation under `Electronic-Dispensations` and `Electronic-Prescriptions`,
+naming every member the lookup asked and the owner. Its record's place is
+taken before the owner is asked, so a dispensation whose record has no place
+is refused `503 access-unrecorded` and reaches no member. A withdrawal is a
+dispensation sent again with `status` `entered-in-error`, routed as any
+other.
 
 ## Terminology
 
@@ -720,7 +772,7 @@ members = ["node-a"]                         # node ids, each with its own MPD e
 
 [[fhir.serve]]
 category = "Electronic-Dispensations"
-members = ["node-a"]                         # each also serves Electronic-Prescriptions
+members = ["node-a"]                         # each also declared for Electronic-Prescriptions
 ```
 
 The terminology server, when you configure one:
@@ -739,9 +791,11 @@ mutual TLS the server asks for, as for the identity services. Outside
 `profile = "development"` the URL must be `https`, because the server is sent
 the codes of the documents you receive.
 
-For `[[fhir.receive]]`, set `receive_namespaces` under `[fhir]` as well,
-for example `receive_namespaces = ["urn:oid:2.999.1"]`: the identifier
-systems a received document's patient is resolved in.
+For `[[fhir.receive]]` and for `Electronic-Dispensations`, set
+`receive_namespaces` under `[fhir]` as well, for example
+`receive_namespaces = ["urn:oid:2.999.1"]`: the identifier systems a
+received document's or dispensation's patient is resolved in. Configuration
+load refuses either without it.
 
 - `[fhir]` needs a demographics binding, `[pdqm]`, because every summary
   names its patient and the members federate no demographics: configuration
@@ -769,7 +823,7 @@ systems a received document's patient is resolved in.
   the mapping compiles when the configuration is read.
 - Each `[[fhir.serve]]` declares one category, once, with at least one
   member, each named once. Configuration load refuses any other category and
-  a member of `Electronic-Dispensations` that does not also serve
+  a member of `Electronic-Dispensations` that is not also declared for
   `Electronic-Prescriptions`, because a dispensation is written only at the
   member that owns its prescription. The start and `ferrofed config check`
   are refused for a member that is no node of the registry, one with no

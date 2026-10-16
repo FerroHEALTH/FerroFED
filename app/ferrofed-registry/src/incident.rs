@@ -80,6 +80,13 @@ pub enum Incident {
         /// Every member the index now holds it at, in `node_id` order.
         claimants: Vec<NodeId>,
     },
+    /// A dispensation named a prescription that more than one member holds
+    /// for its patient, and was refused `409` listing them; the prescription's
+    /// identifier is never carried, since it may identify the patient (§5.1).
+    PrescriptionIdentifierCollision {
+        /// The own endpoint of each member holding it, in endpoint order.
+        claimants: Vec<EndpointId>,
+    },
 }
 
 /// The kind of an integrity incident: the closed set a log pipeline or a
@@ -95,6 +102,8 @@ pub enum Kind {
     EhrIdCollision,
     /// [`Incident::IndexInsertCollision`].
     IndexInsertCollision,
+    /// [`Incident::PrescriptionIdentifierCollision`].
+    PrescriptionIdentifierCollision,
 }
 
 /// How many [`Kind::LearnedCreatingSystemConflict`] incidents were emitted.
@@ -105,14 +114,17 @@ static REGISTERED_CONFLICTS: AtomicU64 = AtomicU64::new(0);
 static EHR_ID_COLLISIONS: AtomicU64 = AtomicU64::new(0);
 /// How many [`Kind::IndexInsertCollision`] incidents were emitted.
 static INDEX_INSERT_COLLISIONS: AtomicU64 = AtomicU64::new(0);
+/// How many [`Kind::PrescriptionIdentifierCollision`] incidents were emitted.
+static PRESCRIPTION_IDENTIFIER_COLLISIONS: AtomicU64 = AtomicU64::new(0);
 
 impl Kind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::LearnedCreatingSystemConflict,
         Self::RegisteredCreatingSystemConflict,
         Self::EhrIdCollision,
         Self::IndexInsertCollision,
+        Self::PrescriptionIdentifierCollision,
     ];
 
     /// The kind's stable name, as the event and a counter label carry it.
@@ -123,6 +135,7 @@ impl Kind {
             Self::RegisteredCreatingSystemConflict => "RegisteredCreatingSystemConflict",
             Self::EhrIdCollision => "EhrIdCollision",
             Self::IndexInsertCollision => "IndexInsertCollision",
+            Self::PrescriptionIdentifierCollision => "PrescriptionIdentifierCollision",
         }
     }
 
@@ -140,6 +153,7 @@ impl Kind {
             Self::RegisteredCreatingSystemConflict => &REGISTERED_CONFLICTS,
             Self::EhrIdCollision => &EHR_ID_COLLISIONS,
             Self::IndexInsertCollision => &INDEX_INSERT_COLLISIONS,
+            Self::PrescriptionIdentifierCollision => &PRESCRIPTION_IDENTIFIER_COLLISIONS,
         }
     }
 }
@@ -206,6 +220,7 @@ impl Incident {
             Self::RegisteredCreatingSystemConflict { .. } => Kind::RegisteredCreatingSystemConflict,
             Self::EhrIdCollision { .. } => Kind::EhrIdCollision,
             Self::IndexInsertCollision { .. } => Kind::IndexInsertCollision,
+            Self::PrescriptionIdentifierCollision { .. } => Kind::PrescriptionIdentifierCollision,
         }
     }
 
@@ -219,7 +234,9 @@ impl Incident {
             | Self::RegisteredCreatingSystemConflict {
                 creating_system_id, ..
             } => Some(creating_system_id),
-            Self::EhrIdCollision { .. } | Self::IndexInsertCollision { .. } => None,
+            Self::EhrIdCollision { .. }
+            | Self::IndexInsertCollision { .. }
+            | Self::PrescriptionIdentifierCollision { .. } => None,
         }
     }
 
@@ -231,7 +248,8 @@ impl Incident {
                 Some(ehr_id)
             }
             Self::LearnedCreatingSystemConflict { .. }
-            | Self::RegisteredCreatingSystemConflict { .. } => None,
+            | Self::RegisteredCreatingSystemConflict { .. }
+            | Self::PrescriptionIdentifierCollision { .. } => None,
         }
     }
 
@@ -289,6 +307,12 @@ impl Incident {
                 ehr_id = uuid_form(ehr_id),
                 claimants = %Listed(claimants),
                 "integrity incident: the ehr_id index learned an ehr_id it holds at another member"
+            ),
+            Self::PrescriptionIdentifierCollision { claimants } => tracing::error!(
+                target: TARGET,
+                kind = self.kind().as_str(),
+                claimants = %Listed(claimants),
+                "integrity incident: a prescription a dispensation named is held by more than one member, and the dispensation was refused"
             ),
         }
     }
@@ -361,6 +385,11 @@ impl fmt::Display for Incident {
                 f,
                 "the ehr_id index holds {} at nodes {}",
                 Shown(ehr_id),
+                Listed(claimants)
+            ),
+            Self::PrescriptionIdentifierCollision { claimants } => write!(
+                f,
+                "a prescription a dispensation named is held by endpoints {}",
                 Listed(claimants)
             ),
         }

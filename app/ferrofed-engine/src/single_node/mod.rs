@@ -9,13 +9,15 @@
 //! one node's EHR, [`forward`] passes one client request to its owning node
 //! once (§7a.3, N22, N31), [`probe`] sends the one read of §12.5.1 step 4
 //! to each member, [`native`] asks a member's own exchange-format endpoint
-//! for its patient summary, and [`native_search`] searches that endpoint for
-//! a patient's resources page by page. No specification governs the
+//! for its patient summary, [`native_search`] searches that endpoint for a
+//! patient's resources page by page, and [`native_create`] creates one
+//! resource there. No specification governs the
 //! grouping: our own design.
 
 pub mod composition;
 pub mod ehr;
 pub mod forward;
 pub mod native;
+pub mod native_create;
 pub mod native_search;
 pub mod probe;

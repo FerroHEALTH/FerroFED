@@ -124,6 +124,16 @@ impl Forwarded {
         }
     }
 
+    /// A success of the status `status` whose body was not read, which
+    /// carries no header and no byte of it.
+    pub(super) fn bare(status: StatusCode) -> Self {
+        Self {
+            status,
+            headers: HeaderMap::new(),
+            body: Vec::new(),
+        }
+    }
+
     /// The status, the headers and the body.
     #[must_use]
     pub fn into_parts(self) -> (StatusCode, HeaderMap, Vec<u8>) {

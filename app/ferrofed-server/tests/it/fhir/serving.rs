@@ -204,7 +204,8 @@ async fn a_declared_member_lists_both_resources_in_their_mpd_profiles() -> TestR
 }
 
 #[tokio::test]
-async fn every_interaction_declared_for_medication_request_is_one_the_route_serves() -> TestResult {
+async fn every_interaction_declared_for_a_prescription_or_dispensation_is_one_the_route_serves()
+-> TestResult {
     let (a, b, own) = (
         Server::start().await,
         Server::start().await,
@@ -224,37 +225,56 @@ async fn every_interaction_declared_for_medication_request_is_one_the_route_serv
     let (status, text) = call(app, metadata()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let statement: Value = serde_json::from_str(&text)?;
-    let declared: Vec<String> = statement
+    let declared: Vec<(String, String)> = statement
         .pointer("/rest/0/resource")
         .and_then(Value::as_array)
-        .and_then(|resources| {
-            resources
-                .iter()
-                .find(|resource| resource["type"] == "MedicationRequest")
-        })
-        .and_then(|resource| resource["interaction"].as_array())
-        .ok_or("MedicationRequest is listed")?
+        .ok_or("rest[0].resource")?
         .iter()
-        .filter_map(|interaction| interaction["code"].as_str().map(str::to_owned))
+        .filter(|resource| {
+            resource["type"] == "MedicationRequest" || resource["type"] == "MedicationDispense"
+        })
+        .flat_map(|resource| {
+            let kind = resource["type"].as_str().unwrap_or_default().to_owned();
+            resource["interaction"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(move |interaction| {
+                    interaction["code"]
+                        .as_str()
+                        .map(|code| (kind.clone(), code.to_owned()))
+                })
+        })
         .collect();
-    assert!(declared.iter().any(|code| code == "read"), "{declared:?}");
-    for (served, code) in declared.iter().enumerate() {
-        let request = match code.as_str() {
-            "search-type" => search()?,
-            "read" => read()?,
-            other => return Err(format!("{other} is declared and no route serves it").into()),
+    let named = |kind: &str, code: &str| {
+        declared
+            .iter()
+            .any(|(held, interaction)| held == kind && interaction == code)
+    };
+    assert!(named("MedicationRequest", "read"), "{declared:?}");
+    assert!(named("MedicationDispense", "create"), "{declared:?}");
+    for (kind, code) in &declared {
+        let request = match (kind.as_str(), code.as_str()) {
+            ("MedicationRequest", "search-type") => search()?,
+            ("MedicationRequest", "read") => read()?,
+            ("MedicationDispense", "create") => Request::post(format!("{FHIR}/MedicationDispense"))
+                .header(header::CONTENT_TYPE, "application/fhir+json")
+                .body(Body::from(super::prescriptions::dispense::dispensation(
+                    super::prescriptions::dispense::BY_IDENTIFIER,
+                )))?,
+            _ => return Err(format!("{kind} {code} is declared and no route serves it").into()),
         };
+        let before = crate::facade::received(&own).await?.len();
         let (app, _) = gateway()?;
         let (status, text) = call(app, request).await?;
         assert_ne!(
             StatusCode::NOT_IMPLEMENTED,
             status,
-            "FHIR R4 http.html §3.1.0.10: {code} is declared, so it is served: {text}"
+            "FHIR R4 http.html §3.1.0.10: {kind} {code} is declared, so it is served: {text}"
         );
-        assert_eq!(
-            served + 1,
-            crate::facade::received(&own).await?.len(),
-            "{code} reaches the member's own endpoint"
+        assert!(
+            crate::facade::received(&own).await?.len() > before,
+            "{kind} {code} reaches the member's own endpoint: {text}"
         );
     }
     Ok(())
@@ -280,7 +300,7 @@ async fn a_served_category_is_never_answered_as_not_served() -> TestResult {
         assert_ne!(StatusCode::NOT_FOUND, status, "{text}");
         assert!(!text.contains("not served"), "{text}");
         // The search and the read, the first two routes, each ask the member once; the
-        // dispensation (#1042) answers 501 and adds no request.
+        // dispensation, held to its profile first, is refused before any member is asked.
         assert_eq!(
             position.min(1) + 1,
             crate::facade::received(&own).await?.len(),
