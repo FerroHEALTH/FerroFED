@@ -94,3 +94,4 @@
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
 - [No personal data in requests](no-personal-data-in-requests.md): no worker sends the owner's email or contact to an external service, User-Agent included; a neutral agent string, and a slip is reported
 - [Native issue types and fields](native-issue-types-and-priority.md): type, priority and effort are the native issue type and the FerroHEALTH Priority and Effort fields, set with scripts/gh/fields.sh; bug, enhancement and P0 to P3 retired; owner 2026-10-02 (#154)
+- [FerroUI](ferroui.md): every console draws in FerroUI; uniform design, shared components, all four consoles move in lockstep with each FerroUI release; owner 2026-10-18
