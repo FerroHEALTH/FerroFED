@@ -11,14 +11,19 @@
 //! the action with the fields read from the form's own data, which keeps the
 //! parsing of the URL-encoded form out of the bundle.
 
+use ferrohealth_ui::highlight::Language;
+use ferrohealth_ui::icon::Glyph;
+use ferrohealth_ui::view::button::{Variant, label};
+use ferrohealth_ui::view::form::{INPUT, SELECT, SWITCH, field};
+use ferrohealth_ui::view::layout::{FieldRow, action_bar, field_row, main_aside};
+use ferrohealth_ui::view::surface::stack;
+use ferrohealth_ui::widget::editor::{Editor, code_editor};
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use super::tabs::{TabPair, tab_list};
-use crate::components::icon;
 use crate::query::model::{QueryForm, QueryOptionsView};
 use crate::query::run::RunQuery;
-use crate::styles;
 
 /// The name of each parameter row's name field, which the form posts once
 /// per row.
@@ -76,48 +81,55 @@ pub(super) fn editor_section(
         stored,
     )
     .into_any();
-    let query = query_section(stored, chosen);
+    let query = query_section(stored, chosen, hydrated);
     let parameters = parameters_section();
     let window = window_section();
     let federation = federation_section(offered);
+    let run_bar = action_bar(view! {
+        <button type="submit" disabled=move || !hydrated.get() class=Variant::Primary.class()>
+            {label(Some(Glyph::PLAY), "Run query")}
+        </button>
+        <p role="status" class="fui-help">
+            {move || {
+                if hydrated.get() {
+                    ""
+                } else {
+                    "The form is ready once the page has loaded."
+                }
+            }}
+        </p>
+    });
+    let main = view! {
+        {kinds}
+        {query}
+    };
+    let aside = stack(view! {
+        {parameters}
+        {window}
+        {federation}
+    });
     view! {
         <form
             method="post"
             action=RunQuery::url()
             node_ref=form
             on:submit=submit
-            class=format!("{} query-editor", styles::CARD)
+            class="fui-card"
         >
             <input
                 type="hidden"
                 name="form[kind]"
                 value=move || if stored.get() { "stored" } else { "aql" }
             />
-            <div class="grid lg:grid-cols-[minmax(0,1fr)_24rem]">
-                <div class="min-w-0 px-5 pt-3 pb-5">{kinds} {query}</div>
-                <div class="min-w-0 border-t border-line p-5 lg:border-t-0 lg:border-l">
-                    {parameters} {window} {federation}
-                </div>
-            </div>
-            <div class="run-bar">
-                <button type="submit" disabled=move || !hydrated.get() class=styles::BUTTON_PRIMARY>
-                    {icon(icondata_lu::LuPlay, "16")}
-                    "Run query"
-                </button>
-                <p role="status" class=styles::HELP>
-                    {move || {
-                        if hydrated.get() {
-                            ""
-                        } else {
-                            "The form is ready once the page has loaded."
-                        }
-                    }}
-                </p>
-            </div>
+            {main_aside(main, aside)}
+            {run_bar}
         </form>
     }
     .into_any()
 }
+
+/// The id and name of the AQL editor's text area.
+const AQL: &str = "query-aql";
 
 /// The query `data` holds, by the field names the form posts: the parameter
 /// rows as `name=value` lines, and each ticked target in one list.
@@ -141,7 +153,7 @@ fn submitted(data: &leptos::web_sys::FormData) -> QueryForm {
         .collect();
     QueryForm {
         kind: field("form[kind]"),
-        aql: field("form[aql]"),
+        aql: field(AQL),
         name: field("form[name]"),
         version: field("form[version]"),
         parameters: parameters.join("\n"),
@@ -163,64 +175,79 @@ fn submitted(data: &leptos::web_sys::FormData) -> QueryForm {
 fn query_section(
     stored: RwSignal<bool>,
     chosen: impl Fn(&str) -> String + Copy + Send + Sync + 'static,
+    hydrated: RwSignal<bool>,
 ) -> AnyView {
+    let aql = RwSignal::new(String::new());
+    let editor = code_editor(
+        Editor {
+            id: AQL,
+            language: Language::Aql,
+            text: aql.into(),
+            marks: Signal::stored(Vec::new()),
+            editable: hydrated.into(),
+        },
+        move |text| aql.set(text),
+    );
     view! {
         <div
             role="tabpanel"
             id="query-panel-aql"
             aria-labelledby="query-tab-aql"
             hidden=move || stored.get()
-            class="pt-4"
+            class="fui-tab-panel"
         >
-            <label for="query-aql">"AQL"</label>
-            <textarea
-                id="query-aql"
-                name="form[aql]"
-                rows="14"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"
-                aria-describedby="query-aql-help"
-                class="query-aql"
-            ></textarea>
-            <p id="query-aql-help" class=format!("{} mt-1", styles::HELP)>
-                "Name a patient as a parameter, never in the AQL text."
-            </p>
+            {field(
+                AQL,
+                "AQL",
+                Some("Name a patient as a parameter, never in the AQL text."),
+                editor,
+            )}
         </div>
         <div
             role="tabpanel"
             id="query-panel-stored"
             aria-labelledby="query-tab-stored"
             hidden=move || !stored.get()
-            class="pt-4"
+            class="fui-tab-panel"
         >
-            <div class="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                <div class=styles::FIELD>
-                    <label for="query-name">"Stored query name"</label>
-                    <input
-                        type="text"
-                        id="query-name"
-                        name="form[name]"
-                        autocomplete="off"
-                        spellcheck="false"
-                        placeholder="org.example::vital_signs"
-                        value=move || chosen(crate::views::stored::CONSOLE_NAME)
-                        class=styles::MONO
-                    />
-                </div>
-                <div class=styles::FIELD>
-                    <label for="query-version">"Version (optional)"</label>
-                    <input
-                        type="text"
-                        id="query-version"
-                        name="form[version]"
-                        autocomplete="off"
-                        placeholder="1.0.0"
-                        value=move || chosen(crate::views::stored::CONSOLE_VERSION)
-                        class=styles::MONO
-                    />
-                </div>
-            </div>
+            {field_row(
+                FieldRow::NarrowWide,
+                view! {
+                    {field(
+                        "query-version",
+                        "Version (optional)",
+                        None,
+                        view! {
+                            <input
+                                type="text"
+                                id="query-version"
+                                name="form[version]"
+                                autocomplete="off"
+                                placeholder="1.0.0"
+                                value=move || chosen(crate::views::stored::CONSOLE_VERSION)
+                                class=format!("{INPUT} fui-mono")
+                            />
+                        },
+                    )}
+                    {field(
+                        "query-name",
+                        "Stored query name",
+                        None,
+                        view! {
+                            <input
+                                type="text"
+                                id="query-name"
+                                name="form[name]"
+                                autocomplete="off"
+                                spellcheck="false"
+                                placeholder="org.example::vital_signs"
+                                value=move || chosen(crate::views::stored::CONSOLE_NAME)
+                                class=format!("{INPUT} fui-mono")
+                            />
+                        },
+                    )}
+                },
+            )}
         </div>
     }
     .into_any()
@@ -240,19 +267,15 @@ fn parameters_section() -> AnyView {
         .map(|index| parameter_row(index, shown))
         .collect_view();
     view! {
-        <fieldset class=styles::GROUP>
-            <legend>"Parameters"</legend>
-            <ul class="m-0 flex list-none flex-col gap-2 p-0">{rows}</ul>
-            <button
-                type="button"
-                class=format!("{} mt-2", styles::BUTTON_SECONDARY)
-                disabled=full
-                on:click=add
-            >
-                {icon(icondata_lu::LuPlus, "16")}
-                "Add parameter"
-            </button>
-            <p id="query-parameters-help" class=format!("{} mt-2", styles::HELP)>
+        <fieldset class="fui-fieldset">
+            <legend class="fui-label">"Parameters"</legend>
+            <ul class="fui-divided">{rows}</ul>
+            <div class="fui-cluster">
+                <button type="button" class=Variant::Secondary.class() disabled=full on:click=add>
+                    {label(Some(Glyph::PLUS), "Add parameter")}
+                </button>
+            </div>
+            <p id="query-parameters-help" class="fui-help">
                 "Name a patient here. Each value is sent as a string, in the request body."
             </p>
         </fieldset>
@@ -266,9 +289,9 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
     let value_id = format!("query-parameter-value-{index}");
     let waiting = move || index >= shown.get();
     view! {
-        <li class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2" hidden=waiting>
-            <div class="flex min-w-0 flex-col gap-1">
-                <label for=name_id.clone() class="text-xs text-muted">
+        <li class="fui-field-row fui-field-row-narrow-wide" hidden=waiting>
+            <div class="fui-field">
+                <label for=name_id.clone() class="fui-label">
                     "Name"
                 </label>
                 <input
@@ -279,11 +302,11 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
                     spellcheck="false"
                     pattern=NAME_PATTERN
                     title="Letters, digits and underscores"
-                    class=format!("{} w-full", styles::MONO)
+                    class=format!("{INPUT} fui-mono")
                 />
             </div>
-            <div class="flex min-w-0 flex-col gap-1">
-                <label for=value_id.clone() class="text-xs text-muted">
+            <div class="fui-field">
+                <label for=value_id.clone() class="fui-label">
                     "Value"
                 </label>
                 <input
@@ -293,39 +316,51 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
                     autocomplete="off"
                     spellcheck="false"
                     aria-describedby="query-parameters-help"
-                    class=format!("{} w-full", styles::MONO)
+                    class=format!("{INPUT} fui-mono")
                 />
             </div>
         </li>
     }
 }
+
 /// The ITS-REST window of the answer, `offset` and `fetch`, on one row.
 fn window_section() -> AnyView {
-    view! {
-        <div class="mt-5 flex flex-wrap gap-3">
-            <div class="flex w-28 flex-col gap-1">
-                <label for="query-offset">"Offset"</label>
-                <input
-                    type="text"
-                    id="query-offset"
-                    name="form[offset]"
-                    inputmode="numeric"
-                    autocomplete="off"
-                />
-            </div>
-            <div class="flex w-28 flex-col gap-1">
-                <label for="query-fetch">"Fetch"</label>
-                <input
-                    type="text"
-                    id="query-fetch"
-                    name="form[fetch]"
-                    inputmode="numeric"
-                    autocomplete="off"
-                />
-            </div>
-        </div>
-    }
-    .into_any()
+    field_row(
+        FieldRow::Halves,
+        view! {
+            {field(
+                "query-offset",
+                "Offset",
+                Some("The rows to skip. Empty starts at the first row."),
+                view! {
+                    <input
+                        type="text"
+                        id="query-offset"
+                        name="form[offset]"
+                        class=INPUT
+                        placeholder="0"
+                        inputmode="numeric"
+                        autocomplete="off"
+                    />
+                },
+            )}
+            {field(
+                "query-fetch",
+                "Fetch",
+                Some("The rows to return. Empty leaves it to the gateway."),
+                view! {
+                    <input
+                        type="text"
+                        id="query-fetch"
+                        name="form[fetch]"
+                        class=INPUT
+                        inputmode="numeric"
+                        autocomplete="off"
+                    />
+                },
+            )}
+        },
+    )
 }
 
 /// The federation headers a client may send, behind one disclosure:
@@ -362,32 +397,39 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
         (true, "This gateway does not offer best effort.")
     };
     view! {
-        <details class="federation-options">
-            <summary>{icon(icondata_lu::LuSlidersHorizontal, "16")} "Federation options"</summary>
-            <div class="flex flex-col gap-4 pt-3">
-                {endpoints} {organisations} <div class="flex flex-col gap-1">
-                    <label for="query-dedup">"Deduplication"</label>
-                    <select id="query-dedup" name="form[dedup]">
-                        <option value="">"The gateway's default"</option>
-                        {modes}
-                    </select>
-                </div> <div class="flex items-start gap-3">
+        <details id="federation-options" class="fui-disclosure">
+            <summary>"Federation options"</summary>
+            <div class="fui-form">
+                {endpoints}
+                {organisations}
+                {field(
+                    "query-dedup",
+                    "Deduplication",
+                    None,
+                    view! {
+                        <select id="query-dedup" name="form[dedup]" class=SELECT>
+                            <option value="">"The gateway's default"</option>
+                            {modes}
+                        </select>
+                    },
+                )}
+                <div class="fui-check">
                     <input
                         type="checkbox"
                         role="switch"
                         id="query-partial"
                         name="form[partial]"
                         value="partial"
-                        class="switch"
+                        class=SWITCH
                         disabled=disabled
                         aria-describedby="query-partial-help"
                     />
-                    <div class="min-w-0">
+                    <span class="fui-check-text">
                         <label for="query-partial">"Best effort"</label>
-                        <p id="query-partial-help" class=styles::HELP>
+                        <span id="query-partial-help" class="fui-help">
                             {hint}
-                        </p>
-                    </div>
+                        </span>
+                    </span>
                 </div>
             </div>
         </details>
@@ -426,20 +468,18 @@ fn chips(group: Chips<'_>) -> AnyView {
             let input = format!("{}-{index}", group.prefix);
             let label = input.clone();
             view! {
-                <li>
-                    <label for=label class="chip">
-                        <input type="checkbox" id=input name=group.name value=id.clone() />
-                        <span class=styles::MONO>{id.clone()}</span>
-                    </label>
-                </li>
+                <label for=label class="fui-chip-check">
+                    <input type="checkbox" id=input name=group.name value=id.clone() />
+                    <span class="fui-mono">{id.clone()}</span>
+                </label>
             }
         })
         .collect_view();
     view! {
-        <fieldset class=styles::GROUP>
-            <legend>{group.legend}</legend>
-            <ul class="m-0 flex list-none flex-wrap gap-2 p-0">{chips}</ul>
-            <p class=styles::HELP>{help}</p>
+        <fieldset class="fui-fieldset fui-choice">
+            <legend class="fui-label">{group.legend}</legend>
+            <div class="fui-chip-checks">{chips}</div>
+            <p class="fui-help">{help}</p>
         </fieldset>
     }
     .into_any()

@@ -11,8 +11,8 @@
 //! ([`session`], [`oidc`]), so the browser carries an opaque cookie and never
 //! a token, and it holds no clinical data. [`admin`] runs the operator's
 //! admin actions on the replicas' admin listeners its configuration names.
-//! [`app`] is the page tree both halves share, drawn in the [`shell`] from
-//! the [`components`] and [`styles`] in the operator's [`theme`], with
+//! [`app`] is the page tree both halves share, drawn in the [`shell`] with
+//! the `ferrohealth_ui` components in the operator's [`theme`], with
 //! [`manufacturer`] named in full on the [`about`] page every footer links
 //! to; [`server`] serves it with the health route and the sign-in
 //! routes, [`config`] reads the TOML configuration, [`cli`] and [`command`]
@@ -27,7 +27,6 @@
 pub mod about;
 pub mod admin;
 pub mod app;
-pub mod components;
 pub mod configure;
 pub mod home;
 // NOTE: Regulation (EU) 2025/327 Art 30(1)(g): the browser half links no FerroFED crate,
@@ -36,7 +35,6 @@ pub mod home;
 pub mod manufacturer;
 pub mod query;
 pub mod shell;
-pub mod styles;
 // The browser half of the server function, which the server macro writes, is
 // a network call that awaits nothing, and the lint names the macro alone.
 #[cfg_attr(
@@ -61,8 +59,6 @@ pub mod dashboard;
 pub mod gateway;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod healthcheck;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod highlight;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oidc;
 #[cfg(not(target_arch = "wasm32"))]

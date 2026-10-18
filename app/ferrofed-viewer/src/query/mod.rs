@@ -33,10 +33,11 @@ mod tabs;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
-use crate::components::page_header;
 use crate::query::run::RunQuery;
 use crate::views::model::Outcome;
 use crate::views::{fault, refusal, titled};
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::surface::page_header;
 
 /// The path of the query console.
 pub const QUERY: &str = "/query";
@@ -52,7 +53,9 @@ pub fn QueryPage() -> impl IntoView {
     let action = ServerAction::<RunQuery>::new();
     let header = page_header(
         "Query console",
-        "Run AQL or a stored query across the federation.",
+        Some(String::from(
+            "Run AQL or a stored query across the federation.",
+        )),
         (),
     )
     .into_any();
@@ -60,9 +63,9 @@ pub fn QueryPage() -> impl IntoView {
     view! {
         <Title text=titled("Query") />
         {header}
-        <div class="flex flex-col gap-6">
+        <div class="fui-stack">
             <Suspense fallback=|| {
-                view! { <p>"Loading what the gateway offers a query."</p> }
+                busy("Loading what the gateway offers a query.", Busy::Section)
             }>
                 {move || Suspend::new(async move {
                     match options.await {

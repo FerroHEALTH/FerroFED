@@ -19,15 +19,23 @@ use std::collections::BTreeMap;
 use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::PageRequest;
 use ferrofed_registry::revision::{RevisionId, Standing};
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::model::filled_columns;
+use ferrohealth_ui::table::view::{Column, NUM};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::empty::empty_quiet;
+use ferrohealth_ui::view::layout::main_aside;
+use ferrohealth_ui::view::notice::{Announce, notice};
+use ferrohealth_ui::view::status::{badge, pill};
+use ferrohealth_ui::view::surface::{Stat, panel_body, stat_card_marked, stat_grid, titled_panel};
 use leptos::either::Either;
 use leptos::prelude::*;
 
-use crate::components::{empty_card, icon, replica_meta, stat_card_marked, status_pill};
 use crate::gateway::{AccessToken, GatewayError};
 use crate::server::ViewerState;
-use crate::styles::{self, Tone};
 use crate::views::load::server::{self as load, Stop};
 use crate::views::model::{IncidentRow, MemberRow, Refusal};
+use crate::views::{replica_line, state_pill};
 
 /// How many of the newest incidents the dashboard lists.
 const RECENT: usize = 5;
@@ -189,7 +197,7 @@ fn nodes_mark(nodes: Nodes, reported: bool) -> (Tone, String) {
     } else if nodes.up == nodes.total {
         (Tone::Ok, String::from("all up"))
     } else if nodes.down > 0 {
-        (Tone::Danger, format!("{} down", nodes.down))
+        (Tone::Bad, format!("{} down", nodes.down))
     } else {
         (Tone::Warn, String::from("not yet observed"))
     }
@@ -202,18 +210,39 @@ pub fn render(board: &Board) -> String {
     let health = health_panel(board);
     let incidents = incidents_panel(&board.incidents);
     view! {
-        {replica_meta(board.answered_by.clone())}
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {stats}
+        {replica_line(board.answered_by.clone())}
+        <div class="fui-stack">
+            {stat_grid(stats)}
+            {main_aside(health, incidents)}
         </div>
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">{health} {incidents}</div>
     }
     .to_html()
 }
 
 /// The badge of a stat whose part was not shown.
 fn unknown_mark() -> impl IntoView {
-    view! { <span class=Tone::Neutral.badge()>"not shown"</span> }
+    badge(Tone::Neutral, "not shown")
+}
+
+/// A stat card of `value` that `label` names, beside `glyph`, leading to
+/// `href`, with `mark` after the label.
+fn stat(
+    glyph: Glyph,
+    value: String,
+    label: &'static str,
+    href: &'static str,
+    mark: impl IntoView + 'static,
+) -> AnyView {
+    stat_card_marked(
+        Stat {
+            glyph,
+            value,
+            label: label.into(),
+            href: Some(String::from(href)),
+        },
+        mark,
+    )
+    .into_any()
 }
 
 /// The stat cards.
@@ -227,8 +256,8 @@ fn stats(board: &Board) -> impl IntoView + use<> {
             .count(),
     )
     .unwrap_or(u64::MAX);
-    let members = stat_card_marked(
-        icondata_lu::LuUsers,
+    let members = stat(
+        Glyph::USERS,
         format!("{active} of {total}"),
         "Members active",
         crate::views::MEMBERS,
@@ -236,8 +265,8 @@ fn stats(board: &Board) -> impl IntoView + use<> {
     );
     let standing = nodes(&board.members);
     let (tone, word) = nodes_mark(standing, board.health.is_ok());
-    let nodes = stat_card_marked(
-        icondata_lu::LuHeartPulse,
+    let nodes = stat(
+        Glyph::HEART_PULSE,
         if board.health.is_ok() {
             format!("{} of {}", standing.up, standing.total)
         } else {
@@ -245,39 +274,39 @@ fn stats(board: &Board) -> impl IntoView + use<> {
         },
         "Nodes up",
         crate::views::MEMBERS,
-        view! { <span class=tone.pill()>{word}</span> },
+        pill(tone, &word),
     );
     let open = match &board.incidents {
-        Ok(rows) => Either::Left(stat_card_marked(
-            icondata_lu::LuShieldAlert,
+        Ok(rows) => stat(
+            Glyph::SHIELD_OFF,
             rows.iter().filter(|row| !row.resolved).count().to_string(),
             "Open incidents",
             crate::views::INTEGRITY,
             (),
-        )),
-        Err(_) => Either::Right(stat_card_marked(
-            icondata_lu::LuShieldAlert,
+        ),
+        Err(_) => stat(
+            Glyph::SHIELD_OFF,
             String::from("n/a"),
             "Open incidents",
             crate::views::INTEGRITY,
             unknown_mark(),
-        )),
+        ),
     };
     let stored = match &board.stored {
-        Ok(total) => Either::Left(stat_card_marked(
-            icondata_lu::LuDatabase,
+        Ok(total) => stat(
+            Glyph::DATABASE,
             total.to_string(),
             "Stored queries",
             crate::views::STORED_QUERIES,
             (),
-        )),
-        Err(_) => Either::Right(stat_card_marked(
-            icondata_lu::LuDatabase,
+        ),
+        Err(_) => stat(
+            Glyph::DATABASE,
             String::from("n/a"),
             "Stored queries",
             crate::views::STORED_QUERIES,
             unknown_mark(),
-        )),
+        ),
     };
     let revision = board.revisions.as_ref().map(revision_stat);
     view! {
@@ -291,21 +320,21 @@ fn stats(board: &Board) -> impl IntoView + use<> {
 
 /// The stat card of the running configuration revision, with the revision
 /// that waits to be applied.
-fn revision_stat(revisions: &Part<Revisions>) -> impl IntoView + use<> {
+fn revision_stat(revisions: &Part<Revisions>) -> AnyView {
     let (value, mark) = match revisions {
         Ok(revisions) => (
             revisions
                 .running
                 .map_or_else(|| String::from("none"), |running| format!("r{running}")),
-            revisions.pending.map(|pending| {
-                view! { <span class=Tone::Warn.badge()>{format!("revision {pending} pending")}</span> }
-            }),
+            revisions
+                .pending
+                .map(|pending| badge(Tone::Warn, &format!("revision {pending} pending"))),
         ),
         Err(_) => (String::from("n/a"), None),
     };
     let shown = revisions.is_ok();
-    stat_card_marked(
-        icondata_lu::LuSettings,
+    stat(
+        Glyph::SETTINGS,
         value,
         "Running revision",
         crate::configure::CONFIGURATION,
@@ -319,52 +348,47 @@ fn revision_stat(revisions: &Part<Revisions>) -> impl IntoView + use<> {
 /// A panel titled `title` with a link to `href` that says `more`, holding
 /// `body`.
 fn panel(
-    id: &'static str,
     title: &'static str,
     (href, more): (&'static str, &'static str),
-    body: impl IntoView,
+    body: impl IntoView + 'static,
 ) -> impl IntoView {
-    view! {
-        <section class=styles::PANEL aria-labelledby=id>
-            <div class=styles::PANEL_HEAD>
-                <h2 id=id class="m-0 text-sm font-semibold text-ink">
-                    {title}
-                </h2>
-                <a href=href class="inline-flex items-center gap-1 text-sm font-medium">
-                    {more}
-                    {icon(icondata_lu::LuArrowRight, "14")}
-                </a>
-            </div>
-            {body}
-        </section>
-    }
+    let link = view! {
+        <a href=href>
+            {more}
+            {icon(Glyph::ARROW_RIGHT, "14")}
+        </a>
+    };
+    titled_panel(title, link, body)
 }
 
 /// The notice of a part the gateway did not answer.
-fn notice(line: &str) -> impl IntoView + use<> {
-    let line = line.to_owned();
-    view! {
-        <div class="p-4">
-            <p role="alert" class="m-0">
-                {line}
-            </p>
-        </div>
-    }
+fn not_answered(line: &str) -> impl IntoView + use<> {
+    panel_body(notice(Tone::Bad, Announce::Alert, None, line.to_owned()))
 }
 
-/// The box a panel's table scrolls sideways in, `label` naming it.
-fn scroller(label: &'static str, table: impl IntoView) -> impl IntoView {
-    view! {
-        <div class="overflow-x-auto" role="region" aria-label=label tabindex="0">
-            {table}
-        </div>
-    }
-}
+/// The columns of the member health table.
+const HEALTH_COLUMNS: [Column; 4] = [
+    Column::text("endpoint", "Endpoint"),
+    Column::text("node", "Node"),
+    Column::text("health", "Health"),
+    Column::text("latency", "Median latency").numeric(),
+];
+
+/// The columns of the recent incidents table.
+const INCIDENT_COLUMNS: [Column; 3] = [
+    Column::text("at", "At"),
+    Column::text("kind", "Kind"),
+    Column::text("state", "State"),
+];
 
 /// The member health panel: each endpoint, its node, its health and its
 /// median latency.
 fn health_panel(board: &Board) -> impl IntoView + use<> {
-    let notice = board.health.as_ref().err().map(|line| notice(line));
+    let notice = board.health.as_ref().err().map(|line| not_answered(line));
+    let columns = filled_columns(&HEALTH_COLUMNS, &board.members, &[], |member, key| {
+        key != "latency" || member.latency_ms_p50.is_some()
+    });
+    let timed = crate::views::has(&columns, "latency");
     let rows = board
         .members
         .iter()
@@ -376,47 +400,39 @@ fn health_panel(board: &Board) -> impl IntoView + use<> {
             };
             view! {
                 <tr>
-                    <th scope="row" class=styles::ID>
+                    <th scope="row" class="fui-mono">
                         {name}
                     </th>
-                    <td class=styles::MONO>{member.node_id.clone().unwrap_or_default()}</td>
-                    <td>{status_pill(member.health.clone())}</td>
-                    <td class=styles::NUM>
-                        {member
-                            .latency_ms_p50
-                            .map(|latency| format!("{latency} ms"))
-                            .unwrap_or_default()}
+                    <td data-label="Node" class="fui-mono">
+                        {member.node_id.clone().unwrap_or_default()}
                     </td>
+                    <td data-label="Health">{state_pill(&member.health)}</td>
+                    {timed
+                        .then(|| {
+                            view! {
+                                <td data-label="Median latency" class=NUM>
+                                    {member
+                                        .latency_ms_p50
+                                        .map(|latency| format!("{latency} ms"))
+                                        .unwrap_or_default()}
+                                </td>
+                            }
+                        })}
                 </tr>
             }
         })
         .collect_view();
-    let table = view! {
-        <table>
-            <thead>
-                <tr>
-                    <th scope="col">"Endpoint"</th>
-                    <th scope="col">"Node"</th>
-                    <th scope="col">"Health"</th>
-                    <th scope="col" class=styles::NUM>
-                        "Median latency"
-                    </th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-    };
+    let table = crate::views::table("Member health", &columns, rows.into_any());
     let body = if board.members.is_empty() {
-        Either::Left(empty_card(
-            icondata_lu::LuUsers,
+        Either::Left(panel_body(empty_quiet(
+            Glyph::USERS,
             "No members",
             "The gateway declares no member endpoint.",
-        ))
+        )))
     } else {
-        Either::Right(scroller("Member health", table))
+        Either::Right(table)
     };
     panel(
-        "dashboard-health",
         "Member health",
         (crate::views::MEMBERS, "All members"),
         view! {
@@ -429,12 +445,13 @@ fn health_panel(board: &Board) -> impl IntoView + use<> {
 /// The recent incidents panel: the newest few, each with its state.
 fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> {
     let body = match incidents {
-        Err(line) => Either::Left(notice(line)),
-        Ok(rows) if rows.is_empty() => Either::Right(Either::Left(empty_card(
-            icondata_lu::LuShieldCheck,
+        Err(line) => not_answered(line).into_any(),
+        Ok(rows) if rows.is_empty() => panel_body(empty_quiet(
+            Glyph::SHIELD_CHECK,
             "No incidents",
             "None since the gateway started.",
-        ))),
+        ))
+        .into_any(),
         Ok(rows) => {
             let rows = rows
                 .iter()
@@ -443,47 +460,28 @@ fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> 
                     let (tone, word) = if row.resolved {
                         (Tone::Ok, "resolved")
                     } else {
-                        (Tone::Danger, "open")
+                        (Tone::Bad, "open")
                     };
                     view! {
                         <tr>
-                            <td class=format!(
-                                "{} whitespace-nowrap",
-                                styles::MONO,
-                            )>{row.at.clone()}</td>
-                            <th scope="row">{row.kind.clone()}</th>
-                            <td>
-                                <span class=tone.pill()>{word}</span>
+                            <td data-label="At" class="fui-mono">
+                                {row.at.clone()}
                             </td>
+                            <th scope="row">{row.kind.clone()}</th>
+                            <td data-label="State">{pill(tone, word)}</td>
                         </tr>
                     }
                 })
                 .collect_view();
-            Either::Right(Either::Right(scroller(
-                "Recent incidents",
-                view! {
-                    <table>
-                        <thead>
-                            <tr>
-                                <th scope="col">"At"</th>
-                                <th scope="col">"Kind"</th>
-                                <th scope="col">"State"</th>
-                            </tr>
-                        </thead>
-                        <tbody>{rows}</tbody>
-                    </table>
-                },
-            )))
+            crate::views::table("Recent incidents", &INCIDENT_COLUMNS, rows.into_any())
         }
     };
     panel(
-        "dashboard-incidents",
         "Recent incidents",
         (crate::views::INTEGRITY, "All incidents"),
         body,
     )
 }
-
 #[cfg(test)]
 mod tests {
     use super::{Board, Nodes, Revisions, nodes, render};
@@ -546,6 +544,21 @@ mod tests {
     }
 
     #[test]
+    fn the_latency_column_shows_only_when_a_member_reports_a_latency() {
+        let timed = drawn(&board(
+            vec![member("node-a-pub", Some("node-a"), "up")],
+            Vec::new(),
+        ));
+        assert!(timed.contains("Median latency"), "{timed}");
+        assert!(timed.contains("12 ms"), "{timed}");
+        let mut quiet = member("node-a-pub", Some("node-a"), "unknown");
+        quiet.latency_ms_p50 = None;
+        let untimed = drawn(&board(vec![quiet], Vec::new()));
+        assert!(!untimed.contains("Median latency"), "{untimed}");
+        assert!(!untimed.contains(r#"<td class="fui-num">"#), "{untimed}");
+    }
+
+    #[test]
     fn the_dashboard_shows_each_count_the_health_and_the_pending_revision() {
         let html = drawn(&board(
             vec![member("node-a-pub", Some("node-a"), "up")],
@@ -558,7 +571,7 @@ mod tests {
         ));
         assert!(html.contains("1 of 1"), "{html}");
         assert!(
-            html.contains(r#"<span class="pill tone-ok">all up</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-ok">all up</span>"#),
             "{html}"
         );
         assert!(html.contains("revision 5 pending"), "{html}");
@@ -568,7 +581,7 @@ mod tests {
             "{html}"
         );
         assert!(
-            html.contains(r#"<span class="pill tone-danger">open</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-bad">open</span>"#),
             "{html}"
         );
         assert!(html.contains("Answered by replica gateway-0."), "{html}");

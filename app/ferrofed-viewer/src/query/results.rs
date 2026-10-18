@@ -9,13 +9,14 @@
 //! browser carries only this frame: the tabs, the paging and the move of the
 //! focus to the card once an answer arrives (WCAG 2.2 SC 2.4.3).
 
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::empty::empty_quiet;
 use leptos::prelude::*;
 
 use super::tabs::{TabPair, tab_list};
-use crate::components::icon;
 use crate::query::model::{PAGE_ROWS, RenderedAnswer};
 use crate::query::run::RunQuery;
-use crate::styles;
 use crate::views::fault;
 
 /// The results card of `action`.
@@ -58,23 +59,23 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
     };
     view! {
         <section
-            class=styles::CARD
+            class="fui-card fui-panel"
             aria-labelledby="query-results-title"
             aria-busy=move || pending.get().to_string()
         >
-            <div class="flex flex-wrap items-end justify-between gap-x-4 border-b border-line px-5 pt-3">
+            <div class="fui-panel-head">
                 <h2
                     id="query-results-title"
                     tabindex="-1"
                     node_ref=heading
-                    class="m-0 pb-3 text-sm font-semibold text-ink"
+                    class="fui-card-title"
                 >
                     "Results"
                 </h2>
                 {tabs}
             </div>
-            <div class="p-5">
-                <p role="status" class=styles::HELP>
+            <div class="fui-panel-body fui-stack">
+                <p role="status" class="fui-help">
                     {move || if pending.get() { "Running the query." } else { "" }}
                 </p>
                 {move || {
@@ -94,17 +95,11 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
 
 /// What the card shows before any query has run.
 fn waiting() -> AnyView {
-    view! {
-        <div class="flex flex-col items-center px-4 py-10 text-center">
-            <span class="mb-3 flex size-12 items-center justify-center rounded-full bg-inset text-muted">
-                {icon(icondata_lu::LuSquareTerminal, "24")}
-            </span>
-            <p class="m-0 font-medium text-ink">"No query has run yet."</p>
-            <p class="m-0 mt-1 text-sm text-muted">
-                "Write AQL or name a stored query, then run it."
-            </p>
-        </div>
-    }
+    empty_quiet(
+        Glyph::SQUARE_TERMINAL,
+        "No query has run yet.",
+        "Write AQL or name a stored query, then run it.",
+    )
     .into_any()
 }
 
@@ -162,9 +157,14 @@ fn shown(rendered: &RenderedAnswer, raw: RwSignal<bool>, paged: Paged) -> AnyVie
             aria-labelledby="query-tab-raw"
             hidden=move || !raw.get()
         >
-            <pre class="raw-json" tabindex="0" aria-label="The federated result set as JSON">
-                {text}
-            </pre>
+            <div
+                class="fui-code-panel"
+                role="region"
+                tabindex="0"
+                aria-label="The federated result set as JSON"
+            >
+                <pre>{text}</pre>
+            </div>
         </div>
     }
     .into_any()
@@ -181,28 +181,28 @@ fn pages_section(rows: u32, paged: Paged) -> AnyView {
         format!("Rows {} to {end} of {rows}", first.saturating_add(1))
     };
     view! {
-        <nav aria-label="Pages of rows" class="flex flex-wrap items-center justify-between gap-3">
-            <p class="m-0 text-sm text-muted tabular-nums" aria-live="polite">
+        <nav aria-label="Pages of rows" class="fui-pager">
+            <p class="fui-num" aria-live="polite">
                 {shown}
             </p>
-            <div class="flex gap-2">
+            <div class="fui-pager-steps">
                 <button
                     type="button"
-                    class=styles::BUTTON_SECONDARY
+                    class=Variant::Secondary.small()
                     disabled=move || paged.current() == 0
                     on:click=move |_| paged.turn(paged.current().saturating_sub(1))
                 >
-                    {icon(icondata_lu::LuChevronLeft, "16")}
+                    {icon(Glyph::CHEVRON_LEFT, "14")}
                     "Previous"
                 </button>
                 <button
                     type="button"
-                    class=styles::BUTTON_SECONDARY
+                    class=Variant::Secondary.small()
                     disabled=at_last
                     on:click=move |_| paged.turn(paged.current().saturating_add(1).min(last))
                 >
                     "Next"
-                    {icon(icondata_lu::LuChevronRight, "16")}
+                    {icon(Glyph::CHEVRON_RIGHT, "14")}
                 </button>
             </div>
         </nav>

@@ -12,12 +12,14 @@
 //! client router loads it as a full load does. Leptos escapes every text
 //! and attribute value in both.
 
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::sign_in::{Notice, Provider, SignIn};
+use ferrohealth_ui::view::surface::page_header;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::app::SIGN_IN;
-use crate::components::{icon, page_header};
-use crate::styles;
 use crate::views::titled;
 
 /// The markup `render` writes on the server, which the browser reads back
@@ -48,34 +50,34 @@ pub fn SignInPage() -> impl IntoView {
     let html = SharedValue::new_str(|| rendered(sign_in)).into_inner();
     view! {
         <Title text=titled("Sign in") />
-        <div class="contents" inner_html=html></div>
+        <div inner_html=html></div>
     }
 }
 
 /// The markup of the sign-in card.
 #[must_use]
 pub fn sign_in() -> String {
+    // NOTE: OpenID Connect Core 1.0 §3.1: the console signs an operator in at
+    // their provider alone, so the card offers the provider's button and no form.
+    let card = ferrohealth_ui::view::sign_in::sign_in(SignIn {
+        lockup: crate::shell::lockup().into_any(),
+        notices: vec![Notice::new(
+            Tone::Neutral,
+            "Use your organisation's account to see the state of the federation. \
+             The console holds no clinical data.",
+        )],
+        refusal: None,
+        basic: None,
+        provider: Some(Provider {
+            href: String::from(SIGN_IN),
+            label: String::from("Sign in"),
+        }),
+        links: Vec::new(),
+    });
     view! {
-        <div class=styles::CENTRED>
-            <div class="w-full max-w-sm rounded-card border border-line bg-raised p-8 text-center shadow-card">
-                <div class="mb-6 flex items-center justify-center gap-2">
-                    <span class=styles::MARK aria-hidden="true"></span>
-                    <span class="text-lg font-semibold whitespace-nowrap">
-                        "FerroFED " <span class=styles::LOCKUP_ACCENT>"Console"</span>
-                    </span>
-                </div>
-                <h1 class="m-0 text-xl font-semibold">"Sign in to the console"</h1>
-                <p class="mt-2 mb-6 text-sm text-muted">
-                    "Use your organisation's account to see the state of the federation."
-                </p>
-                // The sign-in route is the server's, so the client router must not
-                // take the click once the page has hydrated.
-                <a href=SIGN_IN rel="external" class=format!("{} w-full", styles::BUTTON_PRIMARY)>
-                    {icon(icondata_lu::LuLogIn, "16")}
-                    "Sign in"
-                </a>
-                <p class="mt-6 mb-0 text-xs text-muted">"The console holds no clinical data."</p>
-            </div>
+        <div class="fui-centred">
+            <h1 class="fui-sr-only">"Sign in to the console"</h1>
+            {card}
         </div>
     }
     .to_html()
@@ -96,14 +98,12 @@ pub fn DashboardPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| crate::views::load::dashboard());
     view! {
         <Title text=titled("Dashboard") />
-        {page_header("Dashboard", DASHBOARD, ())}
-        <Suspense fallback=|| {
-            view! { <p>"Loading the dashboard."</p> }
-        }>
+        {page_header("Dashboard", Some(String::from(DASHBOARD)), ())}
+        <Suspense fallback=|| busy("Loading the dashboard.", Busy::Section)>
             {move || Suspend::new(async move {
                 crate::views::shown(
                     loaded.await,
-                    |html| view! { <div class="contents" inner_html=html></div> }.into_any(),
+                    |html| view! { <div inner_html=html></div> }.into_any(),
                 )
             })}
         </Suspense>

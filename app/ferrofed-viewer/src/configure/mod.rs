@@ -53,6 +53,7 @@ pub mod sections;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod settings;
 
+use ferrohealth_ui::view::empty::{Busy, busy};
 use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::{use_params_map, use_query_map};
@@ -212,14 +213,7 @@ fn outcome(page: Page, slot: Slot, drawn: usize) -> impl IntoView {
             return None;
         }
         if pending.get() {
-            return Some(
-                view! {
-                    <p role="status" class="mt-0 mb-4 text-sm text-muted">
-                        "Sending the change."
-                    </p>
-                }
-                .into_any(),
-            );
+            return Some(busy("Sending the change.", Busy::Inline));
         }
         value.with(|answer| match answer {
             None => None,
@@ -231,7 +225,7 @@ fn outcome(page: Page, slot: Slot, drawn: usize) -> impl IntoView {
                             id="config-outcome"
                             node_ref=shown
                             tabindex="-1"
-                            class="mb-4 rounded-card border border-line bg-surface p-4 focus-visible:outline-2"
+                            class="fui-well"
                             inner_html=html
                         ></div>
                     }
@@ -240,7 +234,7 @@ fn outcome(page: Page, slot: Slot, drawn: usize) -> impl IntoView {
             }
             Some(Err(error)) => Some(
                 view! {
-                    <div id="config-outcome" node_ref=shown tabindex="-1" class="mb-4">
+                    <div id="config-outcome" node_ref=shown tabindex="-1">
                         {crate::views::fault(error)}
                     </div>
                 }
@@ -257,10 +251,10 @@ fn pending_card(html: String, page: Page, drawn: usize) -> AnyView {
         return ().into_any();
     }
     view! {
-        <section class=format!(
-            "{} mb-6 border-l-4 border-l-warn-fg",
-            crate::styles::CARD_PAD,
-        )>{outcome(page, Slot::Pending, drawn)} <div inner_html=html></div></section>
+        <section class="fui-card">
+            {outcome(page, Slot::Pending, drawn)}
+            <div inner_html=html class="fui-stack fui-gap-default"></div>
+        </section>
     }
     .into_any()
 }
@@ -302,7 +296,7 @@ fn config_section(view: ConfigView, page: Page, drawn: usize) -> AnyView {
     view! {
         <div inner_html=header></div>
         <fieldset
-            class="m-0 min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+            class="fui-fieldset fui-stack"
             disabled=move || !hydrated.get()
             aria-busy=move || busy.get().to_string()
             on:submit=submit
@@ -310,16 +304,17 @@ fn config_section(view: ConfigView, page: Page, drawn: usize) -> AnyView {
             on:keydown=move |event| browser::keyed(&event)
             on:input=move |event| browser::typed(&event)
         >
-            <legend class="sr-only">"Configuration changes"</legend>
-            <p role="status" class="m-0 text-sm text-muted">
+            <legend class="fui-sr-only">"Configuration changes"</legend>
+            <p role="status" class="fui-help">
                 {move || crate::admin::ready(hydrated.get())}
             </p>
             {pending_card(pending, page, drawn)}
             <div inner_html=tabs></div>
-            <div id="config-panel" role="tabpanel" aria-labelledby=tab>
+            <div id="config-panel" role="tabpanel" aria-labelledby=tab class="fui-stack">
                 <div inner_html=lead></div>
-                <div class=crate::styles::CARD_PAD>
-                    {outcome(page, Slot::Main, drawn)} <div inner_html=main></div>
+                <div class="fui-card">
+                    {outcome(page, Slot::Main, drawn)}
+                    <div inner_html=main class="fui-stack fui-gap-default"></div>
                 </div>
             </div>
         </fieldset>

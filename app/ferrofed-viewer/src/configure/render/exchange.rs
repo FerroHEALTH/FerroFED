@@ -11,7 +11,11 @@ use leptos::prelude::*;
 
 use crate::configure::render::parts::{diff_table, error_line, form, head, hidden, reason};
 use crate::configure::render::{Loaded, author, when};
-use crate::styles;
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::form::TEXTAREA;
+use ferrohealth_ui::view::status::{badge, pill};
 
 /// Where `revision` came from, as a badge.
 fn origin(revision: &Revision) -> AnyView {
@@ -23,7 +27,7 @@ fn origin(revision: &Revision) -> AnyView {
         (None, Origin::Import) => String::from("import"),
         (None, _) => String::from("other"),
     };
-    view! { <span class="badge tone-neutral">{word}</span> }.into_any()
+    badge(Tone::Neutral, &word).into_any()
 }
 
 /// Where `revision` stands against the running one `running` and the one
@@ -36,17 +40,17 @@ fn standing(
     (running, previous): (Option<RevisionId>, Option<RevisionId>),
 ) -> AnyView {
     let (word, tone) = if Some(revision.id) == running {
-        ("running", "pill tone-ok")
+        ("running", Tone::Ok)
     } else if running.is_some_and(|running| revision.id > running) {
-        ("saved, not applied", "pill tone-warn")
+        ("saved, not applied", Tone::Warn)
     } else if Some(revision.id) == previous
         || matches!(revision.origin, Origin::File | Origin::Rollback)
     {
-        ("applied before", "pill tone-neutral")
+        ("applied before", Tone::Neutral)
     } else {
-        ("not running", "pill tone-neutral")
+        ("not running", Tone::Neutral)
     };
-    view! { <span class=tone>{word}</span> }.into_any()
+    pill(tone, word).into_any()
 }
 
 /// One revision of the timeline.
@@ -57,9 +61,9 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
     let id = revision.id;
     let compare = (Some(id) != running && running.is_some()).then(|| {
         view! {
-            <a href=format!("/configuration/history?compare={id}") class=styles::BUTTON_GHOST>
+            <a href=format!("/configuration/history?compare={id}") class=Variant::Ghost.class()>
                 "Compare with running"
-                <span class="sr-only">{format!(" (revision {id})")}</span>
+                <span class="fui-sr-only">{format!(" (revision {id})")}</span>
             </a>
         }
     });
@@ -67,28 +71,24 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
         .filter(|mark| mark.revision == id && mark.awaiting.is_none())
         .map(|mark| crate::configure::render::top::rollback(mark, "main"));
     view! {
-        <li class="relative border-l-2 border-line pb-6 pl-6 last:pb-0">
-            <span
-                class="absolute top-1 -left-[0.4375rem] size-3 rounded-full border-2 border-raised bg-line-strong"
-                aria-hidden="true"
-            ></span>
-            <div class="flex flex-wrap items-center gap-2">
-                <h3 class="m-0 text-sm font-semibold">{format!("Revision {id}")}</h3>
+        <li class="fui-stack">
+            <div class="fui-cluster">
+                <h3 class="fui-card-title">{format!("Revision {id}")}</h3>
                 {origin(revision)}
                 {standing(revision, (running, previous))}
             </div>
-            <p class="mt-1 mb-1 text-sm text-muted">
+            <p class="fui-muted">
                 {format!("{} · {}", author(&revision.author), when(revision.at))}
             </p>
-            <p class="mt-0 mb-2 text-sm">{revision.reason.clone()}</p>
-            <div class="flex flex-wrap items-center gap-1">
+            <p class="fui-small">{revision.reason.clone()}</p>
+            <div class="fui-cluster">
                 <a
                     href=crate::configure::export::href(id)
                     rel="external"
                     download=""
-                    class=styles::BUTTON_GHOST
+                    class=Variant::Ghost.class()
                 >
-                    {crate::components::icon(icondata_lu::LuDownload, "16")}
+                    {icon(Glyph::DOWNLOAD, "16")}
                     {format!("Export revision {id} as TOML")}
                 </a>
                 {compare}
@@ -123,8 +123,8 @@ pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
             ),
             (),
         )}
-        <p class="mt-0 mb-4 text-xs text-muted">{shown}</p>
-        <ol class="m-0 list-none p-0 pl-2" aria-labelledby="history-title">
+        <p class="fui-help">{shown}</p>
+        <ol class="fui-divided" aria-labelledby="history-title">
             {entries}
         </ol>
     }
@@ -143,12 +143,12 @@ pub(super) fn compared(loaded: &Loaded<'_>) -> AnyView {
         |running| format!("Revision {other} against the running revision {running}"),
     );
     view! {
-        <section class=format!("{} mb-4", styles::CARD_PAD) aria-labelledby="compare-title">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <h2 id="compare-title" class="mt-0 mb-3 text-base font-semibold text-ink">
+        <section class="fui-card" aria-labelledby="compare-title">
+            <div class="fui-split">
+                <h2 id="compare-title" class="fui-card-title">
                     {title}
                 </h2>
-                <a href="/configuration/history" class=styles::BUTTON_GHOST>
+                <a href="/configuration/history" class=Variant::Ghost.class()>
                     "Close the comparison"
                 </a>
             </div>
@@ -166,18 +166,19 @@ pub(super) fn export(loaded: &Loaded<'_>) -> AnyView {
                 href=crate::configure::export::href(running)
                 rel="external"
                 download=""
-                class=styles::BUTTON_SECONDARY
+                class=Variant::Secondary.class()
             >
-                {crate::components::icon(icondata_lu::LuDownload, "16")}
-                "Download the running configuration as TOML"
+                {icon(Glyph::DOWNLOAD, "16")}
+                "Download as TOML"
             </a>
         }
         .into_any(),
-        None => view! { <p class="m-0 text-muted">"No revision runs, so none downloads."</p> }
-            .into_any(),
+        None => {
+            view! { <p class="fui-muted">"No revision runs, so none downloads."</p> }.into_any()
+        }
     };
     view! {
-        <section class=format!("{} mb-4", styles::CARD_PAD) aria-labelledby="export-title">
+        <section class="fui-card" aria-labelledby="export-title">
             {head(
                 ("export-title", String::from("Export")),
                 (
@@ -197,29 +198,29 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
     let body = view! {
         {hidden("action", String::from("import"))}
         {hidden("base", loaded.base())}
-        <div class=styles::FIELD>
-            <label for="cfg-toml">"TOML"</label>
+        <div class="fui-field">
+            <label for="cfg-toml" class="fui-label">"TOML"</label>
             <textarea
                 id="cfg-toml"
                 name="form[toml]"
-                rows="16"
+                rows="12"
                 spellcheck="false"
                 required
-                class="min-h-72 w-full"
+                class=format!("{TEXTAREA} fui-mono")
                 data-lines="cfg-toml-lines"
                 aria-describedby="cfg-toml-lines cfg-toml-error"
             ></textarea>
-            <p id="cfg-toml-lines" class=styles::HELP>
+            <p id="cfg-toml-lines" class="fui-help">
                 "0 lines"
             </p>
             {error_line("cfg-toml")}
         </div>
         {reason()}
-        <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
-            <button type="submit" class=styles::BUTTON_PRIMARY aria-describedby="cfg-import-hint">
+        <div class="fui-action-bar">
+            <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-import-hint">
                 "Import as a dry-run revision"
             </button>
-            <p id="cfg-import-hint" class="m-0 text-sm text-muted">
+            <p id="cfg-import-hint" class="fui-help">
                 {format!(
                     "It is saved as {} and not applied; the outcome shows what it changes.",
                     loaded.next(),
@@ -236,7 +237,7 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
             ),
             (),
         )}
-        {form("main", "", body)}
+        {form("main", "fui-stack", body)}
     }
     .into_any()
 }

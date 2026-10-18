@@ -8,18 +8,29 @@
 //! pages for a path the console does not serve and for a session store it
 //! cannot read.
 
+use ferrohealth_ui::icon::Glyph;
+use ferrohealth_ui::view::button::{Variant, label};
+use ferrohealth_ui::view::empty::empty_state;
+use ferrohealth_ui::view::refusal::fault;
+use ferrohealth_ui::view::shell::{About, MAIN_ID, Shell, shell_about};
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::{SsrMode, path};
 
-use crate::components::{empty_state, icon};
-use crate::theme::Theme;
-use crate::{about, home, shell, styles, views};
+use crate::{about, home, shell, views};
 
 /// The product name as an operator reads it.
 pub const PRODUCT: &str = "FerroFED Console";
+
+/// The path the server serves the `FerroHEALTH` stylesheet at, beside the
+/// site bundle.
+pub const STYLESHEET: &str = "/pkg/ferrohealth-ui.css";
+
+/// The path the server serves the console's brand theme at, which loads
+/// after the stylesheet.
+pub const THEME: &str = "/pkg/ferrofed-theme.css";
 
 /// The product version the footer names.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -66,16 +77,15 @@ pub fn App() -> impl IntoView {
     // the hydrating page serialized, so both halves draw the same shell.
     let administered = *SharedValue::new_str(administered);
     let session = *SharedValue::new_str(session_state);
-    let theme = *SharedValue::new_str(theme_requested);
     let gateway = SharedValue::new_str(gateway_base).into_inner();
     let bar = (session == SessionState::SignedIn).then(|| shell::Bar {
         operator: SharedValue::new_str(operator_name).into_inner(),
-        theme: RwSignal::new(theme),
         gateway: Resource::new_blocking(|| (), |()| views::load::gateway_status()),
         deployment: Resource::new_blocking(|| (), |()| views::load::deployment()),
     });
     view! {
-        <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
+        <Stylesheet id="ferrohealth-ui" href=STYLESHEET />
+        <Stylesheet id="theme" href=THEME />
         <Title text=PRODUCT />
         <Router>{layout(session, bar, administered, gateway)}</Router>
     }
@@ -103,39 +113,32 @@ fn layout(
 
 /// The shell of a signed-in operator: the top bar, the navigation beside
 /// the page, and the footer.
-fn signed_in(bar: shell::Bar, administered: bool, routes: AnyView) -> impl IntoView {
+fn signed_in(bar: shell::Bar, administered: bool, routes: AnyView) -> AnyView {
     let deployment = bar.deployment;
-    view! {
-        <div class=styles::PAGE>
-            <a
-                href="#main"
-                class="sr-only rounded-control bg-raised px-3 py-2 focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
-            >
-                "Skip to the page"
-            </a>
-
-            {shell::topbar(bar)}
-            {shell::banner(deployment)}
-            <div class=styles::BODY>
-                {shell::sidebar(administered)} <main id="main" class=styles::MAIN>
-                    <div class=styles::COLUMN>{routes}</div>
-                </main>
-            </div>
-            {shell::footer()}
-        </div>
-    }
+    shell_about(
+        Shell {
+            topbar: shell::topbar(bar),
+            banner: Some(shell::deployment_banner(deployment)),
+            sidebar: shell::sidebar(administered),
+            content: routes,
+            footer: shell::footing(),
+        },
+        About::FullLoad,
+    )
 }
 
 /// The shell of a visitor: the page alone, and the footer.
-fn visitor(page: AnyView) -> impl IntoView {
+fn visitor(page: AnyView) -> AnyView {
+    let foot = shell::footer().into_any();
     view! {
-        <div class=styles::PAGE>
-            <main id="main" class="flex flex-1 flex-col px-4 py-8">
-                {page}
+        <div class="fui-page">
+            <main id=MAIN_ID class="fui-main">
+                <div class="fui-column">{page}</div>
             </main>
-            {shell::footer()}
+            {foot}
         </div>
     }
+    .into_any()
 }
 
 /// The routes, for a request whose session is `session`; `gateway` is the
@@ -249,27 +252,20 @@ fn unreadable() -> impl IntoView {
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
         response.set_status(http::StatusCode::INTERNAL_SERVER_ERROR);
     }
-    let again = view! {
-        <a href="/" rel="external" class=styles::BUTTON_SECONDARY>
-            {icon(icondata_lu::LuRotateCw, "16")}
-            "Try again"
-        </a>
-    };
-    let body = view! {
-        <p role="alert" class=styles::EMPTY_BODY>
-            "500: the console cannot read its session store, so it cannot tell whether you "
-            "are signed in. Ask the console's operator to restart it."
-        </p>
-    };
+    let alert = fault(
+        "500: the console cannot read its session store, so it cannot tell whether you \
+         are signed in. Ask the console's operator to restart it.",
+    );
     view! {
         <Title text=views::titled("Fault") />
-        <div class=styles::CENTRED>
-            {empty_state(
-                icondata_lu::LuServerCrash,
-                "The console cannot read its sessions",
-                body,
-                again,
-            )}
+        <div class="fui-centred">
+            <div class="fui-card fui-sign-in">
+                <h1>"The console cannot read its sessions"</h1>
+                {alert}
+                <a href="/" rel="external" class=Variant::Secondary.class()>
+                    {label(Some(Glyph::REFRESH_CW), "Try again")}
+                </a>
+            </div>
         </div>
     }
 }
@@ -292,17 +288,21 @@ fn NotFound() -> impl IntoView {
         }
     }
     let back = view! {
-        <a href="/" rel="external" class=styles::BUTTON_PRIMARY>
-            {icon(icondata_lu::LuArrowLeft, "16")}
-            "Back to the console"
+        <a href="/" rel="external" class=Variant::Primary.class()>
+            {label(Some(Glyph::ARROW_LEFT), "Back to the console")}
         </a>
     };
-    let body =
-        view! { <p class=styles::EMPTY_BODY>"404: the console has no page at this address."</p> };
+    let empty = empty_state(
+        Glyph::COMPASS,
+        "Not found",
+        "404: the console has no page at this address.",
+        back,
+    );
     view! {
         <Title text=views::titled("Not found") />
-        <div class=styles::CENTRED>
-            {empty_state(icondata_lu::LuCompass, "Not found", body, back)}
+        <div class="fui-centred">
+            <h1 class="fui-sr-only">"Not found"</h1>
+            {empty}
         </div>
     }
 }
@@ -320,20 +320,6 @@ fn administered() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
         true
-    }
-}
-
-/// The theme the request's cookie names.
-fn theme_requested() -> Theme {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        crate::theme::server::requested()
-    }
-    // NOTE: the browser reads the value the server decided; this runs only if
-    // that value is missing, and then marks the theme that follows the system.
-    #[cfg(target_arch = "wasm32")]
-    {
-        Theme::default()
     }
 }
 

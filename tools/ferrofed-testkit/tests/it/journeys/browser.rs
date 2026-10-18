@@ -292,6 +292,19 @@ impl Browser {
             .await
     }
 
+    /// Scrolls `element` to the middle of the window and clicks it, so a bar
+    /// that stays in view at the top or the bottom never takes the click.
+    pub(crate) async fn press(&self, element: &WebElement) -> Result<(), Box<dyn Error>> {
+        self.driver()
+            .execute(
+                "arguments[0].scrollIntoView({block: 'center'});",
+                vec![element.to_json()?],
+            )
+            .await?;
+        element.click().await?;
+        Ok(())
+    }
+
     /// Waits for the link whose text is `text`, and follows it.
     pub(crate) async fn follow(&self, text: &str) -> Result<(), Box<dyn Error>> {
         self.element(By::LinkText(text)).await?.click().await?;

@@ -32,13 +32,15 @@ pub mod answer;
 pub mod fields;
 pub mod model;
 
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::surface::well;
 use leptos::html::{Div, Form};
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::admin::model::{ActionAnswer, AdminForm};
-use crate::styles;
 use crate::views::fault;
 use crate::views::model::ViewError;
 
@@ -142,11 +144,11 @@ fn action_section(
     let question = format!("{}-question", action.id);
     let (opens, closes, labelled) = (confirm.clone(), confirm.clone(), question.clone());
     view! {
-        <section class=format!("{} mb-6", styles::CARD_PAD) aria-labelledby=action.id>
-            <h2 id=action.id class="mt-0 mb-1 text-base font-semibold text-ink">
+        <section class="fui-card" aria-labelledby=action.id>
+            <h2 id=action.id class="fui-card-title">
                 {action.heading}
             </h2>
-            <p class="mt-0 mb-4 text-sm text-muted">
+            <p class="fui-muted">
                 {action.line} " " <a href=LEARN rel="external">
                     "Learn more"
                 </a>
@@ -159,44 +161,51 @@ fn action_section(
             >
                 {answered((value, pending))}
             </div>
-            <form method="post" action=action.url node_ref=form on:submit=submit>
+            <form method="post" action=action.url node_ref=form on:submit=submit class="fui-form">
                 <div inner_html=fields></div>
-                <button
-                    type="button"
-                    class=styles::BUTTON_PRIMARY
-                    popovertarget=opens
-                    aria-haspopup="dialog"
-                    disabled=move || !hydrated.get()
-                >
-                    {action.label}
-                </button>
+                <div class="fui-cluster">
+                    <button
+                        type="button"
+                        class=Variant::Primary.class()
+                        popovertarget=opens
+                        aria-haspopup="dialog"
+                        disabled=move || !hydrated.get()
+                    >
+                        {action.label}
+                    </button>
+                </div>
                 <div
                     id=confirm
                     popover="auto"
                     role="dialog"
                     aria-labelledby=labelled
                     node_ref=popover
-                    class="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-card border border-line bg-raised p-5 text-ink shadow-card backdrop:bg-scrim"
+                    class="fui-dialog"
                 >
-                    <p id=question class="mt-0 mb-3 font-medium">
+                    <h2 id=question class="fui-dialog-title">
                         {action.question}
-                    </p>
+                    </h2>
                     <input type="hidden" name="form[confirm]" value="yes" />
-                    <div class="mt-4 flex flex-wrap justify-end gap-2">
+                    <div class="fui-dialog-actions">
                         <button
                             type="button"
-                            class=styles::BUTTON_SECONDARY
+                            class=Variant::Secondary.class()
                             popovertarget=closes
                             popovertargetaction="hide"
                         >
                             "Cancel"
                         </button>
-                        <button type="submit" autofocus disabled=move || !hydrated.get()>
+                        <button
+                            type="submit"
+                            class=Variant::Primary.class()
+                            autofocus
+                            disabled=move || !hydrated.get()
+                        >
                             {action.label}
                         </button>
                     </div>
                 </div>
-                <p role="status" class="mt-2 mb-0 text-sm text-muted">
+                <p role="status" class="fui-help">
                     {move || ready(hydrated.get())}
                 </p>
             </form>
@@ -226,15 +235,7 @@ type Outcome = (
 fn answered((value, pending): Outcome) -> AnyView {
     view! {
         {move || {
-            pending
-                .get()
-                .then(|| {
-                    view! {
-                        <p role="status" class="mt-0 mb-4 text-sm text-muted">
-                            "Running the action."
-                        </p>
-                    }
-                })
+            pending.get().then(|| busy("Running the action.", Busy::Inline))
         }}
         {move || {
             value
@@ -242,13 +243,7 @@ fn answered((value, pending): Outcome) -> AnyView {
                     None => ().into_any(),
                     Some(Ok(rendered)) => {
                         let html = rendered.html.clone();
-                        view! {
-                            <div
-                                class="mb-4 rounded-card border border-line bg-surface p-4"
-                                inner_html=html
-                            ></div>
-                        }
-                            .into_any()
+                        well(view! { <div inner_html=html></div> }).into_any()
                     }
                     Some(Err(error)) => fault(error),
                 })

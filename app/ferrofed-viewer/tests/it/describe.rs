@@ -66,7 +66,7 @@ async fn the_self_description_shows_its_cards_and_the_document() -> Result<(), B
         "2031-10-16",
         "<caption>Declared endpoints</caption>",
         "<summary>The OPTIONS document</summary>",
-        r#"<span class="tok-key">"spec_version"</span>"#,
+        r#"<span class="fui-tok-key">&quot;spec_version&quot;</span>"#,
     ] {
         assert!(page.contains(shown), "{shown}: {page}");
     }

@@ -47,7 +47,7 @@ async fn a_members_page_shows_its_endpoints_and_an_unknown_one_is_not_found()
     assert!(body.contains("cdr1.rso.nl"), "{body}");
     assert!(!drawn(&body).contains("cdr2.rso.nl"), "{body}");
     assert!(
-        body.contains(r#"<span class="pill tone-ok">up</span>"#),
+        body.contains(r#"<span class="fui-pill fui-tone-ok">up</span>"#),
         "{body}"
     );
 
@@ -95,7 +95,7 @@ async fn the_integrity_view_filters_the_open_and_the_resolved_incidents()
     let (_response, resolved) =
         send(&service, get_as("/integrity?show=resolved", &session)?).await?;
     assert!(
-        resolved.contains(r#"<span class="pill tone-ok">resolved</span>"#),
+        resolved.contains(r#"<span class="fui-pill fui-tone-ok">resolved</span>"#),
         "{resolved}"
     );
     assert!(
@@ -122,10 +122,13 @@ async fn the_routing_view_shows_the_creating_system_id_table() -> Result<(), Box
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="badge tone-neutral">learned</span>"#),
+        body.contains(r#"<span class="fui-badge fui-tone-neutral">learned</span>"#),
         "{body}"
     );
-    assert!(body.contains(r#"<label for="routing-filter">"#), "{body}");
+    assert!(
+        body.contains(r#"<label for="routing-filter" class="fui-label">"#),
+        "{body}"
+    );
     assert!(body.contains("2 of 2 rows on this page."), "{body}");
     Ok(())
 }
@@ -143,9 +146,9 @@ async fn the_dashboard_counts_the_federation_and_shows_each_endpoints_health()
         body.contains("<title>Dashboard · FerroFED Console</title>"),
         "{body}"
     );
-    assert!(body.contains(">2 of 2</p>"), "{body}");
+    assert!(body.contains(">2 of 2</div>"), "{body}");
     assert!(
-        body.contains(r#"<span class="pill tone-ok">all up</span>"#),
+        body.contains(r#"<span class="fui-pill fui-tone-ok">all up</span>"#),
         "{body}"
     );
     assert!(body.contains(">Open incidents</span>"), "{body}");
@@ -155,7 +158,7 @@ async fn the_dashboard_counts_the_federation_and_shows_each_endpoints_health()
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="pill tone-ok">resolved</span>"#),
+        body.contains(r#"<span class="fui-pill fui-tone-ok">resolved</span>"#),
         "{body}"
     );
     assert!(

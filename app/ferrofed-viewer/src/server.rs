@@ -18,7 +18,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use http::header::{
-    CACHE_CONTROL, CONTENT_SECURITY_POLICY, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS,
+    CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS,
     X_FRAME_OPTIONS,
 };
 use http::{HeaderValue, StatusCode};
@@ -124,6 +124,8 @@ pub fn router(state: ViewerState) -> axum::Router {
     };
     let pages = axum::Router::new()
         .route(HEALTH, get(health))
+        .route(crate::app::STYLESHEET, get(stylesheet))
+        .route(crate::app::THEME, get(theme))
         .route(
             crate::configure::export::EXPORT,
             get(crate::configure::export::export),
@@ -334,6 +336,32 @@ struct Health {
     status: &'static str,
 }
 
+/// The console's brand theme, which loads after the library's stylesheet.
+const BRAND_THEME: &str = include_str!("../style/theme.css");
+
+/// A stylesheet answer of `text`.
+fn css(text: &'static str) -> Response {
+    (
+        [(
+            CONTENT_TYPE,
+            HeaderValue::from_static("text/css; charset=utf-8"),
+        )],
+        text,
+    )
+        .into_response()
+}
+
+/// Serves the `ferrohealth_ui` stylesheet, the roles and every component
+/// class the console's views paint with.
+async fn stylesheet() -> Response {
+    css(ferrohealth_ui::style::STYLESHEET)
+}
+
+/// Serves the console's brand theme.
+async fn theme() -> Response {
+    css(BRAND_THEME)
+}
+
 /// Serves `GET /health`: `200` while the process serves.
 async fn health() -> Response {
     (StatusCode::OK, axum::Json(Health { status: "up" })).into_response()
@@ -359,7 +387,7 @@ fn is_bundle(
     _extensions: &http::Extensions,
 ) -> bool {
     headers
-        .get(http::header::CONTENT_TYPE)
+        .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|media| BUNDLE_TYPES.iter().any(|bundle| media.starts_with(bundle)))
 }

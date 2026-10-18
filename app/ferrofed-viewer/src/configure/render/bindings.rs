@@ -7,18 +7,19 @@
 
 use ferrofed_registry::console::Owner;
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
+use ferrohealth_ui::view::form::{INPUT, SELECT};
 use leptos::prelude::*;
 
 use crate::configure::render::Loaded;
 use crate::configure::render::credentials::{addable, back, secret_row};
-use crate::configure::render::members::{GROUP, GROUP_TITLE};
+use crate::configure::render::members::GROUP;
 use crate::configure::render::parts::{
     Text, add_button, error_line, form, head, hidden, reason, remove_button, save_bar, template,
     text,
 };
 use crate::configure::settings;
 use crate::configure::settings::build::{secret_field, setting_field};
-use crate::styles;
+
 use crate::views::model::Refusal;
 
 /// A setting row `row` of a binding section: its key, fixed for one the
@@ -30,7 +31,7 @@ fn binding_row(row: &str, held: Option<(&str, &toml::Value)>) -> AnyView {
     let key = match held {
         Some((key, _)) => view! {
             <input type="hidden" name=name("key") value=key.to_owned() />
-            <p class="m-0 mb-1 text-sm font-medium">
+            <p class="fui-label">
                 <code>{key.to_owned()}</code>
             </p>
         }
@@ -62,7 +63,7 @@ fn binding_row(row: &str, held: Option<(&str, &toml::Value)>) -> AnyView {
         |(key, _)| key.to_owned(),
     );
     view! {
-        <div id=line.clone() class="rounded-card border border-line bg-surface p-3">
+        <div id=line.clone() class="fui-well fui-stack">
             <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
             {key}
             {text(
@@ -85,7 +86,7 @@ fn new_secret(row: &str) -> AnyView {
     let name = |part: &str| format!("form[secret][{row}][{part}]");
     let line = format!("cfg-x-{row}-row");
     view! {
-        <div id=line.clone() class="secret rounded-card border border-line bg-surface p-3">
+        <div id=line.clone() class="fui-well fui-stack">
             <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
             {text(
                 (&secret_field(row, "key"), &name("key")),
@@ -98,11 +99,14 @@ fn new_secret(row: &str) -> AnyView {
                 },
             )}
             <input type="hidden" name=name("choice") value="set" />
-            <label for=secret_field(row, "value")>"Value, never shown again"</label>
+            <label for=secret_field(row, "value") class="fui-label">
+                "Value, never shown again"
+            </label>
             <input
                 type="password"
                 id=secret_field(row, "value")
                 name=name("value")
+                class=INPUT
                 autocomplete="new-password"
                 aria-describedby=format!("{}-error", secret_field(row, "value"))
             />
@@ -126,9 +130,9 @@ fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>) -> AnyView 
         })
         .collect_view();
     view! {
-        <div class=styles::FIELD>
-            <label for="cfg-section">"Binding section"</label>
-            <select id="cfg-section" name="form[section]" aria-describedby="cfg-section-error">
+        <div class="fui-field">
+            <label for="cfg-section" class="fui-label">"Binding section"</label>
+            <select id="cfg-section" name="form[section]" class=SELECT aria-describedby="cfg-section-error">
                 {options}
             </select>
             {error_line("cfg-section")}
@@ -152,16 +156,16 @@ fn settings_group(table: &toml::Table) -> AnyView {
         .collect();
     let kept = (!kept.is_empty()).then(|| {
         view! {
-            <p class="mt-0 mb-3 text-sm text-muted">
+            <p class="fui-muted">
                 {format!("Kept as the revision holds them: {}.", kept.join(", "))}
             </p>
         }
     });
     view! {
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Settings"</legend>
+            <legend>"Settings"</legend>
             {kept}
-            <div id="cfg-setting-rows" class="mb-3 flex flex-col gap-3">
+            <div id="cfg-setting-rows" class="fui-stack">
                 {rows}
             </div>
             {add_button(
@@ -191,9 +195,9 @@ fn secrets_group(slots: &[SecretSlot]) -> AnyView {
         .collect_view();
     view! {
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Secrets"</legend>
+            <legend>"Secrets"</legend>
             {secrets}
-            <div id="cfg-secret-rows" class="mb-3 flex flex-col gap-3"></div>
+            <div id="cfg-secret-rows" class="fui-stack"></div>
             {add_button(
                 "cfg-add-secret",
                 ("tpl-secret", "cfg-secret-rows"),
@@ -244,19 +248,16 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
         {hidden("action", String::from("save-binding"))}
         {hidden("base", loaded.base())}
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Section"</legend>
+            <legend>"Section"</legend>
             {chosen}
         </fieldset>
         {settings_group(&table)}
         {secrets_group(slots)}
-        <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Reason"</legend>
-            {reason()}
-        </fieldset>
+        {reason()}
         {save_bar(loaded, "/configuration/credentials")}
     };
     Ok(view! {
-        {back()}
+        {back(title.clone())}
         {head(
             ("binding-title", title),
             (
@@ -265,7 +266,7 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
             ),
             (),
         )}
-        {form("main", "", body)}
+        {form("main", "fui-stack", body)}
     }
     .into_any())
 }

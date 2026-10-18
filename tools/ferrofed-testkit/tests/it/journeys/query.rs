@@ -26,7 +26,7 @@ use crate::journeys::stack::{PATIENT, Stack, UID_AT_A, patient_query};
 const SUBMIT: &str = "//form//button[@type = 'submit' and normalize-space(.) = 'Run query']";
 
 /// The summary of the federation options' disclosure.
-const OPTIONS: &str = "//details[contains(@class, 'federation-options')]/summary";
+const OPTIONS: &str = "//details[@id = 'federation-options']/summary";
 
 /// Waits until the query form's submit is enabled, which the bundle does
 /// once it has hydrated the page.
@@ -62,10 +62,12 @@ async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Err
 /// Opens the federation options, unless they are open.
 async fn options(browser: &Browser) -> Result<(), Box<dyn Error>> {
     let details = browser
-        .element(By::Css("details.federation-options"))
+        .element(By::Css("details#federation-options"))
         .await?;
     if details.attr("open").await?.is_none() {
-        browser.element(By::XPath(OPTIONS)).await?.click().await?;
+        browser
+            .press(&browser.element(By::XPath(OPTIONS)).await?)
+            .await?;
     }
     Ok(())
 }
@@ -88,12 +90,12 @@ pub(crate) async fn submit(browser: &Browser, run: &Run<'_>) -> Result<(), Box<d
     for id in ["node-a-pub", "node-b-pub"] {
         let box_ = chip(browser, id).await?;
         if box_.is_selected().await? != run.endpoints.contains(&id) {
-            box_.click().await?;
+            browser.press(&box_).await?;
         }
     }
     let partial = browser.element(By::Id("query-partial")).await?;
     if partial.is_selected().await? != run.partial {
-        partial.click().await?;
+        browser.press(&partial).await?;
     }
     browser.element(By::XPath(SUBMIT)).await?.click().await?;
     Ok(())
@@ -184,9 +186,7 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
             partial: false,
         };
         submit(browser, &run).await?;
-        browser
-            .text("span", "Every node in scope answered.")
-            .await?;
+        browser.text("div", "Every node in scope answered.").await?;
         // The focus moves to the answer once it is drawn, scrolling the page,
         // so the next run starts only once it has.
         focused(browser, "query-results-title").await?;
@@ -202,7 +202,7 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         run.partial = true;
         submit(browser, &run).await?;
         browser
-            .text("span", "Not every node in scope answered")
+            .text("div", "Not every node in scope answered")
             .await?;
         focused(browser, "query-results-title").await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
@@ -220,7 +220,7 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
             .await?;
         focused(browser, "query-results-title").await?;
         browser
-            .text("span", "Not every node in scope answered")
+            .text("div", "Not every node in scope answered")
             .await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("node-error", status_of(browser, "node-b-pub").await?);
@@ -249,7 +249,9 @@ async fn a_refused_query_shows_the_gateways_status_and_code() -> Result<(), Box<
         };
         submit(browser, &run).await?;
         let alert = browser
-            .text("p", "The gateway refused this view: 400")
+            .element(By::XPath(
+                "//div[@role = 'alert'][contains(., 'The gateway refused this view: 400')]",
+            ))
             .await?;
         let text = alert.text().await?;
         assert_eq!(Some("alert"), alert.attr("role").await?.as_deref());
@@ -261,7 +263,7 @@ async fn a_refused_query_shows_the_gateways_status_and_code() -> Result<(), Box<
         // follows the run to it.
         browser
             .element(By::XPath(
-                "//div[contains(@class, 'query-refusal')]/span[contains(@class, 'pill') and . = 'refused']",
+                "//section[@aria-labelledby = 'query-results-title']//span[contains(@class, 'fui-pill') and . = 'refused']",
             ))
             .await?;
         focused(browser, "query-results-title").await?;
@@ -357,9 +359,7 @@ async fn the_editor_tabs_the_target_chips_and_the_focus_move_work_from_the_keybo
         fill(browser, "query-parameter-name-0", "patient").await?;
         fill(browser, "query-parameter-value-0", PATIENT).await?;
         browser.element(By::XPath(SUBMIT)).await?.click().await?;
-        browser
-            .text("span", "Every node in scope answered.")
-            .await?;
+        browser.text("div", "Every node in scope answered.").await?;
         focused(browser, "query-results-title").await?;
         assert_eq!("active", status_of(browser, "node-a-pub").await?);
         assert_eq!("excluded", status_of(browser, "node-b-pub").await?);
@@ -369,7 +369,9 @@ async fn the_editor_tabs_the_target_chips_and_the_focus_move_work_from_the_keybo
         table_tab.click().await?;
         table_tab.send_keys(Key::Right).await?;
         focused(browser, "query-tab-raw").await?;
-        let raw = browser.element(By::Css("pre.raw-json")).await?;
+        let raw = browser
+            .element(By::Css("#query-panel-raw .fui-code-panel"))
+            .await?;
         assert!(raw.is_displayed().await?);
         assert!(raw.text().await?.contains("\"federation\""));
         browser

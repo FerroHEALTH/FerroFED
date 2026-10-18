@@ -10,6 +10,16 @@
 //! patient identifier (§5.4.1, N33). Both read the one members answer, so
 //! the page of a member shows what the members view shows of it.
 
+use ferrohealth_ui::icon::Glyph;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::table::model::filled_columns;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::table::view::{Column, NUM};
+use ferrohealth_ui::view::button::{Variant, link_button};
+use ferrohealth_ui::view::empty::{Busy, busy, empty_state};
+use ferrohealth_ui::view::surface::page_header;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::surface::{Crumb, Header, card, definitions, page_heading, stack};
 #[cfg(not(target_arch = "wasm32"))]
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -17,12 +27,10 @@ use leptos_meta::Title;
 use leptos_router::hooks::use_params_map;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::components::{card, replica_meta, status_pill, table_card};
-use crate::components::{empty_state, link_button, page_header};
-use crate::styles;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::views::model::{MemberRow, MembersView};
 use crate::views::{MEMBERS, load, shown, titled};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::views::{has, replica_line, state_pill, table, table_unstacked};
 
 /// The members and their health.
 #[component]
@@ -36,18 +44,18 @@ pub fn MembersPage() -> impl IntoView {
         <Title text=titled("Members") />
         {page_header(
             "Members",
-            "Each member endpoint and its health, as one replica observes it.",
+            Some(String::from("Each member endpoint and its health, as one replica observes it.")),
             (),
         )}
         <Suspense fallback=|| {
-            view! { <p>"Loading the members."</p> }
+            busy("Loading the members.", Busy::Section)
         }>{move || Suspend::new(async move { shown(loaded.await, drawn) })}</Suspense>
     }
 }
 
 /// The markup the server rendered, shown as the HTML it is.
 pub(crate) fn drawn(html: String) -> AnyView {
-    view! { <div class="contents" inner_html=html></div> }.into_any()
+    view! { <div inner_html=html></div> }.into_any()
 }
 
 /// The endpoint `member`'s id, a link to its member's page when it has one.
@@ -69,25 +77,77 @@ fn latency(member: &MemberRow) -> String {
         .unwrap_or_default()
 }
 
+/// The columns of the members table.
+#[cfg(not(target_arch = "wasm32"))]
+const MEMBER_COLUMNS: [Column; 8] = [
+    Column::text("endpoint", "Endpoint"),
+    Column::text("organisation", "Organisation"),
+    Column::text("membership", "Membership"),
+    Column::text("health", "Health"),
+    Column::text("node", "Node"),
+    Column::text("system_id", "system_id").mono(),
+    Column::text("product", "Product"),
+    Column::text("latency", "Median latency").numeric(),
+];
+
+/// The columns of a member's endpoints table.
+#[cfg(not(target_arch = "wasm32"))]
+const ENDPOINT_COLUMNS: [Column; 4] = [
+    Column::text("endpoint", "Endpoint"),
+    Column::text("membership", "Membership"),
+    Column::text("health", "Health"),
+    Column::text("latency", "Median latency").numeric(),
+];
+
+/// The columns of the other dependencies.
+#[cfg(not(target_arch = "wasm32"))]
+const SERVICE_COLUMNS: [Column; 2] = [
+    Column::text("dependency", "Dependency"),
+    Column::text("state", "State"),
+];
+
+/// The columns of `columns` some of `members` fills: Product and Median
+/// latency only when a member reports one.
+#[cfg(not(target_arch = "wasm32"))]
+fn filled(columns: &[Column], members: &[MemberRow]) -> Vec<Column> {
+    filled_columns(columns, members, &[], |member, key| match key {
+        "product" => member.product.is_some(),
+        "latency" => member.latency_ms_p50.is_some(),
+        _ => true,
+    })
+}
+
 /// The members table and the other services.
 #[cfg(not(target_arch = "wasm32"))]
 fn members_section(view: MembersView) -> AnyView {
+    let columns = filled(&MEMBER_COLUMNS, &view.members);
+    let (products, timed) = (has(&columns, "product"), has(&columns, "latency"));
     let rows = view
         .members
         .iter()
         .map(|member| {
             view! {
                 <tr>
-                    <th scope="row" class=styles::ID>
+                    <th scope="row" class="fui-mono">
                         {endpoint_name(member)}
                     </th>
-                    <td>{member.organisation.clone()}</td>
-                    <td>{status_pill(member.status.clone())}</td>
-                    <td>{status_pill(member.health.clone())}</td>
-                    <td class=styles::MONO>{member.node_id.clone().unwrap_or_default()}</td>
-                    <td class=styles::MONO>{member.system_id.clone().unwrap_or_default()}</td>
-                    <td>{member.product.clone().unwrap_or_default()}</td>
-                    <td class=styles::NUM>{latency(member)}</td>
+                    <td data-label="Organisation">{member.organisation.clone()}</td>
+                    <td data-label="Membership">{state_pill(&member.status)}</td>
+                    <td data-label="Health">{state_pill(&member.health)}</td>
+                    <td data-label="Node" class="fui-mono">
+                        {member.node_id.clone().unwrap_or_default()}
+                    </td>
+                    <td data-label="system_id" class="fui-mono">
+                        {member.system_id.clone().unwrap_or_default()}
+                    </td>
+                    {products
+                        .then(|| {
+                            view! {
+                                <td data-label="Product">{member.product.clone().unwrap_or_default()}</td>
+                            }
+                        })}
+                    {timed
+                        .then(|| view! { <td data-label="Median latency" class=NUM>{latency(member)}</td> })}
                 </tr>
             }
         })
@@ -98,55 +158,20 @@ fn members_section(view: MembersView) -> AnyView {
         .map(|(key, state)| {
             view! {
                 <tr>
-                    <th scope="row" class=styles::ID>
+                    <th scope="row" class="fui-mono">
                         {key}
                     </th>
-                    <td>{status_pill(state)}</td>
+                    <td data-label="State">{state_pill(&state)}</td>
                 </tr>
             }
         })
         .collect_view();
-    view! {
-        {replica_meta(view.answered_by)}
-        {table_card(
-            "Member endpoints",
-            view! {
-                <table>
-                    <caption>"Member endpoints"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Endpoint"</th>
-                            <th scope="col">"Organisation"</th>
-                            <th scope="col">"Membership"</th>
-                            <th scope="col">"Health"</th>
-                            <th scope="col">"Node"</th>
-                            <th scope="col">"system_id"</th>
-                            <th scope="col">"Product"</th>
-                            <th scope="col" class=styles::NUM>
-                                "Median latency"
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            },
-        )}
-        {table_card(
-            "Other dependencies",
-            view! {
-                <table>
-                    <caption>"Other dependencies"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Dependency"</th>
-                            <th scope="col">"State"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{services}</tbody>
-                </table>
-            },
-        )}
-    }
+    let answered_by = replica_line(view.answered_by);
+    stack(view! {
+        {answered_by}
+        {table("Member endpoints", &columns, rows.into_any())}
+        {table_unstacked("Other dependencies", &SERVICE_COLUMNS, services.into_any())}
+    })
     .into_any()
 }
 
@@ -167,9 +192,7 @@ pub fn MemberPage() -> impl IntoView {
     let loaded = Resource::new_blocking(key.clone(), load::member);
     view! {
         <Title text=move || titled(&format!("Member {}", key())) />
-        <Transition fallback=|| {
-            view! { <p>"Loading the member."</p> }
-        }>
+        <Transition fallback=|| busy("Loading the member.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
@@ -208,78 +231,67 @@ fn member_section(key: &str, view: MembersView) -> Option<AnyView> {
     let words: Vec<&str> = endpoints.iter().map(|row| row.health.as_str()).collect();
     let state = overall(&words);
     let count = endpoints.len();
+    let columns = filled(&ENDPOINT_COLUMNS, &endpoints);
+    let timed = has(&columns, "latency");
     let rows = endpoints
         .iter()
         .map(|member| {
             view! {
                 <tr>
-                    <th scope="row" class=styles::ID>
+                    <th scope="row" class="fui-mono">
                         {member.endpoint_id.clone()}
                     </th>
-                    <td>{status_pill(member.status.clone())}</td>
-                    <td>{status_pill(member.health.clone())}</td>
-                    <td class=styles::NUM>{latency(member)}</td>
+                    <td data-label="Membership">{state_pill(&member.status)}</td>
+                    <td data-label="Health">{state_pill(&member.health)}</td>
+                    {timed
+                        .then(|| view! { <td data-label="Median latency" class=NUM>{latency(member)}</td> })}
                 </tr>
             }
         })
         .collect_view();
-    let facts = [
-        ("Organisation", first.organisation.clone(), ""),
-        ("Node", first.node_id.clone().unwrap_or_default(), styles::MONO),
-        ("system_id", first.system_id.clone().unwrap_or_else(|| String::from("not reported")), styles::MONO),
-        ("Product", first.product.clone().unwrap_or_else(|| String::from("not reported")), ""),
-        ("Endpoints", count.to_string(), "tabular-nums"),
-    ]
-    .into_iter()
-    .map(|(term, value, class)| {
-        view! {
-            <div class="grid grid-cols-1 gap-1 border-b border-line py-2 last:border-b-0 sm:grid-cols-[10rem_1fr]">
-                <dt class="text-sm font-medium text-muted">{term}</dt>
-                <dd class=format!("m-0 text-sm break-words {class}")>{value}</dd>
-            </div>
-        }
-    })
-    .collect_view();
+    let mono = |text: String| view! { <span class="fui-mono">{text}</span> }.into_any();
+    let facts = definitions(vec![
+        ("Organisation", first.organisation.clone().into_any()),
+        ("Node", mono(first.node_id.clone().unwrap_or_default())),
+        (
+            "system_id",
+            mono(
+                first
+                    .system_id
+                    .clone()
+                    .unwrap_or_else(|| String::from("not reported")),
+            ),
+        ),
+        (
+            "Product",
+            first
+                .product
+                .clone()
+                .unwrap_or_else(|| String::from("not reported"))
+                .into_any(),
+        ),
+        ("Endpoints", count.to_string().into_any()),
+    ]);
+    let heading = page_heading(
+        Header {
+            title: key.to_owned(),
+            subtitle: Some(format!(
+                "A member of {}, with its endpoints and their health.",
+                first.organisation,
+            )),
+            crumbs: vec![Crumb::new("Members", MEMBERS)],
+            mono: true,
+        },
+        state_pill(&state),
+    );
+    let answered_by = replica_line(view.answered_by);
     view! {
-        <header class=styles::PAGE_HEADER>
-            <div class="min-w-0">
-                <p class="m-0 mb-1 text-sm">
-                    <a href=MEMBERS>"Members"</a>
-                </p>
-                <h1 class=format!(
-                    "{} break-all font-mono",
-                    styles::PAGE_TITLE,
-                )>{key.to_owned()}</h1>
-                <p class=styles::PAGE_SUBTITLE>
-                    {format!(
-                        "A member of {}, with its endpoints and their health.",
-                        first.organisation,
-                    )}
-                </p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">{status_pill(state)}</div>
-        </header>
-        {replica_meta(view.answered_by)}
-        <div class="mb-6">{card("Overview", view! { <dl class="m-0">{facts}</dl> })}</div>
-        {table_card(
-            "Endpoints of this member",
-            view! {
-                <table>
-                    <caption>"Endpoints of this member"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Endpoint"</th>
-                            <th scope="col">"Membership"</th>
-                            <th scope="col">"Health"</th>
-                            <th scope="col" class=styles::NUM>
-                                "Median latency"
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            },
-        )}
+        {heading}
+        {answered_by}
+        <div class="fui-stack">
+        {card("Overview", facts)}
+        {table("Endpoints of this member", &columns, rows.into_any())}
+        </div>
     }
     .into_any()
     .into()
@@ -307,20 +319,22 @@ fn missing() -> AnyView {
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
         response.set_status(http::StatusCode::NOT_FOUND);
     }
-    let body = view! { <p class=styles::EMPTY_BODY>"404: the gateway declares no member at this address."</p> };
     view! {
-        <div class=styles::CENTRED>
-            {empty_state(
-                icondata_lu::LuUsers,
-                "No such member",
-                body,
-                link_button(
-                    MEMBERS,
-                    styles::Button::Secondary,
-                    icondata_lu::LuArrowLeft,
-                    "All members",
-                ),
-            )}
+        <div class="fui-centred">
+            <h1 class="fui-sr-only">"No such member"</h1>
+            <div class="fui-card">
+                {empty_state(
+                    Glyph::USERS,
+                    "No such member",
+                    "404: the gateway declares no member at this address.",
+                    link_button(
+                        String::from(MEMBERS),
+                        Variant::Secondary,
+                        Some(Glyph::ARROW_LEFT),
+                        "All members",
+                    ),
+                )}
+            </div>
         </div>
     }
     .into_any()
@@ -379,6 +393,26 @@ mod tests {
                 assert!(!html.contains("<img"), "{html}");
             }
             assert_eq!(None, member_html(HOSTILE, hostile()));
+        });
+    }
+
+    #[test]
+    fn a_column_no_member_fills_is_left_out() {
+        leptos::prelude::Owner::new().with(|| {
+            let mut view = hostile();
+            let filled = members_html(view.clone());
+            assert!(filled.contains(">Product</th>"), "{filled}");
+            assert!(!filled.contains("Median latency"), "{filled}");
+            for member in &mut view.members {
+                member.product = None;
+                member.latency_ms_p50 = Some(12);
+            }
+            let swapped = members_html(view.clone());
+            assert!(!swapped.contains(">Product</th>"), "{swapped}");
+            assert!(swapped.contains("Median latency"), "{swapped}");
+            assert!(swapped.contains("12 ms"), "{swapped}");
+            let detail = member_html("node-a", view).unwrap_or_default();
+            assert!(detail.contains("Median latency"), "{detail}");
         });
     }
 }

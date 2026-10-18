@@ -86,12 +86,12 @@ async fn pages(
     (path, caption, total): (&str, &str, u64),
 ) -> Result<(), Box<dyn Error>> {
     page(browser, caption, 0, total).await?;
-    browser.follow("Next page").await?;
+    browser.follow("Next").await?;
     page(browser, caption, PAGE, total).await?;
     browser
         .at(&stack.url(&format!("{path}?offset={PAGE}")))
         .await?;
-    browser.follow("Previous page").await?;
+    browser.follow("Previous").await?;
     page(browser, caption, 0, total).await?;
     browser.at(&stack.url(&format!("{path}?offset=0"))).await?;
     browser.console_clean(&format!("the pager of {path}")).await
@@ -128,12 +128,12 @@ async fn each_view_renders_and_pages_through_the_hydrated_console() -> Result<()
         browser.follow("Stored queries").await?;
         browser.titled(&titled("Stored queries")).await?;
         list_page(browser, 0, held()?).await?;
-        browser.follow("Next page").await?;
+        browser.follow("Next").await?;
         list_page(browser, PAGE, held()?).await?;
         browser
             .at(&stack.url(&format!("/stored-queries?offset={PAGE}")))
             .await?;
-        browser.follow("Previous page").await?;
+        browser.follow("Previous").await?;
         list_page(browser, 0, held()?).await?;
         browser
             .console_clean("the pager of /stored-queries")
@@ -171,7 +171,7 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
             .await?;
         browser.titled(&titled("Routing")).await?;
         page(browser, ROUTING, PAGE, ROUTES).await?;
-        browser.follow("Previous page").await?;
+        browser.follow("Previous").await?;
         page(browser, ROUTING, 0, ROUTES).await?;
         browser.console_clean("the routing view").await?;
 
@@ -180,7 +180,7 @@ async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Er
             .await?;
         browser.titled(&titled("Stored queries")).await?;
         list_page(browser, PAGE, held()?).await?;
-        browser.follow("Previous page").await?;
+        browser.follow("Previous").await?;
         list_page(browser, 0, held()?).await?;
         browser.console_clean("the stored-query view").await?;
 

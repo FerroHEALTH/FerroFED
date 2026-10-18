@@ -10,6 +10,8 @@
 //! and attribute value they carry: a replica name, an `ehr_id` an incident
 //! names, a stored query's name.
 
+use ferrohealth_ui::view::form::{INPUT, SELECT, field};
+use ferrohealth_ui::view::layout::{FieldRow, field_row};
 use leptos::prelude::*;
 
 use crate::admin::act::server::EVERY_REPLICA;
@@ -30,28 +32,40 @@ pub fn clear(replicas: &[ReplicaSettings], ehr_ids: &[String]) -> String {
             view! { <option value=replica.name.clone()>{replica.name.clone()}</option> }
         })
         .collect_view();
-    view! {
-        <p>
-            <label for="clear-ehr-id">"ehr_id"</label>
-            <input
-                type="text"
-                id="clear-ehr-id"
-                name="form[ehr_id]"
-                list="clear-ehr-ids"
-                autocomplete="off"
-                spellcheck="false"
-                required
-            />
-            <datalist id="clear-ehr-ids">{known}</datalist>
-        </p>
-        <p>
-            <label for="clear-replica">"Replica"</label>
-            <select id="clear-replica" name="form[replica]">
-                <option value=EVERY_REPLICA>"Every replica, one after another"</option>
-                {choices}
-            </select>
-        </p>
-    }
+    field_row(
+        FieldRow::Halves,
+        view! {
+            {field(
+                "clear-ehr-id",
+                "ehr_id",
+                None,
+                view! {
+                    <input
+                        type="text"
+                        id="clear-ehr-id"
+                        name="form[ehr_id]"
+                        class=INPUT
+                        list="clear-ehr-ids"
+                        autocomplete="off"
+                        spellcheck="false"
+                        required
+                    />
+                    <datalist id="clear-ehr-ids">{known}</datalist>
+                },
+            )}
+            {field(
+                "clear-replica",
+                "Replica",
+                None,
+                view! {
+                    <select id="clear-replica" name="form[replica]" class=SELECT>
+                        <option value=EVERY_REPLICA>"Every replica, one after another"</option>
+                        {choices}
+                    </select>
+                },
+            )}
+        },
+    )
     .to_html()
 }
 
@@ -69,34 +83,61 @@ pub fn repair(replica: &ReplicaSettings, names: &[String]) -> String {
         replica.name
     );
     view! {
-        <p class="mt-0 text-sm text-muted">{goes}</p>
-        <p>
-            <label for="repair-name">"Stored query name"</label>
-            <input
-                type="text"
-                id="repair-name"
-                name="form[name]"
-                list="repair-names"
-                autocomplete="off"
-                required
-            />
-            <datalist id="repair-names">{known}</datalist>
-            " "
-            <label for="repair-version">"Version"</label>
-            <input
-                type="text"
-                id="repair-version"
-                name="form[version]"
-                autocomplete="off"
-                required
-            />
-        </p>
-        <p>
-            <label for="repair-endpoints">
-                "Members, comma-separated, or * for every active member"
-            </label>
-            <input type="text" id="repair-endpoints" name="form[endpoints]" value="*" required />
-        </p>
+        <div class="fui-form">
+            <p class="fui-muted">{goes}</p>
+            {field_row(
+                FieldRow::NarrowWide,
+                view! {
+                    {field(
+                        "repair-version",
+                        "Version",
+                        None,
+                        view! {
+                            <input
+                                type="text"
+                                id="repair-version"
+                                name="form[version]"
+                                class=INPUT
+                                autocomplete="off"
+                                required
+                            />
+                        },
+                    )}
+                    {field(
+                        "repair-name",
+                        "Stored query name",
+                        None,
+                        view! {
+                            <input
+                                type="text"
+                                id="repair-name"
+                                name="form[name]"
+                                class=INPUT
+                                list="repair-names"
+                                autocomplete="off"
+                                required
+                            />
+                            <datalist id="repair-names">{known}</datalist>
+                        },
+                    )}
+                },
+            )}
+            {field(
+                "repair-endpoints",
+                "Members, comma-separated, or * for every active member",
+                None,
+                view! {
+                    <input
+                        type="text"
+                        id="repair-endpoints"
+                        name="form[endpoints]"
+                        class=INPUT
+                        value="*"
+                        required
+                    />
+                },
+            )}
+        </div>
     }
     .to_html()
 }

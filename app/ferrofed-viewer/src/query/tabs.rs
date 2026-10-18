@@ -7,8 +7,6 @@
 
 use leptos::prelude::*;
 
-use crate::styles;
-
 /// The two tabs of one tab list.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct TabPair {
@@ -41,7 +39,7 @@ pub(super) fn tab_list(pair: TabPair, second: RwSignal<bool>) -> impl IntoView {
     let [first_panel, second_panel] = pair.panels;
     let [first_name, second_name] = pair.names;
     view! {
-        <div role="tablist" aria-label=pair.label class=styles::TAB_LIST on:keydown=keys>
+        <div role="tablist" aria-label=pair.label class="fui-tabs" on:keydown=keys>
             <button
                 type="button"
                 role="tab"
@@ -49,7 +47,7 @@ pub(super) fn tab_list(pair: TabPair, second: RwSignal<bool>) -> impl IntoView {
                 aria-controls=first_panel
                 aria-selected=move || (!second.get()).to_string()
                 tabindex=move || if second.get() { "-1" } else { "0" }
-                class=styles::TAB_BUTTON
+                class="fui-tab"
                 node_ref=first_tab
                 on:click=move |_| second.set(false)
             >
@@ -62,7 +60,7 @@ pub(super) fn tab_list(pair: TabPair, second: RwSignal<bool>) -> impl IntoView {
                 aria-controls=second_panel
                 aria-selected=move || second.get().to_string()
                 tabindex=move || if second.get() { "0" } else { "-1" }
-                class=styles::TAB_BUTTON
+                class="fui-tab"
                 node_ref=second_tab
                 on:click=move |_| second.set(true)
             >

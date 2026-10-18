@@ -9,6 +9,13 @@ use ferrofed_registry::console::{
     ConsoleEndpoint, ConsoleMember, ConsoleState, MemberResource, Owner,
 };
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::form::{INPUT, SWITCH};
+use ferrohealth_ui::view::status::{badge, pill};
+use ferrohealth_ui::view::surface::definitions;
 use leptos::prelude::*;
 
 use crate::configure::member::{ADD_FHIR, ADD_QUERY, fhir_field, field, query_field};
@@ -16,9 +23,8 @@ use crate::configure::plan::removal_reason;
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{
     Text, add_button, confirmed, error_line, form, head, hidden, reason, remove_button, save_bar,
-    template, text,
+    template, text, trail,
 };
-use crate::styles::{self, Button};
 use crate::views::model::Refusal;
 
 /// The path of the member `node`'s form or detail.
@@ -30,27 +36,27 @@ fn href(node: &str) -> String {
 /// console changes it.
 pub(super) fn owner(owner: Owner) -> AnyView {
     let (word, tone) = match owner {
-        Owner::Console => ("Console", "badge tone-accent"),
-        Owner::File => ("File, read-only", "badge tone-neutral"),
-        Owner::Directory => ("Directory, read-only", "badge tone-neutral"),
-        Owner::Gateway => ("Gateway, read-only", "badge tone-neutral"),
-        Owner::Store => ("Store, immutable", "badge tone-neutral"),
-        _ => ("Elsewhere, read-only", "badge tone-neutral"),
+        Owner::Console => ("Console", Tone::Accent),
+        Owner::File => ("File, read-only", Tone::Neutral),
+        Owner::Directory => ("Directory, read-only", Tone::Neutral),
+        Owner::Gateway => ("Gateway, read-only", Tone::Neutral),
+        Owner::Store => ("Store, immutable", Tone::Neutral),
+        _ => ("Elsewhere, read-only", Tone::Neutral),
     };
-    view! { <span class=tone>{word}</span> }.into_any()
+    badge(tone, word).into_any()
 }
 
 /// Where a console resource stands, as a pill that says so in words; one
 /// the console does not hold runs as its source provides it.
 pub(super) fn state(state: Option<ConsoleState>) -> AnyView {
     let (word, tone) = match state {
-        None | Some(ConsoleState::Running) => ("running", "pill tone-ok"),
-        Some(ConsoleState::Pending) => ("saved, not applied", "pill tone-warn"),
-        Some(ConsoleState::Removing) => ("removed, not applied", "pill tone-warn"),
-        Some(ConsoleState::Shadowed) => ("shadowed by the file", "pill tone-neutral"),
-        Some(_) => ("unknown", "pill tone-neutral"),
+        None | Some(ConsoleState::Running) => ("running", Tone::Ok),
+        Some(ConsoleState::Pending) => ("saved, not applied", Tone::Warn),
+        Some(ConsoleState::Removing) => ("removed, not applied", Tone::Warn),
+        Some(ConsoleState::Shadowed) => ("shadowed by the file", Tone::Neutral),
+        Some(_) => ("unknown", Tone::Neutral),
     };
-    view! { <span class=tone>{word}</span> }.into_any()
+    pill(tone, word).into_any()
 }
 
 /// The removal of the console member `node`, a confirmation step asking
@@ -59,7 +65,7 @@ fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
     let reason_id = removal_reason(node);
     form(
         "main",
-        "inline",
+        "",
         view! {
             {hidden("action", String::from("remove-member"))}
             {hidden("base", loaded.base())}
@@ -69,9 +75,9 @@ fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
                 (
                     view! {
                         "Remove"
-                        <span class="sr-only">{format!(" {node}")}</span>
+                        <span class="fui-sr-only">{format!(" {node}")}</span>
                     },
-                    Button::Ghost,
+                    Variant::Ghost,
                 ),
                 (
                     format!(
@@ -111,19 +117,23 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
     let actions = if editable {
-        view! {
-            <a href=href(&node) class=styles::BUTTON_GHOST>
+        let edit = view! {
+            <a href=href(&node) class=Variant::Ghost.class()>
                 "Edit"
-                <span class="sr-only">{format!(" {node}")}</span>
+                <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
+        }
+        .into_any();
+        view! {
+            {edit}
             {remove(loaded, &node)}
         }
         .into_any()
     } else {
         view! {
-            <a href=href(&node) class=styles::BUTTON_GHOST>
+            <a href=href(&node) class=Variant::Ghost.class()>
                 "View"
-                <span class="sr-only">{format!(" {node}")}</span>
+                <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
         }
         .into_any()
@@ -133,22 +143,31 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
             <th scope="row">
                 <code>{node.clone()}</code>
             </th>
-            <td>{member.organisation.as_str().to_owned()}</td>
-            <td>
+            <td data-label="Organisation">{member.organisation.as_str().to_owned()}</td>
+            <td data-label="system_id">
                 <code>{member.system_id.as_str().to_owned()}</code>
             </td>
-            <td class=styles::NUM title=ids>
+            <td data-label="Endpoints" class=NUM title=ids>
                 {count}
             </td>
-            <td>{owner(member.owner)}</td>
-            <td>{state(member.state)}</td>
-            <td>
-                <div class="flex flex-wrap items-center justify-end gap-1">{actions}</div>
-            </td>
+            <td data-label="Owner">{owner(member.owner)}</td>
+            <td data-label="State">{state(member.state)}</td>
+            <td data-label="Actions" class=ACTIONS>{actions}</td>
         </tr>
     }
     .into_any()
 }
+
+/// The columns of the Members tab.
+const MEMBER_COLUMNS: [Column; 7] = [
+    Column::text("node", "Node"),
+    Column::text("organisation", "Organisation"),
+    Column::text("system_id", "system_id").mono(),
+    Column::text("endpoints", "Endpoints").numeric(),
+    Column::text("owner", "Owner"),
+    Column::text("state", "State"),
+    Column::text("actions", "Actions"),
+];
 
 /// The Members tab: every member with its owner and state.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
@@ -156,7 +175,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let rows = if members.is_empty() {
         view! {
             <tr>
-                <td colspan="7" class="text-muted">
+                <td colspan="7" class="fui-muted">
                     "No member is configured yet."
                 </td>
             </tr>
@@ -177,33 +196,13 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
                 "console-managed-resources",
             ),
             view! {
-                <a href="/configuration/members/new" class=styles::BUTTON_PRIMARY>
-                    {crate::components::icon(icondata_lu::LuPlus, "16")}
+                <a href="/configuration/members/new" class=Variant::Primary.class()>
+                    {icon(Glyph::PLUS, "16")}
                     "Add member"
                 </a>
             },
         )}
-        <div class=styles::TABLE_SCROLL tabindex="0" role="region" aria-labelledby="members-title">
-            <table>
-                <caption class="sr-only">"Members and their owners"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Node"</th>
-                        <th scope="col">"Organisation"</th>
-                        <th scope="col">"system_id"</th>
-                        <th scope="col" class=styles::NUM>
-                            "Endpoints"
-                        </th>
-                        <th scope="col">"Owner"</th>
-                        <th scope="col">"State"</th>
-                        <th scope="col">
-                            <span class="sr-only">"Actions"</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
+        {crate::views::table("Members and their owners", &MEMBER_COLUMNS, rows)}
     }
     .into_any()
 }
@@ -262,57 +261,52 @@ fn detail(member: &MemberResource) -> AnyView {
         })
         .collect_view();
     view! {
-        <p class="mt-0 mb-2 text-sm">
-            <a href="/configuration/members">"Members"</a>
-        </p>
-        <h2 id="member-title" class="mt-0 mb-1 text-base font-semibold text-ink">
+        {trail(("Members", "/configuration/members"), member.node.as_str().to_owned())}
+        <h2 id="member-title" class="fui-card-title">
             <code>{member.node.as_str().to_owned()}</code>
         </h2>
-        <p class="mt-0 mb-4 text-sm text-muted" role="note">
+        <p class="fui-muted" role="note">
             {source}
         </p>
-        <dl class="m-0 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[12rem_1fr]">
-            <dt class="text-muted font-medium">"Organisation"</dt>
-            <dd class="m-0">{member.organisation.as_str().to_owned()}</dd>
-            <dt class="text-muted font-medium">"system_id"</dt>
-            <dd class="m-0">
-                <code>{member.system_id.as_str().to_owned()}</code>
-            </dd>
-            <dt class="text-muted font-medium">"Owner"</dt>
-            <dd class="m-0">{owner(member.owner)}</dd>
-            <dt class="text-muted font-medium">"State"</dt>
-            <dd class="m-0">{state(member.state)}</dd>
-            <dt class="text-muted font-medium">"Endpoints"</dt>
-            <dd class="m-0">
-                <ul class="m-0 list-none p-0">{endpoints}</ul>
-            </dd>
-        </dl>
+        {definitions(vec![
+            ("Organisation", member.organisation.as_str().to_owned().into_any()),
+            (
+                "system_id",
+                view! { <code>{member.system_id.as_str().to_owned()}</code> }.into_any(),
+            ),
+            ("Owner", owner(member.owner)),
+            ("State", state(member.state)),
+            ("Endpoints", view! { <ul class="fui-bullets">{endpoints}</ul> }.into_any()),
+        ])}
     }
     .into_any()
 }
 
-/// The classes of one group of a form: a heading over its fields, set off
-/// by a hairline.
-pub(super) const GROUP: &str = "m-0 mb-6 min-w-0 rounded-none border-0 border-t border-line \
-                                bg-transparent p-0 pt-4 shadow-none";
+/// The classes of one group of a form: a legend over its fields.
+pub(super) const GROUP: &str = "fui-fieldset";
 
-/// The classes of a group's heading.
-pub(super) const GROUP_TITLE: &str = "mb-3 text-sm font-semibold text-ink";
+/// The classes of one repeatable row: a sunken box of its own fields.
+const ROW: &str = "fui-fieldset fui-well";
 
-/// The classes of one repeatable row: a small card of its own fields.
-const ROW: &str = "m-0 min-w-0 rounded-card border border-line bg-surface p-4 shadow-none";
-
-/// The classes of a row's heading.
-const ROW_TITLE: &str = "mb-2 text-xs font-semibold tracking-wide text-muted uppercase";
+/// The classes of a row's legend.
+const ROW_TITLE: &str = "fui-label";
 
 /// The "In service" switch of the endpoint field `id`, named `name`.
 fn in_service(id: String, name: String, on: bool) -> AnyView {
     let label_for = id.clone();
     view! {
-        <label for=label_for class="inline-flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" role="switch" id=id name=name value="on" checked=on />
-            "In service"
-        </label>
+        <div class="fui-check">
+            <input
+                type="checkbox"
+                role="switch"
+                class=SWITCH
+                id=id
+                name=name
+                value="on"
+                checked=on
+            />
+            <label for=label_for>"In service"</label>
+        </div>
     }
     .into_any()
 }
@@ -330,7 +324,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
         <fieldset id=row.clone() class=ROW>
             <legend class=ROW_TITLE>{named.clone()}</legend>
             <input type="hidden" name="form[query_rows]" value=key.to_owned() />
-            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div class="fui-field-row fui-field-row-narrow-wide">
                 {text(
                     (&query_field(key, "id"), &name("id")),
                     String::from("Endpoint id"),
@@ -353,7 +347,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                     },
                 )}
             </div>
-            <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="fui-split">
                 {in_service(
                     query_field(key, "service"),
                     name("in_service"),
@@ -382,9 +376,9 @@ const CATEGORIES: [(&str, &str); 6] = [
 fn profile(key: &str, item: &str, value: String) -> AnyView {
     let id = format!("cfg-f-{key}-p-{item}");
     view! {
-        <div id=format!("{id}-row") class="flex items-end gap-2">
-            <div class="min-w-0 flex-1">
-                <label for=id.clone() class="sr-only">
+        <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
+            <div class="fui-field">
+                <label for=id.clone() class="fui-sr-only">
                     "Profile"
                 </label>
                 <input
@@ -392,7 +386,7 @@ fn profile(key: &str, item: &str, value: String) -> AnyView {
                     id=id.clone()
                     name=format!("form[fhir][{key}][profiles]")
                     value=value
-                    class=styles::MONO
+                    class=format!("{INPUT} fui-mono")
                     autocomplete="off"
                     spellcheck="false"
                 />
@@ -423,7 +417,7 @@ fn categories(key: &str, served: &[String]) -> AnyView {
             let label_for = id.clone();
             let on = served.contains(&code);
             view! {
-                <label for=label_for class="inline-flex items-center gap-2 text-sm font-normal">
+                <label for=label_for class="fui-chip-check">
                     <input
                         type="checkbox"
                         id=id
@@ -439,11 +433,11 @@ fn categories(key: &str, served: &[String]) -> AnyView {
     view! {
         <fieldset
             id=group.clone()
-            class="m-0 mb-4 min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+            class="fui-fieldset fui-choice"
             aria-describedby=format!("{group}-error")
         >
-            <legend class="mb-1 text-sm font-medium">"Categories"</legend>
-            <div class="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">{boxes}</div>
+            <legend class="fui-label">"Categories"</legend>
+            <div class="fui-chip-checks">{boxes}</div>
             {error_line(&group)}
         </fieldset>
     }
@@ -474,7 +468,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
         <fieldset id=row.clone() class=ROW>
             <legend class=ROW_TITLE>{named.clone()}</legend>
             <input type="hidden" name="form[fhir_rows]" value=key.to_owned() />
-            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div class="fui-field-row fui-field-row-narrow-wide">
                 {text(
                     (&fhir_field(key, "id"), &name("id")),
                     String::from("Endpoint id"),
@@ -511,9 +505,9 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                 },
             )}
             {categories(key, &served)}
-            <fieldset class="m-0 mb-4 min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none">
-                <legend class="mb-1 text-sm font-medium">"Profiles"</legend>
-                <div id=list.clone() class="mb-2 flex flex-col gap-2">
+            <fieldset class="fui-fieldset fui-choice">
+                <legend class="fui-label">"Profiles"</legend>
+                <div id=list.clone() class="fui-stack">
                     {profiles}
                 </div>
                 {add_button(
@@ -523,7 +517,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                 )}
                 {template(profile_template.clone(), profile(key, "__ITEM__", String::new()))}
             </fieldset>
-            <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="fui-split">
                 {in_service(
                     fhir_field(key, "service"),
                     name("in_service"),
@@ -566,8 +560,8 @@ fn identity(member: Option<&ConsoleMember>) -> AnyView {
     };
     view! {
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Organisation"</legend>
-            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <legend>"Organisation"</legend>
+            <div class="fui-field-row fui-field-row-halves">
                 {text(
                     (&field("organisation"), "form[organisation]"),
                     String::from("Organisation id"),
@@ -583,8 +577,8 @@ fn identity(member: Option<&ConsoleMember>) -> AnyView {
             </div>
         </fieldset>
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Node"</legend>
-            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <legend>"Node"</legend>
+            <div class="fui-field-row fui-field-row-halves">
                 {text(
                     (&field("node"), "form[node]"),
                     String::from("node_id"),
@@ -637,11 +631,11 @@ fn endpoint_groups(member: Option<&ConsoleMember>) -> AnyView {
     let fresh_query = member.is_none().then(|| query_row("0", None));
     view! {
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Query API endpoints"</legend>
-            <p class="mt-0 mb-3 text-sm text-muted">
+            <legend>"Query API endpoints"</legend>
+            <p class="fui-muted">
                 "The ITS-REST endpoints the gateway sends each member's AQL to."
             </p>
-            <div id="cfg-query-rows" class="mb-3 flex flex-col gap-3">
+            <div id="cfg-query-rows" class="fui-stack">
                 {query_rows}
                 {fresh_query}
             </div>
@@ -649,11 +643,11 @@ fn endpoint_groups(member: Option<&ConsoleMember>) -> AnyView {
             {template(String::from("tpl-query"), query_row("__KEY__", None))}
         </fieldset>
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"FHIR endpoints"</legend>
-            <p class="mt-0 mb-3 text-sm text-muted">
+            <legend>"FHIR endpoints"</legend>
+            <p class="fui-muted">
                 "The exchange-format endpoints that serve the categories each one names."
             </p>
-            <div id="cfg-fhir-rows" class="mb-3 flex flex-col gap-3">
+            <div id="cfg-fhir-rows" class="fui-stack">
                 {fhir_rows}
             </div>
             {add_button(ADD_FHIR, ("tpl-fhir", "cfg-fhir-rows"), ("Add FHIR endpoint", "__KEY__"))}
@@ -678,16 +672,11 @@ pub(super) fn member_form(loaded: &Loaded<'_>, member: Option<&ConsoleMember>) -
         {hidden("fhir_shown", String::from("yes"))}
         {identity(member)}
         {endpoint_groups(member)}
-        <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Reason"</legend>
-            {reason()}
-        </fieldset>
+        {reason()}
         {save_bar(loaded, "/configuration/members")}
     };
     view! {
-        <p class="mt-0 mb-2 text-sm">
-            <a href="/configuration/members">"Members"</a>
-        </p>
+        {trail(("Members", "/configuration/members"), title.clone())}
         {head(
             ("member-title", title),
             (
@@ -696,7 +685,7 @@ pub(super) fn member_form(loaded: &Loaded<'_>, member: Option<&ConsoleMember>) -
             ),
             (),
         )}
-        {form("main", "", body)}
+        {form("main", "fui-stack", body)}
     }
     .into_any()
 }

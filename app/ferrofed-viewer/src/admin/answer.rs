@@ -8,6 +8,8 @@
 //! claimant or a node's error text arrives as text, never as markup.
 
 use ferrofed_registry::operator::HeldBefore;
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::notice::{Announce, notice};
 use leptos::prelude::*;
 
 use crate::admin::act::server::{Acted, ClearLine, RepairLine, ReplicaAnswer};
@@ -37,7 +39,7 @@ pub fn cleared(answers: &[ReplicaAnswer<ClearLine>]) -> ActionAnswer {
     ActionAnswer {
         changed: false,
         field: None,
-        html: view! { <ul>{items}</ul> }.to_html(),
+        html: view! { <ul class="fui-divided">{items}</ul> }.to_html(),
     }
 }
 
@@ -70,41 +72,34 @@ pub(crate) fn replica_said<T>(
                 Some(said) => format!(" The gateway says: {}.", said.trim_end_matches('.')),
                 None => String::new(),
             };
-            view! {
-                <p role="alert">
-                    {format!("Replica {replica} refused the {what}: {status} ({code}).{hint}")}
-                </p>
-            }
-            .into_any()
+            refused_by(format!(
+                "Replica {replica} refused the {what}: {status} ({code}).{hint}"
+            ))
         }
         Acted::Refused(Refusal::NotAuthenticated { code }) => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
-            view! {
-                <p role="alert">
-                    {format!(
-                        "Replica {replica} did not accept your sign-in for the {what}: 401 ({code}). ",
-                    )} <a href=crate::app::SIGN_IN rel="external">
-                        "Sign in again"
-                    </a>
-                </p>
-            }
-            .into_any()
+            refused_by(view! {
+                {format!(
+                    "Replica {replica} did not accept your sign-in for the {what}: 401 ({code}). ",
+                )}
+                <a href=crate::app::SIGN_IN rel="external">
+                    "Sign in again"
+                </a>
+            })
         }
         Acted::Refused(Refusal::Invalid { reason }) => {
-            view! { <p role="alert">{format!("Replica {replica}: {reason}")}</p> }.into_any()
+            refused_by(format!("Replica {replica}: {reason}"))
         }
-        Acted::Fault(ViewError::Unreachable) => view! {
-            <p role="alert">
-                {format!(
-                    "Replica {replica}: its admin listener gave no answer, so whether the {what} ran there is unknown. Reload the page before running it again; a configuration change shows in the revision history.",
-                )}
-            </p>
-        }
-        .into_any(),
-        Acted::Fault(fault) => {
-            view! { <p role="alert">{format!("Replica {replica}: {fault}.")}</p> }.into_any()
-        }
+        Acted::Fault(ViewError::Unreachable) => refused_by(format!(
+            "Replica {replica}: its admin listener gave no answer, so whether the {what} ran there is unknown. Reload the page before running it again; a configuration change shows in the revision history.",
+        )),
+        Acted::Fault(fault) => refused_by(format!("Replica {replica}: {fault}.")),
     }
+}
+
+/// The alert `body` says, for a replica that refused or did not answer.
+fn refused_by(body: impl IntoView + 'static) -> AnyView {
+    notice(Tone::Bad, Announce::Alert, None, body).into_any()
 }
 
 /// What a replica reports of a clear.
@@ -127,12 +122,15 @@ fn clear_line(replica: &str, line: &ClearLine) -> AnyView {
     } else {
         "no ehr_id index entry"
     };
-    view! {
-        <p role="status">
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        view! {
             <strong>{format!("Replica {replica} cleared {ehr_id}.")}</strong>
             {format!(" {held} It forgot {index} and the bindings of {} sessions.", line.sessions)}
-        </p>
-    }
+        },
+    )
     .into_any()
 }
 
@@ -145,20 +143,26 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
         .map(|registry| format!(" The registry's copy: {registry}."))
         .unwrap_or_default();
     let completeness = if line.complete {
-        view! {
-            <p role="status" class="complete">
+        notice(
+            Tone::Ok,
+            Announce::Status,
+            None,
+            view! {
                 <strong>"Complete."</strong>
                 " Every member named took the version."
-            </p>
-        }
+            },
+        )
         .into_any()
     } else {
-        view! {
-            <p role="alert" class="incomplete">
+        notice(
+            Tone::Warn,
+            Announce::Alert,
+            None,
+            view! {
                 <strong>"Incomplete."</strong>
                 " Not every member named took the version; the members below say which."
-            </p>
-        }
+            },
+        )
         .into_any()
     };
     let endpoints = crate::query::answer::endpoints_table(&line.endpoints);

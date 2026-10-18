@@ -445,10 +445,9 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/viewer-tools.sh` |
 | Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/viewer-tools.sh` |
 
-The console's stylesheet is Tailwind CSS 4, configured in
-`app/ferrofed-viewer/style/tailwind.css` with no JavaScript config file, as
-FerroTERM's viewer is, at the release FerroTERM's viewer builds with, so the
-build needs no Node. cargo-leptos runs the Tailwind CSS standalone CLI and
+The console's stylesheet is the `ferrohealth-ui` crate's, which the server
+serves beside the console's brand theme, so the site build compiles no CSS
+and needs no Node. cargo-leptos runs the Tailwind CSS standalone CLI and
 Binaryen's wasm-opt it finds on `PATH`, and downloads either unchecked when it
 finds none, so `scripts/release/viewer-tools.sh` installs both at these
 releases and checks each against its digest first, and

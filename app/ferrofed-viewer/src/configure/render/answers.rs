@@ -5,6 +5,8 @@
 //! kept it from any replica, with the field it names.
 
 use ferrofed_registry::revision::{Applied, Imported};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::notice::{Announce, notice};
 use leptos::prelude::*;
 
 use crate::admin::act::server::{Acted, ReplicaAnswer};
@@ -51,22 +53,23 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
     let id = line.revision.id;
     let preview = match (&line.changes, line.running) {
         (Some(changes), Some(running)) => view! {
-            <p class="mb-2">{format!("What it changes against the running revision {running}:")}</p>
+            <p>{format!("What it changes against the running revision {running}:")}</p>
             {diff_table(changes, (Some(running), id))}
         }
         .into_any(),
-        _ => view! {
-            <p role="alert">
-                "The preview of its changes could not be read; reload the page to see it in the card at the top."
-            </p>
-        }
+        _ => notice(
+            Tone::Warn,
+            Announce::Alert,
+            None,
+            "The preview of its changes could not be read; reload the page to see it in the card at the top.",
+        )
         .into_any(),
     };
     view! {
-        <p role="status" class="mt-0">
+        {said(view! {
             <strong>{format!("Replica {replica} saved revision {id}.")}</strong>
             " It is not applied: apply it from the card at the top once you have read its changes."
-        </p>
+        })}
         {preview}
     }
     .into_any()
@@ -92,17 +95,14 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
     let awaits = line.current.awaiting.as_ref().map(
         |_| " It awaits your confirmation: confirm it in the card at the top, or roll it back.",
     );
-    view! {
-        <p role="status" class="mt-0">
-            <strong>
-                {format!("Replica {replica} applied revision {}{restored}.", line.revision.id)}
-            </strong>
-            " "
-            {mark_said(&line.current)}
-            {awaits}
-        </p>
-    }
-    .into_any()
+    said(view! {
+        <strong>
+            {format!("Replica {replica} applied revision {}{restored}.", line.revision.id)}
+        </strong>
+        " "
+        {mark_said(&line.current)}
+        {awaits}
+    })
 }
 
 /// The answer of a stored-query version stored at `answer`'s replica.
@@ -117,14 +117,11 @@ pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
 
 /// What a replica reports of a stored-query version stored.
 fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
-    view! {
-        <p role="status" class="mt-0">
-            <strong>
-                {format!("Replica {replica} stored {} version {}.", line.name, line.version)}
-            </strong>
-        </p>
-    }
-    .into_any()
+    said(view! {
+        <strong>
+            {format!("Replica {replica} stored {} version {}.", line.name, line.version)}
+        </strong>
+    })
 }
 
 /// The answer of an import at `answer`'s replica, with its changes.
@@ -141,14 +138,17 @@ pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
 fn imported_line(replica: &str, line: &Imported) -> AnyView {
     let id = line.revision.id;
     view! {
-        <p role="status" class="mt-0">
+        {said(view! {
             <strong>{format!("Replica {replica} imported revision {id} as a dry run.")}</strong>
             " It is not applied: apply it from the card at the top once you have read its changes."
-        </p>
-        <p class="mb-2">
-            {format!("What it changes against the running revision {}:", line.diff.from)}
-        </p>
+        })}
+        <p>{format!("What it changes against the running revision {}:", line.diff.from)}</p>
         {diff_table(&line.diff.changes, (Some(line.diff.from), id))}
     }
     .into_any()
+}
+
+/// The notice of what a replica did, `body` in words.
+pub(crate) fn said(body: impl IntoView + 'static) -> AnyView {
+    notice(Tone::Ok, Announce::Status, None, body).into_any()
 }

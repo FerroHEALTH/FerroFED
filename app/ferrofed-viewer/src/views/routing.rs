@@ -8,13 +8,17 @@
 //! asks the gateway nothing; it names no patient, so it needs no URL of its
 //! own.
 
+use ferrohealth_ui::table::view::Column;
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::status::badge;
+use ferrohealth_ui::view::surface::page_header;
+use ferrohealth_ui::widget::filter::table_filter;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
-use crate::components::{page_header, replica_meta, table_card};
-use crate::styles::{self, Tone};
 use crate::views::model::{RouteRow, RoutingView};
-use crate::views::{ROUTING, load, offset_in_url, pager, shown, titled};
+use crate::views::{ROUTING, load, offset_in_url, pager, replica_line, shown, table, titled};
 
 /// The `creating_system_id` routing table.
 #[component]
@@ -23,10 +27,12 @@ pub fn RoutingPage() -> impl IntoView {
     let filter = RwSignal::new(String::new());
     view! {
         <Title text=titled("Routing") />
-        {page_header("Routing", "Where each creating_system_id routes, and on what ground.", ())}
-        <Transition fallback=|| {
-            view! { <p>"Loading the routing table."</p> }
-        }>
+        {page_header(
+            "Routing",
+            Some(String::from("Where each creating_system_id routes, and on what ground.")),
+            (),
+        )}
+        <Transition fallback=|| busy("Loading the routing table.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| routing_section(view, filter))
             })}
@@ -59,6 +65,14 @@ fn source_tone(source: &str) -> Tone {
     }
 }
 
+/// The columns of the routing table.
+const COLUMNS: [Column; 4] = [
+    Column::text("creating_system_id", "creating_system_id").mono(),
+    Column::text("source", "Source"),
+    Column::text("node", "Node"),
+    Column::text("endpoint", "Endpoint"),
+];
+
 /// The filter, the page of the table it filters, and the pager.
 fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
     let routes_pager = pager(ROUTING, view.offset, view.routes.len(), view.total);
@@ -74,74 +88,47 @@ fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
             })
         })
     });
-    let count = move || {
+    let count = Signal::derive(move || {
         let kept = kept.with(Vec::len);
         format!("{kept} of {on_page} rows on this page.")
-    };
+    });
     let none = move || kept.with(Vec::is_empty);
-    view! {
-        {replica_meta(view.answered_by)}
-        <div class=styles::FILTER>
-            <div class="flex w-full max-w-sm flex-col gap-1">
-                <label for="routing-filter">"Filter"</label>
-                <input
-                    type="search"
-                    id="routing-filter"
-                    name="filter"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-describedby="routing-filter-help"
-                    prop:value=move || filter.get()
-                    on:input:target=move |event| filter.set(event.target().value())
-                />
-            </div>
-            <p id="routing-filter-help" role="status" class="m-0 pb-2 text-xs text-muted">
-                {count}
-            </p>
-        </div>
-        {table_card(
-            "The creating_system_id routing table",
-            view! {
-                <table>
-                    <caption>"The creating_system_id routing table"</caption>
-                    <thead>
+    let answered_by = replica_line(view.answered_by);
+    let body = view! {
+                    <For
+                        each=move || kept.get()
+                        key=|route| route.creating_system_id.clone()
+                        let(route)
+                    >
                         <tr>
-                            <th scope="col">"creating_system_id"</th>
-                            <th scope="col">"Source"</th>
-                            <th scope="col">"Node"</th>
-                            <th scope="col">"Endpoint"</th>
+                            <th scope="row" class="fui-mono">
+                                {route.creating_system_id}
+                            </th>
+                            <td data-label="Source">{badge(source_tone(&route.source), &route.source)}</td>
+                            <td data-label="Node" class="fui-mono">{route.node.unwrap_or_default()}</td>
+                            <td data-label="Endpoint" class="fui-mono">
+                                {route.endpoint.unwrap_or_default()}
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        <For
-                            each=move || kept.get()
-                            key=|route| route.creating_system_id.clone()
-                            let(route)
-                        >
-                            <tr>
-                                <th scope="row" class=styles::ID>
-                                    {route.creating_system_id}
-                                </th>
-                                <td>
-                                    <span class=source_tone(&route.source)
-                                        .badge()>{route.source.clone()}</span>
-                                </td>
-                                <td class=styles::MONO>{route.node.unwrap_or_default()}</td>
-                                <td class=styles::MONO>{route.endpoint.unwrap_or_default()}</td>
-                            </tr>
-                        </For>
-                        <Show when=none>
-                            <tr>
-                                <td colspan="4" class="text-muted">
-                                    "No row on this page matches the filter."
-                                </td>
-                            </tr>
-                        </Show>
-                    </tbody>
-                </table>
-            },
-        )}
-        {routes_pager}
+                    </For>
+                    <Show when=none>
+                        <tr>
+                            <td colspan="4" class="fui-muted">
+                                "No row on this page matches the filter."
+                            </td>
+                        </tr>
+                    </Show>
+    }
+    .into_any();
+    let table = table("The creating_system_id routing table", &COLUMNS, body);
+    let filtered = table_filter("routing-filter", "Filter", filter, count).into_any();
+    view! {
+        {answered_by}
+        <div class="fui-stack">
+            {filtered}
+            {table}
+            {routes_pager}
+        </div>
     }
     .into_any()
 }

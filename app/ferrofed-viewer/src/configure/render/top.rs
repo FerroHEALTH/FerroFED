@@ -7,25 +7,25 @@
 //! confirm and its roll back (§13.1 onward credentials, commit-confirm).
 
 use ferrofed_registry::revision::{Current, Review, RevisionId, Signed};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::notice::{Announce, notice};
+use ferrohealth_ui::view::status::pill;
+use ferrohealth_ui::view::surface::page_header;
 use leptos::prelude::*;
 
 use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden, lede, text};
 use crate::configure::render::{Loaded, ROLLBACK_REASON, author, when};
-use crate::styles::{self, Button};
 
 /// The page's title and its one line, with `pills` at its end.
 pub(super) fn title(pills: impl IntoView) -> impl IntoView {
-    view! {
-        <header class=styles::PAGE_HEADER>
-            <div class="min-w-0">
-                <h1 class=styles::PAGE_TITLE>"Configuration"</h1>
-                <p class=styles::PAGE_SUBTITLE>
-                    "The gateway's settings as revisions: each change is saved, then applied."
-                </p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">{pills}</div>
-        </header>
-    }
+    page_header(
+        "Configuration",
+        Some(String::from(
+            "The gateway's settings as revisions: each change is saved, then applied.",
+        )),
+        pills,
+    )
 }
 
 /// The page header: the revision that runs and, when one is saved and not
@@ -33,19 +33,14 @@ pub(super) fn title(pills: impl IntoView) -> impl IntoView {
 pub(super) fn header(loaded: &Loaded<'_>) -> impl IntoView + use<> {
     let running = loaded.running();
     let runs = match running {
-        Some(running) => {
-            view! { <span class="pill tone-ok">{format!("Revision {running} running")}</span> }
-                .into_any()
-        }
-        None => view! { <span class="pill tone-neutral">"No revision runs"</span> }.into_any(),
+        Some(running) => pill(Tone::Ok, &format!("Revision {running} running")).into_any(),
+        None => pill(Tone::Neutral, "No revision runs").into_any(),
     };
     let saved = loaded
         .standing
         .head
         .filter(|head| Some(*head) != running)
-        .map(|head| {
-            view! { <span class="pill tone-warn">{format!("Revision {head} saved, not applied")}</span> }
-        });
+        .map(|head| pill(Tone::Warn, &format!("Revision {head} saved, not applied")));
     title(view! {
         {runs}
         {saved}
@@ -61,13 +56,13 @@ pub(super) fn rollback(mark: &Current, slot: &'static str) -> AnyView {
     let running = mark.revision;
     form(
         slot,
-        "inline",
+        "",
         view! {
             {hidden("action", String::from("rollback"))}
             {hidden("current", running.to_string())}
             {confirmed(
                 String::from("rollback-confirm"),
-                (String::from("Roll back"), Button::Danger),
+                (String::from("Roll back"), Variant::Danger),
                 (
                     format!(
                         "Roll back revision {running}? The content of revision {previous} is saved and applied in one step.",
@@ -110,9 +105,9 @@ fn awaiting(mark: &Current) -> AnyView {
         when(awaiting.deadline)
     );
     view! {
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-                <h2 id="awaiting-title" class="mt-0 mb-1 text-base font-semibold text-ink">
+        <div class="fui-split">
+            <div>
+                <h2 id="awaiting-title" class="fui-card-title">
                     {format!("Revision {revision} awaits your confirmation")}
                 </h2>
                 {lede(
@@ -120,23 +115,23 @@ fn awaiting(mark: &Current) -> AnyView {
                     "commit-confirm",
                 )}
             </div>
-            <span class="pill tone-warn" role="timer" aria-live="off">
+            <span class="fui-pill fui-tone-warn" role="timer" aria-live="off">
                 <span id="confirm-countdown" data-deadline=deadline.to_string()>
                     {left(deadline)}
                 </span>
             </span>
         </div>
-        <p class="mt-0">{said}</p>
-        <div class="flex flex-wrap gap-2">
+        <p>{said}</p>
+        <div class="fui-cluster">
             {form(
                 "pending",
-                "inline",
+                "",
                 view! {
                     {hidden("action", String::from("confirm"))}
                     {hidden("revision", revision.to_string())}
                     {confirmed(
                         String::from("confirm-confirm"),
-                        (String::from("Confirm"), Button::Primary),
+                        (String::from("Confirm"), Variant::Primary),
                         (
                             format!(
                                 "Confirm revision {revision}? The gateway keeps it and stops the countdown.",
@@ -187,13 +182,13 @@ fn review(review: &Review) -> AnyView {
         let revision = review.revision;
         form(
             "pending",
-            "inline",
+            "",
             view! {
                 {hidden("action", String::from("approve"))}
                 {hidden("revision", revision.to_string())}
                 {confirmed(
                     String::from("approve-confirm"),
-                    (format!("Approve revision {revision}"), Button::Secondary),
+                    (format!("Approve revision {revision}"), Variant::Secondary),
                     (
                         format!(
                             "Approve revision {revision} as an operator other than its author? The approval names you.",
@@ -208,19 +203,11 @@ fn review(review: &Review) -> AnyView {
     view! {
         {confirms
             .map(|said| {
-                view! {
-                    <p class="mt-0 text-sm" role="status">
-                        {said}
-                    </p>
-                }
+                notice(Tone::Info, Announce::Status, None, said)
             })}
         {approval
             .map(|said| {
-                view! {
-                    <p class="mt-0 text-sm" role="status">
-                        {said}
-                    </p>
-                }
+                notice(Tone::Info, Announce::Status, None, said)
             })}
         {approve}
     }
@@ -251,13 +238,13 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
         .map(review);
     let apply = form(
         "pending",
-        "inline",
+        "",
         view! {
             {hidden("action", String::from("apply"))}
             {hidden("revision", head.to_string())}
             {confirmed(
                 String::from("apply-confirm"),
-                (format!("Apply revision {head}"), Button::Primary),
+                (format!("Apply revision {head}"), Variant::Primary),
                 (
                     format!(
                         "Apply revision {head} to the running gateway? Every replica follows it.",
@@ -269,9 +256,9 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
         },
     );
     view! {
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-                <h2 id="pending-title" class="mt-0 mb-1 text-base font-semibold text-ink">
+        <div class="fui-split">
+            <div>
+                <h2 id="pending-title" class="fui-card-title">
                     {heading}
                 </h2>
                 {lede(
@@ -279,7 +266,7 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
                     "what-a-revision-holds",
                 )}
             </div>
-            <div class="flex flex-wrap items-center gap-2">{apply}</div>
+            <div class="fui-cluster">{apply}</div>
         </div>
         {table}
         {review}
@@ -301,8 +288,7 @@ pub(super) fn pending(loaded: &Loaded<'_>) -> AnyView {
     }
     let first = mark.map(awaiting);
     let second = head.map(|head| saved(loaded, head));
-    let between = (awaits && head.is_some())
-        .then(|| view! { <hr class="my-5 border-0 border-t border-line" /> });
+    let between = (awaits && head.is_some()).then(|| view! { <hr /> });
     view! {
         {first}
         {between}

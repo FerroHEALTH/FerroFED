@@ -11,9 +11,10 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 use serde::{Deserialize, Serialize};
 
-use crate::components::page_header;
 use crate::views::model::{Outcome, ViewError};
 use crate::views::{shown, titled};
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::surface::page_header;
 
 /// The self-description view, as the server rendered it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,14 +50,16 @@ pub fn FederationPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| federation());
     view! {
         <Title text=titled("Self-description") />
-        {page_header("Self-description", "What the gateway declares of itself in OPTIONS.", ())}
-        <Suspense fallback=|| {
-            view! { <p>"Loading the self-description."</p> }
-        }>
+        {page_header(
+            "Self-description",
+            Some(String::from("What the gateway declares of itself in OPTIONS.")),
+            (),
+        )}
+        <Suspense fallback=|| busy("Loading the self-description.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
-                    |view| view! { <div class="contents" inner_html=view.html></div> }.into_any(),
+                    |view| view! { <div inner_html=view.html></div> }.into_any(),
                 )
             })}
         </Suspense>
@@ -73,11 +76,25 @@ pub mod render {
     use openehr_federation::options::{GatewayDescription, MemberEndpoint, OptionsRoot};
     use serde::Deserialize;
 
-    use crate::components::status_pill;
-    use crate::highlight;
-    use crate::styles;
     use crate::views::describe::FederationView;
     use crate::views::model::ViewError;
+    use crate::views::state_pill;
+    use ferrohealth_ui::highlight::Language;
+    use ferrohealth_ui::table::model::filled_columns;
+    use ferrohealth_ui::table::view::Column;
+    use ferrohealth_ui::view::code::code_panel;
+    use ferrohealth_ui::view::layout::main_aside;
+    use ferrohealth_ui::view::surface::{definitions, disclosure, stack};
+
+    /// The columns of the declared endpoints.
+    const ENDPOINT_COLUMNS: [Column; 6] = [
+        Column::text("endpoint", "Endpoint"),
+        Column::text("organisation", "Organisation"),
+        Column::text("membership", "Membership"),
+        Column::text("node", "Node"),
+        Column::text("system_id", "system_id").mono(),
+        Column::text("product", "Product"),
+    ];
 
     /// The top-level member that names the manufacturer, beside
     /// `federation` and `endpoints` (Regulation (EU) 2025/327 Art
@@ -113,54 +130,36 @@ pub mod render {
         let document = serde_json::to_string_pretty(description)
             .map_err(|_unwritable| ViewError::Unavailable)?;
         let gateway = &description.federation;
-        let html = view! {
-            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {card("Federation", identity(gateway, description.endpoints.len()), false)}
-                {card("Capabilities", capabilities(gateway), false)}
-                {card("Budgets and paging", budgets(gateway), false)}
-                {card("Manufacturer", manufacturer(description), false)}
-                {card("ITS-REST areas", its_rest(gateway), true)}
-            </div>
+        let html = stack(view! {
+            {main_aside(
+                stack(view! {
+                    {card("Federation", identity(gateway, description.endpoints.len()))}
+                    {card("Capabilities", capabilities(gateway))}
+                }),
+                stack(view! {
+                    {card("Budgets and paging", budgets(gateway))}
+                    {card("Manufacturer", manufacturer(description))}
+                }),
+            )}
+            {card("ITS-REST areas", its_rest(gateway))}
             {endpoints(&description.endpoints)}
-            <details class=format!("{} mt-4", styles::DISCLOSURE)>
-                <summary>"The OPTIONS document"</summary>
-                <div class=styles::DISCLOSURE_BODY>
-                    {highlight::code_block(
-                        String::from("The OPTIONS document"),
-                        highlight::json(&document),
-                    )}
-                </div>
-            </details>
-        }
+            {disclosure(
+                "The OPTIONS document",
+                code_panel("The OPTIONS document", Language::Json, &document),
+            )}
+        })
         .to_html();
         Ok(FederationView { html })
     }
 
-    /// A card titled `title` holding the labelled values `rows`, across
-    /// both columns when `wide`.
-    fn card(title: &'static str, rows: Vec<(&'static str, String)>, wide: bool) -> impl IntoView {
-        let class = if wide {
-            format!("{} lg:col-span-2", styles::CARD_PAD)
-        } else {
-            styles::CARD_PAD.to_owned()
-        };
-        let rows = rows
-            .into_iter()
-            .map(|(label, value)| {
-                view! {
-                    <dt class="text-muted">{label}</dt>
-                    <dd class="m-0 break-words">{value}</dd>
-                }
-            })
-            .collect_view();
-        view! {
-            <section class=class>
-                <h2 class=styles::CARD_TITLE>{title}</h2>
-                <dl class="m-0 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-y-2">
-                    {rows}
-                </dl>
-            </section>
-        }
+    /// A card titled `title` holding the labelled values `rows`.
+    fn card(title: &'static str, rows: Vec<(&'static str, String)>) -> AnyView {
+        let rows = definitions(
+            rows.into_iter()
+                .map(|(label, value)| (label, value.into_any()))
+                .collect(),
+        );
+        ferrohealth_ui::view::surface::card(title, rows).into_any()
     }
 
     /// `offered` in words.
@@ -303,7 +302,11 @@ pub mod render {
     }
 
     /// The member endpoints the description declares, in a table.
-    fn endpoints(endpoints: &[MemberEndpoint]) -> impl IntoView {
+    fn endpoints(endpoints: &[MemberEndpoint]) -> impl IntoView + use<> {
+        let columns = filled_columns(&ENDPOINT_COLUMNS, endpoints, &[], |endpoint, key| {
+            key != "product" || endpoint.product.is_some()
+        });
+        let products = crate::views::has(&columns, "product");
         let rows = endpoints
             .iter()
             .map(|endpoint| {
@@ -314,40 +317,22 @@ pub mod render {
                 };
                 view! {
                     <tr>
-                        <th scope="row" class=styles::MONO>
+                        <th scope="row" class="fui-mono">
                             {endpoint.id.to_string()}
                         </th>
-                        <td>{endpoint.organisation.clone()}</td>
-                        <td>{status_pill(endpoint.status.as_str().to_owned())}</td>
-                        <td class=styles::MONO>{endpoint.node_id.clone().unwrap_or_default()}</td>
-                        <td class=styles::MONO>{endpoint.system_id.clone().unwrap_or_default()}</td>
-                        <td>{product}</td>
+                        <td data-label="Organisation">{endpoint.organisation.clone()}</td>
+                        <td data-label="Membership">{state_pill(endpoint.status.as_str())}</td>
+                        <td data-label="Node" class="fui-mono">
+                            {endpoint.node_id.clone().unwrap_or_default()}
+                        </td>
+                        <td data-label="system_id" class="fui-mono">
+                            {endpoint.system_id.clone().unwrap_or_default()}
+                        </td>
+                        {products.then(|| view! { <td data-label="Product">{product}</td> })}
                     </tr>
                 }
             })
             .collect_view();
-        view! {
-            <div
-                class=styles::TABLE_SCROLL
-                role="region"
-                aria-label="Declared endpoints"
-                tabindex="0"
-            >
-                <table>
-                    <caption>"Declared endpoints"</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">"Endpoint"</th>
-                            <th scope="col">"Organisation"</th>
-                            <th scope="col">"Membership"</th>
-                            <th scope="col">"Node"</th>
-                            <th scope="col">"system_id"</th>
-                            <th scope="col">"Product"</th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows}</tbody>
-                </table>
-            </div>
-        }
+        crate::views::table("Declared endpoints", &columns, rows.into_any())
     }
 }

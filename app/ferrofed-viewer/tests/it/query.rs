@@ -180,7 +180,9 @@ pub(crate) async fn answered(
 
 /// Whether `html` holds the endpoint row of `id` with `status`.
 fn reports(html: &str, id: &str, status: &str) -> bool {
-    html.contains(&format!(r#"<th scope="row">{id}</th><td>{status}</td>"#))
+    html.contains(&format!(
+        r#"<th scope="row" class="fui-mono">{id}</th><td data-label="Status">{status}</td>"#
+    ))
 }
 
 #[tokio::test]
@@ -275,7 +277,7 @@ async fn a_refused_query_shows_its_status_and_stable_code() -> Result<(), Box<dy
     assert_eq!(Some(400), answer.status);
     assert!(!answer.complete);
     let html = &answer.html;
-    assert!(html.contains(r#"<p role="alert">"#), "{html}");
+    assert!(html.contains(r#"role="alert""#), "{html}");
     assert!(
         html.contains("The gateway refused this view: 400 (aql-not-federable)."),
         "{html}"
@@ -415,10 +417,7 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
         assert_eq!(StatusCode::OK, response.status(), "{body}: {text}");
         let answer: RenderedAnswer = serde_json::from_str(&text)?;
         assert_eq!(None, answer.status, "{body}");
-        assert!(
-            answer.html.contains(r#"<p role="alert">"#),
-            "{body}: {text}"
-        );
+        assert!(answer.html.contains(r#"role="alert""#), "{body}: {text}");
         assert!(!text.contains(PATIENT), "{body}: {text}");
     }
     let asked = gateway
@@ -516,7 +515,7 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
         let id = format!("query-endpoint-{index}");
         assert!(
             page.contains(&format!(
-                r#"<label for="{id}" class="chip"><input type="checkbox" id="{id}" name="form[endpoints]" value="{endpoint}">"#
+                r#"<label for="{id}" class="fui-chip-check"><input type="checkbox" id="{id}" name="form[endpoints]" value="{endpoint}">"#
             )),
             "{endpoint}: {page}"
         );

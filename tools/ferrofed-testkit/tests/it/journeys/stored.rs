@@ -38,7 +38,7 @@ fn titled(section: &str) -> String {
 
 /// The header of the namespace card titled `namespace`.
 fn card_header(namespace: &str) -> String {
-    format!("//section[@aria-label = 'Namespaces']//header[h2[normalize-space(.) = '{namespace}']]")
+    format!("//section[@aria-label = 'Namespaces']//div[h2[normalize-space(.) = '{namespace}']]")
 }
 
 /// Waits for the pager of the page of the list that starts at `offset`, of
@@ -100,12 +100,12 @@ async fn the_stored_queries_are_listed_by_namespace_and_paged() -> Result<(), Bo
         assert!(!other.contains("read-only"), "{other}");
         let total = held()?;
         list_page(browser, 0, total).await?;
-        browser.follow("Next page").await?;
+        browser.follow("Next").await?;
         list_page(browser, PAGE, total).await?;
         browser
             .at(&stack.url(&format!("/stored-queries?offset={PAGE}")))
             .await?;
-        browser.follow("Previous page").await?;
+        browser.follow("Previous").await?;
         list_page(browser, 0, total).await?;
         let text = browser.driver().source().await?;
         assert!(
@@ -135,10 +135,10 @@ async fn the_detail_shows_each_version_the_switch_names() -> Result<(), Box<dyn 
             .click()
             .await?;
         browser.titled(&titled(VERSIONED)).await?;
-        browser.text("span", "Version 1.0.0, stored").await?;
+        browser.text("p", "Version 1.0.0, stored").await?;
         browser
             .element(By::XPath(
-                "//pre[contains(@class, 'code-block')]//span[@class = 'tok-parameter' and . = '$patient']",
+                "//div[contains(@class, 'fui-code-panel')]//span[@class = 'fui-tok-parameter' and . = '$patient']",
             ))
             .await?;
         browser
@@ -156,7 +156,7 @@ async fn the_detail_shows_each_version_the_switch_names() -> Result<(), Box<dyn 
             .click()
             .await?;
         browser
-            .text("span", &format!("Version {SECOND_VERSION}, stored"))
+            .text("p", &format!("Version {SECOND_VERSION}, stored"))
             .await?;
         browser
             .at(&stack.url(&format!(
@@ -164,7 +164,7 @@ async fn the_detail_shows_each_version_the_switch_names() -> Result<(), Box<dyn 
             )))
             .await?;
         let code = browser
-            .element(By::XPath("//pre[contains(@class, 'code-block')]"))
+            .element(By::XPath("//div[contains(@class, 'fui-code-panel')]"))
             .await?
             .text()
             .await?;

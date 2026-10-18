@@ -685,7 +685,7 @@ mod tests {
                 .await
                 .expect("the body");
             let body = String::from_utf8(body.to_vec()).expect("UTF-8");
-            assert!(body.contains(r#"<p role="alert""#), "{path}: {body}");
+            assert!(body.contains(r#"role="alert""#), "{path}: {body}");
             assert!(body.contains("session store"), "{path}: {body}");
             assert!(!body.contains(r#"href="/login""#), "{path}: {body}");
             assert!(!body.contains("<nav"), "{path}: {body}");

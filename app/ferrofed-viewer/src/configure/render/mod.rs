@@ -326,7 +326,7 @@ fn tabs(current: Tab) -> impl IntoView {
                     href=tab.href()
                     id=tab.id()
                     role="tab"
-                    class=crate::styles::TAB
+                    class="fui-tab"
                     aria-selected=if selected { "true" } else { "false" }
                     aria-controls="config-panel"
                     tabindex=if selected { "0" } else { "-1" }
@@ -337,7 +337,7 @@ fn tabs(current: Tab) -> impl IntoView {
         })
         .collect_view();
     view! {
-        <div role="tablist" aria-label="Configuration" class=crate::styles::TABS data-tabs="">
+        <div role="tablist" aria-label="Configuration" class="fui-tabs" data-tabs="">
             {links}
         </div>
     }
