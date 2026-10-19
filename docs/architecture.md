@@ -1170,7 +1170,10 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   client-credentials grant at the same token endpoint. The caller's token
   reaches that authorization server alone, never a node; one whose text or
   JWS payload carries a withheld identifier is not sent (N33). It is
-  preferred where available and is the FerroSMART target;
+  preferred where available. The deployment's own authorization server
+  issues it, because each FerroHEALTH product is its own resource server and
+  no central service holds the signing key every product's access depends on
+  (owner decision, 2026-10-19);
 - **DPoP** (built with #439, moved onto the client with #448): an `oauth2`
   grant with a `dpop_key_file` (a P-256 or P-384 key) binds its tokens to
   that key (RFC 9449). A bound token is `openehr-its`'s `Credentials::Dpop`,
