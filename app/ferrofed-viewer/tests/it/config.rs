@@ -29,6 +29,7 @@ fn the_defaults_resolve_to_a_console_on_loopback_without_sign_in() -> Result<(),
     assert_eq!("127.0.0.1:3000", settings.listen.to_string());
     assert_eq!("http://127.0.0.1:8080/", settings.gateway.base.as_str());
     assert_eq!(Duration::from_secs(30), settings.gateway.timeout);
+    assert_eq!("en", settings.locale.tag(), "English unless configured");
     assert!(settings.session.secure_cookie);
     assert!(settings.oidc.is_none());
     Ok(())
@@ -308,6 +309,15 @@ fn a_listen_address_that_does_not_parse_is_refused() {
     let error = refused("[server]\nlisten = \"localhost\"\n");
     assert!(
         matches!(&error, error::Error::Address { key, .. } if key == "server.listen"),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_locale_that_is_no_language_tag_is_refused() {
+    let error = refused("[server]\nlocale = \"not a tag\"\n");
+    assert!(
+        matches!(&error, error::Error::Locale { key, .. } if key == "server.locale"),
         "{error:?}"
     );
 }

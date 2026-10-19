@@ -44,6 +44,8 @@ secrecy.workspace = true
 # The FerroHEALTH components every view is drawn with, their icons and their
 # stylesheet: the server renders them and the browser hydrates them.
 ferrohealth-ui.workspace = true
+# The console's own string catalogs under locales/, in both halves.
+fluent-templates.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }

@@ -18,6 +18,7 @@ use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{
     Field as FormField, INPUT, SELECT, SWITCH, described_by, error_id,
 };
+use ferrohealth_ui::view::layout::{FieldRow, keyed_field_row};
 use leptos::prelude::*;
 
 use crate::configure::plan::removal_reason;
@@ -341,8 +342,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
     let into = setting_field(row, "list");
     let item = |item: &str, value: String| {
         let id = format!("{into}-{item}");
-        view! {
-            <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
+        let body = view! {
                 {FormField::new(id.clone(), "Value")
                     .label_hidden()
                     .view(view! {
@@ -356,8 +356,8 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
                         />
                     })}
                 {remove_button(&format!("{id}-row"), String::from("Remove this value"))}
-            </div>
-        }
+        };
+        keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
     };
     let items = values
         .into_iter()

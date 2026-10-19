@@ -14,7 +14,11 @@
 # The bundle is target/site: pkg/ferrofed-viewer.wasm, its JavaScript glue
 # and the favicon cargo-leptos copies from the crate's public/; the server
 # serves the stylesheet itself. The server binary is built apart from it,
-# with cargo, because the bundle is the same for every architecture.
+# with cargo, because the bundle is the same for every architecture. A
+# release build that succeeds writes the digests of the WebAssembly and its
+# glue to target/viewer-site.sha256, which scripts/checks/viewer-bundle.sh
+# and scripts/checks/viewer-paths.sh read; the build removes it first, so a
+# failed or a debug build leaves no stamp and a stale bundle is never read.
 #
 # Usage: scripts/release/viewer-site.sh [--release]
 set -Eeuo pipefail
@@ -29,6 +33,9 @@ case "${1:-}" in
     exit 2
     ;;
 esac
+
+stamp="$root/target/viewer-site.sha256"
+rm -f -- "$stamp"
 
 if ! cargo metadata --locked --format-version 1 \
   --manifest-path "$viewer/Cargo.toml" > /dev/null; then
@@ -79,4 +86,8 @@ for file in pkg/ferrofed-viewer.wasm pkg/ferrofed-viewer.js favicon.ico; do
   fi
 done
 [ "$missing" -eq 0 ] || exit 1
+if [ "${1:-}" = "--release" ]; then
+  if command -v sha256sum > /dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
+  (cd "$root/target/site/pkg" && "${sum[@]}" ferrofed-viewer.wasm ferrofed-viewer.js) > "$stamp"
+fi
 echo "viewer-site: the bundle is in target/site"
