@@ -340,9 +340,9 @@ fn counted_u64(count: u64) -> String {
     }
 }
 
-/// One cell of a row under the column `label`, which the gateway names by
-/// `path`: a date-time drawn for reading, anything else as it came.
-fn cell(value: &str, label: &str, path: Option<&str>) -> AnyView {
+/// One cell of a row under the column `label`: a date-time drawn for
+/// reading, anything else as it came.
+fn cell(value: &str, label: &str) -> AnyView {
     // NOTE: no specification governs this: our own design; only a value the
     // shared reading changes is a date-time, so other text keeps its wrapping.
     let shown = if reading(value) == value {
@@ -351,7 +351,7 @@ fn cell(value: &str, label: &str, path: Option<&str>) -> AnyView {
         timestamp(value).into_any()
     };
     view! {
-        <td data-label=label.to_owned() title=path.map(str::to_owned)>
+        <td data-label=label.to_owned()>
             {shown}
         </td>
     }
@@ -361,7 +361,7 @@ fn cell(value: &str, label: &str, path: Option<&str>) -> AnyView {
 /// The rows, under the columns as the gateway renders them (§9.4), in the
 /// library's data table, [`PAGE_ROWS`] to a `tbody`, of which the page shows
 /// one at a time; on a phone every row stacks as a card, each cell named by
-/// its column, and the column's path is each cell's title.
+/// its column, and the column's path is its header's title.
 fn rows_section(answer: &QueryAnswer) -> AnyView {
     if answer.rows.is_empty() {
         return view! { <p class="fui-muted">"No rows."</p> }.into_any();
@@ -370,12 +370,21 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
         .columns
         .iter()
         .enumerate()
-        .map(|(index, column)| Column::owned(format!("c{index}"), heading(index, column)))
-        .collect::<Vec<_>>();
-    let paths = answer
-        .columns
-        .iter()
-        .map(|column| column.path.as_deref().filter(|path| !path.is_empty()))
+        .map(|(index, column)| {
+            let words = heading(index, column);
+            // NOTE: no specification governs this: our own design; a header
+            // whose words are already the path carries no title repeating it.
+            let path = column
+                .path
+                .as_deref()
+                .filter(|path| !path.is_empty() && *path != words)
+                .map(str::to_owned);
+            let shown = Column::owned(format!("c{index}"), words);
+            match path {
+                Some(path) => shown.titled(path),
+                None => shown,
+            }
+        })
         .collect::<Vec<_>>();
     let size = usize::try_from(PAGE_ROWS).unwrap_or(usize::MAX);
     let pages = answer
@@ -388,8 +397,8 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
                 .map(|row| {
                     let cells = row
                         .iter()
-                        .zip(columns.iter().zip(&paths))
-                        .map(|(value, (column, path))| cell(value, &column.label, *path))
+                        .zip(&columns)
+                        .map(|(value, column)| cell(value, &column.label))
                         .collect_view();
                     view! { <tr>{cells}</tr> }
                 })
@@ -700,6 +709,10 @@ mod tests {
         let html = answered(&positional).to_html();
         assert!(html.contains(">c/uid/value</th>"), "{html}");
         assert!(
+            !html.contains(r#"title="c/uid/value""#),
+            "a header whose words are its path repeats it in no title: {html}"
+        );
+        assert!(
             html.contains(">&lt;/th&gt;&lt;script&gt;x&lt;/script&gt;</th>"),
             "{html}"
         );
@@ -734,10 +747,13 @@ mod tests {
             "{html}"
         );
         assert!(
-            html.contains(
-                r#"<td data-label="composition_id" title="c/uid/value">8849182a::cdr1.rso.nl::1</td>"#
-            ),
+            html.contains(r#"<td data-label="composition_id">8849182a::cdr1.rso.nl::1</td>"#),
             "{html}"
+        );
+        assert!(
+            html.contains(r#"<th scope="col" title="c/uid/value""#)
+                && html.matches(r#"title="c/uid/value""#).count() == 1,
+            "the column's path is its header's title, not each cell's: {html}"
         );
         assert!(
             html.contains(r#"<time datetime="2026-10-05T08:00:00Z" title="2026-10-05T10:00:00+02:00" class="fui-time">2026-10-05 08:00:00 UTC</time>"#),
