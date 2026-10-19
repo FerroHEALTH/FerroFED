@@ -52,8 +52,8 @@ pub struct QueryForm {
 /// served from a cursor only where the gateway declares one (§11.6.2, N39).
 pub const PAGE_ROWS: u32 = 25;
 
-/// The id of the answer's rows table, whose `tbody` elements, one a page,
-/// the page shows one at a time.
+/// The id of the box that holds the answer's rows table, whose `tbody`
+/// elements, one a page, the page shows one at a time.
 pub const ROWS_TABLE: &str = "query-rows";
 
 impl fmt::Debug for QueryForm {

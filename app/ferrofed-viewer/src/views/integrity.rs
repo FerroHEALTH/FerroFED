@@ -26,6 +26,8 @@ use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::{card, grid_start};
 use ferrohealth_ui::view::surface::{page_header, stack};
 #[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::time::timestamp;
+#[cfg(not(target_arch = "wasm32"))]
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_meta::Title;
@@ -215,8 +217,8 @@ fn incidents_table(rows: &[&IncidentRow], resolved: bool) -> AnyView {
             };
             view! {
                 <tr>
-                    <td data-label="At" class="fui-mono">
-                        {row.at.clone()}
+                    <td data-label="At">
+                        {timestamp(&row.at)}
                     </td>
                     <th scope="row">{row.kind.clone()}</th>
                     <td data-label="Description">{row.description.clone()}</td>
@@ -247,8 +249,8 @@ fn cleared_section(cleared: &[ClearedRow]) -> AnyView {
         .map(|cleared| {
             view! {
                 <tr>
-                    <td data-label="Cleared at" class="fui-mono">
-                        {cleared.at.clone()}
+                    <td data-label="Cleared at">
+                        {timestamp(&cleared.at)}
                     </td>
                     <th scope="row" class="fui-mono">
                         {cleared.ehr_id.clone().unwrap_or_else(|| String::from("not a bare UUID"))}

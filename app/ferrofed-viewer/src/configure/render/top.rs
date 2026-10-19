@@ -12,10 +12,11 @@ use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
 use ferrohealth_ui::view::surface::page_header;
+use ferrohealth_ui::view::time::{reading, timestamp};
 use leptos::prelude::*;
 
 use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden, lede, text};
-use crate::configure::render::{Loaded, ROLLBACK_REASON, author, when};
+use crate::configure::render::{Loaded, ROLLBACK_REASON, author};
 
 /// The page's title and its one line, with `pills` at its end.
 pub(super) fn title(pills: impl IntoView) -> impl IntoView {
@@ -99,11 +100,8 @@ fn awaiting(mark: &Current) -> AnyView {
     };
     let revision = mark.revision;
     let deadline = awaiting.deadline.as_millisecond();
-    let said = format!(
-        "It changed {}. Unless an operator confirms it by {}, the gateway rolls it back.",
-        awaiting.resources.join(", "),
-        when(awaiting.deadline)
-    );
+    let changed = awaiting.resources.join(", ");
+    let by = timestamp(&awaiting.deadline.to_string());
     view! {
         <div class="fui-split">
             <div>
@@ -121,7 +119,10 @@ fn awaiting(mark: &Current) -> AnyView {
                 </span>
             </span>
         </div>
-        <p>{said}</p>
+        <p>
+            "It changed "{changed}". Unless an operator confirms it by "{by}
+            ", the gateway rolls it back."
+        </p>
         <div class="fui-cluster">
             {form(
                 "pending",
@@ -149,7 +150,11 @@ fn awaiting(mark: &Current) -> AnyView {
 
 /// Who signed `signed`, and when, in words.
 fn signed_said(signed: &Signed) -> String {
-    format!("{} at {}", author(&signed.by), when(signed.at))
+    format!(
+        "{} at {}",
+        author(&signed.by),
+        reading(&signed.at.to_string())
+    )
 }
 
 /// What `review` says the saved revision takes before and after it applies,

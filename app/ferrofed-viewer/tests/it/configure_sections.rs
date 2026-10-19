@@ -122,7 +122,12 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         body.contains("Revision 2 awaits your confirmation"),
         "{body}"
     );
-    assert!(body.contains("2026-10-15 09:02 UTC"), "{body}");
+    assert!(
+        body.contains(
+            r#"title="2026-10-15T09:02:00Z" class="fui-time">2026-10-15 09:02:00 UTC</time>"#
+        ),
+        "the deadline reads in UTC, the instant as sent in its title: {body}"
+    );
     assert!(body.contains(r#"id="confirm-countdown""#), "{body}");
     assert!(body.contains("Approve revision 3"), "{body}");
     assert!(body.contains("Approved by: none yet"), "{body}");

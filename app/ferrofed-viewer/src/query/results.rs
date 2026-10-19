@@ -218,7 +218,7 @@ fn show_page(rows: NodeRef<leptos::html::Div>, to: u32) {
         let Some(rows) = rows.get_untracked() else {
             return;
         };
-        let selector = format!("#{}", crate::query::model::ROWS_TABLE);
+        let selector = format!("#{} table", crate::query::model::ROWS_TABLE);
         let Ok(Some(table)) = rows.query_selector(&selector) else {
             return;
         };

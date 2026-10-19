@@ -215,10 +215,10 @@ async fn the_integrity_view_lists_the_collisions_cleared_recently_newest_first()
         "{body}"
     );
     let newer = body
-        .find(r#"<td data-label="Cleared at" class="fui-mono">2026-10-05T10:00:00Z</td><th scope="row" class="fui-mono">not a bare UUID</th><td data-label="Members that claimed it">node-a, node-c</td>"#)
+        .find(r#"<td data-label="Cleared at"><time datetime="2026-10-05T10:00:00Z" title="2026-10-05T10:00:00Z" class="fui-time">2026-10-05 10:00:00 UTC</time></td><th scope="row" class="fui-mono">not a bare UUID</th><td data-label="Members that claimed it">node-a, node-c</td>"#)
         .ok_or("the newer clear")?;
     let older = body
-        .find(r#"<td data-label="Cleared at" class="fui-mono">2026-10-05T09:00:00Z</td><th scope="row" class="fui-mono">7d44b88c-4199-4bad-97dc-d78268e01398</th><td data-label="Members that claimed it">node-a, node-b</td>"#)
+        .find(r#"<td data-label="Cleared at"><time datetime="2026-10-05T09:00:00Z" title="2026-10-05T09:00:00Z" class="fui-time">2026-10-05 09:00:00 UTC</time></td><th scope="row" class="fui-mono">7d44b88c-4199-4bad-97dc-d78268e01398</th><td data-label="Members that claimed it">node-a, node-b</td>"#)
         .ok_or("the older clear")?;
     assert!(newer < older, "newest first: {body}");
     assert!(
