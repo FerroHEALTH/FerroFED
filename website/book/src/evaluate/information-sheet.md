@@ -256,12 +256,16 @@ the month and the year", specified "at the time of purchase", and its Annex
 II, point 7, puts "the end-date of the support period" in the information
 to the user.
 
-The manufacturer gives every release placed on the market from 11 December
-2027 a support period of at least five years, the minimum of Art 13(8),
-with its end date published.
+Only the newest release is supported: every earlier release stops
+receiving fixes when a new one is published, and upgrading is free. For
+every release placed on the market from 11 December 2027, the manufacturer
+keeps publishing security fixes, in new releases, for at least five years,
+the minimum of Art 13(8), and ships them only in the newest release
+(Art 13(10)), with the end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
-lists every release with its support period, five years from its release
-date, and its end date. FerroFED 0.0.11 is supported until 2031-10-16.
+lists every release with the date until which fixes are published, five
+years from its release date. For FerroFED 0.0.11 that date is 2031-10-16;
+0.0.11 itself is supported while it is the newest release.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).
 

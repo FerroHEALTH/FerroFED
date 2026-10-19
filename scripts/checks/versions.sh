@@ -416,7 +416,7 @@ support_rows() {
       stale=1
     fi
     if [[ "$end" != "$(support_end "$date")" ]]; then
-      bad "$security says v$version is supported until $end; five years from $date is $(support_end "$date")"
+      bad "$security says fixes for v$version are published until $end; five years from $date is $(support_end "$date")"
       stale=1
     fi
   done < <(grep -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$log" || true)
@@ -758,7 +758,7 @@ RECORDS
   printf '%s\n' '## [Unreleased]' '' '## [0.0.10] - 2028-02-29' '' '## [0.0.9] - 2026-10-05' '' \
     '## [0.0.1] - 2026-10-01' '' '## [0.0.1-rc.1] - 2026-10-01' > "$work/supported.md"
   printf '%s\n' '## [0.0.9]' > "$work/undated.md"
-  local table='| Release | Released | Supported until |\n| ------- | -------- | --------------- |\n'
+  local table='| Release | Released | Fixes published until |\n| ------- | -------- | --------------- |\n'
   local marker='<!-- support periods: rows above this line -->'
   local name rows
   while IFS='~' read -r name rows; do

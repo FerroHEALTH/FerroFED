@@ -220,7 +220,7 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
     // period is stated, and a notification is displayed once it is reached.
     let support = match deployment.support {
         Support::NoPeriod => "none, this build is no release".to_owned(),
-        Support::Until(end) => format!("until {end}"),
+        Support::Until(end) => format!("newest release only, fixes until {end}"),
         Support::Ended(end) => format!("ended on {end}"),
     };
     line(&mut out, "Support", &support);

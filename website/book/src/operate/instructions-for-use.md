@@ -280,7 +280,7 @@ event, and its frequency is the event's:
 
 | Maintenance | When | Reference |
 |---|---|---|
-| Upgrade to the newest release | at each release, and as soon as you can after a security advisory: a security fix ships as its own patch release on each supported line, so move to the security patch release of your line | [Upgrading](upgrading.md), [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) |
+| Upgrade to the newest release | at each release, and as soon as you can after a security advisory: only the newest release is supported, and a security fix ships only in a new release | [Upgrading](upgrading.md), [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) |
 | Run `config check` | before every start, reload and upgrade | [Running it](configuration.md#running-it) |
 | Re-run `ferrofed admission check` for a member | when the member changes its CDR product, its version, its `system_id` or how it creates `ehr_id`s | [Admitting a node](admission.md) |
 | Update the category map | when a member adds or changes a template | [`[access_log]`](access-log.md#access_log) |
@@ -289,7 +289,7 @@ event, and its frequency is the event's:
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
 | Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
 | Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
-| Move to a supported release | before the end date of your release's support period in `SECURITY.md`; once it has passed, the startup banner and `config check` say so | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
+| Move to the newest release | when a new release is published, because an earlier release receives no fix; once the end date of your release in `SECURITY.md` has passed, the startup banner and `config check` say so as well | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
 | Confirm an applied change to an onward credential or a binding section | under `config.ui = "managed"`, within `config.confirm_ms` (120000 ms by default) of the apply, once the gateway works with it; unconfirmed, it is rolled back | [Commit-confirm](configuration-revisions.md#commit-confirm) |
 | Bring a replica back in step | when `FerroFEDConfigurationDrift` fires: fix what the replica refused, then send it `SIGHUP` or apply a newer revision | [Several replicas](configuration-revisions.md#several-replicas) |
 | Back up the configuration revisions | under `config.ui = "managed"`, with the stored-query store and before every upgrade: the `redb` file or the PostgreSQL database, and the files of `config.secrets_dir` | [Turning it on](configuration-revisions.md#turning-it-on) |

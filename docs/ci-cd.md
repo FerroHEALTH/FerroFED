@@ -25,10 +25,10 @@ has run on every change since the workspace landed.
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `ci.yml` | push to `main`, pull request into `main` or a maintenance branch, merge group, dispatch | the two tiers below and the `conclusion` check |
+| `ci.yml` | push to `main`, pull request into `main` or a security patch branch, merge group, dispatch | the two tiers below and the `conclusion` check |
 | `contribution-licence.yml` | pull request opened, edited, reopened or synchronized | `contribution-licence-guard`: the pull request body accepts the contribution terms |
 | `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
-| `codeql.yml` | push to `main` and pull request into `main` or a maintenance branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
+| `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |
@@ -486,9 +486,9 @@ that makes it stale refreshes it in the same pull request (#143).
 ## Triggers and concurrency
 
 `ci.yml` runs on `push` to `main`, `pull_request` against `main` or a
-maintenance branch `release/<major>.<minor>.x`, `merge_group` and
-`workflow_dispatch`. A maintenance branch carries a security patch release
-([`release.md`](release.md#cutting-a-security-patch-release)); a push to it
+security patch branch `release/<major>.<minor>.x`, `merge_group` and
+`workflow_dispatch`. A patch branch carries a security patch of the newest
+release ([`release.md`](release.md#cutting-a-security-patch-release)); a push to it
 runs nothing, because zizmor's cache-poisoning audit reads a push trigger on
 a release branch as a release lane, so the pull request's run is its gate.
 `label-guards.yml` and `codeql.yml` take the same branches. A pull request's

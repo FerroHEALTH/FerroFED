@@ -4,10 +4,11 @@
 //! The support period of the running release, compiled in by the release
 //! build.
 //!
-//! Regulation (EU) 2024/2847 Art 13(8) gives each release a support period
-//! of at least five years, and Art 13(19) has the manufacturer state its end
-//! date and, where technically feasible, display a notification once the
-//! release has reached it. The release lane sets `FERROFED_RELEASE_DATE` to
+//! Regulation (EU) 2024/2847 Art 13(8) has Cadasto B.V. keep publishing
+//! security fixes for at least five years after each release, shipped only
+//! in the newest release (Art 13(10)), so a release is supported only while
+//! it is the newest. Art 13(19) has the manufacturer state the end date and,
+//! where technically feasible, display a notification once it is reached. The release lane sets `FERROFED_RELEASE_DATE` to
 //! the date the release's changelog section carries, and the end date is
 //! that date [`SUPPORT_YEARS`] years on, the date `SECURITY.md` lists for
 //! the release. A development build and a pre-release are built without it
@@ -65,8 +66,10 @@ pub enum Support {
     /// The build has no support period: a development build or a
     /// pre-release.
     NoPeriod,
-    /// The release is supported until the date, inclusive, and the day it
-    /// is judged on is not past it.
+    /// Fixed releases are published until the date, inclusive, and the day
+    /// it is judged on is not past it.
+    ///
+    /// The release itself is supported only while it is the newest.
     Until(Date),
     /// The release's support period ended on the date, before the day it
     /// is judged on.
@@ -98,7 +101,7 @@ impl Support {
         match self {
             Self::Ended(end) => Some(format!(
                 "FerroFED v{version} is past its support period, which ended on {end}: \
-                 it receives no security fixes, so move to the latest patch release of a supported line"
+                 it receives no security fixes, so upgrade to the newest release"
             )),
             Self::NoPeriod | Self::Until(_) => None,
         }
@@ -221,7 +224,7 @@ mod tests {
         assert_eq!(
             Some(
                 "FerroFED v0.0.9 is past its support period, which ended on 2031-10-05: \
-                 it receives no security fixes, so move to the latest patch release of a supported line"
+                 it receives no security fixes, so upgrade to the newest release"
                     .to_owned()
             ),
             ended.notice("0.0.9")

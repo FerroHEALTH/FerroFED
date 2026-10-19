@@ -123,7 +123,8 @@ The circumstances that lead to the most severe ones:
   ([Admitting a node](../operate/admission.md));
 - keeping the audit spool on an unencrypted volume
   ([The audit spool](../operate/hardening.md#the-audit-spool));
-- running a release past the end date of its support period (point 7).
+- running a release that is not the newest, which receives no fix
+  (point 7).
 
 ## 6. The EU declaration of conformity
 
@@ -143,16 +144,21 @@ vulnerabilities to be handled and to receive security updates;"
 
 The type of support is the manufacturer's, described on the family book's
 [How a fix reaches you](https://ferrohealth.eu/docs/security.html#how-a-fix-reaches-you).
-For FerroFED, a security fix ships as its own patch release on each
-supported line, the releases that share a `<major>.<minor>` version, with
-no feature changes in it. A user of an older release within its support
-period moves to the security patch release of its line to get the fix
+Only the newest release of FerroFED is supported. When a new release is
+published, every earlier release stops receiving fixes: there are no
+maintenance branches, no long-term-support line and no backports. A
+security fix ships in a new release, a patch release with no feature
+changes in it, and a user of an older release upgrades to the newest
+release, free of charge, to get the fix
 ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
-Each release is supported for five years from its release date. The end
-dates, as `SECURITY.md` lists them:
+Cadasto B.V. keeps publishing security fixes, in new releases, for at least
+five years after each release (Art 13(8)), and ships them only in the
+newest release (Art 13(10)). The end date of each release is the date until
+which that commitment runs; the release itself is supported only while it
+is the newest. The end dates, as `SECURITY.md` lists them:
 
-| Release | Released | Supported until |
+| Release | Released | Fixes published until |
 |---|---|---|
 | v0.0.1 | 2026-10-01 | 2031-10-01 |
 | v0.0.3 | 2026-10-02 | 2031-10-02 |

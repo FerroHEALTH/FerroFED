@@ -113,8 +113,8 @@ crates move to 0.0.87 with `fhirconnect` 0.1.117, on one copy of the
 family, and a received document's category comes from its template (#714,
 #1028). The CRA documents land: the cybersecurity risk assessment, the
 information to the user, decommissioning and the Annex VII index (#1058,
-#1059, #1063, #1065), with security fixes as patch releases cut from a
-supported line's last tag (#1064, #1087); beside them the Annex II
+#1059, #1063, #1065), with security fixes as patch releases cut from the
+newest release's tag (#1064, #1087); beside them the Annex II
 checklist, the technical documentation, the declaration script and the
 economic-operator register (#941, #671, #940, #787). And the fixes: an
 unresolved member named on the FHIR face (#1104, #1107), reloads that say

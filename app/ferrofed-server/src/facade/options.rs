@@ -23,8 +23,8 @@
 //! The manufacturer is named at the top level, beside `federation` and
 //! `endpoints`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR
 //! system. Beside it, `supported_until` names the last day of the
-//! release's support period, or is `null` for a build with none (Regulation
-//! (EU) 2024/2847 Art 13(19)). The issuers declared national contact points
+//! release's support period, until which fixed releases are published, or
+//! is `null` for a build with none (Regulation (EU) 2024/2847 Art 13(19)). The issuers declared national contact points
 //! are declared under `federation.national_contact_point`
 //! ([`ContactPoints`]), with how their requests are served.
 
@@ -110,6 +110,9 @@ pub const MANUFACTURER: &str = "manufacturer";
 /// The top-level member that names the last day of the running release's
 /// support period, beside the manufacturer, or `null` for a build with none
 /// (Regulation (EU) 2024/2847 Art 13(19)).
+///
+/// Fixed releases are published until that day; the release itself is
+/// supported only while it is the newest.
 // NOTE: Regulation (EU) 2024/2847 Art 13(19) has the end date specified by digital
 // means, and options-root.schema.json leaves the top level open for it.
 pub const SUPPORTED_UNTIL: &str = "supported_until";

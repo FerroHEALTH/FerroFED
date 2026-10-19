@@ -27,8 +27,9 @@
 #       Changelog order; moves
 #       the [Unreleased] link reference on and adds the version's; then
 #       `git rm`s the fragments. A release without a pre-release suffix also
-#       gets its support period: the section opens with the end date, five
-#       years from <date>, and SECURITY.md gets the version's row in its
+#       gets its support period: the section opens with the date until which
+#       security fixes are published in the newest release, five years from
+#       <date>, and SECURITY.md gets the version's row in its
 #       support table (Regulation (EU) 2024/2847 Art 13(8), (19)); the end
 #       date is printed. Exit 1 on any defect, with nothing written.
 #   changelog.sh --self-test
@@ -218,7 +219,7 @@ assemble() {
     sed -n "1,${start}p" CHANGELOG.md
     printf '\n## [%s] - %s\n' "$version" "$date"
     if [[ -n "$support_end_date" ]]; then
-      printf '\nSupported until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
+      printf '\nSecurity fixes until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
         "$support_end_date" "$SUPPORT_YEARS" "$base"
     fi
     for section in "${SECTIONS[@]}"; do
@@ -253,7 +254,7 @@ assemble() {
   fi
   echo "changelog: [$version] - $date assembled from ${#fragments[@]} fragment(s) and the [Unreleased] entries; review CHANGELOG.md and commit."
   if [[ -n "$support_end_date" ]]; then
-    echo "changelog: v$version is supported until $support_end_date ($SUPPORT_YEARS years from $date); its row is added to SECURITY.md."
+    echo "changelog: security fixes are published until $support_end_date ($SUPPORT_YEARS years from $date), in the newest release; the row of v$version is added to SECURITY.md."
   else
     echo "changelog: $version is a pre-release, so it gets no support period."
   fi
@@ -381,7 +382,7 @@ EOF
   fragment 7-y.changed.md '- Fragment 7-y.' '' ''
   fragment 5-x.security.md '- Fragment 5-x.'
   fragment 9-u.upgrade.md '- Upgrade fragment 9-u.'
-  printf '%s\n' '# Security' '' '| Release | Released | Supported until |' '| --- | --- | --- |' \
+  printf '%s\n' '# Security' '' '| Release | Released | Fixes published until |' '| --- | --- | --- |' \
     '| v0.0.1 | 2026-10-01 | 2031-10-01 |' "$SUPPORT_MARKER" '' '## Withdrawn' > "$work/SECURITY.md"
   cp "$work/SECURITY.md" "$work/security.before"
   stub_git add -A
@@ -407,7 +408,7 @@ EOF
   grep -q 'already lists' "$work/out" || flunk "the listed version was not named."
   cp "$work/security.before" "$work/SECURITY.md"
   expect "the cut" 0 --assemble 0.0.2 2026-10-10
-  grep -q 'supported until 2031-10-10' "$work/out" || flunk "the cut did not print the end of the support period."
+  grep -q 'published until 2031-10-10' "$work/out" || flunk "the cut did not print the end of the support period."
 
   cat > "$work/want" <<'EOF'
 # Changelog
@@ -416,7 +417,7 @@ EOF
 
 ## [0.0.2] - 2026-10-10
 
-Supported until 2031-10-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](https://example.org/r/blob/main/SECURITY.md#supported-versions) says.
+Security fixes until 2031-10-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://example.org/r/blob/main/SECURITY.md#supported-versions) says.
 
 ### Upgrade notes
 
@@ -477,7 +478,7 @@ EOF
   stub_git commit -q -m "a fragment for the rehearsal"
   expect "a pre-release cut" 0 --assemble 0.0.3-rc.1 2026-10-11
   grep -q 'gets no support period' "$work/out" || flunk "the pre-release cut did not say it has no support period."
-  if awk '/^## \[0\.0\.3-rc\.1\]/ { on = 1; next } /^## \[/ { on = 0 } on && /^Supported until/ { found = 1 } END { exit !found }' "$work/CHANGELOG.md"; then
+  if awk '/^## \[0\.0\.3-rc\.1\]/ { on = 1; next } /^## \[/ { on = 0 } on && /^Security fixes until/ { found = 1 } END { exit !found }' "$work/CHANGELOG.md"; then
     flunk "the pre-release section carries a support period."
   fi
   cmp -s "$work/security.before" "$work/SECURITY.md" || flunk "the pre-release cut wrote SECURITY.md."

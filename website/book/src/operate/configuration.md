@@ -104,8 +104,8 @@ ferrofed: note: [[fhir.serve]] names no member for Electronic-Dispensations: the
 
 When the log renders for a person, `serve` prints a banner before the first
 log line: the wordmark, the version, the maintainer, the manufacturer with
-its contact and postal address, the releases the gateway serves, the end of
-its support period, and the deployment facts to check first. Built from
+its contact and postal address, the releases the gateway serves, the end
+date of its support period, and the deployment facts to check first. Built from
 source and run on a terminal with the development configuration of
 [the quickstart](container.md#the-quickstart), it prints this:
 
@@ -141,14 +141,17 @@ source and run on a terminal with the development configuration of
   patient data.
 ```
 
-The `Support` line of a release from v0.0.10 on names the last day of its
-support period, as `until YYYY-MM-DD`, five years from its release date ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
+The `Support` line of a release from v0.0.10 on says that only the newest
+release is supported and names the last day of its support period, until
+which fixed releases are published, as
+`newest release only, fixes until YYYY-MM-DD`, five years from its release
+date ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 The release build compiles the date in, and the gateway never reads it from
 the network. A build from source and a pre-release have no support period,
 and the line says so. Once the date has passed, the line reads
 `ended on YYYY-MM-DD`, and an `UNSUPPORTED` notice under it says the release
-receives no security fixes and to move to the latest patch release of a
-supported line, in red on a terminal with colour. `config check`
+receives no security fixes and to upgrade to the newest release, in red on
+a terminal with colour. `config check`
 prints the same notice as a `warning:` line, `serve` logs it at `WARN`, and
 `OPTIONS {base}/` names the date as `supported_until`, or `null` for a build
 with none (Regulation (EU) 2024/2847 Art 13(19)).

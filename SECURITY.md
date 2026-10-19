@@ -3,14 +3,14 @@
 
 # Security Policy
 
-This file holds what is particular to FerroFED: which releases are supported
-and until when, where to report a vulnerability in FerroFED, and the
-versions withdrawn. The vulnerability-handling policy of Cadasto B.V., the
-manufacturer of every FerroHEALTH product, is on the family book's
-[Security](https://ferrohealth.eu/docs/security.html) page: what happens
-after a report, how a fix and its advisory reach you, how to hear of an
-update, and what the manufacturer reports to the authorities. This page is
-not legal advice.
+This file holds what is particular to FerroFED: which release is supported,
+until when security fixes are published, where to report a vulnerability in
+FerroFED, and the versions withdrawn. The vulnerability-handling policy of
+Cadasto B.V., the manufacturer of every FerroHEALTH product, is on the
+family book's [Security](https://ferrohealth.eu/docs/security.html) page:
+what happens after a report, how a fix and its advisory reach you, how to
+hear of an update, and what the manufacturer reports to the authorities.
+This page is not legal advice.
 
 One FerroFED release is the source tag, the binary tarballs and the gateway
 and console images of one version. Cadasto B.V. places each tagged release on
@@ -21,30 +21,43 @@ the European Health Data Space (EHDS)
 
 ## Supported versions
 
-Each release has a support period, during which Cadasto B.V. handles the
-vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
+Only the newest release is supported. When a new release is published, every
+earlier release stops receiving fixes: there are no maintenance branches, no
+long-term-support line and no backports. If you are not on the newest
+release, upgrade; upgrading is free. Under the Cyber Resilience Act, Cadasto
+B.V. commits to keep publishing security fixes for at least five years after
+each release (Art 13(8)) and ships them only in the newest release
+(Art 13(10)).
 
-- **Length:** five years from the release date, the minimum Art 13(8),
-  third subparagraph, sets. Each end date in the table below is computed
-  from that rule. If Cadasto B.V. sets a longer period, this page states
-  it. The matters Art 13(8) names, and how each was taken into account,
-  are recorded in the book's
+| Artifact | Supported version | Where fixes ship |
+| --- | --- | --- |
+| The `ferrofed` binary (release tarballs) | the newest published release | the newest release |
+| The gateway and console container images | the newest published release | the newest release |
+
+- **The five years:** Cadasto B.V. keeps publishing security fixes, in new
+  releases, for at least five years after each release is placed on the
+  market, the minimum Art 13(8), third subparagraph, sets. Each end date in
+  the table below is computed from that rule: it is the date until which
+  Cadasto B.V. commits to keep publishing fixed releases, and a release
+  itself is supported only while it is the newest. If Cadasto B.V. sets a
+  longer period, this page states it. The matters Art 13(8) names, and how
+  each was taken into account, are recorded in the book's
   [basis of the five years](https://ferrofed.eu/docs/evaluate/regulatory-status.html#the-basis-of-the-five-years)
   (Annex VII, point 4).
-- **Where fixes ship:** a security fix ships as its own patch release on
-  each supported line, with no feature changes in it, so the update is
-  provided separately from functionality updates (Annex I Part II(2)). A
-  line is the releases that share a `<major>.<minor>` version, whose image
-  tag moves to each new patch release of the line
-  ([`docs/release.md`](docs/release.md#withdrawing-a-release)); a line is
-  supported while a release on it is within its support period. A
-  published release is never changed, so a user of an older release moves
-  to the security patch release of its line to get the fix.
+- **Where fixes ship:** a security fix ships in a new release, a patch
+  release with no feature changes in it, so the update is provided
+  separately from functionality updates (Annex I Part II(2)). Art 13(10)
+  lets Cadasto B.V. ship it only in the newest release, provided a user of
+  an earlier release gets the newest one free of charge and with no added
+  cost to adjust the environment it runs in. Every release is published
+  under the same licence terms as the one before it, and a published
+  release is never changed, so a user of an older release upgrades to the
+  newest release to get the fix.
 - **Updates stay available:** a published release, its tag and its image
   digest are never deleted ([`docs/release.md`](docs/release.md)).
-- **After the end date:** a release past its end date is unsupported. The
-  releases page keeps every version available, and running one past its
-  end date leaves each vulnerability found after that date unfixed in it
+- **An older release:** a release that is not the newest receives no fix.
+  The releases page keeps every version available, and running an older
+  one leaves each vulnerability fixed in a later release unfixed in it
   (Art 13(11)). From v0.0.10 on, the gateway knows its own end date from
   its build, names it in the startup banner and in `OPTIONS {base}/`, and
   once the date has passed says so in the banner, at start in its log and
@@ -52,7 +65,7 @@ vulnerabilities that affect it as CRA Annex I Part II requires (Art 13(8)).
 
 Art 13(8) binds the releases placed on the market from 11 December 2027
 (Art 69(2), Art 71(2)). Cadasto B.V. gives the releases placed before that
-date the same support period. A pre-release (a tag with a suffix, such as
+date the same commitment. A pre-release (a tag with a suffix, such as
 `v0.0.2-rc.1`) rehearses the release lane and has no support period. `main`
 is development code that is not supplied for use.
 
@@ -64,8 +77,8 @@ here and in the copy of this table on the book's
 [CRA information to the user](https://ferrofed.eu/docs/evaluate/cra-user-information.html#7-technical-security-support-and-the-support-period),
 which `scripts/checks/support-periods.sh` holds to this one.
 
-| Release | Released | Supported until |
-| ------- | -------- | --------------- |
+| Release | Released | Fixes published until |
+| ------- | -------- | --------------------- |
 | v0.0.1 | 2026-10-01 | 2031-10-01 |
 | v0.0.3 | 2026-10-02 | 2031-10-02 |
 | v0.0.6 | 2026-10-03 | 2031-10-03 |
