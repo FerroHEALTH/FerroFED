@@ -14,7 +14,7 @@
 use ferrohealth_ui::highlight::Language;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::view::button::{Variant, label};
-use ferrohealth_ui::view::form::{INPUT, SELECT, SWITCH, field};
+use ferrohealth_ui::view::form::{INPUT, SELECT, SWITCH, field, keyed_field};
 use ferrohealth_ui::view::layout::{FieldRow, action_bar, field_row, main_aside};
 use ferrohealth_ui::view::surface::stack;
 use ferrohealth_ui::widget::editor::{Editor, code_editor};
@@ -290,35 +290,39 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
     let waiting = move || index >= shown.get();
     view! {
         <li class="fui-field-row fui-field-row-narrow-wide" hidden=waiting>
-            <div class="fui-field">
-                <label for=name_id.clone() class="fui-label">
-                    "Name"
-                </label>
-                <input
-                    type="text"
-                    id=name_id
-                    name=PARAMETER_NAME
-                    autocomplete="off"
-                    spellcheck="false"
-                    pattern=NAME_PATTERN
-                    title="Letters, digits and underscores"
-                    class=format!("{INPUT} fui-mono")
-                />
-            </div>
-            <div class="fui-field">
-                <label for=value_id.clone() class="fui-label">
-                    "Value"
-                </label>
-                <input
-                    type="text"
-                    id=value_id
-                    name=PARAMETER_VALUE
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-describedby="query-parameters-help"
-                    class=format!("{INPUT} fui-mono")
-                />
-            </div>
+            {keyed_field(
+                name_id.clone(),
+                "Name",
+                None,
+                view! {
+                    <input
+                        type="text"
+                        id=name_id
+                        name=PARAMETER_NAME
+                        autocomplete="off"
+                        spellcheck="false"
+                        pattern=NAME_PATTERN
+                        title="Letters, digits and underscores"
+                        class=format!("{INPUT} fui-mono")
+                    />
+                },
+            )}
+            {keyed_field(
+                value_id.clone(),
+                "Value",
+                None,
+                view! {
+                    <input
+                        type="text"
+                        id=value_id
+                        name=PARAMETER_VALUE
+                        autocomplete="off"
+                        spellcheck="false"
+                        aria-describedby="query-parameters-help"
+                        class=format!("{INPUT} fui-mono")
+                    />
+                },
+            )}
         </li>
     }
 }

@@ -7,7 +7,7 @@
 
 use ferrofed_registry::console::Owner;
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
-use ferrohealth_ui::view::form::{INPUT, SELECT};
+use ferrohealth_ui::view::form::{Field, INPUT, SELECT, error_id};
 use leptos::prelude::*;
 
 use crate::configure::render::Loaded;
@@ -129,16 +129,14 @@ fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>) -> AnyView 
             view! { <option value=binding.as_str()>{Resource::Binding(binding).to_string()}</option> }
         })
         .collect_view();
-    view! {
-        <div class="fui-field">
-            <label for="cfg-section" class="fui-label">"Binding section"</label>
-            <select id="cfg-section" name="form[section]" class=SELECT aria-describedby="cfg-section-error">
-                {options}
-            </select>
-            {error_line("cfg-section")}
-        </div>
-    }
-    .into_any()
+    let select = view! {
+        <select id="cfg-section" name="form[section]" class=SELECT aria-describedby=error_id("cfg-section")>
+            {options}
+        </select>
+    };
+    Field::new("cfg-section", "Binding section")
+        .after(error_line("cfg-section"))
+        .view(select)
 }
 
 /// The settings of a binding section, a row each for what `table` holds
