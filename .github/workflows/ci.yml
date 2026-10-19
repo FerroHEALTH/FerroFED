@@ -21,8 +21,8 @@
 # is its own workflow (contribution-licence.yml) with its own check.
 name: CI
 
-# A maintenance branch, release/<major>.<minor>.x, carries a security patch
-# release of a supported line, so a pull request into it runs the same gates
+# A patch branch, release/<major>.<minor>.x, carries a security patch
+# release of the newest release, so a pull request into it runs the same gates
 # as one into main. A push to it runs nothing, so no cache this workflow
 # saves is written from a release branch (zizmor's cache-poisoning audit);
 # the pull request's run is the gate. No specification governs this: our own

@@ -5,10 +5,9 @@
 # Says whether a release becomes the latest: the repository's latest GitHub
 # release and the `latest` tag of both images. It prints `true` when the
 # version is a release without a pre-release suffix and no vX.Y.Z tag of the
-# remote names a higher version, and `false` otherwise. A security patch on
-# an older supported line is published beside a newer line and so prints
-# `false`; a tag that is itself the highest, re-run by a dispatch, prints
-# `true`.
+# remote names a higher version, and `false` otherwise. A security patch of
+# the newest release is the highest and prints `true`, as does a tag that is
+# itself the highest, re-run by a dispatch.
 #
 # Usage:
 #   scripts/release/latest.sh <version> [<remote>]

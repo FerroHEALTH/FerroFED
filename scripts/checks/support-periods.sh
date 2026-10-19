@@ -113,13 +113,13 @@ self_test() {
   # heading of the page, neither of which is read.
   fixture() {
     printf '%s\n' '# Security' '' "$RECORD_HEADING" '' \
-      '| Release | Released | Supported until |' '| ------- | -------- | --------------- |' \
+      '| Release | Released | Fixes published until |' '| ------- | -------- | --------------- |' \
       '| v0.0.1 | 2026-10-01 | 2031-10-01 |' '| v0.0.2 | 2026-10-02 | 2031-10-02 |' \
       "$MARKER" '' '| v0.0.9 | 2026-10-09 | withdrawn |' '' '## Withdrawn versions' '' \
       '| Version | Withdrawn |' '|---|---|' '| v0.0.8 | 2026-10-09 |' > "$repo/$RECORD"
     printf '%s\n' '# CRA information' '' '## 6. Another point' '' \
-      '| Release | Released | Supported until |' '|---|---|---|' '| v0.0.7 | 2026-10-07 | 2031-10-07 |' '' \
-      "$PAGE_HEADING" '' '| Release | Released | Supported until |' '|---|---|---|' \
+      '| Release | Released | Fixes published until |' '|---|---|---|' '| v0.0.7 | 2026-10-07 | 2031-10-07 |' '' \
+      "$PAGE_HEADING" '' '| Release | Released | Fixes published until |' '|---|---|---|' \
       '|  v0.0.1  | 2026-10-01 | 2031-10-01 |' '| v0.0.2 | 2026-10-02 |  2031-10-02 |' '' \
       '## 8. Instructions' '' '| v0.0.5 | 2026-10-05 | 2031-10-05 |' > "$repo/$PAGE"
   }

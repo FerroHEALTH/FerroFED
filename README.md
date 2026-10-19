@@ -98,8 +98,9 @@ on the listener ([#632](https://github.com/FerroHEALTH/FerroFED/issues/632)),
 and the production, upgrade, data-protection and threat-model pages. It
 implements the Federation Tier specification's 1.0.0 release.
 Each tagged release is a product its manufacturer, Cadasto B.V., places on
-the market under the Cyber Resilience Act, with a support period of five
-years from its release date
+the market under the Cyber Resilience Act. Only the newest release is
+supported: upgrading is free, and Cadasto B.V. keeps publishing security
+fixes, in new releases, for at least five years after each release
 ([SECURITY.md](SECURITY.md#supported-versions),
 [regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
 The manufacturer's side of the CRA, the same for every FerroHEALTH product,

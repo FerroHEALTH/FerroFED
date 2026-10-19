@@ -326,8 +326,8 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   [instructions for use](../operate/instructions-for-use.md), the
   [clinical safety risk file](clinical-safety.md), this page's
   [claims review](claims-review.md), and the post-market and Cyber
-  Resilience Act procedures with a support period of five years for each
-  release ([#670](https://github.com/FerroHEALTH/FerroFED/issues/670), [#673](https://github.com/FerroHEALTH/FerroFED/issues/673), [#674](https://github.com/FerroHEALTH/FerroFED/issues/674), [#672](https://github.com/FerroHEALTH/FerroFED/issues/672), [#762](https://github.com/FerroHEALTH/FerroFED/issues/762), [#763](https://github.com/FerroHEALTH/FerroFED/issues/763)).
+  Resilience Act procedures, with security fixes published for five years
+  after each release, only in the newest release ([#670](https://github.com/FerroHEALTH/FerroFED/issues/670), [#673](https://github.com/FerroHEALTH/FerroFED/issues/673), [#674](https://github.com/FerroHEALTH/FerroFED/issues/674), [#672](https://github.com/FerroHEALTH/FerroFED/issues/672), [#762](https://github.com/FerroHEALTH/FerroFED/issues/762), [#763](https://github.com/FerroHEALTH/FerroFED/issues/763)).
 - Identity resolution in production through a PIX Manager the members feed
   ([#622](https://github.com/FerroHEALTH/FerroFED/issues/622), [Identity resolution](../operate/identity.md)).
 - Restarts with no dropped request, several replicas, inbound metrics behind
@@ -382,7 +382,7 @@ Released on 2026-10-16.
   manufacturer issues it, the register of economic operators, the rights of
   natural persons, the cybersecurity risk assessment, the CRA information
   to the user, the decommissioning page, and security fixes as patch
-  releases on each supported line
+  releases of the newest release
   ([#941](https://github.com/FerroHEALTH/FerroFED/issues/941), [#671](https://github.com/FerroHEALTH/FerroFED/issues/671), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [#787](https://github.com/FerroHEALTH/FerroFED/issues/787), [#961](https://github.com/FerroHEALTH/FerroFED/issues/961), [#1058](https://github.com/FerroHEALTH/FerroFED/issues/1058), [#1059](https://github.com/FerroHEALTH/FerroFED/issues/1059), [#1063](https://github.com/FerroHEALTH/FerroFED/issues/1063), [#1064](https://github.com/FerroHEALTH/FerroFED/issues/1064),
   [Annex II checklist](annex-ii.md),
   [Technical documentation](technical-documentation.md)).

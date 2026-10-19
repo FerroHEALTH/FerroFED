@@ -105,6 +105,8 @@ pub mod render {
 
     /// The top-level member that names the last day of the release's
     /// support period (Regulation (EU) 2024/2847 Art 13(19)).
+    ///
+    /// Fixed releases are published until that day.
     const SUPPORTED_UNTIL: &str = "supported_until";
 
     /// The manufacturer as the gateway declares it.
@@ -284,10 +286,7 @@ pub mod render {
             },
         };
         let Ok(declared) = declared else {
-            return vec![
-                ("Manufacturer", unreadable()),
-                ("Supported until", supported),
-            ];
+            return vec![("Manufacturer", unreadable()), ("Fixes until", supported)];
         };
         vec![
             ("Name", declared.name.unwrap_or_else(not_declared)),
@@ -297,7 +296,7 @@ pub mod render {
             ),
             ("Contact", declared.email.unwrap_or_else(not_declared)),
             ("Website", declared.website.unwrap_or_else(not_declared)),
-            ("Supported until", supported),
+            ("Fixes until", supported),
         ]
     }
 

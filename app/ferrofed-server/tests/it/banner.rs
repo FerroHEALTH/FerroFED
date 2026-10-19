@@ -196,12 +196,15 @@ fn a_production_deployment_prints_no_notice() -> TestResult {
 const SUPPORT_END: jiff::civil::Date = jiff::civil::date(2031, 10, 5);
 
 /// Regulation (EU) 2024/2847 Art 13(19): the end date is stated, and on its
-/// last day the release is still supported.
+/// last day fixed releases are still published.
 #[test]
 fn on_the_last_day_of_support_the_banner_names_the_end_date() -> TestResult {
     let supported = deployment()?.with_support(Support::at(Some(SUPPORT_END), SUPPORT_END));
     let banner = render("9.9.9", &supported, false);
-    assert_eq!(Some("until 2031-10-05"), value_of(&banner, "Support"));
+    assert_eq!(
+        Some("newest release only, fixes until 2031-10-05"),
+        value_of(&banner, "Support")
+    );
     assert!(!banner.contains("UNSUPPORTED"), "{banner}");
     Ok(())
 }
@@ -220,7 +223,7 @@ fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestRe
     assert!(
         words.contains(
             "UNSUPPORTED: FerroFED v9.9.9 is past its support period, which ended on 2031-10-05: \
-             it receives no security fixes, so move to the latest patch release of a supported line."
+             it receives no security fixes, so upgrade to the newest release."
         ),
         "{plain}"
     );

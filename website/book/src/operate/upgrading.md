@@ -83,11 +83,12 @@ configuration. These rules bound how.
   is never migrated back. A release refuses to start over a store a newer
   release migrated.
 
-A security fix ships as its own patch release on each supported line, with
-no feature changes in it. A line is the releases that share a
-`<major>.<minor>` version, and it is supported while a release on it is
-within its support period. A published release is never changed, so move
-to the security patch release of your line to get the fix
+Only the newest release is supported. When a new release is published,
+every earlier release stops receiving fixes: there are no maintenance
+branches, no long-term-support line and no backports. A security fix ships
+as a patch release of the newest release, with no feature changes in it,
+and a published release is never changed, so upgrade to the newest release
+to get the fix; upgrading is free
 ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
 ## Upgrade notes by release

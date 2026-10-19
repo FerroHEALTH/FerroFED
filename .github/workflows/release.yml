@@ -25,7 +25,7 @@
 # ships the binaries and the image.
 #
 # The workflow is dormant until a `v*` tag is pushed. It does not run on a push
-# to main, on a pull request, or in a merge group. A tag on a maintenance
+# to main, on a pull request, or in a merge group. A tag on a security patch
 # branch runs it like a tag on main; plan decides whether the release becomes
 # the latest (scripts/release/latest.sh).
 name: Release
@@ -115,10 +115,9 @@ jobs:
 
       - id: latest
         name: Whether this release becomes the latest
-        # A security patch release on an older supported line is cut from a
-        # maintenance branch and published beside a newer line, so only the
-        # highest version, never a pre-release, becomes the repository's
-        # latest release and moves the latest image tags.
+        # Only the highest version, never a pre-release, becomes the
+        # repository's latest release and moves the latest image tags; a
+        # security patch of the newest release is the highest.
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |

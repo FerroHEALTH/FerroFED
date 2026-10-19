@@ -17,7 +17,7 @@
 #     Its configuration, .github/codeql/codeql-config.yml, leaves out the
 #     integration-test trees, whose assertion messages are not logging.
 #
-# Pull requests into a maintenance branch (release/*.*.x) are scanned too, so
+# Pull requests into a security patch branch (release/*.*.x) are scanned too, so
 # a security patch is analyzed before it is tagged. A push to one runs
 # nothing, as in ci.yml: zizmor reads a push trigger on a release branch as a
 # release lane, so the pull request's run is the scan.

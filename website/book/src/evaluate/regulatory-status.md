@@ -357,11 +357,16 @@ support period, and "the support period shall be at least five years". Art
 13(19) has the end date of that period, "including at least the month and
 the year", specified "at the time of purchase", and Annex II, point 7, puts
 "the end-date of the support period" in the information to the user.
-The manufacturer gives every release placed on the market from 11 December
-2027 a support period of at least five years, with its end date published.
+Cadasto B.V. meets this as a commitment for the whole product: for every
+release placed on the market from 11 December 2027 it keeps publishing
+security fixes, in new releases, for at least five years, with the end date
+published, and ships them only in the newest release, as Art 13(10) allows.
+Only the newest release is supported: when a new release is published,
+every earlier release stops receiving fixes, and upgrading is free. There
+are no maintenance branches, no long-term-support line and no backports.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
-lists every release with its support period and end date, five years from
-its release date
+lists every release with the date until which fixes are published, five
+years from its release date
 ([#763](https://github.com/FerroHEALTH/FerroFED/issues/763)). The gateway
 knows the end date of its own release from its build: the startup banner and
 `OPTIONS {base}/` name it, and once it has passed the banner, the log and
@@ -391,9 +396,9 @@ these matters into account:
 - **Reasonable user expectations.** The users are the health institutions
   and the operators that run the gateway for them
   ([Intended purpose](#intended-purpose)). They can expect every
-  vulnerability found while a release is in use to be fixed in it, without
-  taking new features: a security fix ships as its own patch release on
-  each supported line
+  vulnerability found to be fixed in a new release they can take free of
+  charge: a security fix ships as a patch release of the newest release,
+  with no feature changes in it
   ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 - **The nature of the product and its intended purpose.** FerroFED is
   software with no hardware part, and it holds no clinical data of its own,
@@ -408,10 +413,9 @@ these matters into account:
   that rule sets how long the declaration stays available, and sets no
   support period.
 - **The release cadence.** Releases come days or weeks apart: seven between
-  2026-10-01 and 2026-10-15, in the table of `SECURITY.md`. Each release has
-  its own five years, and a line is supported while a release on it is
-  within its period, so a line that keeps receiving releases stays
-  supported until five years after its newest one.
+  2026-10-01 and 2026-10-15, in the table of `SECURITY.md`. Only the newest
+  release is supported, and each release starts its own five years, so
+  fixes keep coming for at least five years after the newest release.
 
 Art 13(8) also lets the manufacturer take into account "the support periods
 of products with digital elements offering a similar functionality placed on
@@ -426,8 +430,8 @@ these:
 - **The operating environment and integrated components.** A release runs as
   its container image or binary tarball and reaches each node over openEHR
   ITS-REST. A vulnerability in a component the release carries, which its
-  SBOMs list, is fixed by a patch release on the line like one in the
-  gateway's own code, so no supplier's end of support ends a release's.
+  SBOMs list, is fixed in a new release like one in the gateway's own
+  code, so no supplier's end of support ends the commitment.
 - **ADCO and Commission guidance.** The manufacturer holds no ADCO or
   Commission guidance on support periods (Art 52(16)) for this category of
   product, and reads the period against such guidance once it is published.
