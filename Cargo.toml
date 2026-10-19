@@ -263,8 +263,13 @@ console_error_panic_hook = "0.1.7"
 # table model, the highlighter, the Lucide icons, the stylesheet and the role
 # tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
 # moves to a new version deliberately. Verified against crates.io on
-# 2026-10-18.
-ferrohealth-ui = "=0.1.6"
+# 2026-10-19.
+ferrohealth-ui = "=0.1.7"
+# The console's string catalogs (#1162): Project Fluent messages embedded at
+# build time from app/ferrofed-viewer/locales/, the crate and version
+# ferrohealth-ui catalogs its own words with, so one locale drives both.
+# Verified against crates.io on 2026-10-19.
+fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
 cookie = { version = "0.18.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design). Groups sit

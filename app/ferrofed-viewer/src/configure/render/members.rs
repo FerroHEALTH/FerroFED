@@ -14,6 +14,7 @@ use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{Field, INPUT, SWITCH};
+use ferrohealth_ui::view::layout::{FieldRow, keyed_field_row};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::definitions;
 use leptos::prelude::*;
@@ -375,8 +376,7 @@ const CATEGORIES: [(&str, &str); 6] = [
 /// A profile item `item` of the FHIR endpoint row `key`, holding `value`.
 fn profile(key: &str, item: &str, value: String) -> AnyView {
     let id = format!("cfg-f-{key}-p-{item}");
-    view! {
-        <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
+    let body = view! {
             {Field::new(id.clone(), "Profile")
                 .label_hidden()
                 .view(view! {
@@ -391,9 +391,8 @@ fn profile(key: &str, item: &str, value: String) -> AnyView {
                     />
                 })}
             {remove_button(&format!("{id}-row"), String::from("Remove this profile"))}
-        </div>
-    }
-    .into_any()
+    };
+    keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
 }
 
 /// The categories of the FHIR endpoint row `key`, those it serves

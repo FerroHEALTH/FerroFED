@@ -258,6 +258,21 @@ jobs:
           PROMTOOL="$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" \
             bash scripts/checks/observability.sh
 
+  # The stray-literal guard: a string the operator console draws belongs in
+  # its catalog under app/ferrofed-viewer/locales/, and a file holds no more
+  # stray literals than its baseline while the strings move (#1162).
+  stray-literals:
+    name: stray-literals
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/checks/stray-literals.sh app/ferrofed-viewer/src
+
   # The comment-style guard (RFC 505 and RFC 1574) over the whole tree: every
   # hand-written .rs file, plus the citation checks over the shell scripts,
   # every Cargo.toml, clippy.toml, the YAML under .github and the TOML under
@@ -1476,6 +1491,7 @@ jobs:
       - kubernetes-manifests
       - observability
       - comment-style
+      - stray-literals
       - file-length
       - versions
       - favicon-sync

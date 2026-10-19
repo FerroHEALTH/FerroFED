@@ -16,6 +16,7 @@
 #   pkg-dir defaults to target/site/pkg.
 #
 # Exit 0 = within the budget. Exit 1 = over the budget, a bundle file missing,
+# a bundle the last release build did not write (target/viewer-site.sha256),
 # a compressor missing, or the budget unreadable. Exit 2 = a usage error.
 set -Eeuo pipefail
 
@@ -38,6 +39,26 @@ for tool in gzip brotli; do
     exit 1
   fi
 done
+
+# The bundle the last release build wrote, and no other: the stamp
+# scripts/release/viewer-site.sh --release leaves on success names the
+# digests of the two files, so a stale, a failed or a debug build is refused.
+stamp="$root/target/viewer-site.sha256"
+for file in "$name.wasm" "$name.js"; do
+  if [ ! -s "$pkg/$file" ]; then
+    echo "viewer-bundle: $pkg/$file is missing; run scripts/release/viewer-site.sh --release first." >&2
+    exit 1
+  fi
+done
+if [ ! -s "$stamp" ]; then
+  echo "viewer-bundle: $stamp is missing: the last site build failed or was not a release build; run scripts/release/viewer-site.sh --release first." >&2
+  exit 1
+fi
+if command -v sha256sum > /dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
+if ! (cd "$pkg" && "${sum[@]}" -c --status "$stamp"); then
+  echo "viewer-bundle: $pkg is not the bundle the last release build wrote ($stamp); run scripts/release/viewer-site.sh --release first." >&2
+  exit 1
+fi
 
 for file in "$name.wasm" "$name.js"; do
   if [ ! -s "$pkg/$file" ]; then

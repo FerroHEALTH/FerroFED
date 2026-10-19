@@ -14,7 +14,11 @@
 # Usage: scripts/checks/viewer-paths.sh [pkg-dir]
 #   pkg-dir defaults to target/site/pkg.
 #
-# Exit 0 = no host path. Exit 1 = a host path, or a bundle file missing.
+# It reads only the bundle the last release build wrote: the digests in
+# target/viewer-site.sha256 must match, so a stale bundle is refused.
+#
+# Exit 0 = no host path. Exit 1 = a host path, a bundle file missing, or a
+# bundle the last release build did not write.
 # Exit 2 = a usage error.
 set -Eeuo pipefail
 
@@ -29,6 +33,26 @@ case "$#" in
     exit 2
     ;;
 esac
+
+# The bundle the last release build wrote, and no other: the stamp
+# scripts/release/viewer-site.sh --release leaves on success names the
+# digests of the two files, so a stale, a failed or a debug build is refused.
+stamp="$root/target/viewer-site.sha256"
+for file in "$name.wasm" "$name.js"; do
+  if [ ! -s "$pkg/$file" ]; then
+    echo "viewer-paths: $pkg/$file is missing; run scripts/release/viewer-site.sh --release first." >&2
+    exit 1
+  fi
+done
+if [ ! -s "$stamp" ]; then
+  echo "viewer-paths: $stamp is missing: the last site build failed or was not a release build; run scripts/release/viewer-site.sh --release first." >&2
+  exit 1
+fi
+if command -v sha256sum > /dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
+if ! (cd "$pkg" && "${sum[@]}" -c --status "$stamp"); then
+  echo "viewer-paths: $pkg is not the bundle the last release build wrote ($stamp); run scripts/release/viewer-site.sh --release first." >&2
+  exit 1
+fi
 
 pattern='(/home/|/Users/|/root/|[A-Za-z]:\\Users\\|/runner/|/github/workspace|\.cargo/registry|\.rustup/toolchains)[^"[:cntrl:]]*'
 

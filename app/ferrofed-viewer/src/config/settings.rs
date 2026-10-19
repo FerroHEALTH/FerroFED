@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ferrofed_registry::secret::Secret;
+use ferrohealth_ui::i18n::Locale;
 use secrecy::SecretString;
 use secrecy::zeroize::Zeroizing;
 use url::Url;
@@ -23,6 +24,9 @@ pub struct Settings {
     pub listen: SocketAddr,
     /// The directory holding the site bundle.
     pub site_root: PathBuf,
+    /// The locale a page renders in when the request names none the
+    /// console's catalog holds.
+    pub locale: Locale,
     /// The gateway the console is a client of.
     pub gateway: GatewaySettings,
     /// The server-side sign-in sessions.
@@ -111,6 +115,7 @@ impl Config {
     ///
     /// # Errors
     /// Returns [`Error::Address`] for a listen address that does not parse,
+    /// [`Error::Locale`] for a `server.locale` that is no language tag,
     /// [`Error::Url`] and [`Error::UrlShape`] for a URL that does not parse
     /// or is not one its key admits, [`Error::Zero`] for a zero timeout or
     /// session bound, [`Error::Missing`] for an absent `[oidc]` key,
@@ -127,6 +132,10 @@ impl Config {
                 key: String::from("server.listen"),
                 source,
             })?;
+        let locale = Locale::parse(&self.server.locale).map_err(|source| Error::Locale {
+            key: String::from("server.locale"),
+            source,
+        })?;
         let base = web_url("gateway.base_url", &self.gateway.base_url)?;
         let timeout =
             positive("gateway.timeout_ms", self.gateway.timeout_ms).map(Duration::from_millis)?;
@@ -156,6 +165,7 @@ impl Config {
         Ok(Settings {
             listen,
             site_root: self.server.site_root.clone(),
+            locale,
             gateway: GatewaySettings { base, timeout },
             session,
             oidc,
