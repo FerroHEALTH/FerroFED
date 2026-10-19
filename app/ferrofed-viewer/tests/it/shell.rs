@@ -61,14 +61,14 @@ async fn the_page_arrives_in_the_theme_its_cookie_names() -> Result<(), Box<dyn 
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(
-        body.contains(r#"<html lang="en" data-theme="light">"#),
+        body.contains(r#"<html lang="en" data-theme="system">"#),
         "{body}"
     );
     for (cookie, drawn) in [
         ("dark", "dark"),
         ("light", "light"),
         ("system", "system"),
-        ("sepia", "light"),
+        ("sepia", "system"),
     ] {
         let (_response, body) = send(&service, get_in("/members", &session, cookie)?).await?;
         assert!(
@@ -76,10 +76,13 @@ async fn the_page_arrives_in_the_theme_its_cookie_names() -> Result<(), Box<dyn 
             "{cookie}: {body}"
         );
     }
-    // The switch marks the theme in force, by a word as well as its look.
+    // The toggle offers the other theme, by a word as well as its icon.
     let (_response, body) = send(&service, get_in("/", &session, "dark")?).await?;
-    assert!(body.contains(r#"aria-label="Theme""#), "{body}");
-    assert!(body.contains(r#"value="dark""#), "{body}");
+    assert!(
+        body.contains(r#"aria-label="Switch to the light theme""#),
+        "{body}"
+    );
+    assert!(body.contains(r#"action="/api/theme""#), "{body}");
     Ok(())
 }
 
@@ -187,7 +190,7 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
     assert!(body.contains(r#"popovertarget="operator-menu""#), "{body}");
     assert!(body.contains("Gateway UP"), "{body}");
     assert!(body.contains("· spec 1.0 · rso-zl"), "{body}");
-    assert!(body.contains("pill tone-ok"), "{body}");
+    assert!(body.contains("fui-status fui-tone-ok"), "{body}");
 
     let refusing = gateway(
         403,
@@ -199,7 +202,7 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(body.contains("Gateway refused 403"), "{body}");
     assert!(body.contains("· insufficient-scope"), "{body}");
-    assert!(body.contains("pill tone-danger"), "{body}");
+    assert!(body.contains("fui-status fui-tone-bad"), "{body}");
 
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
@@ -300,7 +303,8 @@ async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(body.contains(">Dashboard</h1>"), "{body}");
     assert!(
-        body.contains(r#"<p role="alert">the gateway could not be reached</p>"#),
+        body.contains(r#"<div role="alert" class="fui-notice fui-tone-bad">"#)
+            && body.contains("<div>the gateway could not be reached</div>"),
         "{body}"
     );
     Ok(())
@@ -365,12 +369,12 @@ async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill(
     )
     .await?;
     let top = top_of(&development).await?;
-    assert!(top.contains("Development deployment: "), "{top}");
+    assert!(top.contains("Development deployment"), "{top}");
     assert!(
         top.contains("Patients resolve through the static development cross-reference."),
         "{top}"
     );
-    assert!(top.contains(r#"class="tone-warn border-b"#), "{top}");
+    assert!(top.contains(r#"class="fui-banner fui-tone-warn""#), "{top}");
     assert!(top.contains("· v0.0.11 · gateway-0"), "{top}");
     let banner = top.find("Development deployment").ok_or("the banner")?;
     let bar = top.find("Gateway UP").ok_or("the pill")?;
@@ -382,7 +386,7 @@ async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill(
     )
     .await?;
     let top = top_of(&plain).await?;
-    assert!(top.contains("Development deployment: "), "{top}");
+    assert!(top.contains("Development deployment"), "{top}");
     assert!(!top.contains("cross-reference"), "{top}");
     assert!(
         top.contains("· v0.0.11<"),

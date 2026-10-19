@@ -102,9 +102,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
         )
         .await?;
         let download = browser
-            .element(By::PartialLinkText(
-                "Download the running configuration as TOML",
-            ))
+            .element(By::PartialLinkText("Download as TOML"))
             .await?;
         assert_eq!(
             Some(String::from("/configuration/revisions/2/export")),

@@ -11,10 +11,10 @@
 # loud when Cargo.lock does not satisfy every manifest and leaves the second
 # resolution nothing to change, and --locked is passed to the compile itself.
 #
-# The bundle is target/site: pkg/ferrofed-viewer.wasm, its JavaScript glue,
-# the stylesheet, and the favicon cargo-leptos copies from the crate's
-# public/. The server binary is built apart from it, with cargo, because the
-# bundle is the same for every architecture.
+# The bundle is target/site: pkg/ferrofed-viewer.wasm, its JavaScript glue
+# and the favicon cargo-leptos copies from the crate's public/; the server
+# serves the stylesheet itself. The server binary is built apart from it,
+# with cargo, because the bundle is the same for every architecture.
 #
 # Usage: scripts/release/viewer-site.sh [--release]
 set -Eeuo pipefail
@@ -72,7 +72,7 @@ cd "$viewer"
 cargo leptos build --frontend-only --lib-cargo-args=--locked "$@"
 
 missing=0
-for file in pkg/ferrofed-viewer.wasm pkg/ferrofed-viewer.js pkg/ferrofed-viewer.css favicon.ico; do
+for file in pkg/ferrofed-viewer.wasm pkg/ferrofed-viewer.js favicon.ico; do
   if [ ! -s "$root/target/site/$file" ]; then
     echo "viewer-site: the bundle has no $file" >&2
     missing=1

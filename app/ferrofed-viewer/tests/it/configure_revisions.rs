@@ -100,15 +100,12 @@ async fn each_revision_offers_its_download_and_the_page_offers_an_import()
         );
     }
     assert!(
-        body.contains(r#"<span class="badge tone-neutral">import</span>"#),
+        body.contains(r#"<span class="fui-badge fui-tone-neutral">import</span>"#),
         "{body}"
     );
     let (_response, body) =
         send(&service, get_as("/configuration/import-export", &session)?).await?;
-    assert!(
-        body.contains("Download the running configuration as TOML"),
-        "{body}"
-    );
+    assert!(body.contains("Download as TOML"), "{body}");
     assert!(body.contains("Import as a dry-run revision"), "{body}");
     assert!(
         body.contains(r#"<textarea id="cfg-toml" name="form[toml]""#),

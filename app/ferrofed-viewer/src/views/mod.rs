@@ -45,10 +45,37 @@ pub mod routing;
 )]
 pub mod stored;
 
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Step, data_table, step_label};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::notice::{Announce, notice};
+use ferrohealth_ui::view::status::pill;
+use ferrohealth_ui::view::surface::page_meta;
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
 use crate::views::model::{Outcome, PAGE_SIZE, Refusal, ViewError};
+
+/// The tone of the state word `word`, written in either case.
+///
+/// Up, complete and active take the good tone; down, failing, refused and
+/// error the bad one; unknown, degraded, partial and pending the warning
+/// one; any other word, which is no state, the neutral one.
+#[must_use]
+pub fn state_tone(word: &str) -> Tone {
+    match word.to_ascii_lowercase().as_str() {
+        "up" | "complete" | "ok" | "active" => Tone::Ok,
+        "down" | "failing" | "refused" | "error" => Tone::Bad,
+        "unknown" | "degraded" | "partial" | "pending" => Tone::Warn,
+        _ => Tone::Neutral,
+    }
+}
+
+/// A status pill: a dot and the state `word`, in the tone the word has.
+#[must_use]
+pub fn state_pill(word: &str) -> impl IntoView + use<> {
+    pill(state_tone(word), word)
+}
 
 /// The path of the members view.
 pub const MEMBERS: &str = "/members";
@@ -119,36 +146,91 @@ pub(crate) fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -
     } else {
         format!("Rows {} to {end} of {total}.", offset.saturating_add(1))
     };
-    let previous = (offset > 0).then(|| {
-        let to = offset.saturating_sub(PAGE_SIZE);
-        view! {
-            <a href=format!("{path}?offset={to}") rel="prev">
-                "Previous page"
-            </a>
-        }
-    });
-    let next = (end < total).then(|| {
-        view! {
-            <a href=format!("{path}?offset={end}") rel="next">
-                "Next page"
-            </a>
-        }
-    });
+    let previous = step(
+        Step::Previous,
+        (offset > 0).then(|| {
+            (
+                format!("{path}?offset={}", offset.saturating_sub(PAGE_SIZE)),
+                "prev",
+            )
+        }),
+    );
+    let next = step(
+        Step::Next,
+        (end < total).then(|| (format!("{path}?offset={end}"), "next")),
+    );
     view! {
-        <nav aria-label="Pages">
-            <p>{place}</p>
-            {previous}
-            " "
-            {next}
+        <nav class="fui-pager" aria-label="Pages">
+            <p role="status">{place}</p>
+            <div class="fui-pager-steps">{previous} {next}</div>
         </nav>
     }
     .into_any()
 }
 
+/// One step of [`pager`]: a link to `to` with its `rel`, or a step that
+/// cannot be taken, which says so in words.
+fn step(step: Step, to: Option<(String, &'static str)>) -> AnyView {
+    match to {
+        Some((href, rel)) => view! {
+            <a href=href rel=rel class=Variant::Secondary.small()>
+                {step_label(step, true)}
+            </a>
+        }
+        .into_any(),
+        None => view! {
+            <span class=Variant::Secondary.small() aria-disabled="true">
+                {step_label(step, false)}
+            </span>
+        }
+        .into_any(),
+    }
+}
+
 /// The line naming the replica, or the replicas, that answered a view;
 /// nothing when the replica has no name.
 pub(crate) fn replica_line(line: Option<String>) -> AnyView {
-    line.map(|line| view! { <p>{line}</p> }).into_any()
+    page_meta(line).into_any()
+}
+
+/// The library's data table under `caption`, headed by `columns`, over
+/// `rows`, its rows stacked as cards on a phone: every body cell but the
+/// row's name carries its column's `data-label`. The console's tables do not
+/// sort.
+pub(crate) fn table(caption: &str, columns: &[Column], rows: AnyView) -> AnyView {
+    data_table(DataTable {
+        caption,
+        columns,
+        sort: None,
+        sort_href: &|_| String::new(),
+        body: Body::Rows(rows),
+    })
+    .into_any()
+}
+
+/// The data table [`table`] draws, as a grid at every width: for a table of
+/// two short columns, which fits a phone as it is.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn table_unstacked(caption: &str, columns: &[Column], rows: AnyView) -> AnyView {
+    ferrohealth_ui::table::view::data_table_unstacked(DataTable {
+        caption,
+        columns,
+        sort: None,
+        sort_href: &|_| String::new(),
+        body: Body::Rows(rows),
+    })
+    .into_any()
+}
+
+/// Whether `columns` holds the column keyed `key`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn has(columns: &[Column], key: &str) -> bool {
+    columns.iter().any(|column| column.key == key)
+}
+
+/// The alert `body` says, in the refusal's tone.
+fn alert(body: impl IntoView + 'static) -> AnyView {
+    notice(Tone::Bad, Announce::Alert, None, body).into_any()
 }
 
 /// The section `section` draws of a view `loaded`, the notice of the refusal
@@ -170,15 +252,12 @@ pub(crate) fn refusal(refused: &Refusal) -> AnyView {
     match refused {
         Refusal::NotAuthenticated { code } => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
-            view! {
-                <p role="alert">
-                    {format!("The gateway did not accept your sign-in ({code}). ")}
-                    <a href=crate::app::SIGN_IN rel="external">
-                        "Sign in again"
-                    </a>
-                </p>
-            }
-            .into_any()
+            alert(view! {
+                {format!("The gateway did not accept your sign-in ({code}). ")}
+                <a href=crate::app::SIGN_IN rel="external">
+                    "Sign in again"
+                </a>
+            })
         }
         Refusal::Gateway { status, code } => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
@@ -187,13 +266,11 @@ pub(crate) fn refusal(refused: &Refusal) -> AnyView {
             } else {
                 ""
             };
-            view! { <p role="alert">{format!("The gateway refused this view: {status} ({code}).{hint}")}</p> }
-            .into_any()
+            alert(format!(
+                "The gateway refused this view: {status} ({code}).{hint}"
+            ))
         }
-        Refusal::Invalid { reason } => {
-            let reason = reason.clone();
-            view! { <p role="alert">{reason}</p> }.into_any()
-        }
+        Refusal::Invalid { reason } => alert(reason.clone()),
     }
 }
 
@@ -201,28 +278,40 @@ pub(crate) fn refusal(refused: &Refusal) -> AnyView {
 /// view.
 pub(crate) fn fault(error: &ViewError) -> AnyView {
     match error {
-        ViewError::SignedOut => view! {
-            <p role="alert">
-                "Sign in to see this view. " <a href=crate::app::SIGN_IN rel="external">
-                    "Sign in"
-                </a>
-            </p>
-        }
-        .into_any(),
+        ViewError::SignedOut => alert(view! {
+            "Sign in to see this view. "
+            <a href=crate::app::SIGN_IN rel="external">
+                "Sign in"
+            </a>
+        }),
         ViewError::Unreadable { .. }
         | ViewError::Unreachable
         | ViewError::PlainPost
         | ViewError::Unavailable
-        | ViewError::Fetch { .. } => {
-            let text = error.to_string();
-            view! { <p role="alert">{text}</p> }.into_any()
-        }
+        | ViewError::Fetch { .. } => alert(error.to_string()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::needs_session;
+    use ferrohealth_ui::tone::Tone;
+
+    use super::{needs_session, state_tone};
+
+    #[test]
+    fn a_pill_names_its_tone_by_the_word_in_either_case() {
+        assert_eq!(Tone::Ok, state_tone("UP"));
+        assert_eq!(Tone::Ok, state_tone("complete"));
+        assert_eq!(Tone::Bad, state_tone("DOWN"));
+        assert_eq!(Tone::Bad, state_tone("failing"));
+        assert_eq!(Tone::Bad, state_tone("refused"));
+        assert_eq!(Tone::Warn, state_tone("partial"));
+        assert_eq!(Tone::Warn, state_tone("UNKNOWN"));
+        assert_eq!(Tone::Warn, state_tone("degraded"));
+        assert_eq!(Tone::Neutral, state_tone("withdrawn"));
+        assert_eq!(Tone::Neutral, state_tone("registry-invalid"));
+        assert_eq!(Tone::Neutral, state_tone("not reported"));
+    }
 
     #[test]
     fn every_view_each_members_page_and_each_stored_query_needs_a_session_and_nothing_else_does() {

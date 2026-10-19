@@ -194,15 +194,15 @@ async fn the_detail_shows_the_newest_version_and_reads_every_page() -> Result<()
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="tok-keyword">SELECT</span>"#),
+        body.contains(r#"<span class="fui-tok-keyword">SELECT</span>"#),
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="tok-parameter">$ehr_id</span>"#),
+        body.contains(r#"<span class="fui-tok-parameter">$ehr_id</span>"#),
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="tok-path">/data[at0001]/events[at0002]/data/items[at0004]/value/magnitude</span>"#),
+        body.contains(r#"<span class="fui-tok-path">/data[at0001]/events[at0002]/data/items[at0004]/value/magnitude</span>"#),
         "{body}"
     );
     let switch = body
@@ -329,7 +329,7 @@ async fn the_gateways_own_namespace_is_marked_read_only() -> Result<(), Box<dyn 
     assert_eq!(1, list.matches(">read-only</span>").count(), "{list}");
     let reserved = list
         .split_once(">eu.ferrofed.eehrxf</h2>")
-        .and_then(|(_, rest)| rest.split_once("</header>"))
+        .and_then(|(_, rest)| rest.split_once("</div>"))
         .map(|(header, _)| header)
         .ok_or("the reserved namespace has its card")?;
     assert!(reserved.contains("read-only"), "{reserved}");
@@ -377,7 +377,7 @@ async fn a_version_the_gateway_marks_read_only_is_shown_read_only() -> Result<()
     assert_eq!(1, list.matches(">read-only</span>").count(), "{list}");
     let marked = list
         .split_once(">org.example</h2>")
-        .and_then(|(_, rest)| rest.split_once("</header>"))
+        .and_then(|(_, rest)| rest.split_once("</div>"))
         .map(|(header, _)| header)
         .ok_or("the namespace has its card")?;
     assert!(marked.contains("read-only"), "{marked}");
@@ -517,7 +517,7 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
     }
     // A quote in a text node is text: it ends no attribute.
     assert!(
-        list.contains(">q\" onclick=\"x&lt;b&gt;</span><span class=\"whitespace-nowrap text-muted\">@1.0.0\"&gt;&lt;u&gt;v&lt;/u&gt;</span></a>"),
+        list.contains(">q\" onclick=\"x&lt;b&gt;<span class=\"fui-muted\">@1.0.0\"&gt;&lt;u&gt;v&lt;/u&gt;</span></a>"),
         "{list}"
     );
     assert!(

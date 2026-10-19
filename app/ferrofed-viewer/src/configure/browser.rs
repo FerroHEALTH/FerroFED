@@ -305,12 +305,41 @@ fn lines(text: &str) -> String {
     }
 }
 
-/// Counts the lines of a text area that names its counter, as `event`
-/// changes it.
+/// Shows the settings of the grant a select marked `data-grant` now names
+/// and hides the others, as `event` changes it.
+#[cfg(target_arch = "wasm32")]
+fn granted(event: &leptos::ev::Event) {
+    use wasm_bindgen::JsCast as _;
+    let Some(select) = target(event)
+        .and_then(|select| select.dyn_into::<leptos::web_sys::HtmlSelectElement>().ok())
+        .filter(|select| select.has_attribute("data-grant"))
+    else {
+        return;
+    };
+    let chosen = select.value();
+    let Some(parts) = document().get_element_by_id(GRANT_PARTS) else {
+        return;
+    };
+    let mut child = parts.first_element_child();
+    while let Some(part) = child {
+        let hide = part.get_attribute("data-grant-part").as_deref() != Some(chosen.as_str());
+        if part.toggle_attribute_with_force("hidden", hide).is_err() {
+            leptos::logging::warn!("the browser refused to show a grant's settings");
+        }
+        child = part.next_element_sibling();
+    }
+}
+
+/// The id of the box that holds each grant's settings.
+pub(crate) const GRANT_PARTS: &str = "cfg-grant-parts";
+
+/// Counts the lines of a text area that names its counter, and shows the
+/// settings of the grant a grant select names, as `event` changes either.
 pub(super) fn typed(event: &leptos::ev::Event) {
     #[cfg(target_arch = "wasm32")]
     {
         use wasm_bindgen::JsCast as _;
+        granted(event);
         let Some(area) = target(event)
             .and_then(|area| area.dyn_into::<leptos::web_sys::HtmlTextAreaElement>().ok())
         else {

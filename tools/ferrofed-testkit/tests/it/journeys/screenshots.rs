@@ -8,7 +8,9 @@
 //! With `FERROFED_SCREENSHOTS=1` the capture drives the journeys' stack and
 //! browser through every page of [`shots`], in the light and the dark theme,
 //! at 1440 CSS pixels wide and the full height of the page, and writes each
-//! as `<image>.png` and `<image>-dark.png` under [`IMAGES`]. The browser runs
+//! as `<image>.png` and `<image>-dark.png` under [`IMAGES`]; it takes each
+//! again at 390 CSS pixels, a phone, under the ignored [`NARROW_IMAGES`], for
+//! the visual review the book does not show. The browser runs
 //! through the chromedriver at `FERROFED_WEBDRIVER`, as the journeys do, and
 //! the console serves its release site bundle. Without the gate the capture
 //! returns at once, so no CI job takes a screenshot.
@@ -44,8 +46,28 @@ const SCREENSHOTS_GATE: &str = "FERROFED_SCREENSHOTS";
 /// The book's folder of console screenshots, from the workspace root.
 const IMAGES: &str = "website/book/src/operate/img/console";
 
-/// The width every screenshot is taken at, in CSS pixels.
-const WIDTH: u32 = 1440;
+/// The ignored folder of the phone-width screenshots, from the workspace
+/// root.
+const NARROW_IMAGES: &str = "target/console-screenshots/narrow";
+
+/// A width a screenshot is taken at.
+#[derive(Debug, Clone, Copy)]
+enum Width {
+    /// 1440 CSS pixels, the book's.
+    Wide,
+    /// 390 CSS pixels, a phone.
+    Narrow,
+}
+
+impl Width {
+    /// The width in CSS pixels.
+    const fn pixels(self) -> u32 {
+        match self {
+            Self::Wide => 1440,
+            Self::Narrow => 390,
+        }
+    }
+}
 
 /// The height of the window a page is laid out in before its full height is
 /// measured.
@@ -116,7 +138,7 @@ const PAGES: [Shot; 16] = [
         image: "query",
         route: "/query",
         url: "/query",
-        ready: "//form//button[@type = 'submit' and normalize-space(.) = 'Run query']",
+        ready: "//form//button[@type = 'submit' and not(@disabled) and normalize-space(.) = 'Run query']",
     },
     Shot {
         image: "stored-queries",
@@ -128,7 +150,7 @@ const PAGES: [Shot; 16] = [
         image: "stored-query",
         route: "/stored-queries/:name",
         url: "/stored-queries/org.example::journey_001",
-        ready: "//pre[contains(@class, 'code-block')]",
+        ready: "//div[contains(@class, 'fui-code-panel')]",
     },
     Shot {
         image: "self-description",
@@ -193,7 +215,7 @@ const QUERY_COMPLETE: Shot = Shot {
     image: "query-complete",
     route: "/query",
     url: "/query",
-    ready: "//span[contains(., 'Every node in scope answered.')]",
+    ready: "//div[contains(., 'Every node in scope answered.')]",
 };
 
 /// An incomplete answer: both nodes, best effort, and node B fails.
@@ -201,7 +223,7 @@ const QUERY_PARTIAL: Shot = Shot {
     image: "query-partial",
     route: "/query",
     url: "/query",
-    ready: "//span[contains(., 'Not every node in scope answered')]",
+    ready: "//div[contains(., 'Not every node in scope answered')]",
 };
 
 /// A query the gateway refuses.
@@ -209,7 +231,7 @@ const QUERY_REFUSED: Shot = Shot {
     image: "query-refused",
     route: "/query",
     url: "/query",
-    ready: "//p[contains(., 'The gateway refused this view: 400')]",
+    ready: "//div[contains(., 'The gateway refused this view: 400')]",
 };
 
 /// Every shot the capture takes.
@@ -334,28 +356,43 @@ struct ContentSize {
     height: f64,
 }
 
-/// Lays the page out in a window `height` CSS pixels tall at [`WIDTH`].
-async fn window(browser: &Browser, height: u32) -> Result<(), Box<dyn Error>> {
+/// Lays the page out in a window `height` CSS pixels tall at `width`.
+async fn window(browser: &Browser, width: Width, height: u32) -> Result<(), Box<dyn Error>> {
     browser
         .driver()
         .cdp()
         .send_raw(
             "Emulation.setDeviceMetricsOverride",
-            json!({ "width": WIDTH, "height": height, "deviceScaleFactor": 1, "mobile": false }),
+            json!({ "width": width.pixels(), "height": height, "deviceScaleFactor": 1, "mobile": false }),
         )
         .await?;
     Ok(())
 }
 
+/// Where the image of `image` in `theme` at `width` is written: the book's
+/// folder for the wide one, the ignored folder for the narrow one.
+fn output(image: &str, theme: Theme, width: Width) -> PathBuf {
+    match width {
+        Width::Wide => file(image, theme),
+        Width::Narrow => root()
+            .join(NARROW_IMAGES)
+            .join(format!("{image}{}.png", theme.suffix())),
+    }
+}
+
 /// Has the browser report `theme` as the system's colour scheme, so the
-/// form controls the browser draws match the page.
+/// form controls the browser draws match the page, and ask for reduced
+/// motion, so a control that just turned enabled is drawn at rest.
 async fn scheme(browser: &Browser, theme: Theme) -> Result<(), Box<dyn Error>> {
     browser
         .driver()
         .cdp()
         .send_raw(
             "Emulation.setEmulatedMedia",
-            json!({ "features": [{ "name": "prefers-color-scheme", "value": theme.word() }] }),
+            json!({ "features": [
+                { "name": "prefers-color-scheme", "value": theme.word() },
+                { "name": "prefers-reduced-motion", "value": "reduce" }
+            ] }),
         )
         .await?;
     Ok(())
@@ -431,18 +468,22 @@ async fn to_top(browser: &Browser) -> Result<(), Box<dyn Error>> {
 
 /// Waits for `shot` to show in `theme`, and writes it at the page's full
 /// height.
-async fn capture(browser: &Browser, shot: &Shot, theme: Theme) -> Result<(), Box<dyn Error>> {
+async fn capture(
+    browser: &Browser,
+    shot: &Shot,
+    (theme, width): (Theme, Width),
+) -> Result<(), Box<dyn Error>> {
     browser.element(By::XPath(shot.ready)).await?;
     browser
         .element(By::Css(format!(r#"html[data-theme="{}"]"#, theme.word())))
         .await?;
     settled(browser).await?;
     let height = content_height(browser).await?;
-    window(browser, height).await?;
+    window(browser, width, height).await?;
     to_top(browser).await?;
     let png = browser.driver().screenshot_as_png().await?;
-    window(browser, HEIGHT).await?;
-    std::fs::write(file(shot.image, theme), png)?;
+    window(browser, width, HEIGHT).await?;
+    std::fs::write(output(shot.image, theme, width), png)?;
     if shot.route != NOT_FOUND.route {
         return browser.console_clean(shot.image).await;
     }
@@ -460,14 +501,18 @@ async fn visit(
     browser: &Browser,
     stack: &Stack,
     shot: &Shot,
-    theme: Theme,
+    at: (Theme, Width),
 ) -> Result<(), Box<dyn Error>> {
     browser.goto(&stack.url(shot.url)).await?;
-    capture(browser, shot, theme).await
+    capture(browser, shot, at).await
 }
 
-/// Runs the query console's three answers and captures each in `theme`.
-async fn answers(browser: &Browser, stack: &Stack, theme: Theme) -> Result<(), Box<dyn Error>> {
+/// Runs the query console's three answers and captures each in `at`.
+async fn answers(
+    browser: &Browser,
+    stack: &Stack,
+    at: (Theme, Width),
+) -> Result<(), Box<dyn Error>> {
     let aql = patient_query();
     let mut run = Run {
         aql: &aql,
@@ -484,7 +529,7 @@ async fn answers(browser: &Browser, stack: &Stack, theme: Theme) -> Result<(), B
         run.endpoints = endpoints;
         run.partial = partial;
         submit(browser, &run).await?;
-        capture(browser, shot, theme).await?;
+        capture(browser, shot, at).await?;
     }
     browser.goto(&stack.url(QUERY_REFUSED.url)).await?;
     hydrated(browser).await?;
@@ -495,7 +540,7 @@ async fn answers(browser: &Browser, stack: &Stack, theme: Theme) -> Result<(), B
         partial: false,
     };
     submit(browser, &refused).await?;
-    capture(browser, &QUERY_REFUSED, theme).await
+    capture(browser, &QUERY_REFUSED, at).await
 }
 
 /// Puts the theme cookie for `theme` in the browser, which must be at the
@@ -507,18 +552,22 @@ async fn choose(browser: &Browser, theme: Theme) -> Result<(), Box<dyn Error>> {
     scheme(browser, theme).await
 }
 
-/// Captures every shot in `theme`, signing in and out around the pages.
-async fn every_page(browser: &Browser, stack: &Stack, theme: Theme) -> Result<(), Box<dyn Error>> {
+/// Captures every shot in `at`, signing in and out around the pages.
+async fn every_page(
+    browser: &Browser,
+    stack: &Stack,
+    at: (Theme, Width),
+) -> Result<(), Box<dyn Error>> {
     browser.driver().delete_all_cookies().await?;
     browser.goto(&stack.url("/")).await?;
-    choose(browser, theme).await?;
-    visit(browser, stack, &SIGN_IN, theme).await?;
+    choose(browser, at.0).await?;
+    visit(browser, stack, &SIGN_IN, at).await?;
     sign_in(browser, stack).await?;
     for shot in &PAGES {
-        visit(browser, stack, shot, theme).await?;
+        visit(browser, stack, shot, at).await?;
     }
-    answers(browser, stack, theme).await?;
-    visit(browser, stack, &NOT_FOUND, theme).await
+    answers(browser, stack, at).await?;
+    visit(browser, stack, &NOT_FOUND, at).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -527,12 +576,15 @@ async fn the_book_shows_every_console_page_in_light_and_dark() -> Result<(), Box
         return Ok(());
     }
     std::fs::create_dir_all(root().join(IMAGES))?;
+    std::fs::create_dir_all(root().join(NARROW_IMAGES))?;
     let admin = listener().await;
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
-        window(browser, HEIGHT).await?;
-        for theme in [Theme::Light, Theme::Dark] {
-            every_page(browser, &stack, theme).await?;
+        for width in [Width::Wide, Width::Narrow] {
+            window(browser, width, HEIGHT).await?;
+            for theme in [Theme::Light, Theme::Dark] {
+                every_page(browser, &stack, (theme, width)).await?;
+            }
         }
         Ok(())
     })

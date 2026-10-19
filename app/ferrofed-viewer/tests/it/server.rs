@@ -304,7 +304,8 @@ async fn the_page_loads_the_bundle_cargo_leptos_writes() -> Result<(), Box<dyn E
     for asset in [
         "/pkg/ferrofed-viewer.wasm",
         "/pkg/ferrofed-viewer.js",
-        "/pkg/ferrofed-viewer.css",
+        "/pkg/ferrohealth-ui.css",
+        "/pkg/ferrofed-theme.css",
     ] {
         assert!(
             body.contains(&format!(r#"href="{asset}""#)),

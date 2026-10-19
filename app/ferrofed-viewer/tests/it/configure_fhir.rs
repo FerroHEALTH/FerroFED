@@ -181,7 +181,7 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
         r#"name="form[fhir][0][system]" value="urn:oid:2.999.1""#,
         r#"name="form[fhir][0][categories]" value="Patient-Summaries" checked"#,
         r#"name="form[fhir][0][profiles]" value="http://example.org/ps""#,
-        r#"<label for="cfg-f-0-system">Identifier system of the ehr_id</label>"#,
+        r#"<label for="cfg-f-0-system" class="fui-label">Identifier system of the ehr_id</label>"#,
         r#"aria-describedby="cfg-f-0-system-hint cfg-f-0-system-error""#,
         r#"name="form[fhir_shown]" value="yes""#,
         r#"aria-label="Remove FHIR endpoint node-c-fhir""#,

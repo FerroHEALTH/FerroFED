@@ -479,6 +479,17 @@ async fn an_empty_stored_query_registry_still_offers_a_version() -> Result<(), B
         form.contains("cannot be changed or removed afterwards"),
         "{form}"
     );
+    assert!(
+        form.contains(r#"<li aria-current="page">Store a new version</li>"#),
+        "{form}"
+    );
+    let member = page(&service, &session, "/configuration/members/new").await?;
+    assert!(
+        member.contains(r#"<li aria-current="page">Add a member</li>"#),
+        "{member}"
+    );
+    assert!(!member.contains(">Reason</legend>"), "{member}");
+    assert!(member.contains(">Reason</label>"), "{member}");
     Ok(())
 }
 

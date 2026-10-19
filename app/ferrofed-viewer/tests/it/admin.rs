@@ -244,7 +244,7 @@ async fn the_drift_repair_goes_to_the_first_replica_with_the_members_named()
     assert!(html.contains("The registry's copy: held."), "{html}");
     assert!(html.contains("Incomplete."), "{html}");
     assert!(
-        html.contains(r#"<th scope="row">node-b-pub</th><td>time-out</td>"#),
+        html.contains(r#"<th scope="row" class="fui-mono">node-b-pub</th><td data-label="Status">time-out</td>"#),
         "{html}"
     );
     assert!(html.contains("<tbody>"), "{html}");
@@ -307,7 +307,7 @@ async fn a_refusal_shows_the_replica_its_status_and_its_code() -> Result<(), Box
         let replicas = [("gateway-0", listener.uri())];
         let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
         let html = acted(&service, &session, "/api/clear-ehr-id", clear_at("*")).await?;
-        assert!(html.contains(r#"<p role="alert">"#), "{status}: {html}");
+        assert!(html.contains(r#"role="alert""#), "{status}: {html}");
         if status == 401 {
             assert!(
                 html.contains(&format!(
@@ -671,7 +671,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     );
     assert!(integrity.contains(r#"id="clear-confirm""#), "{integrity}");
     assert!(
-        integrity.contains(r#"<button type="submit" autofocus disabled>Clear the ehr_id</button>"#),
+        integrity.contains(r#"<button type="submit" autofocus disabled class="fui-button fui-button-primary">Clear the ehr_id</button>"#),
         "{integrity}"
     );
     let (_, stored) = send(&service, get_as("/stored-queries", &session)?).await?;

@@ -111,14 +111,14 @@ async fn listener() -> Server {
 /// The choice `label` of the secret `key`.
 fn choice(key: &str, label: &str) -> By {
     By::XPath(format!(
-        "//fieldset[contains(@class, 'secret') and .//code[. = '{key}']]//label[contains(., '{label}')]"
+        "//div[contains(@class, 'fui-reveal') and .//code[. = '{key}']]//label[contains(., '{label}')]"
     ))
 }
 
 /// The value field of the secret `key`.
 fn value_field(key: &str) -> By {
     By::XPath(format!(
-        "//fieldset[contains(@class, 'secret') and .//code[. = '{key}']]//input[@type = 'password']"
+        "//div[contains(@class, 'fui-reveal') and .//code[. = '{key}']]//input[@type = 'password']"
     ))
 }
 
@@ -150,9 +150,11 @@ async fn secret_saved(
         "a password field is never filled"
     );
     browser
-        .element(choice("bearer_token", "Set a value"))
-        .await?
-        .click()
+        .press(
+            &browser
+                .element(choice("bearer_token", "Set a value"))
+                .await?,
+        )
         .await?;
     assert!(
         password.is_displayed().await?,
@@ -161,9 +163,7 @@ async fn secret_saved(
     password.send_keys(VALUE).await?;
     fill(browser, "cfg-reason", "rotate").await?;
     browser
-        .element(submit("Save as revision 4"))
-        .await?
-        .click()
+        .press(&browser.element(submit("Save as revision 4")).await?)
         .await?;
     browser
         .text("strong", "Replica gateway-0 saved revision 4.")
@@ -199,22 +199,26 @@ async fn rolled_back(
     )
     .await?;
     browser
-        .element(By::Css(
-            r#"button[popovertarget="rollback-confirm"][aria-haspopup]"#,
-        ))
-        .await?
-        .click()
+        .press(
+            &browser
+                .element(By::Css(
+                    r#"button[popovertarget="rollback-confirm"][aria-haspopup]"#,
+                ))
+                .await?,
+        )
         .await?;
     browser
         .element(By::Css("#rollback-confirm:popover-open"))
         .await?;
     fill(browser, "cfg-rollback-reason", "the token is wrong").await?;
     browser
-        .element(By::XPath(
-            "//div[@id = 'rollback-confirm']//button[@type = 'submit']",
-        ))
-        .await?
-        .click()
+        .press(
+            &browser
+                .element(By::XPath(
+                    "//div[@id = 'rollback-confirm']//button[@type = 'submit']",
+                ))
+                .await?,
+        )
         .await?;
     browser
         .text(
@@ -253,7 +257,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
         )
         .await?;
         browser
-            .text("span", "/var/lib/ferrofed/secrets/a.secret")
+            .text("li", "/var/lib/ferrofed/secrets/a.secret")
             .await?;
         browser
             .text("h2", "Revision 2 awaits your confirmation")

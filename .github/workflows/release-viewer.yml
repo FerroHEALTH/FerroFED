@@ -238,7 +238,7 @@ jobs:
           done
           gh attestation verify inputs/ferrofed-viewer-site.tar.gz --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
           tar -C dist/viewer -xzf inputs/ferrofed-viewer-site.tar.gz site
-          for file in ferrofed-viewer.wasm ferrofed-viewer.js ferrofed-viewer.css; do
+          for file in ferrofed-viewer.wasm ferrofed-viewer.js; do
             test -s "dist/viewer/site/pkg/${file}"
           done
 

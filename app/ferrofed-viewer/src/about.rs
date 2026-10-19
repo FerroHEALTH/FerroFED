@@ -11,12 +11,12 @@
 //! The page is data: each card is a title and its rows, drawn by one
 //! function, so the browser bundle carries the drawing once.
 
+use ferrohealth_ui::view::surface::{card, definitions, grid_start, page_header};
 use leptos::either::EitherOf4;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::app::{PRODUCT, VERSION};
-use crate::components::{card, page_header};
 use crate::manufacturer::MANUFACTURER;
 use crate::views::titled;
 
@@ -43,7 +43,7 @@ fn value(value: Value) -> impl IntoView {
         Value::Text(text) => EitherOf4::A(text),
         Value::Link { href, text } => EitherOf4::B(view! { <a href=href>{text}</a> }),
         Value::Code(text) => EitherOf4::C(view! { <code>{text}</code> }),
-        Value::Missing(text) => EitherOf4::D(view! { <span class="text-muted">{text}</span> }),
+        Value::Missing(text) => EitherOf4::D(view! { <span class="fui-muted">{text}</span> }),
     }
 }
 
@@ -51,21 +51,15 @@ fn value(value: Value) -> impl IntoView {
 fn facts(title: &'static str, rows: Vec<(&'static str, Value)>) -> AnyView {
     let rows = rows
         .into_iter()
-        .map(|(term, shown)| {
-            view! {
-                <div class="grid grid-cols-1 gap-1 border-b border-line py-2 last:border-b-0 sm:grid-cols-[10rem_1fr]">
-                    <dt class="text-sm font-medium text-muted">{term}</dt>
-                    <dd class="m-0 text-sm break-words">{value(shown)}</dd>
-                </div>
-            }
-        })
-        .collect_view();
-    card(title, view! { <dl class="m-0">{rows}</dl> }).into_any()
+        .map(|(term, shown)| (term, value(shown).into_any()))
+        .collect();
+    card(title, definitions(rows)).into_any()
 }
 
-/// The cards of the page: the product, the manufacturer (Art 30(1)(g): the
-/// name, the postal address and the single point of contact), and the
-/// gateway's `{base}`, which `gateway` holds for a signed-in operator alone.
+/// The cards of the page: the product with the gateway's `{base}`, which
+/// `gateway` holds for a signed-in operator alone, and the manufacturer
+/// (Art 30(1)(g): the name, the postal address and the single point of
+/// contact).
 fn cards(gateway: String) -> Vec<(&'static str, Vec<(&'static str, Value)>)> {
     let gateway = if gateway.is_empty() {
         Value::Missing("Sign in to see the gateway this console reads.")
@@ -85,6 +79,7 @@ fn cards(gateway: String) -> Vec<(&'static str, Vec<(&'static str, Value)>)> {
                          It holds no clinical data.",
                     ),
                 ),
+                ("Gateway", gateway),
             ],
         ),
         (
@@ -108,7 +103,6 @@ fn cards(gateway: String) -> Vec<(&'static str, Vec<(&'static str, Value)>)> {
                 ),
             ],
         ),
-        ("Gateway", vec![("Base URL", gateway)]),
     ]
 }
 
@@ -130,7 +124,7 @@ pub fn AboutPage(
         SharedValue::new_str(move || crate::home::rendered(move || about(gateway))).into_inner();
     view! {
         <Title text=titled("About") />
-        <div class="contents" inner_html=html></div>
+        <div inner_html=html></div>
     }
 }
 
@@ -142,10 +136,12 @@ pub fn about(gateway: String) -> String {
         .map(|(title, rows)| facts(title, rows))
         .collect_view();
     view! {
-        <div class="mx-auto w-full max-w-3xl">
-            {page_header("About", "The product, the gateway it reads, and who makes it.", ())}
-            <div class="flex flex-col gap-4">{cards}</div>
-        </div>
+        {page_header(
+            "About",
+            Some(String::from("The product, the gateway it reads, and who makes it.")),
+            (),
+        )}
+        {grid_start(cards)}
     }
     .to_html()
 }

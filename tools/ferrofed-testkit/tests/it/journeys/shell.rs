@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The shell in the browser: the theme switch, which draws the page at once
+//! The shell in the browser: the theme toggle, which draws the page at once
 //! and keeps the choice for the next page the server draws, before any
 //! script runs; the navigation drawer below `md`, which the keyboard opens,
 //! moves the focus into, closes with Escape and returns the focus from; the
@@ -49,7 +49,7 @@ async fn focused(browser: &Browser) -> Result<String, Box<dyn Error>> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_theme_switch_draws_the_page_and_the_server_keeps_the_choice()
+async fn the_theme_toggle_draws_the_page_and_the_server_keeps_the_choice()
 -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
         return Ok(());
@@ -57,22 +57,32 @@ async fn the_theme_switch_draws_the_page_and_the_server_keeps_the_choice()
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
+        browser
+            .driver()
+            .cdp()
+            .send_raw(
+                "Emulation.setEmulatedMedia",
+                json!({ "features": [{ "name": "prefers-color-scheme", "value": "light" }] }),
+            )
+            .await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        drawn_in(browser, "light").await?;
-        let dark = "//header//div[@aria-label = 'Theme']//button[normalize-space(.) = 'Dark']";
-        browser.element(By::XPath(dark)).await?.click().await?;
-        drawn_in(browser, "dark").await?;
-        until("the switch marks the dark theme pressed", async || {
-            let pressed = browser
-                .element(By::XPath(dark))
+        drawn_in(browser, "system").await?;
+        until("the toggle swaps the theme in place", async || {
+            let to_dark = browser.element(By::Id("theme-to-dark")).await?;
+            if to_dark.is_displayed().await? {
+                to_dark.click().await?;
+            }
+            Ok(!browser
+                .driver()
+                .find_all(By::Css(r#"html[data-theme="dark"]"#))
                 .await?
-                .attr("aria-pressed")
-                .await?;
-            Ok(pressed.as_deref() == Some("true"))
+                .is_empty())
         })
         .await?;
-        browser.console_clean("the theme switch").await?;
+        browser.at(&stack.url("/query")).await?;
+        browser.element(By::Id("theme-to-light")).await?;
+        browser.console_clean("the theme toggle").await?;
 
         // The server draws the next page in the theme it keeps, before any
         // script runs, so the page never shows the wrong theme first.
@@ -89,11 +99,20 @@ async fn the_theme_switch_draws_the_page_and_the_server_keeps_the_choice()
         .await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        let system = "//header//div[@aria-label = 'Theme']//button[normalize-space(.) = 'System']";
-        browser.element(By::XPath(system)).await?.click().await?;
-        drawn_in(browser, "system").await?;
+        until("the toggle swaps back to the light theme", async || {
+            let to_light = browser.element(By::Id("theme-to-light")).await?;
+            if to_light.is_displayed().await? {
+                to_light.click().await?;
+            }
+            Ok(!browser
+                .driver()
+                .find_all(By::Css(r#"html[data-theme="light"]"#))
+                .await?
+                .is_empty())
+        })
+        .await?;
         browser
-            .console_clean("the way back to the system theme")
+            .console_clean("the way back to the light theme")
             .await
     })
     .await
@@ -138,7 +157,8 @@ async fn the_keyboard_opens_the_drawer_moves_into_it_and_escape_returns()
         })
         .await?;
         until("the focus returns to the menu button", async || {
-            Ok(focused(browser).await? == "Menu")
+            let active = browser.driver().active_element().await?;
+            Ok(active.attr("aria-label").await?.as_deref() == Some("Menu"))
         })
         .await?;
 

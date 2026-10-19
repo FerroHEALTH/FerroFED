@@ -9,14 +9,19 @@
 //! attribute value it renders, and the Content-Security-Policy admits no
 //! inline script besides.
 
+use ferrohealth_ui::table::model::filled_columns;
+use ferrohealth_ui::table::view::{Column, NUM};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::layout::tile_list;
+use ferrohealth_ui::view::notice::{Announce, notice};
+use ferrohealth_ui::view::status::pill;
+use ferrohealth_ui::view::surface::table_card;
 use leptos::either::Either;
 use leptos::prelude::*;
 
-use crate::components::icon;
 use crate::query::model::{
     ColumnLine, EndpointLine, PAGE_ROWS, QueryAnswer, ROWS_TABLE, RenderedAnswer,
 };
-use crate::styles::{self, Tone};
 use crate::views::model::Refusal;
 
 /// The HTML of `answer`.
@@ -40,8 +45,8 @@ pub fn refused(refused: &Refusal) -> RenderedAnswer {
         complete: false,
         refused: true,
         rows: 0,
-        // NOTE: the Leptos book, `reactivity/working_with_signals`: the icon is a
-        // component, which renders under a reactive owner of its own here.
+        // NOTE: the Leptos book, `reactivity/working_with_signals`: the view renders
+        // under a reactive owner of its own here, outside any request.
         html: Owner::new().with(|| refusal_state(refused).to_html()),
         raw: String::new(),
     }
@@ -52,9 +57,8 @@ pub fn refused(refused: &Refusal) -> RenderedAnswer {
 fn refusal_state(refused: &Refusal) -> AnyView {
     let line = crate::views::refusal(refused);
     view! {
-        <div class="query-refusal">
-            <span class="text-danger-fg">{icon(icondata_lu::LuCircleAlert, "18")}</span>
-            <span class=Tone::Danger.pill()>"refused"</span>
+        <div class="fui-stack">
+            <div class="fui-cluster">{pill(Tone::Bad, "refused")}</div>
             {line}
         </div>
     }
@@ -69,8 +73,7 @@ fn answered(answer: &QueryAnswer) -> AnyView {
     let nodes = nodes_section(&answer.endpoints);
     let details = details_section(&answer.endpoints);
     let rows = rows_section(answer);
-    view! { <div class="query-answer">{summary} {outcome} {nodes} {details} {rows}</div> }
-        .into_any()
+    view! { <div class="fui-stack">{summary} {outcome} {nodes} {details} {rows}</div> }.into_any()
 }
 
 /// Whether `status` is one a node in scope ends with once it has answered
@@ -89,7 +92,7 @@ fn out_of_scope(status: &str) -> bool {
 fn node_tone(status: &str) -> Tone {
     match status {
         "active" => Tone::Ok,
-        "offline" | "time-out" | "node-error" => Tone::Danger,
+        "offline" | "time-out" | "node-error" => Tone::Bad,
         "not-resolved" | "consent-denied" => Tone::Warn,
         _ => Tone::Neutral,
     }
@@ -99,7 +102,7 @@ fn node_tone(status: &str) -> Tone {
 /// answered of those in scope, and the time the gateway took.
 fn summary_section(answer: &QueryAnswer) -> AnyView {
     let (tone, word) = if !answer.succeeded {
-        (Tone::Danger, format!("failed {}", answer.status))
+        (Tone::Bad, format!("failed {}", answer.status))
     } else if answer.complete {
         (Tone::Ok, String::from("complete"))
     } else {
@@ -123,7 +126,7 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
     let elapsed = answer.elapsed_ms.map(|elapsed| {
         view! {
             <span aria-hidden="true">"·"</span>
-            <span class="tabular-nums">{format!("{elapsed} ms")}</span>
+            <span class="fui-num">{format!("{elapsed} ms")}</span>
         }
     });
     let dedup = answer.dedup.clone().map(|mode| {
@@ -137,16 +140,15 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
         }
     });
     view! {
-        <div class="summary-strip">
-            <span class="font-semibold text-ink tabular-nums">{counted(answer.rows.len())}</span>
-            <span class=tone.pill()>{word}</span>
+        <div class="fui-cluster">
+            <strong class="fui-num">{counted(answer.rows.len())}</strong>
+            {pill(tone, &word)}
             <span aria-hidden="true">"·"</span>
-            <span class="tabular-nums">{nodes}</span>
+            <span class="fui-num">{nodes}</span>
             {elapsed}
             {dedup}
-            <span aria-hidden="true">"·"</span>
-            {completeness(answer.complete)}
         </div>
+        {completeness(answer.complete)}
     }
     .into_any()
 }
@@ -162,67 +164,63 @@ fn outcome_section(answer: &QueryAnswer) -> AnyView {
         _ => " The gateway returned no rows.",
     };
     let failed = (!answer.succeeded).then(|| {
-        view! {
-            <p role="alert">
+        notice(
+            Tone::Bad,
+            Announce::Alert,
+            None,
+            view! {
                 <strong>{format!("The gateway failed the query: {status}.")}</strong>
                 {why}
                 " The nodes below say what each one did."
-            </p>
-        }
+            },
+        )
     });
     failed.into_any()
 }
 
-/// What `meta.federation.complete` says, in words, for the end of the
-/// summary strip, whose pill names it in one word (§11.4, N37).
+/// What `meta.federation.complete` says, in words, under the summary
+/// strip, whose pill names it in one word (§11.4, N37).
 fn completeness(complete: bool) -> impl IntoView {
     if complete {
-        Either::Left(view! {
-            <span role="status" class="complete-note">
-                "Every node in scope answered."
-            </span>
-        })
+        Either::Left(notice(
+            Tone::Ok,
+            Announce::Status,
+            None,
+            "Every node in scope answered.",
+        ))
     } else {
-        Either::Right(view! {
-            <span role="alert" class="incomplete-note">
-                "Not every node in scope answered (meta.federation.complete is false), "
-                "so these rows are not the whole answer."
-            </span>
-        })
+        Either::Right(notice(
+            Tone::Warn,
+            Announce::Alert,
+            None,
+            "Not every node in scope answered (meta.federation.complete is false), \
+             so these rows are not the whole answer.",
+        ))
     }
 }
 
-/// One chip per node: its id, its status, its rows and its latency (§9.5,
+/// One tile per node: its id, its status, its rows and its latency (§9.5,
 /// §11.1).
 fn nodes_section(endpoints: &[EndpointLine]) -> AnyView {
-    let chips = endpoints
+    let tiles = endpoints
         .iter()
         .map(|endpoint| {
             let rows = endpoint.row_count.map(|count| {
-                view! { <span class="text-muted tabular-nums">{counted_u64(count)}</span> }
+                view! { <span class="fui-muted fui-num">{counted_u64(count)}</span> }
             });
             let latency = endpoint.latency_ms.map(|latency| {
-                view! { <span class="text-muted tabular-nums">{format!("{latency} ms")}</span> }
+                view! { <span class="fui-muted fui-num">{format!("{latency} ms")}</span> }
             });
             view! {
-                <li class="node-chip">
-                    <span class=format!(
-                        "{} font-medium text-ink",
-                        styles::MONO,
-                    )>{endpoint.id.clone()}</span>
-                    <span class=node_tone(&endpoint.status).pill()>{endpoint.status.clone()}</span>
-                    {rows}
-                    {latency}
-                </li>
+                <span class="fui-mono">{endpoint.id.clone()}</span>
+                {pill(node_tone(&endpoint.status), &endpoint.status)}
+                {rows}
+                {latency}
             }
+            .into_any()
         })
-        .collect_view();
-    view! {
-        <ul class="node-chips" aria-label="Nodes">
-            {chips}
-        </ul>
-    }
-    .into_any()
+        .collect();
+    tile_list("Nodes", tiles)
 }
 
 /// Every endpoint's record in full, its organisation and error with it,
@@ -231,56 +229,78 @@ fn details_section(endpoints: &[EndpointLine]) -> AnyView {
     let open = endpoints.iter().any(|endpoint| endpoint.error.is_some());
     let table = endpoints_table(endpoints);
     view! {
-        <details class="endpoint-details" open=open>
+        <details class="fui-disclosure" open=open>
             <summary>"Endpoint details"</summary>
-            {table}
+            <div>{table}</div>
         </details>
     }
     .into_any()
 }
 
+/// The columns of the endpoint details.
+const ENDPOINT_COLUMNS: [Column; 6] = [
+    Column::text("endpoint", "Endpoint"),
+    Column::text("status", "Status"),
+    Column::text("latency", "Latency").numeric(),
+    Column::text("rows", "Rows").numeric(),
+    Column::text("organisation", "Organisation"),
+    Column::text("error", "Error"),
+];
+
 /// The table of `endpoints`, each with its status, latency, rows and
 /// error (§9.5, §11.1).
 pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
+    let columns = filled_columns(
+        &ENDPOINT_COLUMNS,
+        endpoints,
+        &["endpoint", "status"],
+        |endpoint, key| match key {
+            "latency" => endpoint.latency_ms.is_some(),
+            "rows" => endpoint.row_count.is_some(),
+            "organisation" => endpoint.organisation.is_some(),
+            "error" => endpoint.error.is_some(),
+            _ => true,
+        },
+    );
+    let has = |key: &str| crate::views::has(&columns, key);
+    let (latency, counted, organised, failed) = (
+        has("latency"),
+        has("rows"),
+        has("organisation"),
+        has("error"),
+    );
     let rows = endpoints
         .iter()
         .map(|endpoint| {
             view! {
                 <tr>
-                    <th scope="row">{endpoint.id.clone()}</th>
-                    <td>{endpoint.status.clone()}</td>
-                    <td>
-                        {endpoint
-                            .latency_ms
-                            .map(|latency| format!("{latency} ms"))
-                            .unwrap_or_default()}
-                    </td>
-                    <td>{endpoint.row_count.map(|count| count.to_string()).unwrap_or_default()}</td>
-                    <td>{endpoint.organisation.clone().unwrap_or_default()}</td>
-                    <td>{endpoint.error.clone().unwrap_or_default()}</td>
+                    <th scope="row" class="fui-mono">{endpoint.id.clone()}</th>
+                    <td data-label="Status">{endpoint.status.clone()}</td>
+                    {latency.then(|| view! {
+                        <td data-label="Latency" class=NUM>
+                            {endpoint.latency_ms.map(|latency| format!("{latency} ms")).unwrap_or_default()}
+                        </td>
+                    })}
+                    {counted.then(|| view! {
+                        <td data-label="Rows" class=NUM>
+                            {endpoint.row_count.map(|count| count.to_string()).unwrap_or_default()}
+                        </td>
+                    })}
+                    {organised.then(|| view! {
+                        <td data-label="Organisation">{endpoint.organisation.clone().unwrap_or_default()}</td>
+                    })}
+                    {failed.then(|| view! {
+                        <td data-label="Error">{endpoint.error.clone().unwrap_or_default()}</td>
+                    })}
                 </tr>
             }
         })
         .collect_view();
-    view! {
-        <div class=styles::TABLE_SCROLL tabindex="0">
-            <table>
-                <caption>"Every endpoint the gateway reports"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Endpoint"</th>
-                        <th scope="col">"Status"</th>
-                        <th scope="col">"Latency"</th>
-                        <th scope="col">"Rows"</th>
-                        <th scope="col">"Organisation"</th>
-                        <th scope="col">"Error"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
-    }
-    .into_any()
+    crate::views::table(
+        "Every endpoint the gateway reports",
+        &columns,
+        rows.into_any(),
+    )
 }
 
 /// The heading of the column at `index`: its `name`, or its `path` when the
@@ -325,7 +345,7 @@ fn counted_u64(count: u64) -> String {
 /// which the page shows one at a time.
 fn rows_section(answer: &QueryAnswer) -> AnyView {
     if answer.rows.is_empty() {
-        return view! { <p class="no-rows">"No rows."</p> }.into_any();
+        return view! { <p class="fui-muted">"No rows."</p> }.into_any();
     }
     let header = answer
         .columns
@@ -363,17 +383,18 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
             }
         })
         .collect_view();
-    view! {
-        <div class=styles::TABLE_SCROLL role="region" aria-label="Rows" tabindex="0">
-            <table id=ROWS_TABLE>
+    table_card(
+        "Rows",
+        view! {
+            <table id=ROWS_TABLE class="fui-table">
                 <caption>{counted(answer.rows.len())}</caption>
                 <thead>
                     <tr>{header}</tr>
                 </thead>
                 {pages}
             </table>
-        </div>
-    }
+        },
+    )
     .into_any()
 }
 
@@ -424,8 +445,14 @@ mod tests {
         let rows = html.find("8849182a::cdr1.rso.nl::1").expect("the rows");
         assert!(flag < rows, "{html}");
         assert!(html.contains(r#"role="alert""#), "{html}");
-        assert!(html.contains("<td>time-out</td>"), "{html}");
-        assert!(html.contains("<td>no answer in time</td>"), "{html}");
+        assert!(
+            html.contains(r#"<td data-label="Status">time-out</td>"#),
+            "{html}"
+        );
+        assert!(
+            html.contains(r#"<td data-label="Error">no answer in time</td>"#),
+            "{html}"
+        );
         assert!(html.contains("<tbody>"), "{html}");
         assert!(html.contains(r#"<th scope="col""#), "{html}");
     }
@@ -501,21 +528,21 @@ mod tests {
     fn the_summary_strip_names_the_rows_the_completeness_the_nodes_and_the_time() {
         let html = answered(&answer(200, false)).to_html();
         assert!(
-            html.contains(r#"<span class="pill tone-warn">partial</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-warn">partial</span>"#),
             "{html}"
         );
         assert!(html.contains("1 of 2 nodes answered"), "{html}");
         assert!(html.contains("142 ms"), "{html}");
         let html = answered(&answer(200, true)).to_html();
         assert!(
-            html.contains(r#"<span class="pill tone-ok">complete</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-ok">complete</span>"#),
             "{html}"
         );
         let mut failed = answer(504, false);
         failed.rows.clear();
         let html = answered(&failed).to_html();
         assert!(
-            html.contains(r#"<span class="pill tone-danger">failed 504</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-bad">failed 504</span>"#),
             "{html}"
         );
     }
@@ -534,7 +561,9 @@ mod tests {
         assert!(html.contains("2 of 2 nodes answered"), "{html}");
         for (id, tone) in [("node_1", "ok"), ("node_2", "warn"), ("node_3", "neutral")] {
             assert!(
-                html.contains(&format!(r#"{id}</span><span class="pill tone-{tone}">"#)),
+                html.contains(&format!(
+                    r#"{id}</span><span class="fui-pill fui-tone-{tone}">"#
+                )),
                 "{id}: {html}"
             );
         }
@@ -603,13 +632,16 @@ mod tests {
         assert_eq!(0, refused.rows);
         assert!(refused.raw.is_empty());
         let html = &refused.html;
-        assert!(html.contains(r#"<p role="alert">"#), "{html}");
+        assert!(
+            html.contains(r#"<div role="alert" class="fui-notice fui-tone-bad">"#),
+            "{html}"
+        );
         assert!(
             html.contains("The gateway refused this view: 400 ("),
             "{html}"
         );
         assert!(
-            html.contains(r#"<span class="pill tone-danger">refused</span>"#),
+            html.contains(r#"<span class="fui-pill fui-tone-bad">refused</span>"#),
             "{html}"
         );
         assert!(html.contains("&lt;script&gt;x&lt;/script&gt;"), "{html}");

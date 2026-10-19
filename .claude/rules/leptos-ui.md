@@ -16,6 +16,15 @@ documentation. The discipline is the family's, carried from FerroEHR's
 server-rendered viewer and FerroTERM's client-rendered one, and adapted to
 this crate's shape.
 
+**The components, tokens, icons, accessibility bar and quality control are
+FerroUI's**: the console draws with `ferrohealth-ui`, pinned exactly in the
+root `[workspace.dependencies]`, and that library's own
+`.claude/rules/leptos-ui.md` (FerroHEALTH/FerroUI) is the rule set for
+every view. This file keeps what is particular to this console: the BFF, the
+session, the server functions, the gateway client, the admin actions and
+the bundle budget. A component this console needs and the library lacks is
+added to the library, never written here.
+
 **The console is rendered on the server and hydrated in the browser**, with a
 backend-for-frontend (BFF) on the same server, built by cargo-leptos. Unlike
 FerroEHR's viewer, the two halves are chosen by **compilation target, never by
@@ -291,46 +300,19 @@ The bar is **WCAG 2.2 Level AA** (<https://www.w3.org/TR/WCAG22/>), checked
 per slice. Every control is keyboard operable with a visible focus state;
 tables carry real `<th scope=…>` headers; no meaning rides on colour alone,
 so a node status is a word as well as a tint; contrast meets AA in the light
-and the dark theme of `style/tailwind.css`, whose colours are the "Azure & Iron"
-tokens of `assets/brand/tokens.css`; motion respects
-`prefers-reduced-motion`.
+and the dark theme; motion respects `prefers-reduced-motion`. A view uses the
+components and the role classes of `ferrohealth-ui`, never a colour of its
+own. The console keeps only its brand theme, `style/theme.css`, the "Azure &
+Iron" accent of `assets/brand/tokens.css` over the library's roles.
 
-`tests/it/contrast.rs` reads the colour custom properties of the three theme
-blocks of `style/tailwind.css` and computes the WCAG 2.2 contrast ratio of
-every text and ground pair a view can draw, at 4.5:1 for text (SC 1.4.3)
-and 3:1 for a control's edge (SC 1.4.11). A translucent ground is laid over
-each opaque ground (`surface`, `raised`, `inset`, `head`, `neutral-bg`) and
-the worst result counts. A new token or pairing joins the test's lists. The
-ratios, measured 2026-10-16 (#1112):
-
-| Muted text on | Light | Dark |
-|---|---:|---:|
-| `surface` | 5.44 | 7.38 |
-| `raised` | 5.69 | 6.96 |
-| `inset` | 5.19 | 5.71 |
-| `head` | 5.44 | 6.61 |
-| `neutral-bg` | 5.19 | 5.71 |
-| `accent-tint` | 4.51 | 4.54 |
-| `ok-bg` | 5.40 | 4.70 |
-| `warn-bg` | 5.49 | 4.64 |
-| `danger-bg` | 5.20 | 5.14 |
-
-The light `--muted` is `#58687d`, slate-500 darkened just enough for the
-accent tint; slate-500 itself (`#64748b`) measured 4.34 on `inset` and 3.77
-on the tint, and one step lighter, `#59697e`, measures 4.44 on the tint.
-
-| Worst pair of each other role | Minimum | Light | Dark |
-|---|---:|---:|---:|
-| `ink` on `accent-tint` | 4.5 | 14.15 | 10.62 |
-| `accent` on `accent-tint` | 4.5 | 4.70 | 6.98 |
-| `accent-hover` on `accent-tint` | 4.5 | 6.00 | 8.77 |
-| `accent-fg` on `accent` | 4.5 | 5.93 | 10.71 |
-| `neutral-fg` on `inset` | 4.5 | 9.45 | 9.85 |
-| `ok-fg` on `ok-bg` | 4.5 | 5.21 | 7.90 |
-| `warn-fg` on `warn-bg` | 4.5 | 4.84 | 8.25 |
-| `danger-fg` on `danger-bg` | 4.5 | 5.91 | 6.95 |
-| `control` edge on `inset` | 3 | 4.34 | 3.07 |
-| `accent` edge on `inset` | 3 | 5.42 | 8.77 |
+`tests/it/contrast.rs` reads the role tokens of the library's stylesheet with
+the brand theme laid over them, in the three theme blocks, and computes the
+WCAG 2.2 contrast ratio of every text and ground pair a view can draw, at
+4.5:1 for text (SC 1.4.3) and 3:1 for a control's edge and the focus ring
+(SC 1.4.11). A translucent ground is laid over each opaque ground and the
+worst result counts. The top bar stays in view from `md` up, so the
+stylesheet's `scroll-padding-top` clears it for a focused control
+(SC 2.4.11), which the test holds too.
 
 ## 11. Testing and gates
 
@@ -582,19 +564,8 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
 
 ## 13. Icons
 
-- **Icons come from `leptos_icons` with the Lucide pack alone**:
-  `icondata_lu` for the icons and `icondata_core` for the `Icon` type a prop
-  names, never the `icondata` umbrella, which depends on every pack. The three
-  are pinned in the root `[workspace.dependencies]` and join the crate's
-  shared `[dependencies]` with the first view that draws an icon, since the
-  server renders it and the browser hydrates it.
-- **An icon no view names costs nothing.** Every icon of the pack is a
-  `static`, and the linker drops each one nothing references. Measured on the
-  profile of §12: the three crates linked with no icon used changed the
-  bundle by 8 bytes raw. The first icon adds the `Icon` component and the SVG
-  rendering it pulls in, 20801 bytes raw and 6292 brotli-compressed, plus 220
-  bytes of JavaScript glue, once. Each further icon adds its own path data
-  and its call site, about 1 KB raw and 435 bytes compressed for the second.
-  The bundle then holds the path data of the icons used and no other.
+- **Icons are `ferrohealth_ui::icon::Glyph`**, the Lucide outlines the
+  library vendors; no icon crate of the console's own. A glyph the console
+  needs and the library lacks is added to the library.
 - An icon never carries meaning alone (§10): it sits beside the word it
   illustrates.

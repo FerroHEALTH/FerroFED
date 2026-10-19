@@ -13,6 +13,7 @@ use leptos::prelude::*;
 use crate::admin::act::server::{Acted, ReplicaAnswer};
 use crate::admin::answer::replica_said;
 use crate::admin::model::ActionAnswer;
+use crate::configure::render::answers::said;
 
 /// How a removal names `resource`: `credentials:<endpoint id>` or
 /// `binding:<section>`.
@@ -37,18 +38,15 @@ pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
 
 /// What a replica reports of a confirmation.
 fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
-    view! {
-        <p role="status" class="mt-0">
-            <strong>
-                {format!(
-                    "Replica {replica} recorded the confirmation of revision {}.",
-                    mark.revision,
-                )}
-            </strong>
-            " It stays running, and the gateway no longer rolls it back."
-        </p>
-    }
-    .into_any()
+    said(view! {
+        <strong>
+            {format!(
+                "Replica {replica} recorded the confirmation of revision {}.",
+                mark.revision,
+            )}
+        </strong>
+        " It stays running, and the gateway no longer rolls it back."
+    })
 }
 
 /// The answer of an approval at `answer`'s replica.
@@ -68,16 +66,13 @@ fn approved_line(replica: &str, review: &Review) -> AnyView {
     } else {
         " It still takes an approval before it applies."
     };
-    view! {
-        <p role="status" class="mt-0">
-            <strong>
-                {format!(
-                    "Replica {replica} recorded the approval of revision {}.",
-                    review.revision,
-                )}
-            </strong>
-            {next}
-        </p>
-    }
-    .into_any()
+    said(view! {
+        <strong>
+            {format!(
+                "Replica {replica} recorded the approval of revision {}.",
+                review.revision,
+            )}
+        </strong>
+        {next}
+    })
 }

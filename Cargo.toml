@@ -259,12 +259,12 @@ leptos_meta = "0.8.7"
 leptos_router = "0.8.16"
 wasm-bindgen = "0.2.129"
 console_error_panic_hook = "0.1.7"
-# The console's icons: the Icon component and the Lucide pack alone, never the
-# icondata umbrella, which depends on every pack. A pack icon no view names is
-# never linked into the bundle. Verified against crates.io on 2026-10-05.
-leptos_icons = "0.7.1"
-icondata_lu = "0.1.0"
-icondata_core = "0.1.0"
+# The FerroHEALTH component library: the console's views and widgets, the
+# table model, the highlighter, the Lucide icons, the stylesheet and the role
+# tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
+# moves to a new version deliberately. Verified against crates.io on
+# 2026-10-18.
+ferrohealth-ui = "=0.1.3"
 cookie = { version = "0.18.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design). Groups sit

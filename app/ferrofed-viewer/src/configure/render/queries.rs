@@ -9,9 +9,16 @@ use ferrofed_registry::console::{QueryRegistry, QueryResource};
 use leptos::prelude::*;
 
 use crate::configure::render::Loaded;
-use crate::configure::render::members::{GROUP, GROUP_TITLE, owner};
-use crate::configure::render::parts::{Text, confirmed, error_line, form, head, hidden, text};
-use crate::styles::{self, Button};
+use crate::configure::render::members::{GROUP, owner};
+use crate::configure::render::parts::{
+    Text, confirmed, error_line, form, head, hidden, text, trail,
+};
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::view::Column;
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::form::TEXTAREA;
+use ferrohealth_ui::view::status::badge;
 
 /// The stored versions grouped by name, in the order the gateway lists
 /// them.
@@ -26,13 +33,20 @@ fn grouped(queries: &[QueryResource]) -> Vec<(&str, Vec<&QueryResource>)> {
     groups
 }
 
+/// The columns of the Stored queries tab.
+const QUERY_COLUMNS: [Column; 3] = [
+    Column::text("name", "Name"),
+    Column::text("versions", "Versions"),
+    Column::text("owner", "Owner"),
+];
+
 /// The Stored queries tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let registry = loaded.resources.stored_query_registry;
     let store = (registry == QueryRegistry::Writable).then(|| {
         view! {
-            <a href="/configuration/stored-queries/new" class=styles::BUTTON_PRIMARY>
-                {crate::components::icon(icondata_lu::LuPlus, "16")}
+            <a href="/configuration/stored-queries/new" class=Variant::Primary.class()>
+                {icon(Glyph::PLUS, "16")}
                 "Store a new version"
             </a>
         }
@@ -48,13 +62,13 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     if registry == QueryRegistry::Absent {
         return view! {
             {header}
-            <p class="m-0 text-muted">"The gateway offers no stored-query registry."</p>
+            <p class="fui-muted">"The gateway offers no stored-query registry."</p>
         }
         .into_any();
     }
     let read_only = (registry == QueryRegistry::ReadOnly).then(|| {
         view! {
-            <p class="mt-0 text-sm" role="note">
+            <p role="note">
                 "The stored queries come from the read-only definition files: change the files."
             </p>
         }
@@ -63,7 +77,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let rows = if groups.is_empty() {
         view! {
             <tr>
-                <td colspan="3" class="text-muted">
+                <td colspan="3" class="fui-muted">
                     "No version is stored yet."
                 </td>
             </tr>
@@ -75,9 +89,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             .map(|(name, versions)| {
                 let badges = versions
                     .iter()
-                    .map(|query| {
-                        view! { <span class="badge tone-neutral font-mono">{query.version.clone()}</span> }
-                    })
+                    .map(|query| badge(Tone::Neutral, &query.version))
                     .collect_view();
                 let held = versions.first().map(|query| owner(query.owner));
                 view! {
@@ -85,10 +97,10 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
                         <th scope="row">
                             <code>{name.to_owned()}</code>
                         </th>
-                        <td>
-                            <div class="flex flex-wrap gap-1">{badges}</div>
+                        <td data-label="Versions">
+                            <div class="fui-cluster">{badges}</div>
                         </td>
-                        <td>{held}</td>
+                        <td data-label="Owner">{held}</td>
                     </tr>
                 }
             })
@@ -98,19 +110,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {header}
         {read_only}
-        <div class=styles::TABLE_SCROLL tabindex="0" role="region" aria-labelledby="queries-title">
-            <table>
-                <caption class="sr-only">"Stored-query versions by name"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Name"</th>
-                        <th scope="col">"Versions"</th>
-                        <th scope="col">"Owner"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
+        {crate::views::table("Stored-query versions by name", &QUERY_COLUMNS, rows)}
     }
     .into_any()
 }
@@ -125,8 +125,8 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
     let body = view! {
         {hidden("action", String::from("store-query"))}
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Version"</legend>
-            <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <legend>"Version"</legend>
+            <div class="fui-field-row fui-field-row-halves">
                 {text(
                     ("cfg-name", "form[name]"),
                     String::from("Qualified name"),
@@ -154,8 +154,8 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
             <datalist id="cfg-names">{names}</datalist>
         </fieldset>
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"AQL"</legend>
-            <label for="cfg-aql" class="sr-only">
+            <legend>"AQL"</legend>
+            <label for="cfg-aql" class="fui-sr-only">
                 "AQL"
             </label>
             <textarea
@@ -164,15 +164,15 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
                 rows="14"
                 spellcheck="false"
                 required
-                class="min-h-64 w-full"
+                class=format!("{TEXTAREA} fui-mono")
                 aria-describedby="cfg-aql-error"
             ></textarea>
             {error_line("cfg-aql")}
         </fieldset>
-        <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
+        <div class="fui-action-bar">
             {confirmed(
                 String::from("store-confirm"),
-                (String::from("Store the version"), Button::Primary),
+                (String::from("Store the version"), Variant::Primary),
                 (
                     String::from(
                         "Store this version? A stored version cannot be changed or removed afterwards.",
@@ -180,15 +180,13 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
                     "Store",
                 ),
                 (),
-            )} <a href="/configuration/stored-queries" class=styles::BUTTON_SECONDARY>
+            )} <a href="/configuration/stored-queries" class=Variant::Secondary.class()>
                 "Cancel"
             </a>
         </div>
     };
     view! {
-        <p class="mt-0 mb-2 text-sm">
-            <a href="/configuration/stored-queries">"Stored queries"</a>
-        </p>
+        {trail(("Stored queries", "/configuration/stored-queries"), String::from("Store a new version"))}
         {head(
             ("query-title", String::from("Store a new version")),
             (
@@ -197,7 +195,7 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
             ),
             (),
         )}
-        {form("main", "", body)}
+        {form("main", "fui-stack", body)}
     }
     .into_any()
 }

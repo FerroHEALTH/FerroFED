@@ -171,7 +171,10 @@ async fn the_members_view_renders_from_the_running_gateway() -> Result<(), Box<d
         page.contains(r#"<a href="/members/node-a">node-a-pub</a></th>"#),
         "{page}"
     );
-    assert!(page.contains("<td>org-a</td>"), "{page}");
+    assert!(
+        page.contains(r#"<td data-label="Organisation">org-a</td>"#),
+        "{page}"
+    );
     Ok(())
 }
 
@@ -191,7 +194,7 @@ async fn the_integrity_view_renders_the_incidents_and_the_routing_table()
     assert!(page.contains("EhrIdCollision"), "{page}");
     assert!(page.contains(EHR_ID), "{page}");
     assert!(
-        page.contains(r#"<span class="pill tone-danger">open</span>"#),
+        page.contains(r#"<span class="fui-pill fui-tone-bad">open</span>"#),
         "{page}"
     );
 
@@ -199,13 +202,11 @@ async fn the_integrity_view_renders_the_incidents_and_the_routing_table()
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
     rendered("/routing", &page)?;
     assert!(
-        page.contains(
-            r#"<th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">legacy-a.example.org</th>"#
-        ),
+        page.contains(r#"<th scope="row" class="fui-mono">legacy-a.example.org</th>"#),
         "{page}"
     );
     assert!(
-        page.contains(r#"<span class="badge tone-neutral">registered</span>"#),
+        page.contains(r#"<span class="fui-badge fui-tone-neutral">registered</span>"#),
         "{page}"
     );
     assert!(page.contains("Rows 1 to 2 of 2."), "{page}");

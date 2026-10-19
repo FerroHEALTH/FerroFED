@@ -1,0 +1,30 @@
+/* SPDX-FileCopyrightText: Cadasto B.V. */
+/* SPDX-License-Identifier: BUSL-1.1 */
+/* The FerroFED brand, "Azure & Iron": the accent of each theme over the roles
+   of the ferrohealth-ui stylesheet, loaded after it. tests/it/contrast.rs
+   holds every pairing to WCAG 2.2 AA. */
+:root {
+  --accent: #0369a1;
+  --accent-hover: #075985;
+  --accent-ink: #ffffff;
+  --accent-tint: rgb(3 105 161 / 0.1);
+  --focus: #0369a1;
+}
+
+:root[data-theme="dark"] {
+  --accent: #7dd3fc;
+  --accent-hover: #bae6fd;
+  --accent-ink: #0f172a;
+  --accent-tint: rgb(125 211 252 / 0.1);
+  --focus: #7dd3fc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"], [data-theme="dark"]) {
+    --accent: #7dd3fc;
+    --accent-hover: #bae6fd;
+    --accent-ink: #0f172a;
+    --accent-tint: rgb(125 211 252 / 0.1);
+    --focus: #7dd3fc;
+  }
+}

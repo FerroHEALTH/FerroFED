@@ -21,9 +21,10 @@ use leptos_router::hooks::{use_params_map, use_query_map};
 use serde::{Deserialize, Serialize};
 
 use crate::admin::act::RepairDrift;
-use crate::components::page_header;
 use crate::views::model::{Outcome, ViewError};
 use crate::views::{STORED_QUERIES, offset_in_url, pager, replica_line, shown, titled};
+use ferrohealth_ui::view::empty::{Busy, busy};
+use ferrohealth_ui::view::surface::{page_header, stack};
 
 /// The query parameter of the query console that names the stored query to
 /// run, by its qualified name.
@@ -118,10 +119,12 @@ pub fn StoredQueriesPage() -> impl IntoView {
     let repair = ServerAction::<RepairDrift>::new();
     view! {
         <Title text=titled("Stored queries") />
-        {page_header("Stored queries", "The queries the gateway holds, by namespace.", ())}
-        <Transition fallback=|| {
-            view! { <p>"Loading the stored queries."</p> }
-        }>
+        {page_header(
+            "Stored queries",
+            Some(String::from("The queries the gateway holds, by namespace.")),
+            (),
+        )}
+        <Transition fallback=|| busy("Loading the stored queries.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| list_section(view, repair))
             })}
@@ -140,16 +143,14 @@ fn list_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView 
             view.total,
         )
     });
-    let offered = view.repair_form.is_some();
     let repair = crate::admin::repair_section(repair, view.repair_form);
-    let repair = offered.then(|| {
-        view! { <div class=format!("{} mt-6", crate::styles::CARD_PAD)>{repair}</div> }
-    });
     view! {
         {answered_by}
-        <div class="contents" inner_html=view.html></div>
-        {stored_pager}
-        {repair}
+        {stack(view! {
+            <div inner_html=view.html></div>
+            {stored_pager}
+            {repair}
+        })}
     }
     .into_any()
 }
@@ -179,14 +180,12 @@ pub fn StoredQueryPage() -> impl IntoView {
     let loaded = Resource::new_blocking(asked, |(name, version)| stored_query(name, version));
     view! {
         <Title text=move || titled(&name()) />
-        <Transition fallback=|| {
-            view! { <p>"Loading the stored query."</p> }
-        }>
+        <Transition fallback=|| busy("Loading the stored query.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
                     |detail| {
-                        view! { <div class="contents" inner_html=detail.html></div> }.into_any()
+                        view! { <div inner_html=detail.html></div> }.into_any()
                     },
                 )
             })}

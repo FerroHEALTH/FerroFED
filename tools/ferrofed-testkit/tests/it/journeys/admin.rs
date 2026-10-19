@@ -100,17 +100,18 @@ async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Err
 /// Opens the confirmation step `id` from its button and runs the action
 /// with its submit, under the heading `heading`.
 async fn confirmed(browser: &Browser, id: &str, heading: &str) -> Result<(), Box<dyn Error>> {
-    browser
+    let opens = browser
         .element(By::Css(format!(
             r#"button[popovertarget="{id}"][aria-haspopup]"#
         )))
-        .await?
-        .click()
         .await?;
+    browser.press(&opens).await?;
     browser
         .element(By::Css(format!("#{id}:popover-open")))
         .await?;
-    browser.element(submit(heading)).await?.click().await?;
+    browser
+        .press(&browser.element(submit(heading)).await?)
+        .await?;
     Ok(())
 }
 
@@ -152,7 +153,7 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
             .text("strong", &format!("Replica gateway-0 cleared {EHR_ID}."))
             .await?;
         browser
-            .text("p", "It held a collision between node-a, node-b.")
+            .text("div", "It held a collision between node-a, node-b.")
             .await?;
         browser.console_clean("a cleared collision").await?;
 

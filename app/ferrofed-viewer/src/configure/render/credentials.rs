@@ -12,20 +12,23 @@
 
 use ferrofed_registry::console::{ConsoleState, Owner};
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot, SectionResource};
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::view::{ACTIONS, Column};
+use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::form::{INPUT, SELECT, SWITCH};
 use leptos::prelude::*;
 
 use crate::configure::plan::removal_reason;
 use crate::configure::render::Loaded;
-use crate::configure::render::members::{GROUP, GROUP_TITLE, owner, state};
+use crate::configure::render::members::{GROUP, owner, state};
 use crate::configure::render::parts::{
     Text, add_button, confirmed, error_line, form, head, hidden, reason, remove_button, save_bar,
-    template, text,
+    template, text, trail,
 };
 use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
 use crate::configure::settings::fields::TLS;
 use crate::configure::settings::{self, Field, Grant, Kind, Secret, TLS_SECRET};
-use crate::styles::{self, Button};
 use crate::views::model::Refusal;
 
 /// The path of `resource`'s form.
@@ -40,21 +43,21 @@ fn href(resource: &Resource) -> String {
 /// The secrets `slots` name, each set and read from its file, or none.
 fn secrets_said(slots: &[SecretSlot]) -> AnyView {
     if slots.is_empty() {
-        return view! { <span class="text-muted">"not set"</span> }.into_any();
+        return view! { <span class="fui-muted">"not set"</span> }.into_any();
     }
-    slots
+    let items = slots
         .iter()
         .map(|slot| {
             view! {
-                <span class="block">
+                <li>
                     <code>{slot.key.clone()}</code>
                     ": set, read from "
                     <code>{slot.reference.clone()}</code>
-                </span>
+                </li>
             }
         })
-        .collect_view()
-        .into_any()
+        .collect_view();
+    view! { <ul class="fui-divided">{items}</ul> }.into_any()
 }
 
 /// The settings of `section` in a few words: its grant and how many keys
@@ -86,7 +89,7 @@ fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
     let shown = resource.to_string();
     form(
         "main",
-        "inline",
+        "",
         view! {
             {hidden("action", String::from("remove-section"))}
             {hidden("base", loaded.base())}
@@ -96,9 +99,9 @@ fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
                 (
                     view! {
                         "Remove"
-                        <span class="sr-only">{format!(" {shown}")}</span>
+                        <span class="fui-sr-only">{format!(" {shown}")}</span>
                     },
-                    Button::Ghost,
+                    Variant::Ghost,
                 ),
                 (
                     format!(
@@ -132,11 +135,15 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
     let actions = editable.then(|| {
-        view! {
-            <a href=href(&section.resource) class=styles::BUTTON_GHOST>
+        let edit = view! {
+            <a href=href(&section.resource) class=Variant::Ghost.class()>
                 "Edit"
-                <span class="sr-only">{format!(" {shown}")}</span>
+                <span class="fui-sr-only">{format!(" {shown}")}</span>
             </a>
+        }
+        .into_any();
+        view! {
+            {edit}
             {remove(loaded, &section.resource)}
         }
     });
@@ -145,13 +152,11 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             <th scope="row">
                 <code>{shown.clone()}</code>
             </th>
-            <td>{owner(section.owner)}</td>
-            <td>{state(if console { section.state } else { None })}</td>
-            <td>{secrets_said(&section.secrets)}</td>
-            <td>{settings_said(section)}</td>
-            <td>
-                <div class="flex flex-wrap items-center justify-end gap-1">{actions}</div>
-            </td>
+            <td data-label="Owner">{owner(section.owner)}</td>
+            <td data-label="State">{state(if console { section.state } else { None })}</td>
+            <td data-label="Secrets">{secrets_said(&section.secrets)}</td>
+            <td data-label="Settings">{settings_said(section)}</td>
+            <td data-label="Actions" class=ACTIONS>{actions}</td>
         </tr>
     }
     .into_any()
@@ -174,13 +179,23 @@ pub(super) fn addable(loaded: &Loaded<'_>) -> Vec<BindingSection> {
         .collect()
 }
 
+/// The columns of the Credentials and bindings tab.
+const SECTION_COLUMNS: [Column; 6] = [
+    Column::text("resource", "Resource"),
+    Column::text("owner", "Owner"),
+    Column::text("state", "State"),
+    Column::text("secrets", "Secrets"),
+    Column::text("settings", "Settings"),
+    Column::text("actions", "Actions"),
+];
+
 /// The Credentials and bindings tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let sections = &loaded.resources.sections;
     let rows = if sections.is_empty() {
         view! {
             <tr>
-                <td colspan="6" class="text-muted">
+                <td colspan="6" class="fui-muted">
                     "No onward credential or binding section is set."
                 </td>
             </tr>
@@ -195,7 +210,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     };
     let binding = (!addable(loaded).is_empty()).then(|| {
         view! {
-            <a href="/configuration/bindings/new" class=styles::BUTTON_SECONDARY>
+            <a href="/configuration/bindings/new" class=Variant::Secondary.class()>
                 "Add binding section"
             </a>
         }
@@ -209,51 +224,27 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             ),
             view! {
                 {binding}
-                <a href="/configuration/credentials/new" class=styles::BUTTON_PRIMARY>
-                    {crate::components::icon(icondata_lu::LuPlus, "16")}
+                <a href="/configuration/credentials/new" class=Variant::Primary.class()>
+                    {icon(Glyph::PLUS, "16")}
                     "Add credentials"
                 </a>
             },
         )}
-        <div
-            class=styles::TABLE_SCROLL
-            tabindex="0"
-            role="region"
-            aria-labelledby="credentials-title"
-        >
-            <table>
-                <caption class="sr-only">
-                    "Credentials and binding sections and their owners"
-                </caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Resource"</th>
-                        <th scope="col">"Owner"</th>
-                        <th scope="col">"State"</th>
-                        <th scope="col">"Secrets"</th>
-                        <th scope="col">"Settings"</th>
-                        <th scope="col">
-                            <span class="sr-only">"Actions"</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
+        {crate::views::table(
+            "Credentials and binding sections and their owners",
+            &SECTION_COLUMNS,
+            rows,
+        )}
     }
     .into_any()
 }
 
-/// The classes of a choice of a secret, one segment of a segmented control:
-/// raised and edged while chosen, so colour is never its only mark.
-const SEGMENT: &str = "inline-flex cursor-pointer items-center rounded-[0.25rem] border \
-                       border-transparent px-2.5 py-1 text-xs font-medium text-muted \
-                       has-[:checked]:border-control has-[:checked]:bg-raised \
-                       has-[:checked]:text-ink has-[:checked]:shadow-card \
-                       has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent";
-
 /// The choice of the secret `secret` in row `row`, its slot `slot` when it
 /// is set: Keep, Set a value, Read from a file or, when set, Clear.
+///
+/// The value field shows while Set a value is chosen and the file field
+/// while Read from a file is, which the stylesheet decides by the place of
+/// the radio chosen, so it works before the page hydrates.
 pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&SecretSlot>) -> AnyView {
     let (key, label) = secret;
     let name = |part: &str| format!("form[secret][{row}][{part}]");
@@ -282,11 +273,11 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
             let id = secret_field(row, value);
             let label_for = id.clone();
             view! {
-                <label for=label_for class=SEGMENT>
+                <label for=label_for class="fui-segment">
                     <input
                         type="radio"
                         id=id
-                        class="sr-only"
+                        class="fui-sr-only"
                         name=name("choice")
                         value=value
                         checked=value == "keep"
@@ -298,46 +289,51 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
         .collect_view();
     let group = secret_field(row, "choice");
     let value_id = secret_field(row, "value");
+    let set = view! {
+        <div class="fui-field">
+            <label for=value_id.clone() class="fui-label">
+                "Value, never shown again"
+            </label>
+            <input
+                type="password"
+                id=value_id.clone()
+                name=name("value")
+                class=INPUT
+                autocomplete="new-password"
+                aria-describedby=format!("{value_id}-error")
+            />
+            {error_line(&value_id)}
+        </div>
+    };
+    let file = text(
+        (&secret_field(row, "file"), &name("file")),
+        String::from("Absolute path of the file it is read from"),
+        String::new(),
+        Text {
+            mono: true,
+            ..Text::default()
+        },
+    );
     view! {
-        <fieldset
-            class="secret m-0 mb-4 min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-            id=group.clone()
-        >
-            <legend class="mb-1 text-sm font-medium">{label}</legend>
-            <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
-            <input type="hidden" name=name("key") value=key.to_owned() />
-            <p class="mt-0 mb-2 text-xs text-muted">
-                <code>{key.to_owned()}</code>
-                " · "
-                {status}
-            </p>
-            <div class=styles::SEGMENTED role="presentation">
-                {segments}
+        <div class="fui-reveal">
+            <fieldset class="fui-fieldset fui-choice" id=group.clone()>
+                <legend class="fui-label">{label}</legend>
+                <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
+                <input type="hidden" name=name("key") value=key.to_owned() />
+                <p class="fui-help">
+                    <code>{key.to_owned()}</code>
+                    " · "
+                    {status}
+                </p>
+                <div class="fui-segmented">{segments}</div>
+                {error_line(&group)}
+            </fieldset>
+            <div class="fui-reveal-parts">
+                <div class="fui-revealed"></div>
+                <div class="fui-revealed">{set}</div>
+                <div class="fui-revealed">{file}</div>
             </div>
-            <div class="secret-set mt-2">
-                <label for=value_id.clone()>"Value, never shown again"</label>
-                <input
-                    type="password"
-                    id=value_id.clone()
-                    name=name("value")
-                    autocomplete="new-password"
-                    aria-describedby=format!("{value_id}-error")
-                />
-                {error_line(&value_id)}
-            </div>
-            <div class="secret-file mt-2">
-                {text(
-                    (&secret_field(row, "file"), &name("file")),
-                    String::from("Absolute path of the file it is read from"),
-                    String::new(),
-                    Text {
-                        mono: true,
-                        ..Text::default()
-                    },
-                )}
-            </div>
-            {error_line(&group)}
-        </fieldset>
+        </div>
     }
     .into_any()
 }
@@ -348,9 +344,9 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
     let item = |item: &str, value: String| {
         let id = format!("{into}-{item}");
         view! {
-            <div id=format!("{id}-row") class="flex items-end gap-2">
-                <div class="min-w-0 flex-1">
-                    <label for=id.clone() class="sr-only">
+            <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
+                <div class="fui-field">
+                    <label for=id.clone() class="fui-sr-only">
                         "Value"
                     </label>
                     <input
@@ -358,7 +354,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
                         id=id.clone()
                         name=format!("form[setting][{row}][values]")
                         value=value
-                        class=styles::MONO
+                        class=format!("{INPUT} fui-mono")
                         autocomplete="off"
                     />
                 </div>
@@ -373,7 +369,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
         .collect_view();
     let tpl = format!("tpl-{into}");
     view! {
-        <div id=into.clone() class="mb-2 flex flex-col gap-2">
+        <div id=into.clone() class="fui-stack">
             {items}
         </div>
         {add_button(&setting_field(row, "add"), (&tpl, &into), ("Add value", "__ITEM__"))}
@@ -401,9 +397,16 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
                 })
                 .collect_view();
             view! {
-                <div class=styles::FIELD>
-                    <label for=id.clone()>{field.label}</label>
-                    <select id=id.clone() name=name("value") aria-describedby=format!("{id}-error")>
+                <div class="fui-field">
+                    <label for=id.clone() class="fui-label">
+                        {field.label}
+                    </label>
+                    <select
+                        id=id.clone()
+                        name=name("value")
+                        class=SELECT
+                        aria-describedby=format!("{id}-error")
+                    >
                         {options}
                     </select>
                     {error_line(&id)}
@@ -412,24 +415,23 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
             .into_any()
         }
         Kind::Switch => view! {
-            <div class="mb-4">
-                <label for=id.clone() class="inline-flex items-center gap-2 text-sm font-medium">
-                    <input
-                        type="checkbox"
-                        role="switch"
-                        id=id.clone()
-                        name=name("value")
-                        value="true"
-                        checked=value == "true"
-                    />
-                    {field.label}
-                </label>
+            <div class="fui-check">
+                <input
+                    type="checkbox"
+                    role="switch"
+                    class=SWITCH
+                    id=id.clone()
+                    name=name("value")
+                    value="true"
+                    checked=value == "true"
+                />
+                <label for=id.clone()>{field.label}</label>
             </div>
         }
         .into_any(),
         Kind::List => view! {
-            <fieldset class="m-0 mb-4 min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none">
-                <legend class="mb-1 text-sm font-medium">{field.label}</legend>
+            <fieldset class="fui-fieldset fui-choice">
+                <legend class="fui-label">{field.label}</legend>
                 {list(row, settings::build::listed(held, field.key))}
             </fieldset>
         }
@@ -489,7 +491,7 @@ fn part(
         })
         .collect_view();
     view! {
-        <div class="grid grid-cols-1 gap-x-4 md:grid-cols-2">{fields}</div>
+        <div class="fui-columns">{fields}</div>
         {secrets}
     }
     .into_any()
@@ -521,7 +523,7 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>) -> AnyView {
     if let Some(endpoint) = endpoint {
         return view! {
             {hidden("endpoint", endpoint.to_owned())}
-            <p class="mt-0 mb-4 text-sm">"Endpoint " <code>{endpoint.to_owned()}</code></p>
+            <p>"Endpoint " <code>{endpoint.to_owned()}</code></p>
         }
         .into_any();
     }
@@ -533,17 +535,18 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>) -> AnyView {
         })
         .collect_view();
     view! {
-        <div class=styles::FIELD>
-            <label for="cfg-endpoint">"Endpoint"</label>
+        <div class="fui-field">
+            <label for="cfg-endpoint" class="fui-label">"Endpoint"</label>
             <select
                 id="cfg-endpoint"
+                class=SELECT
                 name="form[endpoint]"
                 required
                 aria-describedby="cfg-endpoint-hint cfg-endpoint-error"
             >
                 {options}
             </select>
-            <p id="cfg-endpoint-hint" class=styles::HELP>
+            <p id="cfg-endpoint-hint" class="fui-help">
                 "The endpoints the members declare that hold no credentials yet."
             </p>
             {error_line("cfg-endpoint")}
@@ -566,17 +569,18 @@ fn grant_choice(grant: Grant) -> AnyView {
         })
         .collect_view();
     view! {
-        <div class=styles::FIELD>
-            <label for="cfg-grant">"Grant type"</label>
+        <div class="fui-field">
+            <label for="cfg-grant" class="fui-label">"Grant type"</label>
             <select
                 id="cfg-grant"
+                class=SELECT
                 name="form[grant]"
                 data-grant=""
                 aria-describedby="cfg-grant-hint cfg-grant-error"
             >
                 {grants}
             </select>
-            <p id="cfg-grant-hint" class=styles::HELP>
+            <p id="cfg-grant-hint" class="fui-help">
                 "How the gateway reaches the endpoint; the form shows that grant's fields."
             </p>
             {error_line("cfg-grant")}
@@ -625,8 +629,10 @@ pub(super) fn credential_form(
                 (&table, slots),
                 &mut rows,
             );
+            // NOTE: no specification governs this: our own design; the server shows
+            // the grant held, and the page's script shows the one the select names.
             view! {
-                <div class="grant-part" data-grant=option.as_str()>
+                <div data-grant-part=option.as_str() hidden=option != grant>
                     {inner}
                 </div>
             }
@@ -641,26 +647,23 @@ pub(super) fn credential_form(
         {hidden("action", String::from("save-credentials"))}
         {hidden("base", loaded.base())}
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Endpoint and grant"</legend>
+            <legend>"Endpoint and grant"</legend>
             {endpoint_choice(loaded, endpoint)}
             {grant_choice(grant)}
         </fieldset>
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Grant settings"</legend>
-            {parts}
+            <legend>"Grant settings"</legend>
+            <div id=crate::configure::browser::GRANT_PARTS>{parts}</div>
         </fieldset>
         <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"TLS"</legend>
+            <legend>"TLS"</legend>
             {tls}
         </fieldset>
-        <fieldset class=GROUP>
-            <legend class=GROUP_TITLE>"Reason"</legend>
-            {reason()}
-        </fieldset>
+        {reason()}
         {save_bar(loaded, "/configuration/credentials")}
     };
     Ok(view! {
-        {back()}
+        {back(title.clone())}
         {head(
             ("credential-title", title),
             (
@@ -669,17 +672,15 @@ pub(super) fn credential_form(
             ),
             (),
         )}
-        {form("main", "", body)}
+        {form("main", "fui-stack", body)}
     }
     .into_any())
 }
 
-/// The link back to the tab.
-pub(super) fn back() -> AnyView {
-    view! {
-        <p class="mt-0 mb-2 text-sm">
-            <a href="/configuration/credentials">"Credentials and bindings"</a>
-        </p>
-    }
-    .into_any()
+/// The trail from the tab to the form titled `current`.
+pub(super) fn back(current: String) -> AnyView {
+    trail(
+        ("Credentials and bindings", "/configuration/credentials"),
+        current,
+    )
 }

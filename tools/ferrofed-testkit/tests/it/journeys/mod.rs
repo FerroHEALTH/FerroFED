@@ -33,6 +33,7 @@ mod shell;
 mod sign_in;
 mod sign_out;
 mod stack;
+mod states;
 mod stored;
 mod views;
 

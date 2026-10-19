@@ -12,31 +12,25 @@
 //! shows in that card, and `data-field-error` on a field's refusal line.
 
 use ferrofed_registry::revision::{Difference, RevisionId};
+use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::view::Column;
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::{Variant, label};
+use ferrohealth_ui::view::form::INPUT;
+use ferrohealth_ui::view::status::badge;
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use crate::configure::act::Configure;
 use crate::configure::render::Loaded;
-use crate::styles;
 
 /// The book page that explains the configuration page.
 pub(crate) const LEARN: &str = "https://ferrofed.eu/docs/operate/configuration-revisions.html";
 
-/// The classes of a confirmation popover: a small card in the middle of
-/// the window, over a dimmed page.
-const POPOVER: &str = "m-auto w-[min(26rem,calc(100vw-2rem))] rounded-card border border-line \
-                       bg-raised p-5 text-ink shadow-card backdrop:bg-scrim";
-
-/// The classes of the line under a field that says why it was refused.
-const FIELD_ERROR: &str = "m-0 text-xs font-medium text-danger-fg";
-
-/// The classes of a card's one line of explanation.
-const LEDE: &str = "mt-0 mb-4 text-sm text-muted";
-
 /// One line of explanation and a link to the book's section `anchor`.
 pub(crate) fn lede(text: &'static str, anchor: &'static str) -> AnyView {
     view! {
-        <p class=LEDE>
+        <p class="fui-muted">
             {text} " " <a href=format!("{LEARN}#{anchor}") rel="external">
                 "Learn more"
             </a>
@@ -53,14 +47,14 @@ pub(crate) fn head(
     actions: impl IntoView,
 ) -> impl IntoView {
     view! {
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-                <h2 id=id class="mt-0 mb-1 text-base font-semibold text-ink">
+        <div class="fui-split">
+            <div>
+                <h2 id=id class="fui-card-title">
                     {title}
                 </h2>
                 {lede(line, anchor)}
             </div>
-            <div class="flex flex-wrap items-center gap-2">{actions}</div>
+            <div class="fui-cluster">{actions}</div>
         </div>
     }
 }
@@ -73,7 +67,9 @@ pub(crate) fn hidden(name: &str, value: String) -> AnyView {
 /// The line under the field `id` where its refusal shows, empty and hidden
 /// until the page marks it.
 pub(crate) fn error_line(id: &str) -> impl IntoView + use<> {
-    view! { <p id=format!("{id}-error") class=FIELD_ERROR data-field-error="" hidden></p> }
+    view! {
+        <p id=format!("{id}-error") class="fui-help fui-tone-bad" data-field-error="" hidden></p>
+    }
 }
 
 /// What a text field shows and takes beside its value.
@@ -109,10 +105,16 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
     } else {
         shown.kind
     };
-    let class = if shown.mono { styles::MONO } else { "" };
+    let class = if shown.mono {
+        format!("{INPUT} fui-mono")
+    } else {
+        String::from(INPUT)
+    };
     view! {
-        <div class=styles::FIELD>
-            <label for=id.to_owned()>{label}</label>
+        <div class="fui-field">
+            <label for=id.to_owned() class="fui-label">
+                {label}
+            </label>
             <input
                 type=kind
                 id=id.to_owned()
@@ -130,13 +132,33 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
                 .hint
                 .map(|hint| {
                     view! {
-                        <p id=hint_id class=styles::HELP>
+                        <p id=hint_id class="fui-help">
                             {hint}
                         </p>
                     }
                 })}
             {error_line(id)}
         </div>
+    }
+    .into_any()
+}
+
+/// The breadcrumb trail from the tab `(label, href)` to the form or view
+/// titled `current`, the current one last (WAI-ARIA Authoring Practices, the
+/// breadcrumb pattern).
+pub(crate) fn trail((label, href): (&'static str, &'static str), current: String) -> AnyView {
+    view! {
+        <nav class="fui-crumbs" aria-label="Breadcrumb">
+            <ol>
+                <li>
+                    <a href=href>{label}</a>
+                    <span class="fui-crumb-sep" aria-hidden="true">
+                        "/"
+                    </span>
+                </li>
+                <li aria-current="page">{current}</li>
+            </ol>
+        </nav>
     }
     .into_any()
 }
@@ -173,37 +195,42 @@ pub(crate) fn form(slot: &'static str, class: &'static str, body: impl IntoView)
 /// as it closes (HTML, the `popover` attribute).
 pub(crate) fn confirmed(
     id: String,
-    (open, variant): (impl IntoView, styles::Button),
+    (open, variant): (impl IntoView, Variant),
     (question, submit): (String, &'static str),
     inside: impl IntoView,
 ) -> impl IntoView {
     let question_id = format!("{id}-question");
     let labelled = question_id.clone();
     let (opens, closes) = (id.clone(), id.clone());
+    let confirm = if variant == Variant::Danger {
+        Variant::Destructive
+    } else {
+        Variant::Primary
+    };
+    let class = if variant == Variant::Danger {
+        "fui-dialog fui-dialog-danger"
+    } else {
+        "fui-dialog"
+    };
     view! {
-        <button
-            type="button"
-            class=styles::button(variant)
-            popovertarget=opens
-            aria-haspopup="dialog"
-        >
+        <button type="button" class=variant.class() popovertarget=opens aria-haspopup="dialog">
             {open}
         </button>
-        <div id=id popover="auto" role="dialog" aria-labelledby=labelled class=POPOVER>
-            <p id=question_id class="mt-0 mb-3 font-medium">
+        <div id=id popover="auto" role="dialog" aria-labelledby=labelled class=class>
+            <h2 id=question_id class="fui-dialog-title">
                 {question}
-            </p>
-            {inside}
-            <div class="mt-4 flex flex-wrap justify-end gap-2">
+            </h2>
+            <div class="fui-form">{inside}</div>
+            <div class="fui-dialog-actions">
                 <button
                     type="button"
-                    class=styles::BUTTON_SECONDARY
+                    class=Variant::Secondary.class()
                     popovertarget=closes
                     popovertargetaction="hide"
                 >
-                    "Cancel"
+                    {label(Some(Glyph::X), "Cancel")}
                 </button>
-                <button type="submit" class=styles::BUTTON_PRIMARY autofocus>
+                <button type="submit" class=confirm.class() autofocus>
                     {submit}
                 </button>
             </div>
@@ -218,14 +245,19 @@ pub(crate) fn confirmed(
 pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
     let next = format!("Save as {}", loaded.next());
     view! {
-        <div class="flex flex-wrap items-center gap-3 border-t border-line pt-4">
-            <button type="submit" class=styles::BUTTON_PRIMARY aria-describedby="cfg-save-hint">
+        <div class="fui-action-bar">
+            <button
+                type="submit"
+                class=Variant::Primary.class()
+                aria-describedby="cfg-save-hint"
+            >
+                {icon(Glyph::SAVE, "16")}
                 {next}
             </button>
-            <a href=back class=styles::BUTTON_SECONDARY>
+            <a href=back class=Variant::Secondary.class()>
                 "Cancel"
             </a>
-            <p id="cfg-save-hint" class="m-0 text-sm text-muted">
+            <p id="cfg-save-hint" class="fui-help">
                 "Saving does not apply it: apply it from the card at the top."
             </p>
         </div>
@@ -242,19 +274,21 @@ pub(crate) fn add_button(
     (label, placeholder): (&'static str, &'static str),
 ) -> AnyView {
     view! {
-        <div class="flex flex-col gap-1">
-            <button
-                type="button"
-                id=id.to_owned()
-                class=format!("{} self-start", styles::BUTTON_SECONDARY)
-                data-add=template.to_owned()
-                data-into=into.to_owned()
-                data-placeholder=placeholder
-                aria-describedby=format!("{id}-error")
-            >
-                {crate::components::icon(icondata_lu::LuPlus, "16")}
-                {label}
-            </button>
+        <div class="fui-field">
+            <div class="fui-cluster">
+                <button
+                    type="button"
+                    id=id.to_owned()
+                    class=Variant::Secondary.class()
+                    data-add=template.to_owned()
+                    data-into=into.to_owned()
+                    data-placeholder=placeholder
+                    aria-describedby=format!("{id}-error")
+                >
+                    {icon(Glyph::PLUS, "16")}
+                    {label}
+                </button>
+            </div>
             {error_line(id)}
         </div>
     }
@@ -266,11 +300,11 @@ pub(crate) fn remove_button(row: &str, named: String) -> AnyView {
     view! {
         <button
             type="button"
-            class=format!("{} self-start", styles::BUTTON_GHOST)
+            class=Variant::Ghost.class()
             data-remove=row.to_owned()
             aria-label=named
         >
-            {crate::components::icon(icondata_lu::LuTrash2, "16")}
+            {icon(Glyph::TRASH, "16")}
             "Remove"
         </button>
     }
@@ -287,26 +321,26 @@ pub(crate) fn template(id: String, row: impl IntoView) -> impl IntoView {
 fn diff_value(value: Option<&String>, sign: &'static str, removed: bool) -> AnyView {
     match value {
         Some(value) if removed => view! {
-            <del class="no-underline">
-                <span aria-hidden="true" class="mr-1 font-semibold text-danger-fg">
+            <del class="fui-change fui-change-removed">
+                <span aria-hidden="true" class="fui-change-sign">
                     {sign}
                 </span>
-                <span class="sr-only">"Running value: "</span>
+                <span class="fui-sr-only">"Running value: "</span>
                 <code>{value.clone()}</code>
             </del>
         }
         .into_any(),
         Some(value) => view! {
-            <ins class="no-underline">
-                <span aria-hidden="true" class="mr-1 font-semibold text-ok-fg">
+            <ins class="fui-change fui-change-added">
+                <span aria-hidden="true" class="fui-change-sign">
                     {sign}
                 </span>
-                <span class="sr-only">"New value: "</span>
+                <span class="fui-sr-only">"New value: "</span>
                 <code>{value.clone()}</code>
             </ins>
         }
         .into_any(),
-        None => view! { <span class="text-muted">"not set"</span> }.into_any(),
+        None => view! { <span class="fui-muted">"not set"</span> }.into_any(),
     }
 }
 
@@ -317,8 +351,18 @@ pub(crate) fn diff_table(
     (from, to): (Option<RevisionId>, RevisionId),
 ) -> AnyView {
     if changes.is_empty() {
-        return view! { <p class="text-muted">"It changes no setting."</p> }.into_any();
+        return view! { <p class="fui-muted">"It changes no setting."</p> }.into_any();
     }
+    let running = from.map_or_else(
+        || String::from("Running value"),
+        |from| format!("Revision {from} (running)"),
+    );
+    let (from_label, to_label) = (running.clone(), format!("Revision {to}"));
+    let columns = [
+        Column::text("setting", "Setting"),
+        Column::owned("from", running),
+        Column::owned("to", to_label.clone()),
+    ];
     let rows = changes
         .iter()
         .map(|change| {
@@ -327,37 +371,18 @@ pub(crate) fn diff_table(
                 <tr>
                     <th scope="row">
                         <code>{change.key.clone()}</code>
-                        <span class="ml-2 badge tone-neutral">{what}</span>
+                        " "
+                        {badge(Tone::Neutral, what)}
                     </th>
-                    <td>{diff_value(change.from.as_ref(), "−", true)}</td>
-                    <td>{diff_value(change.to.as_ref(), "+", false)}</td>
+                    <td data-label=from_label.clone()>{diff_value(change.from.as_ref(), "−", true)}</td>
+                    <td data-label=to_label.clone()>{diff_value(change.to.as_ref(), "+", false)}</td>
                 </tr>
             }
         })
         .collect_view();
-    let running = from.map_or_else(
-        || String::from("Running value"),
-        |from| format!("Revision {from} (running)"),
-    );
-    view! {
-        <div
-            class=styles::TABLE_SCROLL
-            tabindex="0"
-            role="region"
-            aria-label=format!("What revision {to} changes")
-        >
-            <table>
-                <caption class="sr-only">{format!("What revision {to} changes, by key")}</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Setting"</th>
-                        <th scope="col">{running}</th>
-                        <th scope="col">{format!("Revision {to}")}</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
-    }
-    .into_any()
+    crate::views::table(
+        &format!("What revision {to} changes, by key"),
+        &columns,
+        rows.into_any(),
+    )
 }

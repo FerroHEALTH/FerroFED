@@ -13,15 +13,24 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use ferrofed_registry::operator::{MAX_PAGE, Page, PageRequest, StoredVersion};
+use ferrohealth_ui::highlight::Language;
+use ferrohealth_ui::icon::Glyph;
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::button::{Variant, label};
+use ferrohealth_ui::view::code::code_panel;
+use ferrohealth_ui::view::empty::empty_state;
+use ferrohealth_ui::view::layout::{main_aside, tile_list};
+use ferrohealth_ui::view::notice::{Announce, notice};
+use ferrohealth_ui::view::status::badge;
+use ferrohealth_ui::view::surface::{
+    Crumb, Header, card, definitions, page_heading, page_meta, stack,
+};
 use http::StatusCode;
 use leptos::prelude::*;
 use openehr_its::rest::generated::definition::StoredQuery;
 
-use crate::components::{badge, empty_state, icon};
 use crate::config::settings::ReplicaSettings;
 use crate::gateway::{AccessToken, Gateway, GatewayError};
-use crate::highlight;
-use crate::styles::{self, Tone};
 use crate::views::STORED_QUERIES;
 use crate::views::load::server::answered_by;
 use crate::views::stored::{StoredDetail, StoredView, console_href, detail_href};
@@ -73,16 +82,15 @@ pub fn list(report: &Page<Listed>, replicas: &[ReplicaSettings]) -> StoredView {
 
 /// The empty state of a gateway that holds no stored query.
 fn none_held() -> String {
-    let body = view! { <p class=styles::EMPTY_BODY>"The gateway holds no stored query."</p> };
     view! {
-        <div class=styles::CARD>
-            {empty_state(icondata_lu::LuDatabase, "No stored queries", body, ())}
+        <div class="fui-card">
+            {empty_state(Glyph::DATABASE, "No stored queries", "The gateway holds no stored query.", ())}
         </div>
     }
     .to_html()
 }
 
-/// One card per namespace of `items`, each with its versions as chips.
+/// One card per namespace of `items`, each with its versions as tiles.
 fn namespaces(items: &[Listed]) -> String {
     let mut grouped: BTreeMap<Option<&str>, Vec<&Listed>> = BTreeMap::new();
     for entry in items {
@@ -97,14 +105,14 @@ fn namespaces(items: &[Listed]) -> String {
         .map(|(index, (namespace, entries))| namespace_card(index, namespace, &entries))
         .collect_view();
     view! {
-        <section class="grid grid-cols-1 gap-4" aria-label="Namespaces">
+        <section class="fui-stack" aria-label="Namespaces">
             {cards}
         </section>
     }
     .to_html()
 }
 
-/// The card of `namespace`, the `index`th of the page, with the chip of
+/// The card of `namespace`, the `index`th of the page, with the tile of
 /// each of its `entries`, marked read-only when the gateway takes no write
 /// under any of them.
 fn namespace_card(
@@ -118,16 +126,12 @@ fn namespace_card(
         1 => String::from("1 version"),
         n => format!("{n} versions"),
     };
-    let read_only = entries.iter().all(|entry| entry.read_only).then(|| {
-        view! {
-            <span class=Tone::Neutral
-                .badge()>
-                {icon(icondata_lu::LuLock, "12")} <span class="ml-1">"read-only"</span>
-            </span>
-        }
-    });
+    let read_only = entries
+        .iter()
+        .all(|entry| entry.read_only)
+        .then(|| badge(Tone::Neutral, "read-only"));
     let title = namespace.map_or_else(|| String::from("No namespace"), str::to_owned);
-    let chips = entries
+    let tiles = entries
         .iter()
         .map(|entry| {
             let entry = &entry.definition;
@@ -136,36 +140,27 @@ fn namespace_card(
             let version = format!("@{}", entry.version);
             let href = detail_href(&entry.name, &entry.version);
             view! {
-                <li>
-                    <a href=href class=CHIP>
-                        <span class="min-w-0">{name}</span>
-                        <span class="whitespace-nowrap text-muted">{version}</span>
-                    </a>
-                </li>
+                <a href=href class="fui-mono">
+                    {name}
+                    <span class="fui-muted">{version}</span>
+                </a>
             }
+            .into_any()
         })
-        .collect_view();
+        .collect();
     view! {
-        <section class=styles::CARD_PAD aria-labelledby=labelled>
-            <header class="mb-3 flex flex-wrap items-center gap-2">
-                <h2 id=heading class="m-0 font-mono text-sm font-semibold break-all text-ink">
+        <section class="fui-card" aria-labelledby=labelled>
+            <div class="fui-cluster">
+                <h2 id=heading class="fui-card-title fui-mono fui-break">
                     {title}
                 </h2>
-                <span class=Tone::Accent.badge()>{count}</span>
+                {badge(Tone::Accent, &count)}
                 {read_only}
-            </header>
-            <ul class="m-0 flex list-none flex-wrap gap-2 p-0" role="list">
-                {chips}
-            </ul>
+            </div>
+            {tile_list("Versions", tiles)}
         </section>
     }
 }
-
-/// A chip that leads to one version of a stored query.
-const CHIP: &str = "state-change inline-flex items-center rounded-full border border-line-strong \
-                    bg-raised px-2.5 py-1 font-mono text-xs break-all text-ink no-underline \
-                    hover:border-accent hover:text-accent";
-
 /// Every held version of the stored query `name`, newest first, and the
 /// replica that answered.
 ///
@@ -255,83 +250,62 @@ pub fn detail(
     let chosen =
         asked.and_then(|asked| held.iter().find(|entry| entry.definition.version == asked));
     let missing = asked.filter(|_| chosen.is_none()).map(|asked| {
-        view! {
-            <p role="alert">
-                {format!(
-                    "The gateway holds no version {asked} of this query. The newest is shown.",
-                )}
-            </p>
-        }
+        notice(
+            Tone::Warn,
+            Announce::Alert,
+            None,
+            format!("The gateway holds no version {asked} of this query. The newest is shown."),
+        )
     });
     let shown = chosen.unwrap_or(newest);
-    let read_only = shown.read_only.then(|| badge("read-only", Tone::Neutral));
+    let read_only = shown.read_only.then(|| badge(Tone::Neutral, "read-only"));
     let shown = &shown.definition;
     let (namespace, short) = split(name);
-    let header = view! {
-        <a href=STORED_QUERIES class="mb-3 inline-flex items-center gap-1 text-sm">
-            {icon(icondata_lu::LuArrowLeft, "14")}
-            "Stored queries"
+    let open = view! {
+        {read_only}
+        <a href=console_href(name, &shown.version) rel="external" class=Variant::Primary.class()>
+            {label(Some(Glyph::SQUARE_TERMINAL), "Open in query console")}
         </a>
-        <header class=styles::PAGE_HEADER>
-            <div class="min-w-0">
-                <h1 class="m-0 font-mono text-xl font-semibold break-all text-ink">
-                    {name.to_owned()}
-                </h1>
-                <p class=format!("{} flex flex-wrap items-center gap-2", styles::PAGE_SUBTITLE)>
-                    <span>{format!("Version {}, stored {}.", shown.version, shown.saved)}</span>
-                    {read_only}
-                </p>
-            </div>
-            <a href=console_href(name, &shown.version) rel="external" class=styles::BUTTON_PRIMARY>
-                {icon(icondata_lu::LuSquareTerminal, "16")}
-                "Open in query console"
-            </a>
-        </header>
     };
+    let header = page_heading(
+        Header {
+            title: name.to_owned(),
+            subtitle: Some(format!(
+                "Version {}, stored {}.",
+                shown.version, shown.saved
+            )),
+            crumbs: vec![Crumb::new("Stored queries", STORED_QUERIES)],
+            mono: true,
+        },
+        open,
+    );
     let versions = versions_nav(name, held, &shown.version);
-    let facts = view! {
-        <dl class="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-            <dt class="text-muted">"Namespace"</dt>
-            <dd class="m-0 font-mono break-all">{namespace.unwrap_or("none").to_owned()}</dd>
-            <dt class="text-muted">"Name"</dt>
-            <dd class="m-0 font-mono break-all">{short.to_owned()}</dd>
-            <dt class="text-muted">"Version"</dt>
-            <dd class="m-0 font-mono">{shown.version.clone()}</dd>
-            <dt class="text-muted">"Stored"</dt>
-            <dd class="m-0 break-all">{shown.saved.clone()}</dd>
-        </dl>
-    };
-    let aql = highlight::code_block(
-        format!("The AQL of version {}", shown.version),
-        highlight::aql(&shown.q),
+    let mono = |text: String| view! { <span class="fui-mono fui-break">{text}</span> }.into_any();
+    let facts = definitions(vec![
+        ("Namespace", mono(namespace.unwrap_or("none").to_owned())),
+        ("Name", mono(short.to_owned())),
+        ("Version", mono(shown.version.clone())),
+        ("Stored", shown.saved.clone().into_any()),
+    ]);
+    let aql = code_panel(
+        &format!("The AQL of version {}", shown.version),
+        Language::Aql,
+        &shown.q,
     );
     let replica = replica_line(replica);
     let html = view! {
         {header}
-        {missing}
-        <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <section class=styles::CARD_PAD aria-labelledby="stored-aql">
-                <h2 id="stored-aql" class=styles::CARD_TITLE>
-                    "AQL"
-                </h2>
-                {aql}
-            </section>
-            <div class="flex flex-col gap-4">
-                <section class=styles::CARD_PAD aria-labelledby="stored-versions">
-                    <h2 id="stored-versions" class=styles::CARD_TITLE>
-                        "Versions"
-                    </h2>
-                    {versions}
-                </section>
-                <section class=styles::CARD_PAD aria-labelledby="stored-facts">
-                    <h2 id="stored-facts" class=styles::CARD_TITLE>
-                        "Details"
-                    </h2>
-                    {facts}
-                </section>
-            </div>
+        <div class="fui-stack">
+            {missing}
+            {main_aside(
+                card("AQL", aql),
+                stack(view! {
+                    {card("Versions", versions)}
+                    {card("Details", facts)}
+                }),
+            )}
+            {replica}
         </div>
-        {replica}
     }
     .to_html();
     StoredDetail { html }
@@ -339,21 +313,23 @@ pub fn detail(
 
 /// The version switch: a link to each of `held`, the one `shown` marked as
 /// the page, in words as well as in its weight and tint.
-fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView {
+fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView + use<> {
     let links = held
         .iter()
         .map(|entry| {
             let entry = &entry.definition;
             let here = entry.version == shown;
             let current = here.then_some("page");
-            let mark = here.then(|| view! { <span class="text-xs font-normal">"shown"</span> });
+            let mark = here.then(|| view! { <span class="fui-small">"shown"</span> });
             view! {
                 <li>
-                    <a href=detail_href(name, &entry.version) class=VERSION aria-current=current>
-                        <span class="font-mono">{entry.version.clone()}</span>
-                        <span class="text-xs text-muted group-aria-[current=page]:text-accent">
-                            {entry.saved.clone()}
-                        </span>
+                    <a
+                        href=detail_href(name, &entry.version)
+                        class="fui-nav-entry"
+                        aria-current=current
+                    >
+                        <span class="fui-mono">{entry.version.clone()}</span>
+                        <span class="fui-small fui-muted">{entry.saved.clone()}</span>
                         {mark}
                     </a>
                 </li>
@@ -362,42 +338,32 @@ fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView {
         .collect_view();
     view! {
         <nav aria-label="Versions">
-            <ul class="m-0 flex list-none flex-col gap-1 p-0" role="list">
-                {links}
-            </ul>
+            <ul class="fui-nav-list">{links}</ul>
         </nav>
     }
 }
 
-/// A link to one version: while it is the one shown, tinted, set in bold
-/// and marked by a bar at its start, so colour is never the only mark.
-const VERSION: &str = "group state-change flex flex-wrap items-baseline gap-x-2 rounded-control px-3 \
-                       py-1.5 text-ink no-underline hover:bg-inset hover:text-ink \
-                       aria-[current=page]:bg-accent-tint aria-[current=page]:font-semibold \
-                       aria-[current=page]:text-accent \
-                       aria-[current=page]:shadow-[inset_3px_0_0_var(--accent)]";
-
 /// The line naming the replica that answered, or saying none was named;
 /// nothing when the replica has no name.
-fn replica_line(replica: Option<&str>) -> impl IntoView {
-    answered_by(&[("stored queries", replica)])
-        .map(|line| view! { <p class="mt-4 text-xs text-muted">{line}</p> })
+fn replica_line(replica: Option<&str>) -> impl IntoView + use<> {
+    page_meta(answered_by(&[("stored queries", replica)]))
 }
 
 /// The empty state of a stored query the gateway does not hold.
 fn not_held(name: &str) -> String {
-    let body = view! {
-        <p class=styles::EMPTY_BODY>{format!("The gateway holds no stored query named {name}.")}</p>
-    };
     let back = view! {
-        <a href=STORED_QUERIES class=styles::BUTTON_SECONDARY>
-            {icon(icondata_lu::LuArrowLeft, "16")}
-            "Back to the stored queries"
+        <a href=STORED_QUERIES class=Variant::Secondary.class()>
+            {label(Some(Glyph::ARROW_LEFT), "Back to the stored queries")}
         </a>
     };
     view! {
-        <div class=styles::CARD>
-            {empty_state(icondata_lu::LuSearchX, "No such stored query", body, back)}
+        <div class="fui-card">
+            {empty_state(
+                Glyph::SEARCH_X,
+                "No such stored query",
+                format!("The gateway holds no stored query named {name}."),
+                back,
+            )}
         </div>
     }
     .to_html()

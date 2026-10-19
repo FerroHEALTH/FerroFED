@@ -17,7 +17,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use crate::support::{OPERATOR_TOKEN, console, get, get_as, header, send, signed_in};
 
 /// The classes of a cell that heads a row with an identifier.
-pub(crate) const MONO: &str = "font-mono text-[0.8125rem] whitespace-nowrap";
+pub(crate) const MONO: &str = "fui-mono";
 
 /// The vendored specification page that carries the §7a.2 example.
 const REST_FACADE: &str = concat!(
@@ -185,12 +185,16 @@ async fn the_members_view_lists_every_endpoint_with_its_health() -> Result<(), B
         );
     }
     assert!(
-        body.contains(r#"<td><span class="pill tone-ok">up</span></td>"#),
+        body.contains(
+            r#"<td data-label="Health"><span class="fui-pill fui-tone-ok">up</span></td>"#
+        ),
         "{body}"
     );
     assert!(body.contains("resolver"), "{body}");
     assert!(
-        body.contains(r#"<td><span class="pill tone-danger">failing</span></td>"#),
+        body.contains(
+            r#"<td data-label="State"><span class="fui-pill fui-tone-bad">failing</span></td>"#
+        ),
         "{body}"
     );
     Ok(())
@@ -211,10 +215,10 @@ async fn the_integrity_view_lists_the_collisions_cleared_recently_newest_first()
         "{body}"
     );
     let newer = body
-        .find(r#"<td class="font-mono text-[0.8125rem] whitespace-nowrap">2026-10-05T10:00:00Z</td><th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">not a bare UUID</th><td>node-a, node-c</td>"#)
+        .find(r#"<td data-label="Cleared at" class="fui-mono">2026-10-05T10:00:00Z</td><th scope="row" class="fui-mono">not a bare UUID</th><td data-label="Members that claimed it">node-a, node-c</td>"#)
         .ok_or("the newer clear")?;
     let older = body
-        .find(r#"<td class="font-mono text-[0.8125rem] whitespace-nowrap">2026-10-05T09:00:00Z</td><th scope="row" class="font-mono text-[0.8125rem] whitespace-nowrap">7d44b88c-4199-4bad-97dc-d78268e01398</th><td>node-a, node-b</td>"#)
+        .find(r#"<td data-label="Cleared at" class="fui-mono">2026-10-05T09:00:00Z</td><th scope="row" class="fui-mono">7d44b88c-4199-4bad-97dc-d78268e01398</th><td data-label="Members that claimed it">node-a, node-b</td>"#)
         .ok_or("the older clear")?;
     assert!(newer < older, "newest first: {body}");
     assert!(
@@ -246,9 +250,7 @@ async fn the_stored_query_view_groups_each_version_by_namespace_without_its_text
         "{body}"
     );
     assert!(
-        body.contains(
-            ">compositions</span><span class=\"whitespace-nowrap text-muted\">@1.0.0</span></a>"
-        ),
+        body.contains(">compositions<span class=\"fui-muted\">@1.0.0</span></a>"),
         "{body}"
     );
     assert!(!body.contains("CONTAINS COMPOSITION"), "{body}");
@@ -563,20 +565,23 @@ async fn each_operator_view_names_the_replica_that_answered() -> Result<(), Box<
     for (page, line) in [
         (
             "/members",
-            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+            r#"<p class="fui-page-meta">Answered by replica ferrofed-0.</p>"#,
         ),
         (
             "/members/node_1",
-            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+            r#"<p class="fui-page-meta">Answered by replica ferrofed-0.</p>"#,
         ),
-        ("/stored-queries", "<p>Answered by replica ferrofed-0.</p>"),
+        (
+            "/stored-queries",
+            r#"<p class="fui-page-meta">Answered by replica ferrofed-0.</p>"#,
+        ),
         (
             "/integrity",
-            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-0.</p>"#,
+            r#"<p class="fui-page-meta">Answered by replica ferrofed-0.</p>"#,
         ),
         (
             "/routing",
-            r#"<p class="-mt-3 mb-5 text-xs text-muted">Answered by replica ferrofed-1.</p>"#,
+            r#"<p class="fui-page-meta">Answered by replica ferrofed-1.</p>"#,
         ),
     ] {
         let (response, body) = send(&service, get_as(page, &session)?).await?;
@@ -595,7 +600,9 @@ async fn a_view_whose_reports_name_no_replica_says_so() -> Result<(), Box<dyn Er
     let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
-        body.contains(r#"<p class="-mt-3 mb-5 text-xs text-muted">The gateway did not name the replica that answered.</p>"#),
+        body.contains(
+            r#"<p class="fui-page-meta">The gateway did not name the replica that answered.</p>"#
+        ),
         "{body}"
     );
     Ok(())

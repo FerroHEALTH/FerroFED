@@ -12,21 +12,32 @@
 //! shown as the HTML it is; the collision clear beside it is hydrated.
 
 #[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::icon::Glyph;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::table::view::{Column, NUM};
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::tone::Tone;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::empty::empty_quiet;
+use ferrohealth_ui::view::empty::{Busy, busy};
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::status::{badge, pill};
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::surface::{card, grid_start};
+use ferrohealth_ui::view::surface::{page_header, stack};
+#[cfg(not(target_arch = "wasm32"))]
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::use_query_map;
 
 use crate::admin::act::ClearEhrId;
-use crate::components::page_header;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::components::{empty_card, replica_meta, table_card};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::styles::{self, Tone};
 use crate::views::model::IntegrityView;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::views::model::{ClearedRow, IncidentRow};
 use crate::views::{load, shown, titled};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::views::{replica_line, table, table_unstacked};
 
 /// The integrity incidents and the collisions cleared.
 #[component]
@@ -41,12 +52,10 @@ pub fn IntegrityPage() -> impl IntoView {
         <Title text=titled("Integrity") />
         {page_header(
             "Integrity",
-            "The incidents this replica keeps, and the collisions cleared.",
+            Some(String::from("The incidents this replica keeps, and the collisions cleared.")),
             (),
         )}
-        <Transition fallback=|| {
-            view! { <p>"Loading the incidents."</p> }
-        }>
+        <Transition fallback=|| busy("Loading the incidents.", Busy::Section)>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| integrity_section(view, clear))
             })}
@@ -58,10 +67,10 @@ pub fn IntegrityPage() -> impl IntoView {
 /// listener is configured.
 fn integrity_section(view: IntegrityView, clear: ServerAction<ClearEhrId>) -> AnyView {
     let clear = crate::admin::clear_section(clear, view.clear_form);
-    view! {
-        <div class="contents" inner_html=view.html></div>
+    stack(view! {
+        <div inner_html=view.html></div>
         {clear}
-    }
+    })
     .into_any()
 }
 
@@ -83,6 +92,30 @@ pub struct Incidents {
     pub resolved: bool,
 }
 
+/// The columns of the counts by kind.
+#[cfg(not(target_arch = "wasm32"))]
+const COUNT_COLUMNS: [Column; 2] = [
+    Column::text("kind", "Kind"),
+    Column::text("count", "Count").numeric(),
+];
+
+/// The columns of the incidents table.
+#[cfg(not(target_arch = "wasm32"))]
+const INCIDENT_COLUMNS: [Column; 4] = [
+    Column::text("at", "At"),
+    Column::text("kind", "Kind"),
+    Column::text("description", "Description"),
+    Column::text("state", "State"),
+];
+
+/// The columns of the collisions cleared.
+#[cfg(not(target_arch = "wasm32"))]
+const CLEARED_COLUMNS: [Column; 3] = [
+    Column::text("at", "Cleared at"),
+    Column::text("ehr_id", "ehr_id").mono(),
+    Column::text("claimants", "Members that claimed it"),
+];
+
 /// The markup of the read-only part of the integrity view of `shown`.
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
@@ -101,36 +134,26 @@ pub fn integrity_html(shown: &Incidents) -> String {
             view! {
                 <tr>
                     <th scope="row">{kind.clone()}</th>
-                    <td class=styles::NUM>{*count}</td>
+                    <td data-label="Count" class=NUM>
+                        {*count}
+                    </td>
                 </tr>
             }
         })
         .collect_view();
     view! {
-        {replica_meta(shown.answered_by.clone())}
-        {filter_tabs(shown.resolved, open, closed)}
-        {incidents_table(&rows, shown.resolved)}
-        <div class="grid grid-cols-1 gap-x-4 xl:grid-cols-2">
-            <div class="min-w-0">
-                {table_card(
+        {replica_line(shown.answered_by.clone())}
+        <div class="fui-stack">
+            {filter_tabs(shown.resolved, open, closed)}
+            {incidents_table(&rows, shown.resolved)}
+            {grid_start(view! {
+                {table_unstacked(
                     "Incidents since the gateway started",
-                    view! {
-                        <table>
-                            <caption>"Incidents since the gateway started"</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">"Kind"</th>
-                                    <th scope="col" class=styles::NUM>
-                                        "Count"
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>{counts}</tbody>
-                        </table>
-                    },
+                    &COUNT_COLUMNS,
+                    counts.into_any(),
                 )}
-            </div>
-            <div class="min-w-0">{cleared_section(&shown.cleared)}</div>
+                {cleared_section(&shown.cleared)}
+            })}
         </div>
     }
     .to_html()
@@ -141,22 +164,22 @@ pub fn integrity_html(shown: &Incidents) -> String {
 #[cfg(not(target_arch = "wasm32"))]
 fn filter_tabs(resolved: bool, open: usize, closed: usize) -> impl IntoView {
     view! {
-        <nav aria-label="Incidents by state" class=styles::TABS>
+        <nav aria-label="Incidents by state" class="fui-tabs">
             <a
                 href=crate::views::INTEGRITY
-                class=styles::TAB
+                class="fui-tab"
                 aria-current=(!resolved).then_some("page")
             >
                 "Open "
-                <span class=Tone::Neutral.badge()>{open}</span>
+                {badge(Tone::Neutral, &open.to_string())}
             </a>
             <a
                 href="/integrity?show=resolved"
-                class=styles::TAB
+                class="fui-tab"
                 aria-current=resolved.then_some("page")
             >
                 "Resolved "
-                <span class=Tone::Neutral.badge()>{closed}</span>
+                {badge(Tone::Neutral, &closed.to_string())}
             </a>
         </nav>
     }
@@ -165,22 +188,22 @@ fn filter_tabs(resolved: bool, open: usize, closed: usize) -> impl IntoView {
 /// The incidents `rows` of the state the filter shows, newest first, or
 /// the empty state of that filter.
 #[cfg(not(target_arch = "wasm32"))]
-fn incidents_table(rows: &[&IncidentRow], resolved: bool) -> impl IntoView + use<> {
+fn incidents_table(rows: &[&IncidentRow], resolved: bool) -> AnyView {
     if rows.is_empty() {
         let empty = if resolved {
-            Either::Left(empty_card(
-                icondata_lu::LuInbox,
+            Either::Left(empty_quiet(
+                Glyph::INBOX,
                 "No resolved incidents",
                 "No collision held here was cleared since it was found.",
             ))
         } else {
-            Either::Right(empty_card(
-                icondata_lu::LuShieldCheck,
+            Either::Right(empty_quiet(
+                Glyph::SHIELD_CHECK,
                 "No open incidents",
                 "None of the incidents this replica keeps is open.",
             ))
         };
-        return Either::Left(view! { <div class=format!("mb-6 {}", styles::CARD)>{empty}</div> });
+        return view! { <div class="fui-card">{empty}</div> }.into_any();
     }
     let rows = rows
         .iter()
@@ -188,84 +211,58 @@ fn incidents_table(rows: &[&IncidentRow], resolved: bool) -> impl IntoView + use
             let (tone, word) = if row.resolved {
                 (Tone::Ok, "resolved")
             } else {
-                (Tone::Danger, "open")
+                (Tone::Bad, "open")
             };
             view! {
                 <tr>
-                    <td class=format!("{} whitespace-nowrap", styles::MONO)>{row.at.clone()}</td>
-                    <th scope="row">{row.kind.clone()}</th>
-                    <td>{row.description.clone()}</td>
-                    <td>
-                        <span class=tone.pill()>{word}</span>
+                    <td data-label="At" class="fui-mono">
+                        {row.at.clone()}
                     </td>
+                    <th scope="row">{row.kind.clone()}</th>
+                    <td data-label="Description">{row.description.clone()}</td>
+                    <td data-label="State">{pill(tone, word)}</td>
                 </tr>
             }
         })
         .collect_view();
-    Either::Right(table_card(
-        "Recent incidents",
-        view! {
-            <table>
-                <caption>"Recent incidents, newest first"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"At"</th>
-                        <th scope="col">"Kind"</th>
-                        <th scope="col">"Description"</th>
-                        <th scope="col">"State"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        },
-    ))
+    table(
+        "Recent incidents, newest first",
+        &INCIDENT_COLUMNS,
+        rows.into_any(),
+    )
 }
 
 /// The collisions the operator cleared recently, newest first.
 #[cfg(not(target_arch = "wasm32"))]
-fn cleared_section(cleared: &[ClearedRow]) -> impl IntoView + use<> {
+fn cleared_section(cleared: &[ClearedRow]) -> AnyView {
     if cleared.is_empty() {
-        return Either::Left(view! {
-            <div class=format!("mt-2 mb-6 {}", styles::CARD_PAD)>
-                <p class="m-0 text-sm text-muted">
-                    "No collision cleared since the gateway started."
-                </p>
-            </div>
-        });
+        return card(
+            "Collisions cleared recently",
+            view! { <p class="fui-muted">"No collision cleared since the gateway started."</p> },
+        )
+        .into_any();
     }
     let rows = cleared
         .iter()
         .map(|cleared| {
             view! {
                 <tr>
-                    <td class=format!(
-                        "{} whitespace-nowrap",
-                        styles::MONO,
-                    )>{cleared.at.clone()}</td>
-                    <th scope="row" class=styles::ID>
+                    <td data-label="Cleared at" class="fui-mono">
+                        {cleared.at.clone()}
+                    </td>
+                    <th scope="row" class="fui-mono">
                         {cleared.ehr_id.clone().unwrap_or_else(|| String::from("not a bare UUID"))}
                     </th>
-                    <td>{cleared.claimants.join(", ")}</td>
+                    <td data-label="Members that claimed it">{cleared.claimants.join(", ")}</td>
                 </tr>
             }
         })
         .collect_view();
-    Either::Right(table_card(
-        "Collisions cleared recently",
-        view! {
-            <table>
-                <caption>"Collisions cleared recently, newest first"</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">"Cleared at"</th>
-                        <th scope="col">"ehr_id"</th>
-                        <th scope="col">"Members that claimed it"</th>
-                    </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-            </table>
-        },
-    ))
+    table(
+        "Collisions cleared recently, newest first",
+        &CLEARED_COLUMNS,
+        rows.into_any(),
+    )
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
