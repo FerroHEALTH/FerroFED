@@ -4,8 +4,12 @@
 # The release lane. One workflow owns the `v*` tag, and every ordering in it is
 # a `needs` edge:
 #
-#   plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
+#   plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish) ── milestone
 #                                  └─ build-viewer ───────────────┘
+#
+# plan refuses a tag whose milestone (titled exactly as the tag) is missing or
+# still holds an open item, and milestone closes it once every leg succeeded
+# (scripts/release/milestone.sh).
 #
 # build-binaries, build-image and build-viewer are calls to the reusable
 # workflows release-build.yml, release-image.yml and release-viewer.yml, the
@@ -60,6 +64,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      issues: read # the milestone titled as the tag
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
@@ -112,6 +117,15 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+
+      # A release is cut only when its milestone is empty (no specification
+      # governs this: our own design), so this refuses the tag before anything
+      # is created and names every open item.
+      - name: The milestone titled as the tag holds no open item
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: bash scripts/release/milestone.sh check "$TAG"
 
       - id: latest
         name: Whether this release becomes the latest
@@ -624,3 +638,30 @@ jobs:
               exit 1
               ;;
           esac
+
+  # ---- milestone: close the release's milestone ------------------------------
+  # Runs after every leg. `always()` keeps the job in the graph when a leg
+  # fails, so its log names that leg and the milestone stays open; a re-run of
+  # the failed jobs closes it. An already-closed milestone counts as done. The
+  # crates.io lane is publish-crates.yml, a workflow of its own, which no
+  # `needs` edge can reach.
+  milestone:
+    name: close the milestone
+    needs: [plan, github-release, build-binaries, build-image, build-viewer, finalize-release]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the script
+      issues: write # close the milestone
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Close the milestone titled as the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: bash scripts/release/milestone.sh close "$TAG"

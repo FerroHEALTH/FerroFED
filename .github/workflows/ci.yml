@@ -716,6 +716,7 @@ jobs:
           bash scripts/checks/upgrade-notes.sh --self-test
           bash scripts/release/withdraw.sh --self-test
           bash scripts/release/latest.sh --self-test
+          bash scripts/release/milestone.sh --self-test
           bash scripts/release/accompanying-documents.sh --self-test
           bash scripts/release/declaration-of-conformity.sh --self-test
           bash scripts/release/declaration-of-conformity.sh status

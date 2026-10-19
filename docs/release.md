@@ -21,12 +21,14 @@ release). `workflow_dispatch` re-runs
 it for a tag that already exists and has to be dispatched at that tag.
 
 ```text
-plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
+plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish) ── milestone
                                └─ build-viewer ───────────────┘
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the tag
-  it names, decides with `scripts/release/latest.sh` whether the release
+  it names, refuses the tag when no milestone is titled exactly as it or that
+  milestone still holds an open issue or pull request (naming each one),
+  decides with `scripts/release/latest.sh` whether the release
   becomes the latest (a release with no pre-release suffix whose version no
   `vX.Y.Z` tag of the repository exceeds), checks the tag against every
   file that declares the product
@@ -94,6 +96,15 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   latest, such as a pre-release, is published
   with `--latest=false`, so it never becomes the repository's latest
   release.
+- **milestone** closes the milestone titled as the tag once every other job
+  has succeeded, with the workflow token and job-level `issues: write`. When a
+  leg fails the job still runs, names the leg in its log, and leaves the
+  milestone open; re-running the failed jobs closes it. An already-closed
+  milestone counts as done, and a pre-release finishes no milestone, so
+  neither milestone step reads or changes one for an `-rc.N` tag. Both call
+  `scripts/release/milestone.sh`. The crates.io lane is `publish-crates.yml`,
+  a workflow of its own (§ The crates.io lane), which no `needs` edge of
+  `release.yml` reaches.
 
 ## The build legs
 
@@ -185,7 +196,9 @@ slow one.
 
 1. **The milestone is empty.** `gh issue list --milestone vX.Y.Z --state open`
    answers nothing, or the owner calls the cut and moves the stragglers to the
-   next milestone.
+   next milestone. The `plan` job refuses the tag otherwise, and
+   `GITHUB_REPOSITORY=FerroHEALTH/FerroFED bash scripts/release/milestone.sh
+   check vX.Y.Z` asks the same question before you tag.
 2. **The version moves in every file the pin matrix names:** `CITATION.cff`,
    the product-version row of `docs/VERSIONS.md` and the root `Cargo.toml`
    `[workspace.package]` `version`. The gateway image tag moves with it in
@@ -406,10 +419,13 @@ without a version bump, because a published version is immutable
    verify` commands of § The build legs against one tarball and the image.
 2. **Post the board status update** with what shipped and what the next
    milestone targets (`.claude/rules/project-board.md`).
-3. **Close the milestone.** `gh api -X PATCH
-   repos/FerroHEALTH/FerroFED/milestones/<number> -f state=closed`, once the
-   release is published. A milestone left open after its cut still reads as
-   pending work on the roadmap board.
+3. **The milestone is closed.** The `milestone` job of `release.yml` closes
+   it once every leg has succeeded, because a milestone left open after its
+   cut still reads as pending work on the roadmap board. When a leg fails,
+   the job names it and leaves the milestone open, and a re-run of the failed
+   jobs closes it. After a manual or recovery release, check that it is
+   closed, and close it with `GITHUB_REPOSITORY=FerroHEALTH/FerroFED bash
+   scripts/release/milestone.sh close vX.Y.Z` when it is not.
 4. **Bring the standing instructions up to date.** `CLAUDE.md`'s status names
    the released version and the milestone now being built, in a pull request
    of its own, never inside the version bump.
