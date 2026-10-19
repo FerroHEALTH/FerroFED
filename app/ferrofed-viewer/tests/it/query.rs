@@ -203,7 +203,9 @@ async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
     }
     assert!(html.contains("2 rows"), "{html}");
     assert!(
-        html.contains("<td>8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1</td>"),
+        html.contains(
+            r#"<td data-label="composition_id" title="c/uid/value">8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1</td>"#
+        ),
         "{html}"
     );
     assert!(reports(html, "node_1", "active"), "{html}");

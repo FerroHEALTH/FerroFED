@@ -264,7 +264,7 @@ console_error_panic_hook = "0.1.7"
 # tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
 # moves to a new version deliberately. Verified against crates.io on
 # 2026-10-18.
-ferrohealth-ui = "=0.1.3"
+ferrohealth-ui = "=0.1.4"
 cookie = { version = "0.18.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design). Groups sit

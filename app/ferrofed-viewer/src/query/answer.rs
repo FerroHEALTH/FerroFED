@@ -10,12 +10,12 @@
 //! inline script besides.
 
 use ferrohealth_ui::table::model::filled_columns;
-use ferrohealth_ui::table::view::{Column, NUM};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, NUM, data_table};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::layout::tile_list;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
-use ferrohealth_ui::view::surface::table_card;
+use ferrohealth_ui::view::time::{reading, timestamp};
 use leptos::either::Either;
 use leptos::prelude::*;
 
@@ -340,26 +340,43 @@ fn counted_u64(count: u64) -> String {
     }
 }
 
-/// The rows, under the columns as the gateway renders them (§9.4), in a box
-/// they scroll in under a header that stays, [`PAGE_ROWS`] to a `tbody`, of
-/// which the page shows one at a time.
+/// One cell of a row under the column `label`, which the gateway names by
+/// `path`: a date-time drawn for reading, anything else as it came.
+fn cell(value: &str, label: &str, path: Option<&str>) -> AnyView {
+    // NOTE: no specification governs this: our own design; only a value the
+    // shared reading changes is a date-time, so other text keeps its wrapping.
+    let shown = if reading(value) == value {
+        value.to_owned().into_any()
+    } else {
+        timestamp(value).into_any()
+    };
+    view! {
+        <td data-label=label.to_owned() title=path.map(str::to_owned)>
+            {shown}
+        </td>
+    }
+    .into_any()
+}
+
+/// The rows, under the columns as the gateway renders them (§9.4), in the
+/// library's data table, [`PAGE_ROWS`] to a `tbody`, of which the page shows
+/// one at a time; on a phone every row stacks as a card, each cell named by
+/// its column, and the column's path is each cell's title.
 fn rows_section(answer: &QueryAnswer) -> AnyView {
     if answer.rows.is_empty() {
         return view! { <p class="fui-muted">"No rows."</p> }.into_any();
     }
-    let header = answer
+    let columns = answer
         .columns
         .iter()
         .enumerate()
-        .map(|(index, column)| {
-            let title = column.path.clone().unwrap_or_default();
-            view! {
-                <th scope="col" title=title>
-                    {heading(index, column)}
-                </th>
-            }
-        })
-        .collect_view();
+        .map(|(index, column)| Column::owned(format!("c{index}"), heading(index, column)))
+        .collect::<Vec<_>>();
+    let paths = answer
+        .columns
+        .iter()
+        .map(|column| column.path.as_deref().filter(|path| !path.is_empty()))
+        .collect::<Vec<_>>();
     let size = usize::try_from(PAGE_ROWS).unwrap_or(usize::MAX);
     let pages = answer
         .rows
@@ -371,7 +388,8 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
                 .map(|row| {
                     let cells = row
                         .iter()
-                        .map(|cell| view! { <td>{cell.clone()}</td> })
+                        .zip(columns.iter().zip(&paths))
+                        .map(|(value, (column, path))| cell(value, &column.label, *path))
                         .collect_view();
                     view! { <tr>{cells}</tr> }
                 })
@@ -383,19 +401,15 @@ fn rows_section(answer: &QueryAnswer) -> AnyView {
             }
         })
         .collect_view();
-    table_card(
-        "Rows",
-        view! {
-            <table id=ROWS_TABLE class="fui-table">
-                <caption>{counted(answer.rows.len())}</caption>
-                <thead>
-                    <tr>{header}</tr>
-                </thead>
-                {pages}
-            </table>
-        },
-    )
-    .into_any()
+    let caption = counted(answer.rows.len());
+    let table = data_table(DataTable {
+        caption: &caption,
+        columns: &columns,
+        sort: None,
+        sort_href: &|_| String::new(),
+        body: Body::Bodies(pages.into_any()),
+    });
+    view! { <div id=ROWS_TABLE>{table}</div> }.into_any()
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -699,5 +713,35 @@ mod tests {
     fn one_row_is_one_row() {
         let html = answered(&answer(200, true)).to_html();
         assert!(html.contains("<caption>1 row</caption>"), "{html}");
+    }
+
+    // The rows are the library's data table, so on a phone each row stacks
+    // as a card whose every cell is named by its column.
+    #[test]
+    fn the_rows_stack_on_a_phone_each_cell_named_by_its_column() {
+        let mut timed = answer(200, true);
+        timed.columns.push(ColumnLine {
+            name: String::from("time"),
+            path: Some(String::from("c/context/start_time/value")),
+        });
+        timed.rows = vec![vec![
+            String::from("8849182a::cdr1.rso.nl::1"),
+            String::from("2026-10-05T10:00:00+02:00"),
+        ]];
+        let html = answered(&timed).to_html();
+        assert!(
+            html.contains(r#"<div id="query-rows"><div role="region" aria-label="1 row" tabindex="0" class="fui-table-scroll fui-table-stack">"#),
+            "{html}"
+        );
+        assert!(
+            html.contains(
+                r#"<td data-label="composition_id" title="c/uid/value">8849182a::cdr1.rso.nl::1</td>"#
+            ),
+            "{html}"
+        );
+        assert!(
+            html.contains(r#"<time datetime="2026-10-05T08:00:00Z" title="2026-10-05T10:00:00+02:00" class="fui-time">2026-10-05 08:00:00 UTC</time>"#),
+            "a date-time cell reads in UTC, the value as sent in its title: {html}"
+        );
     }
 }

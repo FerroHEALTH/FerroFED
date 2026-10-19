@@ -30,6 +30,7 @@ use ferrofed_registry::operator::Page;
 use ferrofed_registry::revision::{
     Author, Current, Difference, Outcome, Revision, RevisionId, Standing,
 };
+use ferrohealth_ui::view::time::reading;
 use leptos::prelude::*;
 
 use crate::config::settings::ReplicaSettings;
@@ -356,18 +357,6 @@ pub(super) fn author(author: &Author) -> String {
     }
 }
 
-/// The instant `at`, written as RFC 3339 text, as the page shows it: the
-/// day and the minute in UTC.
-pub(super) fn when(at: impl std::fmt::Display) -> String {
-    let text = at.to_string();
-    match (text.get(..10), text.get(11..16)) {
-        (Some(day), Some(minute)) if text.get(10..11) == Some("T") => {
-            format!("{day} {minute} UTC")
-        }
-        _ => text,
-    }
-}
-
 /// The running revision's mark, in words.
 pub(super) fn mark_said(mark: &Current) -> String {
     let outcome = if mark.outcome == Outcome::PendingRestart {
@@ -382,13 +371,13 @@ pub(super) fn mark_said(mark: &Current) -> String {
         "Revision {} runs, applied by {} at {}.{outcome}",
         mark.revision,
         author(&mark.applied_by),
-        when(mark.applied_at)
+        reading(&mark.applied_at.to_string())
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, Shown, Tab, when};
+    use super::{Screen, Shown, Tab};
 
     /// The screen of `tab` and `item`.
     fn screen(tab: &str, item: &str) -> Screen {
@@ -428,11 +417,5 @@ mod tests {
         for (tab, item) in [("revisions", ""), ("history", "3"), ("bindings", "")] {
             assert_eq!(None, Shown::of(&screen(tab, item)), "{tab}/{item}");
         }
-    }
-
-    #[test]
-    fn an_instant_reads_as_its_day_and_minute() {
-        assert_eq!("2026-10-15 09:00 UTC", when("2026-10-15T09:00:00Z"));
-        assert_eq!("yesterday", when("yesterday"));
     }
 }

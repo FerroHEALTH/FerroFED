@@ -10,12 +10,13 @@ use ferrofed_registry::revision::{Origin, Revision, RevisionId};
 use leptos::prelude::*;
 
 use crate::configure::render::parts::{diff_table, error_line, form, head, hidden, reason};
-use crate::configure::render::{Loaded, author, when};
+use crate::configure::render::{Loaded, author};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::TEXTAREA;
 use ferrohealth_ui::view::status::{badge, pill};
+use ferrohealth_ui::view::time::timestamp;
 
 /// Where `revision` came from, as a badge.
 fn origin(revision: &Revision) -> AnyView {
@@ -78,7 +79,9 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
                 {standing(revision, (running, previous))}
             </div>
             <p class="fui-muted">
-                {format!("{} · {}", author(&revision.author), when(revision.at))}
+                {author(&revision.author)}
+                " · "
+                {timestamp(&revision.at.to_string())}
             </p>
             <p class="fui-small">{revision.reason.clone()}</p>
             <div class="fui-cluster">

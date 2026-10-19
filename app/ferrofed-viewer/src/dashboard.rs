@@ -28,6 +28,7 @@ use ferrohealth_ui::view::layout::main_aside;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::{Stat, panel_body, stat_card_marked, stat_grid, titled_panel};
+use ferrohealth_ui::view::time::timestamp;
 use leptos::either::Either;
 use leptos::prelude::*;
 
@@ -464,8 +465,8 @@ fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> 
                     };
                     view! {
                         <tr>
-                            <td data-label="At" class="fui-mono">
-                                {row.at.clone()}
+                            <td data-label="At">
+                                {timestamp(&row.at)}
                             </td>
                             <th scope="row">{row.kind.clone()}</th>
                             <td data-label="State">{pill(tone, word)}</td>
@@ -583,6 +584,10 @@ mod tests {
         assert!(
             html.contains(r#"<span class="fui-pill fui-tone-bad">open</span>"#),
             "{html}"
+        );
+        assert!(
+            html.contains(r#"<time datetime="2026-10-05T08:00:00Z" title="2026-10-05T08:00:00Z" class="fui-time">2026-10-05 08:00:00 UTC</time>"#),
+            "the incident time reads in UTC: {html}"
         );
         assert!(html.contains("Answered by replica gateway-0."), "{html}");
     }
