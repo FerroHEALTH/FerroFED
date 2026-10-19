@@ -11,6 +11,7 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 use serde::{Deserialize, Serialize};
 
+use crate::locale::{Msg, tr};
 use crate::views::model::{Outcome, ViewError};
 use crate::views::{shown, titled};
 use ferrohealth_ui::view::empty::{Busy, busy};
@@ -49,13 +50,13 @@ pub async fn federation() -> Result<Outcome<FederationView>, ViewError> {
 pub fn FederationPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| federation());
     view! {
-        <Title text=titled("Self-description") />
+        <Title text=titled(&tr(Msg::SelfDescription)) />
         {page_header(
-            "Self-description",
-            Some(String::from("What the gateway declares of itself in OPTIONS.")),
+            tr(Msg::SelfDescription),
+            Some(tr(Msg::WhatGatewayDeclaresItselfOptions)),
             (),
         )}
-        <Suspense fallback=|| busy("Loading the self-description.", Busy::Section)>
+        <Suspense fallback=|| busy(tr(Msg::LoadingTheSelfDescription), Busy::Section)>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
@@ -72,6 +73,7 @@ pub fn FederationPage() -> impl IntoView {
 /// which Leptos escapes.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render {
+    use crate::locale::{Msg, tr_served, tr_served_with};
     use leptos::prelude::*;
     use openehr_federation::options::{GatewayDescription, MemberEndpoint, OptionsRoot};
     use serde::Deserialize;
@@ -87,14 +89,16 @@ pub mod render {
     use ferrohealth_ui::view::surface::{definitions, disclosure, stack};
 
     /// The columns of the declared endpoints.
-    const ENDPOINT_COLUMNS: [Column; 6] = [
-        Column::text("endpoint", "Endpoint"),
-        Column::text("organisation", "Organisation"),
-        Column::text("membership", "Membership"),
-        Column::text("node", "Node"),
-        Column::text("system_id", "system_id").mono(),
-        Column::text("product", "Product"),
-    ];
+    fn endpoint_columns() -> [Column; 6] {
+        [
+            Column::text("endpoint", tr_served(Msg::Endpoint)),
+            Column::text("organisation", tr_served(Msg::Organisation)),
+            Column::text("membership", tr_served(Msg::Membership)),
+            Column::text("node", tr_served(Msg::Node)),
+            Column::text("system_id", tr_served(Msg::SystemId)),
+            Column::text("product", tr_served(Msg::Product)),
+        ]
+    }
 
     /// The top-level member that names the manufacturer, beside
     /// `federation` and `endpoints` (Regulation (EU) 2025/327 Art
@@ -135,19 +139,19 @@ pub mod render {
         let html = stack(view! {
             {main_aside(
                 stack(view! {
-                    {card("Federation", identity(gateway, description.endpoints.len()))}
-                    {card("Capabilities", capabilities(gateway))}
+                    {card(tr_served(Msg::Federation), identity(gateway, description.endpoints.len()))}
+                    {card(tr_served(Msg::Capabilities), capabilities(gateway))}
                 }),
                 stack(view! {
-                    {card("Budgets and paging", budgets(gateway))}
-                    {card("Manufacturer", manufacturer(description))}
+                    {card(tr_served(Msg::BudgetsAndPaging), budgets(gateway))}
+                    {card(tr_served(Msg::Manufacturer), manufacturer(description))}
                 }),
             )}
-            {card("ITS-REST areas", its_rest(gateway))}
+            {card(tr_served(Msg::ItsRestAreas), its_rest(gateway))}
             {endpoints(&description.endpoints)}
             {disclosure(
-                "The OPTIONS document",
-                code_panel("The OPTIONS document", Language::Json, &document),
+                tr_served(Msg::TheOptionsDocument),
+                code_panel(&tr_served(Msg::TheOptionsDocument), Language::Json, &document),
             )}
         })
         .to_html();
@@ -155,7 +159,7 @@ pub mod render {
     }
 
     /// A card titled `title` holding the labelled values `rows`.
-    fn card(title: &'static str, rows: Vec<(&'static str, String)>) -> AnyView {
+    fn card(title: String, rows: Vec<(String, String)>) -> AnyView {
         let rows = definitions(
             rows.into_iter()
                 .map(|(label, value)| (label, value.into_any()))
@@ -166,84 +170,96 @@ pub mod render {
 
     /// `offered` in words.
     fn offered(offered: bool) -> String {
-        String::from(if offered { "offered" } else { "not offered" })
+        if offered {
+            tr_served(Msg::Offered)
+        } else {
+            tr_served(Msg::NotOffered)
+        }
     }
 
     /// Who the gateway is: its federation, the specification and its members.
-    fn identity(gateway: &GatewayDescription, endpoints: usize) -> Vec<(&'static str, String)> {
+    fn identity(gateway: &GatewayDescription, endpoints: usize) -> Vec<(String, String)> {
         let mut rows = vec![
-            ("Federation", gateway.id.to_string()),
+            (tr_served(Msg::Federation), gateway.id.to_string()),
             (
-                "Specification version",
+                tr_served(Msg::SpecificationVersion),
                 gateway.spec_version.as_str().to_owned(),
             ),
-            ("Member endpoints", endpoints.to_string()),
+            (tr_served(Msg::MemberEndpoints), endpoints.to_string()),
         ];
         if let Some(jwks) = gateway
             .auth
             .as_ref()
             .and_then(|auth| auth.jwks_uri.as_ref())
         {
-            rows.push(("JWK Set", jwks.to_string()));
+            rows.push((tr_served(Msg::JwkSet), jwks.to_string()));
         }
         rows
     }
 
     /// How the gateway serves each ITS-REST area (§7a.2).
-    fn its_rest(gateway: &GatewayDescription) -> Vec<(&'static str, String)> {
+    fn its_rest(gateway: &GatewayDescription) -> Vec<(String, String)> {
         let areas = &gateway.its_rest;
         vec![
-            ("Query", areas.query.clone()),
-            ("EHR", areas.ehr.clone()),
-            ("Definition", areas.definition.clone()),
-            ("Demographic", areas.demographic.as_str().to_owned()),
+            (tr_served(Msg::Query), areas.query.clone()),
+            (tr_served(Msg::Ehr), areas.ehr.clone()),
+            (tr_served(Msg::Definition), areas.definition.clone()),
+            (
+                tr_served(Msg::Demographic),
+                areas.demographic.as_str().to_owned(),
+            ),
         ]
     }
 
     /// What the gateway offers a query (§8, §10, §11.4, §12.7).
-    fn capabilities(gateway: &GatewayDescription) -> Vec<(&'static str, String)> {
+    fn capabilities(gateway: &GatewayDescription) -> Vec<(String, String)> {
         let completeness = &gateway.completeness;
         let best_effort = match completeness.opt_in() {
-            Some(opt_in) if completeness.best_effort() => format!(
-                "offered, by {}",
-                [opt_in.header.as_deref(), opt_in.value.as_deref()]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(": ")
+            Some(opt_in) if completeness.best_effort() => tr_served_with(
+                Msg::OfferedBy,
+                &[(
+                    "value0",
+                    ([opt_in.header.as_deref(), opt_in.value.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(": "))
+                    .clone()
+                    .into(),
+                )],
             ),
             _ => offered(completeness.best_effort()),
         };
         let definition = &gateway.definition;
         vec![
-            ("AQL fan-out", offered(gateway.aql.fan_out)),
+            (tr_served(Msg::AqlFanOut), offered(gateway.aql.fan_out)),
             (
-                "Deduplication modes",
+                tr_served(Msg::DeduplicationModes),
                 gateway.dedup.modes.as_slice().join(", "),
             ),
             (
-                "Deduplication header",
+                tr_served(Msg::DeduplicationHeader),
                 gateway
                     .dedup
                     .request_header
                     .clone()
-                    .unwrap_or_else(|| String::from("none declared")),
+                    .unwrap_or_else(|| tr_served(Msg::NoneDeclared)),
             ),
-            ("Best effort", best_effort),
+            (tr_served(Msg::BestEffort), best_effort),
             (
-                "Stored-query registry",
+                tr_served(Msg::StoredQueryRegistry),
                 offered(definition.stored_query_registry().unwrap_or(false)),
             ),
             (
-                "Stored-query fan-out",
+                tr_served(Msg::StoredQueryFanOut),
                 offered(definition.stored_query_fan_out().unwrap_or(false)),
             ),
             (
-                "Template upload fan-out",
+                tr_served(Msg::TemplateUploadFanOut),
                 offered(definition.fan_out_template_upload()),
             ),
             (
-                "On a localization failure",
+                tr_served(Msg::OnALocalizationFailure),
                 gateway.localization.on_failure.clone(),
             ),
         ]
@@ -251,17 +267,41 @@ pub mod render {
 
     /// The gateway's time budgets, its paging and its aggregates (§11.5,
     /// §11.6).
-    fn budgets(gateway: &GatewayDescription) -> Vec<(&'static str, String)> {
+    fn budgets(gateway: &GatewayDescription) -> Vec<(String, String)> {
         let aggregates = &gateway.aggregates.decomposable;
         vec![
-            ("Per node", format!("{} ms", gateway.timeout.per_node_ms)),
-            ("Overall", format!("{} ms", gateway.timeout.overall_ms)),
-            ("Timeout policy", gateway.timeout.policy.clone()),
-            ("Offset strategy", gateway.paging.offset_strategy.clone()),
             (
-                "Decomposable aggregates",
+                tr_served(Msg::PerNode),
+                tr_served_with(
+                    Msg::Ms5,
+                    &[(
+                        "per_node_ms",
+                        (gateway.timeout.per_node_ms).to_string().into(),
+                    )],
+                ),
+            ),
+            (
+                tr_served(Msg::Overall),
+                tr_served_with(
+                    Msg::Ms6,
+                    &[(
+                        "overall_ms",
+                        (gateway.timeout.overall_ms).to_string().into(),
+                    )],
+                ),
+            ),
+            (
+                tr_served(Msg::TimeoutPolicy),
+                gateway.timeout.policy.clone(),
+            ),
+            (
+                tr_served(Msg::OffsetStrategy),
+                gateway.paging.offset_strategy.clone(),
+            ),
+            (
+                tr_served(Msg::DecomposableAggregates),
                 if aggregates.is_empty() {
-                    String::from("none")
+                    tr_served(Msg::None)
                 } else {
                     aggregates.join(", ")
                 },
@@ -270,9 +310,9 @@ pub mod render {
     }
 
     /// The manufacturer and the support period the description names.
-    fn manufacturer(description: &OptionsRoot) -> Vec<(&'static str, String)> {
-        let not_declared = || String::from("not declared");
-        let unreadable = || String::from("declared in a form the console cannot read");
+    fn manufacturer(description: &OptionsRoot) -> Vec<(String, String)> {
+        let not_declared = || tr_served(Msg::NotDeclared);
+        let unreadable = || tr_served(Msg::DeclaredFormConsoleCannotRead);
         let declared = match description.extra.get(MANUFACTURER) {
             None => Ok(Manufacturer::default()),
             Some(raw) => serde_json::from_str::<Manufacturer>(raw.get()),
@@ -281,28 +321,40 @@ pub mod render {
             None => not_declared(),
             Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
                 Ok(Some(day)) => day,
-                Ok(None) => String::from("no end date"),
+                Ok(None) => tr_served(Msg::NoEndDate),
                 Err(_unreadable) => unreadable(),
             },
         };
         let Ok(declared) = declared else {
-            return vec![("Manufacturer", unreadable()), ("Fixes until", supported)];
+            return vec![
+                (tr_served(Msg::Manufacturer), unreadable()),
+                (tr_served(Msg::FixesUntil), supported),
+            ];
         };
         vec![
-            ("Name", declared.name.unwrap_or_else(not_declared)),
             (
-                "Postal address",
+                tr_served(Msg::Name),
+                declared.name.unwrap_or_else(not_declared),
+            ),
+            (
+                tr_served(Msg::PostalAddress),
                 declared.postal_address.unwrap_or_else(not_declared),
             ),
-            ("Contact", declared.email.unwrap_or_else(not_declared)),
-            ("Website", declared.website.unwrap_or_else(not_declared)),
-            ("Fixes until", supported),
+            (
+                tr_served(Msg::Contact),
+                declared.email.unwrap_or_else(not_declared),
+            ),
+            (
+                tr_served(Msg::Website),
+                declared.website.unwrap_or_else(not_declared),
+            ),
+            (tr_served(Msg::FixesUntil), supported),
         ]
     }
 
     /// The member endpoints the description declares, in a table.
     fn endpoints(endpoints: &[MemberEndpoint]) -> impl IntoView + use<> {
-        let columns = filled_columns(&ENDPOINT_COLUMNS, endpoints, &[], |endpoint, key| {
+        let columns = filled_columns(&endpoint_columns(), endpoints, &[], |endpoint, key| {
             key != "product" || endpoint.product.is_some()
         });
         let products = crate::views::has(&columns, "product");
@@ -319,19 +371,23 @@ pub mod render {
                         <th scope="row" class="fui-mono">
                             {endpoint.id.to_string()}
                         </th>
-                        <td data-label="Organisation">{endpoint.organisation.clone()}</td>
-                        <td data-label="Membership">{state_pill(endpoint.status.as_str())}</td>
-                        <td data-label="Node" class="fui-mono">
+                        <td data-label=tr_served(Msg::Organisation)>{endpoint.organisation.clone()}</td>
+                        <td data-label=tr_served(Msg::Membership)>{state_pill(endpoint.status.as_str())}</td>
+                        <td data-label=tr_served(Msg::Node) class="fui-mono">
                             {endpoint.node_id.clone().unwrap_or_default()}
                         </td>
-                        <td data-label="system_id" class="fui-mono">
+                        <td data-label=tr_served(Msg::SystemId) class="fui-mono">
                             {endpoint.system_id.clone().unwrap_or_default()}
                         </td>
-                        {products.then(|| view! { <td data-label="Product">{product}</td> })}
+                        {products.then(|| view! { <td data-label=tr_served(Msg::Product)>{product}</td> })}
                     </tr>
                 }
             })
             .collect_view();
-        crate::views::table("Declared endpoints", &columns, rows.into_any())
+        crate::views::table(
+            &tr_served(Msg::DeclaredEndpoints),
+            &columns,
+            rows.into_any(),
+        )
     }
 }

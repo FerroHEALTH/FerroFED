@@ -71,6 +71,7 @@ pub async fn configure(
 /// sent, the gateway's answers read into what the page renders.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use crate::locale::{Msg, tr_served};
     use ferrofed_registry::console::ConsoleMember;
     use ferrofed_registry::operator::PageRequest;
     use ferrofed_registry::resource::{Resource, SecretChange, SectionRequest, SectionResource};
@@ -102,11 +103,9 @@ pub mod server {
     /// # Errors
     /// Returns [`Refusal::Invalid`] when the console names no replica.
     pub fn replica(replicas: &[ReplicaSettings]) -> Result<&ReplicaSettings, Refusal> {
-        replicas.first().ok_or_else(|| {
-            invalid(
-                "This console is configured with no admin listener, so it shows no configuration.",
-            )
-        })
+        replicas
+            .first()
+            .ok_or_else(|| invalid(&tr_served(Msg::ConsoleConfiguredNoAdminListenerSo2)))
     }
 
     /// The part of the configuration page `screen` names, as `replica`
@@ -122,9 +121,7 @@ pub mod server {
         screen: &Screen,
     ) -> Result<ConfigView, Stop> {
         let shown = render::Shown::of(screen).ok_or_else(|| {
-            Stop::Refused(invalid(
-                "This path names no part of the configuration page.",
-            ))
+            Stop::Refused(invalid(&tr_served(Msg::PathNamesNoPartConfigurationPage)))
         })?;
         let standing = match gateway.config_standing(replica, token).await {
             Ok(standing) => standing,
@@ -297,7 +294,7 @@ pub mod server {
             .await;
         render::answers::stored(&acted(
             ActionKind::Configuration,
-            (replica.name.as_str(), "stored-query store"),
+            (replica.name.as_str(), &tr_served(Msg::StoredQueryStore)),
             stored,
             |stored| StoredLine {
                 name: stored.name,
@@ -474,7 +471,7 @@ pub mod server {
         {
             return Err(at(
                 crate::configure::member::field("node"),
-                "A member with this node_id exists: change it with its own edit form.",
+                tr_served(Msg::MemberNodeIdExistsChangeOwn),
             ));
         }
         let held = resources

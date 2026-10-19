@@ -18,6 +18,7 @@ use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, StatusCode};
 
 use crate::gateway::AccessToken;
+use crate::locale::{Msg, tr, tr_with};
 use crate::server::ViewerState;
 
 /// The path of a revision's download.
@@ -35,7 +36,7 @@ fn plain(status: StatusCode, said: String) -> Response {
         status,
         [
             (CACHE_CONTROL, "no-store"),
-            (CONTENT_TYPE, "text/plain; charset=utf-8"),
+            (CONTENT_TYPE, &tr(Msg::TextPlainCharsetUtf8)),
         ],
         said,
     )
@@ -58,7 +59,7 @@ pub async fn export(
             tracing::error!(%error, "the session store could not be read");
             return plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                String::from("The session store could not be read."),
+                tr(Msg::SessionStoreCouldNotRead),
             );
         }
         Some(Ok(None)) | None => {
@@ -73,17 +74,12 @@ pub async fn export(
         }
     };
     let Ok(id) = id.parse::<RevisionId>() else {
-        return plain(
-            StatusCode::NOT_FOUND,
-            String::from("The path names no revision number."),
-        );
+        return plain(StatusCode::NOT_FOUND, tr(Msg::PathNamesNoRevisionNumber));
     };
     let Some(replica) = state.settings().admin.first() else {
         return plain(
             StatusCode::NOT_FOUND,
-            String::from(
-                "This console is configured with no admin listener, so it exports no configuration.",
-            ),
+            tr(Msg::ConsoleConfiguredNoAdminListenerSo3),
         );
     };
     match state.gateway().export_revision(replica, &token, id).await {
@@ -91,19 +87,26 @@ pub async fn export(
         Err(error) => {
             let name = replica.name.as_str();
             if let Some((status, code)) = error.refusal() {
-                let code = code.unwrap_or_else(|| String::from("no code"));
+                let code = code.unwrap_or_else(|| tr(Msg::NoCode));
                 return plain(
                     status,
-                    format!(
-                        "Replica {name} refused the export: {} ({code}).",
-                        status.as_u16()
+                    tr_with(
+                        Msg::ReplicaRefusedTheExport,
+                        &[
+                            ("name", (name).to_string().into()),
+                            ("status", (status.as_u16()).to_string().into()),
+                            ("code", (code).clone().into()),
+                        ],
                     ),
                 );
             }
             tracing::warn!(replica = name, error = %error, "a configuration export failed");
             plain(
                 StatusCode::BAD_GATEWAY,
-                format!("Replica {name} could not be reached, or its answer read, for the export."),
+                tr_with(
+                    Msg::ReplicaCouldNotReachedAnswerRead,
+                    &[("name", (name).to_string().into())],
+                ),
             )
         }
     }
@@ -118,8 +121,9 @@ fn attachment(id: RevisionId, toml: Vec<u8>) -> Response {
         HeaderValue::from_static("application/toml; charset=utf-8"),
     );
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    if let Ok(value) = HeaderValue::from_str(&format!(
-        "attachment; filename=\"ferrofed-revision-{id}.toml\""
+    if let Ok(value) = HeaderValue::from_str(&tr_with(
+        Msg::AttachmentFilenameFerrofedRevisionToml,
+        &[("id", (id).to_string().into())],
     )) {
         headers.insert(CONTENT_DISPOSITION, value);
     }

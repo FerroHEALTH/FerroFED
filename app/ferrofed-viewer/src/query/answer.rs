@@ -19,6 +19,7 @@ use ferrohealth_ui::view::time::{reading, timestamp};
 use leptos::either::Either;
 use leptos::prelude::*;
 
+use crate::locale::{Msg, tr, tr_with};
 use crate::query::model::{
     ColumnLine, EndpointLine, PAGE_ROWS, QueryAnswer, ROWS_TABLE, RenderedAnswer,
 };
@@ -58,7 +59,7 @@ fn refusal_state(refused: &Refusal) -> AnyView {
     let line = crate::views::refusal(refused);
     view! {
         <div class="fui-stack">
-            <div class="fui-cluster">{pill(Tone::Bad, "refused")}</div>
+            <div class="fui-cluster">{pill(Tone::Bad, &tr(Msg::StateRefused))}</div>
             {line}
         </div>
     }
@@ -102,7 +103,13 @@ fn node_tone(status: &str) -> Tone {
 /// answered of those in scope, and the time the gateway took.
 fn summary_section(answer: &QueryAnswer) -> AnyView {
     let (tone, word) = if !answer.succeeded {
-        (Tone::Bad, format!("failed {}", answer.status))
+        (
+            Tone::Bad,
+            tr_with(
+                Msg::Failed,
+                &[("status", (answer.status).to_string().into())],
+            ),
+        )
     } else if answer.complete {
         (Tone::Ok, String::from("complete"))
     } else {
@@ -119,24 +126,33 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
         .filter(|endpoint| answered_status(&endpoint.status))
         .count();
     let nodes = if in_scope == 1 {
-        format!("{replied} of 1 node answered")
+        tr_with(
+            Msg::Of1NodeAnswered,
+            &[("replied", (replied).to_string().into())],
+        )
     } else {
-        format!("{replied} of {in_scope} nodes answered")
+        tr_with(
+            Msg::OfNodesAnswered,
+            &[
+                ("replied", (replied).to_string().into()),
+                ("in_scope", (in_scope).to_string().into()),
+            ],
+        )
     };
     let elapsed = answer.elapsed_ms.map(|elapsed| {
         view! {
             <span aria-hidden="true">"·"</span>
-            <span class="fui-num">{format!("{elapsed} ms")}</span>
+            <span class="fui-num">{tr_with(Msg::Ms2, &[("elapsed", (elapsed).to_string().into())])}</span>
         }
     });
     let dedup = answer.dedup.clone().map(|mode| {
         let suppressed = answer
             .suppressed_rows
-            .map(|rows| format!(", {rows} rows suppressed"))
+            .map(|rows| tr_with(Msg::RowsSuppressed, &[("rows", (rows).to_string().into())]))
             .unwrap_or_default();
         view! {
             <span aria-hidden="true">"·"</span>
-            <span>{format!("Deduplication: {mode}{suppressed}.")}</span>
+            <span>{tr_with(Msg::Deduplication2, &[("mode", (mode).clone().into()), ("suppressed", (suppressed).clone().into())])}</span>
         }
     });
     view! {
@@ -159,9 +175,9 @@ fn outcome_section(answer: &QueryAnswer) -> AnyView {
     // NOTE: §11.4: under all-or-nothing a node not answering is a 504 and a
     // node error a 424; any other failing status gets no reading of its own.
     let why = match status {
-        504 => " A node in scope was asked and did not answer, so the gateway returned no rows.",
-        424 => " A node in scope answered with an error, so the gateway returned no rows.",
-        _ => " The gateway returned no rows.",
+        504 => tr(Msg::NodeScopeWasAskedDidNot),
+        424 => tr(Msg::NodeScopeAnsweredErrorSoGateway),
+        _ => tr(Msg::GatewayReturnedNoRows),
     };
     let failed = (!answer.succeeded).then(|| {
         notice(
@@ -169,9 +185,9 @@ fn outcome_section(answer: &QueryAnswer) -> AnyView {
             Announce::Alert,
             None,
             view! {
-                <strong>{format!("The gateway failed the query: {status}.")}</strong>
+                <strong>{tr_with(Msg::GatewayFailedQuery, &[("status", (status).to_string().into())])}</strong>
                 {why}
-                " The nodes below say what each one did."
+                {tr(Msg::NodesBelowSayWhatEachOne)}
             },
         )
     });
@@ -186,7 +202,7 @@ fn completeness(complete: bool) -> impl IntoView {
             Tone::Ok,
             Announce::Status,
             None,
-            "Every node in scope answered.",
+            tr(Msg::EveryNodeScopeAnswered),
         ))
     } else {
         Either::Right(notice(
@@ -209,7 +225,7 @@ fn nodes_section(endpoints: &[EndpointLine]) -> AnyView {
                 view! { <span class="fui-muted fui-num">{counted_u64(count)}</span> }
             });
             let latency = endpoint.latency_ms.map(|latency| {
-                view! { <span class="fui-muted fui-num">{format!("{latency} ms")}</span> }
+                view! { <span class="fui-muted fui-num">{tr_with(Msg::Ms3, &[("latency", (latency).to_string().into())])}</span> }
             });
             view! {
                 <span class="fui-mono">{endpoint.id.clone()}</span>
@@ -220,7 +236,7 @@ fn nodes_section(endpoints: &[EndpointLine]) -> AnyView {
             .into_any()
         })
         .collect();
-    tile_list("Nodes", tiles)
+    tile_list(tr(Msg::Nodes), tiles)
 }
 
 /// Every endpoint's record in full, its organisation and error with it,
@@ -230,7 +246,7 @@ fn details_section(endpoints: &[EndpointLine]) -> AnyView {
     let table = endpoints_table(endpoints);
     view! {
         <details class="fui-disclosure" open=open>
-            <summary>"Endpoint details"</summary>
+            <summary>{tr(Msg::EndpointDetails)}</summary>
             <div>{table}</div>
         </details>
     }
@@ -247,27 +263,29 @@ fn reported(value: Option<String>) -> AnyView {
             <span class="fui-muted" aria-hidden="true">
                 "—"
             </span>
-            <span class="fui-sr-only">"none"</span>
+            <span class="fui-sr-only">{tr(Msg::None)}</span>
         }
         .into_any(),
     }
 }
 
 /// The columns of the endpoint details.
-const ENDPOINT_COLUMNS: [Column; 6] = [
-    Column::text("endpoint", "Endpoint"),
-    Column::text("status", "Status"),
-    Column::text("latency", "Latency").numeric(),
-    Column::text("rows", "Rows").numeric(),
-    Column::text("organisation", "Organisation"),
-    Column::text("error", "Error"),
-];
+fn endpoint_columns() -> [Column; 6] {
+    [
+        Column::text("endpoint", tr(Msg::Endpoint)),
+        Column::text("status", tr(Msg::Status)),
+        Column::text("latency", tr(Msg::Latency)).numeric(),
+        Column::text("rows", tr(Msg::Rows)).numeric(),
+        Column::text("organisation", tr(Msg::Organisation)),
+        Column::text("error", tr(Msg::Error)),
+    ]
+}
 
 /// The table of `endpoints`, each with its status, latency, rows and
 /// error (§9.5, §11.1).
 pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
     let columns = filled_columns(
-        &ENDPOINT_COLUMNS,
+        &endpoint_columns(),
         endpoints,
         &["endpoint", "status"],
         |endpoint, key| match key {
@@ -291,29 +309,29 @@ pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
             view! {
                 <tr>
                     <th scope="row" class="fui-mono">{endpoint.id.clone()}</th>
-                    <td data-label="Status">{endpoint.status.clone()}</td>
+                    <td data-label=tr(Msg::Status)>{endpoint.status.clone()}</td>
                     {latency.then(|| view! {
-                        <td data-label="Latency" class=NUM>
-                            {reported(endpoint.latency_ms.map(|latency| format!("{latency} ms")))}
+                        <td data-label=tr(Msg::Latency) class=NUM>
+                            {reported(endpoint.latency_ms.map(|latency| tr_with(Msg::Ms4, &[("latency", (latency).to_string().into())])))}
                         </td>
                     })}
                     {counted.then(|| view! {
-                        <td data-label="Rows" class=NUM>
+                        <td data-label=tr(Msg::Rows) class=NUM>
                             {reported(endpoint.row_count.map(|count| count.to_string()))}
                         </td>
                     })}
                     {organised.then(|| view! {
-                        <td data-label="Organisation">{reported(endpoint.organisation.clone())}</td>
+                        <td data-label=tr(Msg::Organisation)>{reported(endpoint.organisation.clone())}</td>
                     })}
                     {failed.then(|| view! {
-                        <td data-label="Error">{reported(endpoint.error.clone())}</td>
+                        <td data-label=tr(Msg::Error)>{reported(endpoint.error.clone())}</td>
                     })}
                 </tr>
             }
         })
         .collect_view();
     crate::views::table(
-        "Every endpoint the gateway reports",
+        &tr(Msg::EveryEndpointGatewayReports),
         &columns,
         rows.into_any(),
     )
@@ -341,18 +359,18 @@ fn heading(index: usize, column: &ColumnLine) -> String {
 /// How many rows `count` is, in words.
 fn counted(count: usize) -> String {
     if count == 1 {
-        String::from("1 row")
+        tr(Msg::N1Row)
     } else {
-        format!("{count} rows")
+        tr_with(Msg::Rows2, &[("count", (count).to_string().into())])
     }
 }
 
 /// How many rows a node's `count` is, in words.
 fn counted_u64(count: u64) -> String {
     if count == 1 {
-        String::from("1 row")
+        tr(Msg::N1Row)
     } else {
-        format!("{count} rows")
+        tr_with(Msg::Rows3, &[("count", (count).to_string().into())])
     }
 }
 
@@ -380,7 +398,7 @@ fn cell(value: &str, label: &str) -> AnyView {
 /// its column, and the column's path is its header's title.
 fn rows_section(answer: &QueryAnswer) -> AnyView {
     if answer.rows.is_empty() {
-        return view! { <p class="fui-muted">"No rows."</p> }.into_any();
+        return view! { <p class="fui-muted">{tr(Msg::NoRows)}</p> }.into_any();
     }
     let columns = answer
         .columns

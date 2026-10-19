@@ -35,6 +35,7 @@ use leptos::prelude::*;
 
 use crate::config::settings::ReplicaSettings;
 use crate::configure::model::{ConfigView, Screen};
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::Refusal;
 
 /// What a replica reports of a saved revision, with the preview of what it
@@ -101,8 +102,8 @@ impl Loaded<'_> {
     #[must_use]
     pub fn next(&self) -> String {
         RevisionId::after(self.standing.head).map_or_else(
-            || String::from("a new revision"),
-            |next| format!("revision {next}"),
+            || tr(Msg::ANewRevision),
+            |next| tr_with(Msg::Revision4, &[("next", (next).to_string().into())]),
         )
     }
 }
@@ -146,13 +147,13 @@ impl Tab {
 
     /// What the tab says.
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub const fn label(self) -> Msg {
         match self {
-            Self::Members => "Members",
-            Self::Credentials => "Credentials and bindings",
-            Self::Queries => "Stored queries",
-            Self::History => "History",
-            Self::Exchange => "Import and export",
+            Self::Members => Msg::Members,
+            Self::Credentials => Msg::CredentialsAndBindings,
+            Self::Queries => Msg::StoredQueries,
+            Self::History => Msg::History,
+            Self::Exchange => Msg::ImportAndExport,
         }
     }
 
@@ -255,9 +256,9 @@ impl Shown {
 /// The page of a gateway whose configuration is not managed: no form.
 #[must_use]
 pub fn unmanaged(replica: &ReplicaSettings) -> ConfigView {
-    let said = format!(
-        "Replica {} serves no configuration revisions: its configuration is not managed (config.ui = \"off\"), so the file alone configures it and the console changes nothing.",
-        replica.name
+    let said = tr_with(
+        Msg::ReplicaServesNoConfigurationRevisionsConfiguration,
+        &[("name", (replica.name).clone().into())],
     );
     ConfigView {
         header: top::title(()).to_html(),
@@ -332,13 +333,13 @@ fn tabs(current: Tab) -> impl IntoView {
                     aria-controls="config-panel"
                     tabindex=if selected { "0" } else { "-1" }
                 >
-                    {tab.label()}
+                    {tr(tab.label())}
                 </a>
             }
         })
         .collect_view();
     view! {
-        <div role="tablist" aria-label="Configuration" class="fui-tabs" data-tabs="">
+        <div role="tablist" aria-label=tr(Msg::Configuration) class="fui-tabs" data-tabs="">
             {links}
         </div>
     }
@@ -347,31 +348,37 @@ fn tabs(current: Tab) -> impl IntoView {
 /// Who `author` is, in words.
 pub(super) fn author(author: &Author) -> String {
     match author {
-        Author::File => String::from("the configuration file"),
-        Author::Operator { subject, .. } => format!("operator {subject}"),
-        Author::DevelopmentLoopback => {
-            String::from("a loopback peer under the development profile")
+        Author::File => tr(Msg::TheConfigurationFile),
+        Author::Operator { subject, .. } => {
+            tr_with(Msg::Operator2, &[("subject", (subject).clone().into())])
         }
-        Author::Gateway => String::from("the gateway, as no operator confirmed in time"),
-        _ => String::from("an author this console does not know"),
+        Author::DevelopmentLoopback => tr(Msg::LoopbackPeerUnderDevelopmentProfile),
+        Author::Gateway => tr(Msg::GatewayNoOperatorConfirmedTime),
+        _ => tr(Msg::AuthorConsoleDoesNotKnow),
     }
 }
 
 /// The running revision's mark, in words.
 pub(super) fn mark_said(mark: &Current) -> String {
     let outcome = if mark.outcome == Outcome::PendingRestart {
-        format!(
-            " Some of its settings take effect only at a restart: {}.",
-            mark.needs_restart.join(", ")
+        tr_with(
+            Msg::SomeSettingsTakeEffectOnlyRestart,
+            &[("mark", (mark.needs_restart.join(", ")).clone().into())],
         )
     } else {
         String::new()
     };
-    format!(
-        "Revision {} runs, applied by {} at {}.{outcome}",
-        mark.revision,
-        author(&mark.applied_by),
-        reading(&mark.applied_at.to_string())
+    tr_with(
+        Msg::RevisionRunsApplied,
+        &[
+            ("revision", (mark.revision).to_string().into()),
+            ("value1", (author(&mark.applied_by)).clone().into()),
+            (
+                "value2",
+                (reading(&mark.applied_at.to_string())).clone().into(),
+            ),
+            ("outcome", (outcome).clone().into()),
+        ],
     )
 }
 

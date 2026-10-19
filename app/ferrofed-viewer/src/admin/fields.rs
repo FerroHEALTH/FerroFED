@@ -16,6 +16,7 @@ use leptos::prelude::*;
 
 use crate::admin::act::server::EVERY_REPLICA;
 use crate::config::settings::ReplicaSettings;
+use crate::locale::{Msg, tr, tr_with};
 
 /// The collision clear's fields: the `ehr_id`, offered from the incidents'
 /// `ehr_ids`, and the replica among `replicas` or every one; the card adds
@@ -55,11 +56,11 @@ pub fn clear(replicas: &[ReplicaSettings], ehr_ids: &[String]) -> String {
             )}
             {field(
                 "clear-replica",
-                "Replica",
+                tr(Msg::Replica),
                 None,
                 view! {
                     <select id="clear-replica" name="form[replica]" class=SELECT>
-                        <option value=EVERY_REPLICA>"Every replica, one after another"</option>
+                        <option value=EVERY_REPLICA>{tr(Msg::EveryReplicaOneAfterAnother)}</option>
                         {choices}
                     </select>
                 },
@@ -78,9 +79,9 @@ pub fn repair(replica: &ReplicaSettings, names: &[String]) -> String {
         .iter()
         .map(|name| view! { <option value=name.clone()></option> })
         .collect_view();
-    let goes = format!(
-        "It goes to replica {}, the first one configured: the replicas share one stored-query store.",
-        replica.name
+    let goes = tr_with(
+        Msg::GoesReplicaFirstOneConfiguredReplicas,
+        &[("name", (replica.name).clone().into())],
     );
     view! {
         <div class="fui-form">
@@ -90,7 +91,7 @@ pub fn repair(replica: &ReplicaSettings, names: &[String]) -> String {
                 view! {
                     {field(
                         "repair-version",
-                        "Version",
+                        tr(Msg::Version),
                         None,
                         view! {
                             <input
@@ -105,7 +106,7 @@ pub fn repair(replica: &ReplicaSettings, names: &[String]) -> String {
                     )}
                     {field(
                         "repair-name",
-                        "Stored query name",
+                        tr(Msg::StoredQueryName),
                         None,
                         view! {
                             <input
@@ -124,7 +125,7 @@ pub fn repair(replica: &ReplicaSettings, names: &[String]) -> String {
             )}
             {field(
                 "repair-endpoints",
-                "Members, comma-separated, or * for every active member",
+                tr(Msg::MembersCommaSeparatedEveryActiveMember),
                 None,
                 view! {
                     <input

@@ -21,6 +21,7 @@ use leptos_router::hooks::{use_params_map, use_query_map};
 use serde::{Deserialize, Serialize};
 
 use crate::admin::act::RepairDrift;
+use crate::locale::{Msg, tr};
 use crate::views::model::{Outcome, ViewError};
 use crate::views::{STORED_QUERIES, offset_in_url, pager, replica_line, shown, titled};
 use ferrohealth_ui::view::empty::{Busy, busy};
@@ -118,13 +119,13 @@ pub fn StoredQueriesPage() -> impl IntoView {
     let loaded = Resource::new_blocking(offset_in_url(), stored_queries);
     let repair = ServerAction::<RepairDrift>::new();
     view! {
-        <Title text=titled("Stored queries") />
+        <Title text=titled(&tr(Msg::StoredQueries)) />
         {page_header(
-            "Stored queries",
-            Some(String::from("The queries the gateway holds, by namespace.")),
+            tr(Msg::StoredQueries),
+            Some(tr(Msg::QueriesGatewayHoldsNamespace)),
             (),
         )}
-        <Transition fallback=|| busy("Loading the stored queries.", Busy::Section)>
+        <Transition fallback=|| busy(tr(Msg::LoadingTheStoredQueries), Busy::Section)>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| list_section(view, repair))
             })}
@@ -180,7 +181,7 @@ pub fn StoredQueryPage() -> impl IntoView {
     let loaded = Resource::new_blocking(asked, |(name, version)| stored_query(name, version));
     view! {
         <Title text=move || titled(&name()) />
-        <Transition fallback=|| busy("Loading the stored query.", Busy::Section)>
+        <Transition fallback=|| busy(tr(Msg::LoadingTheStoredQuery), Busy::Section)>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,

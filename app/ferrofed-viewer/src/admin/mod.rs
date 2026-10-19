@@ -41,6 +41,7 @@ use leptos::server_fn::ServerFn as _;
 
 use crate::admin::act::{ClearEhrId, RepairDrift};
 use crate::admin::model::{ActionAnswer, AdminForm};
+use crate::locale::{Msg, tr};
 use crate::views::fault;
 use crate::views::model::ViewError;
 
@@ -55,16 +56,16 @@ struct Action {
     /// The id of its outcome, which the focus moves to.
     outcome: &'static str,
     /// The card's heading.
-    heading: &'static str,
+    heading: String,
     /// The one line under it.
-    line: &'static str,
+    line: String,
     /// The path of the server function the form posts to.
     url: &'static str,
     /// The label of the button that opens the confirmation and of the one
     /// that runs the action.
-    label: &'static str,
+    label: String,
     /// What the confirmation asks.
-    question: &'static str,
+    question: String,
 }
 
 /// The admin action form `data` holds, by the field names the forms post.
@@ -146,11 +147,11 @@ fn action_section(
     view! {
         <section class="fui-card" aria-labelledby=action.id>
             <h2 id=action.id class="fui-card-title">
-                {action.heading}
+                {action.heading.clone()}
             </h2>
             <p class="fui-muted">
-                {action.line} " " <a href=LEARN rel="external">
-                    "Learn more"
+                {action.line.clone()} " " <a href=LEARN rel="external">
+                    {tr(Msg::LearnMore)}
                 </a>
             </p>
             <div
@@ -171,7 +172,7 @@ fn action_section(
                         aria-haspopup="dialog"
                         disabled=move || !hydrated.get()
                     >
-                        {action.label}
+                        {action.label.clone()}
                     </button>
                 </div>
                 <div
@@ -183,7 +184,7 @@ fn action_section(
                     class="fui-dialog"
                 >
                     <h2 id=question class="fui-dialog-title">
-                        {action.question}
+                        {action.question.clone()}
                     </h2>
                     <input type="hidden" name="form[confirm]" value="yes" />
                     <div class="fui-dialog-actions">
@@ -193,7 +194,7 @@ fn action_section(
                             popovertarget=closes
                             popovertargetaction="hide"
                         >
-                            "Cancel"
+                            {tr(Msg::Cancel)}
                         </button>
                         <button
                             type="submit"
@@ -201,7 +202,7 @@ fn action_section(
                             autofocus
                             disabled=move || !hydrated.get()
                         >
-                            {action.label}
+                            {action.label.clone()}
                         </button>
                     </div>
                 </div>
@@ -216,11 +217,11 @@ fn action_section(
 
 /// What a form says while the page has not hydrated, and nothing once it
 /// has.
-pub(crate) fn ready(hydrated: bool) -> &'static str {
+pub(crate) fn ready(hydrated: bool) -> String {
     if hydrated {
-        ""
+        String::new()
     } else {
-        "The form is ready once the page has loaded."
+        tr(Msg::FormReadyOncePageHasLoaded)
     }
 }
 
@@ -235,7 +236,7 @@ type Outcome = (
 fn answered((value, pending): Outcome) -> AnyView {
     view! {
         {move || {
-            pending.get().then(|| busy("Running the action.", Busy::Inline))
+            pending.get().then(|| busy(tr(Msg::RunningTheAction), Busy::Inline))
         }}
         {move || {
             value
@@ -261,11 +262,11 @@ pub(crate) fn clear_section(action: ServerAction<ClearEhrId>, fields: Option<Str
     let named = Action {
         id: "clear",
         outcome: "clear-outcome",
-        heading: "Clear a held ehr_id",
-        line: "Forgets a remedied collision at a replica, so the next request finds the owner again.",
+        heading: tr(Msg::ClearHeldEhrId),
+        line: tr(Msg::ForgetsRemediedCollisionReplicaSoNext),
         url: ClearEhrId::url(),
-        label: "Clear the ehr_id",
-        question: "Clear this ehr_id at the replica chosen? Each replica holds its own routing state.",
+        label: tr(Msg::ClearTheEhrId),
+        question: tr(Msg::ClearEhrIdReplicaChosenEach),
     };
     let dispatch = Callback::new(move |form| {
         action.dispatch(ClearEhrId { form });
@@ -282,11 +283,11 @@ pub(crate) fn repair_section(action: ServerAction<RepairDrift>, fields: Option<S
     let named = Action {
         id: "repair",
         outcome: "repair-outcome",
-        heading: "Repair stored-query drift",
-        line: "Sends the registry's held copy of a version again to the members named.",
+        heading: tr(Msg::RepairStoredQueryDrift),
+        line: tr(Msg::SendsRegistrySHeldCopyVersion),
         url: RepairDrift::url(),
-        label: "Send the version again",
-        question: "Send this version again to the members named? The registry's copy stays as it is.",
+        label: tr(Msg::SendTheVersionAgain),
+        question: tr(Msg::SendVersionAgainMembersNamedRegistry),
     };
     let dispatch = Callback::new(move |form| {
         action.dispatch(RepairDrift { form });

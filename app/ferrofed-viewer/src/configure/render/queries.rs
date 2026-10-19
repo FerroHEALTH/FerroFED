@@ -13,6 +13,7 @@ use crate::configure::render::members::{GROUP, owner};
 use crate::configure::render::parts::{
     Text, confirmed, error_line, form, head, hidden, text, trail,
 };
+use crate::locale::{Msg, tr};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
@@ -34,11 +35,13 @@ fn grouped(queries: &[QueryResource]) -> Vec<(&str, Vec<&QueryResource>)> {
 }
 
 /// The columns of the Stored queries tab.
-const QUERY_COLUMNS: [Column; 3] = [
-    Column::text("name", "Name"),
-    Column::text("versions", "Versions"),
-    Column::text("owner", "Owner"),
-];
+fn query_columns() -> [Column; 3] {
+    [
+        Column::text("name", tr(Msg::Name)),
+        Column::text("versions", tr(Msg::Versions)),
+        Column::text("owner", tr(Msg::Owner)),
+    ]
+}
 
 /// The Stored queries tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
@@ -47,14 +50,14 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         view! {
             <a href="/configuration/stored-queries/new" class=Variant::Primary.class()>
                 {icon(Glyph::PLUS, "16")}
-                "Store a new version"
+                {tr(Msg::StoreANewVersion)}
             </a>
         }
     });
     let header = head(
-        ("queries-title", String::from("Stored queries")),
+        ("queries-title", tr(Msg::StoredQueries)),
         (
-            "A stored version is immutable: a change is a new version, and none is edited or removed.",
+            tr(Msg::StoredVersionImmutableChangeNewVersion),
             "console-managed-resources",
         ),
         store,
@@ -62,14 +65,14 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     if registry == QueryRegistry::Absent {
         return view! {
             {header}
-            <p class="fui-muted">"The gateway offers no stored-query registry."</p>
+            <p class="fui-muted">{tr(Msg::GatewayOffersNoStoredQueryRegistry)}</p>
         }
         .into_any();
     }
     let read_only = (registry == QueryRegistry::ReadOnly).then(|| {
         view! {
             <p role="note">
-                "The stored queries come from the read-only definition files: change the files."
+                {tr(Msg::StoredQueriesComeFromReadOnly)}
             </p>
         }
     });
@@ -78,7 +81,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         view! {
             <tr>
                 <td colspan="3" class="fui-muted">
-                    "No version is stored yet."
+                    {tr(Msg::NoVersionStoredYet)}
                 </td>
             </tr>
         }
@@ -97,10 +100,10 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
                         <th scope="row">
                             <code>{name.to_owned()}</code>
                         </th>
-                        <td data-label="Versions">
+                        <td data-label=tr(Msg::Versions)>
                             <div class="fui-cluster">{badges}</div>
                         </td>
-                        <td data-label="Owner">{held}</td>
+                        <td data-label=tr(Msg::Owner)>{held}</td>
                     </tr>
                 }
             })
@@ -110,7 +113,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {header}
         {read_only}
-        {crate::views::table("Stored-query versions by name", &QUERY_COLUMNS, rows)}
+        {crate::views::table(&tr(Msg::StoredQueryVersionsName), &query_columns(), rows)}
     }
     .into_any()
 }
@@ -125,28 +128,28 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
     let body = view! {
         {hidden("action", String::from("store-query"))}
         <fieldset class=GROUP>
-            <legend>"Version"</legend>
+            <legend>{tr(Msg::Version)}</legend>
             <div class="fui-field-row fui-field-row-halves">
                 {text(
                     ("cfg-name", "form[name]"),
-                    String::from("Qualified name"),
+                    tr(Msg::QualifiedName),
                     String::new(),
                     Text {
                         required: true,
                         mono: true,
                         list: Some("cfg-names"),
-                        hint: Some("A namespace and a name, such as org.example::vital-signs."),
+                        hint: Some(tr(Msg::NamespaceNameSuchOrgExampleVital)),
                         ..Text::default()
                     },
                 )}
                 {text(
                     ("cfg-version", "form[version]"),
-                    String::from("Version"),
+                    tr(Msg::Version),
                     String::new(),
                     Text {
                         required: true,
                         mono: true,
-                        hint: Some("major.minor.patch, such as 1.0.0."),
+                        hint: Some(tr(Msg::MajorMinorPatchSuch10)),
                         ..Text::default()
                     },
                 )}
@@ -154,9 +157,9 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
             <datalist id="cfg-names">{names}</datalist>
         </fieldset>
         <fieldset class=GROUP>
-            <legend>"AQL"</legend>
+            <legend>{tr(Msg::Aql)}</legend>
             <label for="cfg-aql" class="fui-sr-only">
-                "AQL"
+                {tr(Msg::Aql)}
             </label>
             <textarea
                 id="cfg-aql"
@@ -172,25 +175,23 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
         <div class="fui-action-bar">
             {confirmed(
                 String::from("store-confirm"),
-                (String::from("Store the version"), Variant::Primary),
+                (tr(Msg::StoreTheVersion), Variant::Primary),
                 (
-                    String::from(
-                        "Store this version? A stored version cannot be changed or removed afterwards.",
-                    ),
-                    "Store",
+                    tr(Msg::StoreVersionStoredVersionCannotChanged),
+                    tr(Msg::Store),
                 ),
                 (),
             )} <a href="/configuration/stored-queries" class=Variant::Secondary.class()>
-                "Cancel"
+                {tr(Msg::Cancel)}
             </a>
         </div>
     };
     view! {
-        {trail(("Stored queries", "/configuration/stored-queries"), String::from("Store a new version"))}
+        {trail((tr(Msg::StoredQueries), "/configuration/stored-queries"), tr(Msg::StoreANewVersion))}
         {head(
-            ("query-title", String::from("Store a new version")),
+            ("query-title", tr(Msg::StoreANewVersion)),
             (
-                "The gateway stores it at once and every replica serves it.",
+                tr(Msg::GatewayStoresOnceEveryReplicaServes),
                 "console-managed-resources",
             ),
             (),

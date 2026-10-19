@@ -15,6 +15,7 @@ use crate::admin::model::{ActionAnswer, FieldNote};
 use crate::configure::plan::Refused;
 use crate::configure::render::parts::diff_table;
 use crate::configure::render::{SavedLine, StoredLine, mark_said};
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::Refusal;
 
 /// The answer of a form `refused` kept from reaching any replica, marking
@@ -53,7 +54,7 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
     let id = line.revision.id;
     let preview = match (&line.changes, line.running) {
         (Some(changes), Some(running)) => view! {
-            <p>{format!("What it changes against the running revision {running}:")}</p>
+            <p>{tr_with(Msg::WhatChangesAgainstRunningRevision, &[("running", (running).to_string().into())])}</p>
             {diff_table(changes, (Some(running), id))}
         }
         .into_any(),
@@ -61,14 +62,14 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
             Tone::Warn,
             Announce::Alert,
             None,
-            "The preview of its changes could not be read; reload the page to see it in the card at the top.",
+            tr(Msg::PreviewChangesCouldNotReadReload),
         )
         .into_any(),
     };
     view! {
         {said(view! {
-            <strong>{format!("Replica {replica} saved revision {id}.")}</strong>
-            " It is not applied: apply it from the card at the top once you have read its changes."
+            <strong>{tr_with(Msg::ReplicaSavedRevision, &[("replica", (replica).to_string().into()), ("id", (id).to_string().into())])}</strong>
+            {tr(Msg::NotAppliedApplyFromCardTop)}
         })}
         {preview}
     }
@@ -90,14 +91,21 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
     let restored = line
         .revision
         .restores
-        .map(|restored| format!(", restoring the content of revision {restored}"))
+        .map(|restored| {
+            tr_with(
+                Msg::RestoringContentRevision,
+                &[("restored", (restored).to_string().into())],
+            )
+        })
         .unwrap_or_default();
-    let awaits = line.current.awaiting.as_ref().map(
-        |_| " It awaits your confirmation: confirm it in the card at the top, or roll it back.",
-    );
+    let awaits = line
+        .current
+        .awaiting
+        .as_ref()
+        .map(|_| tr(Msg::AwaitsYourConfirmationConfirmCardTop));
     said(view! {
         <strong>
-            {format!("Replica {replica} applied revision {}{restored}.", line.revision.id)}
+            {tr_with(Msg::ReplicaAppliedRevision, &[("replica", (replica).to_string().into()), ("id", (line.revision.id).to_string().into()), ("restored", (restored).clone().into())])}
         </strong>
         " "
         {mark_said(&line.current)}
@@ -119,7 +127,7 @@ pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
 fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
     said(view! {
         <strong>
-            {format!("Replica {replica} stored {} version {}.", line.name, line.version)}
+            {tr_with(Msg::ReplicaStoredVersion, &[("replica", (replica).to_string().into()), ("name", (line.name).clone().into()), ("version", (line.version).clone().into())])}
         </strong>
     })
 }
@@ -139,10 +147,10 @@ fn imported_line(replica: &str, line: &Imported) -> AnyView {
     let id = line.revision.id;
     view! {
         {said(view! {
-            <strong>{format!("Replica {replica} imported revision {id} as a dry run.")}</strong>
-            " It is not applied: apply it from the card at the top once you have read its changes."
+            <strong>{tr_with(Msg::ReplicaImportedRevisionDryRun, &[("replica", (replica).to_string().into()), ("id", (id).to_string().into())])}</strong>
+            {tr(Msg::NotAppliedApplyFromCardTop)}
         })}
-        <p>{format!("What it changes against the running revision {}:", line.diff.from)}</p>
+        <p>{tr_with(Msg::WhatChangesAgainstRunningRevision2, &[("from", (line.diff.from).to_string().into())])}</p>
         {diff_table(&line.diff.changes, (Some(line.diff.from), id))}
     }
     .into_any()

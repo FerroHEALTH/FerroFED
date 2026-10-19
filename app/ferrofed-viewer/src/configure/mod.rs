@@ -60,6 +60,7 @@ use leptos_router::hooks::{use_params_map, use_query_map};
 
 use crate::configure::act::Configure;
 use crate::configure::model::{ConfigView, Screen};
+use crate::locale::{Msg, tr};
 
 /// The path of the configuration page.
 pub const CONFIGURATION: &str = "/configuration";
@@ -72,7 +73,7 @@ pub const UNDER: &str = "/configuration/";
 #[must_use]
 pub fn countdown(remaining: i64) -> String {
     if remaining <= 0 {
-        return String::from("The deadline has passed");
+        return tr(Msg::TheDeadlineHasPassed);
     }
     let seconds = remaining.div_euclid(1000);
     format!(
@@ -149,9 +150,9 @@ pub fn ConfigurationPage() -> impl IntoView {
         focus,
     };
     view! {
-        <Title text=crate::views::titled("Configuration") />
+        <Title text=crate::views::titled(&tr(Msg::Configuration)) />
         <Transition fallback=|| {
-            view! { <p>"Loading the configuration."</p> }
+            view! { <p>{tr(Msg::LoadingTheConfiguration)}</p> }
         }>
             {move || Suspend::new(async move {
                 let loaded = loaded.await;
@@ -213,7 +214,7 @@ fn outcome(page: Page, slot: Slot, drawn: usize) -> impl IntoView {
             return None;
         }
         if pending.get() {
-            return Some(busy("Sending the change.", Busy::Inline));
+            return Some(busy(tr(Msg::SendingTheChange), Busy::Inline));
         }
         value.with(|answer| match answer {
             None => None,
@@ -304,7 +305,7 @@ fn config_section(view: ConfigView, page: Page, drawn: usize) -> AnyView {
             on:keydown=move |event| browser::keyed(&event)
             on:input=move |event| browser::typed(&event)
         >
-            <legend class="fui-sr-only">"Configuration changes"</legend>
+            <legend class="fui-sr-only">{tr(Msg::ConfigurationChanges)}</legend>
             <p role="status" class="fui-help">
                 {move || crate::admin::ready(hydrated.get())}
             </p>

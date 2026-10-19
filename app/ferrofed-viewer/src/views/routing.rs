@@ -17,6 +17,7 @@ use ferrohealth_ui::widget::filter::table_filter;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::{RouteRow, RoutingView};
 use crate::views::{ROUTING, load, offset_in_url, pager, replica_line, shown, table, titled};
 
@@ -26,13 +27,13 @@ pub fn RoutingPage() -> impl IntoView {
     let loaded = Resource::new_blocking(offset_in_url(), load::routing);
     let filter = RwSignal::new(String::new());
     view! {
-        <Title text=titled("Routing") />
+        <Title text=titled(&tr(Msg::Routing)) />
         {page_header(
-            "Routing",
-            Some(String::from("Where each creating_system_id routes, and on what ground.")),
+            tr(Msg::Routing),
+            Some(tr(Msg::WhereEachCreatingSystemIdRoutes)),
             (),
         )}
-        <Transition fallback=|| busy("Loading the routing table.", Busy::Section)>
+        <Transition fallback=|| busy(tr(Msg::LoadingTheRoutingTable), Busy::Section)>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| routing_section(view, filter))
             })}
@@ -66,12 +67,14 @@ fn source_tone(source: &str) -> Tone {
 }
 
 /// The columns of the routing table.
-const COLUMNS: [Column; 4] = [
-    Column::text("creating_system_id", "creating_system_id").mono(),
-    Column::text("source", "Source"),
-    Column::text("node", "Node"),
-    Column::text("endpoint", "Endpoint"),
-];
+fn columns() -> [Column; 4] {
+    [
+        Column::text("creating_system_id", "creating_system_id").mono(),
+        Column::text("source", tr(Msg::Source)),
+        Column::text("node", tr(Msg::Node)),
+        Column::text("endpoint", tr(Msg::Endpoint)),
+    ]
+}
 
 /// The filter, the page of the table it filters, and the pager.
 fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
@@ -90,7 +93,13 @@ fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
     });
     let count = Signal::derive(move || {
         let kept = kept.with(Vec::len);
-        format!("{kept} of {on_page} rows on this page.")
+        tr_with(
+            Msg::RowsPage,
+            &[
+                ("kept", (kept).to_string().into()),
+                ("on_page", (on_page).to_string().into()),
+            ],
+        )
     });
     let none = move || kept.with(Vec::is_empty);
     let answered_by = replica_line(view.answered_by);
@@ -104,9 +113,9 @@ fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
                             <th scope="row" class="fui-mono">
                                 {route.creating_system_id}
                             </th>
-                            <td data-label="Source">{badge(source_tone(&route.source), &route.source)}</td>
-                            <td data-label="Node" class="fui-mono">{route.node.unwrap_or_default()}</td>
-                            <td data-label="Endpoint" class="fui-mono">
+                            <td data-label=tr(Msg::Source)>{badge(source_tone(&route.source), &route.source)}</td>
+                            <td data-label=tr(Msg::Node) class="fui-mono">{route.node.unwrap_or_default()}</td>
+                            <td data-label=tr(Msg::Endpoint) class="fui-mono">
                                 {route.endpoint.unwrap_or_default()}
                             </td>
                         </tr>
@@ -114,14 +123,14 @@ fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
                     <Show when=none>
                         <tr>
                             <td colspan="4" class="fui-muted">
-                                "No row on this page matches the filter."
+                                {tr(Msg::NoRowPageMatchesFilter)}
                             </td>
                         </tr>
                     </Show>
     }
     .into_any();
-    let table = table("The creating_system_id routing table", &COLUMNS, body);
-    let filtered = table_filter("routing-filter", "Filter", filter, count).into_any();
+    let table = table(&tr(Msg::CreatingSystemIdRoutingTable), &columns(), body);
+    let filtered = table_filter("routing-filter", tr(Msg::Filter), filter, count).into_any();
     view! {
         {answered_by}
         <div class="fui-stack">

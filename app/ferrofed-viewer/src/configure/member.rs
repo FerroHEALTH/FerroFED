@@ -19,6 +19,7 @@ use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
 use crate::configure::model::{ConfigForm, FhirEndpointInput, QueryEndpointInput};
 use crate::configure::plan::{Refused, at, given};
+use crate::locale::{Msg, tr, tr_with};
 
 /// How the form that gave a member was drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,9 +68,9 @@ fn row_key(key: &str) -> Result<&str, Refused> {
     if fits {
         Ok(key)
     } else {
-        Err(Refused::from(crate::configure::plan::invalid(
-            "The form's endpoint rows do not read; reload the page.",
-        )))
+        Err(Refused::from(crate::configure::plan::invalid(&tr(
+            Msg::FormSEndpointRowsDoNot,
+        ))))
     }
 }
 
@@ -80,23 +81,30 @@ fn row_key(key: &str) -> Result<&str, Refused> {
 /// endpoint that does not read, and for a member with no Query API
 /// endpoint.
 pub fn member(form: &ConfigForm) -> Result<(ConsoleMember, Shown), Refused> {
-    let id_form = "1 to 64 letters, digits, '.', '-' or '_', starting with a letter or digit";
+    let id_form = tr(Msg::N164LettersDigitsStartingLetter);
     let organisation = OrganisationId::new(form.organisation.trim()).map_err(|_bad| {
         at(
             field("organisation"),
-            format!("The organisation id is not {id_form}."),
+            tr_with(
+                Msg::OrganisationIdNot,
+                &[("id_form", (id_form).clone().into())],
+            ),
         )
     })?;
-    let node = NodeId::new(form.node.trim())
-        .map_err(|_bad| at(field("node"), format!("The node_id is not {id_form}.")))?;
+    let node = NodeId::new(form.node.trim()).map_err(|_bad| {
+        at(
+            field("node"),
+            tr_with(Msg::NodeIdNot, &[("id_form", (id_form).clone().into())]),
+        )
+    })?;
     let system_id = SystemId::new(form.system_id.trim())
-        .map_err(|_bad| at(field("system_id"), "The system_id is not an openEHR UID."))?;
+        .map_err(|_bad| at(field("system_id"), tr(Msg::SystemIdNotOpenehrUid)))?;
     let mut endpoints = Vec::new();
     for (row, position) in form.query_endpoints.iter().zip(1_usize..) {
         endpoints.push(query_endpoint(row, position)?);
     }
     if endpoints.is_empty() {
-        return Err(at(ADD_QUERY, "Give at least one Query API endpoint."));
+        return Err(at(ADD_QUERY, tr(Msg::GiveLeastOneQueryApiEndpoint)));
     }
     for (row, position) in form.fhir_endpoints.iter().zip(1_usize..) {
         endpoints.push(fhir_endpoint(row, position)?);
@@ -131,8 +139,12 @@ fn endpoint_id(
     EndpointId::new(id.trim()).map_err(|_bad| {
         at(
             named,
-            format!(
-                "The endpoint_id of {kind} endpoint {position} is not 1 to 64 letters, digits, '.', '-' or '_'."
+            tr_with(
+                Msg::EndpointIdEndpointNot164,
+                &[
+                    ("kind", (kind).to_string().into()),
+                    ("position", (position).to_string().into()),
+                ],
             ),
         )
     })
@@ -150,8 +162,12 @@ fn base_url(url: &str, (kind, position): (&str, usize), named: String) -> Result
         }
         _ => Err(at(
             named,
-            format!(
-                "The base URL of {kind} endpoint {position} is not an absolute http or https URL."
+            tr_with(
+                Msg::BaseUrlEndpointNotAbsoluteHttp,
+                &[
+                    ("kind", (kind).to_string().into()),
+                    ("position", (position).to_string().into()),
+                ],
             ),
         )),
     }
@@ -169,7 +185,8 @@ const fn status(in_service: bool) -> EndpointStatus {
 /// One Query API endpoint, at `position`.
 fn query_endpoint(row: &QueryEndpointInput, position: usize) -> Result<ConsoleEndpoint, Refused> {
     let key = row_key(&row.key)?;
-    let kind = ("Query API", position);
+    let word = tr(Msg::QueryApi);
+    let kind = (word.as_str(), position);
     Ok(ConsoleEndpoint {
         id: endpoint_id(&row.id, kind, query_field(key, "id"))?,
         url: base_url(&row.url, kind, query_field(key, "url"))?,
@@ -187,13 +204,17 @@ fn query_endpoint(row: &QueryEndpointInput, position: usize) -> Result<ConsoleEn
 /// at least one profile.
 fn fhir_endpoint(row: &FhirEndpointInput, position: usize) -> Result<ConsoleEndpoint, Refused> {
     let key = row_key(&row.key)?;
-    let kind = ("FHIR", position);
+    let word = tr(Msg::Fhir);
+    let kind = (word.as_str(), position);
     let id = endpoint_id(&row.id, kind, fhir_field(key, "id"))?;
     let url = base_url(&row.url, kind, fhir_field(key, "url"))?;
     let system = given(&row.system).ok_or_else(|| {
         at(
             fhir_field(key, "system"),
-            format!("FHIR endpoint {position} names no identifier system for the ehr_id."),
+            tr_with(
+                Msg::FhirEndpointNamesNoIdentifierSystem,
+                &[("position", (position).to_string().into())],
+            ),
         )
     })?;
     let categories: Vec<String> = row
@@ -204,7 +225,10 @@ fn fhir_endpoint(row: &FhirEndpointInput, position: usize) -> Result<ConsoleEndp
     if categories.is_empty() {
         return Err(at(
             fhir_field(key, "categories"),
-            format!("FHIR endpoint {position} serves no category: choose at least one."),
+            tr_with(
+                Msg::FhirEndpointServesNoCategoryChoose,
+                &[("position", (position).to_string().into())],
+            ),
         ));
     }
     let profiles: Vec<String> = row
@@ -215,7 +239,10 @@ fn fhir_endpoint(row: &FhirEndpointInput, position: usize) -> Result<ConsoleEndp
     if profiles.is_empty() {
         return Err(at(
             fhir_field(key, "add-profile"),
-            format!("FHIR endpoint {position} names no profile: add at least one."),
+            tr_with(
+                Msg::FhirEndpointNamesNoProfileAdd,
+                &[("position", (position).to_string().into())],
+            ),
         ));
     }
     Ok(ConsoleEndpoint {

@@ -14,6 +14,7 @@ use leptos::prelude::*;
 
 use crate::admin::act::server::{Acted, ClearLine, RepairLine, ReplicaAnswer};
 use crate::admin::model::ActionAnswer;
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::{Refusal, ViewError};
 
 /// The answer of an action `refused` kept from reaching any replica.
@@ -49,7 +50,7 @@ pub fn repaired(answer: &ReplicaAnswer<RepairLine>) -> ActionAnswer {
     ActionAnswer {
         changed: false,
         field: None,
-        html: replica_said(answer, "drift repair", repair_line).to_html(),
+        html: replica_said(answer, &tr(Msg::DriftRepair), repair_line).to_html(),
     }
 }
 
@@ -64,36 +65,56 @@ pub(crate) fn replica_said<T>(
     match &answer.acted {
         Acted::Done(report) => done(replica, report),
         Acted::Refused(Refusal::Gateway { status, code }) => {
-            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
             let hint = match &answer.said {
-                _ if code == "scope-insufficient" => {
-                    String::from(" Your access token may carry no operator scope.")
-                }
-                Some(said) => format!(" The gateway says: {}.", said.trim_end_matches('.')),
+                _ if code == "scope-insufficient" => tr(Msg::YourAccessTokenMayCarryNo),
+                Some(said) => tr_with(
+                    Msg::TheGatewaySays,
+                    &[("said", (said.trim_end_matches('.')).to_string().into())],
+                ),
                 None => String::new(),
             };
-            refused_by(format!(
-                "Replica {replica} refused the {what}: {status} ({code}).{hint}"
+            refused_by(tr_with(
+                Msg::ReplicaRefusedThe,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("what", (what).to_string().into()),
+                    ("status", (status).to_string().into()),
+                    ("code", (code).clone().into()),
+                    ("hint", (hint).clone().into()),
+                ],
             ))
         }
         Acted::Refused(Refusal::NotAuthenticated { code }) => {
-            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
             refused_by(view! {
-                {format!(
-                    "Replica {replica} did not accept your sign-in for the {what}: 401 ({code}). ",
-                )}
+                {tr_with(Msg::ReplicaDidNotAcceptYourSign, &[("replica", (replica).to_string().into()), ("what", (what).to_string().into()), ("code", (code).clone().into())])}
                 <a href=crate::app::SIGN_IN rel="external">
-                    "Sign in again"
+                    {tr(Msg::SignInAgain)}
                 </a>
             })
         }
-        Acted::Refused(Refusal::Invalid { reason }) => {
-            refused_by(format!("Replica {replica}: {reason}"))
-        }
-        Acted::Fault(ViewError::Unreachable) => refused_by(format!(
-            "Replica {replica}: its admin listener gave no answer, so whether the {what} ran there is unknown. Reload the page before running it again; a configuration change shows in the revision history.",
+        Acted::Refused(Refusal::Invalid { reason }) => refused_by(tr_with(
+            Msg::Replica2,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("reason", (reason).clone().into()),
+            ],
         )),
-        Acted::Fault(fault) => refused_by(format!("Replica {replica}: {fault}.")),
+        Acted::Fault(ViewError::Unreachable) => refused_by(tr_with(
+            Msg::ReplicaAdminListenerGaveNoAnswer,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("what", (what).to_string().into()),
+            ],
+        )),
+        Acted::Fault(fault) => refused_by(tr_with(
+            Msg::Replica3,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("fault", (fault).to_string().into()),
+            ],
+        )),
     }
 }
 
@@ -104,31 +125,30 @@ fn refused_by(body: impl IntoView + 'static) -> AnyView {
 
 /// What a replica reports of a clear.
 fn clear_line(replica: &str, line: &ClearLine) -> AnyView {
-    let ehr_id = line
-        .ehr_id
-        .clone()
-        .unwrap_or_else(|| String::from("the ehr_id"));
+    let ehr_id = line.ehr_id.clone().unwrap_or_else(|| tr(Msg::TheEhrId));
     let held = match line.held {
-        HeldBefore::Collision => {
-            format!("It held a collision between {}.", line.claimants.join(", "))
-        }
-        HeldBefore::Owner => format!("It held one owner, {}.", line.claimants.join(", ")),
-        HeldBefore::Nothing => {
-            String::from("It held nothing for it, which another replica may still hold.")
-        }
+        HeldBefore::Collision => tr_with(
+            Msg::HeldCollisionBetween,
+            &[("line", (line.claimants.join(", ")).clone().into())],
+        ),
+        HeldBefore::Owner => tr_with(
+            Msg::ItHeldOneOwner,
+            &[("line", (line.claimants.join(", ")).clone().into())],
+        ),
+        HeldBefore::Nothing => tr(Msg::HeldNothingWhichAnotherReplicaMay),
     };
     let index = if line.indexed {
-        "an ehr_id index entry"
+        tr(Msg::EhrIdIndexEntry)
     } else {
-        "no ehr_id index entry"
+        tr(Msg::NoEhrIdIndexEntry)
     };
     notice(
         Tone::Ok,
         Announce::Status,
         None,
         view! {
-            <strong>{format!("Replica {replica} cleared {ehr_id}.")}</strong>
-            {format!(" {held} It forgot {index} and the bindings of {} sessions.", line.sessions)}
+            <strong>{tr_with(Msg::ReplicaCleared, &[("replica", (replica).to_string().into()), ("ehr_id", (ehr_id).clone().into())])}</strong>
+            {tr_with(Msg::ForgotBindingsSessions, &[("held", (held).clone().into()), ("index", (index).clone().into()), ("sessions", (line.sessions).to_string().into())])}
         },
     )
     .into_any()
@@ -140,7 +160,12 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
     let registry = line
         .registry
         .clone()
-        .map(|registry| format!(" The registry's copy: {registry}."))
+        .map(|registry| {
+            tr_with(
+                Msg::TheRegistrySCopy,
+                &[("registry", (registry).clone().into())],
+            )
+        })
         .unwrap_or_default();
     let completeness = if line.complete {
         notice(
@@ -148,8 +173,8 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
             Announce::Status,
             None,
             view! {
-                <strong>"Complete."</strong>
-                " Every member named took the version."
+                <strong>{tr(Msg::Complete)}</strong>
+                {tr(Msg::EveryMemberNamedTookVersion)}
             },
         )
         .into_any()
@@ -159,8 +184,8 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
             Announce::Alert,
             None,
             view! {
-                <strong>"Incomplete."</strong>
-                " Not every member named took the version; the members below say which."
+                <strong>{tr(Msg::Incomplete)}</strong>
+                {tr(Msg::NotEveryMemberNamedTookVersion)}
             },
         )
         .into_any()
@@ -168,12 +193,7 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
     let endpoints = crate::query::answer::endpoints_table(&line.endpoints);
     view! {
         <p>
-            {format!(
-                "Replica {replica} sent {} version {} again: {}.{registry}",
-                line.name,
-                line.version,
-                line.status,
-            )}
+            {tr_with(Msg::ReplicaSentVersionAgain, &[("replica", (replica).to_string().into()), ("name", (line.name).clone().into()), ("version", (line.version).clone().into()), ("status", (line.status).to_string().into()), ("registry", (registry).clone().into())])}
         </p>
         {completeness}
         {endpoints}

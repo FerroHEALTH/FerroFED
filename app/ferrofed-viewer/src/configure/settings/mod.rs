@@ -19,6 +19,8 @@ pub mod fields;
 
 use ferrofed_registry::resource::SecretSlot;
 
+use crate::locale::Msg;
+
 /// How a credential reaches its endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Grant {
@@ -62,14 +64,14 @@ impl Grant {
 
     /// The grant as the select shows it.
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub const fn label(self) -> Msg {
         match self {
-            Self::Transport => "TLS client certificate only",
-            Self::Bearer => "Bearer token",
-            Self::Basic => "Basic authentication",
-            Self::OAuth2 => "OAuth 2.0",
-            Self::Fapi2 => "FAPI 2.0",
-            Self::Nuts => "Nuts",
+            Self::Transport => Msg::TlsClientCertificateOnly,
+            Self::Bearer => Msg::BearerToken,
+            Self::Basic => Msg::BasicAuthentication,
+            Self::OAuth2 => Msg::Oauth20,
+            Self::Fapi2 => Msg::Fapi20,
+            Self::Nuts => Msg::Nuts,
         }
     }
 
@@ -117,15 +119,15 @@ impl Grant {
         match self {
             Self::Bearer => &[Secret {
                 key: "bearer_token",
-                label: "Bearer token",
+                label: Msg::BearerToken,
             }],
             Self::Basic => &[Secret {
                 key: "password",
-                label: "Password",
+                label: Msg::Password,
             }],
             Self::OAuth2 => &[Secret {
                 key: "oauth2.client_secret",
-                label: "Client secret",
+                label: Msg::ClientSecret,
             }],
             Self::Transport | Self::Fapi2 | Self::Nuts => &[],
         }
@@ -149,14 +151,14 @@ impl Grant {
 pub struct Secret {
     /// The dotted key inside the resource.
     pub key: &'static str,
-    /// What the form calls it.
-    pub label: &'static str,
+    /// What the form calls it, by its message in the catalog.
+    pub label: Msg,
 }
 
 /// The secret every node's credential may take beside its grant's.
 pub const TLS_SECRET: Secret = Secret {
     key: "client_identity",
-    label: "TLS client certificate and key (PEM)",
+    label: Msg::TlsClientCertificateKeyPem,
 };
 
 /// What a setting's field takes.
@@ -171,7 +173,7 @@ pub enum Kind {
     /// A switch, on or off.
     Switch,
     /// One of the values listed, each with its label; the first is unset.
-    Choice(&'static [(&'static str, &'static str)]),
+    Choice(&'static [(&'static str, Msg)]),
     /// A list of values, each entered on its own.
     List,
 }
@@ -181,8 +183,8 @@ pub enum Kind {
 pub struct Field {
     /// The dotted key inside the resource.
     pub key: &'static str,
-    /// What the form calls it.
-    pub label: &'static str,
+    /// What the form calls it, by its message in the catalog.
+    pub label: Msg,
     /// What it takes.
     pub kind: Kind,
 }

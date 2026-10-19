@@ -15,6 +15,7 @@ use leptos::prelude::*;
 
 use crate::admin::model::FieldNote;
 use crate::configure::model::ConfigForm;
+use crate::locale::{Msg, tr, tr_with};
 
 /// The form `event` submits, read into its typed fields, and whether it
 /// sits in the card of the saved revision; `None` when the browser gives no
@@ -300,8 +301,8 @@ pub(super) fn keyed(event: &leptos::ev::KeyboardEvent) {
 /// The number of lines `text` holds, in words.
 fn lines(text: &str) -> String {
     match text.lines().count() {
-        1 => String::from("1 line"),
-        count => format!("{count} lines"),
+        1 => tr(Msg::N1Line),
+        count => tr_with(Msg::Lines, &[("count", (count).to_string().into())]),
     }
 }
 

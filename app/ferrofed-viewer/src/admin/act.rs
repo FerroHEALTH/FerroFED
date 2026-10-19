@@ -14,6 +14,8 @@
 use leptos::prelude::*;
 
 use crate::admin::model::{ActionAnswer, AdminForm};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::locale::{Msg, tr_served};
 use crate::views::model::ViewError;
 
 /// Clears the `ehr_id` `form` names at the replica it names, or at every
@@ -71,7 +73,7 @@ pub async fn repair_drift(
     let answered = state.gateway().repair_drift(replica, &token, &sent).await;
     let answer = server::acted(
         crate::views::load::server::ActionKind::Admin,
-        (&replica.name, "drift repair"),
+        (&replica.name, &tr_served(Msg::DriftRepair)),
         answered,
         server::repaired,
     );
@@ -82,6 +84,7 @@ pub async fn repair_drift(
 /// and where, and each replica's answer read into what the console renders.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use crate::locale::{Msg, tr_served, tr_served_with};
     use ferrofed_registry::operator::{ClearedEhrId, HeldBefore};
     use http::HeaderValue;
 
@@ -183,13 +186,14 @@ pub mod server {
     /// and one the operator did not confirm.
     fn offered(form: &AdminForm, replicas: &[ReplicaSettings], what: &str) -> Result<(), Refusal> {
         if replicas.is_empty() {
-            return Err(invalid(
-                "This console is configured with no admin listener, so it offers no admin action.",
-            ));
+            return Err(invalid(&tr_served(Msg::ConsoleConfiguredNoAdminListenerSo)));
         }
         if given(&form.confirm).is_none() {
             return Err(Refusal::Invalid {
-                reason: format!("Confirm the {what} in its confirmation step to run it."),
+                reason: tr_served_with(
+                    Msg::ConfirmConfirmationStepRun,
+                    &[("what", (what).to_string().into())],
+                ),
             });
         }
         Ok(())
@@ -206,7 +210,7 @@ pub mod server {
         replicas: &'a [ReplicaSettings],
     ) -> Result<ClearPlan<'a>, Refusal> {
         offered(form, replicas, "clear")?;
-        let ehr_id = given(&form.ehr_id).ok_or_else(|| invalid("Name the ehr_id to clear."))?;
+        let ehr_id = given(&form.ehr_id).ok_or_else(|| invalid(&tr_served(Msg::NameEhrIdClear)))?;
         let chosen = match given(&form.replica) {
             Some(EVERY_REPLICA) => replicas.iter().collect(),
             Some(name) => replicas
@@ -216,7 +220,7 @@ pub mod server {
             None => Vec::new(),
         };
         if chosen.is_empty() {
-            return Err(invalid("Choose a replica this console names."));
+            return Err(invalid(&tr_served(Msg::ChooseReplicaConsoleNames)));
         }
         Ok(ClearPlan {
             ehr_id: ehr_id.to_owned(),
@@ -236,19 +240,18 @@ pub mod server {
         form: &AdminForm,
         replicas: &'a [ReplicaSettings],
     ) -> Result<(&'a ReplicaSettings, Redistribution), Refusal> {
-        offered(form, replicas, "drift repair")?;
-        let replica = replicas.first().ok_or_else(|| {
-            invalid(
-                "This console is configured with no admin listener, so it offers no admin action.",
-            )
-        })?;
-        let name = given(&form.name).ok_or_else(|| invalid("Name the stored query to send."))?;
-        let version = given(&form.version).ok_or_else(|| invalid("Name the version to send."))?;
-        let endpoints = given(&form.endpoints).ok_or_else(|| {
-            invalid("Name the members to send it to, or * for every active member.")
-        })?;
+        offered(form, replicas, &tr_served(Msg::DriftRepair))?;
+        let replica = replicas
+            .first()
+            .ok_or_else(|| invalid(&tr_served(Msg::ConsoleConfiguredNoAdminListenerSo)))?;
+        let name =
+            given(&form.name).ok_or_else(|| invalid(&tr_served(Msg::NameStoredQuerySend)))?;
+        let version =
+            given(&form.version).ok_or_else(|| invalid(&tr_served(Msg::NameVersionSend)))?;
+        let endpoints = given(&form.endpoints)
+            .ok_or_else(|| invalid(&tr_served(Msg::NameMembersSendEveryActiveMember)))?;
         HeaderValue::from_str(endpoints)
-            .map_err(|_illegal| invalid("The members cannot be sent as a header."))?;
+            .map_err(|_illegal| invalid(&tr_served(Msg::MembersCannotSentHeader)))?;
         Ok((
             replica,
             Redistribution {

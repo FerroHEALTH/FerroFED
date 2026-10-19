@@ -12,6 +12,7 @@ use crate::configure::model::{SecretInput, SettingInput};
 use crate::configure::plan::{Refused, at, given, invalid};
 use crate::configure::settings::fields::TLS;
 use crate::configure::settings::{Field, Grant, Kind};
+use crate::locale::{Msg, tr, tr_with};
 
 /// The settings `text` holds, one inline table, or none for an empty text.
 ///
@@ -21,12 +22,15 @@ pub fn held(text: Option<&str>) -> Result<toml::Table, Refused> {
     let Some(text) = text.map(str::trim).filter(|text| !text.is_empty()) else {
         return Ok(toml::Table::new());
     };
-    let wrapped: Result<toml::Table, _> = toml::from_str(&format!("settings = {text}"));
+    let wrapped: Result<toml::Table, _> = toml::from_str(&tr_with(
+        Msg::Settings4,
+        &[("text", (text).to_string().into())],
+    ));
     match wrapped.map(|mut table| table.remove("settings")) {
         Ok(Some(toml::Value::Table(table))) => Ok(table),
-        _ => Err(Refused::from(invalid(
-            "The gateway's settings for this resource do not read as TOML.",
-        ))),
+        _ => Err(Refused::from(invalid(&tr(
+            Msg::GatewaySSettingsResourceDoNot,
+        )))),
     }
 }
 
@@ -151,9 +155,9 @@ pub fn credentials(
             {
                 continue;
             }
-            return Err(Refused::from(invalid(
-                "The form names a setting this grant does not take; reload the page.",
-            )));
+            return Err(Refused::from(invalid(&tr(
+                Msg::FormNamesSettingGrantDoesNot,
+            ))));
         };
         place(&mut table, field.key, value_of(field.kind, row));
     }
@@ -244,19 +248,22 @@ pub fn binding(held: &toml::Table, rows: &[SettingInput]) -> Result<String, Refu
         if !key.split('.').all(segment) {
             return Err(at(
                 setting_field(&row.row, "key"),
-                "A setting's key is letters, digits, '_' and '-', its parts joined by '.'.",
+                tr(Msg::SettingSKeyLettersDigitsParts),
             ));
         }
         if named.contains(&key) {
             return Err(at(
                 setting_field(&row.row, "key"),
-                format!("The setting {key} is named twice."),
+                tr_with(Msg::SettingNamedTwice, &[("key", (key).to_string().into())]),
             ));
         }
         if is_secret(key) {
             return Err(at(
                 setting_field(&row.row, "key"),
-                format!("{key} is a secret: set it under Secrets."),
+                tr_with(
+                    Msg::SecretSetUnderSecrets,
+                    &[("key", (key).to_string().into())],
+                ),
             ));
         }
         named.push(key);
@@ -267,7 +274,10 @@ pub fn binding(held: &toml::Table, rows: &[SettingInput]) -> Result<String, Refu
         let value = typed(row.value.trim(), was).ok_or_else(|| {
             at(
                 setting_field(&row.row, "value"),
-                format!("The value of {key} does not read as the setting's type."),
+                tr_with(
+                    Msg::ValueDoesNotReadSettingS,
+                    &[("key", (key).to_string().into())],
+                ),
             )
         })?;
         place(&mut table, key, Some(value));
@@ -326,7 +336,7 @@ pub fn secret_changes(
         if !key.split('.').all(segment) || !is_secret(&key) {
             return Err(at(
                 secret_field(&input.row, "key"),
-                "Name a secret this resource takes, such as oauth2.client_secret.",
+                tr(Msg::NameSecretResourceTakesSuchOauth2),
             ));
         }
         let change = match input.choice.as_str() {
@@ -336,7 +346,7 @@ pub fn secret_changes(
                 if typed.is_empty() {
                     return Err(at(
                         secret_field(&input.row, "value"),
-                        format!("Type the value of {key}, or choose Keep."),
+                        tr_with(Msg::TypeValueChooseKeep, &[("key", (key).clone().into())]),
                     ));
                 }
                 SecretChange {
@@ -350,13 +360,19 @@ pub fn secret_changes(
                 let file = given(&input.file).ok_or_else(|| {
                     at(
                         secret_field(&input.row, "file"),
-                        format!("Give the absolute path of the file {key} is read from."),
+                        tr_with(
+                            Msg::GiveAbsolutePathFileReadFrom,
+                            &[("key", (key).clone().into())],
+                        ),
                     )
                 })?;
                 if !std::path::Path::new(file).is_absolute() {
                     return Err(at(
                         secret_field(&input.row, "file"),
-                        format!("The file {key} is read from is not an absolute path."),
+                        tr_with(
+                            Msg::FileReadFromNotAbsolutePath,
+                            &[("key", (key).clone().into())],
+                        ),
                     ));
                 }
                 SecretChange {
@@ -375,7 +391,7 @@ pub fn secret_changes(
             _ => {
                 return Err(at(
                     secret_field(&input.row, "choice"),
-                    "Choose Keep, Set a value, Read from a file or Clear.",
+                    tr(Msg::ChooseKeepSetValueReadFrom),
                 ));
             }
         };

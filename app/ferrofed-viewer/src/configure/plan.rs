@@ -18,6 +18,7 @@ use ferrofed_registry::revision::RevisionId;
 use crate::configure::member::Shown;
 use crate::configure::model::{ConfigForm, SettingInput};
 use crate::configure::settings::{self, Grant};
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::Refusal;
 
 /// The longest reason a revision records, in characters, as the
@@ -68,7 +69,7 @@ impl fmt::Debug for Settings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Credentials(grant, rows) => f
-                .debug_tuple("Credentials")
+                .debug_tuple(&tr(Msg::Credentials))
                 .field(grant)
                 .field(&rows.len())
                 .finish(),
@@ -233,7 +234,10 @@ fn revision(field: &str, what: &str) -> Result<Option<RevisionId>, Refused> {
         .map(|text| {
             text.parse::<RevisionId>().map_err(|_not_a_number| {
                 Refused::from(Refusal::Invalid {
-                    reason: format!("The {what} is not a revision number."),
+                    reason: tr_with(
+                        Msg::NotRevisionNumber,
+                        &[("what", (what).to_string().into())],
+                    ),
                 })
             })
         })
@@ -244,7 +248,7 @@ fn revision(field: &str, what: &str) -> Result<Option<RevisionId>, Refused> {
 fn named(field: &str, what: &str) -> Result<RevisionId, Refused> {
     revision(field, what)?.ok_or_else(|| {
         Refused::from(Refusal::Invalid {
-            reason: format!("Name the {what}."),
+            reason: tr_with(Msg::NameThe, &[("what", (what).to_string().into())]),
         })
     })
 }
@@ -255,10 +259,9 @@ pub const REASON: &str = "cfg-reason";
 /// The reason the form gives, 1 to the limit of characters.
 fn reason(form: &ConfigForm) -> Result<String, Refused> {
     let field = reason_field(form);
-    let reason =
-        given(&form.reason).ok_or_else(|| at(field.clone(), "Give the reason for the change."))?;
+    let reason = given(&form.reason).ok_or_else(|| at(field.clone(), tr(Msg::GiveReasonChange)))?;
     if reason.chars().count() > REASON_LIMIT {
-        return Err(at(field, "The reason is longer than 1000 characters."));
+        return Err(at(field, tr(Msg::ReasonLongerThan1000Characters)));
     }
     Ok(reason.to_owned())
 }
@@ -312,86 +315,82 @@ const CONFIRMED: [&str; 7] = [
 /// naming the field and never what it holds.
 pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refused> {
     if CONFIRMED.contains(&form.action.as_str()) && given(&form.confirm).is_none() {
-        return Err(Refused::from(invalid(
-            "Confirm the change in its confirmation step to run it.",
-        )));
+        return Err(Refused::from(invalid(&tr(
+            Msg::ConfirmChangeConfirmationStepRun,
+        ))));
     }
     match form.action.as_str() {
         "add-member" | "save-member" => {
             let (member, shown) = crate::configure::member::member(form)?;
             Ok(Plan::SaveMember {
-                base: revision(&form.base, "base revision")?,
+                base: revision(&form.base, &tr(Msg::BaseRevision))?,
                 reason: reason(form)?,
                 member: Box::new(member),
                 shown,
             })
         }
         "remove-member" => Ok(Plan::RemoveMember {
-            base: revision(&form.base, "base revision")?,
+            base: revision(&form.base, &tr(Msg::BaseRevision))?,
             reason: reason(form)?,
             node: given(&form.node)
-                .ok_or_else(|| Refused::from(invalid("Choose the console member to remove.")))?
+                .ok_or_else(|| Refused::from(invalid(&tr(Msg::ChooseConsoleMemberRemove))))?
                 .to_owned(),
         }),
         "apply" => Ok(Plan::Apply {
-            revision: named(&form.revision, "revision to apply")?,
+            revision: named(&form.revision, &tr(Msg::RevisionToApply))?,
         }),
         "rollback" => Ok(Plan::Rollback {
-            current: named(&form.current, "running revision to roll back")?,
+            current: named(&form.current, &tr(Msg::RunningRevisionRollBack))?,
             reason: reason(form)?,
         }),
         "store-query" => Ok(Plan::StoreQuery {
             name: given(&form.name)
-                .ok_or_else(|| at("cfg-name", "Name the stored query."))?
+                .ok_or_else(|| at("cfg-name", tr(Msg::NameTheStoredQuery)))?
                 .to_owned(),
             version: given(&form.version)
-                .ok_or_else(|| at("cfg-version", "Name the version to store."))?
+                .ok_or_else(|| at("cfg-version", tr(Msg::NameVersionStore)))?
                 .to_owned(),
             aql: given(&form.aql)
-                .ok_or_else(|| at("cfg-aql", "Give the AQL to store."))?
+                .ok_or_else(|| at("cfg-aql", tr(Msg::GiveAqlStore)))?
                 .to_owned(),
         }),
         "save-credentials" => {
             let endpoint = given(&form.endpoint)
-                .ok_or_else(|| at("cfg-endpoint", "Choose the endpoint of the credentials."))?;
-            EndpointId::new(endpoint).map_err(|_bad| {
-                at(
-                    "cfg-endpoint",
-                    "The endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.",
-                )
-            })?;
+                .ok_or_else(|| at("cfg-endpoint", tr(Msg::ChooseEndpointCredentials)))?;
+            EndpointId::new(endpoint)
+                .map_err(|_bad| at("cfg-endpoint", tr(Msg::EndpointIdNot164Letters)))?;
             let grant = Grant::named(form.grant.trim())
-                .ok_or_else(|| at("cfg-grant", "Choose how the gateway reaches the endpoint."))?;
+                .ok_or_else(|| at("cfg-grant", tr(Msg::ChooseHowGatewayReachesEndpoint)))?;
             section_plan(form, Resource::Credentials(endpoint.to_owned()), |form| {
                 Settings::Credentials(grant, std::mem::take(&mut form.settings))
             })
         }
         "save-binding" => {
             let section = BindingSection::named(form.section.trim())
-                .ok_or_else(|| at("cfg-section", "Choose the binding section."))?;
+                .ok_or_else(|| at("cfg-section", tr(Msg::ChooseTheBindingSection)))?;
             section_plan(form, Resource::Binding(section), |form| {
                 Settings::Binding(std::mem::take(&mut form.settings))
             })
         }
         "remove-section" => Ok(Plan::RemoveSection {
-            base: revision(&form.base, "base revision")?,
+            base: revision(&form.base, &tr(Msg::BaseRevision))?,
             reason: reason(form)?,
             resource: chosen(&form.resource)?,
         }),
         "confirm" => Ok(Plan::Confirm {
-            revision: named(&form.revision, "revision to confirm")?,
+            revision: named(&form.revision, &tr(Msg::RevisionToConfirm))?,
         }),
         "approve" => Ok(Plan::Approve {
-            revision: named(&form.revision, "revision to approve")?,
+            revision: named(&form.revision, &tr(Msg::RevisionToApprove))?,
         }),
         "import" => Ok(Plan::Import {
-            base: revision(&form.base, "base revision")?,
+            base: revision(&form.base, &tr(Msg::BaseRevision))?,
             reason: reason(form)?,
             toml: toml(form)?,
         }),
-        _ => Err(Refused::from(invalid(
-            "The form names no action this page offers.",
-        ))),
+        _ => Err(Refused::from(invalid(&tr(
+            Msg::FormNamesNoActionPageOffers,
+        )))),
     }
 }
 
@@ -402,7 +401,7 @@ fn section_plan(
     resource: Resource,
     settings: impl FnOnce(&mut ConfigForm) -> Settings,
 ) -> Result<Plan, Refused> {
-    let base = revision(&form.base, "base revision")?;
+    let base = revision(&form.base, &tr(Msg::BaseRevision))?;
     let reason = reason(form)?;
     let secrets = settings::build::secret_changes(&mut form.secrets, &[])?;
     Ok(Plan::SaveSection {
@@ -418,14 +417,17 @@ fn section_plan(
 fn toml(form: &mut ConfigForm) -> Result<String, Refused> {
     let text = std::mem::take(&mut form.toml);
     if text.trim().is_empty() {
-        return Err(at("cfg-toml", "Paste the TOML to import."));
+        return Err(at("cfg-toml", tr(Msg::PasteTomlImport)));
     }
     if text.len() > crate::configure::import::IMPORT_LIMIT {
         return Err(at(
             "cfg-toml",
-            format!(
-                "The TOML is larger than {} bytes.",
-                crate::configure::import::IMPORT_LIMIT
+            tr_with(
+                Msg::TomlLargerThanBytes,
+                &[(
+                    "value0",
+                    (crate::configure::import::IMPORT_LIMIT).to_string().into(),
+                )],
             ),
         ));
     }
@@ -435,11 +437,7 @@ fn toml(form: &mut ConfigForm) -> Result<String, Refused> {
 /// The credential or binding section a removal names, as
 /// [`crate::configure::sections::choice`] writes it.
 fn chosen(field: &str) -> Result<Resource, Refused> {
-    let refused = || {
-        Refused::from(invalid(
-            "Choose the credential or binding section to remove.",
-        ))
-    };
+    let refused = || Refused::from(invalid(&tr(Msg::ChooseCredentialBindingSectionRemove)));
     match given(field).and_then(|text| text.split_once(':')) {
         Some(("credentials", endpoint)) if EndpointId::new(endpoint).is_ok() => {
             Ok(Resource::Credentials(endpoint.to_owned()))

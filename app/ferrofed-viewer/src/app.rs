@@ -345,18 +345,20 @@ fn administered() -> bool {
 fn operator_name() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        views::load::server::operator().unwrap_or_else(|| String::from(OPERATOR))
+        views::load::server::operator().unwrap_or_else(unnamed_operator)
     }
     // NOTE: the browser reads the value the server decided; this runs only if
     // that value is missing, and then shows the word a nameless sign-in shows.
     #[cfg(target_arch = "wasm32")]
     {
-        String::from(OPERATOR)
+        unnamed_operator()
     }
 }
 
 /// The word the top bar shows for an operator the provider gave no name.
-const OPERATOR: &str = "Operator";
+fn unnamed_operator() -> String {
+    tr(Msg::Operator)
+}
 
 /// The gateway's `{base}`, which the About page shows a signed-in operator,
 /// and empty for a visitor.

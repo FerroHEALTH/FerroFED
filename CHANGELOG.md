@@ -24,6 +24,22 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+### Changed
+
+- The operator console takes FerroUI 0.2.0 and reads every word it hands
+  FerroUI from its catalog at run time (#1162): table captions, column
+  headers, pager nouns with their plurals, navigation, settings, fields,
+  dialogs and page titles come from `locales/en/ferrofed-viewer.ftl`, and
+  the stray-literal baseline drops from 1016 to 150 literals. English
+  remains the only locale.
+
+### Fixed
+
+- The configuration screen labels `node_id` and `system_id` as "Node id"
+  and "System id", with the configuration key as the field's hint (#1168).
+- The dashboard's card-header link is FerroUI's shared card action, so its
+  arrow keeps the space before it (#1169).
+
 ## [0.0.11] - 2026-10-16
 
 Supported until 2031-10-16, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.

@@ -83,6 +83,7 @@ pub async fn run_query(
 /// and the gateway's answer read into what the console renders.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use crate::locale::{Msg, tr_served, tr_served_with};
     use std::collections::{BTreeMap, BTreeSet};
 
     use http::{HeaderValue, StatusCode};
@@ -163,16 +164,16 @@ pub mod server {
         let target = match form.kind.as_str() {
             "aql" => QueryTarget::Aql(
                 given(&form.aql)
-                    .ok_or_else(|| invalid("Write the AQL query to run."))?
+                    .ok_or_else(|| invalid(tr_served(Msg::WriteAqlQueryRun)))?
                     .to_owned(),
             ),
             "stored" => QueryTarget::Stored {
                 name: given(&form.name)
-                    .ok_or_else(|| invalid("Name the stored query to run."))?
+                    .ok_or_else(|| invalid(tr_served(Msg::NameStoredQueryRun)))?
                     .to_owned(),
                 version: given(&form.version).map(str::to_owned),
             },
-            _ => return Err(invalid("Choose an AQL query or a stored query.")),
+            _ => return Err(invalid(tr_served(Msg::ChooseAqlQueryStoredQuery))),
         };
         let mut headers = Vec::new();
         if let Some(endpoints) = listed(&form.endpoints) {
@@ -182,7 +183,7 @@ pub mod server {
             headers.push((ORGANISATION, header_value("organisations", &organisations)?));
         }
         if let Some(dedup) = given(&form.dedup) {
-            headers.push((DEDUP, header_value("dedup mode", dedup)?));
+            headers.push((DEDUP, header_value(&tr_served(Msg::DedupMode), dedup)?));
         }
         if given(&form.partial).is_some() {
             headers.push((COMPLETENESS, COMPLETENESS_PARTIAL.to_owned()));
@@ -212,7 +213,12 @@ pub mod server {
     fn header_value(field: &str, value: &str) -> Result<String, Refusal> {
         HeaderValue::from_str(value)
             .map(|_legal| value.to_owned())
-            .map_err(|_illegal| invalid(format!("The {field} cannot be sent as a header.")))
+            .map_err(|_illegal| {
+                invalid(tr_served_with(
+                    Msg::CannotSentHeader,
+                    &[("field", (field).to_string().into())],
+                ))
+            })
     }
 
     /// The whole number `text` holds, or `None` when it is empty.
@@ -222,7 +228,10 @@ pub mod server {
         };
         match text.parse::<i64>() {
             Ok(number) if number >= 0 => Ok(Some(number)),
-            _ => Err(invalid(format!("The {field} is a whole number from 0."))),
+            _ => Err(invalid(tr_served_with(
+                Msg::WholeNumberFrom0,
+                &[("field", (field).to_string().into())],
+            ))),
         }
     }
 
@@ -236,20 +245,29 @@ pub mod server {
                 continue;
             }
             let Some((name, value)) = line.split_once('=') else {
-                return Err(invalid(format!("Parameter {number} is not name=value.")));
+                return Err(invalid(tr_served_with(
+                    Msg::ParameterNotNameValue,
+                    &[("number", (number).to_string().into())],
+                )));
             };
             let name = name.trim();
             let name = name.strip_prefix('$').unwrap_or(name);
             if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                return Err(invalid(format!(
-                    "Parameter {number} has no name of letters, digits and underscores."
+                return Err(invalid(tr_served_with(
+                    Msg::ParameterHasNoNameLettersDigits,
+                    &[("number", (number).to_string().into())],
                 )));
             }
-            let value = serde_json::to_value(value.trim())
-                .map_err(|_unencodable| invalid(format!("Parameter {number} cannot be sent.")))?;
+            let value = serde_json::to_value(value.trim()).map_err(|_unencodable| {
+                invalid(tr_served_with(
+                    Msg::ParameterCannotBeSent,
+                    &[("number", (number).to_string().into())],
+                ))
+            })?;
             if parameters.insert(name.to_owned(), value).is_some() {
-                return Err(invalid(format!(
-                    "Parameter {number} names a parameter given before."
+                return Err(invalid(tr_served_with(
+                    Msg::ParameterNamesParameterGivenBefore,
+                    &[("number", (number).to_string().into())],
                 )));
             }
         }
@@ -260,9 +278,8 @@ pub mod server {
     /// gateway answered it with its `meta.federation` (§9).
     #[must_use]
     pub fn raw(answer: &FederatedAnswer) -> String {
-        serde_json::to_string_pretty(&answer.result_set).unwrap_or_else(|_unprintable| {
-            String::from("The console cannot print this result set as JSON.")
-        })
+        serde_json::to_string_pretty(&answer.result_set)
+            .unwrap_or_else(|_unprintable| tr_served(Msg::ConsoleCannotPrintResultSetJson))
     }
 
     /// What the console renders of `answer`.
@@ -322,9 +339,8 @@ pub mod server {
     pub(crate) fn error_text(error: &ErrorDetail) -> String {
         match error {
             ErrorDetail::Text(message) => message.clone(),
-            ErrorDetail::Object(_) => serde_json::to_string(error).unwrap_or_else(|_unprintable| {
-                String::from("an error object the console cannot print")
-            }),
+            ErrorDetail::Object(_) => serde_json::to_string(error)
+                .unwrap_or_else(|_unprintable| tr_served(Msg::ErrorObjectConsoleCannotPrint)),
         }
     }
 }
