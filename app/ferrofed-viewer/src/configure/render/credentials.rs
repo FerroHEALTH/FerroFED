@@ -15,7 +15,9 @@ use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot, SectionR
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column};
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::form::{INPUT, SELECT, SWITCH};
+use ferrohealth_ui::view::form::{
+    Field as FormField, INPUT, SELECT, SWITCH, described_by, error_id,
+};
 use leptos::prelude::*;
 
 use crate::configure::plan::removal_reason;
@@ -289,22 +291,18 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
         .collect_view();
     let group = secret_field(row, "choice");
     let value_id = secret_field(row, "value");
-    let set = view! {
-        <div class="fui-field">
-            <label for=value_id.clone() class="fui-label">
-                "Value, never shown again"
-            </label>
+    let set = FormField::new(value_id.clone(), "Value, never shown again")
+        .after(error_line(&value_id))
+        .view(view! {
             <input
                 type="password"
                 id=value_id.clone()
                 name=name("value")
                 class=INPUT
                 autocomplete="new-password"
-                aria-describedby=format!("{value_id}-error")
+                aria-describedby=error_id(&value_id)
             />
-            {error_line(&value_id)}
-        </div>
-    };
+        });
     let file = text(
         (&secret_field(row, "file"), &name("file")),
         String::from("Absolute path of the file it is read from"),
@@ -345,19 +343,18 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
         let id = format!("{into}-{item}");
         view! {
             <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
-                <div class="fui-field">
-                    <label for=id.clone() class="fui-sr-only">
-                        "Value"
-                    </label>
-                    <input
-                        type="text"
-                        id=id.clone()
-                        name=format!("form[setting][{row}][values]")
-                        value=value
-                        class=format!("{INPUT} fui-mono")
-                        autocomplete="off"
-                    />
-                </div>
+                {FormField::new(id.clone(), "Value")
+                    .label_hidden()
+                    .view(view! {
+                        <input
+                            type="text"
+                            id=id.clone()
+                            name=format!("form[setting][{row}][values]")
+                            value=value
+                            class=format!("{INPUT} fui-mono")
+                            autocomplete="off"
+                        />
+                    })}
                 {remove_button(&format!("{id}-row"), String::from("Remove this value"))}
             </div>
         }
@@ -396,23 +393,13 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
                     }
                 })
                 .collect_view();
-            view! {
-                <div class="fui-field">
-                    <label for=id.clone() class="fui-label">
-                        {field.label}
-                    </label>
-                    <select
-                        id=id.clone()
-                        name=name("value")
-                        class=SELECT
-                        aria-describedby=format!("{id}-error")
-                    >
+            FormField::new(id.clone(), field.label)
+                .after(error_line(&id))
+                .view(view! {
+                    <select id=id.clone() name=name("value") class=SELECT aria-describedby=error_id(&id)>
                         {options}
                     </select>
-                    {error_line(&id)}
-                </div>
-            }
-            .into_any()
+                })
         }
         Kind::Switch => view! {
             <div class="fui-check">
@@ -534,25 +521,21 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>) -> AnyView {
             view! { <option value=endpoint>{shown}</option> }
         })
         .collect_view();
-    view! {
-        <div class="fui-field">
-            <label for="cfg-endpoint" class="fui-label">"Endpoint"</label>
-            <select
-                id="cfg-endpoint"
-                class=SELECT
-                name="form[endpoint]"
-                required
-                aria-describedby="cfg-endpoint-hint cfg-endpoint-error"
-            >
-                {options}
-            </select>
-            <p id="cfg-endpoint-hint" class="fui-help">
-                "The endpoints the members declare that hold no credentials yet."
-            </p>
-            {error_line("cfg-endpoint")}
-        </div>
-    }
-    .into_any()
+    let select = view! {
+        <select
+            id="cfg-endpoint"
+            class=SELECT
+            name="form[endpoint]"
+            required
+            aria-describedby=described_by("cfg-endpoint", true, true)
+        >
+            {options}
+        </select>
+    };
+    FormField::new("cfg-endpoint", "Endpoint")
+        .help("The endpoints the members declare that hold no credentials yet.")
+        .after(error_line("cfg-endpoint"))
+        .view(select)
 }
 
 /// The select of the grant, `grant` chosen; the form shows the chosen
@@ -568,25 +551,21 @@ fn grant_choice(grant: Grant) -> AnyView {
             }
         })
         .collect_view();
-    view! {
-        <div class="fui-field">
-            <label for="cfg-grant" class="fui-label">"Grant type"</label>
-            <select
-                id="cfg-grant"
-                class=SELECT
-                name="form[grant]"
-                data-grant=""
-                aria-describedby="cfg-grant-hint cfg-grant-error"
-            >
-                {grants}
-            </select>
-            <p id="cfg-grant-hint" class="fui-help">
-                "How the gateway reaches the endpoint; the form shows that grant's fields."
-            </p>
-            {error_line("cfg-grant")}
-        </div>
-    }
-    .into_any()
+    let select = view! {
+        <select
+            id="cfg-grant"
+            class=SELECT
+            name="form[grant]"
+            data-grant=""
+            aria-describedby=described_by("cfg-grant", true, true)
+        >
+            {grants}
+        </select>
+    };
+    FormField::new("cfg-grant", "Grant type")
+        .help("How the gateway reaches the endpoint; the form shows that grant's fields.")
+        .after(error_line("cfg-grant"))
+        .view(select)
 }
 
 /// The form that adds onward credentials, or edits those of `endpoint`.

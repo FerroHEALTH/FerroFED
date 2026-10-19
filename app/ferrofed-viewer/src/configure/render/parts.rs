@@ -16,7 +16,7 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::{Variant, label};
-use ferrohealth_ui::view::form::INPUT;
+use ferrohealth_ui::view::form::{ERROR, Field, INPUT, action_field, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
 use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
@@ -67,9 +67,7 @@ pub(crate) fn hidden(name: &str, value: String) -> AnyView {
 /// The line under the field `id` where its refusal shows, empty and hidden
 /// until the page marks it.
 pub(crate) fn error_line(id: &str) -> impl IntoView + use<> {
-    view! {
-        <p id=format!("{id}-error") class="fui-help fui-tone-bad" data-field-error="" hidden></p>
-    }
+    view! { <p id=error_id(id) class=ERROR data-field-error="" hidden></p> }
 }
 
 /// What a text field shows and takes beside its value.
@@ -94,12 +92,7 @@ pub(crate) struct Text {
 /// `value`, its line of help and the line where its refusal shows, both
 /// named by the input's `aria-describedby`.
 pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown: Text) -> AnyView {
-    let hint_id = format!("{id}-hint");
-    let described = if shown.hint.is_some() {
-        format!("{hint_id} {id}-error")
-    } else {
-        format!("{id}-error")
-    };
+    let described = described_by(id, shown.hint.is_some(), true);
     let kind = if shown.kind.is_empty() {
         "text"
     } else {
@@ -110,37 +103,25 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
     } else {
         String::from(INPUT)
     };
-    view! {
-        <div class="fui-field">
-            <label for=id.to_owned() class="fui-label">
-                {label}
-            </label>
-            <input
-                type=kind
-                id=id.to_owned()
-                name=name.to_owned()
-                value=value
-                class=class
-                autocomplete="off"
-                spellcheck="false"
-                list=shown.list
-                required=shown.required
-                readonly=shown.readonly
-                aria-describedby=described
-            />
-            {shown
-                .hint
-                .map(|hint| {
-                    view! {
-                        <p id=hint_id class="fui-help">
-                            {hint}
-                        </p>
-                    }
-                })}
-            {error_line(id)}
-        </div>
-    }
-    .into_any()
+    let input = view! {
+        <input
+            type=kind
+            id=id.to_owned()
+            name=name.to_owned()
+            value=value
+            class=class
+            autocomplete="off"
+            spellcheck="false"
+            list=shown.list
+            required=shown.required
+            readonly=shown.readonly
+            aria-describedby=described
+        />
+    };
+    Field::new(id, label)
+        .help_if(shown.hint)
+        .after(error_line(id))
+        .view(input)
 }
 
 /// The breadcrumb trail from the tab `(label, href)` to the form or view
@@ -273,26 +254,21 @@ pub(crate) fn add_button(
     (template, into): (&str, &str),
     (label, placeholder): (&'static str, &'static str),
 ) -> AnyView {
-    view! {
-        <div class="fui-field">
-            <div class="fui-cluster">
-                <button
-                    type="button"
-                    id=id.to_owned()
-                    class=Variant::Secondary.class()
-                    data-add=template.to_owned()
-                    data-into=into.to_owned()
-                    data-placeholder=placeholder
-                    aria-describedby=format!("{id}-error")
-                >
-                    {icon(Glyph::PLUS, "16")}
-                    {label}
-                </button>
-            </div>
-            {error_line(id)}
-        </div>
-    }
-    .into_any()
+    let button = view! {
+        <button
+            type="button"
+            id=id.to_owned()
+            class=Variant::Secondary.class()
+            data-add=template.to_owned()
+            data-into=into.to_owned()
+            data-placeholder=placeholder
+            aria-describedby=error_id(id)
+        >
+            {icon(Glyph::PLUS, "16")}
+            {label}
+        </button>
+    };
+    action_field(button, error_line(id))
 }
 
 /// The button that removes the row `row`, named for what the row holds.

@@ -237,6 +237,22 @@ fn details_section(endpoints: &[EndpointLine]) -> AnyView {
     .into_any()
 }
 
+/// A value a node reported, or a dash for one it has none of, such as the
+/// latency of a node out of scope or the error of one that answered, so a
+/// stacked card never shows a label with nothing after it.
+fn reported(value: Option<String>) -> AnyView {
+    match value {
+        Some(value) => value.into_any(),
+        None => view! {
+            <span class="fui-muted" aria-hidden="true">
+                "—"
+            </span>
+            <span class="fui-sr-only">"none"</span>
+        }
+        .into_any(),
+    }
+}
+
 /// The columns of the endpoint details.
 const ENDPOINT_COLUMNS: [Column; 6] = [
     Column::text("endpoint", "Endpoint"),
@@ -278,19 +294,19 @@ pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
                     <td data-label="Status">{endpoint.status.clone()}</td>
                     {latency.then(|| view! {
                         <td data-label="Latency" class=NUM>
-                            {endpoint.latency_ms.map(|latency| format!("{latency} ms")).unwrap_or_default()}
+                            {reported(endpoint.latency_ms.map(|latency| format!("{latency} ms")))}
                         </td>
                     })}
                     {counted.then(|| view! {
                         <td data-label="Rows" class=NUM>
-                            {endpoint.row_count.map(|count| count.to_string()).unwrap_or_default()}
+                            {reported(endpoint.row_count.map(|count| count.to_string()))}
                         </td>
                     })}
                     {organised.then(|| view! {
-                        <td data-label="Organisation">{endpoint.organisation.clone().unwrap_or_default()}</td>
+                        <td data-label="Organisation">{reported(endpoint.organisation.clone())}</td>
                     })}
                     {failed.then(|| view! {
-                        <td data-label="Error">{endpoint.error.clone().unwrap_or_default()}</td>
+                        <td data-label="Error">{reported(endpoint.error.clone())}</td>
                     })}
                 </tr>
             }
@@ -590,6 +606,26 @@ mod tests {
                 "{id}: {html}"
             );
         }
+    }
+
+    #[test]
+    fn a_value_a_node_never_reported_reads_as_a_dash_not_an_empty_label() {
+        let mut directed = answer(200, true);
+        let mut answered_node = endpoint("node_1", "active", None);
+        answered_node.latency_ms = Some(42);
+        answered_node.row_count = Some(3);
+        let mut excluded = endpoint("node_3", "excluded", Some("not named"));
+        excluded.latency_ms = None;
+        directed.endpoints = vec![answered_node, excluded];
+        let html = super::endpoints_table(&directed.endpoints).to_html();
+        assert!(html.contains("42 ms"), "{html}");
+        for label in ["Latency", "Rows"] {
+            let empty = format!(r#"<td data-label="{label}" class="fui-num"></td>"#);
+            assert!(!html.contains(&empty), "an empty {label}: {html}");
+        }
+        // The excluded node's latency and rows, and the answered node's
+        // error: the column shows because the excluded node carries one.
+        assert_eq!(3, html.matches(">none</span>").count(), "{html}");
     }
 
     #[test]

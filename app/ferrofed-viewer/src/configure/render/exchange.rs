@@ -14,7 +14,7 @@ use crate::configure::render::{Loaded, author};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::form::TEXTAREA;
+use ferrohealth_ui::view::form::{Field, TEXTAREA};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::time::timestamp;
 
@@ -201,23 +201,25 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
     let body = view! {
         {hidden("action", String::from("import"))}
         {hidden("base", loaded.base())}
-        <div class="fui-field">
-            <label for="cfg-toml" class="fui-label">"TOML"</label>
-            <textarea
-                id="cfg-toml"
-                name="form[toml]"
-                rows="12"
-                spellcheck="false"
-                required
-                class=format!("{TEXTAREA} fui-mono")
-                data-lines="cfg-toml-lines"
-                aria-describedby="cfg-toml-lines cfg-toml-error"
-            ></textarea>
-            <p id="cfg-toml-lines" class="fui-help">
-                "0 lines"
-            </p>
-            {error_line("cfg-toml")}
-        </div>
+        {Field::new("cfg-toml", "TOML")
+            .after(view! {
+                <p id="cfg-toml-lines" class="fui-help">
+                    "0 lines"
+                </p>
+                {error_line("cfg-toml")}
+            })
+            .view(view! {
+                <textarea
+                    id="cfg-toml"
+                    name="form[toml]"
+                    rows="12"
+                    spellcheck="false"
+                    required
+                    class=format!("{TEXTAREA} fui-mono")
+                    data-lines="cfg-toml-lines"
+                    aria-describedby="cfg-toml-lines cfg-toml-error"
+                ></textarea>
+            })}
         {reason()}
         <div class="fui-action-bar">
             <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-import-hint">

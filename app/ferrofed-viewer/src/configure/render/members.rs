@@ -13,7 +13,7 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::form::{INPUT, SWITCH};
+use ferrohealth_ui::view::form::{Field, INPUT, SWITCH};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::definitions;
 use leptos::prelude::*;
@@ -377,20 +377,19 @@ fn profile(key: &str, item: &str, value: String) -> AnyView {
     let id = format!("cfg-f-{key}-p-{item}");
     view! {
         <div id=format!("{id}-row") class="fui-field-row fui-field-row-actions">
-            <div class="fui-field">
-                <label for=id.clone() class="fui-sr-only">
-                    "Profile"
-                </label>
-                <input
-                    type="url"
-                    id=id.clone()
-                    name=format!("form[fhir][{key}][profiles]")
-                    value=value
-                    class=format!("{INPUT} fui-mono")
-                    autocomplete="off"
-                    spellcheck="false"
-                />
-            </div>
+            {Field::new(id.clone(), "Profile")
+                .label_hidden()
+                .view(view! {
+                    <input
+                        type="url"
+                        id=id.clone()
+                        name=format!("form[fhir][{key}][profiles]")
+                        value=value
+                        class=format!("{INPUT} fui-mono")
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                })}
             {remove_button(&format!("{id}-row"), String::from("Remove this profile"))}
         </div>
     }
