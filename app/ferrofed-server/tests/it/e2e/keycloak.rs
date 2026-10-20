@@ -14,7 +14,8 @@
 //! refused `401 natural-person-required` (Regulation (EU) 2025/327 Annex II
 //! 3.1). With the client's
 //! `access.token.header.type.rfc9068` attribute off, the same user's token
-//! is refused `401` for its type (RFC 9068 §4). Keycloak is an issuer here,
+//! is refused `401` for its type (RFC 9068 §4), with the one `invalid_token`
+//! challenge and the type check named in the security log. Keycloak is an issuer here,
 //! never the oracle: a Keycloak release that changes what the recipe
 //! produces fails this test, and the page is what gets fixed.
 
@@ -26,6 +27,7 @@ use std::sync::Arc;
 use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
+use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::containers::keycloak::recipe::{self, Recipe};
 use ferrofed_testkit::containers::keycloak::{self, CLINICAL_APP, Keycloak, REPORTING_SERVICE};
 use ferrofed_testkit::containers::{self, TwoNodes};
@@ -37,7 +39,7 @@ use crate::e2e::{
     Answer, TestResult, assert_no_patient_identifier_on_the_wire, dev_resolver, patient_query,
     query, registry_document,
 };
-use crate::support::{error_body, send_as_is};
+use crate::support::{Logs, error_body, send_as_is};
 
 /// The name of the recipe's mapper that names the professional the
 /// reporting service acts for, in `professional.json` on the page.
@@ -133,7 +135,11 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service
 
     idp.type_tokens(CLINICAL_APP, false).await?;
     let untyped = idp.user_token(&secrets.clinical_app).await?;
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
     let (status, headers, text) = ask(app, &untyped).await?;
+    drop(guard);
     assert_eq!(
         StatusCode::UNAUTHORIZED,
         status,
@@ -143,9 +149,18 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service
         .get(WWW_AUTHENTICATE)
         .and_then(|value| value.to_str().ok())
         .ok_or("a 401 carries its challenge")?;
+    // NOTE: RFC 6750 §3.1 and RFC 9068 §4: every token that fails a check gets the same
+    // challenge, so the type it wanted reaches the security log alone.
+    assert_eq!(
+        r#"Bearer realm="ferrofed", error="invalid_token""#, challenge,
+        "the challenge names no failed check"
+    );
+    let log = logs.text();
     assert!(
-        challenge.contains("at+jwt"),
-        "the challenge names the type it wanted: {challenge}"
+        log.lines()
+            .any(|line| line.contains(r#""event":"caller-refused""#)
+                && line.contains(r#""check":"typ names another kind""#)),
+        "the security log names the type check: {log}"
     );
     Ok(())
 }
