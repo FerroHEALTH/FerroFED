@@ -54,7 +54,7 @@ fn santempi_resolver(mpi: &santempi::SanteMpi) -> String {
     // NOTE: santedb/santedb-restsvc@1a9fdb3 OAuthTokenRequestContext reads the client
     // id and secret from the request body alone, so SanteMPI is asked by client_secret_post.
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = {}\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = {}\nclient_id = {}\nclient_auth = \"client_secret_post\"\nclient_secret = {}\nscope = \"*\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = {}\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials.oauth]\ntoken_endpoint = {}\nclient_id = {}\nclient_auth = \"client_secret_post\"\nclient_secret = {}\nscope = \"*\"\n",
         toml::Value::String(base.clone()),
         DOMAIN_A.system(),
         DOMAIN_B.system(),
