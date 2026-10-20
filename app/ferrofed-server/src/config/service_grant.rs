@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The credentials of an IHE FHIR service: a PIX Manager, the PDQm
-//! Supplier, the PMIR Registry and the mCSD directory.
+//! The credentials of an IHE FHIR service, a PIX Manager, the PDQm
+//! Supplier, the PMIR Registry and the mCSD directory, and of Mitz.
 //!
 //! `[<service>.credentials]` names basic credentials or `oauth`, the client
 //! credentials grant of `ferrohealth-smart` (RFC 6749 §4.4), which IHE IUA

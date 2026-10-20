@@ -27,6 +27,19 @@
 //! "node-b" = { type = "V6", ura = "ura-test-0002" }
 //! ```
 //!
+//! Beside mutual TLS, the gateway authenticates with basic credentials or
+//! with the OAuth 2.0 client credentials grant of `ferrohealth-smart` (RFC
+//! 6749 §4.4), whose token each question carries as a bearer token (RFC 6750
+//! §2.1):
+//!
+//! ```toml
+//! [nl_gf.mitz.credentials.oauth]
+//! token_endpoint = "https://mitz.example.org/oauth2/token"
+//! client_id = "ferrofed"
+//! client_auth = "client_secret_basic"
+//! client_secret_file = "/run/secrets/mitz-client-secret"
+//! ```
+//!
 //! Mitz is sent the BSN, so its URL is held to the protected-payload policy
 //! of [`transport`]. No specification governs the shape of the table: our
 //! own design.
@@ -50,9 +63,9 @@ use serde::Deserialize;
 use crate::binding::nl::NlGfSettings;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
-use crate::config::error::credentials::CredentialsFault;
 use crate::config::resolve::localization_budget_ms;
-use crate::config::secrets::{resolve_credentials, secret};
+use crate::config::secrets::secret;
+use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::{Scheme, Settings};
 use crate::config::{Config, Credentials, transport};
 use crate::federation::error::FederationError;
@@ -156,7 +169,7 @@ impl fmt::Debug for MitzSettings {
 }
 
 /// Resolves `[nl_gf.mitz]`: a URL that parses, carries no userinfo and is
-/// `https` outside development, basic credentials, a
+/// `https` outside development, basic credentials or an `oauth` grant, a
 /// purpose and data categories, a positive timeout that, with the
 /// demographics step's and the localizer's, ends before the overall budget
 /// (§11.5), a data user, and every secret and file read.
@@ -166,11 +179,14 @@ impl fmt::Debug for MitzSettings {
 /// `data_categories`, a data user key left empty or a zero timeout,
 /// [`BindingFault::Mitz`] for a purpose other than `TREAT` or `COC` or the
 /// pseudonymised BSN listed in `namespaces`, [`Error::Url`],
-/// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL,
-/// [`CredentialsFault::GrantNotHere`] for an OAuth 2.0 grant,
+/// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL and the
+/// token endpoint, [`CredentialsFault::ServiceGrantNotHere`] for an
+/// `oauth2`, Nuts or FAPI 2.0 grant,
 /// [`BindingFault::PrefilterBudget`] for a budget that, with the demographics
 /// step's and the localizer's, leaves no time to resolve, and the errors of a
 /// secret or a file that cannot be read.
+///
+/// [`CredentialsFault::ServiceGrantNotHere`]: crate::config::error::credentials::CredentialsFault::ServiceGrantNotHere
 pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Error> {
     let missing = |key: &str| Error::Missing {
         key: format!("{MITZ_KEY}.{key}"),
@@ -199,16 +215,14 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
     question(mitz)?;
     budget(config, mitz)?;
     let section = format!("{MITZ_KEY}.credentials");
+    let context = ServiceContext {
+        profile: config.profile,
+    };
     let credentials = mitz
         .credentials
         .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
+        .map(|credentials| resolve_service(&section, credentials, context))
         .transpose()?;
-    if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::Credentials(CredentialsFault::GrantNotHere {
-            section,
-        }));
-    }
     // NOTE: Implementatiehandleiding §3.3: the question travels over TLS, and it carries
     // the BSN, so the URL is a protected-payload site; one admitted under development is reported.
     transport::protected_payload(
@@ -335,7 +349,7 @@ pub(super) fn prefilter(
     let config = MitzConfig {
         endpoint: mitz.url.clone(),
         development: settings.profile == Profile::Development,
-        auth: service::authentication(
+        auth: service::service_authentication(
             &format!("{MITZ_KEY}.credentials"),
             mitz.credentials.as_ref(),
         )?,

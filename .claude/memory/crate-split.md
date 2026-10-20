@@ -15,9 +15,10 @@ products".
 
 **Decided:** the layout separates the specification crates under `crates/`
 (`openehr-federation` with the hand-written wire types behind the two
-published JSON Schemas, no FerroFED generator by decision A33; `ihe-iti`,
-moved to FerroHEALTH/FerroPIX by #367 and pinned from crates.io;
-`nl-generic-functions`; `oauth-server-metadata`, split out by #551) from
+published JSON Schemas, no FerroFED generator by decision A33;
+`oauth-server-metadata`, split out by #551; `ihe-iti` and
+`nl-generic-functions` moved to FerroHEALTH/FerroPIX by #367 and are pinned
+from crates.io) from
 FerroFED's own glue under `app/`; the crate map is `docs/architecture.md`
 §11, and the naming is [[published-crate-naming]] (#106). `app/*` and `tools/*` are never published.
 

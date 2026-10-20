@@ -82,7 +82,7 @@ const APPLICATION: &str = "ferrofed-server";
 /// at all; a binding crate may depend on another, and the two harmonised
 /// components are held apart by
 /// `the_two_harmonised_components_are_independent_of_each_other`.
-const STANDALONE: &[&str] = &["nl-generic-functions", "oauth-server-metadata", "eehrxf"];
+const STANDALONE: &[&str] = &["oauth-server-metadata", "eehrxf"];
 
 /// The European logging software component, which the server's composition
 /// root alone builds records for (Regulation (EU) 2025/327 Art 2(2)(o)). It

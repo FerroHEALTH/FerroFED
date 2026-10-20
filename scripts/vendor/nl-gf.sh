@@ -13,7 +13,7 @@
 # Query Directory content, the localization and access-token sequence
 # diagrams, the IG's build configuration and the repository's licence.
 #
-# The clients of crates/nl-generic-functions read it: the NVI search of
+# The clients of nl-generic-functions read it: the NVI search of
 # feature `nvi` (#87) is held to the Localization Service capability
 # statement and the localization record profile, the LRZa reading of feature
 # `lrza` (#87) to the Organization profiles and the LRZa examples, and the
@@ -149,12 +149,12 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #87 (the NVI search of \`crates/nl-generic-functions\` feature
+- Read by: the NVI binding of \`app/ferrofed-server\` (\`src/binding/nl/nvi.rs\`), the Mitz pre-filter of \`app/ferrofed-identity\` and the NVI device of \`tools/ferrofed-testkit\`, which cite GF-Localization and GF-Consent. Earlier, #87 (the NVI search of \`nl-generic-functions\` feature
   \`nvi\`, held to the Localization Service capability statement and the
   localization record profile, and the LRZa reading of feature \`lrza\`,
   held to the Organization profiles and the LRZa examples) and #88 (the
   access token request of feature \`nuts-auth\`, held to GF-Authentication
-  and its GFI-004 and GFI-005 transactions)
+  and its GFI-004 and GFI-005 transactions); \`nl-generic-functions\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

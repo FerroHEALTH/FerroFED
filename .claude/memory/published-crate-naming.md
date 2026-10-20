@@ -23,9 +23,10 @@ on anything called FerroFED.
 
 - A crate that may be published lives under `crates/` and carries the name of
   the specification it implements: `openehr-federation` (the Federation Tier
-  with AQL), `ihe-iti` (the IHE IT Infrastructure profiles, owned and
-  published by FerroHEALTH/FerroPIX since #367, pinned here from crates.io),
-  `nl-generic-functions` (the Dutch Generic Functions) and
+  with AQL), `ihe-iti` (the IHE IT Infrastructure profiles) and
+  `nl-generic-functions` (the Dutch Generic Functions), both owned and
+  published by FerroHEALTH/FerroPIX since #367 and pinned here from
+  crates.io, and
   `oauth-server-metadata` (OAuth 2.0 Authorization Server Metadata, RFC 8414,
   split out of `nl-generic-functions` by #551 so the core and every binding
   read it without depending on a national crate).
@@ -36,7 +37,7 @@ on anything called FerroFED.
   compiles only what it uses. A new crate is the exception, for a new
   specification.
 - A published crate depends on nothing in FerroFED. It may depend on another
-  `crates/*` library (`nuts-auth` on `oauth-server-metadata`). FerroFED's own
+  `crates/*` library. FerroFED's own
   glue (the registry, the identity traits and their adapters, the engine, the
   server) lives under `app/` as `ferrofed-*` with a hard `publish = false`.
 - Before a name is used, it is claimed on crates.io with a 0.0.0 placeholder

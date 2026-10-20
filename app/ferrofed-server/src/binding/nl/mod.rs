@@ -66,8 +66,8 @@ pub struct NlGfSettings {
 
 /// Resolves `[nl_gf]`: an NVI URL that parses, carries no userinfo and is
 /// `https` outside development, basic credentials or the Nuts grant for the
-/// NVI, basic credentials for Mitz, and
-/// every secret and file read.
+/// NVI, basic credentials or the `oauth` client credentials grant for Mitz,
+/// and every secret and file read.
 ///
 /// # Errors
 /// [`BindingFault::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
@@ -75,13 +75,14 @@ pub struct NlGfSettings {
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
 /// `https` outside the development profile, [`BindingFault::NviGrant`] for an
-/// OAuth 2.0 or FAPI 2.0 grant for the NVI, [`CredentialsFault::GrantNotHere`]
-/// for a grant for Mitz, the errors of a Nuts grant that cannot be built, and
+/// OAuth 2.0 or FAPI 2.0 grant for the NVI,
+/// [`CredentialsFault::ServiceGrantNotHere`] for an `oauth2`, Nuts or FAPI
+/// 2.0 grant for Mitz, the errors of a Nuts grant that cannot be built, and
 /// the errors of a secret or a file that cannot be read.
 ///
 /// [`BindingFault::BsnAsPseudonym`]: crate::config::error::binding::BindingFault::BsnAsPseudonym
 /// [`BindingFault::NviGrant`]: crate::config::error::binding::BindingFault::NviGrant
-/// [`CredentialsFault::GrantNotHere`]: crate::config::error::credentials::CredentialsFault::GrantNotHere
+/// [`CredentialsFault::ServiceGrantNotHere`]: crate::config::error::credentials::CredentialsFault::ServiceGrantNotHere
 fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
     let Some(nl_gf) = &config.nl_gf else {
         return Ok(None);

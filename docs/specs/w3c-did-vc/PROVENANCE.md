@@ -16,7 +16,7 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - W3C Bitstring Status List 1.0: <https://www.w3.org/TR/2025/REC-vc-bitstring-status-list-20250515/>, sha256 `3cdf3358a09f3b02f2a97e5dac13cf2b63115c2db1260bf7b7c236d8702924ec`
 - did:web Method Specification: commit `ea423c114e6f2537498ee6f94e8d794c64f60c18` of `w3c-ccg/did-method-web`, its
   `index.html` (the report's source) and `LICENSE.md`
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: the W3C documents carry the W3C copyright notice and
   name the W3C Software and Document License, the 2015 text
   (<https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document>) for the two 2022 Recommendations and the 2023 text
@@ -31,9 +31,9 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: 6
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `601a111d016a24f1f0acfe10cfbde2b416b728e1355771ee7652a872424e9399`
-- Read by: #88 (the Verifiable Presentation of the access token request of
-  `crates/nl-generic-functions` feature `nuts-auth`: VC Data Model 1.1
-  §4.10 and §6.3.1, and the did:web holder identifier)
+- Read by: the Nuts binding of `app/ferrofed-server` (`src/binding/nl/nuts.rs`) and the Nuts tests of `app/ferrofed-engine`, which cite VC Data Model 1.1 and did:web. Earlier, #88 (the Verifiable Presentation of the access token request of
+  `nl-generic-functions` feature `nuts-auth`: VC Data Model 1.1
+  §4.10 and §6.3.1, and the did:web holder identifier); `nl-generic-functions` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 
