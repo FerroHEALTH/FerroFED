@@ -35,7 +35,7 @@ pub(crate) mod resolve;
 pub mod revisions;
 pub(crate) mod secrets;
 pub mod server;
-#[cfg(feature = "binding-ihe")]
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub mod service_grant;
 pub mod settings;
 pub mod stored_queries;

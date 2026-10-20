@@ -278,3 +278,43 @@ fn a_prefilter_budget_alone_past_the_overall_budget_is_refused() -> TestResult {
         .into()),
     }
 }
+
+#[test]
+fn an_oauth_grant_over_plain_http_is_refused_outside_development() -> TestResult {
+    let (_dir, text) = edited(|table| {
+        format!(
+            "{table}\n[nl_gf.mitz.credentials.oauth]\ntoken_endpoint = \"http://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
+        )
+    })?;
+    match resolved(&text) {
+        Err(error::Error::Cleartext(refused)) => {
+            assert_eq!(
+                "nl_gf.mitz.credentials.oauth.token_endpoint",
+                refused.site.url_key
+            );
+            Ok(())
+        }
+        other => Err(format!("RFC 6749 §2.3.1: the client secret needs TLS: {other:?}").into()),
+    }
+}
+
+#[test]
+fn an_oauth_grant_resolves_and_an_oauth2_grant_is_refused() -> TestResult {
+    let (_dir, text) = edited(|table| {
+        format!(
+            "{table}\n[nl_gf.mitz.credentials.oauth]\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
+        )
+    })?;
+    resolved(&text)?;
+    let (_dir, text) = edited(|table| {
+        format!(
+            "{table}\n[nl_gf.mitz.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nscope = \"system/aql-*.s\"\nresource = \"https://mitz.example.org\"\n"
+        )
+    })?;
+    match resolved(&text) {
+        Err(error::Error::Credentials(
+            error::credentials::CredentialsFault::ServiceGrantNotHere { section },
+        )) if section == "nl_gf.mitz.credentials" => Ok(()),
+        other => Err(format!("Mitz takes the oauth grant alone: {other:?}").into()),
+    }
+}
