@@ -313,8 +313,8 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
   professional, the assurance level the issuer states, the client's
   address behind a trusted proxy, the categories of the data per origin and
   the period the record is kept, as Annex II, point 3.2, of Regulation (EU)
-  2025/327 asks of the European logging component, and `crates/ehds-logging`
-  as a library ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623), [#742](https://github.com/FerroHEALTH/FerroFED/issues/742), [#722](https://github.com/FerroHEALTH/FerroFED/issues/722), [#694](https://github.com/FerroHEALTH/FerroFED/issues/694), [#795](https://github.com/FerroHEALTH/FerroFED/issues/795),
+  2025/327 asks of the European logging component, and `ehds-logging` as a
+  library, published from the FerroHEALTH audit library (FerroAUDIT) ([#623](https://github.com/FerroHEALTH/FerroFED/issues/623), [#742](https://github.com/FerroHEALTH/FerroFED/issues/742), [#722](https://github.com/FerroHEALTH/FerroFED/issues/722), [#694](https://github.com/FerroHEALTH/FerroFED/issues/694), [#795](https://github.com/FerroHEALTH/FerroFED/issues/795),
   [The access log](../operate/access-log.md)).
 - The FHIR face: the patient summary in the HL7 Europe exchange format, the
   document list and the read of a listed document, and the receipt of a

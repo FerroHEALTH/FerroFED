@@ -166,7 +166,8 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   through the same script:
   - `docs/specs/eu-hl7-health-data-api/`: `hl7.fhir.eu.health-data-api`
     1.0.0-ballot, whose `EEHRxFDocumentPriorityCategoryCS` codes the Art
-    14(1) categories `crates/ehds-logging` writes (CC0-1.0).
+    14(1) categories the `ehds-logging` crate (FerroHEALTH/FerroAUDIT)
+    writes, read here by the testkit (CC0-1.0).
   - `docs/specs/eu-hl7-imaging/`: `hl7.fhir.eu.imaging` 1.0.0-ballot
     (CC0-1.0).
   - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 0.1.0-ballot (CC0-1.0).

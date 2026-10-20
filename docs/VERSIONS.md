@@ -381,6 +381,20 @@ on the `openehr-*` line above.
 | `fhirconnect` | =0.1.117 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.111 | the root `Cargo.toml` `[workspace.dependencies]` |
 
+## Audit crates (crates.io)
+
+The ATNA ITI-20 sender, the BALP `AuditEvent` with its FHIR Feed, and the
+European logging component come from the family's audit library,
+FerroHEALTH/FerroAUDIT (#1176). Both crates are pinned exactly in the root
+`Cargo.toml` and move together, one version line and one release tag. The
+IHE and EU corpora FerroAUDIT vendors for them are kept here at the same pins
+where FerroFED's own code, tests or guards still read them.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `ihe-atna` | =0.1.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.1.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+
 ## Metrics crates (crates.io)
 
 The metrics surface (#281) is one OpenTelemetry `MeterProvider` read by the

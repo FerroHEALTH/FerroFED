@@ -38,7 +38,7 @@
 //!
 //! use ihe_iti::pdqm::PdqmClient;
 //! use ihe_iti::pdqm::query::{DatePrefix, PatientQuery, StringMatch};
-//! use ihe_iti::user::OnBehalfOf;
+//! use ihe_atna::user::OnBehalfOf;
 //! use secrecy::{ExposeSecret, SecretString};
 //! use url::Url;
 //!
@@ -87,8 +87,8 @@ use url::Url;
 
 use crate::authorizer::{self, Authorizer};
 use crate::redact::RedactedUrl;
-use crate::user::OnBehalfOf;
 use error::{InvalidInput, PdqmError};
+use ihe_atna::user::OnBehalfOf;
 use input::MatchInput;
 use matches::{MatchResult, Page, SearchResult};
 use query::PatientQuery;
@@ -109,7 +109,7 @@ pub struct PdqmClient {
     http: reqwest::Client,
     authorizer: Option<Arc<dyn Authorizer>>,
     #[cfg(feature = "balp")]
-    audit: Option<Arc<dyn crate::balp::AuditRecorder>>,
+    audit: Option<Arc<dyn ihe_atna::balp::AuditRecorder>>,
 }
 
 impl PdqmClient {
@@ -158,7 +158,7 @@ impl PdqmClient {
     /// [`PdqmError::Audit`], and its answer is not used.
     #[cfg(feature = "balp")]
     #[must_use]
-    pub fn audited(mut self, recorder: Arc<dyn crate::balp::AuditRecorder>) -> Self {
+    pub fn audited(mut self, recorder: Arc<dyn ihe_atna::balp::AuditRecorder>) -> Self {
         self.audit = Some(recorder);
         self
     }
@@ -183,7 +183,7 @@ impl PdqmClient {
             match within(deadline, recorder.record(exchange)).await {
                 Recorded::Refused(error) => return Err(PdqmError::Audit(error)),
                 Recorded::Late if result.is_ok() => {
-                    return Err(PdqmError::Audit(crate::balp::AuditError(Box::new(Late))));
+                    return Err(PdqmError::Audit(ihe_atna::balp::AuditError(Box::new(Late))));
                 }
                 Recorded::Accepted | Recorded::Late => {}
             }
@@ -260,7 +260,7 @@ impl PdqmClient {
             // request line, media type and body, as for the ITI-78 POST search.
             let request = secrecy::SecretString::from(format!(
                 "POST {}\nContent-Type: {FHIR_JSON}\n\n{}",
-                crate::balp::request_text(&self.match_endpoint).expose_secret(),
+                ihe_atna::balp::request_text(&self.match_endpoint).expose_secret(),
                 body.expose_secret()
             ));
             let exchange = audit::match_exchange(
@@ -274,7 +274,7 @@ impl PdqmClient {
             match within(deadline, recorder.record(exchange)).await {
                 Recorded::Refused(error) => return Err(PdqmError::Audit(error)),
                 Recorded::Late if result.is_ok() => {
-                    return Err(PdqmError::Audit(crate::balp::AuditError(Box::new(Late))));
+                    return Err(PdqmError::Audit(ihe_atna::balp::AuditError(Box::new(Late))));
                 }
                 Recorded::Accepted | Recorded::Late => {}
             }
@@ -341,7 +341,7 @@ impl PdqmClient {
                     // request line, media type and form body, as BALP's own example writes.
                     secrecy::SecretString::from(format!(
                         "POST {}\nContent-Type: {}\n\n{}",
-                        secrecy::ExposeSecret::expose_secret(&crate::balp::request_text(
+                        secrecy::ExposeSecret::expose_secret(&ihe_atna::balp::request_text(
                             &self.endpoint
                         )),
                         request::FORM,
@@ -404,7 +404,7 @@ impl PdqmClient {
         #[cfg(feature = "balp")]
         let result = self
             .audit(
-                || crate::balp::request_text(page.url()),
+                || ihe_atna::balp::request_text(page.url()),
                 on_behalf,
                 result,
                 deadline,

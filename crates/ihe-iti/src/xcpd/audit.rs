@@ -31,7 +31,7 @@ use url::Url;
 
 use super::identifier::HomeCommunityId;
 use crate::redact::{REDACTED, RedactedUrl};
-use crate::user::OnBehalfOf;
+use ihe_atna::user::OnBehalfOf;
 
 /// The DICOM `EventID` of the message: `EV(110112, DCM, "Query")`.
 pub const EVENT_ID: (&str, &str, &str) = ("110112", "DCM", "Query");
@@ -216,10 +216,10 @@ impl AuditEvent {
     #[must_use]
     pub fn message(
         &self,
-        source: &crate::atna::message::AuditSource,
-        host: &crate::atna::message::AccessPoint,
-    ) -> crate::atna::message::AuditMessage {
-        use crate::atna::message::{
+        source: &ihe_atna::atna::message::AuditSource,
+        host: &ihe_atna::atna::message::AccessPoint,
+    ) -> ihe_atna::atna::message::AuditMessage {
+        use ihe_atna::atna::message::{
             AccessPoint, ActiveParticipant, AuditMessage, CodedValue, EventIdentification,
             ParticipantObject,
         };

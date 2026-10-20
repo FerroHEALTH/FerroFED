@@ -161,7 +161,7 @@ async fn the_resolution_of_the_same_query_reuses_the_localization_call() {
 
 /// A recorder that keeps every exchange it is given.
 #[derive(Default)]
-struct Kept(std::sync::Mutex<Vec<ihe_iti::balp::Exchange>>);
+struct Kept(std::sync::Mutex<Vec<ihe_atna::balp::Exchange>>);
 
 impl Kept {
     /// Whom each kept exchange was made for, in order: the user's `sub`,
@@ -182,11 +182,11 @@ impl Kept {
 }
 
 #[async_trait::async_trait]
-impl ihe_iti::balp::AuditRecorder for Kept {
+impl ihe_atna::balp::AuditRecorder for Kept {
     async fn record(
         &self,
-        exchange: ihe_iti::balp::Exchange,
-    ) -> Result<(), ihe_iti::balp::AuditError> {
+        exchange: ihe_atna::balp::Exchange,
+    ) -> Result<(), ihe_atna::balp::AuditError> {
         self.0.lock().expect("the kept exchanges").push(exchange);
         Ok(())
     }
@@ -203,7 +203,7 @@ fn caller(subject: &str) -> OnBehalfOf {
 
 /// The PIXm resolver over `server`, recording every exchange in `kept`.
 fn audited(server: &Server, kept: &std::sync::Arc<Kept>) -> PixmResolver {
-    let recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder> = kept.clone();
+    let recorder: std::sync::Arc<dyn ihe_atna::balp::AuditRecorder> = kept.clone();
     pixm(server).audited(&recorder)
 }
 

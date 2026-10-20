@@ -144,10 +144,10 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #418 (the ITI-20 syslog sender of \`crates/ihe-iti\`, feature
-  \`atna\`) and #486 (its ATX: FHIR Feed sender, feature \`balp\`), whose tests
-  hold the store-and-forward of §3.20.4.1.1 the spool keeps, and the
-  supplement the FHIR Feed follows, to these files
+- Read by: the IHE citation guard over the ITI-20 and RESTful ATNA citations
+  of the gateway and its testkit; the ITI-20 sender and its FHIR Feed (#418,
+  #486) moved to the \`ihe-atna\` crate of FerroHEALTH/FerroAUDIT (#1176),
+  which vendors the same files at the same pins
 
 ## What is here
 

@@ -37,10 +37,10 @@ use ferrofed_identity::ihe::audit::balp::{
     FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
 };
 use ferrofed_registry::health::{Indication, Observed};
-use ihe_iti::atna::forwarder::{Forwarder, Status};
-use ihe_iti::atna::repository::RepositoryError;
-use ihe_iti::atna::spool::{Bounds, Content, Spool, SpoolError};
-use ihe_iti::balp::AuditRecorder;
+use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::repository::RepositoryError;
+use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
+use ihe_atna::balp::AuditRecorder;
 use serde::Deserialize;
 
 use crate::audit::config::{AuditSettings, FeedRepositorySettings};

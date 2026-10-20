@@ -159,9 +159,11 @@ of an EHR system shall be adequately taken into account and reflected in the
 technical documentation".
 
 The harmonised software components (Art 25(1)) and the code that serves them
-are these paths:
+are these, a published crate and paths of this repository:
 
-- `crates/ehds-logging`, the European logging software component;
+- `ehds-logging`, the European logging software component, published from
+  the family's audit library (FerroHEALTH/FerroAUDIT) and pinned exactly in
+  the root `Cargo.toml`, so a moved pin is a change to it;
 - `app/ferrofed-server/src/access`, which builds its access record;
 - `crates/eehrxf`, the European interoperability software component;
 - `app/ferrofed-eehrxf`, its stored section queries and its documents;
@@ -170,7 +172,8 @@ are these paths:
 A release that changes any of them since the previous release cannot be
 cut until it is reviewed. `scripts/checks/technical-documentation.sh`
 compares the version being built with the newest release tag below it, and
-when a file under these paths differs, it fails unless the
+when a file under these paths differs or the published crate's pin moves, it
+fails unless the
 [clinical safety review table](clinical-safety.md#review-and-change) has a
 row whose release is that version and the table below has a row for it. A
 routine pull request keeps the version of the last release, whose rows

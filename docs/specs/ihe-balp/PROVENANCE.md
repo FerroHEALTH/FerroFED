@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.balp/1.1.4>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/BALP/1.1.4/>
 - Pin: package `ihe.iti.balp` version `1.1.4`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`
-- Fetched: 2026-10-05
+- Fetched: 2026-10-20
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -21,11 +21,11 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 125 of the package's 126, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `f7e73b45e097e9ddb135013454fcf74547fea01bb3dcee5216b5ca27137a4381`
-- Read by: #486 (the BALP audit records of `crates/ihe-iti`, whose tests hold
-  each record to the pattern its transaction's audit profile derives from and
-  a search to the client-side example, and the ATNA FHIR Feed sender, held to
-  the Audit Creator's `create` interaction) and #696 (every pattern an access
-  record names by canonical URL). The narrative pages of the same version are
+- Read by: #486 (the profile audit records of `crates/ihe-iti`, whose tests
+  hold each record to the pattern its transaction's audit profile derives
+  from and a search to the client-side example). The BALP writer, its FHIR
+  Feed and the access record moved to FerroHEALTH/FerroAUDIT (#1176), which
+  vendors the same package at the same pin. The narrative pages of the same version are
   in docs/specs/ihe-balp-pages/.
 
 ## What is here

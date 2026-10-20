@@ -21,11 +21,11 @@ use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
 use ferrofed_identity::role::localizer::{Localization, Localizer as _, LocalizerError};
 use ferrofed_testkit::atna::AuditRepository;
 use ferrofed_testkit::xcpd::RespondingGateway;
-use ihe_iti::atna::forwarder::Forwarder;
-use ihe_iti::atna::message::AuditSource;
-use ihe_iti::atna::repository::{Repository, Timeouts, TlsSettings};
-use ihe_iti::atna::spool::{Bounds, Spool};
-use ihe_iti::atna::syslog::Sender;
+use ihe_atna::atna::forwarder::Forwarder;
+use ihe_atna::atna::message::AuditSource;
+use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::spool::{Bounds, Spool};
+use ihe_atna::atna::syslog::Sender;
 use url::Url;
 
 use crate::support::{CALLER_AUDIENCE, CALLER_ISSUER, CALLER_SUBJECT, PATIENT_VALUE, caller};

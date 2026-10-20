@@ -98,6 +98,9 @@ toml.workspace = true
 # harness Patient Identity Registry is held to (#147), and the PDQm client the
 # harness PDQm Supplier is held to (#487).
 ihe-iti = { workspace = true, features = ["mcsd", "pdqm", "pixm", "pmir", "xcpd"] }
+# Whom a client exchange is made for (`user::OnBehalfOf`), from the family's
+# audit library (FerroHEALTH/FerroAUDIT).
+ihe-atna.workspace = true
 secrecy.workspace = true
 # The browser journeys of the operator console, behind the FERROFED_JOURNEYS
 # gate (#608), each through a chromedriver of its own, which tokio starts and

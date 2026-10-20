@@ -266,7 +266,7 @@ pub struct McsdClient {
     http: reqwest::Client,
     authorizer: Option<Arc<dyn Authorizer>>,
     #[cfg(feature = "balp")]
-    audit: Option<Arc<dyn crate::balp::AuditRecorder>>,
+    audit: Option<Arc<dyn ihe_atna::balp::AuditRecorder>>,
 }
 
 /// The URLs of the two interactions on one resource type.
@@ -334,7 +334,7 @@ impl McsdClient {
     /// fails with [`McsdError::Audit`], and its answer is not used.
     #[cfg(feature = "balp")]
     #[must_use]
-    pub fn audited(mut self, recorder: Arc<dyn crate::balp::AuditRecorder>) -> Self {
+    pub fn audited(mut self, recorder: Arc<dyn ihe_atna::balp::AuditRecorder>) -> Self {
         self.audit = Some(recorder);
         self
     }
@@ -344,7 +344,7 @@ impl McsdClient {
     #[cfg(feature = "balp")]
     async fn audit<T>(
         &self,
-        kind: crate::balp::EventKind,
+        kind: ihe_atna::balp::EventKind,
         request: &Url,
         result: Result<T, McsdError>,
     ) -> Result<T, McsdError> {

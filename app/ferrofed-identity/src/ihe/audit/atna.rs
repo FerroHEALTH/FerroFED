@@ -20,9 +20,9 @@ use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
-use ihe_iti::atna::forwarder::{Forwarder, Status};
-use ihe_iti::atna::message::{AccessPoint, AuditSource};
-use ihe_iti::atna::syslog::Sender;
+use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::message::{AccessPoint, AuditSource};
+use ihe_atna::atna::syslog::Sender;
 use ihe_iti::xcpd::audit::{AuditError, AuditEvent, AuditRecorder};
 use tokio::task::JoinHandle;
 

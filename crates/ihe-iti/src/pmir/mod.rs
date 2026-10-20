@@ -90,7 +90,7 @@ pub struct PmirSubscriber {
     http: reqwest::Client,
     authorizer: Option<Arc<dyn Authorizer>>,
     #[cfg(feature = "balp")]
-    audit: Option<Arc<dyn crate::balp::AuditRecorder>>,
+    audit: Option<Arc<dyn ihe_atna::balp::AuditRecorder>>,
 }
 
 impl PmirSubscriber {
@@ -148,7 +148,7 @@ impl PmirSubscriber {
     /// fails with [`SubscribeError::Audit`], and its answer is not used.
     #[cfg(feature = "balp")]
     #[must_use]
-    pub fn audited(mut self, recorder: Arc<dyn crate::balp::AuditRecorder>) -> Self {
+    pub fn audited(mut self, recorder: Arc<dyn ihe_atna::balp::AuditRecorder>) -> Self {
         self.audit = Some(recorder);
         self
     }
@@ -158,7 +158,7 @@ impl PmirSubscriber {
     #[cfg(feature = "balp")]
     async fn audit<T>(
         &self,
-        exchange: impl FnOnce(&Result<T, SubscribeError>) -> crate::balp::Exchange,
+        exchange: impl FnOnce(&Result<T, SubscribeError>) -> ihe_atna::balp::Exchange,
         result: Result<T, SubscribeError>,
     ) -> Result<T, SubscribeError> {
         if let Some(recorder) = &self.audit {

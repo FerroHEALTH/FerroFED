@@ -13,8 +13,8 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use ihe_iti::balp::{AuditError, AuditRecorder, Exchange};
-use ihe_iti::user::{OnBehalfOf, PurposeOfUse, User};
+use ihe_atna::balp::{AuditError, AuditRecorder, Exchange};
+use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};
 use secrecy::ExposeSecret as _;
 use serde_json::Value;
 

@@ -569,8 +569,9 @@ dispatched (N8).
   §1:52.1.1.1; the RESTful ATNA supplement, ITI TF-2 §3.20.4.2), a FHIR
   `create` at the repository. So these transactions are not audited as
   DICOM messages over syslog: `ihe-iti`'s `balp` feature writes each
-  profile's `AuditEvent` and posts it through the same spool and forwarder
-  as the ITI-55 trail, and each client (`PixmClient`, `McsdClient`,
+  profile's `AuditEvent` through the published `ihe-atna` crate (the
+  family's audit library, FerroHEALTH/FerroAUDIT) and posts it through the
+  same spool and forwarder as the ITI-55 trail, and each client (`PixmClient`, `McsdClient`,
   `PmirSubscriber`, `PdqmClient`) takes an `AuditRecorder` and fails the
   transaction when its record cannot be stored, the XCPD policy. The FHIR
   Feed adds what syslog lacks, an answer: a `4xx` other than `408` and
@@ -2326,10 +2327,11 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
-| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies); `balp` turns on the FHIR profiles' audit records and `atna` the ITI-55 audit message, each written through `ihe-atna` | `fhir-types` (`r4`, `resources`), an HTTP client, `ihe-atna` (its `user` module with `pixm`, `pdqm` and `xcpd`; `atna` and `balp` with the features of those names), and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `ihe-atna` (crates.io, `=0.1.0`, from FerroHEALTH/FerroAUDIT) | the family's audit library, published from FerroAUDIT: `atna`, the ITI-20 DICOM audit message over syslog with TLS, the bounded store-and-forward spool and the forwarder, and `balp`, the BALP `AuditEvent` and the ATX: FHIR Feed; `user`, whom an exchange is made for | `quick-xml`, `rustls`, `tokio` under `atna`; `fhir-types` (`r4`, `resources`), an HTTP client under `balp` | anything in FerroFED |
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `authorizer`, the FHIR-free request authorizer `nvi` takes and the engine implements (#730) | the clients each function needs, `oauth-server-metadata` under `nuts-auth` | anything in FerroFED |
 | `crates/oauth-server-metadata` | OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, the identical-issuer and same-origin endpoint checks, and the refusal of an answer that repeats a name; no feature | `serde`, `serde_json`, `url` | anything in FerroFED, any national crate |
-| `crates/ehds-logging` | the European logging software component of Regulation (EU) 2025/327 (decision A58): the Annex II 3.2 access record, the Art 14(1) categories, coded as A81 decides, the map that classifies an access, the retention of each record by category and origin (A75), its security labels by category and origin (A91), the record of each semantic transformation an access applied (A100), the sink; `balp` writes the record as an IHE BALP `AuditEvent` | `serde`, `jiff`, `secrecy`; `ihe-iti` (`balp`) under `balp` | `eehrxf`, `fhirconnect`, anything in FerroFED |
+| `ehds-logging` (crates.io, `=0.1.0`, from FerroHEALTH/FerroAUDIT) | the European logging software component of Regulation (EU) 2025/327 (decision A58): the Annex II 3.2 access record, the Art 14(1) categories, coded as A81 decides, the map that classifies an access, the retention of each record by category and origin (A75), its security labels by category and origin (A91), the record of each semantic transformation an access applied (A100), the sink; `balp` writes the record as an IHE BALP `AuditEvent` | `serde`, `jiff`, `secrecy`; `ihe-atna` (`balp`) under `balp` | `eehrxf`, `fhirconnect`, anything in FerroFED |
 | `crates/eehrxf` | the European interoperability software component (decisions A58, A60 to A62): the format-neutral dataset model read from the Xt-EHR *EHDS Logical Information Models* package, one feature per Art 14(1) category (`patient-summary`, `prescription`, `dispensation`, `imaging`, `laboratory`, `discharge`), `fhir-r4`, the FHIR R4 serialisation with no openEHR crate, whose `document` writes the patient summary as an HL7 Europe Patient Summary document `Bundle` under `patient-summary` (#809), and `openehr`, which turns on `fhir-r4` and runs FerroBRIDGE's FHIRconnect engine in process over a canonical-JSON composition and its OPT (#730); under `fhir-r4`, `receive` reads and checks a received document, and under `openehr` maps it into one composition that keeps the original (#801); under `fhir-r4`, `transformation` reports what each transformation transcoded, left untranscoded and dropped, by path (A100) | `serde`, `serde_json`, `flate2`, `tar`; `fhir-types` (`r4`, `resources`), `async-trait` and `http` (the terminology server seam, #687) under `fhir-r4`; `fhirconnect`, `openehr-mapping-core` and `openehr-rm` under `openehr` | `ehds-logging`, anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait, and the reports of the read-only operator surface (`operator`); a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6 and `PatientRef` (`role`), the adapters that plug `ihe-iti` (`ihe`, feature `ihe`) and `nl-generic-functions` (`nl`, feature `nl`) into the seams, the resolution bindings of a client session (`session`), the one HTTP client and TLS type of the identity services (`fhir`), and the development cross-reference (`dev`) | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
@@ -2355,7 +2357,10 @@ module behind one feature, `binding-ihe` or `binding-nl`, both on by default
 `ferrofed-identity` and the `nl` feature of `ferrofed-engine`, so a build
 without a binding's feature compiles neither its code nor its binding crate
 (#551): `cargo tree -p ferrofed-server --no-default-features` lists neither
-`ihe-iti` nor `nl-generic-functions`. The architecture test in
+`ihe-iti` nor `nl-generic-functions`. It lists `ihe-atna` and `ehds-logging`,
+the published audit crates every build writes its audit trail and its access
+records through (#697). Before #1176 it listed `ihe-iti` too, because the
+ATNA sender and the BALP writer were features of that crate. The architecture test in
 `app/ferrofed-engine/tests/it/architecture.rs` fails when a crate other than
 the server reaches a storage implementation (#40), or when a binding crate or
 the RFC 8414 crate they share gains a FerroFED dependency, and CI lints every
@@ -2390,8 +2395,8 @@ flowchart LR
     glue --> registry["app/ferrofed-registry"]
     eehrxf --> fhirconnect["fhirconnect (FerroBRIDGE)"]
     eehrxf --> fhir["fhir-types r4"]
-    server -- "access record" --> logging["crates/ehds-logging (logging component)"]
-    logging -- balp --> iti["ihe-iti (balp)"]
+    server -- "access record" --> logging["ehds-logging (logging component, FerroAUDIT)"]
+    logging -- balp --> atna["ihe-atna (balp, FerroAUDIT)"]
     eehrxf -.- |"no edge either way"| logging
 ```
 
@@ -2476,8 +2481,10 @@ flowchart TD
     federation --> rm["openehr-rm"]
     registry --> base["openehr-base"]
     iti --> fhir["fhir-types r4"]
-    server --> logging["ehds-logging (balp)"]
-    logging -- balp --> iti
+    server --> logging["ehds-logging (balp, FerroAUDIT)"]
+    logging -- balp --> atna["ihe-atna (atna, balp, FerroAUDIT)"]
+    server --> atna
+    iti -- "atna, balp" --> atna
     server --> glue["app/ferrofed-eehrxf"]
     glue --> eehrxf["eehrxf (patient-summary, openehr)"]
     glue --> registry

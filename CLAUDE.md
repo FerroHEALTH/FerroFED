@@ -248,22 +248,24 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
-  `xcpd`, and the ATNA audit as `atna` and `balp`), `nl-generic-functions`
+  `xcpd`, with `balp` and `atna` turning on their audit records, written
+  through `ihe-atna`), `nl-generic-functions`
   (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, the
   FHIR-free request `authorizer` the engine implements, and the BSN naming
   systems in `identification`), `oauth-server-metadata` (RFC 8414,
   the issuer and the checks a client holds authorization server metadata to,
-  with no feature; #551), and the two harmonised software components of
-  Regulation (EU) 2025/327 (decision A58): `ehds-logging` (the logging
-  component: the Annex II 3.2 access record, the Art 14(1) categories and
-  their map, the sink, and `balp`; #623) and `eehrxf` (the interoperability
+  with no feature; #551), and the interoperability component of Regulation
+  (EU) 2025/327 (decision A58), `eehrxf` (the interoperability
   component: the format-neutral dataset model read from the Xt-EHR logical
   models package, one feature per Art 14(1) category, `fhir-r4`, the FHIR
   R4 serialisation with no openEHR crate, and `openehr`, which maps openEHR
   to it through FerroBRIDGE's FHIRconnect engine in process; #684, #730).
-  The two never
-  list each other and only `ferrofed-server` links both, which the
-  architecture test holds. A library may depend on another library
+  The logging component, `ehds-logging` (the Annex II 3.2 access record, the
+  Art 14(1) categories and their map, the sink, and `balp`; #623), and the
+  ATNA and BALP audit, `ihe-atna`, come from the family's audit library,
+  FerroHEALTH/FerroAUDIT, pinned exactly from crates.io (#1176). The two
+  components never list each other and only `ferrofed-server` links both,
+  which the architecture test holds. A library may depend on another library
   (`nuts-auth` on `oauth-server-metadata`), and `cargo package` resolves it
   through a `patch.crates-io` per depended-on member while the switch is off
   (`.claude/rules/crates-publishing.md`). The library crates depend on
@@ -273,8 +275,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   trait), `ferrofed-identity` (laid out by role and binding: `role/` holds
   the seams and `PatientRef`; `ihe/`, behind feature `ihe`, the PIXm
   resolver and localizer, the PDQm demographics step, the XCPD localizer,
-  the PMIR identity feed, the mCSD directory and the audit recorders over
-  `ihe-iti`, whose BALP recorder alone builds under feature `balp`, which
+  the PMIR identity feed and the mCSD directory over `ihe-iti`, and the
+  audit recorders over `ihe-atna`, whose BALP recorder alone builds under
+  feature `balp`, which
   `ihe` implies and the server always enables (#697); `nl/`, behind feature `nl`, the NVI localizer and the Mitz
   pre-filter over `nl-generic-functions`; and at the top `session`, the
   resolution bindings per verified caller, `fhir`, the one IHE FHIR client
