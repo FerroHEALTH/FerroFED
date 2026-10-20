@@ -22,8 +22,6 @@
       <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-viewer/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/crates/ehds-logging/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/crates/ehds-logging/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/ihe-iti/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/nl-generic-functions/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/oauth-server-metadata/src" isTestSource="false" />

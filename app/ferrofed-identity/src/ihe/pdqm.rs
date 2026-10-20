@@ -37,7 +37,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use ferrofed_registry::secret::SecretUrl;
-use ihe_iti::balp::AuditRecorder;
+use ihe_atna::balp::AuditRecorder;
 use ihe_iti::pdqm::PdqmClient;
 use ihe_iti::pdqm::error::{InvalidInput, PdqmError};
 use ihe_iti::pdqm::input::MatchInput;

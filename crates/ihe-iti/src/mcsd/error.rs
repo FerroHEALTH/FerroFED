@@ -131,7 +131,7 @@ pub enum McsdError {
     /// so its answer is not used (feature `balp`, §2:3.90.5.1, §2:3.91.5.1).
     #[cfg(feature = "balp")]
     #[error("the mCSD audit record could not be recorded")]
-    Audit(#[source] crate::balp::AuditError),
+    Audit(#[source] ihe_atna::balp::AuditError),
 }
 
 impl McsdError {

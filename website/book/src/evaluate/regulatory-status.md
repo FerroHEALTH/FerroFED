@@ -473,7 +473,8 @@ them:
   the verified caller, the patient, each endpoint asked and the categories
   of the data, in the record Annex II, point 3.2, sets for the European
   logging component ([the access log](../operate/access-log.md)).
-  The library that builds it is `crates/ehds-logging`. The records are
+  The library that builds it is `ehds-logging`, published from the
+  FerroHEALTH audit library (FerroAUDIT). The records are
   reviewed at the Audit Record Repository with ITI-81, the connection of
   external software point 3.3 admits, and each states how long it is kept
   by its origins and categories, never under three years (point 3.4, Art

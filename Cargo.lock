@@ -1272,20 +1272,16 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.0.26"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e04f6060007816a120eb9ce54ed57f7ac471e9424737ab10f3dc2fa9e91332bb"
 dependencies = [
  "async-trait",
- "flate2",
- "ihe-iti",
+ "ihe-atna",
  "jiff",
- "proptest",
  "secrecy",
  "serde",
- "serde_json",
- "tar",
  "thiserror 2.0.21",
- "tokio",
- "toml",
  "url",
 ]
 
@@ -1485,6 +1481,7 @@ dependencies = [
  "ferrofed-testkit",
  "fhir-types",
  "http",
+ "ihe-atna",
  "ihe-iti",
  "jiff",
  "nl-generic-functions",
@@ -1540,6 +1537,7 @@ dependencies = [
  "fhir-types",
  "governor",
  "http",
+ "ihe-atna",
  "ihe-iti",
  "ipnet",
  "jiff",
@@ -1602,6 +1600,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "ihe-atna",
  "ihe-iti",
  "jiff",
  "jsonwebtoken",
@@ -2543,13 +2542,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "ihe-iti"
-version = "0.0.38"
+name = "ihe-atna"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3447c9ed26bbb3797804655242ffa9089267c4ca25e0c28c630fcead31320417"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
  "fhir-types",
  "http",
+ "jiff",
+ "quick-xml",
+ "reqwest",
+ "rustls",
+ "rustls-platform-verifier",
+ "secrecy",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "ihe-iti"
+version = "0.0.39"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "fhir-types",
+ "http",
+ "ihe-atna",
  "jiff",
  "quick-xml",
  "reqwest",

@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `aad98731a1f2597d6a7defa2c7f6ab7297781b677398383346c5592f913c9f4b`
-- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `5908ab6216a4931783642948841ad9830a38eefd2a0d466f7384b0e1746cf8e8`
-- Read by: #824 (the wire form of the Article 14(1) categories in
-  the access record of crates/ehds-logging)
+- Read by: #824 (the wire form of the Article 14(1) categories, decision A81,
+  which the access record of ehds-logging writes from FerroHEALTH/FerroAUDIT
+  since #1176), and the eehrxf tests and the testkit
 
 The European imaging report guide in its ballot version, canonical
 `http://hl7.eu/fhir/imaging`, committed under CC0-1.0.

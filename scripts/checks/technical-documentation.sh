@@ -48,11 +48,17 @@ readonly CHANGES_HEADING='Changes to the harmonised components'
 readonly REVIEW_HEADING='Review and change'
 # The harmonised software components (Art 25(1)) and the code that serves them.
 readonly COMPONENTS=(
-  crates/ehds-logging
   crates/eehrxf
   app/ferrofed-eehrxf
   app/ferrofed-server/src/access
   app/ferrofed-server/src/fhir
+)
+
+# The harmonised components taken from crates.io, each pinned by a line of
+# the root Cargo.toml: the logging component comes from the family's audit
+# library, FerroHEALTH/FerroAUDIT (#1176). A moved pin is a changed component.
+readonly PUBLISHED=(
+  ehds-logging
 )
 
 failures=0
@@ -210,6 +216,9 @@ check_changes() {
   for component in "${COMPONENTS[@]}"; do
     grep -Fq -- "\`$component\`" "$PAGE" || fail "$PAGE does not name the component path $component."
   done
+  for component in "${PUBLISHED[@]}"; do
+    grep -Fq -- "\`$component\`" "$PAGE" || fail "$PAGE does not name the published component $component."
+  done
   version="$(workspace_version)"
   [[ -n "$version" ]] || {
     fail "the root Cargo.toml declares no [workspace.package] version."
@@ -221,6 +230,12 @@ check_changes() {
     return
   fi
   changed="$(git diff --name-only "$tag" -- "${COMPONENTS[@]}")"
+  for component in "${PUBLISHED[@]}"; do
+    if git diff "$tag" -- Cargo.toml | grep -Eq "^[-+]$component = "; then
+      changed="${changed:+$changed
+}Cargo.toml ($component)"
+    fi
+  done
   if [[ -z "$changed" ]]; then
     echo "technical-documentation: no harmonised component changed between $tag and $version."
     return
@@ -251,7 +266,7 @@ self_test() {
   script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   repo="$work/repo"
   mkdir -p "$repo/scripts/checks" "$repo/conformance" "$repo/docs/specs/eu-ehds" "$repo/docs/specs/eu-cra" \
-    "$repo/website/book/src/evaluate" "$repo/crates/ehds-logging"
+    "$repo/website/book/src/evaluate" "$repo/crates/eehrxf"
   cp "$script" "$repo/scripts/checks/technical-documentation.sh"
   stub_git() {
     git -C "$repo" -c user.name=self-test -c user.email=self-test@example.org \
@@ -294,12 +309,18 @@ self_test() {
       printf '\n| Annex VII | Where |\n|---|---|\n'
       for item in $CRA_ITEMS; do printf '| point %s | here |\n' "$item"; done
       printf '\n## %s\n\n' "$CHANGES_HEADING"
-      for component in "${COMPONENTS[@]}"; do printf -- '- \140%s\140\n' "$component"; done
+      for component in "${COMPONENTS[@]}" "${PUBLISHED[@]}"; do printf -- '- \140%s\140\n' "$component"; done
       printf '\n| Release | Date |\n|---|---|\n| 0.0.1 | 2026-01-01 |\n'
     } > "$repo/$PAGE"
     printf '# Clinical safety\n\n## %s\n\n| Reviewed on | Release |\n|---|---|\n| 2026-01-01 | 0.0.1 |\n' \
       "$REVIEW_HEADING" > "$repo/$SAFETY"
-    printf '[workspace.package]\nversion = "0.0.1"\n' > "$repo/Cargo.toml"
+    manifest 0.0.1 0.1.0
+  }
+  # manifest VERSION PIN: the root Cargo.toml at VERSION, with the published
+  # logging component pinned at PIN.
+  manifest() {
+    printf '[workspace.package]\nversion = "%s"\n\n[workspace.dependencies]\nehds-logging = { version = "=%s" }\n' \
+      "$1" "$2" > "$repo/Cargo.toml"
   }
   # row_in INDEX ITEM FIELD VALUE: set one field of ITEM's row of INDEX; a
   # FIELD of 0 drops it. row and cra_row name the index.
@@ -314,7 +335,7 @@ self_test() {
   cra_row() { row_in "$CRA_INDEX" "$@"; }
 
   fixture
-  printf 'one\n' > "$repo/crates/ehds-logging/lib.rs"
+  printf 'one\n' > "$repo/crates/eehrxf/lib.rs"
   stub_git init -q -b main
   stub_git add -A
   stub_git commit -q -m "the first release"
@@ -352,6 +373,9 @@ self_test() {
   sed -i.orig '/crates\/eehrxf/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
   expect "a page that drops a component path" 1 "component path crates/eehrxf"
   fixture
+  sed -i.orig "/- \`ehds-logging\`/d" "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
+  expect "a page that drops a published component" 1 "published component ehds-logging"
+  fixture
   row 3 5 not-applicable
   expect "a not-applicable Annex III row" 1 "status \"not-applicable\" is not documented, partial or planned"
   fixture
@@ -378,9 +402,12 @@ self_test() {
 
   # Change control: the release v0.0.1, then a bump to 0.0.2.
   stub_git tag v0.0.1
-  printf '[workspace.package]\nversion = "0.0.2"\n' > "$repo/Cargo.toml"
+  manifest 0.0.2 0.1.0
   expect "a bump that changes no component" 0 "no harmonised component changed between v0.0.1 and 0.0.2"
-  printf 'two\n' > "$repo/crates/ehds-logging/lib.rs"
+  manifest 0.0.2 0.1.1
+  expect "a bump that moves a published component's pin with no row" 1 "has no row whose release is 0.0.2"
+  manifest 0.0.2 0.1.0
+  printf 'two\n' > "$repo/crates/eehrxf/lib.rs"
   stub_git commit -q -a -m "a component change"
   expect "a bump that changes a component with no row" 1 "has no row whose release is 0.0.2"
   printf '| 2026-02-01 | before 0.0.2 |\n' >> "$repo/$SAFETY"
@@ -394,10 +421,10 @@ self_test() {
   # change after its tag is the next bump's to record.
   stub_git commit -q -a -m "the second release"
   stub_git tag v0.0.2
-  printf 'three\n' > "$repo/crates/ehds-logging/lib.rs"
+  printf 'three\n' > "$repo/crates/eehrxf/lib.rs"
   stub_git commit -q -a -m "a change after the release"
   expect "a routine change between releases" 0 "between v0.0.1 and 0.0.2"
-  printf '[workspace.package]\nversion = "0.0.3-rc.1"\n' > "$repo/Cargo.toml"
+  manifest 0.0.3-rc.1 0.1.0
   expect "a pre-release bump with no row" 1 "has no row whose release is 0.0.3-rc.1"
   echo "technical-documentation: self-test passed."
 }

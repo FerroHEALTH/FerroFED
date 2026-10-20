@@ -14,7 +14,7 @@ change the pins in docs/VERSIONS.md and re-run the script.
     Supplement *Add RESTful ATNA (Query and Feed)*, Rev. 3.6,
     November 25, 2025, Trial Implementation
 - Pins: each file by its sha256, listed below; the URLs carry no revision
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: copyright IHE International, Inc. The IHE Technical
   Frameworks General Introduction §9
   (<https://profiles.ihe.net/GeneralIntro/ch-9.html>) grants it, verbatim:
@@ -33,10 +33,10 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: 3
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `d88b675acba02428ef2f73f020b781ef648ff45e2a14f269be4c9f026a818a4c`
-- Read by: #418 (the ITI-20 syslog sender of `crates/ihe-iti`, feature
-  `atna`) and #486 (its ATX: FHIR Feed sender, feature `balp`), whose tests
-  hold the store-and-forward of §3.20.4.1.1 the spool keeps, and the
-  supplement the FHIR Feed follows, to these files
+- Read by: the IHE citation guard over the ITI-20 and RESTful ATNA citations
+  of the gateway and its testkit; the ITI-20 sender and its FHIR Feed (#418,
+  #486) moved to the `ihe-atna` crate of FerroHEALTH/FerroAUDIT (#1176),
+  which vendors the same files at the same pins
 
 ## What is here
 

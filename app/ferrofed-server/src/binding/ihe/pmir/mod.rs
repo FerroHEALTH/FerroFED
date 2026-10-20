@@ -35,7 +35,7 @@ use ferrofed_identity::ihe::pmir::{self, PmirConfigError};
 use http::HeaderMap;
 use std::sync::Arc;
 
-use ihe_iti::balp::{AuditError, AuditRecorder};
+use ihe_atna::balp::{AuditError, AuditRecorder};
 use ihe_iti::pmir::PmirSubscriber;
 use ihe_iti::pmir::audit::received;
 use ihe_iti::pmir::error::InvalidInput;

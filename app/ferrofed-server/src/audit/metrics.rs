@@ -7,7 +7,7 @@
 //! label at all, so a record's content never reaches a metric. No
 //! specification governs metrics: our own design.
 
-use ihe_iti::atna::forwarder::Status;
+use ihe_atna::atna::forwarder::Status;
 use opentelemetry::metrics::{Meter, ObservableCounter, ObservableGauge};
 
 /// The ITI-20 audit messages waiting in the spool for the audit repository;

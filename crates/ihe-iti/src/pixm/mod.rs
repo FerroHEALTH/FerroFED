@@ -34,7 +34,7 @@
 //!
 //! use ihe_iti::pixm::PixmClient;
 //! use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
-//! use ihe_iti::user::OnBehalfOf;
+//! use ihe_atna::user::OnBehalfOf;
 //! use secrecy::{ExposeSecret, SecretString};
 //! use url::Url;
 //!
@@ -85,9 +85,9 @@ use url::Url;
 
 use crate::authorizer::{self, Authorizer};
 use crate::redact::RedactedUrl;
-use crate::user::OnBehalfOf;
 use error::{InvalidInput, PixmError};
 use identifier::{CrossReference, SourceIdentifier, TargetSystem};
+use ihe_atna::user::OnBehalfOf;
 use request::Request;
 
 /// The media type ITI-83 asks for and reads (ITI TF-2 Appendix Z.6).
@@ -129,7 +129,7 @@ pub struct PixmClient {
     http: reqwest::Client,
     authorizer: Option<Arc<dyn Authorizer>>,
     #[cfg(feature = "balp")]
-    audit: Option<Arc<dyn crate::balp::AuditRecorder>>,
+    audit: Option<Arc<dyn ihe_atna::balp::AuditRecorder>>,
 }
 
 impl PixmClient {
@@ -188,7 +188,7 @@ impl PixmClient {
     /// `recorder` (§2:3.83.5.1.1, feature `balp`).
     #[cfg(feature = "balp")]
     #[must_use]
-    pub fn audited(mut self, recorder: Arc<dyn crate::balp::AuditRecorder>) -> Self {
+    pub fn audited(mut self, recorder: Arc<dyn ihe_atna::balp::AuditRecorder>) -> Self {
         self.audit = Some(recorder);
         self
     }
@@ -249,7 +249,7 @@ impl PixmClient {
             match within(deadline, recorder.record(exchange)).await {
                 Recorded::Refused(error) => return Err(PixmError::Audit(error)),
                 Recorded::Late if result.is_ok() => {
-                    return Err(PixmError::Audit(crate::balp::AuditError(Box::new(Late))));
+                    return Err(PixmError::Audit(ihe_atna::balp::AuditError(Box::new(Late))));
                 }
                 Recorded::Accepted | Recorded::Late => {}
             }

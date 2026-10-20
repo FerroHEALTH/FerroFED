@@ -13,12 +13,12 @@ use std::error::Error;
 use std::time::Duration;
 
 use ferrofed_testkit::pdq::{PdqError, PdqSupplier};
+use ihe_atna::user::OnBehalfOf;
 use ihe_iti::pdqm::PdqmClient;
 use ihe_iti::pdqm::error::PdqmError;
 use ihe_iti::pdqm::input::MatchInput;
 use ihe_iti::pdqm::matches::MatchGrade;
 use ihe_iti::pdqm::query::PatientQuery;
-use ihe_iti::user::OnBehalfOf;
 use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;

@@ -13,8 +13,8 @@ framework, with a feature per profile.
 | `mcsd` | Mobile Care Services Discovery | ITI-90, ITI-91 |
 | `pmir` | Patient Master Identity Registry | ITI-93, ITI-94 |
 | `xcpd` | Cross-Community Patient Discovery | ITI-55 |
-| `atna` | Audit Trail and Node Authentication | ITI-20 |
-| `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of the FHIR profiles, sent over the ITI-20 FHIR Feed | ITI-20 |
+| `atna` | the ITI-55 audit message of `xcpd`, written through `ihe-atna`'s Audit Trail and Node Authentication | ITI-20 |
+| `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of the FHIR profiles, written through `ihe-atna` and sent over the ITI-20 FHIR Feed | ITI-20 |
 
 The crate depends on no application, so a federation gateway, a master patient
 index or any other caller can use it as it is. Only the `xcpd` feature may carry
@@ -169,12 +169,12 @@ Initiating Gateway's table fills.
 The XML is read and written with `quick-xml`, which the FHIR features
 compile already through `fhir-types`; `xcpd` adds only `uuid` for the
 message ids and `jiff` for the creation time, and no other feature but
-`atna`, which writes timestamps too, compiles either.
+`atna` and `balp`, whose `ihe-atna` writes timestamps too, compiles either.
 
 ## Whom an exchange is made for
 
 `PixmClient::cross_reference`, the `PdqmClient` searches, pages and
-matches, and `XcpdClient::discover` each take an `ihe_iti::user::OnBehalfOf`:
+matches, and `XcpdClient::discover` each take an `ihe_atna::user::OnBehalfOf`:
 the `User` an OAuth 2.0 access token names (its `iss`, `sub`, `client_id`,
 `aud` and purposes of use), or `System` for an exchange the client's own
 system makes. An audited exchange's record names the user: the `AuditEvent`
@@ -185,37 +185,17 @@ ITI-55 message carries the Human Requestor, with `UserName` written
 exchange names no user. `User`'s `Debug` shows none of its values. The mCSD
 and PMIR exchanges are always the system's own.
 
-## ATNA (`atna`)
+## Audit (`atna`, `balp`)
 
-`ihe_iti::atna` is the sending half of ITI-20, Record Audit Event (ITI TF-2
-§3.20), as syslog with the DICOM message:
-
-- `message::AuditMessage`: the DICOM PS3.15 Annex A.5 audit message, with
-  its participant objects held as secrets and written to UTF-8 XML with no
-  byte order mark.
-- `syslog::Sender`: the RFC 5424 message with the PRI `<85>` and the MSGID
-  `IHE+RFC-3881` §3.20.4.1.2 fixes, in its RFC 5425 octet-counted frame.
-- `repository::Repository`: the connection to an Audit Record Repository,
-  `tls://host[:port]` over rustls at TLS 1.2 or later with the platform's
-  roots and yours, and an optional client certificate;
-  `unencrypted_for_development` admits `tcp://` for development and tests.
-- `spool::Spool`: the bounded store a sender that cannot reach its
-  repository keeps the records in (§3.20.4.1.1), one fsynced file per
-  message in a directory private to its owner, or a queue in memory. A
-  message that cannot be read or is no whole frame moves to its
-  `quarantine` subdirectory, so the drain never stalls on it. Storing one
-  message is bounded in time (`Bounds::write_timeout`): a write that misses
-  the bound is refused as `SpoolError::Late` and runs on, and a message it
-  stores is delivered like any other.
-- `recording::Late`: an audited client's `timeout` bounds its record too,
-  so an exchange that succeeded and whose record is not accepted in time
-  fails as an audit failure.
-- `repository::Timeouts`: the connect timeout, and the send timeout that
-  bounds the TLS handshake and each write and flush.
-- `forwarder::Forwarder`: stores every message first, then delivers it from
-  the spool in order, retries a transport failure with a jittered backoff
-  capped where the caller says, and reports the spool's depth, its
-  quarantine, its deliveries and its retries.
+The audit records go through the `ihe-atna` crate of the FerroHEALTH audit
+library (<https://github.com/FerroHEALTH/FerroAUDIT>): the ITI-20 DICOM audit
+message over syslog with TLS, the bounded store-and-forward spool and the
+forwarder, and the BALP `AuditEvent` with its FHIR Feed. In this crate,
+`atna` turns on the ITI-55 audit message an `XcpdClient` writes, and `balp`
+the `AuditEvent` each PIXm, PDQm, mCSD and PMIR client writes, both through
+`ihe-atna`. `recording::Late` stays here: an audited client's `timeout`
+bounds its record too, so an exchange that succeeded and whose record is not
+accepted in time fails as an audit failure.
 
 The other profile modules hold their place and land with their FerroFED issues
 (<https://github.com/FerroHEALTH/FerroFED>).
