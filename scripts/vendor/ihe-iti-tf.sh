@@ -85,7 +85,7 @@ whose rights HL7 reserves (General Introduction §9.1.2), so it is cache
 only: the guard checks the ITI-55 citations against the cached page when a
 local run has fetched it, and counts them otherwise." \
   "" "the IHE section citation guard, \`scripts/checks/ihe-citations.sh\`
-  (#719), over the ITI-38 and ITI-55 citations of crates/ihe-iti,
+  (#719), over the ITI-38 and ITI-55 citations (ihe-iti is FerroHEALTH/FerroPIX's since #367),
   app/ferrofed-identity, app/ferrofed-server and the testkit"
 
 say "done"

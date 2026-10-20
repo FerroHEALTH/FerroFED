@@ -9,7 +9,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `84c3ff8cfad148b5c066ae364d1f8a3044c6210ed806e9b87f363d8dda2d5546`
-- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 1 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
@@ -17,7 +17,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `4c5a4b82f0b70aeca20fc43870677b084b75745c0751bbd2536d409d2ef55092`
 - Read by: the IHE section citation guard, `scripts/checks/ihe-citations.sh`
-  (#719), over the ITI-38 and ITI-55 citations of crates/ihe-iti,
+  (#719), over the ITI-38 and ITI-55 citations (ihe-iti is FerroHEALTH/FerroPIX's since #367),
   app/ferrofed-identity, app/ferrofed-server and the testkit
 
 The Cross Gateway Query [ITI-38] and Cross Gateway Patient Discovery

@@ -38,11 +38,6 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   Parameters profiles, the capability statements, the Consumer's audit
   profile and the IG's examples, pinned by package version and tarball
   sha256.
-- `docs/specs/ihe-pdqm/`: the ITI-78 and ITI-119 artefacts of the IHE PDQm 3.2.0 FHIR
-  package (CC-BY-4.0): the Consumer and Supplier capability statements, the
-  Query Patient Resource Response Message and Patient profiles, the
-  Consumer's audit profile and the IG's examples, pinned by package version
-  and tarball sha256.
 - `docs/specs/ihe-mcsd/`: the ITI-90 and ITI-91 artefacts of the IHE mCSD
   4.0.0 FHIR package (CC-BY-4.0): the Directory, Query Client and Update
   Client capability statements, the Organization, Endpoint and Location
@@ -55,10 +50,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   sha256 (`scripts/vendor/ihe-pmir.sh`).
 - `docs/specs/ihe-iua/`: the IHE IUA supplement client authentication cites,
   pinned by tag `2.5` and commit (CC-BY-4.0, `scripts/vendor/ihe-iua.sh`).
-- `docs/specs/ihe-balp/`: the IHE Basic Audit Log Patterns 1.1.4 FHIR
-  package (CC-BY-4.0), the whole package but its manifest, which the
-  profiles' audit records are built on, pinned by package version and
-  tarball sha256.
+- The IHE PDQm 3.2.0 and BALP 1.1.4 FHIR packages and the Swiss pins of
+  PIXm, PDQm and IUA moved with `ihe-iti` to FerroHEALTH/FerroPIX (#367),
+  which vendors them; nothing left in FerroFED reads them, and their pin
+  rows in `docs/VERSIONS.md` stay as the specification versions the crate
+  implements.
 - `docs/specs/ihe-pixm-pages/`, `docs/specs/ihe-pdqm-pages/`,
   `docs/specs/ihe-pmir-pages/`, `docs/specs/ihe-mcsd-pages/`,
   `docs/specs/ihe-balp-pages/`: the narrative pages of the same IHE guides
@@ -106,9 +102,6 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/ch-epr-fhir/`: `ch.fhir.ig.ch-epr-fhir` (CC0-1.0).
   - `docs/specs/ch-ehs-central-services/`: the EPR central services
     interface pack, cache only.
-  - `docs/specs/ihe-pixm-ch/`, `docs/specs/ihe-pdqm-ch/`,
-    `docs/specs/ihe-iua-ch/`: IHE PIXm 3.0.4, PDQm 3.1.0 and IUA 2.3, the
-    revisions Swiss Annex 5 pins (CC-BY-4.0).
   - `docs/specs/eu-ehds/`: Regulation (EU) 2025/327, Implementing
     Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243
     and Commission Decision 2011/833/EU on the reuse of Commission

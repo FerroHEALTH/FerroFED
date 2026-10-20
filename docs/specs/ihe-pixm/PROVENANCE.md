@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.pixm/3.1.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PIXm/3.1.0/>
 - Pin: package `ihe.iti.pixm` version `3.1.0`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -21,13 +21,13 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 24 of the package's 59, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `9d25f84d0c21e4bf464a3d0be60df68a06b11760db885885f3152edae9f88f6e`
-- Read by: #42 (the ITI-83 client of `crates/ihe-iti`, whose tests decode the
+- Read by: #42 (the ITI-83 client of `ihe-iti`, whose tests decode the
   examples and hold the request and response to the OperationDefinition) and
   #47 (the harness PIX Manager of `tools/ferrofed-testkit`, whose ITI-104 feed
   accepts the example Patients and holds every fed Patient to the Patient
   profile, and whose ITI-83 answers are held to the OperationDefinition) and
-  #486 (the ITI-83 audit record of `crates/ihe-iti`, held to the Consumer's
-  audit profile and its example)
+  #486 (the ITI-83 audit record of `ihe-iti`, held to the Consumer's
+  audit profile and its example); `ihe-iti` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

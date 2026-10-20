@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The harness PIX Manager, held to the PIXm client of `crates/ihe-iti` and to
+//! The harness PIX Manager, held to the PIXm client of `ihe-iti` and to
 //! the vendored IHE PIXm 3.1.0 artefacts: ITI-104 seeds what ITI-83 answers.
 #![allow(
     clippy::panic_in_result_fn,

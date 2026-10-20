@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.pmir/1.6.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PMIR/1.6.0/>
 - Pin: package `ihe.iti.pmir` version `1.6.0`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -22,11 +22,11 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `5370ae99fe47215e2dcae2d42b1949b20c587627c10b89f8499fb145364e0fd1`
 - Read by: #147 (the ITI-94 subscriber and the ITI-93 feed reader of
-  `crates/ihe-iti`, whose tests decode the example message Bundles and hold
+  `ihe-iti`, whose tests decode the example message Bundles and hold
   the subscription and the feed response to the profiles, and the harness
   Patient Identity Registry of `tools/ferrofed-testkit`) and #469 (the
-  ITI-93 and ITI-94 audit records of `crates/ihe-iti`, held to the Feed and
-  Subscription audit profiles and their examples)
+  ITI-93 and ITI-94 audit records of `ihe-iti`, held to the Feed and
+  Subscription audit profiles and their examples); `ihe-iti` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

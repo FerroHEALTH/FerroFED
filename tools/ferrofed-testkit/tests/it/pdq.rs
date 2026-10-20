@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The harness PDQm Supplier, held to the PDQm client of `crates/ihe-iti`:
+//! The harness PDQm Supplier, held to the PDQm client of `ihe-iti`:
 //! ITI-78 searches by identifier and ITI-119 matches answer from the
 //! synthetic Patients a test adds, in the `urn:oid:2.999` example arc.
 #![allow(

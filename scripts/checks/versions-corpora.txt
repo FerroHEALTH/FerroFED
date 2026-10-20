@@ -13,11 +13,9 @@ docs/specs/aql|openEHR AQL specification source
 docs/specs/openehr-rm|openEHR Reference Model specification source
 docs/specs/openehr-base|openEHR BASE specification source
 docs/specs/ihe-pixm|IHE PIXm FHIR package
-docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
 docs/specs/ihe-pmir|IHE PMIR FHIR package
 docs/specs/ihe-iua|IHE IUA supplement
-docs/specs/ihe-balp|IHE BALP FHIR package
 docs/specs/ihe-pixm-pages|IHE PIXm narrative pages
 docs/specs/ihe-pdqm-pages|IHE PDQm narrative pages
 docs/specs/ihe-pmir-pages|IHE PMIR narrative pages
@@ -55,9 +53,6 @@ docs/specs/at-hl7-core|Austrian core profiles (HL7 Austria)
 docs/specs/ch-fedlex-epr|Swiss EPR legislation (Fedlex)
 docs/specs/ch-epr-fhir|Swiss CH EPR FHIR package
 docs/specs/ch-ehs-central-services|Swiss EPR central services interface pack
-docs/specs/ihe-pixm-ch|IHE PIXm FHIR package, Swiss pin
-docs/specs/ihe-pdqm-ch|IHE PDQm FHIR package, Swiss pin
-docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
 docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
 docs/specs/eu-cra|EU Cyber Resilience Act and market surveillance acts
 docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
