@@ -43,6 +43,10 @@ const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org
 /// The onward credential the gateway holds for node A.
 const ONWARD_TOKEN: &str = "synthetic-onward-token";
 
+/// The `Authorization` value of node A's onward credential, the base64 of
+/// `gateway:` and [`ONWARD_TOKEN`] (RFC 7617 §2).
+const ONWARD_BASIC: &str = "Basic Z2F0ZXdheTpzeW50aGV0aWMtb253YXJkLXRva2Vu";
+
 /// The client's own credential, which no node ever sees.
 use crate::support::CLIENT_TOKEN;
 
@@ -90,7 +94,9 @@ fn gateway_over(
         dir,
         &registry(a, b, extra),
         "",
-        &format!("[credentials.\"{ENDPOINT_A}\"]\nbearer_token = \"{ONWARD_TOKEN}\"\n"),
+        &format!(
+            "[credentials.\"{ENDPOINT_A}\"]\nuser = \"gateway\"\npassword = \"{ONWARD_TOKEN}\"\n"
+        ),
     )
 }
 

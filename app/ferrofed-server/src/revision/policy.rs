@@ -216,11 +216,11 @@ mod tests {
     #[test]
     fn the_changed_resources_are_named_whole() {
         let from = table(
-            "[credentials.a]\nbearer_token_file = \"/s/a\"\n[credentials.b]\nuser = \"x\"\n\
+            "[credentials.a]\npassword_file = \"/s/a\"\n[credentials.b]\nuser = \"x\"\n\
              [federation]\nbest_effort = true\n[federation.consent]\ndisclose = true\n",
         );
         let to = table(
-            "[credentials.a]\nbearer_token_file = \"/s/a2\"\n[credentials.b]\nuser = \"x\"\n\
+            "[credentials.a]\npassword_file = \"/s/a2\"\n[credentials.b]\nuser = \"x\"\n\
              [federation]\nbest_effort = false\n[pixm]\ntimeout_ms = 1\n",
         );
         assert_eq!(

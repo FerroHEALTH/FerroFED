@@ -412,7 +412,7 @@ async fn a_cleartext_issuer_is_refused_outside_development() -> TestResult {
 fn the_oauth2_assertion_audience_is_configured() -> TestResult {
     let oauth2 = |extra: &str| {
         format!(
-            "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{extra}{}",
+            "[credentials.\"node-a-pub\".oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\nresource = \"https://node-a.example.org/openehr\"\n{extra}{}",
             crate::support::signing_toml()
         )
     };

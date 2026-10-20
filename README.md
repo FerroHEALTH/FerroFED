@@ -57,8 +57,8 @@ use, or through a proxy in the explicit edge mode
 Toward the nodes, the gateway authenticates as itself, with OAuth 2.0 client
 credentials or token exchange and a signed assertion, the token bound to the
 gateway's key with DPoP or to its TLS client certificate where you ask for
-it, or with a bearer token or a user and password you configure per
-endpoint, and never sends the client's own token.
+it, or with a user and password you configure per endpoint, and never
+sends the client's own token.
 Every request to a node carries the verified client in an
 `openEHR-federation-client` token the gateway signs with its own key, which
 each node can verify against the key set the gateway publishes

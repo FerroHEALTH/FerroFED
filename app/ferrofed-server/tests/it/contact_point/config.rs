@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[auth.issuer.national_contact_point]` as written: it declares the issuer
+//! `[trust.issuer.national_contact_point]` as written: it declares the issuer
 //! a national contact point and names every claim the Annex attributes IHE
 //! IUA has no claim for are read from; a claim left unnamed, or a
 //! correlation header that is no field name or carries a credential,
@@ -19,7 +19,7 @@ use ferrofed_server::config::error::Error as ConfigError;
 /// `table`.
 fn declaring(table: &str) -> String {
     format!(
-        "[auth]\naudience = \"urn:example:gateway\"\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\njwks_uri = \"https://ncp.example.test/jwks\"\n\n[auth.issuer.national_contact_point]\n{table}"
+        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[trust.issuer.national_contact_point]\n{table}"
     )
 }
 
@@ -83,7 +83,7 @@ fn a_complete_table_declares_the_issuer_a_contact_point() -> Result<(), Box<dyn 
 
 #[test]
 fn an_issuer_without_the_table_is_no_contact_point() -> Result<(), Box<dyn Error>> {
-    let text = "[auth]\naudience = \"urn:example:gateway\"\n\n[[auth.issuer]]\nissuer = \"https://idp.example.test\"\njwks_uri = \"https://idp.example.test/jwks\"\n";
+    let text = "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://idp.example.test\"\n";
     let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
     let [issuer] = settings.server.auth.issuers.as_slice() else {
         return Err("one issuer".into());
@@ -97,7 +97,7 @@ fn every_claim_name_is_required_and_a_missing_one_is_named() -> Result<(), Box<d
     for (missing, _) in NAMES {
         match refusal(&naming(Some(missing), ""))? {
             Some(ConfigError::Missing { key }) => assert_eq!(
-                format!("auth.issuer[0].national_contact_point.{missing}"),
+                format!("trust.issuer[0].national_contact_point.{missing}"),
                 key
             ),
             other => return Err(format!("{missing}: {other:?}").into()),
@@ -112,7 +112,7 @@ fn a_correlation_header_that_carries_a_credential_is_refused() -> Result<(), Box
         match refusal(&complete(&format!("correlation_header = \"{header}\"\n")))? {
             Some(ConfigError::Auth { key, fault }) => assert_eq!(
                 (
-                    "auth.issuer[0].national_contact_point.correlation_header",
+                    "trust.issuer[0].national_contact_point.correlation_header",
                     AuthFault::CorrelationCredential
                 ),
                 (key.as_str(), fault),
@@ -130,7 +130,7 @@ fn a_correlation_header_that_is_no_field_name_is_refused() -> Result<(), Box<dyn
         Some(ConfigError::Auth { key, fault }) => {
             assert_eq!(
                 (
-                    "auth.issuer[0].national_contact_point.correlation_header",
+                    "trust.issuer[0].national_contact_point.correlation_header",
                     AuthFault::HeaderName
                 ),
                 (key.as_str(), fault)
@@ -181,7 +181,7 @@ fn an_additional_country_out_of_form_or_a_member_state_is_refused() -> Result<()
         match refusal(&complete(&format!("additional_countries = [\"{code}\"]\n")))? {
             Some(ConfigError::Auth { key, fault }) => assert_eq!(
                 (
-                    "auth.issuer[0].national_contact_point.additional_countries",
+                    "trust.issuer[0].national_contact_point.additional_countries",
                     AuthFault::CountryCode
                 ),
                 (key.as_str(), fault),

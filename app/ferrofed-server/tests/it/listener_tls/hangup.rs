@@ -53,7 +53,7 @@ async fn sighup_presents_the_replaced_certificate_without_a_restart() -> TestRes
             "[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\n\n[server.tls]\ncertificate_file = {}\nkey_file = {}\n{}",
             quoted(&files.certificate),
             quoted(&files.key),
-            auth_toml()?,
+            auth_toml(),
         ),
     )?;
     let mut serving = Serving(

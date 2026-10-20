@@ -70,7 +70,7 @@ async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult
     std::fs::write(&key, oauth::es384_pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     let tables = format!(
-        "{}\n[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/composition-*.cr\"\n",
+        "{}\n[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/composition-*.cr\"\n",
         crossref(&[("node-a", V4[0])]),
         endpoint.token_url()
     );
@@ -81,7 +81,11 @@ async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult
         &tables,
     )?;
     let signing = federation.signing().ok_or("the keys are configured")?;
-    endpoint.trust(signing.keys.published());
+    let mut published = signing.keys.published();
+    published
+        .keys
+        .extend(federation.client_keys().iter().cloned());
+    endpoint.trust(published);
 
     let report = check_a(&federation).await?;
     assert_eq!(

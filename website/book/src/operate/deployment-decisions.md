@@ -45,14 +45,14 @@ published JWK Set and its own client registry. With `client_auth =
 "tls_client_auth"` or `"self_signed_tls_client_auth"`, the gateway's TLS
 client certificate is that identity instead: the node's authorization
 server matches the certificate to the client it registered for `client_id`
-(RFC 8705 §2). Without a grant, it sends the bearer token or the user and
+(RFC 8705 §2). Without a grant, it sends the user and
 password configured for that endpoint, or, with TLS material alone, only
 presents its certificate. Every request also carries the
 `openEHR-federation-client` token, signed with the `[signing]` key, whose
 `iss` the node can check against that same `client_id`.
 
-**What changes the answer:** `[[auth.issuer]]` (the trust list, by key set or
-introspection), `auth.audience`, `auth.mode`,
+**What changes the answer:** `[auth]` issuers and `[[trust.issuer]]` (the
+trust list, by key set or introspection), `auth.audience`, `trust.mode`,
 `[credentials."<endpoint id>"]` and its `oauth2` section, and `[signing]`.
 
 ## 2. Who authenticates the end user, and where that trust stops
@@ -93,10 +93,10 @@ token: the `sub` and `iss_upstream` the gateway verified, and `verified_by`,
 which says `edge` when a proxy asserted the identity rather than an issuer's
 token proving it. The caller's own token never reaches a node.
 
-**What changes the answer:** `auth.mode = "edge"` moves end-user
+**What changes the answer:** `trust.mode = "edge"` moves end-user
 authentication to your proxy, whose signed assertion the gateway then
 verifies; `[[auth.issuer]]` decides whose authentication you accept, and
-`[auth.issuer.national_contact_point]` declares an issuer whose tokens
+`[trust.issuer.national_contact_point]` declares an issuer whose tokens
 relay a professional another Member State authenticated.
 
 ## 3. Purpose of use
@@ -121,7 +121,7 @@ token, never derived from the caller. The caller's own purpose still
 reaches the node in `openEHR-federation-client`
 ([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
 
-**What changes the answer:** `auth.purpose_of_use.required = false` admits a
+**What changes the answer:** `trust.purpose_of_use.required = false` admits a
 token with no purpose. A deployment that sets it records why here, because
 its nodes then decide without one.
 
@@ -283,16 +283,16 @@ your deployment's documentation.
 2. End-user authentication
    Who authenticates the clinicians of each calling organisation: …
    The assurance level each issuer's tokens state, and the least level
-     required for patient data ([auth.issuer.assurance]): …
+     required for patient data ([trust.issuer.assurance]): …
    Issuers whose client tokens act for a named professional, and why: …
-   National contact points ([auth.issuer.national_contact_point]), the
+   National contact points ([trust.issuer.national_contact_point]), the
      entity of each Member State that authenticates its professionals
      (2026/2099 Art 6(1)), and the claims carrying the Annex attributes: …
    Token mode or edge mode, and for the edge mode which proxy: …
    How each node uses the conveyed caller in its release decision: …
 
 3. Purpose of use
-   auth.purpose_of_use.required: true | false, and if false, why: …
+   trust.purpose_of_use.required: true | false, and if false, why: …
    The purpose-of-use codes callers send, and their legal basis: …
 
 4. Token binding

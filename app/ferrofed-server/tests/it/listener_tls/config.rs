@@ -20,7 +20,7 @@ const MARKER: &str = "Qz7-synthetic-listener-file";
 /// `dir`.
 fn check(dir: &Path, tables: &str) -> Result<std::process::Output, Box<dyn std::error::Error>> {
     let config = dir.join("ferrofed.toml");
-    std::fs::write(&config, format!("{tables}{}", auth_toml()?))?;
+    std::fs::write(&config, format!("{tables}{}", auth_toml()))?;
     Ok(ferrofed(&["config", "check"], &config)?)
 }
 

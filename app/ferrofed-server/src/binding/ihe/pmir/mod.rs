@@ -10,8 +10,9 @@
 //!
 //! The route sits under `{base}` at the configured path, outside the ITS-REST
 //! surface and its client authentication. A message is applied only when it
-//! carries the configured feed token as its bearer token, compared in
-//! constant time; one without it is answered `401`, one that does not hold to
+//! carries the HTTP Basic credentials of a user `feed_users` names; one
+//! without them is answered `401`, one of another user `403`, one that does
+//! not hold to
 //! the PMIR profiles `400` (`415` for another media type), and either changes
 //! nothing. An applied message drops the resolution bindings it could have
 //! made stale ([`ferrofed_identity::ihe::pmir::change_of`]) and is answered
@@ -30,7 +31,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use ferrofed_identity::ihe::pmir::{self, PmirConfigError};
-use ferrofed_registry::secret::Secret;
+
 use http::HeaderMap;
 use std::sync::Arc;
 
@@ -42,6 +43,8 @@ use ihe_iti::pmir::feed::Feed;
 use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
+use crate::auth::Gate;
+use crate::auth::refusal::BasicRefusal;
 use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
 use crate::service::{self, ServiceAuthError, TlsRefused};
 use ferrofed_registry::health::Observed;
@@ -70,13 +73,13 @@ pub enum IdentityFeedError {
 }
 
 /// The identity feed a running gateway keeps: its subscription and the
-/// route's credential.
+/// users the route admits.
 pub struct IdentityFeed {
     subscriber: PmirSubscriber,
     registry: Url,
     audit: Option<Arc<dyn AuditRecorder>>,
     request: SubscriptionRequest,
-    token: Secret,
+    feed_users: Vec<String>,
     domains: BTreeSet<String>,
     source: String,
     path: String,
@@ -138,7 +141,7 @@ impl IdentityFeed {
             registry,
             audit,
             request,
-            token: settings.feed_token.clone(),
+            feed_users: settings.feed_users.clone(),
             domains,
             source: settings.callback_url.to_string(),
             path: settings.path.clone(),
@@ -215,9 +218,10 @@ impl IdentityFeed {
         self.watch.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Whether `headers` carry the feed token as their one bearer token,
-    /// compared in constant time (RFC 6750 §2.1).
-    fn authenticated(&self, headers: &HeaderMap) -> bool {
-        crate::auth::bearer_matches(headers, self.token.expose())
+    /// Returns the `[[auth.basic.users]]` user `headers` authenticate with
+    /// HTTP Basic (RFC 7617), when `gate` verifies it and `feed_users` names
+    /// it.
+    async fn authenticate(&self, gate: &Gate, headers: &HeaderMap) -> Result<String, BasicRefusal> {
+        gate.admit_basic(headers, &self.feed_users).await
     }
 }

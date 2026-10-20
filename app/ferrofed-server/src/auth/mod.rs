@@ -11,10 +11,10 @@
 //! trusts, whose metadata and key set the crate reads (RFC 8414 §3) and
 //! whose signature, `iss`, `aud`, `exp` and `nbf` it checks under the RFC
 //! 9068 profile, with an asymmetric algorithm only; or the token is checked
-//! by the one introspected issuer's RFC 7662 endpoint ([`introspection`]).
+//! by the one introspected issuer's RFC 7662 endpoint (`introspection`).
 //! In the edge mode, a proxy authenticates the caller and the gateway
 //! verifies the proxy's signed assertion, in the header the deployment
-//! names, with the same checks ([`verify`]).
+//! names, with the same checks (`verify`).
 //!
 //! The caller then needs what the operation requires ([`permission`]): a
 //! SMART on openEHR resource scope, checked by the crate's

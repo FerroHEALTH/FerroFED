@@ -635,7 +635,7 @@ fn a_service_credentials_section_takes_no_tls_material() -> TestResult {
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "unused")?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nbearer_token = \"Qz7synthetic\"\nclient_identity_file = {}\n",
+        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\nclient_identity_file = {}\n",
         toml::Value::String(identity.display().to_string())
     );
     let error = refused(&text)?;

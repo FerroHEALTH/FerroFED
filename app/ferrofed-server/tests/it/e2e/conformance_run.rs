@@ -146,7 +146,7 @@ fn configuration(
         quoted(&document),
         quoted(&dir.join("definitions.redb")),
         signing_toml(),
-        auth_toml()?
+        auth_toml()
     );
     let file = dir.join("ferrofed.toml");
     std::fs::write(&file, text)?;

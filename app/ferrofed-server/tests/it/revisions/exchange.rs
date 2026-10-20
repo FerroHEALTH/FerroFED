@@ -194,9 +194,9 @@ async fn the_export_holds_a_secret_as_its_reference_alone() -> TestResult {
     let body = serde_json::to_string(&SectionRequest {
         base: Some(RevisionId::FIRST),
         reason: String::from("the node's token"),
-        settings: String::new(),
+        settings: String::from("user = \"gateway\""),
         secrets: vec![SecretChange {
-            key: String::from("bearer_token"),
+            key: String::from("password"),
             value: Some(WriteOnly::new(VALUE)),
             file: None,
             clear: false,
@@ -221,7 +221,7 @@ async fn the_export_holds_a_secret_as_its_reference_alone() -> TestResult {
     );
     assert!(!exported.contains(VALUE), "the export holds the secret");
     let table: toml::Table = toml::from_str(&exported)?;
-    let reference = table["credentials"]["node-a-pub"]["bearer_token_file"]
+    let reference = table["credentials"]["node-a-pub"]["password_file"]
         .as_str()
         .ok_or("the secret is exported as its reference")?;
     assert!(
@@ -257,7 +257,7 @@ async fn refused(
 async fn an_import_with_an_inline_secret_is_refused() -> TestResult {
     let gateway = Gateway::start("")?;
     let text = format!(
-        "{}\n[credentials.\"node-a-pub\"]\nbearer_token = \"{VALUE}\"\n",
+        "{}\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{VALUE}\"\n",
         gateway.held(1)?.toml
     );
     refused(

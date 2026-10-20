@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The `[pmir]` table a gateway refuses to start with: no registry, no feed
-//! token, a path on the ITS-REST surface or the health family, a URL with
+//! user or one `[[auth.basic.users]]` does not write, a path on the ITS-REST surface or the health family, a URL with
 //! credentials in it, an OAuth 2.0 grant, and a Registry or a callback reached
 //! in the clear outside the development profile, since both carry patient
 //! identities (PMIR §2:3.93.5). No specification governs the table: our own
@@ -23,7 +23,7 @@ use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
 
-use super::{TOKEN, text};
+use super::{FEED_USER, text};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -48,7 +48,7 @@ fn a_development_gateway_resolves_the_table() -> TestResult {
     let settings = resolve(&text)?.map_err(|error| error.to_string())?;
     let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
     assert_eq!("/pmir/feed", pmir.path);
-    assert_eq!(TOKEN, pmir.feed_token.expose());
+    assert_eq!(vec![FEED_USER.to_owned()], pmir.feed_users);
     Ok(())
 }
 
@@ -71,29 +71,25 @@ fn a_drain_keeps_the_subscription_unless_told_otherwise() -> TestResult {
 }
 
 #[test]
-fn the_feed_token_is_read_from_its_file() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let token = dir.path().join("feed-token");
-    std::fs::write(&token, "Qz7filetoken\n")?;
-    let (_registry, text) = development("")?;
+fn a_feed_user_no_basic_user_writes_is_refused() -> TestResult {
+    let (_dir, text) = development("")?;
     let text = text.replacen(
-        &format!("feed_token = \"{TOKEN}\""),
-        &format!(
-            "feed_token_file = {}",
-            toml::Value::String(token.display().to_string())
-        ),
+        &format!("feed_users = [\"{FEED_USER}\"]"),
+        "feed_users = [\"unwritten-user\"]",
         1,
     );
-    let settings = resolve(&text)?.map_err(|error| error.to_string())?;
-    let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
-    assert_eq!("Qz7filetoken", pmir.feed_token.expose());
+    let error = resolve(&text)?.err().ok_or("refused")?;
+    assert!(
+        matches!(&error, ConfigError::Binding(BindingFault::FeedUser { user }) if user == "unwritten-user"),
+        "{error}"
+    );
     Ok(())
 }
 
 #[test]
 fn a_table_without_a_registry_is_refused() -> TestResult {
     let text = format!(
-        "[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_token = \"{TOKEN}\"\n"
+        "[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_users = [\"{FEED_USER}\"]\n"
     );
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
@@ -104,12 +100,12 @@ fn a_table_without_a_registry_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_table_without_a_feed_token_is_refused() -> TestResult {
+fn a_table_without_a_feed_user_is_refused() -> TestResult {
     let (_dir, text) = development("")?;
-    let text = text.replacen(&format!("feed_token = \"{TOKEN}\"\n"), "", 1);
+    let text = text.replacen(&format!("feed_users = [\"{FEED_USER}\"]\n"), "", 1);
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "pmir.feed_token"),
+        matches!(&error, ConfigError::Missing { key } if key == "pmir.feed_users"),
         "{error}"
     );
     Ok(())

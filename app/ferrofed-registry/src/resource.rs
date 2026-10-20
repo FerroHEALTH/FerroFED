@@ -132,14 +132,7 @@ impl fmt::Display for Resource {
 /// `_file` reference, and the console asks for one through a password field
 /// and never shows it as a setting. The gateway's tests fail on a secret it
 /// reads through `_file` that is missing here.
-pub const SECRETS: [&str; 6] = [
-    "password",
-    "password_hash",
-    "client_identity",
-    "client_secret",
-    "assertion",
-    "feed_token",
-];
+pub const SECRETS: [&str; 4] = ["password", "client_identity", "client_secret", "assertion"];
 
 /// One secret of a resource: its key inside the resource, and the file it
 /// is read from when it is set. Never its value.

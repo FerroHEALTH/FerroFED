@@ -148,7 +148,8 @@ fn a_remote_listener_is_refused_unless_allowed() -> TestResult {
             "{shown}"
         );
         let allowed = resolved(&format!(
-            "{text}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"
+            "{text}allow_remote = true\n{}",
+            crate::support::scraping()
         ))?;
         assert_eq!(Some(remote.parse()?), allowed.metrics.listen);
     }
@@ -219,10 +220,13 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
     )?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), unauthenticated.status.code());
     let stderr = String::from_utf8_lossy(&unauthenticated.stderr);
-    assert!(stderr.contains("metrics.scrape_token_file"), "{stderr}");
+    assert!(stderr.contains("metrics.scrape_users"), "{stderr}");
     let allowed = binary(
         &["config", "check"],
-        &format!("{remote}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"),
+        &format!(
+            "{remote}allow_remote = true\n{}",
+            crate::support::scraping()
+        ),
     )?;
     assert_eq!(
         Some(0),
@@ -232,11 +236,11 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
     );
     let stdout = String::from_utf8_lossy(&allowed.stdout);
     assert!(
-        stdout.contains("a scrape that carries metrics.scrape_token")
-            && stdout.contains("operator_scope"),
+        stdout.contains("a scrape that authenticates as a metrics.scrape_users user")
+            && stdout.contains("product_scope"),
         "config check says who the remote listener answers: {stdout}"
     );
-    assert!(!stdout.contains("synthetic-scrape-token"), "{stdout}");
+    assert!(!stdout.contains(crate::support::SCRAPE_HASH), "{stdout}");
     Ok(())
 }
 

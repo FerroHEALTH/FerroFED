@@ -387,7 +387,7 @@ impl Auth {
     /// # Errors
     /// Returns [`Error::Smart`] for a section `ferrohealth-smart` refuses,
     /// [`Error::Auth`] naming the key and the [`AuthFault`] for one FerroFED
-    /// refuses, and the errors [`Trust::resolve`] returns.
+    /// refuses, and the errors of `[trust]`.
     pub fn resolve(
         &self,
         trust: &Trust,

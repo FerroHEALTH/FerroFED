@@ -138,7 +138,8 @@ max_bytes = 67108864                        # 64 MiB of answer bodies
 max_entries = 50000
 
 [registry.mcsd.credentials]                 # when the transport does not authenticate
-bearer_token_file = "/run/secrets/directory-token"
+user = "ferrofed"
+password_file = "/run/secrets/directory-password"
 ```
 
 The members are the directory's `Organization`s that carry an
@@ -152,9 +153,9 @@ directory deleted. The gateway ignores such a listing, where the document
 refuses it, and logs the listing's reference, never the endpoint, once each
 time it reads the directory's content. A start and a refresh over the same
 content give the same registry. The URL is `http` or
-`https` with no user name or password; the credentials take a bearer token or
-basic credentials, each through its `_file` sibling, and never an OAuth 2.0
-grant. A directory with credentials is `https` outside
+`https` with no user name or password; the credentials take basic credentials,
+the password through its `_file` sibling, or the client credentials grant of
+`oauth` ([A PIX Manager behind OAuth 2.0](identity.md#a-pix-manager-behind-oauth-20)). A directory with credentials is `https` outside
 `profile = "development"`, and the configuration is refused before the
 directory is asked otherwise; under that profile the site is reported as
 every other cleartext credential is.
@@ -435,7 +436,7 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Nine sections take effect on a reload:
+Ten sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
@@ -448,6 +449,7 @@ Nine sections take effect on a reload:
 | `[nl_gf]` | `[audit]` and `[config]` |
 | `[access_log]` | `[fhir]` and `[eehrxf]` |
 | `[auth]`: the issuers, how each is verified, its key set read again | `auth.audience`, and a changed `[server.tls]` or `[metrics.tls]` path |
+| `[trust]`: each issuer's policy, its edge and its purpose of use | |
 
 The same reload reads the certificate files of `[server.tls]` and
 `[metrics.tls]` again ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
@@ -562,7 +564,7 @@ Nothing the gateway observes shows that a node remedied a collision, and
 what a federation does about one is left to its governance (§12b.2, §18),
 so the clear is yours. Once the node at fault has fixed it, send the
 `ehr_id` to the [admin listener](metrics.md#who-the-admin-listener-serves)
-with an access token that carries the `operator_scope` of its issuer:
+with an access token that carries `auth.product_scope`:
 
 ```http
 POST /admin/ehr-ids/7d44b88c-4199-4bad-97dc-d78268e01398/clear

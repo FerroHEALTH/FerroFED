@@ -456,7 +456,7 @@ fn carry(
     Ok((observed, demographics))
 }
 
-/// Holds every `[auth.issuer.patient]` binding of `settings` to the
+/// Holds every `[trust.issuer.patient]` binding of `settings` to the
 /// registry `snapshot`, and to a configured resolver when `resolving`.
 ///
 /// # Errors
@@ -647,7 +647,7 @@ fn dependencies(
     )
 }
 
-/// Every `[auth.issuer.patient]` binding of `settings`, with its key.
+/// Every `[trust.issuer.patient]` binding of `settings`, with its key.
 fn patient_bindings(settings: &Settings) -> impl Iterator<Item = (String, &PatientBinding)> {
     settings.server.auth.issuers.iter().filter_map(|issuer| {
         let binding = issuer.patient.as_ref()?;

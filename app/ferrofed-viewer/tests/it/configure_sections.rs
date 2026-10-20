@@ -40,7 +40,7 @@ const RESOURCES: &str = r#"{"running":2,"head":3,"members":[],"stored_query_regi
        "secrets":[{"key":"password","reference":"/run/secrets/node-a"}]},
       {"resource":{"credentials":"node-c-pub"},"owner":"console","state":"running",
        "settings":"{ user = \"<script>u</script>\" }",
-       "secrets":[{"key":"bearer_token","reference":"/var/lib/s/\"><img src=x onerror=1>"}]}],
+       "secrets":[{"key":"oauth.client_secret","reference":"/var/lib/s/\"><img src=x onerror=1>"}]}],
     "bindings":["localization","consent"]}"#;
 
 /// The history, empty of markup.
@@ -238,9 +238,12 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         .map(|change| (change.key.as_str(), change.value.is_some(), change.clear))
         .collect();
     assert_eq!(
-        vec![("password", true, false), ("bearer_token", false, true)],
+        vec![
+            ("password", true, false),
+            ("oauth.client_secret", false, true)
+        ],
         changes,
-        "the value is set, and the bearer token basic authentication no longer uses is cleared"
+        "the value is set, and the client secret basic authentication no longer uses is cleared"
     );
     assert_eq!(
         Some(VALUE),

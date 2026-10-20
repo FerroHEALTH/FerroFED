@@ -15,7 +15,7 @@
 
 use axum::response::{IntoResponse, Response};
 use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes};
-use http::{HeaderValue, header};
+use http::{HeaderValue, StatusCode, header};
 
 use crate::error::{self, Code};
 
@@ -269,26 +269,43 @@ impl BasicRefusal {
         }
     }
 
+    /// The `WWW-Authenticate` challenge naming `realm` the refusal carries:
+    /// one on a `401`, none on a `403` (RFC 7617 §2, §2.1).
+    #[must_use]
+    pub fn challenge(self, realm: &str) -> Option<HeaderValue> {
+        let refusal = match self {
+            Self::Missing => SmartRefusal::Missing(Schemes {
+                bearer: false,
+                basic: true,
+            }),
+            Self::Invalid => SmartRefusal::InvalidBasic,
+            Self::Unlisted => return None,
+        };
+        refusal
+            .challenge(Some(realm))
+            .and_then(|text| HeaderValue::from_str(&text).ok())
+    }
+
+    /// The status of the refusal: `401` for a credential that is missing or
+    /// does not verify, `403` for a user not admitted here.
+    #[must_use]
+    pub const fn status(self) -> StatusCode {
+        match self {
+            Self::Missing | Self::Invalid => StatusCode::UNAUTHORIZED,
+            Self::Unlisted => StatusCode::FORBIDDEN,
+        }
+    }
+
     /// The answer to the refused request: the error body, with the Basic
     /// challenge naming `realm` on a `401` (RFC 7617 §2, §2.1).
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
-        let (code, refusal) = match self {
-            Self::Missing => (
-                Code::Unauthenticated,
-                Some(SmartRefusal::Missing(Schemes {
-                    bearer: false,
-                    basic: true,
-                })),
-            ),
-            Self::Invalid => (Code::Unauthenticated, Some(SmartRefusal::InvalidBasic)),
-            Self::Unlisted => (Code::OperationRefused, None),
+        let code = match self {
+            Self::Missing | Self::Invalid => Code::Unauthenticated,
+            Self::Unlisted => Code::OperationRefused,
         };
         let mut response = error::fixed(code, request_id);
-        if let Some(value) = refusal
-            .and_then(|refusal| refusal.challenge(Some(realm)))
-            .and_then(|text| HeaderValue::from_str(&text).ok())
-        {
+        if let Some(value) = self.challenge(realm) {
             response
                 .headers_mut()
                 .insert(header::WWW_AUTHENTICATE, value);

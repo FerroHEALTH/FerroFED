@@ -110,6 +110,7 @@ impl Binding for Ihe {
             config,
             ServiceContext::of(settings),
             settings.server.public_url.as_ref(),
+            settings.server.auth.basic.as_ref(),
         )?;
         if let (Some(fhir), Some(pmir)) = (&settings.fhir, &settings.pmir) {
             let route = settings.server.base_path.join(&pmir.path);

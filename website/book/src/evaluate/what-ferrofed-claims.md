@@ -475,7 +475,7 @@ These are the ones to know before you deploy FerroFED; the
   person behind the token, or a client application you declare to act for
   the professional its token names; any other token is refused
   `401 natural-person-required`. The gateway reads and requires an
-  assurance level only for an issuer with `[auth.issuer.assurance]`, and
+  assurance level only for an issuer with `[trust.issuer.assurance]`, and
   `config check` names each issuer without one
   ([Professionals and assurance](../operate/authentication.md#professionals-and-assurance)).
   Your issuer authenticates the person; the gateway verifies the token.

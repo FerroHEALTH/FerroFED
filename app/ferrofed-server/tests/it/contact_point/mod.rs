@@ -55,7 +55,7 @@ pub(crate) const HCP_AUTHORITY: &str = "Qz7-hcp-authority-67";
 pub(crate) const HCP_NAME: &str = "Qz7-hcp-name-68";
 pub(crate) const HCP_ADDRESS: &str = "Qz7-hcp-address-69";
 
-/// The `[auth.issuer.national_contact_point]` of the test contact point:
+/// The `[trust.issuer.national_contact_point]` of the test contact point:
 /// the claim each Annex attribute IUA carries no claim for is read from,
 /// and the correlation header.
 pub(crate) fn claim_names() -> ContactPointClaims {
@@ -74,7 +74,7 @@ pub(crate) fn claim_names() -> ContactPointClaims {
 /// The suite's `[auth]`, its test issuer declared a national contact point.
 pub(crate) fn declared() -> Result<AuthSettings, Box<dyn std::error::Error>> {
     let mut auth = support::auth();
-    let resolved = claim_names().resolve("auth.issuer[0].national_contact_point")?;
+    let resolved = claim_names().resolve("trust.issuer[0].national_contact_point")?;
     for issuer in &mut auth.issuers {
         issuer.national_contact_point = Some(resolved.clone());
     }

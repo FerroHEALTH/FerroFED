@@ -60,7 +60,8 @@ pub(crate) fn resolve_node_credentials(
     credentials: &Credentials,
 ) -> Result<(Option<Scheme>, Option<TlsSettings>), Error> {
     if !credentials.names_tls() {
-        return scheme(section, credentials, None).map(|scheme| (Some(scheme), None));
+        let scheme = node_scope(section, scheme(section, credentials, None)?)?;
+        return Ok((Some(scheme), None));
     }
     let material = tls::resolve(
         section,
@@ -85,10 +86,31 @@ pub(crate) fn resolve_node_credentials(
         })
         .transpose()?;
     match scheme(section, credentials, thumbprint.as_ref()) {
-        Ok(scheme) => Ok((Some(scheme), Some(material))),
+        Ok(scheme) => Ok((Some(node_scope(section, scheme)?), Some(material))),
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) => Ok((None, Some(material))),
         Err(refused) => Err(refused),
     }
+}
+
+/// Returns `scheme`, a node's, once the scope of its `oauth` grant reads as
+/// resource scopes of the `system` compartment, the one a client credentials
+/// grant to the gateway names (SMART on openEHR, master08 §Resource Scopes).
+///
+/// # Errors
+///
+/// Returns [`CredentialsFault::Scope`] naming the scope's key.
+fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
+    if let Scheme::Oauth { written, .. } = &scheme
+        && !written.0.scope.is_empty()
+    {
+        Scope::parse(&written.0.scope).map_err(|source| {
+            Error::Credentials(CredentialsFault::Scope {
+                key: format!("{section}.oauth.scope"),
+                source,
+            })
+        })?;
+    }
+    Ok(scheme)
 }
 
 /// Returns the scheme `credentials` describe, with `certificate` the
@@ -269,12 +291,6 @@ pub(crate) fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error>
     Ok(SecretString::from(value))
 }
 
-/// Returns the grant the `oauth2` table at `section` describes, every key
-/// set and each value held to its rule: the scope to the SMART on openEHR
-/// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
-/// the `resource` to an absolute URI (RFC 8707 §2). A grant that authenticates
-/// by, or binds its tokens to, the TLS client certificate of `certificate`
-/// reaches an `https` token endpoint alone (RFC 8705).
 /// Refuses the `oauth2` grant at `section` when it asks for a plain client
 /// credentials token: `unconstrained`, no exchange, no binding to the TLS
 /// client certificate and no authentication by it, and no `DPoP` key and an
@@ -298,6 +314,12 @@ fn refuse_plain(section: &str, oauth2: &OAuth2, unconstrained: bool) -> Result<(
     Ok(())
 }
 
+/// Returns the grant the `oauth2` table at `section` describes, every key
+/// set and each value held to its rule: the scope to the SMART on openEHR
+/// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
+/// the `resource` to an absolute URI (RFC 8707 §2). A grant that authenticates
+/// by, or binds its tokens to, the TLS client certificate of `certificate`
+/// reaches an `https` token endpoint alone (RFC 8705).
 fn resolve_grant(
     section: &str,
     oauth2: &OAuth2,

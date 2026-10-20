@@ -266,8 +266,10 @@ timeout_ms = 1000
 disclose = true
 emergency = "apply"
 
-[credentials."node-a-query"]
-bearer_token_file = "@DIR@/token"
+[credentials."node-a-query".oauth]
+token_endpoint = "https://as.example.org/token"
+client_id = "ferrofed"
+client_secret_file = "@DIR@/token"
 
 [credentials."node-b-query"]
 user = "ferrofed"
@@ -289,7 +291,8 @@ method = "get"
 "node-a" = "urn:oid:2.999.10"
 
 [pixm.manager.credentials]
-bearer_token_file = "@DIR@/token"
+user = "ferrofed"
+password_file = "@DIR@/token"
 
 [pixm.namespaces]
 "urn:oid:2.999.1" = "urn:oid:2.999.1"
@@ -319,7 +322,7 @@ device = "2.999.50.1"
 url = "https://pmir.example.org/fhir/"
 callback_url = "https://gateway.example.org/fed/pmir/feed"
 path = "/pmir/feed"
-feed_token_file = "@DIR@/feed-token"
+feed_users = ["synthetic-scraper"]
 timeout_ms = 2000
 check_interval_s = 60
 on_drain = "keep"
@@ -347,7 +350,7 @@ path = "@DIR@/stored.redb"
 
 [metrics]
 listen = "127.0.0.1:9090"
-scrape_token_file = "@DIR@/scrape-token"
+scrape_users = ["synthetic-scraper"]
 otlp_endpoint = "http://otel.example.org:4318"
 
 [metrics.tls]
@@ -362,20 +365,26 @@ node_jwks_cache_s = 300
 rotation_overlap_s = 600
 
 [auth]
-audience = "https://gateway.example.org/fed"
-clock_skew_s = 60
-key_set_max_age_s = 300
-key_set_refetch_s = 30
-fetch_timeout_ms = 2000
-
-[auth.purpose_of_use]
-required = true
+audience = ["https://gateway.example.org/fed"]
+clock_skew_seconds = 60
+jwks_max_age_seconds = 300
+jwks_refresh_interval_seconds = 30
+timeout_ms = 2000
+product_scope = "__ferrofed.operator"
 
 [[auth.issuer]]
 issuer = "https://idp.example.org"
-jwks_uri = "https://idp.example.org/jwks"
+
+[[auth.basic.users]]
+user = "synthetic-scraper"
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA"
+
+[trust.purpose_of_use]
+required = true
+
+[[trust.issuer]]
+issuer = "https://idp.example.org"
 backend_clients = ["backend-a"]
-operator_scope = "ferrofed:operator"
 
 [[access_log.emergency_purpose]]
 system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
@@ -403,7 +412,7 @@ secrets_dir = "@DIR@/secrets"
             es384_pem().map_err(|_unavailable| "a key")?,
         )?;
         std::fs::write(dir.join("registry.toml"), "")?;
-        for secret in ["token", "password", "feed-token", "scrape-token"] {
+        for secret in ["token", "password"] {
             std::fs::write(dir.join(secret), format!("synthetic-{secret}-{tag}"))?;
         }
         std::fs::create_dir_all(dir.join("secrets"))?;
@@ -579,8 +588,18 @@ secrets_dir = "@DIR@/secrets"
     const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
 
     /// The keys another key of the maximal configuration holds to the one
-    /// value it has, so no change of the key alone loads.
-    const HELD: &[&str] = &["config.backend", "config.ui", "stored_queries.backend"];
+    /// value it has, so no change of the key alone loads: a Basic user that
+    /// `metrics.scrape_users` and `pmir.feed_users` name, and an issuer that
+    /// `[[trust.issuer]]` and `[[auth.issuer]]` both name.
+    const HELD: &[&str] = &[
+        "auth.basic.users[0].user",
+        "auth.issuer[0].issuer",
+        "config.backend",
+        "config.ui",
+        "pmir.feed_users",
+        "stored_queries.backend",
+        "trust.issuer[0].issuer",
+    ];
 
     /// The configuration the walk starts from, the files it names in `from`.
     struct Start<'walk> {

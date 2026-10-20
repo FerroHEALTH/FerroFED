@@ -452,7 +452,7 @@ fn an_oauth2_or_fapi2_grant_for_the_nvi_is_refused() -> TestResult {
     Ok(())
 }
 
-/// The Nuts grant beside a bearer token is refused, and a grant missing a
+/// The Nuts grant beside basic credentials is refused, and a grant missing a
 /// value names its key (Annex B §B.4).
 #[tokio::test]
 async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
@@ -460,7 +460,7 @@ async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
     let grant = grant(dir.path(), 300).await?;
 
     let both = format!(
-        "\n[nl_gf.nvi.credentials]\nbearer_token = \"synthetic-token\"\n{}",
+        "\n[nl_gf.nvi.credentials]\nuser = \"gateway\"\npassword = \"synthetic-token\"\n{}",
         grant.tables
     );
     match resolve(dir.path(), "development", &both)? {

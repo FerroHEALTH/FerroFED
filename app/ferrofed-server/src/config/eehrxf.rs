@@ -13,7 +13,8 @@
 //! timeout_ms = 2000
 //!
 //! [eehrxf.terminology.credentials]
-//! bearer_token_file = "/run/secrets/terminology-token"
+//! user = "ferrofed"
+//! password_file = "/run/secrets/terminology-password"
 //! ```
 //!
 //! `client_identity`, `client_identity_file` and `trust_roots_file` give the
@@ -94,8 +95,7 @@ impl Default for TerminologyServer {
 pub struct TerminologySettings {
     /// The server's FHIR base URL, already known to parse.
     pub url: SecretUrl,
-    /// How the gateway authenticates to it: a bearer token or basic
-    /// credentials.
+    /// How the gateway authenticates to it: basic credentials.
     pub credentials: Option<Scheme>,
     /// The TLS material it is reached with.
     pub tls: TlsSettings,
@@ -123,8 +123,8 @@ pub enum TerminologyFault {
 
 impl Config {
     /// Resolves `[eehrxf.terminology]`: a URL that parses, carries no
-    /// userinfo and is `https` outside development, a bearer token or basic
-    /// credentials, and a positive timeout.
+    /// userinfo and is `https` outside development, basic credentials, and a
+    /// positive timeout.
     ///
     /// # Errors
     /// [`Error::Missing`] for no `url`, [`Error::Url`],

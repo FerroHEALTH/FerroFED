@@ -27,10 +27,10 @@
 //! protected-payload policy of [`transport`]. No specification governs the
 //! shape of the table: our own design.
 //!
-//! The gateway authenticates to the service as a data user: by mutual TLS, a
-//! bearer token or basic credentials, or on GF-Authentication with the Nuts
-//! grant, the same table and the same implementation a node's onward
-//! credentials take ([`super::nuts`]). The grant's `DPoP`-bound token is sent
+//! The gateway authenticates to the service as a data user: by mutual TLS,
+//! basic credentials, or on GF-Authentication with the Nuts grant, the same
+//! table and the same implementation a node's onward credentials take
+//! ([`super::nuts`]). The grant's `DPoP`-bound token is sent
 //! to the service alone, with a proof of each request (the IG's GFI-004 and
 //! GFI-005; Nuts RFC021):
 //!
@@ -90,7 +90,7 @@ pub struct Nvi {
     /// its userinfo.
     pub url: SecretUrl,
     /// How the gateway authenticates to the service, when the transport does
-    /// not: a bearer token, basic credentials or the Nuts grant.
+    /// not: basic credentials or the Nuts grant.
     pub credentials: Option<Credentials>,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; optional when the directory publishes each member
@@ -114,7 +114,7 @@ pub struct Nvi {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum NviCredentials {
-    /// A bearer token or basic credentials, in a header of every request.
+    /// Basic credentials, in a header of every request.
     Header(Scheme),
     /// The Nuts grant of GF-Authentication: a `DPoP`-bound token and a proof
     /// of each request (the IG's GFI-004 and GFI-005).
@@ -169,8 +169,8 @@ impl NviSettings {
     }
 }
 
-/// Resolves the credentials section `table` of the NVI: a bearer token,
-/// basic credentials or the Nuts grant, one of them.
+/// Resolves the credentials section `table` of the NVI: basic credentials
+/// or the Nuts grant, one of them.
 fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
     // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
     // define the Nuts profile for the data user and no other grant, so every other grant is refused.

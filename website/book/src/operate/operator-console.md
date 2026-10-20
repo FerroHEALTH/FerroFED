@@ -192,7 +192,7 @@ service worker or a URL.
   sign-in, and one the console cannot reach is named as such. The console
   calls the admin listener with your own access token, which never reaches
   the browser, so the gateway admits the action only for a token carrying
-  your issuer's `operator_scope` and records you as the operator who ran it.
+  `auth.product_scope` and records you as the operator who ran it.
 - **`/configuration`**, where `[admin]` names at least one gateway replica
   whose configuration is managed (`config.ui = "managed"`). It reads the
   first replica's configuration revisions. The header names the revision
@@ -371,7 +371,7 @@ each tab changes.
 
 [The Members tab in the dark theme](img/console/configuration-members-dark.png)
 
-![The Credentials and bindings tab: the console's credentials of node-a-pub, running, its bearer_token set and read from a file, with the buttons that add a binding section or credentials.](img/console/configuration-credentials.png)
+![The Credentials and bindings tab: the console's credentials of node-a-pub, running, its password set and read from a file, with the buttons that add a binding section or credentials.](img/console/configuration-credentials.png)
 
 [The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
 

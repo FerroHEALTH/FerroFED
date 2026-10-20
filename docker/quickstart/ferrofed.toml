@@ -44,11 +44,11 @@ node_selection = "ask-all"
 # first run into docker/quickstart/issuer/, which compose.yaml mounts here:
 # development keys, NOT for anything real. The gateway reads the set when a
 # token first needs it, so the key can be made after `docker compose up`.
+# The issuer is an https URL under the reserved .invalid domain (RFC 2606):
+# an identifier the gateway never calls, since the key set is a file.
 [auth]
-audience = "ferrofed-quickstart"
-
-[[auth.issuer]]
-issuer = "ferrofed-quickstart-issuer"
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+audience = ["ferrofed-quickstart"]
 jwks_file = "/etc/ferrofed/issuer/jwks.json"
 
 # The gateway's own signing key, P-384 (ES384) here; a P-256 key signs

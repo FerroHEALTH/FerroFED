@@ -17,8 +17,11 @@
 //! [pdqm.namespaces]
 //! "2.999.7" = "urn:oid:2.999.7"
 //!
-//! [pdqm.credentials]
-//! bearer_token_file = "/run/secrets/pdq-token"
+//! [pdqm.credentials.oauth]
+//! token_endpoint = "https://pdq.example.org/auth/token"
+//! client_id = "ferrofed-pdq-consumer"
+//! client_secret_file = "/run/secrets/pdq-consumer"
+//! scope = "*"
 //! ```
 //!
 //! `client_identity_file` and `trust_roots_file` give the mutual TLS the
@@ -109,8 +112,8 @@ impl Default for Pdqm {
 pub struct PdqmSettings {
     /// The Supplier's FHIR base URL, already known to parse.
     pub url: SecretUrl,
-    /// How the gateway authenticates to it: a bearer token or basic
-    /// credentials.
+    /// How the gateway authenticates to it: basic credentials or the client
+    /// credentials grant of `oauth`.
     pub credentials: Option<Scheme>,
     /// The TLS material it is reached with.
     pub tls: TlsSettings,
@@ -125,7 +128,7 @@ pub struct PdqmSettings {
 }
 
 /// Resolves `[pdqm]`: a URL that parses, carries no userinfo and is `https`
-/// outside development, a bearer token or basic credentials, a master
+/// outside development, basic credentials or an `oauth` grant, a master
 /// domain, at least one namespace and none the cross-reference maps, and a
 /// positive timeout that, with the localizer's, ends before the overall
 /// budget (§11.5).

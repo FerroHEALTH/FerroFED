@@ -32,6 +32,10 @@ aws-lc-rs.workspace = true
 # the outbound gate reads before an exchange (#439).
 base64.workspace = true
 ferrofed-registry.workspace = true
+# The client credentials grant's token error of ferrohealth-smart (#1174),
+# whose RFC 6749 §5.2 code a node's answer names when the token endpoint
+# refused with one.
+ferrohealth-smart.workspace = true
 # The access token request of the Nuts grant, Annex B §B.4 (#88), and the
 # authorizer trait the Nuts grant implements for a Generic Functions client
 # (#539), under nl. Neither feature compiles a FHIR model, so the engine

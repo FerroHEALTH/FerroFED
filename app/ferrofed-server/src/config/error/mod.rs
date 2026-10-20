@@ -158,7 +158,7 @@ pub enum Error {
         /// The key that holds it.
         key: String,
     },
-    /// An `[auth.issuer.patient]` binding names something that is not an
+    /// A `[trust.issuer.patient]` binding names something that is not an
     /// endpoint id.
     #[error("{key} is not an endpoint id")]
     PatientEndpoint {

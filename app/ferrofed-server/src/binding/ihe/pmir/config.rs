@@ -12,20 +12,24 @@
 //! url = "https://pmir.example.org/fhir"
 //! callback_url = "https://gateway.example.org/pmir/feed"
 //! path = "/pmir/feed"
-//! feed_token_file = "/run/secrets/pmir-feed-token"
+//! feed_users = ["pmir-registry"]
 //! identifier_system = "urn:oid:2.999.1"
 //! on_drain = "keep"
 //!
-//! [pmir.credentials]
-//! bearer_token_file = "/run/secrets/pmir-registry-token"
+//! [pmir.credentials.oauth]
+//! token_endpoint = "https://pmir.example.org/auth/token"
+//! client_id = "ferrofed-pmir-subscriber"
+//! client_secret_file = "/run/secrets/pmir-subscriber"
+//! scope = "*"
 //! ```
 //!
 //! `client_identity_file` and `trust_roots_file` give the mutual TLS the
 //! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
 //!
-//! The Registry sends the feed with the bearer token `feed_token`, agreed
-//! with its operator out of band: the subscription carries no credential for
-//! the feed (§2:3.94.5), and ITI-93 leaves the client authentication to "an
+//! The Registry sends the feed with HTTP Basic credentials (RFC 7617) of a
+//! user `feed_users` names from `[[auth.basic.users]]`, agreed with its
+//! operator out of band: the subscription carries no credential for the feed
+//! (§2:3.94.5), and ITI-93 leaves the client authentication to "an
 //! appropriate agreement between client and server" (§2:3.93.5). Both the
 //! Registry's `url` and the `callback_url` carry patient identifiers, so each
 //! is held to the protected-payload policy of [`transport`]. No specification
@@ -40,11 +44,10 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::ITS_REST_PREFIX;
+use crate::config::auth::BasicUsers;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
-use crate::config::error::credentials::CredentialsFault;
 use crate::config::public_url::PublicUrl;
-use crate::config::secrets::secret;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
@@ -59,8 +62,8 @@ pub struct Pmir {
     /// password.
     pub url: SecretUrl,
     /// How the gateway authenticates to the Registry, by which the Registry
-    /// authorizes the subscription (§2:3.94.5): a bearer token or basic
-    /// credentials.
+    /// authorizes the subscription (§2:3.94.5): basic credentials or the
+    /// client credentials grant of `oauth`.
     pub credentials: Option<Credentials>,
     /// The gateway's client certificate chain and private key, PEM, for
     /// mutual TLS with the Registry, inline or through `client_identity_file`.
@@ -77,11 +80,9 @@ pub struct Pmir {
     pub callback_url: String,
     /// The path under `{base}` the gateway serves the feed at.
     pub path: String,
-    /// The bearer token the Registry sends the feed with, inline or through
-    /// `feed_token_file`.
-    pub feed_token: Option<Secret>,
-    /// A file holding the feed token, read at boot.
-    pub feed_token_file: Option<PathBuf>,
+    /// The `[[auth.basic.users]]` users the Registry may send the feed as,
+    /// with HTTP Basic credentials (RFC 7617).
+    pub feed_users: Vec<String>,
     /// The assigning authority the feed is limited to, so the Registry sends
     /// only the Patients with an identifier it issued
     /// (`Patient?identifier=<system>|`, §2:3.94.4.1.2.1.1). Unset, every
@@ -129,8 +130,7 @@ impl Default for Pmir {
             trust_roots_file: None,
             callback_url: String::new(),
             path: String::from("/pmir/feed"),
-            feed_token: None,
-            feed_token_file: None,
+            feed_users: Vec::new(),
             identifier_system: None,
             timeout_ms: 5_000,
             check_interval_s: 60,
@@ -153,8 +153,8 @@ pub struct PmirSettings {
     pub callback_url: Url,
     /// The path under `{base}` the feed is served at.
     pub path: String,
-    /// The bearer token the Registry sends the feed with.
-    pub feed_token: Secret,
+    /// The `[[auth.basic.users]]` users the Registry may send the feed as.
+    pub feed_users: Vec<String>,
     /// The assigning authority the feed is limited to.
     pub identifier_system: Option<String>,
     /// How long one exchange with the Registry may take.
@@ -167,7 +167,7 @@ pub struct PmirSettings {
 
 impl PmirSettings {
     /// Whether `other` names the same Registry, credentials, TLS material,
-    /// callback, path, feed token, criteria, timings and drain.
+    /// callback, path, feed users, criteria, timings and drain.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -180,7 +180,7 @@ impl PmirSettings {
             && self.tls == other.tls
             && self.callback_url == other.callback_url
             && self.path == other.path
-            && self.feed_token == other.feed_token
+            && self.feed_users == other.feed_users
             && self.identifier_system == other.identifier_system
             && self.timeout == other.timeout
             && self.check_interval == other.check_interval
@@ -199,11 +199,13 @@ fn registry_site() -> ProtectedSite {
 }
 
 /// The site of the callback: the ITI-93 messages, which carry patient
-/// identifiers, and the feed token travel to it.
+/// identifiers, and the feed's Basic credentials travel to it.
 fn callback_site() -> ProtectedSite {
     ProtectedSite {
         url_key: String::from("pmir.callback_url"),
-        payload: String::from("pmir.feed_token and the patient identifiers of the ITI-93 messages"),
+        payload: String::from(
+            "the feed's Basic credentials and the patient identifiers of the ITI-93 messages",
+        ),
         requires: Encryption::Https,
     }
 }
@@ -244,14 +246,13 @@ pub fn sites(
 ///
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `callback_url` or no feed
-/// token; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
+/// user; [`BindingFault::FeedUser`] for a feed user `basic` does not write; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
 /// or is no `http(s)` URL without credentials;
 /// [`ServerFault::PublicUrlDisagrees`] for a `callback_url` that names another
 /// route than the feed's under `public`; [`Error::Cleartext`] for one
 /// that is not `https` outside the development profile;
-/// [`CredentialsFault::Authorization`] for a feed token that is no RFC 6750
-/// `b64token`; [`BindingFault::FeedPath`]; [`CredentialsFault::GrantNotHere`]
-/// for OAuth 2.0 credentials; [`Error::Zero`]; and the errors of a secret that
+/// [`BindingFault::FeedPath`]; [`CredentialsFault::ServiceGrantNotHere`](crate::config::error::credentials::CredentialsFault::ServiceGrantNotHere)
+/// for an `oauth2` or FAPI 2.0 grant; [`Error::Zero`]; and the errors of a secret that
 /// cannot be read.
 ///
 /// [`ServerFault::PublicUrlDisagrees`]: crate::config::error::server::ServerFault::PublicUrlDisagrees
@@ -259,6 +260,7 @@ pub(crate) fn resolve(
     config: &Config,
     context: ServiceContext,
     public: Option<&PublicUrl>,
+    basic: Option<&BasicUsers>,
 ) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
@@ -294,27 +296,20 @@ pub(crate) fn resolve(
     if let Some(public) = public {
         public.agrees(CALLBACK_URL, &callback_url, &path)?;
     }
-    let feed_token = secret(
-        "pmir.feed_token",
-        pmir.feed_token.as_ref(),
-        pmir.feed_token_file.as_deref(),
-    )?
-    .ok_or_else(|| Error::Missing {
-        key: String::from("pmir.feed_token"),
-    })?;
-    let token_key = if pmir.feed_token_file.is_some() {
-        "pmir.feed_token_file"
-    } else {
-        "pmir.feed_token"
-    };
-    openehr_its::rest::client::Credentials::bearer(feed_token.to_secret_string())
-        .header_value()
-        .map_err(|source| {
-            Error::Credentials(CredentialsFault::Authorization {
-                key: token_key.to_owned(),
-                source,
-            })
-        })?;
+    if pmir.feed_users.is_empty() {
+        return Err(Error::Missing {
+            key: String::from("pmir.feed_users"),
+        });
+    }
+    if let Some(user) = pmir
+        .feed_users
+        .iter()
+        .find(|user| !basic.is_some_and(|basic| basic.names(user.as_str())))
+    {
+        return Err(Error::Binding(BindingFault::FeedUser {
+            user: user.clone(),
+        }));
+    }
     let section = String::from("pmir.credentials");
     let credentials = pmir
         .credentials
@@ -339,7 +334,7 @@ pub(crate) fn resolve(
         tls,
         callback_url,
         path,
-        feed_token,
+        feed_users: pmir.feed_users.clone(),
         identifier_system: pmir.identifier_system.clone(),
         timeout: positive("pmir.timeout_ms", Duration::from_millis(pmir.timeout_ms))?,
         check_interval: positive(

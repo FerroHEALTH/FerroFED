@@ -66,12 +66,11 @@ refused.
 
 A revision never holds a secret value. Under `managed`, every secret
 outside the core is written as its `_file` reference, such as
-`bearer_token_file`, and the gateway refuses to start, and refuses a
-revision, that writes one inline (`bearer_token`, `password`,
-`client_identity`, `client_secret`, `assertion`, `feed_token`,
-`stored_queries.url`, or a URL that carries a password). The refusal names
-the key, never the value. A secret inside the core, such as
-`metrics.scrape_token`, may stay inline, since the core is never stored.
+`password_file`, and the gateway refuses to start, and refuses a
+revision, that writes one inline (`password`, `client_identity`,
+`client_secret`, `assertion`, `stored_queries.url`, or a URL that carries a
+password). The refusal names the key, never the value. A secret inside the
+core, such as an `[[auth.basic.users]]` `password_hash`, may stay inline, since the core is never stored.
 Comments are not kept: a revision is stored as TOML writes it.
 
 Each revision records its number, the revision it was based on, where it
@@ -100,7 +99,7 @@ running configuration stays.
 ## The routes
 
 Every route is on the admin listener and is admitted only for a caller
-whose token carries the issuer's `operator_scope`, as the other admin
+whose token carries `auth.product_scope`, as the other admin
 actions are ([Who the admin listener serves](metrics.md#who-the-admin-listener-serves)).
 Each write is recorded under `ferrofed::security` as an admin action, and
 with the revision number as `config-revision-saved`,
@@ -241,7 +240,7 @@ as a member is:
 | the localization failure policy | `[federation.localization]` | `localization` |
 | consent disclosure | `[federation.consent]` | `consent` |
 
-![The Credentials and bindings tab: the console's credentials of node-a-pub, running, with its bearer_token set and read from a file, never shown by value.](img/console/configuration-credentials.png)
+![The Credentials and bindings tab: the console's credentials of node-a-pub, running, with its password set and read from a file, never shown by value.](img/console/configuration-credentials.png)
 
 [The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
 
@@ -287,7 +286,7 @@ as before.
 
 A revision never holds a secret value, only the `_file` reference to the
 file it is read from. A secret change names the secret's dotted key inside
-the resource, such as `bearer_token` or `oauth2.client_secret`, and one of:
+the resource, such as `password` or `oauth.client_secret`, and one of:
 
 - `file`: the absolute path of a file the gateway reads, which the revision
   references as it is;

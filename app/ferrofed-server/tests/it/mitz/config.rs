@@ -140,12 +140,12 @@ fn a_configured_data_user_is_refused() -> TestResult {
 fn a_requester_mapping_without_a_claim_name_is_refused() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[auth]\naudience = \"urn:example:gateway\"\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\njwks_uri = \"https://issuer.example.test/jwks\"\n\n[auth.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
+            "{table}\n[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
         )
     })?;
     match resolved(&text) {
         Err(error::Error::Missing { key }) => {
-            assert_eq!("auth.issuer[0].requester.role", key);
+            assert_eq!("trust.issuer[0].requester.role", key);
             Ok(())
         }
         other => Err(format!("no claim name has a default: {other:?}").into()),

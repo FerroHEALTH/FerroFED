@@ -95,7 +95,7 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
         "http://127.0.0.1:10/openehr",
     ))?;
     let text = format!(
-        "{}\n[registry.mcsd.credentials]\nbearer_token = \"{TOKEN}\"\n",
+        "{}\n[registry.mcsd.credentials]\nuser = \"gateway\"\npassword = \"{TOKEN}\"\n",
         super::config(&harness.base(), 5_000)
     );
     let resolved = settings(&text)?;
@@ -112,8 +112,10 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
     assert!(!sent.is_empty());
     assert!(
         sent.iter()
-            .all(|value| value.as_deref() == Some(format!("Bearer {TOKEN}").as_str())),
-        "every request carries the token"
+            // NOTE: RFC 7617 §2, the base64 of `gateway:` and TOKEN.
+            .all(|value| value.as_deref()
+                == Some("Basic Z2F0ZXdheTpRejdTZW50aW5lbERpcmVjdG9yeVRva2Vu")),
+        "every request carries the credentials"
     );
     let _booted = Gateway::boot(&harness, 5_000)?;
     Ok(())
@@ -200,7 +202,7 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
 /// our own design).
 #[test]
 fn directory_credentials_over_plain_http_are_refused_outside_development() -> TestResult {
-    let section = "[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n\n[registry.mcsd.credentials]\nbearer_token = \"synthetic-directory-token\"\n";
+    let section = "[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n\n[registry.mcsd.credentials]\nuser = \"gateway\"\npassword = \"synthetic-directory-token\"\n";
     let refused = settings(section);
     let error = refused.err().ok_or("cleartext credentials are refused")?;
     let text = error.to_string();

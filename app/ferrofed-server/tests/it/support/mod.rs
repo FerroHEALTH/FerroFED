@@ -263,12 +263,23 @@ pub(crate) fn auth() -> AuthSettings {
     }
 }
 
-/// Returns the `[auth]` and `[trust]` of [`auth`] as configuration text.
-pub(crate) fn auth_toml() -> Result<String, IssuerError> {
-    Ok(format!(
-        "\n[auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {}\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+/// Returns the `[auth]` and `[trust]` of [`auth`] as configuration text,
+/// its issuer an `[[auth.issuer]]` entry, so a test can append another.
+pub(crate) fn auth_toml() -> String {
+    format!(
+        "\n[auth]\naudience = [\"{AUDIENCE}\"]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
         toml_path(jwks_file()),
         claims().client_id
+    )
+}
+
+/// Returns the `[[auth.issuer]]` entry of `issuer`, its key set written to
+/// a file as it is now.
+pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> {
+    Ok(format!(
+        "\n[[auth.issuer]]\nissuer = \"{}\"\njwks_file = {}\n",
+        issuer.name(),
+        toml_path(&jwks_file_of(issuer)?)
     ))
 }
 
@@ -314,6 +325,14 @@ pub(crate) fn auth_with_basic(users: &[&str]) -> Result<AuthSettings, Box<dyn St
         )),
         ..auth()
     })
+}
+
+/// The `[metrics]` key naming [`SCRAPE_USER`] as the scrape's user, then
+/// the `[auth]` that writes that user with HTTP Basic.
+pub(crate) fn scraping() -> String {
+    format!(
+        "scrape_users = [\"{SCRAPE_USER}\"]\n\n[auth]\n\n[[auth.basic.users]]\nuser = \"{SCRAPE_USER}\"\npassword_hash = \"{SCRAPE_HASH}\"\n"
+    )
 }
 
 /// Returns `path` as a TOML string.

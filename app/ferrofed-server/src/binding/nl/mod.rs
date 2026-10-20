@@ -65,8 +65,8 @@ pub struct NlGfSettings {
 }
 
 /// Resolves `[nl_gf]`: an NVI URL that parses, carries no userinfo and is
-/// `https` outside development, a bearer token, basic credentials or the
-/// Nuts grant for the NVI, a bearer token or basic credentials for Mitz, and
+/// `https` outside development, basic credentials or the Nuts grant for the
+/// NVI, basic credentials for Mitz, and
 /// every secret and file read.
 ///
 /// # Errors

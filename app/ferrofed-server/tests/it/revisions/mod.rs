@@ -107,13 +107,13 @@ pub(crate) fn rest(document: &Path, extra: &str) -> String {
 
 /// The bootstrap core of a managed development gateway whose revisions are
 /// kept at `store`, with `config` appended to its `[config]` table.
-fn core(store: &Path, config: &str) -> Result<String, Box<dyn Error>> {
+fn core(store: &Path, config: &str) -> String {
     let store = toml::Value::String(store.display().to_string());
-    Ok(format!(
+    format!(
         "profile = \"development\"\n\n[metrics]\nlisten = \"127.0.0.1:9\"\n\n\
          [config]\nui = \"managed\"\npath = {store}\n{config}\n{}\n",
-        support::auth_toml()?
-    ))
+        support::auth_toml()
+    )
 }
 
 /// A managed development gateway started over a configuration file in a
@@ -162,7 +162,7 @@ impl Gateway {
         let config = dir.path().join("ferrofed.toml");
         std::fs::write(
             &config,
-            core(&store, config_extra)? + &rest(&documents.join("one.toml"), extra),
+            core(&store, config_extra) + &rest(&documents.join("one.toml"), extra),
         )?;
         Self::boot(dir, (config, store), shared.map(|(store, _)| store))
     }

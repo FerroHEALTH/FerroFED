@@ -621,7 +621,8 @@ url = "https://terminology.example.org/fhir/"   # the server's FHIR base
 timeout_ms = 2000                               # one operation's budget; 2000 unless set
 
 [eehrxf.terminology.credentials]
-bearer_token_file = "/run/secrets/terminology-token"   # or user and password
+user = "ferrofed"
+password_file = "/run/secrets/terminology-password"
 ```
 
 `client_identity`, `client_identity_file` and `trust_roots_file` give the

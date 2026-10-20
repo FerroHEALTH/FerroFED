@@ -62,7 +62,7 @@ impl Config {
     /// ([`ServerFault::MetricsRemote`]), a listener on the address `server.listen`
     /// binds at a port other than 0 ([`ServerFault::MetricsShared`]), a remote
     /// listener outside the development
-    /// profile whose scrape neither a scrape token nor a client CA
+    /// profile whose scrape neither a scrape user nor a client CA
     /// authenticates ([`ServerFault::MetricsUnauthenticated`]), and the metrics push and the trace export
     /// each refuse a collector that is no `http://` URL
     /// ([`ServerFault::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a

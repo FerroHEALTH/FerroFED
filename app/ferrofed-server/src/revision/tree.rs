@@ -277,14 +277,14 @@ mod tests {
     #[test]
     fn an_inline_secret_is_named_by_key_and_a_reference_is_not() {
         let tree = table(
-            "[credentials.\"node-a\"]\nbearer_token = \"synthetic-secret-1\"\n\
-             [credentials.\"node-b\"]\nbearer_token_file = \"/run/secrets/b\"\n\
+            "[credentials.\"node-a\"]\npassword = \"synthetic-secret-1\"\n\
+             [credentials.\"node-b\"]\npassword_file = \"/run/secrets/b\"\n\
              [stored_queries]\nbackend = \"postgres\"\nurl = \"host=db\"\n\
              [telemetry]\notlp_endpoint = \"http://u:synthetic-pw@collector:4317\"\n",
         );
         assert_eq!(
             vec![
-                "credentials.node-a.bearer_token",
+                "credentials.node-a.password",
                 "stored_queries.url",
                 "telemetry.otlp_endpoint"
             ],

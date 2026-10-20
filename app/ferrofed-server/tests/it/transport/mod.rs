@@ -60,9 +60,12 @@ const ENDPOINT_URL: &str = "the url of endpoint node-a-pub in registry.document"
 /// The credentials section of node A.
 const SECTION: &str = "credentials.node-a-pub";
 
-/// A bearer token for node A.
-fn bearer() -> String {
-    format!("[credentials.\"node-a-pub\"]\nbearer_token = \"{SECRET}\"\n")
+/// The client credentials grant of `ferrohealth-smart` for node A, its
+/// client secret [`SECRET`].
+fn oauth() -> String {
+    format!(
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed-test-gateway\"\nclient_secret = \"{SECRET}\"\n"
+    )
 }
 
 /// Basic credentials for node A.
@@ -70,25 +73,24 @@ fn basic() -> String {
     format!("[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{SECRET}\"\n")
 }
 
-/// An OAuth 2.0 grant for node A at `token_endpoint`, with the `[signing]`
-/// key its assertion needs, written under `dir`.
+/// The client credentials grant for node A at `token_endpoint`, its
+/// `private_key_jwt` assertion signed by a key written under `dir`.
 fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
-    let key = dir.join("signing.pem");
+    let key = dir.join("client.pem");
     std::fs::write(&key, oauth::es384_pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     Ok(format!(
-        "[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\n\
+        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\
          token_endpoint = \"{token_endpoint}\"\nclient_id = \"ferrofed-test-gateway\"\nscope = \"system/aql-*.s\"\n"
     ))
 }
 
-/// A PIX Manager at `url` with a bearer token, resolving node A.
+/// A PIX Manager at `url` with basic credentials, resolving node A.
 #[cfg(feature = "binding-ihe")]
 fn pix(url: &str) -> String {
     format!(
         "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
-         [pixm.manager.credentials]\nbearer_token = \"{SECRET}\"\n"
+         [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"{SECRET}\"\n"
     )
 }
 
@@ -177,9 +179,9 @@ fn reported(settings: &Settings, sites: &[ProtectedSite]) -> TestResult {
 }
 
 #[test]
-fn a_bearer_token_to_a_plain_http_endpoint_is_refused_outside_development() -> TestResult {
+fn an_oauth_token_to_a_plain_http_endpoint_is_refused_outside_development() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let settings = resolved(dir.path(), "production", HTTP_A, &bearer())?;
+    let settings = resolved(dir.path(), "production", HTTP_A, &oauth())?;
     refused_on(&settings, &site(ENDPOINT_URL, SECTION))
 }
 
@@ -206,8 +208,8 @@ fn a_plain_http_token_endpoint_is_refused_outside_development() -> TestResult {
     refused_on(
         &settings,
         &site(
-            "credentials.node-a-pub.oauth2.token_endpoint",
-            "credentials.node-a-pub.oauth2",
+            "credentials.node-a-pub.oauth.token_endpoint",
+            "credentials.node-a-pub.oauth",
         ),
     )
 }
@@ -338,8 +340,8 @@ fn every_site_starts_under_development_and_is_reported() -> TestResult {
     let sites = vec![
         site(ENDPOINT_URL, SECTION),
         site(
-            "credentials.node-a-pub.oauth2.token_endpoint",
-            "credentials.node-a-pub.oauth2",
+            "credentials.node-a-pub.oauth.token_endpoint",
+            "credentials.node-a-pub.oauth",
         ),
     ];
     #[cfg(feature = "binding-ihe")]
@@ -364,7 +366,7 @@ fn every_site_starts_under_development_and_is_reported() -> TestResult {
 #[test]
 fn the_boot_under_development_logs_a_warning_per_cleartext_credential() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let settings = resolved(dir.path(), "development", HTTP_A, &bearer())?;
+    let settings = resolved(dir.path(), "development", HTTP_A, &oauth())?;
     let logs = Logs::default();
     let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
     let built = tracing::subscriber::with_default(capture, || AppState::build(&settings));
@@ -387,7 +389,7 @@ fn the_boot_under_development_logs_a_warning_per_cleartext_credential() -> TestR
 #[test]
 fn the_banner_names_each_cleartext_credential_by_key() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let settings = resolved(dir.path(), "development", HTTP_A, &bearer())?;
+    let settings = resolved(dir.path(), "development", HTTP_A, &oauth())?;
     let read = read_registry(&settings);
     let described = read.as_ref().map(Result::as_ref);
     let checked = transport::check(&settings, described.and_then(Result::ok));
@@ -413,7 +415,7 @@ fn the_banner_names_each_cleartext_credential_by_key() -> TestResult {
 #[test]
 fn a_production_banner_names_no_cleartext_credential() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let settings = resolved(dir.path(), "production", HTTP_A, &bearer())?;
+    let settings = resolved(dir.path(), "production", HTTP_A, &oauth())?;
     let read = read_registry(&settings);
     let described = read.as_ref().map(Result::as_ref);
     let checked = transport::check(&settings, described.and_then(Result::ok));
@@ -439,7 +441,7 @@ fn every_site_over_https_starts_outside_development() -> TestResult {
     let settings = resolved(dir.path(), "production", HTTPS_A, &tables)?;
     reported(&settings, &[])?;
     AppState::build(&settings)?;
-    for credentials in [bearer(), basic()] {
+    for credentials in [oauth(), basic()] {
         let settings = resolved(dir.path(), "production", HTTPS_A, &credentials)?;
         reported(&settings, &[])?;
     }
@@ -460,7 +462,7 @@ fn a_plain_http_url_no_credential_is_sent_to_starts_outside_development() -> Tes
 #[test]
 fn config_check_refuses_a_cleartext_credential_naming_its_key() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let text = configuration("production", &document(dir.path(), HTTP_A)?, &bearer());
+    let text = configuration("production", &document(dir.path(), HTTP_A)?, &oauth());
     let output = binary(&["config", "check"], &text)?;
     assert_eq!(Some(78), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -473,7 +475,7 @@ fn config_check_refuses_a_cleartext_credential_naming_its_key() -> TestResult {
 #[test]
 fn config_check_under_development_passes_and_warns_by_key() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let text = configuration("development", &document(dir.path(), HTTP_A)?, &bearer());
+    let text = configuration("development", &document(dir.path(), HTTP_A)?, &oauth());
     let output = binary(&["config", "check"], &text)?;
     assert_eq!(Some(0), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -486,7 +488,7 @@ fn config_check_under_development_passes_and_warns_by_key() -> TestResult {
 #[test]
 fn admission_check_refuses_a_cleartext_credential() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let text = configuration("production", &document(dir.path(), HTTP_A)?, &bearer());
+    let text = configuration("production", &document(dir.path(), HTTP_A)?, &oauth());
     let output = binary(&["admission", "check", "--endpoint", "node-a-pub"], &text)?;
     assert_eq!(Some(78), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -495,7 +497,7 @@ fn admission_check_refuses_a_cleartext_credential() -> TestResult {
     Ok(())
 }
 
-/// A gateway under a profile serving node A over `https` with a bearer
+/// A gateway under a profile serving node A over `https` with an oauth
 /// token, with its configuration file, its registry document and its
 /// reloader.
 struct Gateway {
@@ -508,7 +510,7 @@ struct Gateway {
 
 impl Gateway {
     fn start(profile: &str) -> Result<Self, Box<dyn Error>> {
-        Self::start_with(|document| configuration(profile, document, &bearer()))
+        Self::start_with(|document| configuration(profile, document, &oauth()))
     }
 
     /// Starts over the configuration `text` writes for the registry document.
@@ -567,7 +569,7 @@ fn a_reload_cannot_switch_to_development_to_send_a_credential_in_cleartext() -> 
     std::fs::write(&gateway.document, registry(HTTP_A, HTTPS_B, ""))?;
     std::fs::write(
         &gateway.config,
-        configuration("development", &gateway.document, &bearer()),
+        configuration("development", &gateway.document, &oauth()),
     )?;
 
     let refused = gateway
@@ -652,7 +654,7 @@ fn a_reload_that_changes_the_profile_is_refused_logged_and_counted() -> TestResu
             .ok_or("a registry is configured")?;
         std::fs::write(
             &gateway.config,
-            configuration(file, &gateway.document, &bearer()),
+            configuration(file, &gateway.document, &oauth()),
         )?;
 
         let logs = Logs::default();

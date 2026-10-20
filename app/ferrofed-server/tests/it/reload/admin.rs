@@ -80,7 +80,7 @@ async fn reload(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_reload_needs_the_operator_scope() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     let app = listener(&gateway);
     let (status, _, _) = reload(app.clone(), None).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, status, "no credential");
@@ -91,7 +91,7 @@ async fn the_reload_needs_the_operator_scope() -> TestResult {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_reload_applies_what_sighup_applies_and_is_recorded() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     gateway.write_auth(&auth_a_and_b()?)?;
 
     let (status, body, logs) = reload(listener(&gateway), Some(&operator_bearer()?)).await?;
@@ -130,7 +130,7 @@ async fn the_reload_applies_what_sighup_applies_and_is_recorded() -> TestResult 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_refused_reload_answers_422_with_its_class_and_changes_nothing() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     gateway.write_auth("")?;
 
     let (status, body, _) = reload(listener(&gateway), Some(&operator_bearer()?)).await?;
@@ -148,7 +148,7 @@ async fn a_refused_reload_answers_422_with_its_class_and_changes_nothing() -> Te
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reload_with_a_body_is_refused() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     let request = Request::post(RELOAD)
         .header(header::AUTHORIZATION, operator_bearer()?)
         .body(Body::from("{}"))?;

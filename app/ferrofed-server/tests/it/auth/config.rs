@@ -121,7 +121,7 @@ fn a_clock_skew_past_five_minutes_is_refused() -> Result<(), Box<dyn Error>> {
 fn an_issuer_without_an_audience_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
         &format!("[auth]\nissuer = \"{ISSUER}\"\n"),
-        "names no audience",
+        "name no audience",
     )
 }
 

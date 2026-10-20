@@ -227,7 +227,8 @@ fn a_face_with_no_registry_is_refused() -> TestResult {
 #[cfg(feature = "binding-ihe")]
 fn pmir(path: &str) -> String {
     format!(
-        "\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\nfeed_token = \"Qz7feedtoken\"\npath = \"{path}\"\n"
+        "\n[[auth.basic.users]]\nuser = \"pmir-registry\"\npassword_hash = \"{}\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\nfeed_users = [\"pmir-registry\"]\npath = \"{path}\"\n",
+        crate::support::SCRAPE_HASH
     )
 }
 

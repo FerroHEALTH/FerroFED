@@ -317,7 +317,7 @@ pub struct Claims {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub act: Option<std::collections::BTreeMap<String, String>>,
     /// Any other string claim, by name: the claims a deployment maps in
-    /// `[auth.issuer.requester]`, for instance.
+    /// `[trust.issuer.requester]`, for instance.
     #[serde(flatten)]
     pub other: std::collections::BTreeMap<String, String>,
 }
