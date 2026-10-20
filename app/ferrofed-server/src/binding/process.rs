@@ -117,6 +117,13 @@ impl Processes {
 
     /// Returns `surface` with the routes the processes serve, each that
     /// admits its own callers verified by the gate `trust` holds.
+    #[cfg_attr(
+        not(feature = "binding-ihe"),
+        expect(
+            unused_variables,
+            reason = "without the IHE binding no process serves a route of its own"
+        )
+    )]
     pub(crate) fn routes(
         &self,
         surface: Router<Arc<AppState>>,
@@ -128,7 +135,6 @@ impl Processes {
         }
         #[cfg(not(feature = "binding-ihe"))]
         {
-            let _unused: &Arc<Trust> = trust;
             surface
         }
     }
