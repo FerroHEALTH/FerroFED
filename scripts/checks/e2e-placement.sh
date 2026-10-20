@@ -10,7 +10,13 @@
 #                      <dir>/<crate>/tests/it/e2e.rs or under
 #                      <dir>/<crate>/tests/it/e2e/, the paths whose tests
 #                      nextest names e2e::…, and the e2e job must set the gate
-#                      and select test(/^e2e::/) across the workspace.
+#                      and select test(/^e2e::/) across the workspace. It
+#                      must also run on every change that has a workspace,
+#                      with no path filter on the triggers and no condition
+#                      beyond the detect job's, and conclusion must need it,
+#                      so a change to the auth, credentials or config code,
+#                      an e2e fixture or the configuration reference always
+#                      runs the container tests (#1187).
 #   FERROFED_JOURNEYS  the operator console's browser journeys, which start
 #                      the gateway and the console and so live in the
 #                      testkit's test binary. A gated file passes only under
@@ -32,6 +38,7 @@ cd "$(dirname "$0")/../.."
 
 readonly WORKFLOW=.github/workflows/ci.yml
 readonly E2E_PATTERN='e2e_enabled[[:space:]]*\(|FERROFED_E2E|E2E_GATE'
+readonly E2E_IF="needs.detect.outputs.cargo == 'true'"
 readonly JOURNEYS_PATTERN='journeys_enabled[[:space:]]*\(|FERROFED_JOURNEYS|JOURNEYS_GATE'
 
 # is_gated FILE PATTERN: whether FILE matches PATTERN on a line that is not a
@@ -75,9 +82,15 @@ job_of() {
   awk -v name="  $2:" '$0 == name { inside = 1; next } inside && /^  [^ #][^ ]*:$/ { inside = 0 } inside' "$1"
 }
 
-# check_workflow FILE: whether the e2e job in FILE sets its gate and selects
-# every crate's e2e module, and the journeys job sets its gate and selects
-# the testkit's journeys module.
+# trigger_of FILE: the lines of the on: block of workflow FILE.
+trigger_of() {
+  awk '/^on:/ { inside = 1; next } inside && /^[^ #]/ { inside = 0 } inside' "$1"
+}
+
+# check_workflow FILE: whether the e2e job in FILE sets its gate, selects
+# every crate's e2e module, runs on every change that has a workspace and
+# feeds conclusion, and the journeys job sets its gate and selects the
+# testkit's journeys module.
 check_workflow() {
   local fail=0 job
   job="$(job_of "$1" e2e)"
@@ -93,6 +106,18 @@ check_workflow() {
       echo "::error file=$1::the e2e job of $1 no longer runs test(/^e2e::/) across the workspace, so a gated test this guard places under e2e:: may never run." >&2
       fail=1
     fi
+    if grep -E '^    if:' <<< "$job" | grep -q -v -x -F "    if: ${E2E_IF}"; then
+      echo "::error file=$1::the e2e job of $1 runs on a condition other than ${E2E_IF}, so a change to the auth, credentials or config code, or to an e2e fixture, may skip it." >&2
+      fail=1
+    fi
+  fi
+  if ! job_of "$1" conclusion | grep -q -x -E '      - e2e'; then
+    echo "::error file=$1::the conclusion job of $1 no longer needs the e2e job, so a failed container test does not block a merge." >&2
+    fail=1
+  fi
+  if trigger_of "$1" | grep -q -E '^[[:space:]]+paths(-ignore)?:'; then
+    echo "::error file=$1::$1 filters its triggers by path, so a change outside the filter runs no e2e job." >&2
+    fail=1
   fi
   job="$(job_of "$1" journeys)"
   if [[ -z "$job" ]]; then
@@ -186,18 +211,23 @@ self_test() {
       failed=1
     fi
   }
-  # workflow ENV RUN JENV JRUN: a workflow whose e2e job sets ENV and runs
-  # RUN and whose journeys job sets JENV and runs JRUN, between jobs that run
-  # every test offline and name the gates in a comment.
+  # workflow ENV RUN JENV JRUN [IF] [NEEDS] [TRIGGER]: a workflow whose e2e
+  # job sets ENV, runs on IF and runs RUN, whose journeys job sets JENV and
+  # runs JRUN, and whose conclusion job needs NEEDS, between jobs that run
+  # every test offline and name the gates in a comment, on TRIGGER.
   workflow() {
+    local condition="${5:-if: ${E2E_IF}}" needs="${6:-e2e}"
+    local trigger="${7:-  pull_request:\n    branches: [main]}"
     {
+      printf 'on:\n%b\n' "$trigger"
       printf 'jobs:\n  test:\n    steps:\n      - run: cargo nextest run --workspace --locked\n'
-      printf '  # Every gated test checks FERROFED_E2E first.\n  e2e:\n    env:\n      %s\n' "$1"
+      printf '  # Every gated test checks FERROFED_E2E first.\n  e2e:\n    needs: detect\n    %s\n    env:\n      %s\n' "$condition" "$1"
       printf '    steps:\n      - run: %s\n' "$2"
       printf '  # FERROFED_JOURNEYS: "1" -p ferrofed-testkit test(/^journeys::/)\n'
       printf '  journeys:\n    env:\n      %s\n' "$3"
       printf '    steps:\n      - run: %s\n' "$4"
-      printf '  doc:\n    steps:\n      - run: cargo doc --workspace -E '"'"'test(/^e2e::/)'"'"'\n'
+      printf '  doc:\n    if: github.event_name == '"'"'push'"'"'\n    steps:\n      - run: cargo doc --workspace -E '"'"'test(/^e2e::/)'"'"'\n'
+      printf '  conclusion:\n    needs:\n      - test\n      - %s\n      - journeys\n' "$needs"
     } > "$job"
   }
   local filter="'package(ferrofed-testkit) or test(/^e2e::/)'"
@@ -217,6 +247,18 @@ self_test() {
   expect_workflow 1 "selecting journeys in another package"
   workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "cargo nextest run --locked -p ferrofed-testkit -E 'test(/^journey/)'"
   expect_workflow 1 "with another journeys filter"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" '# Runs on every change.'
+  expect_workflow 0 "with an e2e job that has no condition"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "if: needs.changes.outputs.rust == 'true'"
+  expect_workflow 1 "with an e2e job behind a changed-paths condition"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "if: ${E2E_IF} && !contains(github.event.pull_request.labels.*.name, 'docs')"
+  expect_workflow 1 "with an e2e job behind a second condition"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "e2e-placement"
+  expect_workflow 1 "with a conclusion that does not need the e2e job"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "" '  pull_request:\n    branches: [main]\n    paths:\n      - "app/**"'
+  expect_workflow 1 "with a pull request trigger filtered by path"
+  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "" '  pull_request:\n    paths-ignore:\n      - "docs/**"'
+  expect_workflow 1 "with a pull request trigger that ignores a path"
   printf 'jobs:\n  test:\n    env:\n      FERROFED_E2E: "1"\n    steps:\n      - run: cargo nextest run --workspace -E %s\n' "$filter" > "$job"
   expect_workflow 1 "with no e2e job"
   printf 'jobs:\n  e2e:\n    env:\n      FERROFED_E2E: "1"\n    steps:\n      - run: %s\n' "$e2e_ok" > "$job"
