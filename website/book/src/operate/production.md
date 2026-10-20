@@ -491,8 +491,7 @@ url = "https://mpi.example.org/fhir/"
 "cdr-a" = "urn:oid:2.999.10"
 "cdr-b" = "urn:oid:2.999.20"
 
-[pixm.manager.credentials.oauth2]
-grant = "client_credentials"
+[pixm.manager.credentials.oauth]
 token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 client_id = "ferrofed-pix-consumer"
 client_auth = "client_secret_post"

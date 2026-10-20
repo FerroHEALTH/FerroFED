@@ -260,7 +260,7 @@ so the console cannot lock you out or lower the security floor.
 | `POST /admin/config/credentials/{endpoint_id}/remove`, `POST /admin/config/bindings/{section}/remove` | `{"base": <newest>, "reason": "…"}`: saves a revision without it, `201` with the revision |
 
 `settings` holds the resource's keys less its secrets, as the table's own
-keys or as one TOML inline table: `{ oauth2 = { grant = "client_credentials", client_auth = "private_key_jwt", token_endpoint = "https://as.example.org/token", client_id = "ferrofed", scope = "system/aql-*.s" } }`.
+keys or as one TOML inline table: `{ oauth = { token_endpoint = "https://as.example.org/token", client_id = "ferrofed", client_auth = "private_key_jwt", private_key_file = "/run/secrets/ferrofed-client.pem", scope = "system/aql-*.s" } }`.
 Settings that name a secret or its `_file` reference are refused with
 `400 body-invalid`, naming the key. `GET /admin/config/resources` lists
 each credential and binding section under `sections`, with its `owner`,
