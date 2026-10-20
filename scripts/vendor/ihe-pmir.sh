@@ -4,7 +4,7 @@
 # scripts/vendor/ihe-pmir.sh
 #
 # Vendors the IHE PMIR 1.6.0 FHIR package artefacts the ITI-94 subscriber and
-# the ITI-93 feed reader of crates/ihe-iti (feature `pmir`, #147) and the
+# the ITI-93 feed reader of ihe-iti (feature `pmir`, #147) and the
 # harness Patient Identity Registry of tools/ferrofed-testkit read into
 # docs/specs/ihe-pmir/: the four actors' capability statements, the ITI-93
 # MessageDefinition and its response, the message Bundle, history Bundle,
@@ -13,7 +13,7 @@
 # ImplementationGuide, and the IG's own message Bundle, response MessageHeader
 # and Subscription examples, which the tests decode, and the Consumer's ITI-93
 # and the Subscriber's ITI-94 audit (BALP) profiles and examples, which the
-# audit records of crates/ihe-iti (feature `balp`, #469) are held to. The
+# audit records of ihe-iti (feature `balp`, #469) are held to. The
 # Update audit profile and the related-person artefacts serve no reader here
 # and are not taken. The package
 # manifest is read for its name, version and licence and left out of the tree
@@ -152,11 +152,11 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #147 (the ITI-94 subscriber and the ITI-93 feed reader of
-  \`crates/ihe-iti\`, whose tests decode the example message Bundles and hold
+  \`ihe-iti\`, whose tests decode the example message Bundles and hold
   the subscription and the feed response to the profiles, and the harness
   Patient Identity Registry of \`tools/ferrofed-testkit\`) and #469 (the
-  ITI-93 and ITI-94 audit records of \`crates/ihe-iti\`, held to the Feed and
-  Subscription audit profiles and their examples)
+  ITI-93 and ITI-94 audit records of \`ihe-iti\`, held to the Feed and
+  Subscription audit profiles and their examples); \`ihe-iti\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

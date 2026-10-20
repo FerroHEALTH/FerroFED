@@ -26,12 +26,13 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   and the XCPD ITI-55 adapter, shipped with the localization seam in v0.0.8
   (#85).
 - The protocols live in the published, spec-named crates `ihe-iti` (a
-  feature per profile), `nl-generic-functions` (a feature per function)
+  feature per profile, moved to FerroHEALTH/FerroPIX by #367 and pinned from
+  crates.io as `=0.0.40`), `nl-generic-functions` (a feature per function)
   and `oauth-server-metadata` (RFC 8414, which the onward grants read),
   which depend on nothing in FerroFED; the adapters onto the seams sit in
   `app/ferrofed-identity` (#106, [[published-crate-naming]]). FerroPIX can use
   `ihe-iti` directly, and a binding can move there with no change to the
-  gateway core (§11). The `xcpd` feature is the only one with SOAP, HL7 v3 and
+  gateway core (§11), as `ihe-iti` did in #367. The `xcpd` feature is the only one with SOAP, HL7 v3 and
   SAML dependencies.
 - The rule is for FerroPIX alone, because nothing of FerroPIX is built yet
   (owner, 2026-10-06: "that rule to build everything first in FED is only for

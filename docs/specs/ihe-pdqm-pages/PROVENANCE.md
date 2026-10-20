@@ -9,19 +9,19 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `a3271aa6b45fad9ceb2da373c6d4cab0eb7649e06fcb278431f967bde976e0b6`
-- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 3 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 3 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `8cab1f6364a614298a29b9840662aeba01d38c0897096bd1ea2ae762ec87f49a`
-- Read by: the section citations of crates/ihe-iti and app/ferrofed-identity (#696)
+- Read by: the section citations of app/ferrofed-identity, app/ferrofed-server, tools/ferrofed-testkit and docs/architecture.md, held by scripts/checks/ihe-citations.sh (#696); ihe-iti is FerroHEALTH/FerroPIX's since #367
 
 The Volume 1 page (1:38) and the Mobile Patient Demographics Query
 [ITI-78] and Patient Demographics Match [ITI-119] pages of the PDQm 3.2.0
-implementation guide, the text of the package vendored in
-docs/specs/ihe-pdqm/, committed under CC-BY-4.0. Attribution: IHE
+implementation guide, the text of the package FerroHEALTH/FerroPIX vendors
+with `ihe-iti`, committed under CC-BY-4.0. Attribution: IHE
 International, IT Infrastructure Technical Committee, *Patient Demographics
 Query for Mobile (PDQm)* 3.2.0.
 

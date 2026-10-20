@@ -9,18 +9,18 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `f682913c6c5d5d2599c1dcb3c41a22373240b126a2051dab6b58ca8d56d1524d`
-- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 2 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 2 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `5ac642e73d352739b4a9363b67ef0f67e0a5a94d3c731497fcb7932fe1184c05`
-- Read by: the section citations of crates/ihe-iti and app/ferrofed-identity (#696)
+- Read by: the section citations of app/ferrofed-identity, app/ferrofed-server, tools/ferrofed-testkit and docs/architecture.md, held by scripts/checks/ihe-citations.sh (#696); ihe-iti is FerroHEALTH/FerroPIX's since #367
 
 The Volume 1 page (1:52) and the Volume 3 content page (3:5.7) of the
 Basic Audit Log Patterns 1.1.4 implementation guide, the text of the
-package vendored in docs/specs/ihe-balp/, committed under CC-BY-4.0.
+package FerroHEALTH/FerroPIX and FerroHEALTH/FerroAUDIT vendor, committed under CC-BY-4.0.
 Attribution: IHE International, IT Infrastructure Technical Committee,
 *Basic Audit Log Patterns (BALP)* 1.1.4.
 

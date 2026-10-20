@@ -11,7 +11,7 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
-implement, never `ferrofed-*` (`openehr-federation`, `ihe-iti`,
+implement, never `ferrofed-*` (`openehr-federation`,
 `nl-generic-functions`, `oauth-server-metadata`, and the two harmonised
 software components of Regulation (EU) 2025/327, `ehds-logging` and
 `eehrxf`; `.claude/memory/published-crate-naming.md`), one crate per

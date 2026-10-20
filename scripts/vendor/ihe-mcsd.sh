@@ -4,7 +4,7 @@
 # scripts/vendor/ihe-mcsd.sh
 #
 # Vendors the IHE mCSD 4.0.0 FHIR package artefacts the care services
-# directory client of crates/ihe-iti (feature `mcsd`, #86) and the harness
+# directory client of ihe-iti (feature `mcsd`, #86) and the harness
 # directory of tools/ferrofed-testkit read into docs/specs/ihe-mcsd/: the
 # Organization, Endpoint and Location profiles with the endpoint-specific-type
 # extension and the endpoint type code system and value sets, the search
@@ -53,7 +53,7 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 # interactions, and the transaction Bundle example, which holds every resource
 # type, serve no reader here and are not taken. The ITI-90 Query and ITI-91
 # Updates audit profiles and examples are taken: the audit records of
-# crates/ihe-iti (feature `balp`, #486) are held to them.
+# ihe-iti (feature `balp`, #486) are held to them.
 paths=(
   package/ImplementationGuide-ihe.iti.mcsd.json
   package/CapabilityStatement-IHE.mCSD.Directory.json
@@ -143,12 +143,12 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files of the package's $total, listed below
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #86 (the ITI-90 and ITI-91 client of \`crates/ihe-iti\`, whose
+- Read by: #86 (the ITI-90 and ITI-91 client of \`ihe-iti\`, whose
   tests hold its interactions to the capability statements and decode the
   example Organizations and Endpoints, and the harness directory of
   \`tools/ferrofed-testkit\`, which publishes the example Organizations) and
-  #486 (the ITI-90 and ITI-91 audit records of \`crates/ihe-iti\`, held to
-  the Query and Updates audit profiles and their examples)
+  #486 (the ITI-90 and ITI-91 audit records of \`ihe-iti\`, held to
+  the Query and Updates audit profiles and their examples); \`ihe-iti\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

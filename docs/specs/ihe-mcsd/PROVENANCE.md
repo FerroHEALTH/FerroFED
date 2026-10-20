@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.mcsd/4.0.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/mCSD/4.0.0/>
 - Pin: package `ihe.iti.mcsd` version `4.0.0`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -21,12 +21,12 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 25 of the package's 114, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `cc7d601f4f64cba29ed6575a31225a69858aa26f5b5884c391138bd52b9c6c27`
-- Read by: #86 (the ITI-90 and ITI-91 client of `crates/ihe-iti`, whose
+- Read by: #86 (the ITI-90 and ITI-91 client of `ihe-iti`, whose
   tests hold its interactions to the capability statements and decode the
   example Organizations and Endpoints, and the harness directory of
   `tools/ferrofed-testkit`, which publishes the example Organizations) and
-  #486 (the ITI-90 and ITI-91 audit records of `crates/ihe-iti`, held to
-  the Query and Updates audit profiles and their examples)
+  #486 (the ITI-90 and ITI-91 audit records of `ihe-iti`, held to
+  the Query and Updates audit profiles and their examples); `ihe-iti` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

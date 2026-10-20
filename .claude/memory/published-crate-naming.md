@@ -23,7 +23,8 @@ on anything called FerroFED.
 
 - A crate that may be published lives under `crates/` and carries the name of
   the specification it implements: `openehr-federation` (the Federation Tier
-  with AQL), `ihe-iti` (the IHE IT Infrastructure profiles),
+  with AQL), `ihe-iti` (the IHE IT Infrastructure profiles, owned and
+  published by FerroHEALTH/FerroPIX since #367, pinned here from crates.io),
   `nl-generic-functions` (the Dutch Generic Functions) and
   `oauth-server-metadata` (OAuth 2.0 Authorization Server Metadata, RFC 8414,
   split out of `nl-generic-functions` by #551 so the core and every binding

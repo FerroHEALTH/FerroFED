@@ -4,7 +4,7 @@
 # scripts/vendor/ihe-pixm.sh
 #
 # Vendors the IHE PIXm 3.1.0 FHIR package artefacts the ITI-83 client of
-# crates/ihe-iti (feature `pixm`, #42) and the harness PIX Manager of
+# ihe-iti (feature `pixm`, #42) and the harness PIX Manager of
 # tools/ferrofed-testkit (#47) read into docs/specs/ihe-pixm/: the `$ihe-pix`
 # OperationDefinition, the Query Parameters In and Out profiles, the Consumer,
 # Manager and Source capability statements, the ImplementationGuide, the IG's
@@ -12,7 +12,7 @@
 # decode, the ITI-104 Patient Identity Feed's Patient profiles and example
 # Patients, which the harness Manager's feed is held to, and the ITI-83
 # Consumer's BALP audit profile and example, which the ITI-83 audit record of
-# crates/ihe-iti (feature `balp`, #486) is held to. The package manifest is
+# ihe-iti (feature `balp`, #486) is held to. The package manifest is
 # read for its name, version and licence and left out of the tree (the
 # dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
@@ -137,13 +137,13 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files of the package's $total, listed below
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #42 (the ITI-83 client of \`crates/ihe-iti\`, whose tests decode the
+- Read by: #42 (the ITI-83 client of \`ihe-iti\`, whose tests decode the
   examples and hold the request and response to the OperationDefinition) and
   #47 (the harness PIX Manager of \`tools/ferrofed-testkit\`, whose ITI-104 feed
   accepts the example Patients and holds every fed Patient to the Patient
   profile, and whose ITI-83 answers are held to the OperationDefinition) and
-  #486 (the ITI-83 audit record of \`crates/ihe-iti\`, held to the Consumer's
-  audit profile and its example)
+  #486 (the ITI-83 audit record of \`ihe-iti\`, held to the Consumer's
+  audit profile and its example); \`ihe-iti\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is here
 

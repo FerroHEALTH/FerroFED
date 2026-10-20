@@ -40,7 +40,7 @@ corpus_require curl shasum awk
 pinned_begin
 
 ig=https://profiles.ihe.net/ITI
-read_by='the section citations of crates/ihe-iti and app/ferrofed-identity (#696)'
+read_by='the section citations of app/ferrofed-identity, app/ferrofed-server, tools/ferrofed-testkit and docs/architecture.md, held by scripts/checks/ihe-citations.sh (#696); ihe-iti is FerroHEALTH/FerroPIX'"'"'s since #367'
 
 # licence PACKAGE VERSION: the licence statement of one IG's pages.
 licence() {
@@ -74,8 +74,8 @@ pinned_corpus ihe-pdqm-pages "IHE PDQm narrative pages" \
   "the IHE PDQm 3.2.0 narrative pages" \
   "The Volume 1 page (1:38) and the Mobile Patient Demographics Query
 [ITI-78] and Patient Demographics Match [ITI-119] pages of the PDQm 3.2.0
-implementation guide, the text of the package vendored in
-docs/specs/ihe-pdqm/, committed under CC-BY-4.0. Attribution: IHE
+implementation guide, the text of the package FerroHEALTH/FerroPIX vendors
+with \`ihe-iti\`, committed under CC-BY-4.0. Attribution: IHE
 International, IT Infrastructure Technical Committee, *Patient Demographics
 Query for Mobile (PDQm)* 3.2.0." "" "$read_by"
 
@@ -120,7 +120,7 @@ pinned_corpus ihe-balp-pages "IHE BALP narrative pages" \
   "the IHE BALP 1.1.4 narrative pages" \
   "The Volume 1 page (1:52) and the Volume 3 content page (3:5.7) of the
 Basic Audit Log Patterns 1.1.4 implementation guide, the text of the
-package vendored in docs/specs/ihe-balp/, committed under CC-BY-4.0.
+package FerroHEALTH/FerroPIX and FerroHEALTH/FerroAUDIT vendor, committed under CC-BY-4.0.
 Attribution: IHE International, IT Infrastructure Technical Committee,
 *Basic Audit Log Patterns (BALP)* 1.1.4." "" "$read_by"
 

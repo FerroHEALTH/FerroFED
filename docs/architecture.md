@@ -855,7 +855,7 @@ because neither R4 nor mCSD 4.0.0 carries them; a FHIR-form or mCSD registry
 holds it to every refusal the TOML registry does (#883).
 
 **The FHIR model** (decision A16) comes from `fhir-types` (`r4`), compiled
-only in `crates/ihe-iti` (section 11), so the core never compiles it. Its
+only in `ihe-iti` (section 11), so the core never compiles it. Its
 `terminology` root set carries every type ITI-83 reads (`Parameters`,
 `OperationOutcome`, `Identifier`, `Reference`, `Bundle`); `resources` joins
 with the PDQm client (#119), whose ITI-78 search and ITI-119 match answer
@@ -2329,7 +2329,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
-| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies); `balp` turns on the FHIR profiles' audit records and `atna` the ITI-55 audit message, each written through `ihe-atna` | `fhir-types` (`r4`, `resources`), an HTTP client, `ihe-atna` (its `user` module with `pixm`, `pdqm` and `xcpd`; `atna` and `balp` with the features of those names), and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `ihe-iti` (crates.io, `=0.0.40`, from FerroHEALTH/FerroPIX) | the IHE ITI profiles, owned and published by FerroHEALTH/FerroPIX since #367, so FerroFED keeps no copy; one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies); `balp` turns on the FHIR profiles' audit records and `atna` the ITI-55 audit message, each written through `ihe-atna` | `fhir-types` (`r4`, `resources`), an HTTP client, `ihe-atna` (its `user` module with `pixm`, `pdqm` and `xcpd`; `atna` and `balp` with the features of those names), and only under `xcpd` the SOAP stack | anything in FerroFED |
 | `ihe-atna` (crates.io, `=0.1.0`, from FerroHEALTH/FerroAUDIT) | the family's audit library, published from FerroAUDIT: `atna`, the ITI-20 DICOM audit message over syslog with TLS, the bounded store-and-forward spool and the forwarder, and `balp`, the BALP `AuditEvent` and the ATX: FHIR Feed; `user`, whom an exchange is made for | `quick-xml`, `rustls`, `tokio` under `atna`; `fhir-types` (`r4`, `resources`), an HTTP client under `balp` | anything in FerroFED |
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `authorizer`, the FHIR-free request authorizer `nvi` takes and the engine implements (#730) | the clients each function needs, `oauth-server-metadata` under `nuts-auth` | anything in FerroFED |
 | `crates/oauth-server-metadata` | OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, the identical-issuer and same-origin endpoint checks, and the refusal of an answer that repeats a name; no feature | `serde`, `serde_json`, `url` | anything in FerroFED, any national crate |
@@ -2351,9 +2351,9 @@ feature to each, with no change outside them (#587, #588; no specification
 governs the layout: our own design).
 
 `ihe-iti` and `nl-generic-functions` know nothing of FerroFED. The adapters in
-`ferrofed-identity` turn their clients into the seams, so a binding can move
-to FerroPIX later, or be served by a FerroPIX instance, without a change to
-the engine or the server (section 6). The server wires each binding from one
+`ferrofed-identity` turn their clients into the seams, so a binding crate can
+move to FerroPIX, as `ihe-iti` did in #367, or be served by a FerroPIX
+instance, without a change to the engine or the server (section 6). The server wires each binding from one
 module behind one feature, `binding-ihe` or `binding-nl`, both on by default
 (section 6, decision A52), and each forwards to the `ihe` and `nl` features of
 `ferrofed-identity` and the `nl` feature of `ferrofed-engine`, so a build

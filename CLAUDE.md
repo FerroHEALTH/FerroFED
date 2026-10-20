@@ -247,9 +247,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   profile, publishable only through the workspace `publish` switch (#106):
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
-  `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
-  `xcpd`, with `balp` and `atna` turning on their audit records, written
-  through `ihe-atna`), `nl-generic-functions`
+  `merge`), `nl-generic-functions`
   (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, the
   FHIR-free request `authorizer` the engine implements, and the BSN naming
   systems in `identification`), `oauth-server-metadata` (RFC 8414,
@@ -270,6 +268,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   through a `patch.crates-io` per depended-on member while the switch is off
   (`.claude/rules/crates-publishing.md`). The library crates depend on
   nothing in FerroFED, so FerroPIX can use them as they are.
+- `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`,
+  with `balp` and `atna` turning on their audit records, written through
+  `ihe-atna`) is owned and published by FerroHEALTH/FerroPIX since #367;
+  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.40"`) and keeps
+  no copy.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (laid out by role and binding: `role/` holds

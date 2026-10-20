@@ -1235,7 +1235,7 @@ jobs:
           tool: cargo-hack
       - run: >-
           cargo hack clippy --locked --each-feature --all-targets
-          --package openehr-federation --package ihe-iti --package nl-generic-functions
+          --package openehr-federation --package nl-generic-functions
           --package oauth-server-metadata --package eehrxf
           --package ferrofed-identity --package ferrofed-engine
           --package ferrofed-server
