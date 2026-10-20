@@ -26,8 +26,9 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   and the XCPD ITI-55 adapter, shipped with the localization seam in v0.0.8
   (#85).
 - The protocols live in the published, spec-named crates `ihe-iti` (a
-  feature per profile), `nl-generic-functions` (a feature per function)
-  and `oauth-server-metadata` (RFC 8414, which the onward grants read),
+  feature per profile), `nl-generic-functions` (a feature per function,
+  moved to FerroHEALTH/FerroPIX by #367 and pinned from crates.io as
+  `=0.0.25`) and `oauth-server-metadata` (RFC 8414, which the onward grants read),
   which depend on nothing in FerroFED; the adapters onto the seams sit in
   `app/ferrofed-identity` (#106, [[published-crate-naming]]). FerroPIX can use
   `ihe-iti` directly, and a binding can move there with no change to the

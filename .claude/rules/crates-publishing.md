@@ -12,7 +12,7 @@ switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
 implement, never `ferrofed-*` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`, `oauth-server-metadata`, and the two harmonised
+`oauth-server-metadata`, and the two harmonised
 software components of Regulation (EU) 2025/327, `ehds-logging` and
 `eehrxf`; `.claude/memory/published-crate-naming.md`), one crate per
 specification with a feature per layer or profile; FerroFED's own glue and
@@ -98,7 +98,7 @@ an owner decision recorded per crate when the switch flips, never assumed.
   and verifies the exact tarball an upload would send and works while the
   switch is off, then `cargo publish --dry-run` over the publishable set once
   there is one. A library that depends on another library
-  (`nl-generic-functions` feature `nuts-auth` on `oauth-server-metadata`)
+  (`ehds-logging` feature `balp` on `ihe-iti`)
   resolves it through a `--config patch.crates-io.<name>.path=…` patch per
   depended-on `crates/*` member, because Cargo resolves a sibling through
   its local overlay only when a target registry is known, and while the

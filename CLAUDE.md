@@ -249,10 +249,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
   `xcpd`, with `balp` and `atna` turning on their audit records, written
-  through `ihe-atna`), `nl-generic-functions`
-  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, the
-  FHIR-free request `authorizer` the engine implements, and the BSN naming
-  systems in `identification`), `oauth-server-metadata` (RFC 8414,
+  through `ihe-atna`), `oauth-server-metadata` (RFC 8414,
   the issuer and the checks a client holds authorization server metadata to,
   with no feature; #551), and the interoperability component of Regulation
   (EU) 2025/327 (decision A58), `eehrxf` (the interoperability
@@ -265,11 +262,16 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   ATNA and BALP audit, `ihe-atna`, come from the family's audit library,
   FerroHEALTH/FerroAUDIT, pinned exactly from crates.io (#1176). The two
   components never list each other and only `ferrofed-server` links both,
-  which the architecture test holds. A library may depend on another library
-  (`nuts-auth` on `oauth-server-metadata`), and `cargo package` resolves it
+  which the architecture test holds. A library may depend on another library,
+  and `cargo package` resolves it
   through a `patch.crates-io` per depended-on member while the switch is off
   (`.claude/rules/crates-publishing.md`). The library crates depend on
   nothing in FerroFED, so FerroPIX can use them as they are.
+- `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`, `lrza`,
+  `nuts-auth`, the FHIR-free request `authorizer` the engine implements, and
+  the BSN naming systems in `identification`) is owned and published by
+  FerroHEALTH/FerroPIX since #367; FerroFED pins it exactly from crates.io
+  (`nl-generic-functions = "=0.0.25"`) and keeps no copy.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (laid out by role and binding: `role/` holds

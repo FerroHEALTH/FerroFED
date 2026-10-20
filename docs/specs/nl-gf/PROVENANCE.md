@@ -12,7 +12,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Document: *Netherlands - Generic Functions for data exchange
   Implementation Guide*, package `fhir.nl.gf` version 0.3.0, published by
   Stichting Nuts
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: the European Union Public Licence 1.2 (`EUPL-1.2`, the
   `license` of `sushi-config.yaml` and the repository's `LICENSE`,
   vendored beside this file)
@@ -21,12 +21,12 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 33
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `2ea858fc732ae61932e582db9dab6d64d664d11caa15363f4ede65ae46ee5610`
-- Read by: #87 (the NVI search of `crates/nl-generic-functions` feature
+- Read by: the NVI binding of `app/ferrofed-server` (`src/binding/nl/nvi.rs`), the Mitz pre-filter of `app/ferrofed-identity` and the NVI device of `tools/ferrofed-testkit`, which cite GF-Localization and GF-Consent. Earlier, #87 (the NVI search of `nl-generic-functions` feature
   `nvi`, held to the Localization Service capability statement and the
   localization record profile, and the LRZa reading of feature `lrza`,
   held to the Organization profiles and the LRZa examples) and #88 (the
   access token request of feature `nuts-auth`, held to GF-Authentication
-  and its GFI-004 and GFI-005 transactions)
+  and its GFI-004 and GFI-005 transactions); `nl-generic-functions` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

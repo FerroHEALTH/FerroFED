@@ -9,14 +9,14 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `1f0196ab826e5093f6f7b8cbb935b106c22e19b6f9b246d4cce8c157602a14cd`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 0 committed, 3 cache only, 0 needing
   manual retrieval
 - Files in this directory: 0 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
-- Read by: #475 (the closed authorization question of `crates/nl-generic-functions` feature `mitz`, its harness service in `tools/ferrofed-testkit`, and the Mitz consent pre-filter of `app/ferrofed-identity`)
+- Read by: the Mitz pre-filter of `app/ferrofed-identity`, the Mitz binding of `app/ferrofed-server`, the Mitz device of `tools/ferrofed-testkit` and `conformance/obligations.tsv`; #475 built the closed authorization question of `nl-generic-functions` feature `mitz`, owned by FerroHEALTH/FerroPIX since #367
 
 The documents of the VZVZ Mitz afsprakenstelsel that define the closed
 authorization question of Annex B §B.6, attachments of the Confluence page
