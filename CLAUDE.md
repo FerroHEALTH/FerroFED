@@ -323,7 +323,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   members, their health, the integrity incidents, the routing table, the
   stored queries and the self-description, the last four through the
   gateway's read-only operator surface (`{base}/operator/`, behind the
-  issuer's `operator_scope`). The query console (`query`, #277) runs AQL and
+  `[auth] product_scope`, #1174). The query console (`query`, #277) runs AQL and
   the stored queries with every node's status and completeness shown, and
   sign-out ends the server session and, when configured, the provider's
   (`oidc`, #584). Its
