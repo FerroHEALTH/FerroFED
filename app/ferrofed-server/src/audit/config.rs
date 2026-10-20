@@ -43,8 +43,8 @@ use std::time::Duration;
 
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::Secret;
-use ihe_iti::atna::spool::Bounds;
-use ihe_iti::balp::{NetworkAddress, Observer};
+use ihe_atna::atna::spool::Bounds;
+use ihe_atna::balp::{NetworkAddress, Observer};
 use serde::Deserialize;
 use url::Url;
 

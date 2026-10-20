@@ -252,7 +252,7 @@ impl DirectorySource {
     /// A read or a refresh whose record the recorder refuses fails, and the
     /// registry in place stays.
     #[must_use]
-    pub fn audited(mut self, recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder>) -> Self {
+    pub fn audited(mut self, recorder: std::sync::Arc<dyn ihe_atna::balp::AuditRecorder>) -> Self {
         self.client = self.client.audited(recorder);
         self
     }

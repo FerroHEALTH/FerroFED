@@ -3,13 +3,9 @@
 
 //! BALP: the `AuditEvent` each audited client records, held to the vendored
 //! audit profile of its transaction, the BALP pattern beneath it and the
-//! profile's own example; the ATX: FHIR Feed that sends it (the `RESTful`
-//! ATNA supplement, ITI TF-2 §3.20.4.2); the hygiene of the patient
-//! identifier a record carries, and where it carries the purposes of use.
+//! profile's own example. The record itself, its FHIR Feed, its hygiene and
+//! its purposes of use are tested in ihe-atna (FerroHEALTH/FerroAUDIT).
 
-mod described;
-mod feed;
-mod hygiene;
 #[cfg(feature = "mcsd")]
 mod mcsd;
 #[cfg(feature = "pdqm")]
@@ -18,11 +14,9 @@ mod pdqm;
 mod pixm;
 #[cfg(feature = "pmir")]
 mod pmir;
-#[cfg(any(feature = "pixm", feature = "pdqm", feature = "mcsd", feature = "pmir"))]
 mod profile;
-mod purposes;
 
-use ihe_iti::balp::{NetworkAddress, Observer};
+use ihe_atna::balp::{NetworkAddress, Observer};
 
 /// The system the tests record as.
 pub(crate) fn observer() -> Observer {

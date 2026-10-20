@@ -8,15 +8,15 @@
 //! [`tls`], both over `ferrofed_identity::fhir`, so the mapping from the
 //! configuration is written once (#507). A credential section names basic
 //! credentials, and [`authentication`] refuses a grant, never reading it as
-//! no credential. Two kinds of service take a grant: the IHE FHIR services
-//! (PIXm, PDQm, PMIR, mCSD) the client credentials grant of IUA ITI-71,
-//! which `ferrohealth-smart` obtains and `service_authentication` hands to
-//! the client, and the NVI the Nuts grant, which the Dutch binding wires
-//! itself. No specification governs the mapping: our own design.
+//! no credential. Three kinds of service take a grant: the IHE FHIR services
+//! (PIXm, PDQm, PMIR, mCSD) the client credentials grant of IUA ITI-71, and
+//! Mitz the same grant, which `ferrohealth-smart` obtains and
+//! `service_authentication` hands to the client, and the NVI the Nuts grant,
+//! which the Dutch binding wires itself. No specification governs the mapping: our own design.
 
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
 use ferrofed_registry::secret::Secret;
-#[cfg(feature = "binding-ihe")]
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrohealth_smart::client::ClientCredentials;
 
 use crate::config::settings::Scheme;
@@ -66,8 +66,8 @@ pub fn authentication(
     }
 }
 
-/// A credential of an IHE FHIR service that cannot be used.
-#[cfg(feature = "binding-ihe")]
+/// A credential of an IHE FHIR service or Mitz that cannot be used.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ServiceAuthError {
@@ -86,18 +86,19 @@ pub enum ServiceAuthError {
     },
 }
 
-/// The credential the section `section` of an IHE FHIR service resolved to.
+/// The credential the section `section` of an IHE FHIR service or Mitz
+/// resolved to.
 ///
 /// It is none, basic credentials, or the token of its client credentials
-/// grant (IUA ITI-71), which `ferrohealth-smart` obtains from its token
-/// endpoint with the platform's trust roots.
+/// grant (IUA ITI-71, RFC 6749 §4.4), which `ferrohealth-smart` obtains from
+/// its token endpoint with the platform's trust roots.
 ///
 /// # Errors
 ///
 /// [`ServiceAuthError::Refused`] for an `oauth2`, Nuts or FAPI 2.0 grant, and
 /// [`ServiceAuthError::TokenTransport`] for a token client that cannot be
 /// built.
-#[cfg(feature = "binding-ihe")]
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub fn service_authentication(
     section: &str,
     scheme: Option<&Scheme>,

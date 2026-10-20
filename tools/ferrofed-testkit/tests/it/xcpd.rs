@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
-use ihe_iti::user::OnBehalfOf;
+use ihe_atna::user::OnBehalfOf;
 use ihe_iti::xcpd::XcpdClient;
 use ihe_iti::xcpd::discovery::Discovery;
 use ihe_iti::xcpd::error::XcpdError;

@@ -488,7 +488,7 @@ impl XcpdLocalizer {
     async fn broadcast(
         &self,
         (query, assertion): (&DiscoveryQuery, Option<XuaAssertion>),
-        on_behalf: &ihe_iti::user::OnBehalfOf,
+        on_behalf: &ihe_atna::user::OnBehalfOf,
         timeout: Duration,
     ) -> Vec<Option<Result<Discovery, XcpdError>>> {
         let mut tasks = JoinSet::new();

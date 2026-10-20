@@ -16,9 +16,9 @@ pub mod repository;
 use std::sync::Arc;
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
-use ihe_iti::atna::forwarder::{Forwarder, Status};
-use ihe_iti::atna::repository::{Repository, TlsSettings};
-use ihe_iti::atna::spool::Content;
+use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::repository::{Repository, TlsSettings};
+use ihe_atna::atna::spool::Content;
 
 use crate::audit::{AuditTrailError, Forwarding, observed, spool, started};
 use crate::binding::ihe::audit::repository::AuditRepositorySettings;

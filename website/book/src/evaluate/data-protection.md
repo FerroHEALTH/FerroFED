@@ -86,7 +86,8 @@ access-unrecorded` and none of the data; a write's record is given its
 place before any member is asked, so a write is refused before it is made
 ([The access log](../operate/access-log.md)). The record follows
 Annex II, point 3.2, of the EHDS Regulation, and the library that builds it
-is `crates/ehds-logging`.
+is `ehds-logging`, published from the FerroHEALTH audit library
+(FerroAUDIT).
 
 What the record does not cover:
 

@@ -113,11 +113,11 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files of the package's $total, listed below
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #486 (the BALP audit records of \`crates/ihe-iti\`, whose tests hold
-  each record to the pattern its transaction's audit profile derives from and
-  a search to the client-side example, and the ATNA FHIR Feed sender, held to
-  the Audit Creator's \`create\` interaction) and #696 (every pattern an access
-  record names by canonical URL). The narrative pages of the same version are
+- Read by: #486 (the profile audit records of \`crates/ihe-iti\`, whose tests
+  hold each record to the pattern its transaction's audit profile derives
+  from and a search to the client-side example). The BALP writer, its FHIR
+  Feed and the access record moved to FerroHEALTH/FerroAUDIT (#1176), which
+  vendors the same package at the same pin. The narrative pages of the same version are
   in docs/specs/ihe-balp-pages/.
 
 ## What is here

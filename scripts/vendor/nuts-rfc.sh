@@ -12,7 +12,7 @@
 # and RFC022, the Discovery Service (how a Nuts participant finds the
 # authorization server of another).
 #
-# The access token request of crates/nl-generic-functions feature
+# The access token request of nl-generic-functions feature
 # `nuts-auth` (#88) is held to RFC021.
 #
 # The specifications live on the default branch of their repository, whose
@@ -101,8 +101,8 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #88 (the access token request of \`crates/nl-generic-functions\`
-  feature \`nuts-auth\`, held to RFC021)
+- Read by: the Nuts grant of \`app/ferrofed-engine\` (\`src/onward/grant/nl/nuts.rs\`) and its tests, which cite RFC021. Earlier, #88 (the access token request of \`nl-generic-functions\`
+  feature \`nuts-auth\`, held to RFC021); \`nl-generic-functions\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

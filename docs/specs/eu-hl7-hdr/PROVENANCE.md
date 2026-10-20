@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `2bc6073aedf1a6e4630b3763c2058ed5bbec53c29bc2e74ef5a9c2a60f0af918`
-- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `2703a997d31ff70ed8c06206d8076d966d25d1d8a64abc6a93187a92552c2e81`
-- Read by: #824 (the wire form of the Article 14(1) categories in
-  the access record of crates/ehds-logging)
+- Read by: #824 (the wire form of the Article 14(1) categories, decision A81,
+  which the access record of ehds-logging writes from FerroHEALTH/FerroAUDIT
+  since #1176), and the eehrxf tests and the testkit
 
 The European hospital discharge report guide in its ballot version,
 canonical `http://hl7.eu/fhir/hdr`, committed under CC0-1.0.

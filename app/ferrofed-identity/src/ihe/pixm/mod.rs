@@ -30,7 +30,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ihe_iti::balp::AuditRecorder;
+use ihe_atna::balp::AuditRecorder;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
 use ihe_iti::pixm::{Invocation, PixmClient};
@@ -689,7 +689,7 @@ struct NoAnswer;
 async fn ask(
     manager: &Manager,
     (source, asked): (&SourceIdentifier, Vec<(NodeId, TargetSystem)>),
-    on_behalf: &ihe_iti::user::OnBehalfOf,
+    on_behalf: &ihe_atna::user::OnBehalfOf,
     timeout: Duration,
 ) -> Vec<(NodeId, Lookup)> {
     if timeout.is_zero() {

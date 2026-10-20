@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ihe_iti::user::{OnBehalfOf, PurposeOfUse, User};
+use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};
 use ihe_iti::xcpd::audit::{
     AuditError, AuditEvent, AuditRecorder, EventOutcome, NetworkAccessPoint,
 };
@@ -251,7 +251,7 @@ fn the_fixed_codes_are_the_table_s() {
 async fn the_dicom_message_fills_the_initiating_gateway_table() {
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
-    use ihe_iti::atna::message::{AccessPoint, AuditSource};
+    use ihe_atna::atna::message::{AccessPoint, AuditSource};
 
     let kept = Arc::new(Kept::default());
     let audited = client().audited(kept.clone());
@@ -353,7 +353,7 @@ async fn the_event_of_a_discovery_made_for_a_user_names_them_and_shows_none_of_i
 /// and the event it was written from.
 #[cfg(feature = "atna")]
 async fn message_for(on_behalf: &OnBehalfOf) -> (String, AuditEvent) {
-    use ihe_iti::atna::message::{AccessPoint, AuditSource};
+    use ihe_atna::atna::message::{AccessPoint, AuditSource};
     let kept = Arc::new(Kept::default());
     let audited = client().audited(kept.clone());
     let server = answering("no-match.xml").await;

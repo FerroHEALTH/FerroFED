@@ -52,10 +52,14 @@ openehr-sdt = { version = "0.0.87", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.51" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.38" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.24" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.39" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.26" }
+# The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
+# and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
+# (ihe-atna), and the EHDS logging component (ehds-logging). Verified against
+# crates.io on 2026-10-20.
+ihe-atna = { version = "=0.1.0", default-features = false }
+ehds-logging = { version = "=0.1.0", default-features = false }
 eehrxf = { path = "crates/eehrxf", version = "0.0.24" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -171,7 +175,7 @@ tokio-rustls = { version = "0.26.6", default-features = false }
 # against crates.io on 2026-10-04.
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
-# ImplementationGuide), compiled in crates/ihe-iti, crates/nl-generic-functions
+# ImplementationGuide), compiled in crates/ihe-iti, nl-generic-functions
 # and crates/eehrxf and, for its PIX Manager test device, in
 # tools/ferrofed-testkit, never in the engine; checked against
 # docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the root
@@ -188,6 +192,10 @@ fhir-types = { version = "0.1.113", default-features = false }
 # against crates.io on 2026-10-16.
 fhirconnect = "=0.1.117"
 openehr-mapping-core = "=0.1.111"
+# The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
+# published by FerroHEALTH/FerroPIX since #367 and pinned exactly, because its
+# crate line moves by patch.
+nl-generic-functions = "=0.0.25"
 # The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
 # crates/eehrxf is read from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -196,7 +204,7 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 tar = { version = "0.4.46", default-features = false }
 # The XML reader and writer of the XCPD ITI-55 SOAP 1.2 and HL7 v3 messages
 # (#85), behind crates/ihe-iti's `xcpd` feature, and of the Mitz closed
-# authorization question (#475), behind crates/nl-generic-functions' `mitz`
+# authorization question (#475), behind nl-generic-functions' `mitz`
 # feature; the version fhir-types already
 # locks, so the feature adds no crate to the graph. Verified against crates.io
 # on 2026-10-03.

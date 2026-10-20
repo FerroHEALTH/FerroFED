@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, Request, Respond, ResponseTemplate};
+use wiremock::{Match, Mock, Request, Respond, ResponseTemplate};
 
 use crate::mock::Server;
 
@@ -73,6 +73,28 @@ impl Mitz {
         Mock::given(method("POST"))
             .and(path(ENDPOINT))
             .respond_with(Answer(Arc::clone(&state)))
+            .mount(&server)
+            .await;
+        Self { server, state }
+    }
+
+    /// Starts the device, answering only a question `credential` matches,
+    /// such as one carrying a token the harness token endpoint issued, and
+    /// `401` to every other.
+    pub async fn start_requiring(credential: impl Match + 'static) -> Self {
+        let server = Server::start().await;
+        let state = Arc::new(Mutex::new(State::default()));
+        Mock::given(method("POST"))
+            .and(path(ENDPOINT))
+            .and(credential)
+            .respond_with(Answer(Arc::clone(&state)))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(ENDPOINT))
+            .respond_with(ResponseTemplate::new(401))
+            .with_priority(2)
             .mount(&server)
             .await;
         Self { server, state }

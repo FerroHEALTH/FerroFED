@@ -127,7 +127,7 @@ version the HL7 Europe Base and Core, Patient Summary and Medication
 Prescription and Dispense guides depend on, committed under CC-BY-SA-4.0,
 which permits verbatim redistribution with attribution." "" "$read_by"
 
-read_by_categories=$'#824 (the wire form of the Article 14(1) categories in\n  the access record of crates/ehds-logging)'
+read_by_categories=$'#824 (the wire form of the Article 14(1) categories, decision A81,\n  which the access record of ehds-logging writes from FerroHEALTH/FerroAUDIT\n  since #1176), and the eehrxf tests and the testkit'
 
 pin commit hl7.fhir.eu.health-data-api-1.0.0-ballot.tgz "1.0.0-ballot (FHIR 4.0.1, 2026-03-13)" \
   "$registry/hl7.fhir.eu.health-data-api/1.0.0-ballot" \

@@ -83,7 +83,7 @@ pub enum BindingFault {
         key: String,
         /// What the syslog writer reported.
         #[source]
-        source: ihe_iti::atna::syslog::HeaderError,
+        source: ihe_atna::atna::syslog::HeaderError,
     },
     /// The path the ITI-93 feed is served at is not a path of its own: it
     /// must start with `/`, carry no query or fragment, and stay off the

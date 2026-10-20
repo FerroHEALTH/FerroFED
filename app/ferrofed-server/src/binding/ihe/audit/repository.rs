@@ -30,10 +30,10 @@ use std::time::Duration;
 
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::Secret;
-use ihe_iti::atna::message::AuditSource;
-use ihe_iti::atna::repository::Timeouts;
-use ihe_iti::atna::spool::Bounds;
-use ihe_iti::atna::syslog::Sender;
+use ihe_atna::atna::message::AuditSource;
+use ihe_atna::atna::repository::Timeouts;
+use ihe_atna::atna::spool::Bounds;
+use ihe_atna::atna::syslog::Sender;
 use serde::Deserialize;
 use url::Url;
 
