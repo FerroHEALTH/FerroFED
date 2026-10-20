@@ -414,7 +414,7 @@ impl From<GrantRefused> for FederationError {
     }
 }
 
-#[cfg(feature = "binding-ihe")]
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 impl From<crate::service::ServiceAuthError> for FederationError {
     fn from(error: crate::service::ServiceAuthError) -> Self {
         match error {

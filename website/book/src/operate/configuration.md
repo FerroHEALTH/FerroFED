@@ -356,7 +356,8 @@ authenticated by a client secret or a client assertion
 `oauth2`, `nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
 `[registry.mcsd]` take the same. Each grant a node's section can name is
 described in [Onward credentials](onward-credentials.md). The credentials of
-`[nl_gf.mitz]` take a user and a password alone. A grant
+`[nl_gf.mitz]` take the same: a user and a password, or the `oauth` grant,
+whose token each question carries as a bearer token. A grant
 a section does not take is refused at load, naming it, and never read as no
 credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses

@@ -17,8 +17,9 @@
 //! name. [`http_client_builder`] is the same build left open, for a client
 //! that finishes it itself. An OAuth 2.0 grant ([`Authentication::Grant`])
 //! rides in no default header: the PIXm, PDQm, PMIR and mCSD clients
-//! incorporate its token in each request themselves (IUA ITI-72), and every
-//! other client refuses it.
+//! incorporate its token in each request themselves (IUA ITI-72), the Mitz
+//! client builds its client per token (RFC 6750 §2.1), and every other
+//! client refuses it.
 
 use std::fmt;
 use std::sync::Arc;

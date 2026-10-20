@@ -20,6 +20,7 @@
 
 mod config;
 mod decision;
+mod grant;
 mod requester;
 
 use std::collections::BTreeMap;
@@ -95,8 +96,18 @@ fn gateway_over(dir: &Path, nodes: (&str, &str), mitz: &str) -> Result<Router, B
 /// The gateway of [`gateway_over`], with its state for the metrics.
 fn metered_over(
     dir: &Path,
-    (a, b): (&str, &str),
+    nodes: (&str, &str),
     mitz: &str,
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    metered_with(dir, nodes, &mitz_table(mitz, &holders()))
+}
+
+/// The gateway of [`metered_over`], with `table` as its `[nl_gf.mitz]`
+/// tables.
+fn metered_with(
+    dir: &Path,
+    (a, b): (&str, &str),
+    table: &str,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
@@ -104,7 +115,7 @@ fn metered_over(
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
-        mitz_table(mitz, &holders())
+        table
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

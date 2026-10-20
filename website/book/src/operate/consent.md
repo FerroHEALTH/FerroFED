@@ -191,7 +191,14 @@ What a deployment must provide:
   is reported as a Mitz outage, since Mitz is never called, and no claim
   value appears in a label, a log line or an error.
 - **TLS.** The `url` must be `https` outside `profile = "development"`.
-  `credentials` takes basic credentials, never an OAuth 2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
+  `credentials` takes basic credentials or the OAuth 2.0 client
+  credentials grant of `[nl_gf.mitz.credentials.oauth]` (RFC 6749 §4.4),
+  never an `oauth2`, `nuts` or `fapi2` grant. The gateway obtains the token
+  at the token endpoint, which must be `https` outside
+  `profile = "development"`, caches it while it is fresh, and sends it with
+  each question as a bearer token (RFC 6750 §2.1). A question Mitz answers
+  `401` is asked once more with a fresh token, within the same budget.
+  Whether a gateway may ask Mitz at all is a matter of admission
   to the Mitz afsprakenstelsel.
 
 The question carries the purpose `purpose` configures, `TREAT` or `COC`,
