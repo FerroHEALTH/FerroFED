@@ -1441,7 +1441,7 @@ dependencies = [
  "base64 0.23.1",
  "ferrofed-registry",
  "ferrofed-testkit",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.4.0",
  "http",
  "jiff",
  "jsonschema",
@@ -1533,7 +1533,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.4.0",
  "fhir-types",
  "governor",
  "http",
@@ -1669,6 +1669,27 @@ dependencies = [
  "url",
  "wasm-bindgen",
  "wiremock",
+]
+
+[[package]]
+name = "ferrohealth-smart"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c618240cfdb9e83a36315278eb10fe2e1f2bdf8b1072cb26620c432cb528466"
+dependencies = [
+ "argon2",
+ "aws-lc-rs",
+ "base64 0.23.1",
+ "http",
+ "jiff",
+ "jsonwebtoken",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -3332,7 +3353,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a93339734f6278f77ebf61a8f4fd86bb6b43bec902821fff57f276689f3c7cd"
 dependencies = [
  "base64 0.23.1",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.3.1",
  "fhir-types",
  "http",
  "jiff",
