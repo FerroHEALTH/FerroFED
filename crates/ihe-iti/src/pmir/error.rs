@@ -73,7 +73,7 @@ pub enum SubscribeError {
     /// its answer is not used (feature `balp`, §2:3.94.5.1).
     #[cfg(feature = "balp")]
     #[error("the ITI-94 audit record could not be recorded")]
-    Audit(#[source] crate::balp::AuditError),
+    Audit(#[source] ihe_atna::balp::AuditError),
 }
 
 impl SubscribeError {

@@ -31,12 +31,12 @@ on anything called FerroFED.
   read it without depending on a national crate).
 - One crate per specification, with a feature per layer or profile
   (`openehr-federation`: `aql`, `merge`; `ihe-iti`: `pixm`, `pdqm`, `mcsd`,
-  `pmir`, `xcpd`, `atna`, `balp`; `nl-generic-functions`: `nvi`, `mitz`,
+  `pmir`, `xcpd`, with `atna` and `balp` turning on their audit records; `nl-generic-functions`: `nvi`, `mitz`,
   `lrza`, `nuts-auth`; `oauth-server-metadata` has none), so a caller
   compiles only what it uses. A new crate is the exception, for a new
   specification.
 - A published crate depends on nothing in FerroFED. It may depend on another
-  `crates/*` library (`nuts-auth` on `oauth-server-metadata`). FerroFED's own
+  `crates/*` library. FerroFED's own
   glue (the registry, the identity traits and their adapters, the engine, the
   server) lives under `app/` as `ferrofed-*` with a hard `publish = false`.
 - Before a name is used, it is claimed on crates.io with a 0.0.0 placeholder
@@ -47,3 +47,8 @@ on anything called FerroFED.
   ([[crate-split]]).
 - The layout landed with #106; `docs/architecture.md` §11 and decision A34 are
   the design of record.
+- **Audit moved to FerroAUDIT (owner, 2026-10-20, #367):** the ATNA sender
+  and the BALP writer, once `ihe-iti`'s `atna` and `balp` code, and the whole
+  `ehds-logging` crate are published from FerroHEALTH/FerroAUDIT as
+  `ihe-atna` and `ehds-logging` 0.1.0, and FerroFED pins both exactly
+  (#1176). A change to either is filed and built there.

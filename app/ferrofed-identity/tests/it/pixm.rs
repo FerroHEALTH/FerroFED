@@ -287,11 +287,11 @@ async fn a_manager_slower_than_the_deadline_is_unavailable() {
 struct Stalled;
 
 #[async_trait::async_trait]
-impl ihe_iti::balp::AuditRecorder for Stalled {
+impl ihe_atna::balp::AuditRecorder for Stalled {
     async fn record(
         &self,
-        _exchange: ihe_iti::balp::Exchange,
-    ) -> Result<(), ihe_iti::balp::AuditError> {
+        _exchange: ihe_atna::balp::Exchange,
+    ) -> Result<(), ihe_atna::balp::AuditError> {
         std::future::pending().await
     }
 }
@@ -299,7 +299,7 @@ impl ihe_iti::balp::AuditRecorder for Stalled {
 #[tokio::test]
 async fn an_answer_whose_record_is_not_stored_by_the_deadline_is_unavailable_in_time() {
     let server = stub(200, parameters(&[(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)])).await;
-    let recorder: Arc<dyn ihe_iti::balp::AuditRecorder> = Arc::new(Stalled);
+    let recorder: Arc<dyn ihe_atna::balp::AuditRecorder> = Arc::new(Stalled);
     let budget = Duration::from_millis(300);
     let asked = Instant::now();
     let resolutions = resolver(&server)

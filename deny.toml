@@ -65,17 +65,19 @@ allow = [
   "Zlib",
 ]
 confidence-threshold = 0.9
-# The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
-# join this list as each is first depended on: openehr-query is BUSL-1.1,
-# openehr-its is Apache-2.0, and openehr-term, under openehr-rm, is Apache-2.0
-# with the CC-BY-SA-3.0 terminology data it redistributes; openehr-sdt is
-# BUSL-1.1.
+# The project's own crates are BUSL-1.1 (LICENSE), and so are ihe-atna and
+# ehds-logging, the family's audit library (FerroHEALTH/FerroAUDIT). The
+# openEHR model crates join this list as each is first depended on:
+# openehr-query is BUSL-1.1, openehr-its is Apache-2.0, and openehr-term,
+# under openehr-rm, is Apache-2.0 with the CC-BY-SA-3.0 terminology data it
+# redistributes; openehr-sdt is BUSL-1.1.
 exceptions = [
   { allow = ["BUSL-1.1"], crate = "openehr-federation" },
   { allow = ["BUSL-1.1"], crate = "ihe-iti" },
   { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
   { allow = ["BUSL-1.1"], crate = "oauth-server-metadata" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
+  { allow = ["BUSL-1.1"], crate = "ihe-atna" },
   { allow = ["BUSL-1.1"], crate = "eehrxf" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },

@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ihe-iti"
-description = "The IHE IT Infrastructure (ITI) profiles: PIXm (ITI-83), PDQm (ITI-78, ITI-119), mCSD (ITI-90, ITI-91), PMIR (ITI-93, ITI-94), XCPD (ITI-55) and ATNA (ITI-20), one feature per profile"
+description = "The IHE IT Infrastructure (ITI) profiles: PIXm (ITI-83), PDQm (ITI-78, ITI-119), mCSD (ITI-90, ITI-91), PMIR (ITI-93, ITI-94) and XCPD (ITI-55), one feature per profile, with their audit records written through ihe-atna"
 # The crate line starts above the 0.0.0 name reservation on crates.io (no
 # specification governs this: our own design).
-version = "0.0.38"
+version = "0.0.39"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -31,6 +31,7 @@ include = ["src/**", "README.md", "LICENSE"]
 # the FHIR R4 `terminology` root set for Parameters and OperationOutcome, and
 # the redacting secret type the identifiers travel in.
 pixm = [
+  "dep:ihe-atna",
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/terminology",
@@ -46,6 +47,7 @@ pixm = [
 # a search or a match answers with and the Parameters a match posts, and the
 # redacting secret type the demographics travel in.
 pdqm = [
+  "dep:ihe-atna",
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/resources",
@@ -94,6 +96,7 @@ pmir = [
 # supplied by the caller and embedded as written, so no signing crate is
 # compiled.
 xcpd = [
+  "dep:ihe-atna",
   "dep:async-trait",
   "dep:http",
   "dep:jiff",
@@ -105,44 +108,36 @@ xcpd = [
   "dep:url",
   "dep:uuid",
 ]
-# ATNA, the audit trail (ITI-20, #418): the DICOM PS3.15 audit message, the
-# RFC 5424 syslog message it travels in, the RFC 5425 TLS connection to an
-# Audit Record Repository on rustls with the platform's roots, and the bounded
-# store-and-forward spool ITI-20 requires of a sender. With `xcpd`, it also
-# writes the ITI-55 audit message.
-atna = [
-  "dep:base64",
-  "dep:jiff",
-  "dep:quick-xml",
-  "dep:rustls",
-  "dep:rustls-platform-verifier",
-  "dep:secrecy",
-  "dep:thiserror",
-  "dep:tokio",
-  "dep:tokio-rustls",
-  "dep:tracing",
-  "dep:url",
-]
-# BALP, the Basic Audit Log Patterns (#486): the FHIR R4 AuditEvent the FHIR
-# profiles audit their transactions as, and the ATNA ATX: FHIR Feed Option of
-# ITI-20 that posts it to an Audit Record Repository through the `atna` spool
-# and forwarder. With `pixm`, `pdqm`, `mcsd` or `pmir` it also writes that
-# profile's audit records.
+# ATNA (ITI-20, #418): with `xcpd`, the ITI-55 audit message, written
+# through the ATNA types of the published `ihe-atna` crate, which carries the
+# DICOM audit message, the syslog transport, the spool and the forwarder.
+atna = ["dep:ihe-atna", "ihe-atna/atna"]
+# BALP (#486): with `pixm`, `pdqm`, `mcsd` or `pmir`, that profile's audit
+# records, the FHIR R4 AuditEvent of the Basic Audit Log Patterns written
+# through `ihe-atna`, and the time an audited exchange's record is stored
+# within (module `recording`).
 balp = [
-  "atna",
+  "dep:ihe-atna",
+  "ihe-atna/balp",
   "dep:async-trait",
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/resources",
   "dep:http",
+  "dep:jiff",
   "dep:reqwest",
+  "dep:secrecy",
   "dep:serde_json",
+  "dep:thiserror",
+  "dep:tokio",
+  "dep:url",
 ]
 
 [dependencies]
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
+ihe-atna = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }

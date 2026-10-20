@@ -10,10 +10,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ihe_iti::balp::Outcome;
+use ihe_atna::balp::Outcome;
+use ihe_atna::user::OnBehalfOf;
 use ihe_iti::pixm::error::PixmError;
 use ihe_iti::recording::Late;
-use ihe_iti::user::OnBehalfOf;
 use secrecy::ExposeSecret as _;
 
 use super::profile::{
@@ -266,17 +266,17 @@ async fn a_failed_exchange_whose_record_is_not_stored_in_time_keeps_its_own_fail
 
 #[test]
 fn the_record_bytes_are_never_shown() {
-    let exchange = ihe_iti::balp::Exchange {
+    let exchange = ihe_atna::balp::Exchange {
         kind: ihe_iti::pixm::audit::QUERY_CONSUMER,
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome: Outcome::Success,
-        direction: ihe_iti::balp::Direction::Sent {
-            server: ihe_iti::balp::Peer::server(
+        direction: ihe_atna::balp::Direction::Sent {
+            server: ihe_atna::balp::Peer::server(
                 &url::Url::parse("https://pix.example.org/fhir/").expect("a URL"),
             ),
         },
         on_behalf: OnBehalfOf::System,
-        entities: vec![ihe_iti::balp::Entity::Patient {
+        entities: vec![ihe_atna::balp::Entity::Patient {
             system: RED.to_owned(),
             value: secrecy::SecretString::from(RED_VALUE),
         }],

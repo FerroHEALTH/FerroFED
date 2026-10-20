@@ -28,9 +28,10 @@ ihe = [
   "ihe-iti/xcpd",
 ]
 # The BALP recorders: the FHIR Feed of ITI-20 to an ATNA Audit Record
-# Repository, and the audit log target. Every server build turns it on, as
-# the access record is written through it whatever the binding.
-balp = ["dep:ihe-iti"]
+# Repository, and the audit log target, over the published ihe-atna. Every
+# server build turns it on, as the access record is written through it
+# whatever the binding.
+balp = ["dep:ihe-atna"]
 # The adapters of the Dutch binding (Annex B): NVI and Mitz, with the LRZa
 # URAs they read. The server's binding-nl turns it on.
 nl = ["dep:nl-generic-functions"]
@@ -44,8 +45,13 @@ http.workspace = true
 # XCPD localizer (#85) over its ITI-55 client, with its audit messages sent
 # over ITI-20 (#418), and the identity lifecycle (#147) over its PMIR ITI-94
 # subscriber and ITI-93 feed reader, and the demographics step (#487) over its
-# PDQm ITI-78 and ITI-119 client.
+# PDQm ITI-78 and ITI-119 client. Its `atna` and `balp` features turn on the
+# audit records those clients write through ihe-atna.
 ihe-iti = { workspace = true, optional = true, features = ["atna", "balp"] }
+# The audit types every recorder here speaks: the ATNA spool, forwarder and
+# syslog sender (ITI-20) and the BALP AuditEvent with its FHIR Feed, from the
+# family's audit library (FerroHEALTH/FerroAUDIT).
+ihe-atna = { workspace = true, optional = true, features = ["atna", "balp"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
 # (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true

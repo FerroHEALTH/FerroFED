@@ -31,7 +31,7 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdq::PdqSupplier;
-use ihe_iti::balp::{AuditError, AuditRecorder, Exchange};
+use ihe_atna::balp::{AuditError, AuditRecorder, Exchange};
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path, query_param};

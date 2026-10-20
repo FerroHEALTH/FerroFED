@@ -52,9 +52,14 @@ openehr-sdt = { version = "0.0.87", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.51" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.38" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.39" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
-ehds-logging = { path = "crates/ehds-logging", version = "0.0.26" }
+# The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
+# and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
+# (ihe-atna), and the EHDS logging component (ehds-logging). Verified against
+# crates.io on 2026-10-20.
+ihe-atna = { version = "=0.1.0", default-features = false }
+ehds-logging = { version = "=0.1.0", default-features = false }
 eehrxf = { path = "crates/eehrxf", version = "0.0.24" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }

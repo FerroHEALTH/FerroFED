@@ -35,12 +35,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
-use ihe_iti::atna::forwarder::{Forwarder, Status};
-use ihe_iti::atna::spool::reserve::Reservation;
-use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer, Reserved};
+use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
+use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::spool::reserve::Reservation;
+use ihe_atna::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer, Reserved};
 #[cfg(feature = "ihe")]
-use ihe_iti::user::{PurposeOfUse, User};
+use ihe_atna::user::{PurposeOfUse, User};
 use tokio::task::JoinHandle;
 use url::Url;
 
@@ -52,9 +52,9 @@ use crate::role::behalf::OnBehalfOf;
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
 /// caller is the user of the exchange, and the gateway its own system.
 #[cfg(feature = "ihe")]
-pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_iti::user::OnBehalfOf {
+pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_atna::user::OnBehalfOf {
     match on_behalf {
-        OnBehalfOf::Caller(caller) => ihe_iti::user::OnBehalfOf::User(
+        OnBehalfOf::Caller(caller) => ihe_atna::user::OnBehalfOf::User(
             User::new(
                 caller.issuer().to_owned(),
                 caller.subject().to_owned(),
@@ -72,15 +72,15 @@ pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_iti::user::OnBehalfOf {
                     .collect(),
             ),
         ),
-        OnBehalfOf::Gateway => ihe_iti::user::OnBehalfOf::System,
+        OnBehalfOf::Gateway => ihe_atna::user::OnBehalfOf::System,
     }
 }
 
 /// What a log line says of `on_behalf`: whose behalf, never who.
-pub(crate) fn logged_as(on_behalf: &ihe_iti::user::OnBehalfOf) -> &'static str {
+pub(crate) fn logged_as(on_behalf: &ihe_atna::user::OnBehalfOf) -> &'static str {
     match on_behalf {
-        ihe_iti::user::OnBehalfOf::System => "gateway",
-        ihe_iti::user::OnBehalfOf::User(_) => "caller",
+        ihe_atna::user::OnBehalfOf::System => "gateway",
+        ihe_atna::user::OnBehalfOf::User(_) => "caller",
         _ => "other",
     }
 }

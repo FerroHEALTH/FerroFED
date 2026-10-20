@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use ferrofed_identity::ihe::pmir;
 use http::header::{CONTENT_TYPE, WWW_AUTHENTICATE};
 use http::{HeaderMap, StatusCode};
-use ihe_iti::balp::AuditError;
+use ihe_atna::balp::AuditError;
 use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 

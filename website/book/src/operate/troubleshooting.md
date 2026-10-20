@@ -194,7 +194,7 @@ withholds the answer.
 **Confirm.** `the access could not be recorded, so its answer is withheld`
 at `ERROR` under `ferrofed_server::access`, with the cause in `error`. The
 spool refused the record when `an audit message was refused: …` naming the
-spool's bounds appears at `WARN` under `ihe_iti::atna::spool` and
+spool's bounds appears at `WARN` under `ihe_atna::atna::spool` and
 `ferrofed_audit_refused_total` rises. Two other lines under the same target
 point at a defect to report with the `request_id`: `an access was served with
 no verified caller, so its answer is withheld` and `an answer of a
@@ -217,7 +217,7 @@ rise, and `GET {base}/operator/dependencies` reports `audit_repository` or
 **Cause.** The audit repository is not taking the records, so they wait in
 the spool, or it refused some, which wait in the quarantine.
 
-**Confirm.** Under `ihe_iti::atna::forwarder`: `the audit repository could
+**Confirm.** Under `ihe_atna::atna::forwarder`: `the audit repository could
 not be reached; its messages stay spooled` or `an audit message could not be
 delivered; the connection is dropped and the message stays spooled` for an
 ITI-20 syslog repository, and `an AuditEvent could not be delivered; it

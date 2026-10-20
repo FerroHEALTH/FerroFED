@@ -77,14 +77,17 @@ const HTTP_ENGINES: &[&str] = &[
 /// depend on it either.
 const APPLICATION: &str = "ferrofed-server";
 
-/// The binding crates, the specification crates they share, and the two EHDS
-/// harmonised components, that carry no FerroFED dependency at all; a binding
-/// crate may depend on another, and the components are held apart by
+/// The binding crates, the specification crates they share, and the EHDS
+/// interoperability component, the members that carry no FerroFED dependency
+/// at all; a binding crate may depend on another, and the two harmonised
+/// components are held apart by
 /// `the_two_harmonised_components_are_independent_of_each_other`.
-const STANDALONE: &[&str] = &["ihe-iti", "oauth-server-metadata", "ehds-logging", "eehrxf"];
+const STANDALONE: &[&str] = &["ihe-iti", "oauth-server-metadata", "eehrxf"];
 
 /// The European logging software component, which the server's composition
-/// root alone builds records for (Regulation (EU) 2025/327 Art 2(2)(o)).
+/// root alone builds records for (Regulation (EU) 2025/327 Art 2(2)(o)). It
+/// is the published crate of the family's audit library (FerroAUDIT), so it
+/// is read from the dependency graph and is no member.
 const LOGGING: &str = "ehds-logging";
 
 /// The European interoperability software component (Regulation (EU)
@@ -126,6 +129,14 @@ const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// with every feature on, so a dependency behind a feature is seen too.
 fn closure(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
     tree(package, &["--all-features"])
+}
+
+/// The package names in the normal and build dependency closure of `package`
+/// as the workspace resolves it, with the features its members turn on: cargo
+/// takes no feature flag for a package outside the workspace, such as the
+/// published logging component.
+fn resolved(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
+    tree(package, &[])
 }
 
 /// The package names in the normal and build dependency closure of `package`
@@ -403,7 +414,7 @@ fn the_two_harmonised_components_are_independent_of_each_other() -> Result<(), B
     // way is our own reading, which the crate graph enforces.
     let application = members("app")?;
     let interoperability = closure(INTEROPERABILITY)?;
-    let logging = closure(LOGGING)?;
+    let logging = resolved(LOGGING)?;
     assert!(
         interoperability.contains(INTEROPERABILITY) && logging.contains(LOGGING),
         "cargo tree did not list a component itself, so its output was not read"
@@ -444,8 +455,12 @@ fn no_crate_but_the_composition_root_links_both_components() -> Result<(), Box<d
     checked.extend(members("app")?);
     checked.extend(members("tools")?);
     assert!(
-        checked.contains(INTEROPERABILITY) && checked.contains(LOGGING),
-        "the crate map lost a harmonised component: {checked:?}"
+        checked.contains(INTEROPERABILITY),
+        "the crate map lost the interoperability component: {checked:?}"
+    );
+    assert!(
+        closure(APPLICATION)?.contains(LOGGING),
+        "the server no longer links the logging component {LOGGING}"
     );
     let mut breaches = Vec::new();
     for member in &checked {
