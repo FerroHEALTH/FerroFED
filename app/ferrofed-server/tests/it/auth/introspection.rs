@@ -9,8 +9,9 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
+use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_registry::secret::Secret;
@@ -40,24 +41,18 @@ const INTROSPECT: &str = "/introspect";
 /// secret `synthetic-secret`.
 fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
     Ok(AuthSettings {
-        audience: Some(AUDIENCE.to_owned()),
-        issuers: vec![IssuerSettings {
-            issuer: ISSUER.to_owned(),
-            verification: Verification::Introspection(Introspection {
+        audience: vec![AUDIENCE.to_owned()],
+        issuers: vec![IssuerSettings::new(
+            ISSUER,
+            Verification::Introspection(Introspection {
                 endpoint: Url::parse(&format!("{endpoint}{INTROSPECT}"))?,
                 client_id: String::from("ferrofed"),
                 client_secret: Secret::new("synthetic-secret"),
+                audience: vec![AUDIENCE.to_owned()],
+                clock_skew: Duration::from_secs(60),
+                timeout: Duration::from_secs(10),
             }),
-            backend_clients: BTreeSet::new(),
-            demographic_clients: BTreeSet::new(),
-            operator_scope: None,
-            patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
-            professional_issuing_authority: None,
-            national_contact_point: None,
-        }],
+        )],
         ..AuthSettings::default()
     })
 }
@@ -108,7 +103,7 @@ async fn an_active_token_for_this_gateway_is_admitted() -> TestResult {
 async fn an_inactive_token_is_401() -> TestResult {
     let introspection = endpoint(200, String::from(r#"{"active":false}"#)).await;
     let gateway = Gateway::with(introspecting(&introspection.uri())?).await?;
-    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Inactive).await
+    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: an active token for another audience is a `401`.
@@ -121,7 +116,7 @@ async fn an_active_token_for_another_audience_is_401() -> TestResult {
     )
     .await;
     let gateway = Gateway::with(introspecting(&introspection.uri())?).await?;
-    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Audience).await
+    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: an answer whose `exp` has passed is a `401`.
@@ -131,7 +126,7 @@ async fn an_answer_past_its_expiry_is_401() -> TestResult {
     let expired = jiff::Timestamp::now().as_second() - 3_600;
     let introspection = endpoint(200, answer(true, AUDIENCE, expired)).await;
     let gateway = Gateway::with(introspecting(&introspection.uri())?).await?;
-    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Expired).await
+    assert_refused(&gateway, bearing(query()?, OPAQUE)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: an endpoint answering with an error is a `503`,

@@ -189,7 +189,7 @@ fn serve_command(
         let access = admin::Access::sharing(
             Arc::clone(&trust),
             settings.profile,
-            settings.metrics.scrape_token.clone(),
+            settings.metrics.scrape_users.clone(),
         );
         (address, access)
     });

@@ -392,19 +392,28 @@ fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, FederationError
 }
 
 /// The public half of the client key of every FAPI 2.0 grant `settings`
-/// configures, then its previous key while it is rotated, each once, in
-/// endpoint order.
+/// configures, then its previous key while it is rotated, and of the
+/// assertion key of every `oauth` grant, each once, in endpoint order.
 fn client_keys(settings: &Settings) -> Vec<Jwk> {
     let mut keys: Vec<Jwk> = Vec::new();
     for scheme in settings.credentials.values() {
-        if let Scheme::Fapi2(grant) = scheme {
-            for key in grant.published_client_keys().keys {
-                if !keys
-                    .iter()
-                    .any(|known| known.common.key_id == key.common.key_id)
-                {
-                    keys.push(key);
-                }
+        let published: Vec<Jwk> = match scheme {
+            Scheme::Fapi2(grant) => grant.published_client_keys().keys,
+            // NOTE: RFC 7517 §4, the crate renders the public JWK, which reads as one;
+            // a key no JWK reader takes is legitimately not published.
+            Scheme::Oauth { grant, .. } => grant
+                .assertion_key
+                .iter()
+                .filter_map(|key| serde_json::from_value(key.public_jwk()).ok())
+                .collect(),
+            _ => Vec::new(),
+        };
+        for key in published {
+            if !keys
+                .iter()
+                .any(|known| known.common.key_id == key.common.key_id)
+            {
+                keys.push(key);
             }
         }
     }
@@ -640,16 +649,13 @@ fn dependencies(
 
 /// Every `[auth.issuer.patient]` binding of `settings`, with its key.
 fn patient_bindings(settings: &Settings) -> impl Iterator<Item = (String, &PatientBinding)> {
-    settings
-        .server
-        .auth
-        .issuers
-        .iter()
-        .enumerate()
-        .filter_map(|(index, issuer)| {
-            let binding = issuer.patient.as_ref()?;
-            Some((format!("auth.issuer[{index}].patient"), binding))
-        })
+    settings.server.auth.issuers.iter().filter_map(|issuer| {
+        let binding = issuer.patient.as_ref()?;
+        Some((
+            format!("trust.issuer \"{}\".patient", issuer.issuer),
+            binding,
+        ))
+    })
 }
 
 /// The rewrite's targeting for an undirected query under the declared node

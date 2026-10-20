@@ -38,14 +38,14 @@
 //! queries system-wide" (master08 §Resource Scopes). A scope the grammar
 //! reads as anything but a resource scope grants nothing.
 //!
-//! [`table`] holds what each operation requires, and [`grant`] whether a
-//! caller's scopes grant it.
+//! [`table`] holds what each operation requires; whether a caller's scopes
+//! grant it is `ferrohealth-smart`'s `Requirement::OpenEhr`, over the rules
+//! of `ferrohealth_smart::openehr`, which began as this module's own.
 
-pub mod grant;
 pub mod table;
 
+use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily};
 use openehr_its::rest::routes::RouteMatch;
-use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
 
 /// What an operation requires of its caller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,8 +60,8 @@ pub enum Requirement {
     Demographic,
     /// No caller: an admin operation, or one the table does not list.
     Refused,
-    /// A verified caller whose token carries the operator scope its issuer's
-    /// entry names: the read-only operator surface, `{base}/operator/`,
+    /// A verified caller whose token carries `[auth] product_scope`: the
+    /// read-only operator surface, `{base}/operator/`,
     /// which no SMART on openEHR resource family covers. No purpose of use
     /// is asked, because the surface returns no clinical data.
     Operator,

@@ -47,7 +47,7 @@ struct Record {
 /// The admin listener of `gateway`, sharing its gate, as a remote peer
 /// reaches it under the production profile.
 fn listener(gateway: &Trusting) -> Router {
-    let access = Access::sharing(Arc::clone(&gateway.trust), Profile::Production, None);
+    let access = Access::sharing(Arc::clone(&gateway.trust), Profile::Production, Vec::new());
     let remote = SocketAddr::from(([192, 0, 2, 10], 40_000));
     admin::serving_router(
         Arc::clone(&gateway.state),

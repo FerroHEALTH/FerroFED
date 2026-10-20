@@ -5,7 +5,7 @@
 //! one entry per operation of the `openehr-its` route table (§13.1, N25;
 //! ITS-REST SMART on openEHR, master08 §Resource Scopes).
 
-use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
+use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily};
 
 use super::{Requirement, Resource};
 

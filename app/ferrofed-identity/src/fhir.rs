@@ -39,8 +39,6 @@ pub enum Authentication {
     /// No `Authorization` header: the transport (mutual TLS, a private
     /// network) authenticates the gateway.
     None,
-    /// An RFC 6750 bearer token.
-    Bearer(SecretString),
     /// RFC 7617 basic authentication.
     Basic {
         /// The user name, which is not a secret.
@@ -61,7 +59,6 @@ impl Authentication {
     fn credentials(&self) -> Option<Credentials> {
         match self {
             Self::None | Self::Grant(_) => None,
-            Self::Bearer(token) => Some(Credentials::bearer(token.clone())),
             Self::Basic { user, password } => {
                 Some(Credentials::basic(user.as_str(), password.clone()))
             }

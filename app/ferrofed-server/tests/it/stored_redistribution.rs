@@ -74,7 +74,7 @@ fn both(
 ) -> Result<(Router, Router), Box<dyn Error>> {
     let state = state(dir, &three(a, b, c), federation)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    let access = Access::new(&crate::support::auth(), Profile::Production, None);
+    let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
     let operator = admin::router(state, access);
     Ok((client, operator))
 }

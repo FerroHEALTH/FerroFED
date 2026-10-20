@@ -49,8 +49,8 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily};
 use http::{HeaderValue, Method, StatusCode, Uri, header};
-use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
 use secrecy::SecretString;
 use serde::Serialize;
 

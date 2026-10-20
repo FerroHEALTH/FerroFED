@@ -104,9 +104,12 @@ openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
-# The SMART on openEHR scope grammar every caller's `scope` claim is read with
-# (#80; ITS-REST SMART on openEHR, master08).
-openehr-sdt.workspace = true
+# The resource server every caller is verified by (#1174): the issuers'
+# metadata and key sets, the RFC 9068 checks, the SMART on openEHR grant
+# rules over the grammar it re-exports, the Basic users, the refusal
+# challenges, and the client credentials grant of the plain onward and
+# service credentials.
+ferrohealth-smart.workspace = true
 # The RFC 7519 verification of every caller's access token (#80).
 jsonwebtoken.workspace = true
 # The per-caller rate limit of the listener (#631).

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! An IHE FHIR service reached with the OAuth 2.0 client-credentials grant
-//! (RFC 6749 §4.4; IHE IUA ITI-71 §3.71.4.1.2.1), through the real
-//! configuration path, against the harness token endpoint: the PIX Manager
+//! (RFC 6749 §4.4; IHE IUA ITI-71 §3.71.4.1.2.1) of `ferrohealth-smart`,
+//! through the real configuration path, against the harness token endpoint:
+//! the PIX Manager
 //! is asked with a token the grant obtained and incorporated as a bearer
 //! token (ITI-72 §3.72.4.2), the token is reused while it is fresh, a `401`
 //! gets one more request with a fresh token (§3.72.4.3), a refused grant
@@ -98,7 +99,7 @@ fn pixm(pix: &str, token_url: &str, secret_file: &Path) -> String {
 fn pixm_auditing(pix: &str, token_url: &str, secret_file: &Path, audit: &str) -> String {
     let file = toml::Value::String(secret_file.display().to_string());
     format!(
-        "{audit}\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
+        "{audit}\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.credentials.oauth]\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
     )
 }
 
@@ -239,16 +240,16 @@ async fn a_query_resolved_through_the_grant_writes_its_access_record() -> TestRe
     Ok(())
 }
 
-/// A `[pixm]` table whose grant carries `oauth2`, under `profile`, asking
-/// for [`SCOPE`] unless `oauth2` names a scope.
-fn manager_with(profile: &str, oauth2: &str) -> String {
-    let scope = if oauth2.contains("scope =") {
+/// A `[pixm]` table whose `oauth` grant carries `oauth`, under `profile`,
+/// asking for [`SCOPE`] unless `oauth` names a scope.
+fn manager_with(profile: &str, oauth: &str) -> String {
+    let scope = if oauth.contains("scope =") {
         String::new()
     } else {
         format!("scope = \"{SCOPE}\"\n")
     };
     format!(
-        "profile = \"{profile}\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\n{scope}{oauth2}"
+        "profile = \"{profile}\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth]\nclient_id = \"{CLIENT_ID}\"\n{scope}{oauth}"
     )
 }
 
@@ -260,16 +261,28 @@ fn refusal(text: &str) -> Result<ConfigError, Box<dyn Error>> {
     }
 }
 
+/// Everything `error` shows: its `Display`, its `Debug` and each cause.
+fn everything(error: &ConfigError) -> String {
+    let mut rendered = format!("{error}\n{error:?}");
+    let mut cause = Error::source(error);
+    while let Some(source) = cause {
+        rendered.push('\n');
+        rendered.push_str(&source.to_string());
+        cause = source.source();
+    }
+    rendered
+}
+
 #[test]
 fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
-    let key = "pixm.manager[0].credentials.oauth2";
+    let key = "pixm.manager[0].credentials.oauth";
     let cases = [
         (
             manager_with(
                 "development",
                 "token_endpoint = \"https://as.example.org/token\"\nclient_auth = \"client_secret_basic\"\n",
             ),
-            format!("{key}.client_secret"),
+            String::from(key),
         ),
         (
             manager_with(
@@ -281,13 +294,10 @@ fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
             format!("{key}.token_endpoint"),
         ),
         (
-            manager_with(
-                "development",
-                &format!(
-                    "token_endpoint = \"https://as.example.org/token\"\nclient_auth = \"tls_client_auth\"\nclient_secret = \"{SECRET}\"\n"
-                ),
+            format!(
+                "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
             ),
-            format!("{key}.client_auth"),
+            String::from("pixm.manager[0].credentials"),
         ),
     ];
     for (toml, named) in cases {
@@ -304,46 +314,51 @@ fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
     Ok(())
 }
 
-/// Whether a refusal is the one a case expects, naming the key it is given.
-type Refused = fn(&ConfigError, &str) -> bool;
-
 #[test]
 fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
-    let key = "pixm.manager[0].credentials.oauth2";
+    let key = "pixm.manager[0].credentials.oauth";
     let endpoint = "token_endpoint = \"https://as.example.org/token\"\n";
-    let cases: [(&str, Refused, String); 5] = [
+    let cases: [(String, &str); 4] = [
         (
-            "client_auth = \"client_secret_basic\"\ndpop_key_file = \"/nonexistent/dpop.pem\"\nclient_secret = \"s\"\n",
-            |error, key| matches!(error, ConfigError::GrantFault(GrantFault::NodeOnly { key: named }) if named == key),
-            format!("{key}.dpop_key_file"),
+            format!("{endpoint}client_auth = \"private_key_jwt\"\n"),
+            "credentials.oauth.private_key_file",
         ),
         (
-            "client_auth = \"private_key_jwt\"\nclient_secret = \"s\"\n",
-            |error, key| matches!(error, ConfigError::GrantFault(GrantFault::SecretUnused { key: named }) if named == key),
-            format!("{key}.client_secret"),
+            format!(
+                "{endpoint}client_auth = \"client_secret_basic\"\nclient_secret = \"{SECRET}\"\nscope = \"say\\\"hi\\\"\"\n"
+            ),
+            "RFC 6749 scope character set",
         ),
         (
-            "client_auth = \"private_key_jwt\"\n",
-            |error, key| matches!(error, ConfigError::Credentials(CredentialsFault::GrantWithoutSigning { section }) if section == key),
-            key.to_owned(),
+            format!("{endpoint}client_auth = \"client_secret_basic\"\n"),
+            "credentials.oauth.client_secret",
         ),
         (
-            "client_auth = \"client_secret_basic\"\nclient_secret = \"s\"\nscope = \"say\\\"hi\\\"\"\n",
-            |error, key| matches!(error, ConfigError::Credentials(CredentialsFault::ServiceScope { key: named, .. }) if named == key),
-            format!("{key}.scope"),
-        ),
-        (
-            "client_auth = \"client_secret_basic\"\n",
-            |error, key| matches!(error, ConfigError::Missing { key: named } if named == key),
-            format!("{key}.client_secret"),
+            format!(
+                "{endpoint}issuer = \"https://as.example.org\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"{SECRET}\"\n"
+            ),
+            "credentials.oauth.issuer and credentials.oauth.token_endpoint exclude each other",
         ),
     ];
-    for (table, refused, named) in cases {
-        let text = manager_with("development", &format!("{endpoint}{table}"));
-        let error = refusal(&text)?;
-        assert!(refused(&error, &named), "{named}: {error:?}");
-        assert!(!format!("{error} {error:?}").contains(SECRET));
+    for (table, reason) in cases {
+        let error = refusal(&manager_with("development", &table))?;
+        assert!(
+            matches!(&error, ConfigError::Smart { section, .. } if section == key),
+            "{reason}: {error:?}"
+        );
+        let shown = everything(&error);
+        assert!(shown.contains(reason), "{reason}: {shown}");
+        assert!(!shown.contains(SECRET), "{reason}: {shown}");
     }
+    let oauth2 = format!(
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/aql-*.s\"\nresource = \"https://pix.example.org/fhir\"\n"
+    );
+    let error = refusal(&oauth2)?;
+    assert!(
+        matches!(&error, ConfigError::Credentials(CredentialsFault::ServiceGrantNotHere { section })
+            if section == "pixm.manager[0].credentials"),
+        "a service takes no oauth2 grant: {error:?}"
+    );
     Ok(())
 }
 
@@ -362,7 +377,7 @@ fn a_service_grant_resolves_and_shows_no_secret() -> TestResult {
         .and_then(|pixm| pixm.managers.first())
         .and_then(|manager| manager.credentials.as_ref());
     assert!(
-        matches!(credentials, Some(Scheme::ServiceGrant(_))),
+        matches!(credentials, Some(Scheme::Oauth { .. })),
         "{credentials:?}"
     );
     assert!(!format!("{settings:?}").contains(SECRET));

@@ -198,11 +198,9 @@ async fn a_caller_with_no_token_is_refused_before_anything_is_read() -> TestResu
 }
 
 #[tokio::test]
-async fn an_issuer_that_names_no_operator_scope_admits_no_operator() -> TestResult {
+async fn a_gateway_that_names_no_product_scope_admits_no_operator() -> TestResult {
     let mut server = settings_with_room();
-    for issuer in &mut server.auth.issuers {
-        issuer.operator_scope = None;
-    }
+    server.auth.product_scope = None;
     let app = ferrofed_server::router(Arc::new(AppState::default()), &server);
     let response = send_as_is(app, get("/operator/incidents", &operator_bearer()?)?).await?;
     assert_eq!(StatusCode::FORBIDDEN, response.status());

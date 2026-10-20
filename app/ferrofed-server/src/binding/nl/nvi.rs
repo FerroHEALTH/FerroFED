@@ -13,7 +13,7 @@
 //! ```toml
 //! [nl_gf.nvi]
 //! url = "https://nvi.example.org/fhir"
-//! credentials = { bearer_token_file = "/run/secrets/nvi-token" }
+//! credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }
 //! client_identity_file = "/run/secrets/nvi-client.pem"
 //! trust_roots_file = "/etc/ferrofed/nvi-roots.pem"
 //! namespaces = ["pseudo-bsn"]
@@ -173,8 +173,9 @@ impl NviSettings {
 /// basic credentials or the Nuts grant, one of them.
 fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
     // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
-    // define the Nuts profile for the data user and no other grant, so oauth2 and fapi2 are refused.
+    // define the Nuts profile for the data user and no other grant, so every other grant is refused.
     let other_grant = [
+        ("oauth", table.oauth.is_some()),
         ("oauth2", table.oauth2.is_some()),
         ("fapi2", table.fapi2.is_some()),
     ];
@@ -184,11 +185,8 @@ fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
         }));
     }
     if let Some(grant) = &table.nuts {
-        let header = table.bearer_token.is_some()
-            || table.bearer_token_file.is_some()
-            || table.user.is_some()
-            || table.password.is_some()
-            || table.password_file.is_some();
+        let header =
+            table.user.is_some() || table.password.is_some() || table.password_file.is_some();
         if header {
             return Err(Error::Credentials(CredentialsFault::Scheme {
                 section: CREDENTIALS_KEY.to_owned(),

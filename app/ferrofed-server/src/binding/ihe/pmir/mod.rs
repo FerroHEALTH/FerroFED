@@ -114,12 +114,9 @@ impl IdentityFeed {
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
         let tls = service::tls_of("pmir", &settings.tls).map_err(IdentityFeedError::Tls)?;
-        let auth = service::service_authentication(
-            "pmir.credentials",
-            settings.credentials.as_ref(),
-            &tls,
-        )
-        .map_err(IdentityFeedError::Grant)?;
+        let auth =
+            service::service_authentication("pmir.credentials", settings.credentials.as_ref())
+                .map_err(IdentityFeedError::Grant)?;
         let subscriber = pmir::subscriber(&settings.url, &auth, &tls)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.

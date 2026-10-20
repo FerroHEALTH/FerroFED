@@ -141,7 +141,7 @@ pub struct PdqmSettings {
 /// [`CredentialsFault::GrantNotHere`]: crate::config::error::credentials::CredentialsFault::GrantNotHere
 pub(super) fn resolve(
     config: &Config,
-    context: &ServiceContext<'_>,
+    context: ServiceContext,
 ) -> Result<Option<PdqmSettings>, Error> {
     let Some(pdqm) = &config.pdqm else {
         return Ok(None);
@@ -233,8 +233,7 @@ pub(super) fn step(
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, FederationError> {
     let tls = service::tls_of("pdqm", &pdqm.tls).map_err(FederationError::Tls)?;
-    let auth =
-        service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref(), &tls)?;
+    let auth = service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
         let namespace =

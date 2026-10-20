@@ -27,7 +27,7 @@ async fn the_admin_listener_serves_tls_and_knows_its_loopback_peer() -> TestResu
     let tcp = TcpListener::bind("127.0.0.1:0").await?;
     let address = tcp.local_addr()?;
     let listener = TlsListener::new(tcp, Arc::new(Certificates::load(files)?))?;
-    let access = Access::new(&crate::support::auth(), Profile::Development, None);
+    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
     let app = admin::router(Arc::new(AppState::default()), access);
     tokio::spawn(admin::serve(listener, app));
 

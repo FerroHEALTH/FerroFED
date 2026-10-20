@@ -14,8 +14,8 @@ use std::error::Error;
 
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::error::federation::FederationFault;
-use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::mcsd::HarnessDirectory;
 use ferrofed_testkit::unreachable;
@@ -158,7 +158,7 @@ fn a_directory_url_with_a_credential_or_another_scheme_is_refused() -> TestResul
 #[test]
 fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
     let grant = settings(
-        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
+        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth]\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"synthetic-secret\"\nscope = \"system/aql-*.s\"\n",
     );
     assert!(
         matches!(
@@ -166,7 +166,7 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
                 .registry_directory
                 .as_ref()
                 .and_then(|directory| directory.credentials.as_ref())),
-            Some(Scheme::ServiceGrant(_))
+            Some(Scheme::Oauth { .. })
         ),
         "the client-credentials grant of IUA ITI-71 is taken: {:?}",
         grant.err()
@@ -177,10 +177,10 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
     assert!(
         matches!(
             mutual.err().as_deref().and_then(|error| error.downcast_ref::<ConfigError>()),
-            Some(ConfigError::GrantFault(GrantFault::NodeOnly { key }))
-                if key == "registry.mcsd.credentials.oauth2.client_auth"
+            Some(ConfigError::Credentials(CredentialsFault::ServiceGrantNotHere { section }))
+                if section == "registry.mcsd.credentials"
         ),
-        "a node's client authentication is refused"
+        "a node's grant is refused"
     );
     let zero = settings(
         "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval_s = 0\n",

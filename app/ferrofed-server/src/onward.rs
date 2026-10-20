@@ -34,6 +34,7 @@ use openehr_its::rest::client::Credentials;
 use crate::config::settings::{Scheme, Settings};
 use crate::config::tls::TlsSettings;
 use crate::federation::error::FederationError;
+use crate::upstream::UpstreamToken;
 use openehr_its::rest::client::ReqwestTransport;
 
 /// The HTTP engine every request to a node and to its token endpoint is
@@ -99,13 +100,14 @@ pub(crate) struct Onward {
 /// The onward credentials of each endpoint that has a `[credentials]`
 /// section, as the node clients send them over `engine`.
 ///
-/// A bearer token and basic credentials are sent as configured. An OAuth 2.0
-/// grant becomes a provider that obtains its token with an assertion the
-/// `[signing]` key signs, waiting at most the per-node timeout for the token
-/// endpoint (§13.1, N25): one token for every caller under the
-/// client-credentials grant, one per verified caller under token exchange. A
-/// grant with a `DPoP` key proves every request to its token endpoint, and
-/// its node's client proves every request to the node with the same key.
+/// Basic credentials are sent as configured. An `oauth` table becomes the
+/// token `ferrohealth-smart` obtains with the client credentials grant, one
+/// for every caller (§13.1, N25). An `oauth2` grant becomes a provider that
+/// obtains its token with an assertion the `[signing]` key signs, waiting at
+/// most the per-node timeout for the token endpoint: one per verified caller
+/// under token exchange, or one bound to the gateway's key. A grant with a
+/// `DPoP` key proves every request to its token endpoint, and its node's
+/// client proves every request to the node with the same key.
 ///
 /// An endpoint with TLS material of its own is reached, at its node and its
 /// token endpoint, over an engine built with that material, its timeout the
@@ -131,9 +133,14 @@ pub(crate) fn onward(
     for (endpoint, scheme) in &settings.credentials {
         let engine = transports.get(endpoint).unwrap_or(&engine);
         let grant = match scheme {
-            Scheme::Bearer(token) => {
-                let shared: SharedCredentials =
-                    Arc::new(Credentials::Bearer(token.to_secret_string()));
+            Scheme::Oauth { grant, .. } => {
+                let shared: SharedCredentials = UpstreamToken::provider(
+                    ferrohealth_smart::client::ClientCredentials::clone(grant),
+                )
+                .map_err(|source| FederationError::TokenTransport {
+                    section: format!("credentials.{endpoint}.oauth"),
+                    source: Box::new(source),
+                })?;
                 credentials.insert(endpoint.clone(), shared);
                 continue;
             }
@@ -146,14 +153,6 @@ pub(crate) fn onward(
                 continue;
             }
             Scheme::OAuth2(grant) => grant,
-            // NOTE: no specification governs this: our own design; a node's section
-            // never resolves to an identity service's grant, and one that did fails closed.
-            #[cfg(feature = "binding-ihe")]
-            Scheme::ServiceGrant(_) => {
-                return Err(FederationError::Grant {
-                    section: format!("credentials.{endpoint}"),
-                });
-            }
             Scheme::Fapi2(grant) => {
                 if let Some(prover) = grant.dpop() {
                     dpop.insert(endpoint.clone(), Arc::clone(prover));

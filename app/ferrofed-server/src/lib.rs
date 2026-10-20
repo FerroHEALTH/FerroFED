@@ -100,6 +100,7 @@ pub mod state;
 pub mod stored;
 pub mod support;
 pub mod telemetry;
+pub mod upstream;
 
 use std::future::Future;
 use std::sync::Arc;

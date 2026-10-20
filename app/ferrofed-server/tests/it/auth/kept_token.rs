@@ -5,14 +5,11 @@
 //! exchanges it (RFC 8693 §2.1), only for a caller the gateway verified by
 //! signature or introspection, and never in the caller's `Debug`.
 
-use std::collections::BTreeSet;
 use std::error::Error;
 
 use ferrofed_server::auth::Gate;
 use ferrofed_server::auth::permission::Requirement;
-use ferrofed_server::config::auth::{
-    AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
-};
+use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use http::{HeaderMap, HeaderName, header};
 use secrecy::ExposeSecret;
@@ -68,22 +65,14 @@ async fn the_verified_token_is_kept_for_an_exchanging_node_and_never_shown() -> 
 #[tokio::test]
 async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
     let edge = Issuer::new("https://edge.example.test")?;
+    let file = support::jwks_file_of(&edge)?;
     let gate = Gate::new(&AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static("ferrofed-edge-assertion")),
-        audience: Some(AUDIENCE.to_owned()),
-        issuers: vec![IssuerSettings {
-            issuer: "https://edge.example.test".to_owned(),
-            verification: Verification::KeySet(KeySource::Set(edge.jwks())),
-            backend_clients: BTreeSet::new(),
-            demographic_clients: BTreeSet::new(),
-            operator_scope: None,
-            patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
-            professional_issuing_authority: None,
-            national_contact_point: None,
-        }],
+        audience: vec![AUDIENCE.to_owned()],
+        issuers: vec![IssuerSettings::new(
+            "https://edge.example.test",
+            support::key_set("https://edge.example.test", &file),
+        )],
         ..AuthSettings::default()
     });
     let assertion = edge.mint(&Claims::new("https://edge.example.test", AUDIENCE))?;

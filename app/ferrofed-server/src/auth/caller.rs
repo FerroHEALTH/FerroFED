@@ -34,7 +34,7 @@ use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
-use openehr_sdt::smart_scopes::SmartScope;
+use ferrohealth_smart::openehr::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};
 
 /// A caller the gateway verified.
@@ -277,7 +277,7 @@ impl fmt::Debug for Actor {
 impl Caller {
     /// Returns the caller `stated` describes, verified as `verified_by`
     /// says, its scopes read with
-    /// [`SmartScope::parse_all`](openehr_sdt::smart_scopes::SmartScope::parse_all).
+    /// [`SmartScope::parse_all`].
     #[must_use]
     pub fn new(stated: Stated, verified_by: VerifiedBy) -> Self {
         let scopes = SmartScope::parse_all(&stated.granted);

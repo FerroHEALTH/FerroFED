@@ -121,7 +121,7 @@ fn managed_refuses_a_secret_inline_outside_the_core() -> TestResult {
 
 #[tokio::test]
 async fn off_serves_no_revision_route() -> TestResult {
-    let access = Access::new(&crate::support::auth(), Profile::Development, None);
+    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
     let app = admin::router(Arc::new(AppState::default()), access)
         .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
     for (method, path) in [

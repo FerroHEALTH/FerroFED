@@ -266,7 +266,10 @@ impl Authorizer for Unused {
 #[test]
 fn a_fixed_credential_beside_an_authorizer_is_refused() -> TestResult {
     let mut written = config("https://nvi.example.org/fhir")?;
-    written.auth = Authentication::Bearer(SecretString::from("synthetic-token"));
+    written.auth = Authentication::Basic {
+        user: String::from("ferrofed"),
+        password: SecretString::from("synthetic-token"),
+    };
     written.authorizer = Some(Arc::new(Unused));
     match NviLocalizer::from_config(written, &registry()) {
         Err(NviConfigError::TwoCredentials) => Ok(()),

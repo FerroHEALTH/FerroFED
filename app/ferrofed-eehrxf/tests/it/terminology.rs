@@ -37,11 +37,15 @@ const LOCAL: &str = "http://example.org/fhir/CodeSystem/local";
 const PREFERRED: &str = "http://example.org/fhir/CodeSystem/preferred";
 const FHIR_JSON: &str = "application/fhir+json";
 
-/// The terminology answered by `server`, under `/fhir`, with a bearer token.
+/// The terminology answered by `server`, under `/fhir`, with basic
+/// credentials.
 fn terminology(server: &Server, timeout: Duration) -> Result<Terminology, Box<dyn Error>> {
     let client = FhirTerminology::new(
         &format!("{}/fhir", server.uri()),
-        &Authentication::Bearer(SecretString::from("synthetic-token")),
+        &Authentication::Basic {
+            user: String::from("ferrofed"),
+            password: SecretString::from("synthetic-token"),
+        },
         &Tls::default(),
         timeout,
     )?;
@@ -57,7 +61,7 @@ async fn a_translation_posts_its_parameters_and_keeps_only_equivalent_matches() 
     let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/fhir/ConceptMap/$translate"))
-        .and(header("authorization", "Bearer synthetic-token"))
+        .and(header("authorization", "Basic ZmVycm9mZWQ6c3ludGhldGljLXRva2Vu"))
         .and(header("content-type", FHIR_JSON))
         .and(body_string_contains("targetsystem"))
         .respond_with(answer(&format!(

@@ -176,8 +176,8 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("metrics.otlp_endpoint", |boot, fresh| {
         boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
     }),
-    ("metrics.scrape_token", |boot, fresh| {
-        boot.metrics.scrape_token != fresh.metrics.scrape_token
+    ("metrics.scrape_users", |boot, fresh| {
+        boot.metrics.scrape_users != fresh.metrics.scrape_users
     }),
 ];
 

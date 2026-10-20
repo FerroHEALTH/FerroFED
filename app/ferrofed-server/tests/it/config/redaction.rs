@@ -27,12 +27,12 @@ use crate::run::binary;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// An inline bearer token.
-const BEARER: &str = "Qz7bearerSentinel";
+/// An inline client secret of an `oauth` grant.
+const CLIENT_SECRET: &str = "Qz7clientSecretSentinel";
 /// An inline basic password.
 const PASSWORD: &str = "Qz7passwordSentinel";
-/// A bearer token set through the environment.
-const ENV_BEARER: &str = "Qz7envSentinel";
+/// A basic password set through the environment.
+const ENV_PASSWORD: &str = "Qz7envSentinel";
 /// A basic password read from a `_file` sibling.
 const FILE_PASSWORD: &str = "Qz7fileSentinel";
 /// The user name in the userinfo of a URL.
@@ -44,9 +44,9 @@ const PG_PASSWORD: &str = "Qz7pgPasswordSentinel";
 
 /// Every sentinel; no rendering may hold any of them.
 const SENTINELS: [&str; 7] = [
-    BEARER,
+    CLIENT_SECRET,
     PASSWORD,
-    ENV_BEARER,
+    ENV_PASSWORD,
     FILE_PASSWORD,
     URL_USER,
     URL_PASSWORD,
@@ -95,11 +95,11 @@ fn postgres_url() -> String {
     format!("postgres://ferrofed:{PG_PASSWORD}@db.example.org:5432/ferrofed")
 }
 
-/// The configuration under test: one endpoint with an inline bearer token,
-/// one with an inline basic password, one whose token the environment sets,
-/// one whose password a `_file` sibling holds, a PIX Manager at `pix_url`
-/// whose credentials are inline, an OTLP collector URL with userinfo, and
-/// the tables of `extra`.
+/// The configuration under test: one endpoint whose `oauth` grant holds an
+/// inline client secret, one with an inline basic password, one whose
+/// password the environment sets, one whose password a `_file` sibling
+/// holds, a PIX Manager at `pix_url` whose credentials are inline, an OTLP
+/// collector URL with userinfo, and the tables of `extra`.
 fn configuration(
     password_file: &str,
     pix_url: &str,
@@ -109,18 +109,24 @@ fn configuration(
     let otlp = otlp_url();
     let audit = crate::support::audit_toml();
     let text = format!(
-        "[credentials.\"node-a-pub\"]\nbearer_token = \"{BEARER}\"\n\n\
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
          [metrics]\notlp_endpoint = \"{otlp}\"\n{audit}\n\
          [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
-         [pixm.manager.credentials]\nbearer_token = \"{BEARER}\"\n\n{extra}"
+         [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n{extra}"
     );
-    let env = BTreeMap::from([(
-        String::from("FERROFED__CREDENTIALS__NODE-C-PUB__BEARER_TOKEN"),
-        ENV_BEARER.to_owned(),
-    )]);
+    let env = BTreeMap::from([
+        (
+            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__USER"),
+            String::from("gateway"),
+        ),
+        (
+            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__PASSWORD"),
+            ENV_PASSWORD.to_owned(),
+        ),
+    ]);
     Ok(Config::from_sources(Some(&text), &env)?)
 }
 
@@ -196,15 +202,24 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
     shows_placeholder("MetricsSettings", &settings.metrics);
     shows_placeholder("Settings", &settings);
     for (endpoint, scheme) in &settings.credentials {
-        shows_placeholder(endpoint.as_str(), scheme);
+        // NOTE: ferrohealth-smart renders its own secret with its own placeholder,
+        // so an `oauth` grant is held to showing no sentinel.
+        if matches!(scheme, Scheme::Oauth { .. }) {
+            redacted(endpoint.as_str(), scheme);
+        } else {
+            shows_placeholder(endpoint.as_str(), scheme);
+        }
     }
     let pixm = settings.pixm.as_ref().ok_or("the PIXm settings resolve")?;
     redacted("PixmSettings", pixm);
     for manager in &pixm.managers {
         redacted("PixManagerSettings", manager);
         let auth = match &manager.credentials {
-            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
-            _ => return Err("the PIX Manager resolves to its bearer token".into()),
+            Some(Scheme::Basic { user, password }) => Authentication::Basic {
+                user: user.clone(),
+                password: password.to_secret_string(),
+            },
+            _ => return Err("the PIX Manager resolves to its basic credentials".into()),
         };
         let composed = ManagerConfig {
             tls: ferrofed_identity::fhir::Tls::default(),
@@ -225,16 +240,21 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     let mut tokens = BTreeMap::new();
     for (endpoint, scheme) in &settings.credentials {
         let value = match scheme {
-            Scheme::Bearer(token) => token.expose(),
+            Scheme::Oauth { written, .. } => written
+                .0
+                .client_secret
+                .as_ref()
+                .map(secrecy::ExposeSecret::expose_secret)
+                .ok_or("the oauth grant holds its secret")?,
             Scheme::Basic { password, .. } => password.expose(),
             _ => return Err("a scheme this test does not know".into()),
         };
         tokens.insert(endpoint.as_str(), value);
     }
     let expected = BTreeMap::from([
-        ("node-a-pub", BEARER),
+        ("node-a-pub", CLIENT_SECRET),
         ("node-b-pub", PASSWORD),
-        ("node-c-pub", ENV_BEARER),
+        ("node-c-pub", ENV_PASSWORD),
         ("node-d-pub", FILE_PASSWORD),
     ]);
     assert_eq!(expected, tokens, "each endpoint holds its own secret");
@@ -361,11 +381,14 @@ fn a_connection_url_and_a_secret_render_and_serialize_redacted() -> TestResult {
         "Serialize redacts the URL"
     );
 
-    let secret = Secret::new(BEARER);
+    let secret = Secret::new(PASSWORD);
     shows_placeholder("Secret", &secret);
     assert_eq!(REDACTED, secret.to_string());
     let serialized = toml::Value::try_from(&secret)?.to_string();
-    assert!(!serialized.contains(BEARER), "Serialize redacts the secret");
+    assert!(
+        !serialized.contains(PASSWORD),
+        "Serialize redacts the secret"
+    );
     Ok(())
 }
 
@@ -374,7 +397,7 @@ fn config_check_prints_no_credential() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
     let path = toml::Value::String(file.path().display().to_string());
     let text = format!(
-        "[credentials.\"node-a-pub\"]\nbearer_token = \"{BEARER}\"\n\n\
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n"
     );

@@ -207,7 +207,7 @@ impl Gateway {
                 .with_revisions(Some(Arc::clone(&revisions))),
         );
         let managed = Arc::new(Managed::new(Arc::clone(&revisions), Arc::clone(&reloader)));
-        let access = Access::new(&support::auth(), Profile::Development, None);
+        let access = Access::new(&support::auth(), Profile::Development, Vec::new());
         let admin = admin::managed_router(Arc::clone(&state), access, Some(managed))
             .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
         Ok(Self {

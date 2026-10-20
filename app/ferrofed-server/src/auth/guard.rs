@@ -138,18 +138,20 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
             request.extensions_mut().insert(caller);
             next.run(request).await
         }
-        Err(refusal) => {
+        Err(refused) => {
+            let refusal = refused.refusal;
             crate::metrics::security::refused(refusal);
             tracing::warn!(
                 target: TARGET,
                 event = "caller-refused",
                 reason = refusal.reason(),
+                check = refused.check.map(ferrohealth_smart::refusal::Reason::as_str),
                 status = refusal.code().status().as_u16(),
                 request_id = outbound,
                 "a request was refused at client authentication"
             );
             let request_id = request_id::of(request.headers()).unwrap_or_default();
-            refusal.response(request_id)
+            refusal.response(gate.realm(), request_id)
         }
     }
 }

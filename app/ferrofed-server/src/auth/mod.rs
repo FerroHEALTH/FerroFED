@@ -5,31 +5,31 @@
 //! `OPTIONS {base}/` comes from a caller the gateway verified (§13.1, N25,
 //! CP-17 inbound; §7a.2).
 //!
-//! A caller presents an RFC 9068 access token in `Authorization: Bearer`
-//! (RFC 6750 §2.1). Its JOSE header names an algorithm on the allow-list
-//! [`ALGORITHMS`], never `none` and never an HMAC (RFC 8725 §3.1, §3.2), and
-//! the `at+jwt` type (RFC 9068 §4). Its `iss` names an issuer on the trust
-//! list, whose key set verifies the signature ([`keys`]), or whose RFC 7662
-//! introspection endpoint calls it active ([`fetch`]); a token that is not a
-//! JWS goes to the one introspected issuer. Its `aud` names this gateway, and
-//! `exp` and `nbf` hold within the configured clock skew. In the edge mode, a
-//! proxy authenticates the caller and the gateway verifies the proxy's
-//! signed assertion, in the header the deployment names, under the same
-//! rules.
+//! `ferrohealth-smart` checks the credential. A caller presents an access
+//! token in `Authorization: Bearer` (RFC 6750 §2.1), which the crate reads
+//! and holds to the `b64token` syntax; its `iss` names an issuer `[auth]`
+//! trusts, whose metadata and key set the crate reads (RFC 8414 §3) and
+//! whose signature, `iss`, `aud`, `exp` and `nbf` it checks under the RFC
+//! 9068 profile, with an asymmetric algorithm only; or the token is checked
+//! by the one introspected issuer's RFC 7662 endpoint ([`introspection`]).
+//! In the edge mode, a proxy authenticates the caller and the gateway
+//! verifies the proxy's signed assertion, in the header the deployment
+//! names, with the same checks ([`verify`]).
 //!
 //! The caller then needs what the operation requires ([`permission`]): a
-//! SMART on openEHR resource scope read with `openehr-sdt`, and a purpose of
-//! use unless the deployment declared it optional (§13.4). A request that
-//! reaches patient data also needs a natural person behind the token, or a
-//! client its issuer declares as acting for the professional the token
-//! names, and the authentication assurance its issuer's entry requires
-//! (Regulation (EU) 2025/327 Annex II 3.1). An issuer declared a national
-//! contact point vouches for the professional of another Member State whose
-//! request its connector relays ([`contact_point`]): such a request needs
-//! every Implementing Regulation (EU) 2026/2099 Annex attribute and a
-//! purpose of use. A request that
-//! fails is answered `400`, `401`, `403` or `503` and reaches nothing behind the
-//! gate; one that passes carries its [`Caller`] in its extensions. The
+//! SMART on openEHR resource scope, checked by the crate's
+//! `Requirement::OpenEhr` with what the issuer's `[[trust.issuer]]` entry
+//! lets count, and a purpose of use unless the deployment declared it
+//! optional (§13.4). A request that reaches patient data also needs a
+//! natural person behind the token, or a client its issuer declares as
+//! acting for the professional the token names, and the authentication
+//! assurance its issuer's entry requires (Regulation (EU) 2025/327 Annex II
+//! 3.1). An issuer declared a national contact point vouches for the
+//! professional of another Member State whose request its connector relays
+//! ([`contact_point`]): such a request needs every Implementing Regulation
+//! (EU) 2026/2099 Annex attribute and a purpose of use. A request that
+//! fails is answered `400`, `401`, `403` or `503` and reaches nothing behind
+//! the gate; one that passes carries its [`Caller`] in its extensions. The
 //! caller's credential is never forwarded to a node: the node dispatch sends
 //! each endpoint its own onward credentials and copies no client header
 //! without a rule naming it.
@@ -40,68 +40,65 @@
 //!
 //! The health family and `GET {base}/` stay open: they describe the process
 //! and the product, no patient and no member (no specification governs this:
-//! our own design). The JSON Web Key Set the gateway will publish for its
-//! own client assertions is public too (RFC 7517), and is served beside
-//! them, outside the gate.
+//! our own design). The JSON Web Key Set the gateway publishes for its own
+//! client assertions is public too (RFC 7517), and is served beside them,
+//! outside the gate.
 
 pub mod caller;
 mod claims;
 pub mod contact_point;
-pub mod fetch;
 pub mod guard;
-pub mod keys;
+mod introspection;
 pub mod permission;
 mod reference;
 pub mod refusal;
 pub mod trust;
+mod verify;
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_registry::id::EhrId;
+use ferrohealth_smart::guard::{Gate as SmartGate, Requirement as SmartRequirement};
+use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily, SmartScope};
+use ferrohealth_smart::openehr::{self, granted};
+use ferrohealth_smart::refusal::{Denied, Reason};
+use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured, Verifier as _};
 use http::{HeaderMap, header};
-use jsonwebtoken::errors::ErrorKind;
-use jsonwebtoken::{Algorithm, Validation};
-use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::SecretString;
 
 use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
-use crate::auth::claims::{AccessToken, Introspected};
-use crate::auth::fetch::{FetchError, Fetcher};
-use crate::auth::keys::{KeyError, KeySet};
-use crate::auth::permission::grant;
+use crate::auth::claims::Claims;
+use crate::auth::introspection::Introspector;
 use crate::auth::permission::{Requirement, Resource};
-use crate::auth::refusal::Refusal;
+use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
+use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 use crate::facade::options::ContactPoints;
-use crate::facade::security::TARGET;
-use crate::metrics::security::Event;
 
-/// The signature algorithms a token may be signed with (RFC 8725 §3.1,
-/// §3.2): ECDSA and RSA, never `none` and never an HMAC.
-pub const ALGORITHMS: [Algorithm; 4] = [
-    Algorithm::ES256,
-    Algorithm::ES384,
-    Algorithm::PS256,
-    Algorithm::RS256,
-];
-
-/// The verifier of every caller, built from `[auth]`.
+/// The verifier of every caller, built from `[auth]` and `[trust]`.
 #[derive(Debug)]
 pub struct Gate {
     /// Where the credential travels.
     mode: AuthMode,
-    /// The audience every token names.
+    /// The audience that names the gateway, `[auth]`'s first.
     audience: Option<String>,
-    /// The clock skew allowed on `exp` and `nbf`.
-    skew: Duration,
     /// Whether a purpose of use is required.
     purpose_required: bool,
-    /// The issuers on the trust list.
-    issuers: Vec<Trusted>,
-    /// The HTTP client of key set fetches and introspection.
-    fetcher: Fetcher,
+    /// The scope that admits a caller to the operator surface.
+    product_scope: Option<String>,
+    /// The realm every challenge names.
+    realm: String,
+    /// The issuers on the trust list, with their policy.
+    issuers: Vec<IssuerSettings>,
+    /// How a token is verified.
+    verifiers: Arc<Verifiers>,
+    /// The crate's gate, which reads the `Authorization` field and checks
+    /// a bearer token with [`Gate::verifiers`].
+    smart: SmartGate,
+    /// The crate's gate over the Basic users of `[[auth.basic.users]]`,
+    /// when any is written.
+    basic: Option<SmartGate>,
     /// The key the security log's caller references are made under, kept
     /// by every gate that succeeds this one, so a reference stays stable for
     /// the life of the process.
@@ -110,25 +107,17 @@ pub struct Gate {
     contact_points: Arc<ContactPoints>,
 }
 
-/// One issuer on the trust list, with its key set when it has one.
-#[derive(Debug)]
-struct Trusted {
-    /// The issuer as configured.
-    settings: IssuerSettings,
-    /// Its key set, for an issuer whose tokens are verified by signature.
-    keys: Option<KeySet>,
-}
-
 impl Gate {
-    /// Returns the gate `settings` describe; no key set is read yet.
+    /// Returns the gate `settings` describe; no metadata or key set is read
+    /// yet.
     #[must_use]
     pub fn new(settings: &AuthSettings) -> Self {
         Self::keyed(settings, Arc::new(reference::References::fresh()))
     }
 
     /// Returns the gate `settings` describe in place of this one, with the
-    /// same caller references; no key set is read yet, so each issuer's key
-    /// set is fetched or read from its file again.
+    /// same caller references; no metadata or key set is read yet, so each
+    /// issuer's is read again.
     #[must_use]
     pub fn succeeding(&self, settings: &AuthSettings) -> Self {
         Self::keyed(settings, Arc::clone(&self.references))
@@ -141,31 +130,47 @@ impl Gate {
         &self.contact_points
     }
 
+    /// Returns the realm every challenge names.
+    #[must_use]
+    pub fn realm(&self) -> &str {
+        &self.realm
+    }
+
     /// Returns the gate `settings` describe, its caller references made
     /// under `references`.
     fn keyed(settings: &AuthSettings, references: Arc<reference::References>) -> Self {
-        let issuers = settings
-            .issuers
-            .iter()
-            .map(|issuer| Trusted {
-                keys: match &issuer.verification {
-                    Verification::KeySet(source) => Some(KeySet::new(
-                        source.clone(),
-                        settings.key_set_max_age,
-                        settings.key_set_refetch,
-                    )),
-                    Verification::Introspection(_) => None,
-                },
-                settings: issuer.clone(),
-            })
-            .collect();
+        let mut keyed = Vec::new();
+        let mut introspected = None;
+        for issuer in &settings.issuers {
+            match &issuer.verification {
+                Verification::KeySet(server) => keyed.push((**server).clone()),
+                Verification::Introspection(endpoint) => {
+                    introspected = Some(Introspector::new(issuer.issuer.clone(), endpoint.clone()));
+                }
+            }
+        }
+        let edge = matches!(settings.mode, AuthMode::Edge(_));
+        let verifiers = Arc::new(Verifiers::new(keyed, introspected, edge));
+        let bearer: Arc<dyn ferrohealth_smart::resource::Verifier> =
+            Arc::<Verifiers>::clone(&verifiers);
+        let smart = SmartGate::open()
+            .with_bearer(bearer)
+            .with_realm(settings.realm.clone());
+        let basic = settings.basic.as_ref().map(|users| {
+            SmartGate::open()
+                .with_basic(Arc::clone(users.store()))
+                .with_realm(settings.realm.clone())
+        });
         Self {
             mode: settings.mode.clone(),
-            audience: settings.audience.clone(),
-            skew: settings.clock_skew,
+            audience: settings.audience.first().cloned(),
             purpose_required: settings.purpose_required,
-            issuers,
-            fetcher: Fetcher::new(settings.fetch_timeout),
+            product_scope: settings.product_scope.clone(),
+            realm: settings.realm.clone(),
+            issuers: settings.issuers.clone(),
+            verifiers,
+            smart,
+            basic,
             references,
             contact_points: Arc::new(ContactPoints::of(settings)),
         }
@@ -180,21 +185,28 @@ impl Gate {
     /// dropped with the request's headers.
     ///
     /// # Errors
-    /// Returns the [`Refusal`] the request is answered with.
+    /// Returns the [`Refused`] the request is answered with.
     pub async fn admit(
         &self,
         headers: &HeaderMap,
         (requirement, named): (Requirement, Option<&str>),
         exchanging: bool,
-    ) -> Result<Caller, Refusal> {
+    ) -> Result<Caller, Refused> {
         // NOTE: no specification governs this: our own design; an operation no
         // caller may reach is refused before any credential is read.
         if requirement == Requirement::Refused {
-            return Err(Refusal::Operation);
+            return Err(Refusal::Operation.into());
         }
-        let credential = self.credential(headers)?;
-        let (caller, trusted) = self.verify(credential).await?;
-        let correlation = match &trusted.settings.national_contact_point {
+        let (smart, credential) = self.authenticate(headers).await?;
+        let trusted = smart
+            .issuer()
+            .and_then(|issuer| self.issuers.iter().find(|held| held.issuer == issuer))
+            .ok_or(Refused {
+                refusal: Refusal::Invalid,
+                check: Some(Reason::UntrustedIssuer),
+            })?;
+        let caller = self.caller(&smart, trusted)?;
+        let correlation = match &trusted.national_contact_point {
             Some(declared) => contact_point::correlation(headers, declared)?,
             None => None,
         };
@@ -202,31 +214,35 @@ impl Gate {
             .with_audience(self.audience.clone())
             .with_correlation(correlation);
         let mut caller = if exchanging {
-            caller.with_token(SecretString::from(credential.to_owned()))
+            caller.with_token(SecretString::from(credential))
         } else {
             caller
         };
+        let access = Access::Caller(Arc::new(smart));
+        let none = Honoured::default();
         match requirement {
             Requirement::Caller => return Ok(caller),
-            Requirement::Refused => return Err(Refusal::Operation),
+            Requirement::Refused => return Err(Refusal::Operation.into()),
             Requirement::Operator => {
-                let scope = trusted.settings.operator_scope.as_deref();
-                return grant::operator(scope, caller.granted())
+                let admitted = self.product_scope.as_ref().is_some_and(|scope| {
+                    SmartRequirement::Scope(scope.clone()).met_by(&access, none)
+                });
+                return admitted
                     .then_some(caller)
-                    .ok_or(Refusal::Scope);
+                    .ok_or_else(|| Refusal::Scope.into());
             }
             Requirement::Demographic => {
-                if !trusted
-                    .settings
-                    .demographic_clients
-                    .contains(caller.client_id())
-                {
-                    return Err(Refusal::Demographic);
+                let listed = SmartRequirement::Client {
+                    client_ids: trusted.demographic_clients.iter().cloned().collect(),
+                    basic_users: Vec::new(),
+                };
+                if !listed.met_by(&access, none) {
+                    return Err(Refusal::Demographic.into());
                 }
                 // NOTE: SMART on openEHR master08 §Resource Scopes: a patient scope reaches "data
                 // within that patient's EHR", so listing its client never widens it to parties.
-                if grant::patient_grant(caller.scopes()) {
-                    return Err(Refusal::PatientDemographic);
+                if openehr::patient_grant(caller.scopes()) {
+                    return Err(Refusal::PatientDemographic.into());
                 }
             }
             Requirement::Scope {
@@ -243,266 +259,147 @@ impl Gate {
                         .map(Some)
                         .collect(),
                 };
-                let honoured = grant::Honoured {
-                    backend: grant::backend(&trusted.settings.backend_clients, caller.client_id()),
-                    patient: trusted.settings.patient.is_some(),
-                };
-                let grants = |scopes: &[SmartScope], name: &Option<String>| {
-                    grant::granted(scopes, (family, permission), name.as_deref(), honoured)
-                };
-                if !resources.iter().all(|name| grants(caller.scopes(), name)) {
-                    return Err(Refusal::Scope);
-                }
-                // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
-                // granted scopes that cover the operation, never the whole grant.
-                let covering: Vec<&SmartScope> = caller
-                    .scopes()
-                    .iter()
-                    .filter(|scope| {
-                        resources
-                            .iter()
-                            .any(|name| grants(std::slice::from_ref(*scope), name))
-                    })
-                    .collect();
-                let owned: Vec<SmartScope> =
-                    covering.iter().map(|scope| (*scope).clone()).collect();
-                let confined = grant::confined(&owned);
-                let backend = grant::backend_only(&owned);
-                let covering = SmartScope::format_all(covering);
-                caller = caller.with_covering(covering);
-                // NOTE: SMART on openEHR master08 §Resource Scopes: a `system/` scope is
-                // granted "to backend applications acting without a user context".
-                if backend {
-                    caller = caller.with_acting(Acting::Client);
-                }
-                if confined {
-                    let context = patient_context(&caller, trusted)?;
-                    caller = caller.with_patient(context);
-                }
+                caller = scoped(caller, &access, trusted, (family, permission), &resources)?;
             }
         }
         if requirement.reaches_patient_data() {
             contact_point::relaying(&caller)?;
-            professional(&caller, &trusted.settings)?;
+            professional(&caller, trusted)?;
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
         // the purpose, so a request that reaches past the gate carries one.
         if self.purpose_required && caller.purposes().is_empty() {
-            return Err(Refusal::PurposeOfUse);
+            return Err(Refusal::PurposeOfUse.into());
         }
         Ok(caller)
     }
 
-    /// The credential of a request: the bearer token, or the edge's
-    /// assertion, sent exactly once.
-    fn credential<'h>(&self, headers: &'h HeaderMap) -> Result<&'h str, Refusal> {
-        let name = match &self.mode {
-            AuthMode::Token => &header::AUTHORIZATION,
-            AuthMode::Edge(name) => name,
-        };
-        let mut values = headers.get_all(name).iter();
-        let (Some(value), None) = (values.next(), values.next()) else {
-            return Err(if headers.contains_key(name) {
-                Refusal::Malformed
-            } else {
-                Refusal::Missing
-            });
-        };
-        let text = value.to_str().map_err(|_opaque| Refusal::Malformed)?;
-        let credential = match self.mode {
+    /// Returns the caller the credential of `headers` authenticates and the
+    /// credential itself: the bearer token `ferrohealth-smart` reads from
+    /// `Authorization`, or the edge's assertion, sent exactly once.
+    async fn authenticate(&self, headers: &HeaderMap) -> Result<(SmartCaller, String), Refused> {
+        match &self.mode {
             AuthMode::Token => {
-                // NOTE: RFC 9110 §11.1, the auth-scheme is case-insensitive, and RFC
-                // 6750 §2.1 puts one b64token after it.
-                let (scheme, token) = text.split_once(' ').ok_or(Refusal::Malformed)?;
-                if !scheme.eq_ignore_ascii_case("bearer") {
-                    return Err(Refusal::Malformed);
-                }
-                token.trim_start_matches(' ')
+                let access = self
+                    .smart
+                    .authenticate(headers)
+                    .await
+                    .map_err(|denied| Refused::from(&denied))?;
+                let Access::Caller(caller) = access else {
+                    return Err(Refusal::Missing.into());
+                };
+                // NOTE: RFC 6750 §2.1, the credential the crate verified is the one
+                // `Authorization` field's text after its scheme.
+                let credential = headers
+                    .get(header::AUTHORIZATION)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|text| text.split_once(' '))
+                    .map(|(_, token)| token.trim().to_owned())
+                    .ok_or(Refusal::Malformed)?;
+                Ok((Arc::unwrap_or_clone(caller), credential))
             }
-            AuthMode::Edge(_) => text,
-        };
-        if credential.is_empty() {
-            return Err(Refusal::Malformed);
+            AuthMode::Edge(name) => {
+                let mut values = headers.get_all(name).iter();
+                let (Some(value), None) = (values.next(), values.next()) else {
+                    return Err(if headers.contains_key(name) {
+                        Refusal::Malformed
+                    } else {
+                        Refusal::Missing
+                    }
+                    .into());
+                };
+                let text = value.to_str().map_err(|_opaque| Refusal::Malformed)?;
+                if text.is_empty() {
+                    return Err(Refusal::Malformed.into());
+                }
+                let caller = self
+                    .verifiers
+                    .verify(text)
+                    .await
+                    .map_err(|rejection| Refused::from(&Denied::from(&rejection)))?;
+                Ok((caller, text.to_owned()))
+            }
         }
-        Ok(credential)
     }
 
-    /// Verifies `credential` and returns its caller and the issuer that
-    /// vouched for it.
-    async fn verify(&self, credential: &str) -> Result<(Caller, &Trusted), Refusal> {
-        let edge = matches!(self.mode, AuthMode::Edge(_));
-        if credential.split('.').count() != 3 {
-            if edge {
-                return Err(Refusal::Malformed);
-            }
-            let trusted = self
-                .issuers
-                .iter()
-                .find(|issuer| {
-                    matches!(issuer.settings.verification, Verification::Introspection(_))
-                })
-                .ok_or(Refusal::Issuer)?;
-            return Ok((self.introspect(trusted, credential).await?, trusted));
-        }
-        let header =
-            jsonwebtoken::decode_header(credential).map_err(|_unreadable| Refusal::Malformed)?;
-        if !ALGORITHMS.contains(&header.alg) {
-            return Err(Refusal::Algorithm);
-        }
-        let typed = header.typ.as_deref().is_some_and(|typ| {
-            typ.eq_ignore_ascii_case("at+jwt") || typ.eq_ignore_ascii_case("application/at+jwt")
-        });
-        if !typed {
-            return Err(Refusal::Type);
-        }
-        // NOTE: RFC 8725 §3.10, the unverified `iss` only picks the issuer whose
-        // keys then verify the token, `iss` included.
-        let named: Issued = jsonwebtoken::dangerous::insecure_decode_claims(credential)
-            .map_err(|_unreadable| Refusal::Malformed)?;
-        let trusted = self
-            .issuers
-            .iter()
-            .find(|issuer| issuer.settings.issuer == named.iss)
-            .ok_or(Refusal::Issuer)?;
-        let Some(keys) = &trusted.keys else {
-            return Ok((self.introspect(trusted, credential).await?, trusted));
+    /// Returns the gateway's caller of `smart`, the crate's, vouched for by
+    /// `trusted`, with every claim the gateway reads.
+    fn caller(&self, smart: &SmartCaller, trusted: &IssuerSettings) -> Result<Caller, Refused> {
+        let invalid = |check: &'static str| Refused {
+            refusal: Refusal::Invalid,
+            check: Some(Reason::Other(check)),
         };
-        let key = keys
-            .key(header.kid.as_deref(), header.alg, &self.fetcher)
-            .await
-            .map_err(|error| match error {
-                KeyError::Unavailable(source) => {
-                    Event::KeySetUnavailable.record();
-                    tracing::warn!(
-                        target: TARGET,
-                        event = "key-set-unavailable",
-                        issuer = trusted.settings.issuer,
-                        error = crate::chain(&source),
-                        "an issuer's key set could not be had, so its tokens cannot be verified"
-                    );
-                    Refusal::Unavailable
-                }
-                KeyError::Unknown => Refusal::Key,
-                KeyError::Unusable => Refusal::Signature,
-            })?;
-        let audience = self.audience.as_deref().ok_or(Refusal::Audience)?;
-        let mut validation = Validation::new(header.alg);
-        validation.algorithms = vec![header.alg];
-        validation.leeway = self.skew.as_secs();
-        validation.validate_nbf = true;
-        validation.set_audience(&[audience]);
-        validation.set_issuer(&[trusted.settings.issuer.as_str()]);
-        validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
-        let token = jsonwebtoken::decode::<AccessToken>(credential, &key, &validation)
-            .map_err(|error| refusal_of(error.kind()))?;
-        let verified_by = if edge {
-            VerifiedBy::Edge
-        } else {
-            VerifiedBy::Signature
+        // NOTE: RFC 9068 §2.2 requires `client_id`, and IHE IUA ITI TF-2 3.71.4.2.2.1
+        // tells a client from a person by it, so a token without one does not hold.
+        let client_id = smart
+            .client_id()
+            .filter(|client| !client.is_empty())
+            .ok_or_else(|| invalid("client_id"))?
+            .to_owned();
+        let claims = Claims::read(smart.claims()).map_err(|_shape| invalid("claims"))?;
+        let verified_by = match (&self.mode, &trusted.verification) {
+            (AuthMode::Edge(_), _) => VerifiedBy::Edge,
+            (_, Verification::Introspection(_)) => VerifiedBy::Introspection,
+            (_, Verification::KeySet(_)) => VerifiedBy::Signature,
         };
-        let launch_ehr_id = token.claims.launch_ehr_id();
-        let requester = token.claims.requester(trusted.settings.requester.as_ref());
-        let professional = token
-            .claims
-            .professional(trusted.settings.professional_issuing_authority.as_deref());
-        let assurance = assurance_of(&trusted.settings, |claim| token.claims.text(claim));
-        let relayed = contact_point::read(&trusted.settings, token.claims.annex(), |claim| {
-            token.claims.text(claim)
-        });
-        let representative = token.claims.representative(&trusted.settings);
-        let stated = token.claims.stated();
-        let acting = acting(&stated.subject, &stated.client_id);
-        let caller = Caller::new(stated, verified_by)
-            .with_launch_ehr_id(launch_ehr_id)
-            .with_requester(requester)
-            .with_professional(professional)
-            .with_assurance(assurance)
-            .with_acting(acting)
-            .with_representative(representative);
-        Ok((contact_point::vouched(caller, relayed), trusted))
-    }
-
-    /// Asks `trusted`'s introspection endpoint about `token` and reads its
-    /// answer as RFC 7662 §2.2 states it.
-    async fn introspect(&self, trusted: &Trusted, token: &str) -> Result<Caller, Refusal> {
-        let Verification::Introspection(endpoint) = &trusted.settings.verification else {
-            return Err(Refusal::Issuer);
-        };
-        let bytes = self
-            .fetcher
-            .introspect(endpoint, token)
-            .await
-            .and_then(|bytes| {
-                serde_json::from_slice::<Introspected>(&bytes).map_err(FetchError::Malformed)
-            });
-        let answer = match bytes {
-            Ok(answer) => answer,
-            Err(source) => {
-                Event::IntrospectionUnavailable.record();
-                tracing::warn!(
-                    target: TARGET,
-                    event = "introspection-unavailable",
-                    issuer = trusted.settings.issuer,
-                    error = crate::chain(&source),
-                    "an issuer's introspection endpoint did not answer, so its tokens cannot be verified"
-                );
-                return Err(Refusal::Unavailable);
-            }
-        };
-        if !answer.active {
-            return Err(Refusal::Inactive);
-        }
-        if answer
-            .iss
-            .as_deref()
-            .is_some_and(|iss| iss != trusted.settings.issuer)
-        {
-            return Err(Refusal::Issuer);
-        }
-        let audience = self.audience.as_deref().ok_or(Refusal::Audience)?;
-        if !answer.aud.as_ref().is_some_and(|aud| aud.names(audience)) {
-            return Err(Refusal::Audience);
-        }
-        let now = jiff::Timestamp::now().as_second();
-        let skew = i64::try_from(self.skew.as_secs()).unwrap_or(i64::MAX);
-        let exp = answer.exp.ok_or(Refusal::Malformed)?;
-        if exp.saturating_add(skew) < now {
-            return Err(Refusal::Expired);
-        }
-        if answer.nbf.is_some_and(|nbf| nbf.saturating_sub(skew) > now) {
-            return Err(Refusal::NotYetValid);
-        }
-        let (Some(subject), Some(client_id)) = (answer.sub, answer.client_id) else {
-            return Err(Refusal::Malformed);
-        };
+        let subject = smart.subject().to_owned();
         let acting = acting(&subject, &client_id);
         let stated = Stated {
-            issuer: trusted.settings.issuer.clone(),
+            issuer: trusted.issuer.clone(),
             subject,
             client_id,
-            organisation: answer.declared.organisation(),
-            granted: answer.scope.unwrap_or_default(),
-            purposes: answer.declared.purposes(),
+            organisation: claims.organisation(),
+            granted: smart.scope().join(" "),
+            purposes: claims.purposes(),
         };
-        let requester = trusted
-            .settings
-            .requester
-            .as_ref()
-            .and_then(|named| answer.others.requester(named));
-        let assurance = assurance_of(&trusted.settings, |claim| answer.others.text(claim));
-        let issuing_authority = trusted.settings.professional_issuing_authority.as_deref();
-        let authority = issuing_authority.and_then(|claim| answer.others.text(claim));
-        let relayed = contact_point::read(&trusted.settings, answer.declared.annex(), |claim| {
-            answer.others.text(claim)
-        });
-        let caller = Caller::new(stated, VerifiedBy::Introspection)
-            .with_launch_ehr_id(answer.ehr_id)
-            .with_requester(requester)
-            .with_professional(answer.declared.professional(authority))
-            .with_assurance(assurance)
+        let relayed = contact_point::read(trusted, claims.annex(), |claim| claims.text(claim));
+        let caller = Caller::new(stated, verified_by)
+            .with_launch_ehr_id(smart.ehr_id().map(str::to_owned))
+            .with_requester(claims.requester(trusted.requester.as_ref()))
+            .with_professional(
+                claims.professional(trusted.professional_issuing_authority.as_deref()),
+            )
+            .with_assurance(assurance_of(trusted, |claim| claims.text(claim)))
             .with_acting(acting)
-            .with_representative(answer.declared.representative(&trusted.settings));
+            .with_representative(claims.representative(trusted));
         Ok(contact_point::vouched(caller, relayed))
+    }
+
+    /// Admits a request whose Basic credential (RFC 7617) names one of
+    /// `users`, written in `[[auth.basic.users]]`, and returns the user.
+    ///
+    /// # Errors
+    /// Returns [`BasicRefusal::Missing`] when the request carries no Basic
+    /// credential or no Basic user is written, [`BasicRefusal::Invalid`] for
+    /// one that does not verify, and [`BasicRefusal::Unlisted`] for a user
+    /// not in `users`.
+    pub async fn admit_basic(
+        &self,
+        headers: &HeaderMap,
+        users: &[String],
+    ) -> Result<String, BasicRefusal> {
+        let basic = self.basic.as_ref().ok_or(BasicRefusal::Missing)?;
+        let access =
+            basic
+                .authenticate(headers)
+                .await
+                .map_err(|denied| match denied.refusal() {
+                    ferrohealth_smart::refusal::Refusal::Missing(_) => BasicRefusal::Missing,
+                    _ => BasicRefusal::Invalid,
+                })?;
+        let listed = SmartRequirement::Client {
+            client_ids: Vec::new(),
+            basic_users: users.to_vec(),
+        };
+        let user = access
+            .caller()
+            .map(|caller| caller.subject().to_owned())
+            .ok_or(BasicRefusal::Missing)?;
+        if listed.met_by(&access, Honoured::default()) {
+            Ok(user)
+        } else {
+            Err(BasicRefusal::Unlisted)
+        }
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.
@@ -522,9 +419,72 @@ impl Gate {
     }
 }
 
+/// Returns `caller`, admitted to `permission` on a resource of `family`
+/// named each of `resources`, when the crate's `Requirement::OpenEhr` finds
+/// every one granted, with the scopes that cover it, and confined to its
+/// patient when only `patient/` grants do.
+///
+/// # Errors
+///
+/// Returns [`Refusal::Scope`] when a resource is not granted, and the
+/// refusals of [`patient_context`].
+fn scoped(
+    mut caller: Caller,
+    access: &Access,
+    trusted: &IssuerSettings,
+    (family, permission): (ResourceFamily, Permission),
+    resources: &[Option<String>],
+) -> Result<Caller, Refusal> {
+    let honoured = Honoured {
+        backend: trusted.backend_clients.contains(caller.client_id()),
+        patient: trusted.patient.is_some(),
+    };
+    let met = resources.iter().all(|name| {
+        SmartRequirement::OpenEhr {
+            family,
+            permission,
+            resource: name.clone(),
+        }
+        .met_by(access, honoured)
+    });
+    if !met {
+        return Err(Refusal::Scope);
+    }
+    // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the granted
+    // scopes that cover the operation, never the whole grant.
+    let covering: Vec<SmartScope> = caller
+        .scopes()
+        .iter()
+        .filter(|scope| {
+            resources.iter().any(|name| {
+                granted(
+                    std::slice::from_ref(*scope),
+                    family,
+                    permission,
+                    name.as_deref(),
+                    honoured,
+                )
+            })
+        })
+        .cloned()
+        .collect();
+    let confined = openehr::confined(&covering);
+    let backend = openehr::backend_only(&covering);
+    caller = caller.with_covering(SmartScope::format_all(&covering));
+    // NOTE: SMART on openEHR master08 §Resource Scopes: a `system/` scope is
+    // granted "to backend applications acting without a user context".
+    if backend {
+        caller = caller.with_acting(Acting::Client);
+    }
+    if confined {
+        let context = patient_context(&caller, trusted)?;
+        caller = caller.with_patient(context);
+    }
+    Ok(caller)
+}
+
 /// Whether `headers` carry `expected` as their one bearer token (RFC 6750
-/// §2.1), compared in constant time: the check of a static token, such as
-/// the PMIR feed token or the admin listener's scrape token.
+/// §2.1), compared in constant time: the check of the PMIR feed token.
 #[must_use]
 pub fn bearer_matches(headers: &HeaderMap, expected: &str) -> bool {
     let mut values = headers.get_all(header::AUTHORIZATION).iter();
@@ -551,8 +511,8 @@ pub fn bearer_matches(headers: &HeaderMap, expected: &str) -> bool {
 /// one that is no openEHR `HIER_OBJECT_ID`, and [`Refusal::Scope`] when the
 /// issuer is bound to no member, whose `patient/` grants then count for
 /// nothing.
-fn patient_context(caller: &Caller, trusted: &Trusted) -> Result<PatientContext, Refusal> {
-    let binding = trusted.settings.patient.as_ref().ok_or(Refusal::Scope)?;
+fn patient_context(caller: &Caller, trusted: &IssuerSettings) -> Result<PatientContext, Refusal> {
+    let binding = trusted.patient.as_ref().ok_or(Refusal::Scope)?;
     // NOTE: SMART on openEHR master04 §Capabilities conveys the context "via the `ehrId`
     // token claim"; one absent, or no HIER_OBJECT_ID, names no patient to confine to.
     let ehr_id = caller
@@ -621,28 +581,5 @@ fn acting(subject: &str, client_id: &str) -> Acting {
         Acting::Client
     } else {
         Acting::Person
-    }
-}
-
-/// The `iss` of a token not yet verified.
-#[derive(Debug, serde::Deserialize)]
-struct Issued {
-    /// `iss`.
-    iss: String,
-}
-
-/// The refusal a `jsonwebtoken` verification failure stands for.
-fn refusal_of(kind: &ErrorKind) -> Refusal {
-    match kind {
-        ErrorKind::ExpiredSignature => Refusal::Expired,
-        ErrorKind::ImmatureSignature => Refusal::NotYetValid,
-        ErrorKind::InvalidAudience => Refusal::Audience,
-        ErrorKind::InvalidIssuer => Refusal::Issuer,
-        ErrorKind::InvalidAlgorithm | ErrorKind::MissingAlgorithm => Refusal::Algorithm,
-        ErrorKind::InvalidSignature
-        | ErrorKind::InvalidEcdsaKey
-        | ErrorKind::InvalidRsaKey(_)
-        | ErrorKind::InvalidKeyFormat => Refusal::Signature,
-        _ => Refusal::Malformed,
     }
 }

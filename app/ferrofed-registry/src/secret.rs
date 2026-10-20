@@ -3,7 +3,7 @@
 
 //! The two types every credential the gateway is configured with is held in.
 //!
-//! Redaction is a property of the type. A [`Secret`] (a bearer token, a
+//! Redaction is a property of the type. A [`Secret`] (a client secret, a
 //! password) renders as [`REDACTED`] through `Debug`, `Display` and
 //! `Serialize`; a [`SecretUrl`] (a URL that may carry a user name and
 //! password in its userinfo, RFC 3986 §3.2.1, or a credential in its query)

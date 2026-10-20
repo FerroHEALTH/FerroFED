@@ -56,7 +56,7 @@ const REMOTE: ([u8; 4], u16) = ([192, 0, 2, 10], 40_000);
 
 /// The admin listener's application over `state`, in production.
 fn admin_over(state: &Arc<AppState>) -> Router {
-    let access = Access::new(&support::auth(), Profile::Production, None);
+    let access = Access::new(&support::auth(), Profile::Production, Vec::new());
     admin::router(Arc::clone(state), access).layer(MockConnectInfo(SocketAddr::from(REMOTE)))
 }
 

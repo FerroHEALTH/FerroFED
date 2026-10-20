@@ -257,7 +257,7 @@ pub fn sites(
 /// [`ServerFault::PublicUrlDisagrees`]: crate::config::error::server::ServerFault::PublicUrlDisagrees
 pub(crate) fn resolve(
     config: &Config,
-    context: &ServiceContext<'_>,
+    context: ServiceContext,
     public: Option<&PublicUrl>,
 ) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {

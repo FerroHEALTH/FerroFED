@@ -21,8 +21,8 @@ pub enum CredentialsFault {
         #[source]
         source: IdError,
     },
-    /// A credentials section names more than one scheme: a bearer token, a
-    /// basic user, an OAuth 2.0 grant.
+    /// A credentials section names more than one scheme: a basic user, an
+    /// OAuth 2.0 grant.
     #[error("{section} names more than one credentials scheme; set one")]
     Scheme {
         /// The credentials section.
@@ -35,8 +35,7 @@ pub enum CredentialsFault {
         section: String,
     },
     /// A credential does not form the `Authorization` value the node client
-    /// sends, as a bearer token that is not the `b64token` of RFC 6750 §2.1
-    /// does not.
+    /// sends.
     ///
     /// The source is the node client's refusal, which quotes nothing.
     #[error("{key} cannot be sent in the Authorization header")]
@@ -170,30 +169,18 @@ pub enum CredentialsFault {
         /// The section.
         section: String,
     },
-    /// An identity service's scope is not the space-delimited scopes of RFC
-    /// 6749 §3.3.
-    #[error("{key} is not a space-delimited list of RFC 6749 §3.3 scope-tokens")]
-    ServiceScope {
-        /// The key that holds it.
-        key: String,
-        /// What the scope grammar refused.
-        #[source]
-        source: ferrofed_engine::onward::ScopeError,
-    },
-    /// An identity service's credentials section names a Nuts grant or a
-    /// FAPI 2.0 grant.
+    /// An identity service's credentials section names an `oauth2`, Nuts
+    /// or FAPI 2.0 grant.
     #[error(
-        "{section} takes a bearer token, basic credentials or an oauth2 client-credentials grant, not a nuts or fapi2 grant"
+        "{section} takes basic credentials or the oauth client credentials grant, not an oauth2, nuts or fapi2 grant"
     )]
     ServiceGrantNotHere {
         /// The section.
         section: String,
     },
-    /// A credentials section that takes a bearer token or basic credentials
-    /// names an OAuth 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
-    #[error(
-        "{section} takes a bearer token or basic credentials, not an oauth2, nuts or fapi2 grant"
-    )]
+    /// A credentials section that takes basic credentials names an OAuth
+    /// 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
+    #[error("{section} takes basic credentials, not an oauth, oauth2, nuts or fapi2 grant")]
     GrantNotHere {
         /// The section.
         section: String,

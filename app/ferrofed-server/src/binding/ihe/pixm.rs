@@ -113,7 +113,7 @@ pub struct PixManagerSettings {
 
 /// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is
 /// `https` outside the development `profile`, and every secret is read.
-pub(super) fn resolve(pixm: &Pixm, context: &ServiceContext<'_>) -> Result<PixmSettings, Error> {
+pub(super) fn resolve(pixm: &Pixm, context: ServiceContext) -> Result<PixmSettings, Error> {
     let profile = context.profile;
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
@@ -187,7 +187,6 @@ pub(super) fn resolver(
         let auth = service::service_authentication(
             &format!("{key}.credentials"),
             manager.credentials.as_ref(),
-            &tls,
         )?;
         managers.push(ManagerConfig {
             base: manager.url.clone(),

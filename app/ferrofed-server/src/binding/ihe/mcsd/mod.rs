@@ -145,7 +145,7 @@ pub fn site() -> transport::ProtectedSite {
 /// deadline and caps, audited as `audit` says.
 pub(super) fn resolve(
     directory: &McsdDirectory,
-    context: &ServiceContext<'_>,
+    context: ServiceContext,
     audit: AuditSettings,
 ) -> Result<DirectorySettings, Error> {
     let profile = context.profile;

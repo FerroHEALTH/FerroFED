@@ -31,8 +31,10 @@ body_limit_bytes = 4096
 format = "json"
 filter = "debug"
 
-[credentials."hospital-a"]
-bearer_token = "synthetic-token"
+[credentials."hospital-a".oauth]
+token_endpoint = "https://as.hospital-a.example.org/token"
+client_id = "ferrofed"
+client_secret = "synthetic-token"
 
 [credentials."clinic-b"]
 user = "gateway"
