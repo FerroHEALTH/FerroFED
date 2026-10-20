@@ -52,13 +52,14 @@ revision below, cited and not vendored: IHE International licenses its own
 text for reproduction (General Introduction ch. 9), but the ITI-55 pages
 reproduce HL7 v3 tables whose rights HL7 reserves. The client is held to the
 revision by synthetic fixtures shaped after its examples
-(`crates/ihe-iti/tests/fixtures/xcpd/`). IUA, which client authentication
+(`tests/fixtures/xcpd/` of `ihe-iti`, in FerroHEALTH/FerroPIX). IUA, which client authentication
 reads for the ITI-71 token claims and the ITI-72 bearer presentation, is
 vendored: its supplement is published in IHE's own repository under
 CC-BY-4.0, General Introduction ch. 9 grants reproduction of IHE's own text,
 and it reproduces no base-standard table. PDQm is not
-used by the gateway; its ITI-78 client is a capability of `crates/ihe-iti`
-for other callers (#119), vendored with it. The versions are what the FHIR
+used by the gateway; its ITI-78 client is a capability of `ihe-iti`
+for other callers (#119), and FerroHEALTH/FerroPIX vendors the package with
+it (#367). The versions are what the FHIR
 package registry listed as latest on 2026-10-01.
 
 The FHIR profiles audit each transaction as a FHIR `AuditEvent` built on the
@@ -112,11 +113,11 @@ reason no reader is needed; its self-test fails on a row with neither.
 | openEHR Reference Model specification source | `openEHR/specifications-RM` tag `Release-1.1.0`, the AsciiDoc sources of the RM 1.1.0 specifications and the class definitions they include | `scripts/vendor/openehr-rm.sh`, `docs/specs/openehr-rm/PROVENANCE.md` |
 | openEHR BASE specification source | `openEHR/specifications-BASE` tag `Release-1.1.0`, the release paired with the RM `Release-1.1.0` (decided 2026-10-06): the AsciiDoc sources of the BASE 1.1.0 specifications and the class definitions they include | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
-| IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 and ITI-119 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
+| IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 and ITI-119 artefacts | the `ihe-iti` crate; FerroHEALTH/FerroPIX vendors the package by `scripts/vendor/ihe-pdqm.sh` (#367) |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
 | IHE PMIR FHIR package | `ihe.iti.pmir` version `1.6.0` from `packages.fhir.org`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`, the ITI-93 and ITI-94 artefacts | `scripts/vendor/ihe-pmir.sh`, `docs/specs/ihe-pmir/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
-| IHE BALP FHIR package | `ihe.iti.balp` version `1.1.4` from `packages.fhir.org`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`, the whole package but its manifest | `scripts/vendor/ihe-balp.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
+| IHE BALP FHIR package | `ihe.iti.balp` version `1.1.4` from `packages.fhir.org`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`, the whole package but its manifest | the `ihe-iti` crate (`balp`) and `ihe-atna`; FerroHEALTH/FerroPIX and FerroHEALTH/FerroAUDIT vendor the package by `scripts/vendor/ihe-balp.sh` (#367) |
 | IHE PIXm narrative pages | the IG of package `ihe.iti.pixm` 3.1.0 at `profiles.ihe.net/ITI/PIXm/3.1.0/`, pin-set digest `b3cfa964a0c8813c068d0193bc35f5e606cead23e845a0de0925f041fe9ad2a1`, the Volume 1 (1:41), ITI-83 and ITI-104 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pixm-pages/PROVENANCE.md` |
 | IHE PDQm narrative pages | the IG of package `ihe.iti.pdqm` 3.2.0 at `profiles.ihe.net/ITI/PDQm/3.2.0/`, pin-set digest `a3271aa6b45fad9ceb2da373c6d4cab0eb7649e06fcb278431f967bde976e0b6`, the Volume 1 (1:38), ITI-78 and ITI-119 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pdqm-pages/PROVENANCE.md` |
 | IHE PMIR narrative pages | the IG of package `ihe.iti.pmir` 1.6.0 at `profiles.ihe.net/ITI/PMIR/1.6.0/`, pin-set digest `ba4747caf6acc383df4ffb041b253272ad58ead796345fb78dc38740f58c4b09`, the Volume 1 (1:49), ITI-93 and ITI-94 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pmir-pages/PROVENANCE.md` |
@@ -183,9 +184,6 @@ change with every render, is cited and not pinned.
 | Swiss EPR legislation (Fedlex) | EPDG, EPDV, EPDV-EDI with its annexes, and the EGDG draft, pin-set digest `384f0bbb5b958da909b54b835faf1535b2d0a141a05bc4a92d324914ff943910` | `scripts/vendor/ch.sh`, `docs/specs/ch-fedlex-epr/PROVENANCE.md` |
 | Swiss CH EPR FHIR package | package `ch.fhir.ig.ch-epr-fhir` 5.0.0, pin-set digest `75f8cce821998e823bd9a9fecac8848ca661d862d2576b1488e6399a9309eed5` | `scripts/vendor/ch.sh`, `docs/specs/ch-epr-fhir/PROVENANCE.md` |
 | Swiss EPR central services interface pack | `Central-Services_20260601_PROD.zip`, pin-set digest `6f6eb0c51aa0843a4332e915b6f9e0020ab36d6d6dfa245eb3ff9de9a1020ed0` | `scripts/vendor/ch.sh`, `docs/specs/ch-ehs-central-services/PROVENANCE.md` |
-| IHE PIXm FHIR package, Swiss pin | package `ihe.iti.pixm` 3.0.4, pin-set digest `68b36cfa85cc04551e30b3628ce16218c1b980495c06bb835f34b0ccc706063a` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pixm-ch/PROVENANCE.md` |
-| IHE PDQm FHIR package, Swiss pin | package `ihe.iti.pdqm` 3.1.0, pin-set digest `ae4fb56c9eba92fcdf5637c86135618e37b60642c99013a8ca06ba747c9c4e73` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pdqm-ch/PROVENANCE.md` |
-| IHE IUA supplement, Swiss pin | `IHE/ITI.IUA` Revision 2.3, pin-set digest `2a5f13a87ccf307fecda8c48e77a61fd09c440089b2172be0edea912dea85439` | `scripts/vendor/ch.sh`, `docs/specs/ihe-iua-ch/PROVENANCE.md` |
 | EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, the eHealth Network Patient Summary, ePrescription and General Guidelines and Commission Decision 2011/833/EU on the reuse of Commission documents, all committed, with the eHDSI interoperability specifications and the MyHealth@EU requirements catalogue recorded for manual retrieval (EU Login), pin-set digest `b102b6e1db0ec479568a97aa8ca71e2c56403d19ca16f90a1b22c35a911230fb` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
 | EU Cyber Resilience Act and market surveillance acts | Regulation (EU) 2024/2847 with its three English corrigenda, Implementing Regulation (EU) 2025/2392, Delegated Regulations (EU) 2025/1535 and 2026/881, Regulation (EU) 2019/1020 and Regulation (EC) No 765/2008, pin-set digest `c5641e7937d0a0a9638af933a62143b1a9807fa002a1b3b337632e527e4f655f` | `scripts/vendor/eu.sh`, `docs/specs/eu-cra/PROVENANCE.md` |
 | MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0 and three of its rendered pages (home, Patient Identification, Document Retrieval), committed; the `fhir.ehdsi.eu` site index and OpenNCP v10.1.0, cache only; pin-set digest `faa5eca9add80f772589e00c43bbe8251a25c54a5d3fb94bc078c7a1b89c1c9a` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
@@ -350,7 +348,7 @@ AQL variable, which `columns[].path` now carries (#877).
 
 The FHIR model comes from the published `fhir-types` crate
 (`docs/architecture.md` §6, decisions A16 and A59), compiled in the binding
-crates `crates/ihe-iti` and `nl-generic-functions` (crates.io) and in the
+crates `ihe-iti` and `nl-generic-functions` (both from crates.io) and in the
 interoperability component `crates/eehrxf`, never in the engine, so the
 gateway core never builds it. `scripts/checks/versions.sh` fails when this row
 and the root `Cargo.toml` `[workspace.dependencies]` disagree.

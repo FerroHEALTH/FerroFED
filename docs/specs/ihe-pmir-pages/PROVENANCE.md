@@ -9,14 +9,14 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `ba4747caf6acc383df4ffb041b253272ad58ead796345fb78dc38740f58c4b09`
-- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-20, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 3 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 3 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `30587697647273f300436f19b0d038344b4d7ce9a45c45564716c7437c2d7b8b`
-- Read by: the section citations of crates/ihe-iti and app/ferrofed-identity (#696)
+- Read by: the section citations of app/ferrofed-identity, app/ferrofed-server, tools/ferrofed-testkit and docs/architecture.md, held by scripts/checks/ihe-citations.sh (#696); ihe-iti is FerroHEALTH/FerroPIX's since #367
 
 The Volume 1 page (1:49) and the Mobile Patient Identity Feed [ITI-93]
 and Subscribe to Patient Updates [ITI-94] pages of the PMIR 1.6.0

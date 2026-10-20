@@ -175,8 +175,8 @@ flags verbatim: `cargo fmt --all --check`; `cargo clippy --locked --workspace
 (advisories, licences, bans, sources, which subsumes cargo-audit); MSRV via
 `cargo hack check --rust-version --workspace --locked --all-targets`; every
 feature alone via `cargo hack clippy --locked --each-feature --all-targets
---package openehr-federation --package ihe-iti
---package oauth-server-metadata --package ehds-logging --package eehrxf --package ferrofed-identity --package
+--package openehr-federation
+--package oauth-server-metadata --package eehrxf --package ferrofed-identity --package
 ferrofed-engine --package ferrofed-server -- -D warnings`, which covers each
 published crate's layer and profile features and the regional binding
 features (`binding-ihe` and `binding-nl` of the server, `ihe` and `nl` of
