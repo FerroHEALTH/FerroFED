@@ -505,7 +505,7 @@ lower case, with `__` between the segments:
 
 ```text
 FERROFED__SERVER__LISTEN=0.0.0.0:8080
-FERROFED__CREDENTIALS__HOSPITAL_A__BEARER_TOKEN_FILE=/run/secrets/token
+FERROFED__CREDENTIALS__HOSPITAL_A__PASSWORD_FILE=/run/secrets/hospital-a-password
 ```
 
 A value reads as TOML syntax when it is one (`9`, `true`) and as the string it
