@@ -59,11 +59,13 @@ use std::sync::Arc;
 
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_registry::id::EhrId;
-use ferrohealth_smart::guard::{Gate as SmartGate, Requirement as SmartRequirement};
+use ferrohealth_smart::guard::{
+    CredentialHeader, Gate as SmartGate, Requirement as SmartRequirement,
+};
 use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily, SmartScope};
 use ferrohealth_smart::openehr::{self, granted};
-use ferrohealth_smart::refusal::{Denied, Reason};
-use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured, Verifier as _};
+use ferrohealth_smart::refusal::Reason;
+use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured};
 use http::{HeaderMap, header};
 use secrecy::SecretString;
 
@@ -91,10 +93,9 @@ pub struct Gate {
     realm: String,
     /// The issuers on the trust list, with their policy.
     issuers: Vec<IssuerSettings>,
-    /// How a token is verified.
-    verifiers: Arc<Verifiers>,
-    /// The crate's gate, which reads the `Authorization` field and checks
-    /// a bearer token with [`Gate::verifiers`].
+    /// The crate's gate, which reads the credential from `Authorization`,
+    /// or from the edge's header in the edge mode, and checks it with the
+    /// issuers' verifiers.
     smart: SmartGate,
     /// The crate's gate over the Basic users of `[[auth.basic.users]]`,
     /// when any is written.
@@ -142,20 +143,32 @@ impl Gate {
         let mut keyed = Vec::new();
         let mut introspected = None;
         for issuer in &settings.issuers {
+            let trusted = Arc::new(issuer.clone());
             match &issuer.verification {
-                Verification::KeySet(server) => keyed.push((**server).clone()),
+                Verification::KeySet(server) => keyed.push(((**server).clone(), trusted)),
                 Verification::Introspection(endpoint) => {
-                    introspected = Some(Introspector::new(issuer.issuer.clone(), endpoint.clone()));
+                    introspected = Some(Introspector::new(
+                        issuer.issuer.clone(),
+                        endpoint.clone(),
+                        trusted,
+                    ));
                 }
             }
         }
         let edge = matches!(settings.mode, AuthMode::Edge(_));
-        let verifiers = Arc::new(Verifiers::new(keyed, introspected, edge));
         let bearer: Arc<dyn ferrohealth_smart::resource::Verifier> =
-            Arc::<Verifiers>::clone(&verifiers);
+            Arc::new(Verifiers::new(keyed, introspected, edge));
         let smart = SmartGate::open()
             .with_bearer(bearer)
             .with_realm(settings.realm.clone());
+        // NOTE: no specification governs the edge mode: our own design; the proxy's
+        // assertion is the whole value of the header the deployment names.
+        let smart = match &settings.mode {
+            AuthMode::Token => smart,
+            AuthMode::Edge(name) => {
+                smart.with_credential_header(CredentialHeader::bare(name.clone()))
+            }
+        };
         let basic = settings.basic.as_ref().map(|users| {
             SmartGate::open()
                 .with_basic(Arc::clone(users.store()))
@@ -168,7 +181,6 @@ impl Gate {
             product_scope: settings.product_scope.clone(),
             realm: settings.realm.clone(),
             issuers: settings.issuers.clone(),
-            verifiers,
             smart,
             basic,
             references,
@@ -198,13 +210,16 @@ impl Gate {
             return Err(Refusal::Operation.into());
         }
         let (smart, credential) = self.authenticate(headers).await?;
-        let trusted = smart
-            .issuer()
-            .and_then(|issuer| self.issuers.iter().find(|held| held.issuer == issuer))
+        // NOTE: no specification governs this: our own design; the verifier that
+        // routed the token by its `iss` attached that issuer's trust entry.
+        let entry = smart
+            .extension::<Arc<IssuerSettings>>()
+            .map(Arc::clone)
             .ok_or(Refused {
                 refusal: Refusal::Invalid,
                 check: Some(Reason::UntrustedIssuer),
             })?;
+        let trusted: &IssuerSettings = &entry;
         let caller = self.caller(&smart, trusted)?;
         let correlation = match &trusted.national_contact_point {
             Some(declared) => contact_point::correlation(headers, declared)?,
@@ -276,50 +291,25 @@ impl Gate {
 
     /// Returns the caller the credential of `headers` authenticates and the
     /// credential itself: the bearer token `ferrohealth-smart` reads from
-    /// `Authorization`, or the edge's assertion, sent exactly once.
+    /// `Authorization`, or the edge's assertion from the header the
+    /// deployment names, sent exactly once.
     async fn authenticate(&self, headers: &HeaderMap) -> Result<(SmartCaller, String), Refused> {
-        match &self.mode {
-            AuthMode::Token => {
-                let access = self
-                    .smart
-                    .authenticate(headers)
-                    .await
-                    .map_err(|denied| Refused::from(&denied))?;
-                let Access::Caller(caller) = access else {
-                    return Err(Refusal::Missing.into());
-                };
-                // NOTE: RFC 6750 §2.1, the credential the crate verified is the one
-                // `Authorization` field's text after its scheme.
-                let credential = headers
-                    .get(header::AUTHORIZATION)
-                    .and_then(|value| value.to_str().ok())
-                    .and_then(|text| text.split_once(' '))
-                    .map(|(_, token)| token.trim().to_owned())
-                    .ok_or(Refusal::Malformed)?;
-                Ok((Arc::unwrap_or_clone(caller), credential))
-            }
-            AuthMode::Edge(name) => {
-                let mut values = headers.get_all(name).iter();
-                let (Some(value), None) = (values.next(), values.next()) else {
-                    return Err(if headers.contains_key(name) {
-                        Refusal::Malformed
-                    } else {
-                        Refusal::Missing
-                    }
-                    .into());
-                };
-                let text = value.to_str().map_err(|_opaque| Refusal::Malformed)?;
-                if text.is_empty() {
-                    return Err(Refusal::Malformed.into());
-                }
-                let caller = self
-                    .verifiers
-                    .verify(text)
-                    .await
-                    .map_err(|rejection| Refused::from(&Denied::from(&rejection)))?;
-                Ok((caller, text.to_owned()))
-            }
-        }
+        let access = self
+            .smart
+            .authenticate(headers)
+            .await
+            .map_err(|denied| Refused::from(&denied))?;
+        let Access::Caller(caller) = access else {
+            return Err(Refusal::Missing.into());
+        };
+        // NOTE: RFC 6750 §2.1, the credential the crate verified is the one field's
+        // text after its scheme, or the whole value of the edge's header.
+        let credential = self
+            .smart
+            .credential(headers)
+            .ok_or(Refusal::Malformed)?
+            .to_owned();
+        Ok((Arc::unwrap_or_clone(caller), credential))
     }
 
     /// Returns the gateway's caller of `smart`, the crate's, vouched for by
@@ -387,19 +377,13 @@ impl Gate {
                     ferrohealth_smart::refusal::Refusal::Missing(_) => BasicRefusal::Missing,
                     _ => BasicRefusal::Invalid,
                 })?;
-        let listed = SmartRequirement::Client {
-            client_ids: Vec::new(),
-            basic_users: users.to_vec(),
-        };
-        let user = access
-            .caller()
-            .map(|caller| caller.subject().to_owned())
-            .ok_or(BasicRefusal::Missing)?;
-        if listed.met_by(&access, Honoured::default()) {
-            Ok(user)
-        } else {
-            Err(BasicRefusal::Unlisted)
+        if access.caller().is_none() {
+            return Err(BasicRefusal::Missing);
         }
+        access
+            .basic_user_in(users)
+            .map(str::to_owned)
+            .ok_or(BasicRefusal::Unlisted)
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.
@@ -412,10 +396,7 @@ impl Gate {
     /// not: `Authorization`, or the edge's header.
     #[must_use]
     pub fn presents_credential(&self, headers: &HeaderMap) -> bool {
-        match &self.mode {
-            AuthMode::Token => headers.contains_key(header::AUTHORIZATION),
-            AuthMode::Edge(name) => headers.contains_key(name),
-        }
+        headers.contains_key(self.smart.credential_header().name())
     }
 }
 

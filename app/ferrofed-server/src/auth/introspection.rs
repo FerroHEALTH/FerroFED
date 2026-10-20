@@ -19,12 +19,12 @@ use std::sync::Arc;
 
 use ferrohealth_smart::metadata::DiscoveryError;
 use ferrohealth_smart::refusal::Reason;
-use ferrohealth_smart::resource::{Caller as SmartCaller, Rejection, ResourceError};
+use ferrohealth_smart::resource::{Caller as SmartCaller, Rejection};
 use http::StatusCode;
 use tokio::sync::OnceCell;
 
 use crate::auth::claims::Introspected;
-use crate::config::auth::Introspection;
+use crate::config::auth::{Introspection, IssuerSettings};
 use crate::facade::security::TARGET;
 use crate::metrics::security::Event;
 
@@ -54,16 +54,23 @@ pub(super) struct Introspector {
     settings: Introspection,
     /// The client, built at its first use.
     client: OnceCell<reqwest::Client>,
+    /// The issuer's trust entry, attached to every caller it admits.
+    trusted: Arc<IssuerSettings>,
 }
 
 impl Introspector {
     /// Returns the introspector of `issuer` at the endpoint `settings`
     /// names; nothing is asked yet.
-    pub(super) fn new(issuer: String, settings: Introspection) -> Self {
+    pub(super) fn new(
+        issuer: String,
+        settings: Introspection,
+        trusted: Arc<IssuerSettings>,
+    ) -> Self {
         Self {
             issuer,
             settings,
             client: OnceCell::new(),
+            trusted,
         }
     }
 
@@ -85,9 +92,7 @@ impl Introspector {
                     error = crate::chain(&source),
                     "an issuer's introspection endpoint did not answer, so its tokens cannot be verified"
                 );
-                return Err(Rejection::Unavailable {
-                    source: Arc::new(ResourceError::Discovery(source)),
-                });
+                return Err(Rejection::upstream("introspection endpoint", source));
             }
         };
         let invalid = |reason: &'static str| Rejection::Invalid {
@@ -134,7 +139,8 @@ impl Introspector {
         };
         let scope = answer.scope.unwrap_or_default();
         let caller = SmartCaller::new(subject, Some(client_id), &scope, None, false)
-            .with_issuer(self.issuer.clone());
+            .with_issuer(self.issuer.clone())
+            .with_extension(Arc::clone(&self.trusted));
         claims(caller, &bytes).ok_or_else(|| invalid("answer"))
     }
 

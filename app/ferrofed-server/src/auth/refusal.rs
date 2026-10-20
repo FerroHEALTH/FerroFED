@@ -14,7 +14,7 @@
 //! keep their own codes.
 
 use axum::response::{IntoResponse, Response};
-use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes};
+use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes, StepUp};
 use http::{HeaderValue, StatusCode, header};
 
 use crate::error::{self, Code};
@@ -164,7 +164,7 @@ impl Refusal {
     /// The refusal of `ferrohealth-smart` whose challenge this one carries,
     /// or `None` for one of the gateway's own.
     #[must_use]
-    pub const fn smart(self) -> Option<SmartRefusal> {
+    pub fn smart(self) -> Option<SmartRefusal> {
         match self {
             Self::Missing => Some(SmartRefusal::Missing(Schemes {
                 bearer: true,
@@ -180,7 +180,10 @@ impl Refusal {
             | Self::PatientContext
             | Self::PatientDemographic
             | Self::ContactPoint => Some(SmartRefusal::Forbidden),
-            Self::NaturalPerson | Self::Assurance | Self::Correlation => None,
+            // NOTE: RFC 9470 §3: a token whose authentication does not meet the resource's
+            // requirements is a 401 with the error `insufficient_user_authentication`.
+            Self::NaturalPerson | Self::Assurance => Some(StepUp::new().into_refusal()),
+            Self::Correlation => None,
         }
     }
 
@@ -190,16 +193,9 @@ impl Refusal {
     pub fn response(self, realm: &str, request_id: &str) -> Response {
         let mut response =
             error::response(self.code(), self.description(), request_id).into_response();
-        let challenge = match self {
-            // NOTE: RFC 9470 §3: a token whose authentication does not meet the resource's
-            // requirements is a 401 with the error `insufficient_user_authentication`.
-            Self::NaturalPerson | Self::Assurance => Some(format!(
-                "Bearer realm=\"{realm}\", error=\"insufficient_user_authentication\""
-            )),
-            _ => self
-                .smart()
-                .and_then(|refusal| refusal.challenge(Some(realm))),
-        };
+        let challenge = self
+            .smart()
+            .and_then(|refusal| refusal.challenge(Some(realm)));
         if let Some(value) = challenge.and_then(|text| HeaderValue::from_str(&text).ok()) {
             response
                 .headers_mut()

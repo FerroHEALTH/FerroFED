@@ -272,7 +272,7 @@ ferrohealth-ui = "=0.2.0"
 # client credentials grant of the plain onward and service credentials. It
 # checks tokens and never issues them. Pinned exactly, so every product moves
 # to a new version deliberately. Verified against crates.io on 2026-10-20.
-ferrohealth-smart = { version = "=0.3.1", default-features = false, features = ["fetch", "axum", "openehr"] }
+ferrohealth-smart = { version = "=0.4.0", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-viewer/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.
