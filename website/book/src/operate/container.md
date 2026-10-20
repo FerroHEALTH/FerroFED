@@ -66,7 +66,7 @@ and no checkout of the repository.
    ```
 
 This setup writes no credential in `ferrofed.toml`: each one is a file, named
-by a `bearer_token_file` or `password_file` key, and so is the signing key,
+by a `password_file` or `client_secret_file` key, and so is the signing key,
 named by `key_file`. The gateway also accepts a secret written inline, under
 every profile ([Configuration](configuration.md#secrets-inline-or-from-a-file)),
 but a file keeps it out of the configuration and out of every copy of it. Compose mounts `ferrofed.toml`, `registry.toml` and

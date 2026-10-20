@@ -9,14 +9,11 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use std::collections::BTreeSet;
 use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_server::auth::refusal::Refusal;
-use ferrofed_server::config::auth::{
-    AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
-};
+use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
 use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use http::{HeaderName, Request};
@@ -31,25 +28,14 @@ const HEADER: &str = "ferrofed-edge-assertion";
 const EDGE: &str = "https://edge.example.test";
 
 /// `[auth]` in the edge mode, trusting `edge`.
-fn at_the_edge(edge: &Issuer) -> AuthSettings {
-    AuthSettings {
+fn at_the_edge(edge: &Issuer) -> Result<AuthSettings, Box<dyn Error>> {
+    let file = support::jwks_file_of(edge)?;
+    Ok(AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(HEADER)),
-        audience: Some(AUDIENCE.to_owned()),
-        issuers: vec![IssuerSettings {
-            issuer: EDGE.to_owned(),
-            verification: Verification::KeySet(KeySource::Set(edge.jwks())),
-            backend_clients: BTreeSet::new(),
-            demographic_clients: BTreeSet::new(),
-            operator_scope: None,
-            patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
-            professional_issuing_authority: None,
-            national_contact_point: None,
-        }],
+        audience: vec![AUDIENCE.to_owned()],
+        issuers: vec![IssuerSettings::new(EDGE, support::key_set(EDGE, &file))],
         ..AuthSettings::default()
-    }
+    })
 }
 
 /// The query carrying `assertion` in the edge's header.
@@ -65,7 +51,7 @@ fn asserted(assertion: &str) -> Result<Request<Body>, Box<dyn Error>> {
 #[tokio::test]
 async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
     let edge = Issuer::new(EDGE)?;
-    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let gateway = Gateway::with(at_the_edge(&edge)?).await?;
     let mut claims = Claims::new(EDGE, AUDIENCE);
     claims.sub = String::from("synthetic-clinician-at-the-edge");
     let logs = Logs::default();
@@ -93,7 +79,7 @@ async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
 #[tokio::test]
 async fn the_edge_event_references_are_stable_per_caller() -> TestResult {
     let edge = Issuer::new(EDGE)?;
-    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let gateway = Gateway::with(at_the_edge(&edge)?).await?;
     let mut first = Claims::new(EDGE, AUDIENCE);
     first.sub = String::from("synthetic-clinician-one");
     let mut second = Claims::new(EDGE, AUDIENCE);
@@ -125,7 +111,7 @@ async fn the_edge_event_references_are_stable_per_caller() -> TestResult {
 #[tokio::test]
 async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
     let edge = Issuer::new(EDGE)?;
-    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let gateway = Gateway::with(at_the_edge(&edge)?).await?;
     let token = edge.mint(&Claims::new(EDGE, AUDIENCE))?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Missing).await
 }
@@ -135,7 +121,7 @@ async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
 #[tokio::test]
 async fn an_assertion_of_another_issuer_is_401() -> TestResult {
     let edge = Issuer::new(EDGE)?;
-    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let gateway = Gateway::with(at_the_edge(&edge)?).await?;
     let token = support::token()?;
-    assert_refused(&gateway, asserted(&token)?, Refusal::Issuer).await
+    assert_refused(&gateway, asserted(&token)?, Refusal::Invalid).await
 }

@@ -15,7 +15,7 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
@@ -25,9 +25,7 @@ use axum::body::Body;
 use axum::extract::State;
 use ferrofed_engine::conveyance::{HEADER, LIFETIME, TYPE};
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::{
-    AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
-};
+use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{ACT_REASON, Claims, Coding, EVERY_SCOPE, Issuer};
@@ -478,20 +476,11 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
     let edge = Issuer::new(EDGE)?;
     let gateway = Gateway::with(AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(EDGE_HEADER)),
-        audience: Some(AUDIENCE.to_owned()),
-        issuers: vec![IssuerSettings {
-            issuer: EDGE.to_owned(),
-            verification: Verification::KeySet(KeySource::Set(edge.jwks())),
-            backend_clients: BTreeSet::new(),
-            demographic_clients: BTreeSet::new(),
-            operator_scope: None,
-            patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
-            professional_issuing_authority: None,
-            national_contact_point: None,
-        }],
+        audience: vec![AUDIENCE.to_owned()],
+        issuers: vec![IssuerSettings::new(
+            EDGE,
+            crate::support::key_set(EDGE, &crate::support::jwks_file_of(&edge)?),
+        )],
         ..AuthSettings::default()
     })
     .await?;

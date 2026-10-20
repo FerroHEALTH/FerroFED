@@ -34,8 +34,8 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
     assert_eq!(Format::Json, settings.telemetry.format);
     assert_eq!("debug", settings.telemetry.filter);
     match settings.credentials.get(&EndpointId::new("hospital-a")?) {
-        Some(Scheme::Bearer(token)) => assert_eq!("synthetic-token", token.expose()),
-        other => return Err(format!("hospital-a is a bearer scheme: {other:?}").into()),
+        Some(Scheme::Oauth { grant, .. }) => assert_eq!("ferrofed", grant.client_id),
+        other => return Err(format!("hospital-a is an oauth scheme: {other:?}").into()),
     }
     match settings.credentials.get(&EndpointId::new("clinic-b")?) {
         Some(Scheme::Basic { user, password }) => {

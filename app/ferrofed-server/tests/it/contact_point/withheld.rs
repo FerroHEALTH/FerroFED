@@ -20,7 +20,7 @@ use axum::body::Body;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrofed_server::config::auth::{AuthSettings, KeySource, Verification};
+use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::config::settings::ConsentDisclosure;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
@@ -124,7 +124,10 @@ async fn the_deployments_own_caller_still_sees_the_exclusion_disclosed() -> Test
         .next()
         .ok_or("the declared issuer")?;
     contact_point.name().clone_into(&mut declared_issuer.issuer);
-    declared_issuer.verification = Verification::KeySet(KeySource::Set(contact_point.jwks()));
+    declared_issuer.verification = crate::support::key_set(
+        contact_point.name(),
+        &crate::support::jwks_file_of(&contact_point)?,
+    );
     auth.issuers.push(declared_issuer);
     let app = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), auth)?;
     let (status, _, text) = sent(

@@ -30,104 +30,140 @@ above, is a `404`.
 ## The token
 
 A client sends `Authorization: Bearer <token>` (RFC 6750 §2.1), once. The
-token is an RFC 9068 access token, verified as follows:
+gateway checks it through `ferrohealth-smart`, the SMART and OAuth 2.0
+resource-server crate every FerroHEALTH product runs on, which checks tokens
+and never issues them. The token is a JWT access token, verified as follows:
 
-- its JOSE header names the type `at+jwt` (RFC 9068 §4) and one of the
-  algorithms ES256, ES384, PS256 and RS256. A token signed with `none` or an
-  HMAC algorithm is refused (RFC 8725 §3.1, §3.2);
-- its `iss` names an issuer on the trust list, `[[auth.issuer]]`;
-- the issuer's key set verifies the signature, under the key its `kid`
-  names. A token with no `kid` is verified only when the set holds one key;
-- `aud` names this gateway, `auth.audience`;
-- `exp` and `nbf` hold, within `auth.clock_skew_s`;
-- it carries every claim RFC 9068 §2.2 requires: `iss`, `exp`, `aud`,
-  `sub`, `client_id`, `iat` and `jti`.
+- the bearer value is a `b64token` (RFC 6750 §2.1);
+- its JOSE header names an algorithm `auth.algorithms` admits, by default
+  RS256, RS384, PS256, PS384, ES256 and ES384. A token signed with `none` or
+  an HMAC algorithm is refused, and so is an HMAC algorithm in
+  `auth.algorithms` at load (RFC 8725 §3.1, §3.2);
+- under the default `auth.token_profile = "rfc9068"`, its header names the
+  type `at+jwt` (RFC 9068 §4) and it carries every claim RFC 9068 §2.2
+  requires: `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`. A
+  `sub` that is empty or blank names no caller and is refused;
+- its `iss` names an issuer `[auth]` trusts, whose key set verifies the
+  signature under the key its `kid` names. A token with no `kid` is verified
+  only when the set holds one candidate key;
+- `aud` names one of `auth.audience`;
+- `exp`, `nbf` and `iat` hold within `auth.clock_skew_seconds`.
 
-An issuer can be verified by RFC 7662 introspection instead. The gateway then
-asks the issuer's endpoint about each token, authenticating with its own
-client credentials, and admits the token when the answer is `active`, names
-this gateway in `aud`, and has an `exp` that has not passed. A token that is
-no JWS goes to the one issuer the deployment introspects.
+Every token that fails a check gets the same `401` with
+`WWW-Authenticate: Bearer realm="ferrofed", error="invalid_token"`, and no
+`error_description` (RFC 9068 §4, RFC 6750 §3.1): a refusal that named the
+failed check would teach a forger which claim to fix next. Which check failed
+reaches the security log alone, as `check` on the `caller-refused` event. A
+request with no credential, or with a credential in another scheme, gets
+`401` with the challenge and no error code (RFC 6750 §3.1). Two
+`Authorization` fields are a `400` (`credential-malformed`) with
+`error="invalid_request"`.
+
+An issuer can be verified by RFC 7662 introspection instead, configured
+under `[trust]`. The gateway then asks the issuer's endpoint about each
+token, authenticating with its own client credentials, and admits the token
+when the answer is `active`, names one of `auth.audience` in `aud`, and has
+an `exp` that has not passed. A token that is no JWS goes to the one issuer
+the deployment introspects.
 
 The gateway never forwards the client's token to a node. Its audience is the
 gateway, and one token would unlock every member that trusts its issuer (RFC
 9700 §2.3). Toward each node the gateway sends that endpoint's own onward
-credentials ([Configuration](configuration.md#the-file)), and the caller's
+credentials ([Onward credentials](onward-credentials.md)), and the caller's
 identity in a token of its own
 ([below](#what-a-node-is-told-about-the-caller)).
 
 ## Configuration
 
+Two sections configure client authentication. `[auth]` is the section of
+`ferrohealth-smart`, the same in every FerroHEALTH product: the issuers, the
+audiences, the token rules, the Basic users and the product scope.
+`[trust]` is FerroFED's own policy over the callers `[auth]` verifies: what
+each issuer's tokens are honoured for, the introspected issuer, the edge
+mode and the purpose-of-use rule.
+
 ```toml
 [auth]
-audience = "https://gateway.example.org/fed"
-clock_skew_s = 60
-
-[[auth.issuer]]
 issuer = "https://idp.example.org"
-jwks_uri = "https://idp.example.org/jwks"
+audience = ["https://gateway.example.org/fed"]
+product_scope = "__ferrofed.operator"
+
+[[trust.issuer]]
+issuer = "https://idp.example.org"
 backend_clients = ["example-reporting-service"]
 demographic_clients = []
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
-| `auth.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
-| `auth.audience` | none | The audience every token names in `aud`. Required once an issuer is listed. |
-| `auth.clock_skew_s` | `60` | The leeway on `exp` and `nbf`, at most `300` (RFC 7519 §4.1.4). |
-| `auth.key_set_max_age_s` | `600` | How long a key set is used before it is fetched or read again. |
-| `auth.key_set_refetch_s` | `30` | The least time between two fetches of one key set. |
-| `auth.fetch_timeout_ms` | `5000` | How long a key set fetch or an introspection call may take. |
-| `auth.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
-| `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`. |
-| `auth.issuer[].jwks_uri` | none | The URL of its JWK Set: `https`, or `http` to a loopback host, under every profile ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). |
-| `auth.issuer[].jwks_file` | none | A file holding its JWK Set, for keys handed over out of band. |
-| `auth.issuer[].jwks` | none | Its JWK Set itself, as JSON text. |
-| `auth.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. |
-| `auth.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
-| `auth.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
-| `auth.issuer[].operator_scope` | none | The scope value that admits a caller of this issuer to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves), one scope token. Without it, no caller of this issuer reaches either. |
-| `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
-| `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
-| `auth.issuer[].patient.act_is_representative` | `false` | Whether the RFC 8693 `act` claim of this issuer's patient tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative ([Patient grants](#patient-grants)). |
-| `auth.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. `[auth.issuer.requester]` names all four claims or none. |
-| `auth.issuer[].requester.role` | none | The claim carrying the professional's UZI role code. |
-| `auth.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
-| `auth.issuer[].requester.organisation_type` | none | The claim carrying that organisation's care provider type. |
-| `auth.issuer[].client_tokens_act_for_professional` | `false` | Whether this issuer's client tokens act for the professional they name, so one that names a professional reaches patient data ([Professionals and assurance](#professionals-and-assurance)). |
-| `auth.issuer[].professional_issuing_authority` | none | The string claim of this issuer's tokens that carries the name of the agency that issued the professional's `national_provider_identifier` (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which each node is told. IHE IUA defines no claim for it. Without it, none is read or conveyed. |
-| `auth.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
-| `auth.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[auth.issuer.assurance]` is set. |
-| `auth.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
-| `auth.issuer[].national_contact_point.family_name`, `.given_name`, `.country_code` | none | The string claims of this issuer's tokens that carry the professional's `family_name`, `given_name` and `country_code` (Implementing Regulation (EU) 2026/2099 Annex Table 1). Setting `[auth.issuer.national_contact_point]` declares the issuer a national contact point ([National contact points](#national-contact-points)), and every claim name is then required. |
-| `auth.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
-| `auth.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
-| `auth.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
-| `auth.issuer[].national_contact_point.additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes a `country_code` this contact point relays may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
-| `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
+| `auth.issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). Several issuers are an `[[auth.issuer]]` list, each entry an `issuer` with any of the keys below that differ for it. |
+| `auth.audience` | the public URL | The audiences, of which every token names one in `aud` (RFC 9068 §4). Unset, the `server.public_url` as written; an issuer without an audience refuses the start. |
+| `auth.algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
+| `auth.token_profile` | `rfc9068` | `rfc9068`: the `at+jwt` type and the claims RFC 9068 §2.2 requires. `jwt`: a JWT bearer token outside that profile, `typ` absent or `JWT`, for an issuer that issues no RFC 9068 tokens; the gateway still requires `client_id`. |
+| `auth.clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
+| `auth.jwks_max_age_seconds` | `600` | How long a key set is used before it is read again. |
+| `auth.jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
+| `auth.jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. |
+| `auth.timeout_ms` | `10000` | How long one call to an authorization server may take: its metadata, its key set, or an introspection. |
+| `auth.realm` | `ferrofed` | The realm every `WWW-Authenticate` challenge names. |
+| `auth.product_scope` | none | The scope that admits a caller to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves): a string starting with `__` or a full URI you control (SMART App Launch 2.2.0, Scopes and Launch Context, Extensibility). Without it, no caller reaches either. |
+| `auth.basic.users[]` | none | The Basic users (RFC 7617): `user`, `password_hash` or `password_hash_file` holding the Argon2id PHC string of the password, and `scopes`. A scrape of the admin listener authenticates as one ([Metrics](metrics.md#who-the-admin-listener-serves)). |
+| `auth.basic.cache_ttl_seconds` | `0` | How long a verified Basic credential is kept, so a repeat request skips the key derivation; `0` keeps none. |
+| `trust.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
+| `trust.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
+| `trust.issuer[].issuer` | none | The issuer this entry's policy is for: an `[auth]` issuer, or with `introspection_endpoint` the introspected one. |
+| `trust.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. The issuer is then not an `[auth]` issuer. |
+| `trust.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
+| `trust.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
+| `trust.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[trust.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
+| `trust.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
+| `trust.issuer[].patient.act_is_representative` | `false` | Whether the RFC 8693 `act` claim of this issuer's patient tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative ([Patient grants](#patient-grants)). |
+| `trust.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. `[trust.issuer.requester]` names all four claims or none. |
+| `trust.issuer[].requester.role` | none | The claim carrying the professional's UZI role code. |
+| `trust.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
+| `trust.issuer[].requester.organisation_type` | none | The claim carrying that organisation's care provider type. |
+| `trust.issuer[].client_tokens_act_for_professional` | `false` | Whether this issuer's client tokens act for the professional they name, so one that names a professional reaches patient data ([Professionals and assurance](#professionals-and-assurance)). |
+| `trust.issuer[].professional_issuing_authority` | none | The string claim of this issuer's tokens that carries the name of the agency that issued the professional's `national_provider_identifier` (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which each node is told. IHE IUA defines no claim for it. Without it, none is read or conveyed. |
+| `trust.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
+| `trust.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[trust.issuer.assurance]` is set. |
+| `trust.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
+| `trust.issuer[].national_contact_point.family_name`, `.given_name`, `.country_code` | none | The string claims of this issuer's tokens that carry the professional's `family_name`, `given_name` and `country_code` (Implementing Regulation (EU) 2026/2099 Annex Table 1). Setting `[trust.issuer.national_contact_point]` declares the issuer a national contact point ([National contact points](#national-contact-points)), and every claim name is then required. |
+| `trust.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
+| `trust.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
+| `trust.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
+| `trust.issuer[].national_contact_point.additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes a `country_code` this contact point relays may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
+| `trust.edge.header` | none | The header the edge's assertion travels in, with `trust.mode = "edge"`. |
 
-An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
-`introspection_endpoint`, and one issuer at most is introspected. A gateway
-that federates and lists no issuer refuses to start, with exit code `78`,
-because it could admit no one. Each bad value refuses to start under its key.
+`[auth] enabled = false` is refused: the gateway has no unauthenticated mode.
+So are `auth.scopeless_subjects`, `auth.capabilities` and
+`auth.scopes_supported`, which the gateway reads nowhere: it serves no SMART
+discovery document and grants nothing without a scope. An `[[trust.issuer]]`
+entry names an `[auth]` issuer or an introspection endpoint, never both, and
+one issuer at most is introspected. A gateway that federates and lists no
+issuer refuses to start, with exit code `78`, because it could admit no one.
+Each bad value refuses to start under its key; a value `ferrohealth-smart`
+refuses is named under `auth` with the crate's rule.
 
 A [reload](registry.md#reloading-the-registry), on `SIGHUP` or
-`POST /admin/reload`, applies a changed `[auth]` to every request that
-arrives after it, on the client face and the admin listener, and reads each
-key set again; `auth.audience` alone waits for a restart. A reload whose
-`[auth]` does not load, or trusts no issuer of a federating gateway, is
-refused and the running issuers stay.
+`POST /admin/reload`, applies a changed `[auth]` and `[trust]` to every
+request that arrives after it, on the client face and the admin listener,
+and reads each issuer's metadata and key set again; `auth.audience` alone
+waits for a restart. A reload whose `[auth]` does not load, or trusts no
+issuer of a federating gateway, is refused and the running issuers stay.
 
 ### The key set
 
-The gateway reads an issuer's key set when a token first needs it, and again
-once the set is older than `key_set_max_age_s`. A token naming a key the set
-does not hold makes the gateway fetch the set once more, so a key the issuer
-rotated in is picked up; that refetch happens at most once per
-`key_set_refetch_s`, so tokens naming unknown keys cannot make the gateway
-flood the issuer. A key set that cannot be fetched or read is a `503`
-(`authentication-unavailable`), never a pass, and a failed attempt is not
-repeated inside the refetch interval. A key declared for another use or
+The gateway reads an issuer's metadata at its RFC 8414 location, with
+OpenID Connect Discovery 1.0 as the fallback, and the key set its
+`jwks_uri` names, when a token of that issuer first needs them; with
+`auth.jwks_file` it reads the file and no metadata. The set is read again
+once it is older than `jwks_max_age_seconds`. A token naming a key the set
+does not hold makes the gateway read the set once more, so a key the issuer
+rotated in is picked up; that read happens at most once per
+`jwks_refresh_interval_seconds`, so tokens naming unknown keys cannot make
+the gateway flood the issuer. Metadata or a key set that cannot be read is a
+`503` (`authentication-unavailable`), never a pass, and a failed read is not
+repeated inside the refresh interval. A key declared for another use or
 another algorithm, or a symmetric key, verifies nothing.
 
 ## Scopes per route
@@ -154,8 +190,8 @@ addresses, only `*` or `**` covers it.
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
-| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries`, `/operator/stored-queries/{name}`, `/operator/dependencies` and `/operator/deployment` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
-| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear`, and the export `POST /admin/identity-state/export` | a verified token carrying the `operator_scope` its issuer names, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
+| `GET {base}/operator/incidents`, `/operator/creating-systems`, `/operator/stored-queries`, `/operator/stored-queries/{name}`, `/operator/dependencies` and `/operator/deployment` | a verified token carrying `auth.product_scope`, no purpose of use |
+| A write action on the admin listener, such as `POST /admin/stored-queries/{name}/{version}/distribute` or `POST /admin/ehr-ids/{ehr_id}/clear`, and the export `POST /admin/identity-state/export` | a verified token carrying `auth.product_scope`, no purpose of use ([Metrics](metrics.md#who-the-admin-listener-serves)) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
 
@@ -196,9 +232,11 @@ which your cross-reference service knows its `ehr_id`s:
 ```toml
 [[auth.issuer]]
 issuer = "https://patient-portal.example.org"
-jwks_uri = "https://patient-portal.example.org/jwks"
 
-[auth.issuer.patient]
+[[trust.issuer]]
+issuer = "https://patient-portal.example.org"
+
+[trust.issuer.patient]
 endpoint = "node-a-pub"
 ehr_id_system = "urn:oid:2.999.9.1"
 ```
@@ -266,7 +304,7 @@ person](../evaluate/receiving-documents.md#inserted-by-the-person)).
 A proxy or a legal representative (Art 4(2)) who inserts for the person is
 told apart only when the token says so. RFC 8693 §4.1 names any delegate
 in the `act` claim, a client service as well as a person, so set
-`act_is_representative = true` in `[auth.issuer.patient]` only for an
+`act_is_representative = true` in `[trust.issuer.patient]` only for an
 issuer whose patient tokens name the representative there. Every entry of
 a document such a token inserts then names the representative, a
 `PARTY_IDENTIFIED` holding the `act` `sub`, and its access record says a
@@ -386,19 +424,20 @@ name the process runs with, which Kubernetes sets to the pod's name, or
 Behind a load balancer each request reaches one replica, so read a report
 as that replica's view; to see every replica, ask each at its own address.
 
-A caller reaches them only with a token whose `scope` holds the
-`operator_scope` its issuer's entry names, as one whole scope token:
+A caller reaches them only with a token whose `scope` holds
+`auth.product_scope`, as one whole scope token, from any trusted issuer:
 
 ```toml
-[[auth.issuer]]
-issuer = "https://idp.example.org"
-jwks_uri = "https://idp.example.org/jwks"
-operator_scope = "ferrofed:operator"
+[auth]
+product_scope = "__ferrofed.operator"
 ```
 
-A token without it is a `403` (`scope-insufficient`), and so is a token
+The product scope is a string starting with `__` or a full URI you control,
+the two forms SMART App Launch 2.2.0 (Scopes and Launch Context,
+Extensibility) leaves to a server's own scopes; another refuses the start. A
+token without it is a `403` (`scope-insufficient`), and so is a token
 whose scope only contains it, starts with it or differs from it in case.
-An issuer that names no `operator_scope` admits no operator at all. No purpose of use is
+A gateway that names no `product_scope` admits no operator at all. No purpose of use is
 asked, because the routes answer no clinical data: routing ids, counts and
 stored definitions only. An incident names an `ehr_id` only when it is a
 bare UUID, and a stored definition names no patient, because the gateway
@@ -415,7 +454,7 @@ IHE IUA extension, `extensions.ihe_iua.purpose_of_use`, an array of FHIR
 `authorization_details[].purpose_of_use`, written `system|code` (Annex B
 §B.4a.3). A token that declares none is a `403`
 (`purpose-of-use-required`) on every route that reaches a node. A deployment
-relaxes the rule with `auth.purpose_of_use.required = false`, and records why
+relaxes the rule with `trust.purpose_of_use.required = false`, and records why
 in its [§13.4 decisions](deployment-decisions.md#3-purpose-of-use). The
 organisation the caller acts for is read from
 `extensions.ihe_iua.subject_organization_id`. The IUA `person_id` claim, a
@@ -476,16 +515,15 @@ signs in its user by a means of its own, reaches patient data when you
 declare it for its issuer and its token names the professional:
 
 ```toml
-[[auth.issuer]]
+[[trust.issuer]]
 issuer = "https://idp.example.org"
-jwks_uri = "https://idp.example.org/jwks"
 backend_clients = ["example-ward-system"]
 client_tokens_act_for_professional = true
 ```
 
 The token names the professional in the IUA extension,
 `extensions.ihe_iua.national_provider_identifier`, or in the professional
-claim `[auth.issuer.requester]` reads. A client token of a declared issuer
+claim `[trust.issuer.requester]` reads. A client token of a declared issuer
 that names neither is still refused: it could tell neither the node nor the
 access record who acted, so no setting admits it.
 
@@ -495,7 +533,7 @@ You declare per issuer which claim carries the assurance of its tokens, which
 values stand for which level, and the least level patient data needs:
 
 ```toml
-[auth.issuer.assurance]
+[trust.issuer.assurance]
 claim = "acr"
 minimum = "substantial"
 substantial = ["urn:example:loa:substantial"]
@@ -514,7 +552,7 @@ a level below `minimum` is refused patient data with
 authenticate its user again. A client token of a declared issuer is held to
 the level as well.
 
-An issuer without `[auth.issuer.assurance]` has no level read or required,
+An issuer without `[trust.issuer.assurance]` has no level read or required,
 and `config check` names each such issuer in a note. Set it for every issuer
 whose tokens reach patient data. Where the gateway serves a cross-border
 exchange, set `minimum = "substantial"`, and `"high"` from 26 March 2032. A
@@ -544,9 +582,11 @@ provider's identification data, the attributes of its Annex Tables 1 and 2
 ```toml
 [[auth.issuer]]
 issuer = "https://ncp.example.org"
-jwks_uri = "https://ncp.example.org/jwks"
 
-[auth.issuer.national_contact_point]
+[[trust.issuer]]
+issuer = "https://ncp.example.org"
+
+[trust.issuer.national_contact_point]
 family_name = "family_name"
 given_name = "given_name"
 country_code = "country_code"
@@ -563,7 +603,7 @@ asserts them; it never authenticates the professional, and cannot check the
 other Member State's identification means. Federation Tier §13.4 lets the
 source "rely on the requester's assertion", and the node is told the
 attributes marked as the contact point's assertion. An assurance level the
-token states is read through `[auth.issuer.assurance]` as for any issuer
+token states is read through `[trust.issuer.assurance]` as for any issuer
 ([The assurance level](#the-assurance-level)).
 
 **The attributes.** Where IHE IUA defines a claim that carries an Annex
@@ -585,7 +625,7 @@ IUA's `subject_name` is one string, so it does not give the Annex's
 separate family and given names; the gateway still reads it as the
 professional's name. A request that reaches patient data needs every
 attribute, not empty, and a purpose of use, whatever
-`auth.purpose_of_use.required` says. A token that lacks an attribute is
+`trust.purpose_of_use.required` says. A token that lacks an attribute is
 refused `403 contact-point-attributes-required`, one with no purpose of use
 `403 purpose-of-use-required`, and no node is asked anything. The contact
 point's connector is a client acting for the professional the token names,
@@ -627,7 +667,7 @@ A deployment that authenticates its clients at a proxy configures the edge
 mode explicitly; it is never a default. The proxy authenticates the client by
 whatever means it has, then signs an assertion of who it authenticated, an
 RFC 9068 access token whose `aud` is this gateway, and sends it in the header
-`auth.edge.header`. The gateway verifies the assertion against the edge's key
+`trust.edge.header`. The gateway verifies the assertion against the edge's key
 set exactly as it verifies a token, reads the caller from it, and logs the
 security event `edge-identity-asserted` with the edge's issuer and two
 references, `subject_ref` and `client_ref`. Each reference is an
@@ -638,15 +678,14 @@ admits no one in this mode.
 
 ```toml
 [auth]
-mode = "edge"
-audience = "https://gateway.example.org/fed"
-
-[auth.edge]
-header = "ferrofed-edge-assertion"
-
-[[auth.issuer]]
 issuer = "https://edge.example.org"
-jwks_uri = "https://edge.example.org/jwks"
+audience = ["https://gateway.example.org/fed"]
+
+[trust]
+mode = "edge"
+
+[trust.edge]
+header = "ferrofed-edge-assertion"
 ```
 
 The edge mode takes a signed assertion, never a header trusted for the
@@ -660,7 +699,8 @@ travelled.
 
 | Status | Code | When |
 |---|---|---|
-| `401` | `unauthenticated` | no token, or one the gateway does not accept; the `WWW-Authenticate` challenge names the reason in `error_description` |
+| `400` | `credential-malformed` | two `Authorization` fields, or one that is no credential; the challenge is `error="invalid_request"` (RFC 6750 §3.1) |
+| `401` | `unauthenticated` | no token, or one the gateway does not accept; the challenge carries `error="invalid_token"` for a token that does not hold and no error code for a missing one, and never names the check that failed |
 | `403` | `scope-insufficient` | no granted scope covers the operation, or the client is not admitted to the DEMOGRAPHIC API |
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `401` | `natural-person-required` | the request reaches patient data and the token names no natural person, and its issuer does not declare client tokens acting for the professional the token names |
@@ -671,10 +711,12 @@ travelled.
 | `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
 | `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to, or a patient grant addresses the DEMOGRAPHIC API |
 | `424` | `patient-context-unavailable` | the patient of a `patient/` grant cannot be resolved at every member |
-| `503` | `authentication-unavailable` | the issuer's key set or introspection endpoint cannot be had |
+| `503` | `authentication-unavailable` | the issuer's metadata, key set or introspection endpoint cannot be had |
 
-Every refusal is logged under the `ferrofed::security` target as
-`caller-refused`, with its reason and the gateway's request id, never the
+A `403` names no scope, in the challenge or the body (RFC 6750 §3.1 makes
+the `scope` attribute optional). Every refusal is logged under the
+`ferrofed::security` target as `caller-refused`, with its reason, the check
+that refused a credential and the gateway's request id, never the
 token ([Errors and status codes](../integrate/errors.md)).
 
 ## The quickstart issuer

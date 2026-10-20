@@ -89,6 +89,10 @@ exceptions = [
   # The operator console's components and stylesheet (#1146): the FerroHEALTH
   # console library, under the licence of the project's own code.
   { allow = ["BUSL-1.1"], crate = "ferrohealth-ui" },
+  # The SMART and OAuth 2.0 resource-server crate client authentication, the
+  # SMART on openEHR grants and the gateway's own OAuth 2.0 clients run on
+  # (#1174), under the licence of the project's own code.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-smart" },
   # The operator console's Leptos stack (#275): two permissive licences, each
   # allowed for its one crate. xxhash-rust under server_fn is under the Boost
   # Software License 1.0 (OSI-listed); base16 under wasm_split_macros is

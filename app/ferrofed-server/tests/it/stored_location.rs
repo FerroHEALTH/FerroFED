@@ -68,7 +68,7 @@ async fn both(dir: &Path, server: &str) -> Result<(Router, Router, [Server; 3]),
     let registry = three(&a, &b, &c);
     let state = state_serving(dir, (&registry, "fan_out_stored_queries = true"), server)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    let access = Access::new(&crate::support::auth(), Profile::Production, None);
+    let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
     Ok((client, admin::router(state, access), [a, b, c]))
 }
 

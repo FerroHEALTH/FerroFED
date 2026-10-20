@@ -63,8 +63,8 @@ static COMPILED: &[&dyn Binding] = &[
 
 /// The configuration sections every reload applies whatever the bindings:
 /// the registry, the onward credentials of each endpoint, the category map
-/// of the access log, and client authentication.
-const CORE_RELOADABLE: [&str; 4] = ["registry", "credentials", "access_log", "auth"];
+/// of the access log, and client authentication with its policy.
+const CORE_RELOADABLE: [&str; 5] = ["registry", "credentials", "access_log", "auth", "trust"];
 
 /// Returns every binding this build compiles, in wiring order.
 #[must_use]

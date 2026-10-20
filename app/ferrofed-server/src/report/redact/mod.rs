@@ -253,12 +253,19 @@ backend = "postgres"
 url = "postgres://db-user:db-pass@db.example.org:5432/ferrofed?sslpassword=QUERY-SECRET-2"
 
 [auth]
-audience = "CANARY-AUDIENCE"
+audience = ["CANARY-AUDIENCE"]
+product_scope = "__CANARY-SCOPE"
 
 [[auth.issuer]]
 issuer = "https://idp.example.org/realms/CANARY-REALM"
-jwks = '{"keys":[{"kid":"CANARY-KID"}]}'
-operator_scope = "CANARY-SCOPE"
+jwks_file = "/home/CANARY-PERSON/jwks.json"
+
+[[auth.basic.users]]
+user = "CANARY-USER"
+password_hash = "HASH-SECRET-1"
+
+[[trust.issuer]]
+issuer = "https://idp.example.org/realms/CANARY-REALM"
 patient = { header = "CANARY-HEADER", claim = "CANARY-CLAIM" }
 
 [[pixm.manager]]
@@ -270,9 +277,11 @@ url = "https://pix-user:pix-pass@pix.example.org/fhir"
 [pixm.manager.namespaces]
 "urn:oid:2.999.8888" = "CANARY-NAMESPACE-VALUE"
 
-[credentials."CANARY-ENDPOINT"]
-bearer_token = "BEARER-SECRET-1"
-bearer_token_file = "/home/CANARY-PERSON/node-a-token"
+[credentials."CANARY-ENDPOINT".oauth]
+token_endpoint = "https://as.example.org/CANARY-TOKEN-PATH"
+client_id = "CANARY-CLIENT"
+client_secret = "BEARER-SECRET-1"
+client_secret_file = "/home/CANARY-PERSON/node-a-secret"
 
 [credentials."node-b-query"]
 user = "Dr CANARY-PROFESSIONAL"
@@ -302,6 +311,7 @@ count = 7
         "2.999.7777",
         "2.999.8888",
         "BEARER-SECRET-1",
+        "HASH-SECRET-1",
         "PASSWORD-SECRET-1",
         "CLIENT-SECRET-1",
         "IDENTITY-SECRET",
@@ -379,7 +389,7 @@ count = 7
         );
         assert_eq!(
             "***",
-            redacted["auth"]["issuer"][0]["patient"]["header"]
+            redacted["trust"]["issuer"][0]["patient"]["header"]
                 .as_str()
                 .expect("an inline table is redacted too")
         );

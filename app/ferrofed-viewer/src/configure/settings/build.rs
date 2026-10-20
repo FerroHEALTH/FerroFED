@@ -544,12 +544,12 @@ mod tests {
         let mut file = secret("client_identity", "file");
         file.file = String::from("/run/secrets/id.pem");
         let mut inputs = [
-            secret("bearer_token", "keep"),
+            secret("oauth.client_secret", "keep"),
             set,
             file,
             secret("password", "clear"),
         ];
-        let changes = secret_changes(&mut inputs, &[String::from("bearer_token")]);
+        let changes = secret_changes(&mut inputs, &[String::from("oauth.client_secret")]);
         let Ok(changes) = changes else {
             panic!("the choices should read");
         };
@@ -569,7 +569,7 @@ mod tests {
                 ("oauth2.client_secret", true, false, false),
                 ("client_identity", false, true, false),
                 ("password", false, false, true),
-                ("bearer_token", false, false, true),
+                ("oauth.client_secret", false, false, true),
             ],
             keys
         );

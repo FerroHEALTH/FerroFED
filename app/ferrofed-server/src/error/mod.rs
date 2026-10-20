@@ -288,6 +288,9 @@ pub enum Code {
     ConfirmationPending,
     /// A secret value is sent while `config.secrets_dir` is unset.
     SecretStoreUnavailable,
+    /// The request carries two credentials, or a credential field that is no
+    /// credential (RFC 6750 §3.1, `invalid_request`).
+    CredentialMalformed,
 }
 
 /// The code of a refused query: the refusal's stable kind

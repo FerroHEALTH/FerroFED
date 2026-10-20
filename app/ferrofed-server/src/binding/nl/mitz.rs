@@ -156,7 +156,7 @@ impl fmt::Debug for MitzSettings {
 }
 
 /// Resolves `[nl_gf.mitz]`: a URL that parses, carries no userinfo and is
-/// `https` outside development, a bearer token or basic credentials, a
+/// `https` outside development, basic credentials, a
 /// purpose and data categories, a positive timeout that, with the
 /// demographics step's and the localizer's, ends before the overall budget
 /// (§11.5), a data user, and every secret and file read.

@@ -34,7 +34,7 @@ use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
-use openehr_sdt::smart_scopes::SmartScope;
+use ferrohealth_smart::openehr::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};
 
 /// A caller the gateway verified.
@@ -77,13 +77,13 @@ pub struct Caller {
     /// `patient/` grant covers the operation.
     patient: Option<PatientContext>,
     /// Who asks for the data, as the claims the issuer's
-    /// `[auth.issuer.requester]` names state it, when the token carries them
+    /// `[trust.issuer.requester]` names state it, when the token carries them
     /// all (§13.4).
     requester: Option<Requester>,
     /// The professional's identification the token states.
     professional: Professional,
     /// The assurance level the caller's authentication reached, as its
-    /// issuer's `[auth.issuer.assurance]` reads the token, when the issuer
+    /// issuer's `[trust.issuer.assurance]` reads the token, when the issuer
     /// declares one and the token carries a value it declares.
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
@@ -277,7 +277,7 @@ impl fmt::Debug for Actor {
 impl Caller {
     /// Returns the caller `stated` describes, verified as `verified_by`
     /// says, its scopes read with
-    /// [`SmartScope::parse_all`](openehr_sdt::smart_scopes::SmartScope::parse_all).
+    /// [`SmartScope::parse_all`].
     #[must_use]
     pub fn new(stated: Stated, verified_by: VerifiedBy) -> Self {
         let scopes = SmartScope::parse_all(&stated.granted);
@@ -405,7 +405,7 @@ impl Caller {
 
     /// Returns whether the token names the professional a client acts for:
     /// an IUA `national_provider_identifier`, or the professional of the
-    /// requester its issuer's `[auth.issuer.requester]` reads.
+    /// requester its issuer's `[trust.issuer.requester]` reads.
     #[must_use]
     pub fn names_professional(&self) -> bool {
         self.professional.identifier.is_some() || self.requester.is_some()

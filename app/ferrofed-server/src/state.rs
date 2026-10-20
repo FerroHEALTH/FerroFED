@@ -94,7 +94,7 @@ pub enum StateError {
     /// The gateway federates, and `[auth]` trusts no issuer, so no caller
     /// could ever be admitted (§13.1, N25).
     #[error(
-        "the gateway federates, and [auth] names no [[auth.issuer]]: every caller authenticates (§13.1, N25)"
+        "the gateway federates, and [auth] names no issuer: every caller authenticates with an access token (§13.1, N25)"
     )]
     NoIssuer,
     /// A credential would travel over a URL that is not `https`, outside the

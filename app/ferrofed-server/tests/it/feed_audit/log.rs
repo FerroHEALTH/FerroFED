@@ -18,7 +18,7 @@ use ferrofed_testkit::pmir::merge_message;
 use http::{Request, StatusCode, header};
 
 use crate::facade::{PATIENT, body, gateway, node_answering, patient_query, post, registry};
-use crate::pmir::{PATH, TOKEN, text};
+use crate::pmir::{PATH, text};
 use crate::registry_mcsd::{Gateway, config, members};
 use crate::support::{Logs, call, send_as_is};
 
@@ -128,7 +128,7 @@ async fn an_iti_93_record_in_the_log_names_no_patient_master_identity() -> TestR
     let body = merge_message(SENTINEL, &[("urn:oid:2.999.1.999", SENTINEL)], SENTINEL)?;
     let request = Request::post(PATH)
         .header(header::CONTENT_TYPE, "application/fhir+json")
-        .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+        .header(header::AUTHORIZATION, crate::pmir::feed_credentials())
         .body(Body::from(body))?;
     let response = send_as_is(gateway.app.clone(), request).await?;
     assert_eq!(StatusCode::OK, response.status());

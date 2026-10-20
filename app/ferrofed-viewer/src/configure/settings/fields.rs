@@ -27,6 +27,53 @@ pub(crate) const CLIENT_AUTH: &[(&str, Msg)] = &[
     ("client_secret_post", Msg::ClientSecretBody),
 ];
 
+/// How the gateway authenticates under the client credentials grant.
+pub(crate) const OAUTH_CLIENT_AUTH: &[(&str, Msg)] = &[
+    ("", Msg::NotSet3),
+    ("client_secret_basic", Msg::ClientSecretBasicScheme),
+    ("client_secret_post", Msg::ClientSecretBody),
+    ("private_key_jwt", Msg::SignedClientAssertionPrivateKeyJwt),
+];
+
+/// The settings of the client credentials grant, the `oauth` table.
+pub(crate) const OAUTH: &[Field] = &[
+    Field {
+        key: "oauth.issuer",
+        label: Msg::Issuer,
+        kind: Kind::Text,
+    },
+    Field {
+        key: "oauth.token_endpoint",
+        label: Msg::TokenEndpoint,
+        kind: Kind::Url,
+    },
+    Field {
+        key: "oauth.client_id",
+        label: Msg::ClientId,
+        kind: Kind::Text,
+    },
+    Field {
+        key: "oauth.client_auth",
+        label: Msg::ClientAuthentication,
+        kind: Kind::Choice(OAUTH_CLIENT_AUTH),
+    },
+    Field {
+        key: "oauth.private_key_file",
+        label: Msg::ClientKeyFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "oauth.scope",
+        label: Msg::Scope,
+        kind: Kind::Text,
+    },
+    Field {
+        key: "oauth.resource",
+        label: Msg::Resource,
+        kind: Kind::Text,
+    },
+];
+
 /// The OAuth 2.0 grants a node takes.
 pub(crate) const OAUTH2_GRANT: &[(&str, Msg)] = &[
     ("", Msg::NotSet3),

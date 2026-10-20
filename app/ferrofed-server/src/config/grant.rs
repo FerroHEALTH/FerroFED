@@ -196,6 +196,15 @@ pub enum GrantFault {
         #[source]
         source: Fapi2GrantError,
     },
+    /// An `oauth2` grant asks for a plain client credentials token, which
+    /// the `oauth` table of `ferrohealth-smart` obtains.
+    #[error(
+        "{section} asks for a plain client credentials token: use the oauth table beside it, the client credentials grant every FerroHEALTH product reads; oauth2 carries token exchange, DPoP, mutual TLS and an assertion naming the issuer"
+    )]
+    Plain {
+        /// The `oauth2` section.
+        section: String,
+    },
     /// A `fapi2` section is configured without `[signing]`, whose JWK Set
     /// publishes the grant's client key.
     #[error(

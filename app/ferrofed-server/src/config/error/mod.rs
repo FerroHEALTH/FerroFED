@@ -115,6 +115,16 @@ pub enum Error {
         /// Why it is refused.
         fault: crate::config::auth::AuthFault,
     },
+    /// A section `ferrohealth-smart` reads is refused: `[auth]`, or an
+    /// `oauth` credentials table.
+    #[error("{section} is refused")]
+    Smart {
+        /// The section.
+        section: String,
+        /// What the crate refused, naming the key and never a value.
+        #[source]
+        source: Box<ferrohealth_smart::config::ConfigError>,
+    },
     /// A URL does not parse.
     #[error("{key} is not a URL")]
     Url {
@@ -148,7 +158,7 @@ pub enum Error {
         /// The key that holds it.
         key: String,
     },
-    /// An `[auth.issuer.patient]` binding names something that is not an
+    /// A `[trust.issuer.patient]` binding names something that is not an
     /// endpoint id.
     #[error("{key} is not an endpoint id")]
     PatientEndpoint {

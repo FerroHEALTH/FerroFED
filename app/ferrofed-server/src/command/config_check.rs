@@ -49,8 +49,8 @@ pub(super) fn config_checked(
     }
     let surface = &settings.metrics;
     if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
-        let scrape = if surface.scrape_token.is_some() {
-            "a scrape that carries metrics.scrape_token"
+        let scrape = if !surface.scrape_users.is_empty() {
+            "a scrape that authenticates as a metrics.scrape_users user with HTTP Basic"
         } else if surface
             .tls
             .as_ref()
@@ -61,7 +61,7 @@ pub(super) fn config_checked(
             "every peer"
         };
         println!(
-            "ferrofed: note: metrics.listen {address} is not a loopback address: GET {} answers {scrape}, and the admin write actions ({}, {}, {}) answer a caller whose token carries an [[auth.issuer]] operator_scope",
+            "ferrofed: note: metrics.listen {address} is not a loopback address: GET {} answers {scrape}, and the admin write actions ({}, {}, {}) answer a caller whose token carries [auth] product_scope",
             metrics::PATH,
             admin::DISTRIBUTE,
             admin::CLEAR_EHR_ID,

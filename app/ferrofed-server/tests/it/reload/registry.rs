@@ -80,7 +80,8 @@ async fn credentials_follow_the_reloaded_registry() -> TestResult {
     let c = node_answering("uid-c::cdr-c.example.org::1").await;
     let gateway = Gateway::start(&member("a", &a.uri()), "", &crossref(&[("node-a", EHR_A)]))?;
     gateway.write_registry(&(member("a", &a.uri()) + &member("c", &c.uri())))?;
-    let credentials = format!("[credentials.\"node-c-pub\"]\nbearer_token = \"{TOKEN_C}\"\n");
+    let credentials =
+        format!("[credentials.\"node-c-pub\"]\nuser = \"gateway-c\"\npassword = \"{TOKEN_C}\"\n");
     gateway.write_config("", &(crossref(&[("node-c", EHR_C)]) + "\n" + &credentials))?;
     gateway.reloader.reload()?;
 
@@ -92,7 +93,11 @@ async fn credentials_follow_the_reloaded_registry() -> TestResult {
         .headers
         .get(http::header::AUTHORIZATION)
         .ok_or("node C's client sends its credentials")?;
-    assert_eq!(format!("Bearer {TOKEN_C}"), authorization.to_str()?);
+    // NOTE: RFC 7617 §2, the base64 of `gateway-c:` and TOKEN_C.
+    assert_eq!(
+        "Basic Z2F0ZXdheS1jOnN5bnRoZXRpYy1yZWxvYWQtdG9rZW4tYw==",
+        authorization.to_str()?
+    );
     Ok(())
 }
 
@@ -100,7 +105,8 @@ async fn credentials_follow_the_reloaded_registry() -> TestResult {
 async fn credentials_for_an_endpoint_the_document_dropped_refuse_the_reload() -> TestResult {
     let a = node_answering("uid-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-b::cdr-b.example.org::1").await;
-    let credentials = format!("[credentials.\"node-b-pub\"]\nbearer_token = \"{TOKEN_C}\"\n");
+    let credentials =
+        format!("[credentials.\"node-b-pub\"]\nuser = \"gateway-c\"\npassword = \"{TOKEN_C}\"\n");
     let tables = crossref(&[("node-a", EHR_A)]) + "\n" + &credentials;
     let gateway = Gateway::start(
         &(member("a", &a.uri()) + &member("b", &b.uri())),

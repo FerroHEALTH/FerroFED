@@ -69,8 +69,8 @@ pub trait Indicator: fmt::Debug + Send + Sync {
     fn indicate(&self) -> Vec<(&'static str, Indication)>;
 }
 
-/// An onward credential kind a binding adds beside the core's bearer token,
-/// basic credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
+/// An onward credential kind a binding adds beside the core's basic
+/// credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
 ///
 /// A grant is [`Any`], so the binding that added it can read its own grants
 /// back from the settings ([`Binding::documents`](crate::binding::Binding::documents)).

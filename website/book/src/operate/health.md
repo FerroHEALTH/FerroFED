@@ -41,7 +41,7 @@ directory, of the audit repository and of the PMIR Patient Identity
 Registry. Use it for monitoring, never as a probe. It names every member
 and which of them are down, so it sits on the
 [operator surface](authentication.md#the-operator-surface): only a caller
-whose token carries its issuer's `operator_scope` reads it, a request
+whose token carries `auth.product_scope` reads it, a request
 without a token is a `401`, and one without the scope is a `403`. Give your
 monitoring a token with the operator scope, as the operator console has
 one. A report reads:

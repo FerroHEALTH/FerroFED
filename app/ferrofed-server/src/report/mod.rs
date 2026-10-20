@@ -327,16 +327,16 @@ impl Report {
             None => Err(SourceError::NotServed(
                 "metrics.listen is not set, so no admin listener serves the metrics",
             )),
+            // NOTE: no specification governs this: our own design; a scrape user's password
+            // is held by the scraper alone, the configuration holds its hash, so none is sent.
+            Some(_) if !settings.metrics.scrape_users.is_empty() => Err(SourceError::NotServed(
+                "metrics.scrape_users asks a scrape for a Basic password the configuration does not hold",
+            )),
             Some(listen) => match Listener::new(listen, settings.metrics.tls.as_ref(), TIMEOUT) {
                 Err(error) => Err(error),
                 Ok(admin) => {
-                    let scrape = settings
-                        .metrics
-                        .scrape_token
-                        .as_ref()
-                        .map(ferrofed_registry::secret::Secret::to_secret_string);
                     admin
-                        .get(crate::metrics::PATH, scrape.as_ref())
+                        .get(crate::metrics::PATH, None)
                         .await
                         .and_then(|(status, body)| {
                             if status == StatusCode::OK {

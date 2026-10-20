@@ -292,9 +292,9 @@ pub struct MetricsSettings {
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<TlsFiles>,
-    /// The bearer token a scrape of `GET /metrics` must carry; `None` leaves
-    /// the scrape open.
-    pub scrape_token: Option<Secret>,
+    /// The Basic users a scrape of `GET /metrics` may authenticate as;
+    /// empty leaves the scrape open.
+    pub scrape_users: Vec<String>,
 }
 
 /// The authentication scheme a credentials section resolves to.
@@ -303,8 +303,6 @@ pub struct MetricsSettings {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Scheme {
-    /// An RFC 6750 bearer token.
-    Bearer(Secret),
     /// RFC 7617 basic authentication.
     Basic {
         /// The user name, which is not a secret.
@@ -312,8 +310,18 @@ pub enum Scheme {
         /// The password.
         password: Secret,
     },
-    /// An OAuth 2.0 client-credentials grant with a JWT client assertion
-    /// (RFC 6749 §4.4, RFC 7523 §2.2).
+    /// The OAuth 2.0 client credentials grant of `ferrohealth-smart` (RFC
+    /// 6749 §4.4), its token obtained, cached and renewed by the crate.
+    Oauth {
+        /// The grant.
+        grant: Box<ferrohealth_smart::client::ClientCredentials>,
+        /// The table as written, which a reload compares.
+        written: Box<crate::config::oauth::Oauth>,
+    },
+    /// FerroFED's own OAuth 2.0 grant with a JWT client assertion (RFC 6749
+    /// §4.4, RFC 7523 §2.2), for what `Oauth` does not carry: token
+    /// exchange, a sender constraint, or authentication by the TLS client
+    /// certificate.
     OAuth2(Box<Grant>),
     /// A grant under the FAPI 2.0 Security Profile, the track of Annex B
     /// §B.4a: a `DPoP`-bound token for an ES256 `private_key_jwt` assertion,
@@ -321,20 +329,15 @@ pub enum Scheme {
     Fapi2(Box<Fapi2Grant>),
     /// A grant a binding adds, such as the Nuts grant of Annex B §B.4.
     Binding(Box<dyn OnwardGrant>),
-    /// The client-credentials grant of an identity service (IHE IUA
-    /// ITI-71), which no node takes.
-    #[cfg(feature = "binding-ihe")]
-    ServiceGrant(Box<crate::config::service_grant::ServiceGrant>),
 }
 
 impl Scheme {
     /// Whether the scheme is a grant: a node's onward credentials take one,
     /// and of the services only the IHE FHIR services, the client-credentials
-    /// grant of IUA ITI-71; every other service takes a bearer token or basic
-    /// credentials.
+    /// grant of IUA ITI-71; every other service takes basic credentials.
     #[must_use]
     pub fn is_grant(&self) -> bool {
-        !matches!(self, Self::Bearer(_) | Self::Basic { .. })
+        !matches!(self, Self::Basic { .. })
     }
 
     /// Whether `other` names the same credential, so a reload that reads it
@@ -343,7 +346,6 @@ impl Scheme {
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Bearer(was), Self::Bearer(now)) => was == now,
             (
                 Self::Basic { user, password },
                 Self::Basic {
@@ -351,8 +353,7 @@ impl Scheme {
                     password: now_password,
                 },
             ) => user == now_user && password == now_password,
-            #[cfg(feature = "binding-ihe")]
-            (Self::ServiceGrant(was), Self::ServiceGrant(now)) => was.same_as(now),
+            (Self::Oauth { written: was, .. }, Self::Oauth { written: now, .. }) => was == now,
             _ => false,
         }
     }

@@ -110,7 +110,7 @@ fn a_reload_that_adds_an_unencrypted_store_is_refused() -> TestResult {
         configuration(
             "production",
             &gateway.document,
-            &format!("{}\n{}", super::bearer(), store(&networked(""))),
+            &format!("{}\n{}", super::oauth(), store(&networked(""))),
         ),
     )?;
 

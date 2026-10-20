@@ -18,12 +18,14 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 
+use crate::config::auth::AuthSettings;
 use crate::config::error::Error;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::error::federation::FederationFault;
 use crate::config::error::server::ServerFault;
 use crate::config::grant::GrantFault;
-use crate::config::secrets::{resolve_node_credentials, resolve_signing, secret};
+use crate::config::public_url::PublicUrl;
+use crate::config::secrets::{resolve_node_credentials, resolve_signing};
 use crate::config::server::{METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
@@ -60,7 +62,7 @@ impl Config {
     /// ([`ServerFault::MetricsRemote`]), a listener on the address `server.listen`
     /// binds at a port other than 0 ([`ServerFault::MetricsShared`]), a remote
     /// listener outside the development
-    /// profile whose scrape neither a scrape token nor a client CA
+    /// profile whose scrape neither a scrape user nor a client CA
     /// authenticates ([`ServerFault::MetricsUnauthenticated`]), and the metrics push and the trace export
     /// each refuse a collector that is no `http://` URL
     /// ([`ServerFault::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
@@ -108,15 +110,14 @@ impl Config {
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
         let (credentials, onward_tls) = self.resolve_credentials()?;
-        let signing = self
-            .signing
-            .as_ref()
-            .map(|signing| resolve_signing(signing, public_url.as_ref()))
-            .transpose()?;
-        signed_grants(signing.as_ref(), &credentials)?;
+        let signing = self.resolve_signing_keys(public_url.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
+        let auth = scrape_users(
+            &metrics,
+            self.auth.resolve(&self.trust, public_url.as_ref())?,
+        )?;
         stored_query_fan_out(&federation, stored_queries.as_ref())?;
         let terminology = self.resolve_terminology()?;
         let mut fhir = self.resolve_fhir(&base_path, public_url.as_ref())?;
@@ -136,7 +137,7 @@ impl Config {
                 shutdown_timeout,
                 bindings_drain,
                 body_limit: self.server.body_limit_bytes,
-                auth: self.auth.resolve(public_url.as_ref())?,
+                auth,
                 public_url,
                 forwarding,
                 overload: self.server.resolve_overload()?,
@@ -349,6 +350,24 @@ impl Config {
     }
 }
 
+impl Config {
+    /// Resolves `[signing]`, refusing an OAuth 2.0 grant in `credentials`
+    /// when it is unset.
+    fn resolve_signing_keys(
+        &self,
+        public: Option<&PublicUrl>,
+        credentials: &BTreeMap<EndpointId, Scheme>,
+    ) -> Result<Option<SigningSettings>, Error> {
+        let signing = self
+            .signing
+            .as_ref()
+            .map(|signing| resolve_signing(signing, public))
+            .transpose()?;
+        signed_grants(signing.as_ref(), credentials)?;
+        Ok(signing)
+    }
+}
+
 /// Refuses an OAuth 2.0 grant in `credentials` when `signing` is unset.
 fn signed_grants(
     signing: Option<&SigningSettings>,
@@ -380,6 +399,22 @@ fn signed_grants(
     Ok(())
 }
 
+/// Returns `auth`, refusing a scrape user `[metrics] scrape_users` names
+/// that its `[[auth.basic.users]]` does not write.
+fn scrape_users(metrics: &MetricsSettings, auth: AuthSettings) -> Result<AuthSettings, Error> {
+    match metrics.scrape_users.iter().find(|user| {
+        !auth
+            .basic
+            .as_ref()
+            .is_some_and(|basic| basic.names(user.as_str()))
+    }) {
+        Some(user) => Err(Error::Server(ServerFault::ScrapeUser {
+            user: user.clone(),
+        })),
+        None => Ok(auth),
+    }
+}
+
 /// Resolves `[metrics]`: the listener on a loopback address unless
 /// `allow_remote` is set and never on `server`, the gateway's own address,
 /// its scrape authenticated off loopback outside the development profile,
@@ -402,11 +437,6 @@ fn resolve_metrics(
         })
         .transpose()?;
     let tls = resolve_tls(metrics.tls.as_ref(), METRICS_TLS)?;
-    let scrape_token = secret(
-        "metrics.scrape_token",
-        metrics.scrape_token.as_ref(),
-        metrics.scrape_token_file.as_deref(),
-    )?;
     if let Some(address) = listen {
         // NOTE: no specification governs this: our own design; the listener stays
         // on the host unless the operator says, and off it the scrape is authenticated.
@@ -421,7 +451,7 @@ fn resolve_metrics(
         let mutual = tls.as_ref().is_some_and(|tls| tls.client_ca.is_some());
         if !address.ip().is_loopback()
             && profile == Profile::Production
-            && scrape_token.is_none()
+            && metrics.scrape_users.is_empty()
             && !mutual
         {
             return Err(Error::Server(ServerFault::MetricsUnauthenticated {
@@ -433,7 +463,7 @@ fn resolve_metrics(
         listen,
         otlp_endpoint: otlp_collector("metrics.otlp_endpoint", metrics.otlp_endpoint.as_ref())?,
         tls,
-        scrape_token,
+        scrape_users: metrics.scrape_users.clone(),
     })
 }
 

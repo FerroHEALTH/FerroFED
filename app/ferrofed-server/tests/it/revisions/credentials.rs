@@ -35,20 +35,20 @@ fn id(number: u64) -> Result<RevisionId, &'static str> {
     RevisionId::new(number).ok_or("a revision number")
 }
 
-/// The bearer token set by a reference to `file`.
+/// The Basic password set by a reference to `file`.
 fn by_file(file: &str) -> SecretChange {
     SecretChange {
-        key: String::from("bearer_token"),
+        key: String::from("password"),
         value: None,
         file: Some(file.to_owned()),
         clear: false,
     }
 }
 
-/// The bearer token set by the value [`VALUE`].
+/// The Basic password set by the value [`VALUE`].
 fn by_value() -> SecretChange {
     SecretChange {
-        key: String::from("bearer_token"),
+        key: String::from("password"),
         value: Some(WriteOnly::new(VALUE)),
         file: None,
         clear: false,
@@ -122,12 +122,12 @@ impl Gateway {
     }
 }
 
-/// Saves revision 2 with a bearer token of [`ENDPOINT`] by reference and
+/// Saves revision 2 with a Basic password of [`ENDPOINT`] by reference and
 /// applies it, as the first operator.
 async fn applied_credentials(gateway: &Gateway) -> Result<Applied, Box<dyn Error>> {
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "", vec![by_file(&file)])
+        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -235,11 +235,7 @@ async fn a_restart_rolls_back_a_change_past_its_deadline() -> TestResult {
         .revision(id(3)?)?
         .ok_or("the rollback is held")?;
     assert_eq!(Some(id(1)?), rolled.restores);
-    assert!(
-        !rolled.toml.contains("bearer_token_file"),
-        "{}",
-        rolled.toml
-    );
+    assert!(!rolled.toml.contains("password_file"), "{}", rolled.toml);
     Ok(())
 }
 
@@ -312,7 +308,7 @@ async fn approval_by_the_author_is_refused_and_by_a_second_operator_admits_the_a
     let gateway = Gateway::configured(("approval = [\"onward-credentials\"]\n", ""), None)?;
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "", vec![by_file(&file)])
+        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -350,7 +346,7 @@ async fn an_approval_of_a_revision_that_needs_none_is_refused() -> TestResult {
     let gateway = Gateway::configured(("approval = [\"consent\"]\n", ""), None)?;
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "", vec![by_file(&file)])
+        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -377,12 +373,14 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
     )?;
     tracing::subscriber::set_global_default(capture)?;
     let gateway = Gateway::configured((&with_secrets_dir(secrets.path(), ""), ""), None)?;
-    let (status, text) = gateway.save_credentials(1, "", vec![by_value()]).await?;
+    let (status, text) = gateway
+        .save_credentials(1, "user = \"gateway\"", vec![by_value()])
+        .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     assert!(!text.contains(VALUE), "{text}");
     let saved: Revision = serde_json::from_str(&text)?;
     let held: toml::Table = toml::from_str(&saved.toml)?;
-    let reference = held["credentials"][ENDPOINT]["bearer_token_file"]
+    let reference = held["credentials"][ENDPOINT]["password_file"]
         .as_str()
         .ok_or("the revision references the file")?;
     assert!(reference.starts_with(&secrets.path().display().to_string()));
@@ -421,8 +419,11 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
         .ok_or("the credential is listed")?;
     assert_eq!(Owner::Console, section.owner);
     assert_eq!(Some(ConsoleState::Running), section.state);
-    assert_eq!(Some(String::from("{}")), section.settings);
-    assert_eq!("bearer_token", section.secrets[0].key);
+    assert_eq!(
+        Some(String::from("{ user = \"gateway\" }")),
+        section.settings
+    );
+    assert_eq!("password", section.secrets[0].key);
     assert_eq!(reference, section.secrets[0].reference);
     let store = std::fs::read(&gateway.store)?;
     assert!(
@@ -440,7 +441,9 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
 #[tokio::test]
 async fn a_secret_value_without_a_secrets_directory_is_refused() -> TestResult {
     let gateway = Gateway::start("")?;
-    let (status, text) = gateway.save_credentials(1, "", vec![by_value()]).await?;
+    let (status, text) = gateway
+        .save_credentials(1, "user = \"gateway\"", vec![by_value()])
+        .await?;
     assert_eq!(StatusCode::CONFLICT, status, "{text}");
     assert_eq!("secret-store-unavailable", error_body(&text)?.code);
     assert!(!text.contains(VALUE), "{text}");
@@ -453,7 +456,7 @@ async fn a_refused_save_removes_the_secret_file_it_wrote() -> TestResult {
     let secrets = tempfile::tempdir()?;
     let gateway = Gateway::configured((&with_secrets_dir(secrets.path(), ""), ""), None)?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"u\"", vec![by_value()])
+        .save_credentials(1, "user = \"gate:way\"", vec![by_value()])
         .await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
     assert!(!text.contains(VALUE), "{text}");
@@ -497,7 +500,11 @@ async fn a_credential_in_a_url_setting_never_reaches_the_resources_answer() -> T
 async fn settings_that_name_a_secret_are_refused() -> TestResult {
     let gateway = Gateway::start("")?;
     let (status, text) = gateway
-        .save_credentials(1, &format!("bearer_token = \"{VALUE}\""), Vec::new())
+        .save_credentials(
+            1,
+            &format!("user = \"gateway\"\npassword = \"{VALUE}\""),
+            Vec::new(),
+        )
         .await?;
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
     assert_eq!("body-invalid", error_body(&text)?.code);

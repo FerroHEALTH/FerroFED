@@ -128,7 +128,7 @@ profile = "production"
 url = "https://mitz.example.org/geslotenautorisatievraag"
 client_identity_file = "/run/secrets/mitz-client.pem"   # mutual TLS
 trust_roots_file = "/etc/ferrofed/mitz-roots.pem"       # optional
-credentials = { bearer_token_file = "/run/secrets/mitz-token" }  # optional
+credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" }  # optional
 namespaces = ["urn:oid:2.999.1"]  # client namespaces that stand for the BSN
 purpose = "TREAT"                 # TREAT or COC
 data_categories = ["GGC002"]      # the Mitz data categories asked about
@@ -138,11 +138,13 @@ timeout_ms = 1000                 # one round of questions, within the query's b
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
 "node-b" = { type = "V6", ura = "ura-test-0002" }
 
-[[auth.issuer]]                   # the issuer of your callers' tokens
+[auth]                            # the issuer of your callers' tokens
 issuer = "https://issuer.example.org"
-jwks_uri = "https://issuer.example.org/jwks"
 
-[auth.issuer.requester]           # the claims of its tokens that name the requester
+[[trust.issuer]]                  # FerroFED's policy for that issuer
+issuer = "https://issuer.example.org"
+
+[trust.issuer.requester]          # the claims of its tokens that name the requester
 professional = "uzi_number"       # the professional's UZI number
 role = "uzi_role"                 # the professional's UZI role code
 organisation = "ura"              # the organisation's URA
@@ -176,7 +178,7 @@ What a deployment must provide:
   URA and type. That is always the verified caller: Mitz records the
   professional and decides on their role, so the gateway never asks for
   anyone else. Map, per trusted issuer, the four token claims that carry
-  them under `[auth.issuer.requester]`
+  them under `[trust.issuer.requester]`
   ([Client authentication](authentication.md#configuration)); no
   specification the gateway binds names these claims, so each is configured
   and none has a default. A caller whose token does not carry all four is
@@ -189,8 +191,7 @@ What a deployment must provide:
   is reported as a Mitz outage, since Mitz is never called, and no claim
   value appears in a label, a log line or an error.
 - **TLS.** The `url` must be `https` outside `profile = "development"`.
-  `credentials` takes a bearer token or basic credentials, never an OAuth
-  2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
+  `credentials` takes basic credentials, never an OAuth 2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
   to the Mitz afsprakenstelsel.
 
 The question carries the purpose `purpose` configures, `TREAT` or `COC`,

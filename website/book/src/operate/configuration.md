@@ -59,9 +59,7 @@ line naming the key at fault. It refuses an unknown key, a value of the wrong
 type, a zero timeout or body limit, a log filter that does not parse, a secret
 set both inline and through its `_file` sibling, a credentials section
 that names no scheme or two, and a credential the `Authorization` header
-cannot carry: a bearer token that is not a `b64token` (RFC 6750 §2.1: letters,
-digits, `-`, `.`, `_`, `~`, `+` and `/`, then any `=` padding), or a basic
-user or password holding a control character such as a newline (RFC 7617
+cannot carry: a basic user or password holding a control character such as a newline (RFC 7617
 §2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
@@ -267,26 +265,22 @@ trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
-# scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"   # the bearer token GET /metrics asks for; needed off loopback outside development, unless client_ca_file is set
+# scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless client_ca_file is set
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
 # [metrics.tls] takes certificate_file, key_file and client_ca_file, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
-# scheme: a bearer token, a user and a password, or a grant; see Onward
-# credentials.
-[credentials."hospital-a"]
-bearer_token_file = "/run/secrets/hospital-a-token"
-
+# scheme: a user and a password, or a grant; see Onward credentials.
 [credentials."clinic-b"]
 user = "ferrofed"
 password_file = "/run/secrets/clinic-b-password"
 
 # OAuth 2.0 client credentials with a signed JWT client assertion (§13.1).
-[credentials."cdr-c".oauth2]
-grant = "client_credentials"
-client_auth = "private_key_jwt"
+[credentials."cdr-c".oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/cdr-c-client.pem"   # its public half is in the gateway's JWK Set
 scope = "system/aql-*.s system/composition-*.cru"
 resource = "https://cdr-c.example.org/openehr"   # optional, RFC 8707
 # audience = "cdr-c"                             # optional
@@ -344,7 +338,7 @@ The credentials are read and checked at boot and again on each
 [reload](registry.md#reloading-the-registry), and the node client of an endpoint with a
 credentials section sends them on every request to that endpoint.
 
-The gateway never prints a secret. A bearer token or a password, inline, from
+The gateway never prints a secret. A password or a client secret, inline, from
 the environment or from a `_file` sibling, shows as `***` wherever the
 configuration is rendered: a debug log line, a panic message, a test failure.
 A URL that may carry a credential, such as the stored-query store's
@@ -356,17 +350,17 @@ unchanged.
 A PIX Manager's `url` carries no credential: one with a user name or a
 password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
-a bearer token, a user and a password, or an `oauth2` client-credentials
-grant authenticated by a client secret or a client assertion
-([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never a
-`nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
+a user and a password, or the `oauth` client-credentials grant
+authenticated by a client secret or a client assertion
+([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never an
+`oauth2`, `nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
 `[registry.mcsd]` take the same. Each grant a node's section can name is
 described in [Onward credentials](onward-credentials.md). The credentials of
-`[nl_gf.mitz]` take a bearer token or a user and a password alone. A grant
+`[nl_gf.mitz]` take a user and a password alone. A grant
 a section does not take is refused at load, naming it, and never read as no
 credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
-`oauth2` and `fapi2`
+`oauth`, `oauth2` and `fapi2`
 ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
 
 ### A PIX Manager asked by `GET` or `POST`
@@ -401,7 +395,7 @@ as sent: the URL of a `GET`, or the request line, media type and body of a
 ### Mutual TLS to the identity services
 
 A national identity service often authenticates the gateway by its client
-certificate instead of, or beside, a bearer token. `[[pixm.manager]]`,
+certificate instead of, or beside, a password or a token. `[[pixm.manager]]`,
 `[pdqm]`, `[pmir]` and `[registry.mcsd]` take the keys `[xcpd]`,
 `[nl_gf.nvi]`, `[nl_gf.mitz]` and `[audit.repository]` already take:
 
@@ -440,10 +434,10 @@ code 78 and one line naming the URL's key and what would travel over it,
 never a value. The rule covers:
 
 - the URL of a registry endpoint that has a `[credentials."<id>"]` section,
-  which receives its bearer token, its basic credentials or the access token
-  its `oauth2` grant obtains;
-- the `token_endpoint` of an `oauth2` section, which receives the client
-  assertion, or for an identity service's grant the client secret;
+  which receives its basic credentials or the access token its `oauth` or
+  `oauth2` grant obtains;
+- the `token_endpoint` of an `oauth` or `oauth2` section, which receives the
+  client secret or the client assertion;
 - the `authorization_server` of a `nuts` section, which receives the
   gateway's credentials in a Verifiable Presentation;
 - the `issuer` of a `fapi2` section, whose token endpoint receives the
@@ -488,8 +482,8 @@ travels unencrypted is named by key in the startup banner, in a `WARN` log
 line at boot and after each reload, and on stderr by `config check`.
 
 **Trust anchors.** A URL the gateway verifies its callers against, an
-issuer's `jwks_uri` or `introspection_endpoint` in
-[`[auth]`](authentication.md), must be `https`, or `http` to a loopback
+issuer itself, the key set its metadata names, or an `introspection_endpoint`
+in [`[trust]`](authentication.md), must be `https`, or `http` to a loopback
 host, under every profile, development included. A key set fetched in the
 clear would let anyone on the network substitute keys and forge callers.
 

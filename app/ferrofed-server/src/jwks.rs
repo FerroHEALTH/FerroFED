@@ -9,9 +9,10 @@
 //! overlap window, and the next one ahead of a rotation, then the ES256
 //! client key of each FAPI 2.0 grant, which that grant's authorization
 //! server verifies its `private_key_jwt` assertions against (FAPI 2.0
-//! Security Profile §5.4.2; Annex B §B.4a.2). It is public: a node fetches
-//! it without authenticating, and it holds no private key material. A
-//! gateway with no `[signing]` keys answers `404`.
+//! Security Profile §5.4.2; Annex B §B.4a.2), and the assertion key of each
+//! `oauth` client credentials grant (RFC 7523 §2.2). It is public: a node
+//! fetches it without authenticating, and it holds no private key material.
+//! A gateway with no key to publish answers `404`.
 
 use std::sync::Arc;
 
@@ -33,10 +34,13 @@ pub async fn jwks(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Res
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotFound, request_id);
     };
-    let Some(signing) = federation.signing() else {
-        return error::fixed(Code::NotFound, request_id);
+    let mut published = match federation.signing() {
+        Some(signing) => signing.keys.published(),
+        None if federation.client_keys().is_empty() => {
+            return error::fixed(Code::NotFound, request_id);
+        }
+        None => jsonwebtoken::jwk::JwkSet { keys: Vec::new() },
     };
-    let mut published = signing.keys.published();
     for client_key in federation.client_keys() {
         if !published
             .keys

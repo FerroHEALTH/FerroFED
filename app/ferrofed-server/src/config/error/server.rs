@@ -80,14 +80,21 @@ pub enum ServerFault {
         address: std::net::SocketAddr,
     },
     /// `metrics.listen` names an address other than a loopback one outside
-    /// the development profile, and neither a scrape token nor a client CA
+    /// the development profile, and neither a Basic user nor a client CA
     /// authenticates the scrape there.
     #[error(
-        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: set metrics.scrape_token_file, or metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
+        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: name an [[auth.basic.users]] user in metrics.scrape_users, or set metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
     )]
     MetricsUnauthenticated {
         /// The address `metrics.listen` names.
         address: std::net::SocketAddr,
+    },
+    /// `metrics.scrape_users` names a user `[[auth.basic.users]]` does not
+    /// write.
+    #[error("metrics.scrape_users names {user:?}, which no [[auth.basic.users]] entry writes")]
+    ScrapeUser {
+        /// The user named.
+        user: String,
     },
     /// `metrics.listen` names the address `server.listen` binds, at a port
     /// other than 0.

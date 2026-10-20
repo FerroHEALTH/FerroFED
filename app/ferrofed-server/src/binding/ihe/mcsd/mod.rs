@@ -41,7 +41,7 @@ pub struct McsdDirectory {
     /// or password.
     pub url: SecretUrl,
     /// How the gateway authenticates to the directory, when the transport
-    /// does not: a bearer token or basic credentials.
+    /// does not: basic credentials or the client credentials grant of `oauth`.
     pub credentials: Option<Credentials>,
     /// The gateway's client certificate chain and private key, PEM, for
     /// mutual TLS with the directory, inline or through
@@ -88,8 +88,8 @@ pub struct DirectorySettings {
     /// The directory's FHIR base URL, already known to parse as an `http` or
     /// `https` URL with no user name or password.
     pub url: SecretUrl,
-    /// How the gateway authenticates to it: a bearer token or basic
-    /// credentials.
+    /// How the gateway authenticates to it: basic credentials or the client
+    /// credentials grant of `oauth`.
     pub credentials: Option<Scheme>,
     /// The TLS material the directory is reached with.
     pub tls: TlsSettings,
@@ -141,11 +141,11 @@ pub fn site() -> transport::ProtectedSite {
 }
 
 /// Resolves `[registry.mcsd]`: an `http` or `https` base URL with no user name
-/// or password, a bearer token or basic credentials, and a positive interval,
+/// or password, basic credentials or an `oauth` grant, and a positive interval,
 /// deadline and caps, audited as `audit` says.
 pub(super) fn resolve(
     directory: &McsdDirectory,
-    context: &ServiceContext<'_>,
+    context: ServiceContext,
     audit: AuditSettings,
 ) -> Result<DirectorySettings, Error> {
     let profile = context.profile;

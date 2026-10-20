@@ -72,9 +72,9 @@ N42a); the rest are what the gateway needs to reach the member.
 - [ ] **ITS-REST is reachable from the gateway** at one base URL per
   endpoint, over `https` whenever the gateway sends it a credential
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
-- [ ] **The member accepts the gateway's credential**: a bearer token, a user
-  and a password, or an OAuth 2.0 client registered under the gateway's
-  `client_id` with the gateway's JWK Set location
+- [ ] **The member accepts the gateway's credential**: a user and a
+  password, or an OAuth 2.0 client registered under the gateway's
+  `client_id` for the client credentials grant
   ([step 5](#5-onward-credentials)).
 - [ ] **The member makes its own access decision and enforces consent**
   (§13.2, N26, N27). If it marks a consent refusal with an ITS-REST `Error`
@@ -242,7 +242,7 @@ scope, a clinical application that signs users in, and a reporting service
 that uses the client-credentials grant. The realm's `acr.loa.map` names the
 levels of Keycloak's authentication flows, so its tokens carry `acr` as
 `urn:example:loa:substantial` for level 1 and `urn:example:loa:high` for
-level 2, the values the gateway's `[auth.issuer.assurance]` reads below.
+level 2, the values the gateway's `[trust.issuer.assurance]` reads below.
 Keycloak 26.8.0 wrote level 1 into a token after a password sign-in and
 into a client-credentials token. A real realm reaches each level only by a
 flow whose means meets it, which Regulation (EU) No 910/2014 Art 8(2)
@@ -382,22 +382,23 @@ A user who signs in to `example-clinical-app` then gets a token whose
 `scope` reads `user/composition-*.r user/aql-*.s`, and the reporting
 service a token with `system/aql-*.s` that names its professional, both
 with `acr` `urn:example:loa:substantial`. Keycloak's realm issuer is
-`https://idp.example.org/realms/ferrofed`; copy `issuer` and `jwks_uri`
-from `https://idp.example.org/realms/ferrofed/.well-known/openid-configuration`,
+`https://idp.example.org/realms/ferrofed`; copy `issuer` from
+`https://idp.example.org/realms/ferrofed/.well-known/openid-configuration`,
 since the gateway compares `iss` exactly:
 
 ```toml
 # ferrofed.toml
 [auth]
-clock_skew_s = 60
-
-[[auth.issuer]]
 issuer = "https://idp.example.org/realms/ferrofed"
-jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
+clock_skew_seconds = 60
+product_scope = "__ferrofed.operator"
+
+[[trust.issuer]]
+issuer = "https://idp.example.org/realms/ferrofed"
 backend_clients = ["example-reporting-service"]
 client_tokens_act_for_professional = true
 
-[auth.issuer.assurance]
+[trust.issuer.assurance]
 claim = "acr"
 minimum = "substantial"
 substantial = ["urn:example:loa:substantial"]
@@ -408,11 +409,13 @@ high = ["urn:example:loa:high"]
 `client_tokens_act_for_professional` admits the reporting service to
 patient data for the professional `professional.json` names; a client token
 of this issuer that names none is refused `401 natural-person-required`.
-`[auth.issuer.assurance]` reads the realm's `acr` and refuses a token below
+`[trust.issuer.assurance]` reads the realm's `acr` and refuses a token below
 `substantial` with `401 authentication-assurance-insufficient`
 ([Professionals and assurance](authentication.md#professionals-and-assurance)).
-An operator who uses the [operator console](operator-console.md) needs the
-issuer's `operator_scope` as well
+The gateway reads the realm's metadata at its OpenID Connect location and
+the key set it names. An operator who uses the
+[operator console](operator-console.md) needs `__ferrofed.operator`, the
+`product_scope`, in the token as well
 ([The operator surface](authentication.md#the-operator-surface)).
 
 ## 5. Onward credentials
@@ -421,19 +424,20 @@ The gateway never forwards a caller's token to a node. It authenticates to
 each endpoint with that endpoint's own credential, one section per
 endpoint id, and signs the caller's identity onto every request with its
 own key ([Onward credentials](onward-credentials.md)). Here `cdr-a` takes a
-bearer token and `cdr-b` registers the gateway as an OAuth 2.0 client,
-authenticated by an assertion the signing key signs:
+user and a password and `cdr-b` registers the gateway as an OAuth 2.0
+client, which obtains its token with the client credentials grant:
 
 ```toml
 # ferrofed.toml
 [credentials."cdr-a-query"]
-bearer_token_file = "/run/secrets/ferrofed/cdr-a-token"
+user = "ferrofed-gateway"
+password_file = "/run/secrets/ferrofed/cdr-a-password"
 
-[credentials."cdr-b-query".oauth2]
-grant = "client_credentials"
-client_auth = "private_key_jwt"
+[credentials."cdr-b-query".oauth]
 token_endpoint = "https://auth.cdr-b.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
+client_auth = "client_secret_basic"
+client_secret_file = "/run/secrets/ferrofed/cdr-b-client-secret"
 scope = "system/aql-*.s system/composition-*.r"
 
 [signing]
@@ -487,8 +491,7 @@ url = "https://mpi.example.org/fhir/"
 "cdr-a" = "urn:oid:2.999.10"
 "cdr-b" = "urn:oid:2.999.20"
 
-[pixm.manager.credentials.oauth2]
-grant = "client_credentials"
+[pixm.manager.credentials.oauth]
 token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 client_id = "ferrofed-pix-consumer"
 client_auth = "client_secret_post"
@@ -511,7 +514,11 @@ which [step 8](#8-tls-and-the-public-address) opens to the Registry alone
 # ferrofed.toml
 [pmir]
 url = "https://pmir.example.org/fhir"
-feed_token_file = "/run/secrets/ferrofed/pmir-feed-token"
+feed_users = ["pmir-registry"]
+
+[[auth.basic.users]]
+user = "pmir-registry"
+password_hash_file = "/run/secrets/ferrofed/pmir-registry-hash"
 ```
 
 The Registry sends the feed to `pmir.callback_url`, which is
@@ -696,18 +703,18 @@ was made ([What a client gets back](../integrate/client-contract.md#what-a-clien
 - The `openEHR-federation-endpoint` and `openEHR-federation-system-id`
   response headers name the members that contributed rows.
 
-A `401` names its reason in the `WWW-Authenticate` challenge, a `403` in
-its error code, and a `424` means a member that may hold the patient could
+A `401` names its reason in the gateway's security log, never in the
+answer, a `403` in its error code, and a `424` means a member that may hold the patient could
 not be resolved ([Errors and status codes](../integrate/errors.md)).
 
 ## 11. Operations
 
 Turn on the admin listener, and scrape `GET /metrics` there. It stays on
 loopback unless you allow otherwise, and never sits under the base path.
-Off loopback, the scrape needs a token, which your Prometheus sends with
-`authorization.credentials_file`, and a write action such as the
-stored-query distribution needs an access token with your issuer's
-`operator_scope` ([Metrics](metrics.md#who-the-admin-listener-serves)). A
+Off loopback, the scrape needs the Basic credentials of a scrape user, which
+your Prometheus sends with `basic_auth`, and a write action such as the
+stored-query distribution needs an access token with `auth.product_scope`
+([Metrics](metrics.md#who-the-admin-listener-serves)). A
 console with `[admin]` needs it on an internal address its server reaches
 and no public network does ([Console](operator-console.md#configuration)):
 
@@ -716,7 +723,7 @@ and no public network does ([Console](operator-console.md#configuration)):
 [metrics]
 listen = "127.0.0.1:9464"
 # off loopback: listen = "0.0.0.0:9464", allow_remote = true, and
-# scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"
+# scrape_users = ["prometheus"], a user of [[auth.basic.users]]
 ```
 
 - **Alerts.** Load the shipped dashboard and alert rules, and add an alert

@@ -53,7 +53,8 @@ url = "https://pix.example.org/fhir/"
 "clinic-b" = "urn:oid:2.999.20"
 
 [pixm.manager.credentials]
-bearer_token_file = "/run/secrets/pix-token"
+user = "ferrofed-pix-consumer"
+password_file = "/run/secrets/pix-password"
 
 [pixm.namespaces]
 "2.999.1" = "urn:oid:2.999.1"       # a client namespace = the PIX assigning authority
@@ -70,8 +71,8 @@ bearer_token_file = "/run/secrets/pix-token"
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). A user name or password in it refuses the configuration, naming
   `pixm.manager[N].url` and never quoting it; the credentials go in
   `[pixm.manager.credentials]`, with the keys of an endpoint's
-  [credentials](configuration.md#the-file): `bearer_token`, or `user` and
-  `password`, each with its `_file` sibling, or an `oauth2` grant
+  [credentials](configuration.md#the-file): `user` and `password`, the
+  password with its `_file` sibling, or an `oauth` grant
   ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)). Leave
   the section out when the transport, such as mutual TLS or a private
   network, authenticates the gateway.
@@ -113,17 +114,19 @@ the member. Two different values in one domain are never guessed between.
 A Manager that issues expiring tokens, as an IHE IUA Authorization Server
 does, is asked with a token the gateway obtains itself by the OAuth 2.0
 client-credentials grant (RFC 6749 §4.4; IUA ITI-71 §3.71.4.1.2.1). The
-same `oauth2` table serves `[pdqm.credentials]`, `[pmir.credentials]` and
+`oauth` table is the one of `ferrohealth-smart`, which every FerroHEALTH
+product reads for an upstream it calls as itself, and the same table serves
+`[pdqm.credentials]`, `[pmir.credentials]` and
 `[registry.mcsd.credentials]`.
 
 ```toml
-[pixm.manager.credentials.oauth2]
-grant = "client_credentials"
+[pixm.manager.credentials.oauth]
 token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 client_id = "ferrofed-pix-consumer"
 client_auth = "client_secret_basic"     # or client_secret_post, or private_key_jwt
 client_secret_file = "/run/secrets/pix-consumer-secret"
 scope = "*"                             # the scopes the Manager's server defines
+# issuer = "https://mpi.example.org"   # in place of token_endpoint: read it from the RFC 8414 metadata
 # resource = "https://mpi.example.org/fhir/"   # RFC 8707, when the server takes one
 # audience = "https://mpi.example.org"
 ```
@@ -132,21 +135,21 @@ scope = "*"                             # the scopes the Manager's server define
   `client_secret_basic`, the client id and secret in the HTTP Basic scheme,
   as ITI-71 prescribes; `client_secret_post`, the two in the request body,
   for a server that reads them there (RFC 6749 §2.3.1); or
-  `private_key_jwt`, a client assertion the `[signing]` key signs (RFC 7523
-  §2.2), with no secret.
+  `private_key_jwt`, a client assertion signed by the key in
+  `private_key_file` (RFC 7523 §2.2), whose public half the gateway
+  publishes in its JWK Set, with no secret.
 - `client_secret` or `client_secret_file` holds the secret. It is required
   with the two secret methods and refused beside `private_key_jwt`.
-- `scope` is required, each value an RFC 6749 §3.3 scope token.
+- `scope` is required here, each value an RFC 6749 §3.3 scope token.
 - `token_endpoint` is `https` outside the development profile: the client
-  secret or assertion travels to it.
-- `grant = "token_exchange"`, `dpop_key_file`,
-  `tls_client_certificate_bound_access_tokens` and the TLS methods of
-  `client_auth` belong to a node's grant
-  ([Onward credentials](onward-credentials.md)) and are refused here.
+  secret or assertion travels to it. One discovered from `issuer` is always
+  `https`.
+- An `oauth2` table, the grant of a node
+  ([Onward credentials](onward-credentials.md)), is refused here.
   `config check` names every key it refuses, and never a secret.
 
-The gateway caches the token until 30 seconds before the `expires_in` the
-token response states, and incorporates it in each ITI-83 request as
+The gateway caches the token until `refresh_margin_ms`, 30 seconds by
+default, before the `expires_in` the token response states, and incorporates it in each ITI-83 request as
 `Authorization: Bearer` (ITI-72 §3.72.4.2). A token with no stated lifetime
 serves the one request it was obtained for. When the Manager answers `401`,
 the gateway drops the token, obtains a new one, and sends the request once
@@ -356,8 +359,7 @@ every domain, address and secret is an example.
    "hospital-a" = "urn:oid:2.999.10"
    "clinic-b" = "urn:oid:2.999.20"
 
-   [pixm.manager.credentials.oauth2]
-   grant = "client_credentials"
+   [pixm.manager.credentials.oauth]
    token_endpoint = "https://mpi.example.org/auth/oauth2_token"
    client_id = "FFD_PIX_CONSUMER"
    client_auth = "client_secret_post"   # SanteMPI reads the client from the body
@@ -441,7 +443,8 @@ timeout_ms = 1000                      # each exchange with the Supplier
 "urn:oid:2.999.7" = "urn:oid:2.999.7"  # a client namespace = the system it is sent in
 
 [pdqm.credentials]
-bearer_token_file = "/run/secrets/pdq-token"
+user = "ferrofed-pdq-consumer"
+password_file = "/run/secrets/pdq-password"
 ```
 
 - Only an identifier in a namespace `[pdqm.namespaces]` names goes to the
@@ -550,14 +553,22 @@ ITI-93 message (PMIR 1.6.0, Annex A.4).
 url = "https://pmir.example.org/fhir"                    # the Registry's FHIR base
 callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry sends the feed
 path = "/pmir/feed"                                       # the route under {base}, the default
-feed_token_file = "/run/secrets/pmir-feed-token"          # the token the Registry sends
+feed_users = ["pmir-registry"]                            # the [[auth.basic.users]] the Registry sends as
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
 # timeout_ms = 5000
 # check_interval_s = 60
 # on_drain = "keep"                                       # or "unsubscribe"; see Several replicas
 
-[pmir.credentials]                    # how the gateway authenticates to the Registry
-bearer_token_file = "/run/secrets/pmir-registry-token"
+[pmir.credentials.oauth]              # how the gateway authenticates to the Registry
+token_endpoint = "https://pmir.example.org/auth/token"
+client_id = "ferrofed-pmir-subscriber"
+client_auth = "client_secret_basic"
+client_secret_file = "/run/secrets/pmir-subscriber-secret"
+scope = "*"
+
+[[auth.basic.users]]                  # the Registry, as the feed authenticates it
+user = "pmir-registry"
+password_hash_file = "/run/secrets/pmir-registry-hash"
 ```
 
 - **The subscription.** At start the gateway creates a `Subscription` at
@@ -587,10 +598,13 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
   never learned where it was. PMIR lets a subscriber delete a subscription
   (§2:3.94.4.5) and does not say when.
 - **Authenticating the feed.** The subscription carries no credential for the
-  feed (PMIR §2:3.94.5), so you agree the feed token with the Registry's
-  operator and configure it on both sides. The Registry sends it as
-  `Authorization: Bearer <token>`. A message without that token is answered
-  `401` and changes nothing.
+  feed (PMIR §2:3.94.5), so you give the Registry a Basic user of its own
+  under `[[auth.basic.users]]`, name it in `feed_users`, and agree its
+  password with the Registry's operator. The Registry sends the user and
+  password in the HTTP Basic scheme (RFC 7617). A message without them, or
+  with a password that does not verify, is answered `401` with a `Basic`
+  challenge, one from another Basic user `403`, and neither changes
+  anything.
 - **The route.** `POST {base}{path}` takes one ITI-93 message. The route
   sits outside the ITS-REST surface and its client authentication, so the
   path may not be under `/v1`, `/health` or `/.well-known`. A message that

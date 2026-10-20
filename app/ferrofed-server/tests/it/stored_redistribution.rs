@@ -74,7 +74,7 @@ fn both(
 ) -> Result<(Router, Router), Box<dyn Error>> {
     let state = state(dir, &three(a, b, c), federation)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    let access = Access::new(&crate::support::auth(), Profile::Production, None);
+    let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
     let operator = admin::router(state, access);
     Ok((client, operator))
 }
@@ -461,7 +461,8 @@ fn the_admin_listener_is_refused_off_loopback_without_allow_remote() -> TestResu
     );
     let settings = Config::from_sources(
         Some(&crate::support::signed(&format!(
-            "{remote}allow_remote = true\nscrape_token = \"synthetic-scrape-token\"\n"
+            "{remote}allow_remote = true\n{}",
+            crate::support::scraping()
         ))),
         &BTreeMap::new(),
     )?

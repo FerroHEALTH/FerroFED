@@ -41,8 +41,8 @@ fn the_audience_and_the_jwk_set_url_default_from_the_public_url() -> TestResult 
     let settings = resolve(&gateway("/fed", "https://gateway.example.org/fed", ""))?
         .map_err(|error| error.to_string())?;
     assert_eq!(
-        Some("https://gateway.example.org/fed"),
-        settings.server.auth.audience.as_deref()
+        vec![String::from("https://gateway.example.org/fed")],
+        settings.server.auth.audience
     );
     let signing = settings.signing.ok_or("[signing] is resolved")?;
     assert_eq!(
@@ -55,11 +55,14 @@ fn the_audience_and_the_jwk_set_url_default_from_the_public_url() -> TestResult 
 #[test]
 fn a_written_audience_is_taken_as_written() -> TestResult {
     let text = format!(
-        "{}\n[auth]\naudience = \"ferrofed\"\n",
+        "{}\n[auth]\naudience = [\"ferrofed\"]\n",
         gateway("/", "https://gateway.example.org/", "")
     );
     let settings = resolve(&text)?.map_err(|error| error.to_string())?;
-    assert_eq!(Some("ferrofed"), settings.server.auth.audience.as_deref());
+    assert_eq!(
+        vec![String::from("ferrofed")],
+        settings.server.auth.audience
+    );
     Ok(())
 }
 
@@ -134,7 +137,7 @@ fn without_a_public_url_each_copy_is_read_as_written() -> TestResult {
         JWKS_URI,
         settings.signing.ok_or("[signing]")?.jwks_uri.as_str()
     );
-    assert_eq!(None, settings.server.auth.audience);
+    assert!(settings.server.auth.audience.is_empty());
     Ok(())
 }
 

@@ -147,21 +147,23 @@ pub(crate) async fn assert_refused(
     assert_eq!(refusal.code().status(), status, "{refusal:?}: {text}");
     assert_eq!(refusal.code().as_str(), error_body(&text)?.code, "{text}");
     let challenge = challenge(&headers);
-    match refusal.code().status() {
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN if refusal != Refusal::Operation => {
-            let challenge = challenge.ok_or("a 401 and a 403 carry a challenge (RFC 6750 §3)")?;
-            assert!(
-                challenge.starts_with("Bearer realm=\"ferrofed\""),
-                "{challenge}"
-            );
-            if refusal != Refusal::Missing {
-                assert!(
-                    challenge.contains(refusal.description()),
-                    "{refusal:?} is the reason: {challenge}"
-                );
-            }
-        }
-        _ => assert_eq!(None, challenge, "{refusal:?}"),
+    let expected = refusal.response("ferrofed", "corr-1");
+    assert_eq!(
+        self::challenge(expected.headers()),
+        challenge,
+        "{refusal:?}: the challenge is the one of RFC 6750 §3"
+    );
+    if let Some(challenge) = challenge {
+        assert!(
+            challenge.starts_with("Bearer realm=\"ferrofed\""),
+            "{challenge}"
+        );
+        // NOTE: RFC 6750 §3.1 makes `error_description` and `scope` optional, and the
+        // challenge names neither, so a refusal teaches nothing about what failed.
+        assert!(
+            !challenge.contains("error_description") && !challenge.contains("scope="),
+            "{refusal:?}: {challenge}"
+        );
     }
     gateway.nobody_asked().await
 }

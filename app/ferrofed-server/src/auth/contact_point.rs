@@ -21,7 +21,7 @@
 //! `subject_role` is `hp_professional_role`, `subject_organization_id` is
 //! `healthcare_provider_identifier` and `subject_organization` is
 //! `healthcare_provider_name`. The issuer's
-//! `[auth.issuer.national_contact_point]` names the string claim of each
+//! `[trust.issuer.national_contact_point]` names the string claim of each
 //! other one. The IUA `person_id`, a patient identifier, is never read
 //! (§5.4.1, N33).
 
@@ -77,7 +77,7 @@ pub(super) fn vouched(caller: Caller, read: Vouched) -> Caller {
 /// Holds a caller a national contact point vouched for, admitted to patient
 /// data, to what Implementing Regulation (EU) 2026/2099 Art 7 has the
 /// contact point communicate, and to a purpose of use, whatever the
-/// deployment's `auth.purpose_of_use.required` (Federation Tier §13.4
+/// deployment's `trust.purpose_of_use.required` (Federation Tier §13.4
 /// authn-purpose-of-use).
 ///
 /// # Errors

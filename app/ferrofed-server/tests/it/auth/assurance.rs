@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[auth.issuer.assurance]` and `client_tokens_act_for_professional` as
+//! `[trust.issuer.assurance]` and `client_tokens_act_for_professional` as
 //! written: every value the gateway cannot read a level with refuses to
 //! boot, naming its key, and `config check` notes each issuer that requires
 //! no level (Regulation (EU) 2025/327 Annex II 3.1; the levels of Regulation
@@ -21,16 +21,17 @@ use ferrofed_server::config::error::Error as ConfigError;
 
 use crate::run::binary;
 
-/// One trusted issuer by its key set URL.
+/// One trusted issuer and its `[[trust.issuer]]` entry, last, so a key
+/// appended to the text is the entry's.
 fn issuer() -> String {
     String::from(
-        "[auth]\naudience = \"urn:example:gateway\"\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\njwks_uri = \"https://issuer.example.test/jwks\"\n",
+        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
     )
 }
 
-/// [`issuer`] with an `[auth.issuer.assurance]` table of `body`.
+/// [`issuer`] with a `[trust.issuer.assurance]` table of `body`.
 fn assuring(body: &str) -> String {
-    format!("{}\n[auth.issuer.assurance]\n{body}\n", issuer())
+    format!("{}\n[trust.issuer.assurance]\n{body}\n", issuer())
 }
 
 /// The refusal of `text`, or `None` when it resolves.
@@ -119,11 +120,11 @@ fn an_assurance_table_without_a_minimum_or_a_claim_is_refused() -> Result<(), Bo
     for (body, key) in [
         (
             "high = [\"urn:example:loa:3\"]",
-            "auth.issuer[0].assurance.minimum",
+            "trust.issuer[0].assurance.minimum",
         ),
         (
             "claim = \"\"\nminimum = \"high\"\nhigh = [\"urn:example:loa:3\"]",
-            "auth.issuer[0].assurance.claim",
+            "trust.issuer[0].assurance.claim",
         ),
     ] {
         match refusal(&assuring(body))? {
@@ -142,12 +143,12 @@ fn an_assurance_value_at_two_levels_or_empty_is_refused() -> Result<(), Box<dyn 
         &assuring(
             "minimum = \"low\"\nlow = [\"urn:example:loa:2\"]\nhigh = [\"urn:example:loa:2\"]",
         ),
-        "auth.issuer[0].assurance.high",
+        "trust.issuer[0].assurance.high",
         AuthFault::AssuranceValue,
     )?;
     refused_for(
         &assuring("minimum = \"low\"\nlow = [\"\"]"),
-        "auth.issuer[0].assurance.low",
+        "trust.issuer[0].assurance.low",
         AuthFault::AssuranceValue,
     )
 }
@@ -160,7 +161,7 @@ fn a_least_level_no_value_reaches_is_refused() -> Result<(), Box<dyn Error>> {
         &assuring(
             "minimum = \"high\"\nlow = [\"urn:example:loa:1\"]\nsubstantial = [\"urn:example:loa:2\"]",
         ),
-        "auth.issuer[0].assurance.minimum",
+        "trust.issuer[0].assurance.minimum",
         AuthFault::AssuranceUnreachable,
     )
 }
@@ -192,7 +193,7 @@ fn config_check_notes_an_issuer_without_an_assurance_mapping() -> Result<(), Box
     let stdout = String::from_utf8_lossy(&plain.stdout);
     assert!(
         stdout.contains(
-            "ferrofed: note: auth.issuer[0] (https://issuer.example.test) declares no [auth.issuer.assurance]"
+            "ferrofed: note: the issuer https://issuer.example.test declares no [trust.issuer.assurance]"
         ),
         "{stdout}"
     );
@@ -207,6 +208,6 @@ fn config_check_notes_an_issuer_without_an_assurance_mapping() -> Result<(), Box
         String::from_utf8_lossy(&assured.stderr)
     );
     let stdout = String::from_utf8_lossy(&assured.stdout);
-    assert!(!stdout.contains("[auth.issuer.assurance]"), "{stdout}");
+    assert!(!stdout.contains("[trust.issuer.assurance]"), "{stdout}");
     Ok(())
 }

@@ -20,7 +20,7 @@ use http::{Request, StatusCode, header};
 
 use super::{SETTLE, audit_tables, await_feed_state, names_no_caller, transactions};
 use crate::metrics::holds_series;
-use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, TOKEN, gateway, text};
+use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, gateway, text};
 use crate::support::send_as_is;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -45,11 +45,11 @@ fn audited(repository: &FeedRepository, extra: &str) -> String {
     )
 }
 
-/// The ITI-93 request carrying `body` with the feed token.
+/// The ITI-93 request carrying `body` with the feed user's credentials.
 fn message(body: String) -> Result<Request<Body>, http::Error> {
     Request::post(PATH)
         .header(header::CONTENT_TYPE, "application/fhir+json")
-        .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+        .header(header::AUTHORIZATION, crate::pmir::feed_credentials())
         .body(Body::from(body))
 }
 

@@ -19,7 +19,7 @@ use ferrofed_server::auth::trust::Trust;
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::issuer::{Claims, Issuer};
+use ferrofed_testkit::issuer::{Claims, Issuer, METADATA_PATH};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use tower::ServiceExt as _;
@@ -28,7 +28,7 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::{TestResult, configuration, member};
 use crate::facade::settings_with_room;
-use crate::support::{self, AUDIENCE, OPERATOR_SCOPE, call};
+use crate::support::{self, AUDIENCE, call};
 
 /// The issuer a reload adds to the trust list.
 const ISSUER_B: &str = "https://issuer-b.example.test";
@@ -49,21 +49,16 @@ pub(super) fn bearer_b() -> Result<String, Box<dyn Error>> {
     ))
 }
 
-/// `[auth]` trusting the suite's issuer, whose entry admits operators.
-pub(super) fn auth_a() -> Result<String, Box<dyn Error>> {
-    Ok(format!(
-        "{}operator_scope = \"{OPERATOR_SCOPE}\"\n",
-        support::auth_toml()?
-    ))
+/// `[auth]` trusting the suite's issuer, with the product scope that admits
+/// operators.
+pub(super) fn auth_a() -> String {
+    support::auth_toml()
 }
 
-/// `[auth]` trusting the suite's issuer and [`SECOND`], its key set inline.
+/// `[auth]` trusting the suite's issuer and [`SECOND`], its key set in a
+/// file.
 pub(super) fn auth_a_and_b() -> Result<String, Box<dyn Error>> {
-    Ok(format!(
-        "{}\n[[auth.issuer]]\nissuer = \"{ISSUER_B}\"\njwks = '{}'\n",
-        auth_a()?,
-        SECOND.jwks_json()?
-    ))
+    Ok(format!("{}{}", auth_a(), support::issuer_toml(&SECOND)?))
 }
 
 /// A development gateway over one member whose client face, admin listener
@@ -146,7 +141,7 @@ pub(super) async fn status_of(
 
 #[tokio::test]
 async fn a_reload_adds_an_issuer_whose_tokens_are_admitted_after_it() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     let b = bearer_b()?;
     assert_eq!(
         StatusCode::UNAUTHORIZED,
@@ -174,7 +169,7 @@ async fn a_reload_that_drops_an_issuer_refuses_its_tokens_after_it() -> TestResu
     let b = bearer_b()?;
     assert_eq!(StatusCode::OK, status_of(&gateway.app, &b).await?);
 
-    gateway.write_auth(&auth_a()?)?;
+    gateway.write_auth(&auth_a())?;
     gateway.reloader.reload()?;
     assert_eq!(StatusCode::UNAUTHORIZED, status_of(&gateway.app, &b).await?);
     Ok(())
@@ -183,30 +178,41 @@ async fn a_reload_that_drops_an_issuer_refuses_its_tokens_after_it() -> TestResu
 #[tokio::test(flavor = "multi_thread")]
 async fn a_request_being_admitted_finishes_on_the_issuers_it_started_with() -> TestResult {
     let keys = Server::start().await;
+    let slow = Issuer::new(keys.uri())?;
+    let metadata = serde_json::json!({
+        "issuer": slow.name(),
+        "jwks_uri": format!("{}/jwks", keys.uri()),
+    });
+    Mock::given(method("GET"))
+        .and(path(METADATA_PATH))
+        .respond_with(ResponseTemplate::new(200).set_body_json(metadata))
+        .mount(&keys)
+        .await;
     Mock::given(method("GET"))
         .and(path("/jwks"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_raw(SECOND.jwks_json()?, "application/json")
+                .set_body_raw(slow.jwks_json()?, "application/json")
                 .set_delay(Duration::from_millis(1_500)),
         )
         .mount(&keys)
         .await;
     let fetched = format!(
-        "{}\n[[auth.issuer]]\nissuer = \"{ISSUER_B}\"\njwks_uri = \"{}/jwks\"\n",
-        auth_a()?,
-        keys.uri()
+        "{}\n[[auth.issuer]]\nissuer = \"{}\"\n",
+        auth_a(),
+        slow.name()
     );
     let gateway = Trusting::start(&fetched)?;
-    let b = bearer_b()?;
+    let b = format!("Bearer {}", slow.mint(&Claims::new(slow.name(), AUDIENCE))?);
 
     let in_flight = tokio::spawn(gateway.app.clone().oneshot(described(&b)?));
     let started = std::time::Instant::now();
-    while keys
+    while !keys
         .received_requests()
         .await
         .unwrap_or_default()
-        .is_empty()
+        .iter()
+        .any(|request| request.url.path() == "/jwks")
     {
         assert!(
             started.elapsed() < Duration::from_secs(10),
@@ -215,7 +221,7 @@ async fn a_request_being_admitted_finishes_on_the_issuers_it_started_with() -> T
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 
-    gateway.write_auth(&auth_a()?)?;
+    gateway.write_auth(&auth_a())?;
     let applied = gateway.reloader.reload()?;
     assert!(applied.auth_changed, "{applied:?}");
     assert!(
@@ -239,18 +245,21 @@ async fn a_request_being_admitted_finishes_on_the_issuers_it_started_with() -> T
 
 #[tokio::test]
 async fn an_auth_that_does_not_load_is_refused_with_the_whole_reload() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     gateway.write_registry(
         &(member("a", "http://127.0.0.1:9/a") + &member("b", "http://127.0.0.1:9/b")),
     )?;
-    let unverifiable = format!("{}\n[[auth.issuer]]\nissuer = \"{ISSUER_B}\"\n", auth_a()?);
+    let unverifiable = format!(
+        "{}\n[[auth.issuer]]\nissuer = \"http://issuer-b.example.test\"\n",
+        auth_a()
+    );
     gateway.write_auth(&unverifiable)?;
 
     let refused = gateway
         .reloader
         .reload()
         .err()
-        .ok_or("an issuer with no way to verify its tokens is refused")?;
+        .ok_or("an issuer whose metadata would travel in the clear is refused")?;
     assert_eq!("configuration", refused.class(), "{refused:?}");
     assert_eq!(1, gateway.members()?, "the registry change is not applied");
     assert_eq!(
@@ -267,7 +276,7 @@ async fn an_auth_that_does_not_load_is_refused_with_the_whole_reload() -> TestRe
 
 #[tokio::test]
 async fn an_auth_that_trusts_no_issuer_is_refused_and_the_running_issuers_stay() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     gateway.write_auth("")?;
 
     let refused = gateway
@@ -286,7 +295,7 @@ async fn an_auth_that_trusts_no_issuer_is_refused_and_the_running_issuers_stay()
 
 #[tokio::test]
 async fn a_changed_audience_waits_for_a_restart_while_the_issuers_apply() -> TestResult {
-    let gateway = Trusting::start(&auth_a()?)?;
+    let gateway = Trusting::start(&auth_a())?;
     let moved = auth_a_and_b()?.replace(AUDIENCE, "urn:example:another-audience");
     gateway.write_auth(&moved)?;
 

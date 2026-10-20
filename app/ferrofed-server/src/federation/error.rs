@@ -313,14 +313,13 @@ pub enum FederationError {
     },
     /// The HTTP client an IHE FHIR service's grant sends its token requests
     /// through could not be built.
-    #[cfg(feature = "binding-ihe")]
     #[error("the HTTP client of the token endpoint of {section} could not be built")]
     TokenTransport {
         /// The credentials section.
         section: String,
         /// Why it could not be built; it names no secret.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: Box<ferrohealth_smart::client::TokenError>,
     },
     /// The TLS material of an identity, localization, consent or audit
     /// service does not read.

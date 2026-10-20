@@ -23,7 +23,7 @@ use http::StatusCode;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
-use super::{DOMAIN_A, EHR_A, EHR_A2, Gateway, TOKEN, gateway, text};
+use super::{DOMAIN_A, EHR_A, EHR_A2, Gateway, feed_credentials, gateway, text};
 use crate::support::send_as_is;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -303,7 +303,7 @@ async fn a_merge_the_registry_sends_drops_the_merged_bindings() -> TestResult {
         gateway.bound()?,
         "an unauthenticated feed changes nothing"
     );
-    let applied = registry.send(&merge, Some(TOKEN)).await?;
+    let applied = registry.send(&merge, Some(&feed_credentials())).await?;
     assert_eq!(
         vec![StatusCode::OK],
         applied

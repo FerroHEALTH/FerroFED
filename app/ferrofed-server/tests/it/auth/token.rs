@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The bearer token itself (CP-17, inbound half; §13.1, N25): every failure
-//! of RFC 6750, RFC 7519, RFC 8725 and RFC 9068 is a `401` that reaches no
-//! node, and an admitted token never travels on (RFC 9700 §2.3).
+//! of RFC 6750, RFC 7519, RFC 8725 and RFC 9068 is the one `401
+//! invalid_token` that names no check (RFC 9068 §4, RFC 6750 §3.1) and
+//! reaches no node, and an admitted token never travels on (RFC 9700 §2.3).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
@@ -35,7 +36,8 @@ async fn a_query_without_a_token_is_401_and_reaches_no_node() -> TestResult {
     assert_refused(&gateway, query()?, Refusal::Missing).await
 }
 
-/// CP-17, inbound half: a credential in another scheme is no bearer token.
+/// CP-17, inbound half: a credential in a scheme the gate does not admit is
+/// no credential, a `401` whose challenge names no error (RFC 6750 §3.1).
 // conformance: CP-17
 #[tokio::test]
 async fn a_basic_credential_is_401() -> TestResult {
@@ -45,14 +47,14 @@ async fn a_basic_credential_is_401() -> TestResult {
         header::AUTHORIZATION,
         "Basic c3ludGhldGljOnN5bnRoZXRpYw==".parse()?,
     );
-    assert_refused(&gateway, request, Refusal::Malformed).await
+    assert_refused(&gateway, request, Refusal::Missing).await
 }
 
 /// CP-17, inbound half: two `Authorization` fields are refused, never one of
-/// them chosen.
+/// them chosen, as a malformed request (RFC 6750 §3.1, `invalid_request`).
 // conformance: CP-17
 #[tokio::test]
-async fn two_authorization_fields_are_401() -> TestResult {
+async fn two_authorization_fields_are_400() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
     let mut request = query()?;
     for _ in 0..2 {
@@ -73,7 +75,7 @@ async fn an_expired_token_is_401() -> TestResult {
     expired.exp = now() - 3_600;
     expired.iat = now() - 7_200;
     let request = bearing(query()?, &minted(&expired)?)?;
-    assert_refused(&gateway, request, Refusal::Expired).await
+    assert_refused(&gateway, request, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token that expired inside the configured clock
@@ -97,7 +99,7 @@ async fn a_token_not_yet_valid_is_401() -> TestResult {
     let mut early = claims();
     early.nbf = Some(now() + 3_600);
     let request = bearing(query()?, &minted(&early)?)?;
-    assert_refused(&gateway, request, Refusal::NotYetValid).await
+    assert_refused(&gateway, request, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token issued for another audience is a `401`
@@ -109,7 +111,7 @@ async fn a_token_for_another_audience_is_401() -> TestResult {
     let mut elsewhere = claims();
     elsewhere.aud = String::from("urn:example:another-resource-server");
     let request = bearing(query()?, &minted(&elsewhere)?)?;
-    assert_refused(&gateway, request, Refusal::Audience).await
+    assert_refused(&gateway, request, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token from an issuer not on the trust list is a
@@ -123,7 +125,7 @@ async fn a_token_from_an_untrusted_issuer_is_401() -> TestResult {
         stranger.name(),
         AUDIENCE,
     ))?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Issuer).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token naming the trusted issuer and its key, but
@@ -134,7 +136,7 @@ async fn a_token_signed_by_another_key_under_a_trusted_name_is_401() -> TestResu
     let gateway = Gateway::trusting_the_test_issuer().await?;
     let impostor = Issuer::new(ISSUER)?;
     let token = impostor.mint(&claims())?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Signature).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token naming a key its issuer does not publish is
@@ -146,7 +148,7 @@ async fn a_token_naming_an_unpublished_key_is_401() -> TestResult {
     let mut header = support::issuer().header();
     header.kid = Some(String::from("k9"));
     let token = support::issuer().mint_with(&header, &claims())?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Key).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: an HMAC-signed token is a `401`, never verified
@@ -163,7 +165,7 @@ async fn an_hmac_token_is_401() -> TestResult {
         &claims(),
         &EncodingKey::from_secret(support::issuer().jwks_json()?.as_bytes()),
     )?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Algorithm).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: an unsigned token, `alg` `none`, is a `401` (RFC
@@ -176,7 +178,7 @@ async fn an_unsigned_token_is_401() -> TestResult {
     let payload = signed.split('.').nth(1).ok_or("a JWS has a payload")?;
     // The base64url of {"alg":"none","typ":"at+jwt"}.
     let token = format!("eyJhbGciOiJub25lIiwidHlwIjoiYXQrand0In0.{payload}.");
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Malformed).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token not typed `at+jwt` is a `401` (RFC 9068 §4).
@@ -187,7 +189,7 @@ async fn a_token_not_typed_as_an_access_token_is_401() -> TestResult {
     let mut header = support::issuer().header();
     header.typ = Some(String::from("JWT"));
     let token = support::issuer().mint_with(&header, &claims())?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Type).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: a token without a claim RFC 9068 §2.2 requires is a
@@ -202,7 +204,32 @@ async fn a_token_without_its_client_id_is_401() -> TestResult {
         now + 600
     );
     let token = support::issuer().sign(&support::issuer().header(), &payload)?;
-    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Malformed).await
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
+}
+
+/// CP-17, inbound half: a token whose `sub` is blank names no caller, and is
+/// a `401` (RFC 9068 §2.2, RFC 7519 §4.1.2).
+// conformance: CP-17
+#[tokio::test]
+async fn a_token_with_a_blank_sub_is_401() -> TestResult {
+    let gateway = Gateway::trusting_the_test_issuer().await?;
+    let mut blank = claims();
+    blank.sub = String::from("  ");
+    assert_refused(
+        &gateway,
+        bearing(query()?, &minted(&blank)?)?,
+        Refusal::Invalid,
+    )
+    .await
+}
+
+/// CP-17, inbound half: a bearer value outside the `b64token` syntax is a
+/// token that does not hold, a `401` (RFC 6750 §2.1, §3.1).
+// conformance: CP-17
+#[tokio::test]
+async fn a_bearer_value_outside_b64token_is_401() -> TestResult {
+    let gateway = Gateway::trusting_the_test_issuer().await?;
+    assert_refused(&gateway, bearing(query()?, "a,b")?, Refusal::Invalid).await
 }
 
 /// CP-17, inbound half: the caller's own token reaches no node of a

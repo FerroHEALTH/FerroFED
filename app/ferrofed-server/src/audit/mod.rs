@@ -459,7 +459,7 @@ fn gateway(settings: &Settings) -> url::Url {
         .server
         .auth
         .audience
-        .as_deref()
+        .first()
         // NOTE: RFC 7519 §4.1.3: an audience is any string, so one that is no URL is
         // legitimately not one, and the listen address names the gateway instead.
         .and_then(|audience| url::Url::parse(audience).ok())

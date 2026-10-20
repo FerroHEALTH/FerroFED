@@ -133,15 +133,18 @@ current key
 
 **Confirm.** Each refusal logs `a request was refused at client
 authentication` at `WARN` under `ferrofed::security`, with `event`
-`caller-refused`, the `reason` and the `status`, and counts
+`caller-refused`, the `reason`, the `check` and the `status`, and counts
 `ferrofed_security_events_total{event="caller-refused", reason="…"}`. The
-`WWW-Authenticate` challenge of the answer names the same reason.
+answer's challenge says only `invalid_token` for every token that does not
+verify (RFC 6750 §3.1), so read the `check` in the log.
 
-**Fix.** By `reason`: `issuer` is an `iss` no `[[auth.issuer]]` lists;
-`audience` is an `aud` other than `auth.audience`; `expired` and
-`not-yet-valid` past `auth.clock_skew_s` point at a clock out of step;
-`key` is a `kid` the issuer does not publish; `algorithm`, `type` and
-`malformed` are tokens that are no RFC 9068 access tokens; `scope` and
+**Fix.** By `check`: `issuer not trusted` is an `iss` no `[[auth.issuer]]`
+lists; `audience` is an `aud` other than `auth.audience`; `expired` and
+`not yet valid` past the issuer's clock skew point at a clock out of step;
+`no key of the set` is a `kid` the issuer does not publish; `algorithm not
+accepted`, `typ names another kind` and `a required claim is missing` are
+tokens that are no RFC 9068 access tokens; `inactive` is a token the
+introspection endpoint no longer knows. By `reason`: `scope` and
 `purpose-of-use` are grants the token lacks
 ([Client authentication](authentication.md#configuration)).
 
@@ -150,17 +153,18 @@ authentication` at `WARN` under `ferrofed::security`, with `event`
 **Symptom.** Every request of one issuer's callers answers `503
 authentication-unavailable`.
 
-**Cause.** The gateway cannot fetch or read that issuer's key set, or its
-introspection endpoint does not answer.
+**Cause.** The gateway cannot fetch or read that issuer's metadata or key
+set, or its introspection endpoint does not answer.
 
-**Confirm.** `an issuer's key set could not be had, so its tokens cannot be
-verified` (`event` `key-set-unavailable`) or `an issuer's introspection
+**Confirm.** `an issuer's metadata or key set could not be read, so its
+tokens cannot be verified` (`event` `key-set-unavailable`) or `an issuer's introspection
 endpoint did not answer, so its tokens cannot be verified` (`event`
 `introspection-unavailable`) at `WARN` under `ferrofed::security`, naming
 the `issuer` and the fetch `error`.
 
-**Fix.** Make `jwks_uri` or `introspection_endpoint` reachable from the
-gateway, or raise `auth.fetch_timeout_ms`
+**Fix.** Make the issuer's metadata, its key set or its
+`introspection_endpoint` reachable from the gateway, or raise
+`auth.timeout_ms`
 ([The key set](authentication.md#the-key-set)).
 
 ### Requests are refused `503 overloaded` or `429 rate-limited`
@@ -275,15 +279,14 @@ one member by naming it in `openEHR-federation-endpoint`
 its rows should be.
 
 **Cause.** The gateway refused the operator's token. A `403
-scope-insufficient` is a token without the issuer's `operator_scope`, which
+scope-insufficient` is a token without `auth.product_scope`, which
 the `/integrity` and `/stored-queries` views need; a `401` is a token that
 does not verify or a session that ended.
 
 **Confirm.** The gateway logs the refusal as `caller-refused` under
 `ferrofed::security`, with `reason` `scope` or the `401`'s reason.
 
-**Fix.** Set `operator_scope` on the operator's `[[auth.issuer]]` and have the
-provider grant it ([The operator surface](authentication.md#the-operator-surface)).
+**Fix.** Set `auth.product_scope` and have the operator's provider grant it ([The operator surface](authentication.md#the-operator-surface)).
 On a `401`, sign in again. An `/integrity` view that lists no incident is
 a gateway that has raised none since it started
 ([The operator console](operator-console.md#what-is-built)), and no view is
@@ -314,16 +317,17 @@ gateway was asked to stop; size the grace period
 **Symptom.** Prometheus reports the scrape target down with `401`, or the
 stored-query distribution answers `401` or `403`.
 
-**Cause.** `metrics.scrape_token` is set and the scrape does not carry it, or
-a write action's caller has no token that verifies or no `operator_scope`.
+**Cause.** `metrics.scrape_users` is set and the scrape does not carry the
+Basic credentials of one of them, or a write action's caller has no token
+that verifies or no `auth.product_scope`.
 
 **Confirm.** `a request to the admin listener was refused at its
 authentication` at `WARN` under `ferrofed::security`, with `event`
-`scrape-refused` and `reason` `missing` or `scrape-token`, or `event`
+`scrape-refused` and `reason` `missing`, `invalid` or `unlisted`, or `event`
 `admin-write-refused` and the client-authentication `reason`.
 
-**Fix.** Give the scrape job the token in `authorization`, or give the
-operator a token carrying the issuer's `operator_scope`
+**Fix.** Give the scrape job a scrape user's credentials in `basic_auth`, or
+give the operator a token carrying `auth.product_scope`
 ([Who the admin listener serves](metrics.md#who-the-admin-listener-serves)).
 
 ### Every request under `{base}/v1/` answers `501`
@@ -378,9 +382,9 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `… is not https, and … would travel over it in cleartext` | A credential or patient identifier would go over plain `http` outside the development profile; use `https` ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). |
 | `… is plain http to a host that is not loopback` | An issuer's key set or introspection endpoint is plain `http`; use `https` ([Client authentication](authentication.md#configuration)). |
 | `auth.…` with a fault, or `the gateway federates, and [auth] names no [[auth.issuer]]` | Correct `[auth]`; a gateway with a registry lists at least one issuer ([Client authentication](authentication.md#configuration)). |
-| `… is not an endpoint id`, `… names …, which is no endpoint of the registry` | A `[credentials]`, `[auth.issuer.patient]`, `federation.demographic_endpoint` or `access_log.retention.origins` key names an endpoint the registry document does not declare ([Onward credentials](onward-credentials.md)). |
-| `… names more than one credentials scheme`, `… names no credentials`, `… takes a bearer token or basic credentials, not …`, `… takes a bearer token, basic credentials or an oauth2 client-credentials grant, not …` | One credentials section names exactly one scheme its service takes ([Onward credentials](onward-credentials.md)). |
-| `… cannot be sent in the Authorization header`, `… cannot be sent: it holds …` | A bearer token outside the RFC 6750 `b64token` characters, or a basic user or password with a character RFC 7617 forbids ([Running it](configuration.md#running-it)). |
+| `… is not an endpoint id`, `… names …, which is no endpoint of the registry` | A `[credentials]`, `[trust.issuer.patient]`, `federation.demographic_endpoint` or `access_log.retention.origins` key names an endpoint the registry document does not declare ([Onward credentials](onward-credentials.md)). |
+| `… names more than one credentials scheme`, `… names no credentials`, `… takes basic credentials, not …`, `… takes basic credentials or the oauth client credentials grant, not …` | One credentials section names exactly one scheme its service takes ([Onward credentials](onward-credentials.md)). |
+| `… cannot be sent in the Authorization header`, `… cannot be sent: it holds …` | A basic user or password with a character RFC 7617 forbids ([Running it](configuration.md#running-it)). |
 | `… is not a usable OAuth 2.0 client-credentials grant`, `… is not a SMART on openEHR system scope`, `… needs [signing]`, `… names a grant it cannot use`, the FAPI 2.0 and assertion audience faults | Correct the grant ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)). |
 | `… is not a space-delimited list of RFC 6749 §3.3 scope-tokens` | An identity service's `scope` ([A PIX Manager behind OAuth 2.0](identity.md#a-pix-manager-behind-oauth-20)). |
 | `… is not a usable signing key`, `… holds a key that signs …`, `signing.assertion_lifetime_s is …`, `signing.rotation_overlap_s … must be at least …`, `set [signing] when a registry is configured` | Correct `[signing]` ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)). |
@@ -467,8 +471,9 @@ which every row has.
 | `stored-query-reserved` | 409 | A `PUT` names the reserved namespace `eu.ferrofed.eehrxf`. | The request line alone. | The client uses its own namespace ([The gateway's own queries](../integrate/stored-queries.md#the-gateways-own-queries)). |
 | `consent-denied` | 403 | The consent pre-filter denied every member that might hold the subject. | `ferrofed_consent_prefilter_requests_total{outcome="denied"}`. | The patient's consent decides; nothing to fix at the gateway ([Consent](consent.md)). |
 | `unauthenticated` | 401 | No token the gateway accepts. | `caller-refused` under `ferrofed::security`, with the `reason`. | By reason ([Every caller is refused `401`](#every-caller-is-refused-401)). |
+| `credential-malformed` | 400 | Two `Authorization` fields, or one that is no credential. | `caller-refused`, `reason` `malformed`. | The client sends one well-formed `Authorization` field ([Client authentication](authentication.md)). |
 | `scope-insufficient` | 403 | No granted scope covers the operation, or the client is no demographic client. | `caller-refused`, `reason` `scope` or `demographic-client`. | Grant the scope, or list the client in `demographic_clients` ([Scopes per route](authentication.md#scopes-per-route)). |
-| `purpose-of-use-required` | 403 | The token declares no purpose of use. | `caller-refused`, `reason` `purpose-of-use`. | The issuer adds it, or set `auth.purpose_of_use.required` ([Purpose of use](authentication.md#purpose-of-use)). |
+| `purpose-of-use-required` | 403 | The token declares no purpose of use. | `caller-refused`, `reason` `purpose-of-use`. | The issuer adds it, or set `trust.purpose_of_use.required` ([Purpose of use](authentication.md#purpose-of-use)). |
 | `authentication-unavailable` | 503 | The issuer's key set or introspection endpoint cannot be had. | `key-set-unavailable` or `introspection-unavailable` under `ferrofed::security`. | Make the issuer reachable ([Every caller is refused `503`](#every-caller-is-refused-503-authentication-unavailable)). |
 | `operation-refused` | 403 | The request addresses the ADMIN API under `{base}/v1/admin/`. | `caller-refused`, `reason` `operation`. | None: the gateway admits no caller there ([Scopes per route](authentication.md#scopes-per-route)). |
 | `localization-unavailable` | 424 | The localizer did not answer under `on_failure = "closed"`, or its XCPD exchange could not be audited. | `the localizer did not answer` at `WARN` or `the localization exchange could not be audited` at `ERROR` under `ferrofed_server::facade::localize`; `ferrofed_localizer_requests_total`. | Bring the localizer or its audit repository back ([Node selection](registry.md#node-selection)). |
@@ -480,7 +485,7 @@ which every row has.
 | `rate-limited` | 429 | One caller sent more than `[server.caller_rate]` admits. | `limit` `caller-rate` under `ferrofed_server::overload`. | Raise the rate, or the caller slows down ([The per-caller rate](overload.md#the-per-caller-rate)). |
 | `access-unrecorded` | 503 | The record of an access could not be stored. | `the access could not be recorded, so its answer is withheld` at `ERROR` under `ferrofed_server::access`. | Free the spool ([Requests are refused `503 access-unrecorded`](#requests-are-refused-503-access-unrecorded)). |
 | `natural-person-required` | 401 | A patient-data request's token names no natural person. | `caller-refused`, `reason` `natural-person`. | Use a user token, or declare `client_tokens_act_for_professional` ([Professionals and assurance](authentication.md#professionals-and-assurance)). |
-| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[auth.issuer.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
+| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[trust.issuer.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
 | `contact-point-attributes-required` | 403 | A national contact point's token lacks an Annex attribute. | `caller-refused`, `reason` `contact-point-attributes`. | The contact point sends every attribute, or correct the claim names ([National contact points](authentication.md#national-contact-points)). |
 | `correlation-invalid` | 400 | A national contact point's correlation header is malformed. | `caller-refused`, `reason` `correlation`. | The contact point sends one header of 1 to 128 visible ASCII bytes ([National contact points](authentication.md#national-contact-points)). |
 | `configuration-invalid` | 422 | A configuration revision on the admin listener is refused as `config check` refuses a file, sets the bootstrap core, holds a secret inline, or the reload refused it. | The message names the key, as `ferrofed config check` would. | Correct the revision and save it again ([Configuration revisions](configuration-revisions.md)). |

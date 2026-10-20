@@ -270,6 +270,14 @@ console_error_panic_hook = "0.1.7"
 # moves to a new version deliberately. Verified against crates.io on
 # 2026-10-19.
 ferrohealth-ui = "=0.2.0"
+# The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
+# every caller's token checked against its issuer's metadata and key set,
+# the SMART on openEHR grant rules over the grammar it re-exports, the Basic
+# users of [[auth.basic.users]], the refusal statuses and challenges, and the
+# client credentials grant of the plain onward and service credentials. It
+# checks tokens and never issues them. Pinned exactly, so every product moves
+# to a new version deliberately. Verified against crates.io on 2026-10-20.
+ferrohealth-smart = { version = "=0.3.1", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-viewer/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

@@ -281,7 +281,7 @@ async fn a_configuration_config_check_refuses_is_refused_with_its_error() -> Tes
     assert_eq!("configuration-invalid", refused.code);
     let file = format!(
         "profile = \"development\"\n{}{toml}",
-        crate::support::auth_toml()?
+        crate::support::auth_toml()
     );
     let check = Config::from_sources(Some(&file), &std::collections::BTreeMap::new())?
         .resolve()
@@ -307,7 +307,8 @@ async fn a_revision_never_sets_the_bootstrap_core() -> TestResult {
         "profile = \"production\"\n",
         "[server]\nlisten = \"0.0.0.0:8080\"\n",
         "[metrics]\nlisten = \"0.0.0.0:9100\"\n",
-        "[auth]\naudience = \"urn:example:other\"\n",
+        "[auth]\naudience = [\"urn:example:other\"]\n",
+        "[trust]\nmode = \"token\"\n",
         "[config]\nui = \"off\"\n",
     ] {
         let toml = format!("{core}{}", rest(&gateway.one(), ""));

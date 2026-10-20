@@ -57,9 +57,8 @@ kept per verified caller
 Toward the nodes, the gateway authenticates with credentials you configure
 per endpoint ([Configuration](configuration.md#the-file)):
 
-- an RFC 6750 bearer token, or an RFC 7617 user and password, each inline or
-  read from a file, sent on every request to that endpoint and to nothing
-  else;
+- an RFC 7617 user and password, the password inline or read from a file,
+  sent on every request to that endpoint and to nothing else;
 - OAuth 2.0 client credentials with an RFC 7523 signed JWT client assertion,
   the default mechanism of §13.1 (N25): the gateway obtains a token at the
   node's token endpoint and sends that
@@ -79,7 +78,7 @@ without client authentication, and declares its location as
 ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
 Keep that route reachable from every node's authorization server; client
 authentication guards the rest of the surface and never this route. A PIX Manager takes a
-bearer token or a user and password, or none where the transport
+user and password, the OAuth 2.0 client credentials grant, or none where the transport
 authenticates the gateway ([Identity resolution](identity.md)).
 
 Every request to a node also carries the verified caller in an

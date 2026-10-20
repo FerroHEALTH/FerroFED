@@ -238,8 +238,9 @@ impl PatientIdentityRegistry {
     }
 
     /// Sends the ITI-93 message `body` to the channel endpoint of every
-    /// subscription, with `token` as its bearer token when given, and
-    /// returns each answer's status and body, in subscription order.
+    /// subscription, with `authorization` as its `Authorization` field when
+    /// given, and returns each answer's status and body, in subscription
+    /// order.
     ///
     /// # Errors
     ///
@@ -247,7 +248,7 @@ impl PatientIdentityRegistry {
     pub async fn send(
         &self,
         body: &str,
-        token: Option<&str>,
+        authorization: Option<&str>,
     ) -> Result<Vec<(StatusCode, String)>, RegistryError> {
         let endpoints: Vec<String> = self
             .subscriptions()
@@ -261,8 +262,8 @@ impl PatientIdentityRegistry {
                 .post(endpoint)
                 .header(CONTENT_TYPE, FHIR_JSON)
                 .body(body.to_owned());
-            if let Some(token) = token {
-                request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+            if let Some(authorization) = authorization {
+                request = request.header(AUTHORIZATION, authorization);
             }
             let response = request.send().await.map_err(RegistryError::Send)?;
             let status = response.status();

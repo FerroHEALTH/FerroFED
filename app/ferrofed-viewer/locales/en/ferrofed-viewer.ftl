@@ -316,7 +316,6 @@ user-name = User name
 tls-client-certificate-key-pem = TLS client certificate and key (PEM)
 client-secret = Client secret
 password = Password
-bearer-token = Bearer token
 nuts = Nuts
 fapi-2-0 = FAPI 2.0
 oauth-2-0 = OAuth 2.0
