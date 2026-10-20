@@ -14,14 +14,17 @@
 //! reaches the answer (§5.4.1, N33). The HTTP client's reason for an
 //! `offline` or `time-out` node is held to the same rule.
 
+use std::sync::Arc;
+
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_smart::client::TokenError as SmartTokenError;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{CredentialsError, ErrorBody};
 
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
-use crate::onward::token::TokenError;
+use crate::onward::token::{ErrorCode, TokenError};
 use crate::outbound_id::OutboundId;
 
 /// The longest excerpt of a node's own message an `error` carries, in
@@ -99,7 +102,18 @@ pub fn unauthenticated(
     );
     let code = cause
         .and_then(<dyn std::error::Error>::downcast_ref::<TokenError>)
-        .and_then(TokenError::code);
+        .and_then(TokenError::code)
+        .or_else(|| {
+            cause
+                .and_then(<dyn std::error::Error>::downcast_ref::<Arc<SmartTokenError>>)
+                .and_then(|error| match error.as_ref() {
+                    SmartTokenError::Refused {
+                        error: Some(refused),
+                        ..
+                    } => ErrorCode::registered(&refused.error),
+                    _ => None,
+                })
+        });
     match code {
         Some(code) => ErrorDetail::Text(format!(
             "{UNAUTHENTICATED}: the token endpoint refused with {}",

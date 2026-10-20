@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[auth.issuer.requester]`, the claims that name who asks for the data.
+//! `[trust.issuer.requester]`, the claims that name who asks for the data.
 
 use serde::Deserialize;
 
 use crate::config::error::Error;
 
-/// `[auth.issuer.requester]`: the names of the token claims that carry the
+/// `[trust.issuer.requester]`: the names of the token claims that carry the
 /// professional's UZI number and role and the organisation's URA and type,
 /// each a string claim.
 ///

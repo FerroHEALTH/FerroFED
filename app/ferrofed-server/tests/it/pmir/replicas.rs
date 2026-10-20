@@ -24,7 +24,7 @@ use http::StatusCode;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
-use super::{DOMAIN_A, EHR_A, EHR_A2, Gateway, TOKEN, gateway, text};
+use super::{DOMAIN_A, EHR_A, EHR_A2, Gateway, feed_credentials, gateway, text};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -102,7 +102,7 @@ async fn a_drain_keeps_the_subscription_another_replica_relies_on() -> TestResul
     let server = second.serve(listener);
     second.gateway.bind("caller-1", &[EHR_A, EHR_A2])?;
     let merge = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
-    let applied = registry.send(&merge, Some(TOKEN)).await?;
+    let applied = registry.send(&merge, Some(&feed_credentials())).await?;
     assert_eq!(vec![StatusCode::OK], statuses(&applied));
     assert_eq!(
         1,
@@ -178,7 +178,7 @@ async fn replicas_with_their_own_callback_each_apply_every_change() -> TestResul
     second.gateway.bind("caller-2", &[EHR_A, EHR_A2])?;
 
     let merge = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
-    let applied = registry.send(&merge, Some(TOKEN)).await?;
+    let applied = registry.send(&merge, Some(&feed_credentials())).await?;
     assert_eq!(vec![StatusCode::OK, StatusCode::OK], statuses(&applied));
     assert_eq!(1, first.gateway.bound()?, "the first replica applied it");
     assert_eq!(1, second.gateway.bound()?, "the second replica applied it");

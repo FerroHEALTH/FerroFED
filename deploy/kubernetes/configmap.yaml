@@ -5,18 +5,20 @@
 # registry document, mounted read-only at /etc/ferrofed by statefulset.yaml.
 # It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
 # which statefulset.yaml mounts at /run/secrets/ferrofed, named here by a
-# `_file` key: the signing key and the metrics scrape token below, and for an
-# endpoint that needs credentials, the bearer_token_file or password_file of
-# its [credentials."<endpoint id>"] section. Make the Secret with, for
-# example:
+# `_file` key: the signing key and the scrape user's password hash below,
+# and for an endpoint that needs credentials, the password_file or
+# oauth.client_secret_file of its [credentials."<endpoint id>"] section. Make
+# the Secret with, for example:
 #
 #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
 #     -out signing-key.pem
-#   openssl rand -hex 32 > metrics-scrape-token
+#   openssl rand -hex 32 > metrics-scrape-password
+#   argon2 "$(openssl rand -hex 16)" -id -e < metrics-scrape-password \
+#     | tr -d '\n' > metrics-scrape-hash
 #   kubectl create secret generic ferrofed-secrets \
-#     --from-file=signing-key.pem --from-file=metrics-scrape-token
+#     --from-file=signing-key.pem --from-file=metrics-scrape-hash
 #
-# Give your Prometheus the same scrape token in a Secret of its own.
+# Give your Prometheus the scrape password in a Secret of its own.
 #
 # The value itself never goes in a ConfigMap.
 # scripts/checks/kubernetes-example.sh runs `ferrofed config check` over this
@@ -58,17 +60,17 @@ data:
     burst = 20
 
     # The admin listener: GET /metrics for the scraper, which presents the
-    # scrape token as its bearer token, and the write actions, such as the
-    # stored-query distribution, for a caller whose access token carries the
-    # operator scope of an [[auth.issuer]] below. Off loopback the gateway
-    # refuses to start unless the scrape token or a client CA authenticates
-    # the scrape. networkpolicy.yaml admits the scraper alone to this port as
-    # well.
+    # HTTP Basic credentials of a scrape user of [[auth.basic.users]] below,
+    # and the write actions, such as the stored-query distribution, for a
+    # caller whose access token carries auth.product_scope. Off loopback the
+    # gateway refuses to start unless a scrape user or a client CA
+    # authenticates the scrape. networkpolicy.yaml admits the scraper alone
+    # to this port as well.
     # https://ferrofed.eu/docs/operate/metrics.html
     [metrics]
     listen = "0.0.0.0:9464"
     allow_remote = true
-    scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"
+    scrape_users = ["prometheus"]
 
     [telemetry]
     format = "json"
@@ -90,26 +92,30 @@ data:
     max_node_answer_bytes = 16777216
 
     # Client authentication: every caller presents an RFC 9068 access
-    # token from an issuer listed here. A gateway that federates refuses to
-    # start without an issuer.
+    # token from an issuer listed here, which ferrohealth-smart checks. A
+    # gateway that federates refuses to start without an issuer.
     # https://ferrofed.eu/docs/operate/authentication.html
     [auth]
-    # EDIT: the audience your issuers name this gateway by in `aud`.
-    audience = "https://gateway.example.org/fed"
-
-    # EDIT: an authorization server your callers get their tokens from,
-    # verified by its JWK Set. For RFC 7662 introspection instead, set
-    # introspection_endpoint, client_id and client_secret_file, the secret
-    # a key of the ferrofed-secrets Secret:
-    # client_secret_file = "/run/secrets/ferrofed/introspection-secret"
-    [[auth.issuer]]
+    # EDIT: an authorization server your callers get their tokens from; the
+    # gateway reads its RFC 8414 metadata and the key set it names.
     issuer = "https://idp.example.org"
-    jwks_uri = "https://idp.example.org/jwks"
-    # EDIT: the scope value that admits an operator to {base}/operator/ and
-    # to the admin listener's write actions; unset, no caller of this issuer
-    # reaches either.
-    # operator_scope = "ferrofed:operator"
-    #
+    # EDIT: the audience your issuers name this gateway by in `aud`.
+    audience = ["https://gateway.example.org/fed"]
+    # EDIT: the scope that admits an operator to {base}/operator/ and to the
+    # admin listener's write actions; unset, no caller reaches either.
+    # product_scope = "__ferrofed.operator"
+
+    # The scraper, as the admin listener authenticates it with HTTP Basic.
+    [[auth.basic.users]]
+    user = "prometheus"
+    password_hash_file = "/run/secrets/ferrofed/metrics-scrape-hash"
+
+    # What the issuer's tokens are honoured for beyond their user/ and
+    # system/ grants. For RFC 7662 introspection in place of a key set, give
+    # an entry introspection_endpoint, client_id and client_secret_file, the
+    # secret a key of the ferrofed-secrets Secret.
+    [[trust.issuer]]
+    issuer = "https://idp.example.org"
     # Whether its client tokens, which name no natural person, act for the
     # professional they name, and so reach patient data.
     # client_tokens_act_for_professional = false
@@ -121,7 +127,7 @@ data:
     # its tokens, and the least level patient data needs; without it, no
     # level is read or required, and config check notes it.
     # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-    # [auth.issuer.assurance]
+    # [trust.issuer.assurance]
     # claim = "acr"
     # minimum = "substantial"
     # substantial = ["urn:example:loa:substantial"]

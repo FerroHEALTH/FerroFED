@@ -27,7 +27,7 @@ const BOOK_PAGE: &str = concat!(
 const ROW: &str = "| `reason` |";
 
 /// The words after which the row lists the values.
-const LEAD: &str = "challenge names:";
+const LEAD: &str = "refused the caller:";
 
 /// The reason values the `reason` row lists, in backticks after [`LEAD`].
 fn documented() -> Result<Vec<String>, Box<dyn Error>> {

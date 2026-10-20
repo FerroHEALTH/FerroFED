@@ -38,7 +38,7 @@ only, and no value a patient is known by: no patient identifier, no
 ## Running the export
 
 Send the request to the [admin listener](metrics.md#who-the-admin-listener-serves)
-with an access token that carries the `operator_scope` of its issuer:
+with an access token that carries `auth.product_scope`:
 
 ```http
 POST /admin/identity-state/export

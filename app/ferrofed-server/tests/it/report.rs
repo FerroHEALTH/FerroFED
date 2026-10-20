@@ -26,7 +26,7 @@ use http::header;
 use tokio::net::TcpListener;
 
 use crate::run::binary;
-use crate::support::{OPERATOR_SCOPE, auth_toml, bearer, operator_bearer, signed};
+use crate::support::{auth_toml, bearer, operator_bearer, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -85,7 +85,7 @@ managing_organisation = "org-a"
 
 /// Returns the configuration of a gateway on `gateway` with its admin
 /// listener on `admin`, reading the registry `document`.
-fn configuration(gateway: &str, admin: &str, document: &Path) -> Result<String, Box<dyn Error>> {
+fn configuration(gateway: &str, admin: &str, document: &Path) -> String {
     let document = toml::Value::String(document.display().to_string());
     let [
         professional,
@@ -102,14 +102,14 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> Result<String, 
         "profile = \"development\"\n\n\
          [server]\nlisten = \"{gateway}\"\n\n\
          [telemetry]\notlp_endpoint = \"http://{user}:{password}@127.0.0.1:4317/{path}?key={query}#{fragment}\"\n\n\
-         [metrics]\nlisten = \"{admin}\"\nscrape_token = \"SENTINEL-SCRAPE-r705\"\n\n\
+         [metrics]\nlisten = \"{admin}\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\
          [credentials.\"node-a-pub\"]\nuser = \"{professional}\"\npassword = \"{professional_password}\"\n\n\
-         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}operator_scope = \"{OPERATOR_SCOPE}\"\n",
-        auth_toml()?
+         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}",
+        auth_toml()
     );
-    Ok(signed(&text))
+    signed(&text)
 }
 
 /// Reads every file of the archive at `path`, by its path below the root.
@@ -216,7 +216,7 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
     let file = dir.path().join("ferrofed.toml");
     std::fs::write(
         &file,
-        configuration(&gateway.to_string(), &admin.to_string(), &document)?,
+        configuration(&gateway.to_string(), &admin.to_string(), &document),
     )?;
     let (config, tree) = Config::load_with_tree(Some(&file))?;
     let settings = config.resolve()?;
@@ -306,7 +306,7 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     let toml = format!(
         "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:9\"\n\n\
          [federation]\ndefault_namespace = \"urn:oid:2.999.4242\"\n\n\
-         [credentials.\"node-a-pub\"]\nbearer_token = \"SENTINEL-TOKEN-r705\"\n\n\
+         [credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"SENTINEL-TOKEN-r705\"\n\n\
          [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{pixm}"
     );
     let output = tokio::task::spawn_blocking(move || {

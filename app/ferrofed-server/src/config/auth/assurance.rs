@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[auth.issuer.assurance]`, as written and as resolved.
+//! `[trust.issuer.assurance]`, as written and as resolved.
 //!
 //! The table says how an issuer's tokens state the assurance of their
 //! authentication (Regulation (EU) 2025/327 Annex II 3.1), in the levels of
@@ -15,7 +15,7 @@ use serde::Deserialize;
 use crate::config::auth::{AuthFault, fault};
 use crate::config::error::Error;
 
-/// `[auth.issuer.assurance]`: the claim that carries the authentication
+/// `[trust.issuer.assurance]`: the claim that carries the authentication
 /// assurance of a token, the values of that claim at each level, and the
 /// least level a patient-data request needs.
 ///

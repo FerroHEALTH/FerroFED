@@ -25,7 +25,7 @@
 #      audit spool left where the example puts it, since config check writes
 #      nothing;
 #   7. runs it again without the [signing] table, and again without the
-#      [metrics] scrape token while the admin listener is off loopback, each
+#      [metrics] scrape user while the admin listener is off loopback, each
 #      of which it must refuse by name; and
 #   8. checks that a configuration with a registry sends its access records
 #      to an Audit Record Repository, never to the log target, which names
@@ -198,11 +198,17 @@ else
   echo "OK: networkpolicy.yaml opens the metrics port to the scraper alone"
 fi
 
-# A synthetic value for every secret file the configuration names, and a
+# A synthetic value for every secret file the configuration names, the
+# Argon2id PHC string of a synthetic password for each password hash, and a
 # synthetic ES384 key for each signing key, which is read as one.
+# shellcheck disable=SC2016 # a PHC string, whose dollars are literal
+readonly SYNTHETIC_HASH='$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA'
 while IFS= read -r secret; do
   printf 'synthetic-%s\n' "$secret" > "$work/secrets/$secret"
 done < <(sed -nE 's|^[a-z_]+_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\1|p' "$work/ferrofed.toml")
+while IFS= read -r hash; do
+  printf '%s\n' "$SYNTHETIC_HASH" > "$work/secrets/$hash"
+done < <(sed -nE 's|^password_hash_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\1|p' "$work/ferrofed.toml")
 while IFS= read -r key; do
   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
     -out "$work/secrets/$key" 2> /dev/null ||
@@ -241,20 +247,20 @@ else
 fi
 
 # The admin listener is off loopback, so the example without its scrape
-# token is refused, naming the key that authenticates the scrape.
+# user is refused, naming the key that authenticates the scrape.
 awk '
   /^\[/ { inside = ($0 == "[metrics]") }
-  inside && $1 == "scrape_token_file" { next }
+  inside && $1 == "scrape_users" { next }
   { print }
 ' "$work/ferrofed.toml" > "$work/unscraped.toml"
 if cmp -s "$work/ferrofed.toml" "$work/unscraped.toml"; then
-  bad "configmap.yaml sets no [metrics] scrape_token_file for its admin listener off loopback"
+  bad "configmap.yaml sets no [metrics] scrape_users for its admin listener off loopback"
 elif out="$(check "$work/unscraped.toml" 2>&1)"; then
-  bad "ferrofed config check accepts the Kubernetes example without metrics.scrape_token_file"
-elif ! grep -q 'metrics.scrape_token_file' <<< "$out"; then
-  bad "ferrofed config check refuses the example without its scrape token without naming it: $out"
+  bad "ferrofed config check accepts the Kubernetes example without metrics.scrape_users"
+elif ! grep -q 'metrics.scrape_users' <<< "$out"; then
+  bad "ferrofed config check refuses the example without its scrape user without naming it: $out"
 else
-  echo "OK: the example without its scrape token is refused by name"
+  echo "OK: the example without its scrape user is refused by name"
 fi
 
 echo "== the access log names the caller and the patient"

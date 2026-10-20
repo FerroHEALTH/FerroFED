@@ -46,7 +46,7 @@ pub enum BindingFault {
     /// the Generic Functions IG defines for no data user of the Localization
     /// Service.
     #[error(
-        "{key} is not a credential the NVI takes: nl_gf.nvi.credentials takes a bearer token, basic credentials or the nuts grant of GF-Authentication"
+        "{key} is not a credential the NVI takes: nl_gf.nvi.credentials takes basic credentials or the nuts grant of GF-Authentication"
     )]
     #[cfg(feature = "binding-nl")]
     NviGrant {
@@ -95,6 +95,13 @@ pub enum BindingFault {
     FeedPath {
         /// The key that carries the path.
         key: String,
+    },
+    /// `pmir.feed_users` names a user `[[auth.basic.users]]` does not write.
+    #[error("pmir.feed_users names {user:?}, which no [[auth.basic.users]] entry writes")]
+    #[cfg(feature = "binding-ihe")]
+    FeedUser {
+        /// The user named.
+        user: String,
     },
     /// The demographics step's budget and the localizer's do not end before
     /// the overall budget, of which each is a part, so the two could leave

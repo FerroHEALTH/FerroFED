@@ -7,7 +7,9 @@
 //!
 //! [`Issuer`] holds one or more signing keys, publishes their public halves
 //! as a JWK Set (RFC 7517 §5), serves that set over HTTP from a mock
-//! [`Server`], and signs whatever claims a test chooses. [`Claims`] starts
+//! [`Server`] beside its RFC 8414 metadata, which names the set as its
+//! `jwks_uri`, writes the set to a file, and signs whatever claims a test
+//! chooses. [`Claims`] starts
 //! from a token the gateway admits for every operation, so a test changes
 //! only the claim it is about. No specification governs the harness: our own
 //! design.
@@ -30,6 +32,9 @@ use crate::mock::Server;
 /// The path a served key set answers at.
 pub const JWKS_PATH: &str = "/jwks.json";
 
+/// The path a served issuer's metadata answers at (RFC 8414 §3).
+pub const METADATA_PATH: &str = "/.well-known/oauth-authorization-server";
+
 /// The scopes a default token grants: every family, every permission, every
 /// resource, in the `user/` compartment.
 pub const EVERY_SCOPE: &str = "user/aql-*.cruds user/composition-*.cruds user/template-*.cruds";
@@ -50,6 +55,9 @@ pub enum IssuerError {
     /// The claims could not be written as JSON.
     #[error("the claims could not be written")]
     Json(#[source] serde_json::Error),
+    /// The key set file could not be written.
+    #[error("the key set file could not be written")]
+    Io(#[source] std::io::Error),
 }
 
 /// One signing key of an issuer.
@@ -155,8 +163,22 @@ impl Issuer {
         serde_json::to_string(&self.jwks()).map_err(IssuerError::Json)
     }
 
-    /// Starts a mock server that answers `GET` [`JWKS_PATH`] with the key set
-    /// as it is now.
+    /// Writes the key set as it is now to `path`, for a resource server
+    /// that reads it from a file.
+    ///
+    /// # Errors
+    /// Returns [`IssuerError::Json`] when the set cannot be written, and
+    /// [`IssuerError::Io`] when the file cannot.
+    pub fn write_jwks(&self, path: &std::path::Path) -> Result<(), IssuerError> {
+        std::fs::write(path, self.jwks_json()?).map_err(IssuerError::Io)
+    }
+
+    /// Starts a mock server that answers `GET` [`METADATA_PATH`] with this
+    /// issuer's metadata and `GET` [`JWKS_PATH`] with the key set as it is
+    /// now.
+    ///
+    /// The metadata names this issuer, so a resource server reads it only
+    /// when the issuer is named for the server: [`Issuer::at`].
     ///
     /// # Errors
     /// Returns [`IssuerError::Json`] when the set cannot be written.
@@ -166,13 +188,27 @@ impl Issuer {
         Ok(server)
     }
 
-    /// Mounts the key set as it is now on `server`, ahead of any set mounted
-    /// before.
+    /// Mounts the metadata and the key set as it is now on `server`, ahead
+    /// of any mounted before.
     ///
     /// # Errors
     /// Returns [`IssuerError::Json`] when the set cannot be written.
     pub async fn publish(&self, server: &Server) -> Result<(), IssuerError> {
         server.reset().await;
+        let metadata = serde_json::json!({
+            "issuer": self.name,
+            "jwks_uri": format!("{}{JWKS_PATH}", server.uri()),
+            "token_endpoint": format!("{}/token", server.uri()),
+        });
+        Mock::given(method("GET"))
+            .and(path(METADATA_PATH))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "application/json")
+                    .set_body_string(metadata.to_string()),
+            )
+            .mount(server)
+            .await;
         Mock::given(method("GET"))
             .and(path(JWKS_PATH))
             .respond_with(
@@ -183,6 +219,19 @@ impl Issuer {
             .mount(server)
             .await;
         Ok(())
+    }
+
+    /// Returns an issuer with one ES256 key, `kid` `k1`, named for a mock
+    /// server it then serves its metadata and key set from, and that server.
+    ///
+    /// # Errors
+    /// Returns [`IssuerError`] when the key pair cannot be generated or the
+    /// set cannot be written.
+    pub async fn at() -> Result<(Self, Server), IssuerError> {
+        let server = Server::start().await;
+        let issuer = Self::new(server.uri())?;
+        issuer.publish(&server).await?;
+        Ok((issuer, server))
     }
 
     /// Returns the header the signing key writes: its algorithm, its `kid`,
@@ -268,7 +317,7 @@ pub struct Claims {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub act: Option<std::collections::BTreeMap<String, String>>,
     /// Any other string claim, by name: the claims a deployment maps in
-    /// `[auth.issuer.requester]`, for instance.
+    /// `[trust.issuer.requester]`, for instance.
     #[serde(flatten)]
     pub other: std::collections::BTreeMap<String, String>,
 }

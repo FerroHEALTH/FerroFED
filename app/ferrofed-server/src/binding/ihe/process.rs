@@ -11,9 +11,10 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use axum::Router;
 use axum::routing::post;
+use axum::{Extension, Router};
 
+use crate::auth::trust::Trust;
 use crate::binding::ihe::mcsd::registry::DirectoryRegistry;
 use crate::binding::ihe::pmir::IdentityFeed;
 use crate::binding::ihe::pmir::subscription;
@@ -74,12 +75,20 @@ impl Processes {
         indications
     }
 
-    /// Returns `surface` with the identity feed's route, when `[pmir]` is set.
-    pub(crate) fn routes(&self, surface: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
-        // NOTE: PMIR §2:3.93.5: the feed authenticates its Supplier with its own token,
-        // so its route sits outside the ITS-REST surface and its client authentication.
+    /// Returns `surface` with the identity feed's route, when `[pmir]` is set,
+    /// its Basic users verified by the gate `trust` holds.
+    pub(crate) fn routes(
+        &self,
+        surface: Router<Arc<AppState>>,
+        trust: &Arc<Trust>,
+    ) -> Router<Arc<AppState>> {
+        // NOTE: PMIR §2:3.93.5: the feed authenticates its Supplier as one of its own
+        // Basic users, so its route sits outside the ITS-REST surface's admission.
         match &self.identity_feed {
-            Some(feed) => surface.route(feed.path(), post(super::pmir::route::feed)),
+            Some(feed) => surface.route(
+                feed.path(),
+                post(super::pmir::route::feed).layer(Extension(Arc::clone(trust))),
+            ),
             None => surface,
         }
     }

@@ -94,15 +94,15 @@ fn a_credential_in_the_url_or_an_unsigned_assertion_grant_is_refused() -> TestRe
     );
     assert!(!format!("{error} {error:?}").contains("Qz7secret"));
     let error = refusal(&format!(
-        "profile = \"development\"\n{}\n[pdqm.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n",
+        "profile = \"development\"\n{}\n[pdqm.credentials.oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n",
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
         matches!(
             &error,
-            error::Error::Credentials(error::credentials::CredentialsFault::GrantWithoutSigning { section }) if section == "pdqm.credentials.oauth2"
+            error::Error::Smart { section, .. } if section == "pdqm.credentials.oauth"
         ),
-        "{error:?}"
+        "an assertion grant without its key is refused: {error:?}"
     );
     Ok(())
 }

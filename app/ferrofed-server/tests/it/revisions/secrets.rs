@@ -30,7 +30,7 @@ fn stored(gateway: &Gateway, needle: &str) -> Result<bool, std::io::Error> {
 async fn a_secret_written_inline_is_refused_and_never_echoed() -> TestResult {
     let gateway = Gateway::start("")?;
     for table in [
-        format!("\n[credentials.\"node-a-pub\"]\nbearer_token = \"{INLINE}\"\n"),
+        format!("\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{INLINE}\"\n"),
         format!("\n[credentials.\"node-a-pub\"]\nuser = \"u\"\npassword = \"{INLINE}\"\n"),
         format!("\n[telemetry]\notlp_endpoint = \"http://u:{INLINE}@127.0.0.1:4317\"\n"),
     ] {
@@ -55,11 +55,13 @@ async fn a_secret_held_by_reference_is_stored_as_the_reference_alone() -> TestRe
     let reference = toml::Value::String(secret.display().to_string());
     let toml = rest(
         &gateway.one(),
-        &format!("\n[credentials.\"node-a-pub\"]\nbearer_token_file = {reference}\n"),
+        &format!(
+            "\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword_file = {reference}\n"
+        ),
     );
     let (status, text) = gateway.save(Some(1), "a token by reference", &toml).await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
-    assert!(text.contains("bearer_token_file"), "{text}");
+    assert!(text.contains("password_file"), "{text}");
     assert!(!text.contains(IN_FILE), "{text}");
     let (status, text) = gateway
         .post("/admin/config/revisions/2/apply", None)

@@ -25,7 +25,7 @@ cd "$(dirname "$0")/../.."
 readonly DIR=docker/quickstart/issuer
 readonly KEY="$DIR/key.pem"
 readonly JWKS="$DIR/jwks.json"
-readonly ISSUER=ferrofed-quickstart-issuer
+readonly ISSUER=https://quickstart-issuer.ferrofed.invalid
 readonly AUDIENCE=ferrofed-quickstart
 # The HL7 code system's canonical URI, an identifier nothing fetches: http is its spelling.
 readonly ACT_REASON=http://terminology.hl7.org/CodeSystem/v3-ActReason

@@ -228,7 +228,7 @@ timeout_ms = 5000
 
 [nl_gf.nvi]
 url = "https://nvi.example.org/fhir"
-credentials = { bearer_token_file = "/run/secrets/nvi-token" }  # optional, or the Nuts grant
+credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }  # optional, or the Nuts grant
 client_identity_file = "/run/secrets/nvi-client.pem"            # optional, mutual TLS
 trust_roots_file = "/etc/ferrofed/nvi-roots.pem"                # optional
 namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
@@ -277,9 +277,9 @@ What a deployment must provide:
 - **TLS and credentials.** The `url` must be `https` outside
   `profile = "development"`; a plain `http` URL is refused at boot, naming
   its key, as is a URL that carries a user name or a password.
-  `credentials` takes a bearer token, basic credentials or the Nuts grant of
+  `credentials` takes basic credentials or the Nuts grant of
   GF-Authentication ([The NVI's Nuts grant](onward-credentials.md#the-nvis-nuts-grant)),
-  one of them; an `oauth2` or `fapi2` table is refused, naming its key, as
+  one of them; an `oauth`, `oauth2` or `fapi2` table is refused, naming its key, as
   the IG defines no such grant for the Localization Service. The IG asks a
   requester for authorization attributes (its organization, practitioner and
   role); the gateway sends only the credentials configured here.

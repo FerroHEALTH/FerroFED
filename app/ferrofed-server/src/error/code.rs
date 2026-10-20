@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 73] = [
+    pub const GATEWAY: [Self; 74] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -85,6 +85,7 @@ impl Code {
         Self::ConfirmationUnavailable,
         Self::ConfirmationPending,
         Self::SecretStoreUnavailable,
+        Self::CredentialMalformed,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -191,6 +192,7 @@ impl Code {
             Self::ConfirmationUnavailable => "confirmation-unavailable",
             Self::ConfirmationPending => "confirmation-pending",
             Self::SecretStoreUnavailable => "secret-store-unavailable",
+            Self::CredentialMalformed => "credential-malformed",
         }
     }
 
@@ -222,7 +224,8 @@ impl Code {
             | Self::DefinitionEndpointTargeted
             | Self::StoredQueryFanOutUnsupported
             | Self::SubjectSeveral
-            | Self::CorrelationInvalid => StatusCode::BAD_REQUEST,
+            | Self::CorrelationInvalid
+            | Self::CredentialMalformed => StatusCode::BAD_REQUEST,
             Self::NoDestination
             | Self::NotFound
             | Self::StoredQueryUnknown
@@ -461,6 +464,9 @@ impl Code {
             Self::SecretStoreUnavailable => {
                 "a secret value is sent and config.secrets_dir is unset, so the gateway writes no secret file; set the secret by a reference to a file"
             }
+            Self::CredentialMalformed => {
+                "the request carries two credentials, or a credential field that is no credential (RFC 6750 §3.1)"
+            }
         }
     }
 }
@@ -552,6 +558,7 @@ mod tests {
             Code::ConfirmationUnavailable => Some(70),
             Code::ConfirmationPending => Some(71),
             Code::SecretStoreUnavailable => Some(72),
+            Code::CredentialMalformed => Some(73),
         }
     }
 
@@ -698,6 +705,7 @@ mod tests {
             (Code::ConfirmationUnavailable, StatusCode::CONFLICT),
             (Code::ConfirmationPending, StatusCode::CONFLICT),
             (Code::SecretStoreUnavailable, StatusCode::CONFLICT),
+            (Code::CredentialMalformed, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

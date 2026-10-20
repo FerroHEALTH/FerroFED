@@ -60,7 +60,8 @@ pub(crate) fn resolve_node_credentials(
     credentials: &Credentials,
 ) -> Result<(Option<Scheme>, Option<TlsSettings>), Error> {
     if !credentials.names_tls() {
-        return scheme(section, credentials, None).map(|scheme| (Some(scheme), None));
+        let scheme = node_scope(section, scheme(section, credentials, None)?)?;
+        return Ok((Some(scheme), None));
     }
     let material = tls::resolve(
         section,
@@ -85,10 +86,31 @@ pub(crate) fn resolve_node_credentials(
         })
         .transpose()?;
     match scheme(section, credentials, thumbprint.as_ref()) {
-        Ok(scheme) => Ok((Some(scheme), Some(material))),
+        Ok(scheme) => Ok((Some(node_scope(section, scheme)?), Some(material))),
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) => Ok((None, Some(material))),
         Err(refused) => Err(refused),
     }
+}
+
+/// Returns `scheme`, a node's, once the scope of its `oauth` grant reads as
+/// resource scopes of the `system` compartment, the one a client credentials
+/// grant to the gateway names (SMART on openEHR, master08 §Resource Scopes).
+///
+/// # Errors
+///
+/// Returns [`CredentialsFault::Scope`] naming the scope's key.
+fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
+    if let Scheme::Oauth { written, .. } = &scheme
+        && !written.0.scope.is_empty()
+    {
+        Scope::parse(&written.0.scope).map_err(|source| {
+            Error::Credentials(CredentialsFault::Scope {
+                key: format!("{section}.oauth.scope"),
+                source,
+            })
+        })?;
+    }
+    Ok(scheme)
 }
 
 /// Returns the scheme `credentials` describe, with `certificate` the
@@ -98,11 +120,6 @@ fn scheme(
     credentials: &Credentials,
     certificate: Option<&Thumbprint>,
 ) -> Result<Scheme, Error> {
-    let token = secret(
-        &format!("{section}.bearer_token"),
-        credentials.bearer_token.as_ref(),
-        credentials.bearer_token_file.as_deref(),
-    )?;
     let password = secret(
         &format!("{section}.password"),
         credentials.password.as_ref(),
@@ -118,12 +135,9 @@ fn scheme(
             section: section.to_owned(),
         })
     };
+    let basic = credentials.user.is_some() || password.is_some();
     if let Some(fapi2) = &credentials.fapi2 {
-        if token.is_some()
-            || credentials.user.is_some()
-            || password.is_some()
-            || credentials.oauth2.is_some()
-            || !bound.is_empty()
+        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || !bound.is_empty()
         {
             return Err(refused());
         }
@@ -138,11 +152,7 @@ fn scheme(
         .into());
     }
     if let [binding] = bound.as_slice() {
-        if token.is_some()
-            || credentials.user.is_some()
-            || password.is_some()
-            || credentials.oauth2.is_some()
-        {
+        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() {
             return Err(refused());
         }
         if let Some(grant) = binding.onward(section, credentials) {
@@ -152,27 +162,25 @@ fn scheme(
     if bound.len() > 1 {
         return Err(refused());
     }
+    if let Some(oauth) = &credentials.oauth {
+        if basic || credentials.oauth2.is_some() {
+            return Err(refused());
+        }
+        let grant = oauth.resolve(&format!("{section}.oauth"))?;
+        return Ok(Scheme::Oauth {
+            grant: Box::new(grant),
+            written: Box::new(oauth.clone()),
+        });
+    }
     if let Some(oauth2) = &credentials.oauth2 {
-        if token.is_some() || credentials.user.is_some() || password.is_some() {
+        if basic {
             return Err(refused());
         }
         return resolve_grant(&format!("{section}.oauth2"), oauth2, certificate)
             .map(|grant| Scheme::OAuth2(Box::new(grant)));
     }
-    match (token, credentials.user.as_deref(), password) {
-        (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(refused()),
-        (Some(token), None, None) => {
-            let key = source_key(
-                section,
-                "bearer_token",
-                credentials.bearer_token_file.is_some(),
-            );
-            openehr_its::rest::client::Credentials::bearer(token.to_secret_string())
-                .header_value()
-                .map_err(|source| CredentialsFault::Authorization { key, source })?;
-            Ok(Scheme::Bearer(token))
-        }
-        (None, Some(user), Some(password)) => {
+    match (credentials.user.as_deref(), password) {
+        (Some(user), Some(password)) => {
             openehr_its::rest::client::Credentials::basic(user, password.to_secret_string())
                 .header_value()
                 .map_err(|source| {
@@ -183,13 +191,13 @@ fn scheme(
                 password,
             })
         }
-        (None, Some(_), None) => Err(Error::Missing {
+        (Some(_), None) => Err(Error::Missing {
             key: format!("{section}.password"),
         }),
-        (None, None, Some(_)) => Err(Error::Missing {
+        (None, Some(_)) => Err(Error::Missing {
             key: format!("{section}.user"),
         }),
-        (None, None, None) => Err(Error::Credentials(CredentialsFault::NoScheme {
+        (None, None) => Err(Error::Credentials(CredentialsFault::NoScheme {
             section: section.to_owned(),
         })),
     }
@@ -283,6 +291,29 @@ pub(crate) fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error>
     Ok(SecretString::from(value))
 }
 
+/// Refuses the `oauth2` grant at `section` when it asks for a plain client
+/// credentials token: `unconstrained`, no exchange, no binding to the TLS
+/// client certificate and no authentication by it, and no `DPoP` key and an
+/// assertion naming the token endpoint either.
+///
+/// # Errors
+///
+/// Returns [`grant::GrantFault::Plain`] for such a grant.
+fn refuse_plain(section: &str, oauth2: &OAuth2, unconstrained: bool) -> Result<(), Error> {
+    // NOTE: no specification governs this: our own design; the client credentials
+    // grant ferrohealth-smart carries (`oauth`) is the one way to ask for a plain token.
+    if unconstrained
+        && oauth2.dpop_key_file.is_none()
+        && oauth2.assertion_audience == grant::AssertionAudience::TokenEndpoint
+    {
+        return Err(grant::GrantFault::Plain {
+            section: section.to_owned(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
 /// Returns the grant the `oauth2` table at `section` describes, every key
 /// set and each value held to its rule: the scope to the SMART on openEHR
 /// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
@@ -324,6 +355,11 @@ fn resolve_grant(
             oauth2.dpop_key_file.is_some(),
         ),
         certificate,
+    )?;
+    refuse_plain(
+        section,
+        oauth2,
+        !exchange && bound.is_none() && !matches!(client_auth, ClientAuthentication::Tls(_)),
     )?;
     let token_endpoint = oauth2
         .token_endpoint

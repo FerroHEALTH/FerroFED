@@ -3,44 +3,35 @@
 
 //! Why the gate refused a request, and the answer it sends: the error body
 //! with its stable code, and the RFC 6750 §3 challenge.
+//!
+//! A credential that is missing, malformed, invalid or cannot be checked is
+//! answered as `ferrohealth-smart` answers it, with its status and its
+//! challenge: one `401 invalid_token` for every token that does not hold,
+//! naming no check, and a `403 insufficient_scope` naming no scope (RFC 6750
+//! §3.1). Which check refused a token reaches the security log alone. The
+//! refusals of the gateway's own policy (the purpose of use, the patient
+//! context, the natural person, the assurance, the national contact point)
+//! keep their own codes.
 
 use axum::response::{IntoResponse, Response};
-use http::{HeaderValue, header};
+use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes};
+use http::{HeaderValue, StatusCode, header};
 
 use crate::error::{self, Code};
-
-/// The `realm` of every `WWW-Authenticate` challenge (RFC 6750 §3).
-pub(crate) const REALM: &str = "ferrofed";
 
 /// Why a request was refused at the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Refusal {
-    /// The request carries no credential.
+    /// The request carries no credential of a scheme the gate admits.
     Missing,
-    /// The credential is not a token the gateway can read, or lacks a claim
-    /// RFC 9068 §2.2 requires.
+    /// The request carries two credentials, or a credential field that is
+    /// no credential at all (RFC 6750 §3.1, `invalid_request`).
     Malformed,
-    /// The token is signed with an algorithm not on [`ALGORITHMS`](crate::auth::ALGORITHMS).
-    Algorithm,
-    /// The token's `typ` is not `at+jwt` (RFC 9068 §4).
-    Type,
-    /// The token's issuer is not on the trust list.
-    Issuer,
-    /// The issuer's key set holds no key the token names.
-    Key,
-    /// The signature does not verify.
-    Signature,
-    /// The token has expired.
-    Expired,
-    /// The token is not valid yet.
-    NotYetValid,
-    /// The token does not name this gateway in `aud`.
-    Audience,
-    /// The introspection endpoint calls the token inactive.
-    Inactive,
-    /// The key set or the introspection endpoint cannot be had, so the
-    /// token cannot be verified.
+    /// The credential does not hold (RFC 6750 §3.1, `invalid_token`).
+    Invalid,
+    /// The issuer's metadata, key set or introspection endpoint cannot be
+    /// had, so the token cannot be verified.
     Unavailable,
     /// No caller is admitted to the operation: an admin operation, or one
     /// the gateway does not know.
@@ -79,18 +70,10 @@ pub enum Refusal {
 
 impl Refusal {
     /// Every refusal, in declaration order.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 14] = [
         Self::Missing,
         Self::Malformed,
-        Self::Algorithm,
-        Self::Type,
-        Self::Issuer,
-        Self::Key,
-        Self::Signature,
-        Self::Expired,
-        Self::NotYetValid,
-        Self::Audience,
-        Self::Inactive,
+        Self::Invalid,
         Self::Unavailable,
         Self::Operation,
         Self::Scope,
@@ -104,21 +87,13 @@ impl Refusal {
         Self::Correlation,
     ];
 
-    /// The reason the security log and the challenge name.
+    /// The reason the security log and the security metrics name.
     #[must_use]
     pub const fn reason(self) -> &'static str {
         match self {
             Self::Missing => "missing",
             Self::Malformed => "malformed",
-            Self::Algorithm => "algorithm",
-            Self::Type => "type",
-            Self::Issuer => "issuer",
-            Self::Key => "key",
-            Self::Signature => "signature",
-            Self::Expired => "expired",
-            Self::NotYetValid => "not-yet-valid",
-            Self::Audience => "audience",
-            Self::Inactive => "inactive",
+            Self::Invalid => "invalid",
             Self::Unavailable => "unavailable",
             Self::Operation => "operation",
             Self::Scope => "scope",
@@ -133,25 +108,18 @@ impl Refusal {
         }
     }
 
-    /// What the challenge's `error_description` says.
+    /// What the error body's `message` says.
     #[must_use]
     pub const fn description(self) -> &'static str {
         match self {
-            Self::Missing => "the request carries no access token",
-            Self::Malformed => "the access token cannot be read as an RFC 9068 access token",
-            Self::Algorithm => "the access token is signed with an algorithm the gateway refuses",
-            Self::Type => "the access token is not typed at+jwt",
-            Self::Issuer => "the access token's issuer is not trusted",
-            Self::Key => "the access token names a key its issuer does not publish",
-            Self::Signature => "the access token's signature does not verify",
-            Self::Expired => "the access token has expired",
-            Self::NotYetValid => "the access token is not valid yet",
-            Self::Audience => "the access token is not issued for this gateway",
-            Self::Inactive => "the access token is not active",
+            Self::Missing => "the request carries no credential",
+            Self::Malformed => {
+                "the request carries two credentials, or a credential field that is no credential"
+            }
+            Self::Invalid => "the credential is not valid",
             Self::Unavailable => "the access token cannot be verified now",
             Self::Operation => "this gateway admits no caller to this operation",
-            Self::Scope => "no scope of the access token grants this operation",
-            Self::Demographic => "the client is not admitted to the DEMOGRAPHIC API",
+            Self::Scope | Self::Demographic => "the access token does not grant this operation",
             Self::PurposeOfUse => "the access token carries no purpose of use",
             Self::PatientContext => {
                 "only a patient/ scope grants this operation, and the access token carries no ehrId to confine it to"
@@ -178,6 +146,8 @@ impl Refusal {
     #[must_use]
     pub const fn code(self) -> Code {
         match self {
+            Self::Missing | Self::Invalid => Code::Unauthenticated,
+            Self::Malformed => Code::CredentialMalformed,
             Self::Unavailable => Code::AuthenticationUnavailable,
             Self::Operation => Code::OperationRefused,
             Self::Scope | Self::Demographic => Code::ScopeInsufficient,
@@ -188,50 +158,154 @@ impl Refusal {
             Self::Assurance => Code::AuthenticationAssuranceInsufficient,
             Self::ContactPoint => Code::ContactPointAttributesRequired,
             Self::Correlation => Code::CorrelationInvalid,
-            Self::Missing
-            | Self::Malformed
-            | Self::Algorithm
-            | Self::Type
-            | Self::Issuer
-            | Self::Key
-            | Self::Signature
-            | Self::Expired
-            | Self::NotYetValid
-            | Self::Audience
-            | Self::Inactive => Code::Unauthenticated,
         }
     }
 
-    /// The answer to a refused request: the error body, with the RFC 6750 §3
-    /// challenge on a `401` and a `403`.
+    /// The refusal of `ferrohealth-smart` whose challenge this one carries,
+    /// or `None` for one of the gateway's own.
     #[must_use]
-    pub fn response(self, request_id: &str) -> Response {
-        let mut response =
-            error::response(self.code(), self.description(), request_id).into_response();
-        let challenge = match self {
-            Self::Missing => Some(format!("Bearer realm=\"{REALM}\"")),
-            Self::Unavailable | Self::Operation | Self::Correlation => None,
+    pub const fn smart(self) -> Option<SmartRefusal> {
+        match self {
+            Self::Missing => Some(SmartRefusal::Missing(Schemes {
+                bearer: true,
+                basic: false,
+            })),
+            Self::Malformed => Some(SmartRefusal::InvalidRequest),
+            Self::Invalid => Some(SmartRefusal::InvalidToken),
+            Self::Unavailable => Some(SmartRefusal::Unavailable),
+            Self::Operation => Some(SmartRefusal::Unclassified),
             Self::Scope
             | Self::Demographic
             | Self::PurposeOfUse
             | Self::PatientContext
             | Self::PatientDemographic
-            | Self::ContactPoint => Some(format!(
-                "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
-                self.description()
-            )),
+            | Self::ContactPoint => Some(SmartRefusal::Forbidden),
+            Self::NaturalPerson | Self::Assurance | Self::Correlation => None,
+        }
+    }
+
+    /// The answer to a refused request: the error body, with the challenge
+    /// naming `realm`.
+    #[must_use]
+    pub fn response(self, realm: &str, request_id: &str) -> Response {
+        let mut response =
+            error::response(self.code(), self.description(), request_id).into_response();
+        let challenge = match self {
             // NOTE: RFC 9470 §3: a token whose authentication does not meet the resource's
             // requirements is a 401 with the error `insufficient_user_authentication`.
             Self::NaturalPerson | Self::Assurance => Some(format!(
-                "Bearer realm=\"{REALM}\", error=\"insufficient_user_authentication\", error_description=\"{}\"",
-                self.description()
+                "Bearer realm=\"{realm}\", error=\"insufficient_user_authentication\""
             )),
-            _ => Some(format!(
-                "Bearer realm=\"{REALM}\", error=\"invalid_token\", error_description=\"{}\"",
-                self.description()
-            )),
+            _ => self
+                .smart()
+                .and_then(|refusal| refusal.challenge(Some(realm))),
         };
         if let Some(value) = challenge.and_then(|text| HeaderValue::from_str(&text).ok()) {
+            response
+                .headers_mut()
+                .insert(header::WWW_AUTHENTICATE, value);
+        }
+        response
+    }
+}
+
+/// A refusal at the gate, with the check that refused a credential when one
+/// did, which the security log names and the answer never carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Refused {
+    /// What the request is answered with.
+    pub refusal: Refusal,
+    /// The check that refused the credential, when one did.
+    pub check: Option<Reason>,
+}
+
+impl From<Refusal> for Refused {
+    fn from(refusal: Refusal) -> Self {
+        Self {
+            refusal,
+            check: None,
+        }
+    }
+}
+
+impl From<&Denied> for Refused {
+    fn from(denied: &Denied) -> Self {
+        let refusal = match denied.refusal() {
+            SmartRefusal::Missing(_) => Refusal::Missing,
+            SmartRefusal::InvalidRequest => Refusal::Malformed,
+            SmartRefusal::Unavailable => Refusal::Unavailable,
+            SmartRefusal::Forbidden => Refusal::Scope,
+            SmartRefusal::Unclassified => Refusal::Operation,
+            _ => Refusal::Invalid,
+        };
+        Self {
+            refusal,
+            check: denied.reason(),
+        }
+    }
+}
+
+/// Why a Basic credential was not admitted where only named Basic users
+/// are (RFC 7617).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BasicRefusal {
+    /// The request carries no Basic credential.
+    Missing,
+    /// The Basic credential does not verify.
+    Invalid,
+    /// The Basic credential verifies, and its user is not one admitted here.
+    Unlisted,
+}
+
+impl BasicRefusal {
+    /// The reason the security log names.
+    #[must_use]
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Invalid => "invalid",
+            Self::Unlisted => "unlisted",
+        }
+    }
+
+    /// The `WWW-Authenticate` challenge naming `realm` the refusal carries:
+    /// one on a `401`, none on a `403` (RFC 7617 §2, §2.1).
+    #[must_use]
+    pub fn challenge(self, realm: &str) -> Option<HeaderValue> {
+        let refusal = match self {
+            Self::Missing => SmartRefusal::Missing(Schemes {
+                bearer: false,
+                basic: true,
+            }),
+            Self::Invalid => SmartRefusal::InvalidBasic,
+            Self::Unlisted => return None,
+        };
+        refusal
+            .challenge(Some(realm))
+            .and_then(|text| HeaderValue::from_str(&text).ok())
+    }
+
+    /// The status of the refusal: `401` for a credential that is missing or
+    /// does not verify, `403` for a user not admitted here.
+    #[must_use]
+    pub const fn status(self) -> StatusCode {
+        match self {
+            Self::Missing | Self::Invalid => StatusCode::UNAUTHORIZED,
+            Self::Unlisted => StatusCode::FORBIDDEN,
+        }
+    }
+
+    /// The answer to the refused request: the error body, with the Basic
+    /// challenge naming `realm` on a `401` (RFC 7617 §2, §2.1).
+    #[must_use]
+    pub fn response(self, realm: &str, request_id: &str) -> Response {
+        let code = match self {
+            Self::Missing | Self::Invalid => Code::Unauthenticated,
+            Self::Unlisted => Code::OperationRefused,
+        };
+        let mut response = error::fixed(code, request_id);
+        if let Some(value) = self.challenge(realm) {
             response
                 .headers_mut()
                 .insert(header::WWW_AUTHENTICATE, value);
@@ -250,26 +324,18 @@ mod tests {
         match refusal {
             Refusal::Missing => 0,
             Refusal::Malformed => 1,
-            Refusal::Algorithm => 2,
-            Refusal::Type => 3,
-            Refusal::Issuer => 4,
-            Refusal::Key => 5,
-            Refusal::Signature => 6,
-            Refusal::Expired => 7,
-            Refusal::NotYetValid => 8,
-            Refusal::Audience => 9,
-            Refusal::Inactive => 10,
-            Refusal::Unavailable => 11,
-            Refusal::Operation => 12,
-            Refusal::Scope => 13,
-            Refusal::Demographic => 14,
-            Refusal::PurposeOfUse => 15,
-            Refusal::PatientContext => 16,
-            Refusal::PatientDemographic => 17,
-            Refusal::NaturalPerson => 18,
-            Refusal::Assurance => 19,
-            Refusal::ContactPoint => 20,
-            Refusal::Correlation => 21,
+            Refusal::Invalid => 2,
+            Refusal::Unavailable => 3,
+            Refusal::Operation => 4,
+            Refusal::Scope => 5,
+            Refusal::Demographic => 6,
+            Refusal::PurposeOfUse => 7,
+            Refusal::PatientContext => 8,
+            Refusal::PatientDemographic => 9,
+            Refusal::NaturalPerson => 10,
+            Refusal::Assurance => 11,
+            Refusal::ContactPoint => 12,
+            Refusal::Correlation => 13,
         }
     }
 
@@ -277,5 +343,37 @@ mod tests {
     fn all_lists_every_refusal_once_in_declaration_order() {
         let ordinals: Vec<usize> = Refusal::ALL.into_iter().map(ordinal).collect();
         assert_eq!((0..Refusal::ALL.len()).collect::<Vec<_>>(), ordinals);
+    }
+
+    // NOTE: RFC 6750 §3.1: an invalid token is `invalid_token` and a missing one carries no
+    // error code; ferrohealth-smart's challenge names no check and no scope.
+    #[test]
+    fn the_challenges_name_no_check_and_no_scope() {
+        for (refusal, expected) in [
+            (Refusal::Missing, Some("Bearer realm=\"ferrofed\"")),
+            (
+                Refusal::Invalid,
+                Some("Bearer realm=\"ferrofed\", error=\"invalid_token\""),
+            ),
+            (
+                Refusal::Malformed,
+                Some("Bearer realm=\"ferrofed\", error=\"invalid_request\""),
+            ),
+            (
+                Refusal::Scope,
+                Some("Bearer realm=\"ferrofed\", error=\"insufficient_scope\""),
+            ),
+            (Refusal::Unavailable, None),
+            (Refusal::Operation, None),
+            (Refusal::Correlation, None),
+        ] {
+            let response = refusal.response("ferrofed", "corr-1");
+            let challenge = response
+                .headers()
+                .get(http::header::WWW_AUTHENTICATE)
+                .and_then(|value| value.to_str().ok());
+            assert_eq!(expected, challenge, "{refusal:?}");
+            assert_eq!(refusal.code().status(), response.status(), "{refusal:?}");
+        }
     }
 }

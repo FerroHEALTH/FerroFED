@@ -29,8 +29,8 @@ pub(crate) const ISSUER: &str = "https://issuer.example.test";
 /// The audience the gateway is known by at [`ISSUER`].
 pub(crate) const AUDIENCE: &str = "urn:example:ferrofed-under-test";
 
-/// The scope the gateway admits operators with.
-pub(crate) const OPERATOR_SCOPE: &str = "ferrofed:operator";
+/// The scope the gateway admits operators with, its `[auth] product_scope`.
+pub(crate) const OPERATOR_SCOPE: &str = "__ferrofed.operator";
 
 /// A synthetic `ehr_id` an incident names.
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
@@ -55,15 +55,17 @@ fn gateway_configuration(
     issuer: &Issuer,
     key_file: &std::path::Path,
 ) -> Result<String, Box<dyn Error>> {
+    let jwks = document.with_file_name("issuer-jwks.json");
+    std::fs::write(&jwks, issuer.jwks_json()?)?;
+    let jwks = toml::Value::String(jwks.display().to_string());
     let document = toml::Value::String(document.display().to_string());
     let key_file = toml::Value::String(key_file.display().to_string());
     Ok(format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [auth]\naudience = \"{AUDIENCE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n\
-         jwks = '{}'\noperator_scope = \"{OPERATOR_SCOPE}\"\n",
-        issuer.jwks_json()?
+         [auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\
+         product_scope = \"{OPERATOR_SCOPE}\"\n"
     ))
 }
 

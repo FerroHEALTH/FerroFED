@@ -509,11 +509,15 @@ async fn a_grant_the_manager_keeps_refusing_leaves_the_member_unavailable() {
 }
 
 #[tokio::test]
-async fn the_bearer_credential_travels_to_the_manager() {
+async fn the_basic_credential_travels_to_the_manager() {
     let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
-        .and(header("authorization", "Bearer synthetic-pix-token"))
+        // NOTE: RFC 7617 §2, the base64 of `ferrofed:synthetic-pix-token`.
+        .and(header(
+            "authorization",
+            "Basic ZmVycm9mZWQ6c3ludGhldGljLXBpeC10b2tlbg==",
+        ))
         .and(query_param("targetSystem", DOMAIN_A))
         .respond_with(
             ResponseTemplate::new(200)
@@ -524,7 +528,10 @@ async fn the_bearer_credential_travels_to_the_manager() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Bearer(SecretString::from("synthetic-pix-token")),
+            Authentication::Basic {
+                user: String::from("ferrofed"),
+                password: SecretString::from("synthetic-pix-token"),
+            },
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -639,15 +646,16 @@ fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
         PixmResolver::from_config(vec![config], namespaces(), &registry())
             .expect_err("the credential is refused")
     };
-    let bearer = refused(Authentication::Bearer(SecretString::from(
-        "Qz7left Qz7right",
-    )));
+    let control = refused(Authentication::Basic {
+        user: "gateway".to_owned(),
+        password: SecretString::from("Qz7left\nQz7right"),
+    });
     assert!(
         matches!(
-            &bearer,
-            PixmConfigError::Credentials(InvalidCredentials::NotB64Token)
+            &control,
+            PixmConfigError::Credentials(InvalidCredentials::ControlCharacter(_))
         ),
-        "a bearer token is the b64token of RFC 6750 §2.1: {bearer:?}"
+        "a basic password carries no control character (RFC 7617 §2): {control:?}"
     );
     let basic = refused(Authentication::Basic {
         user: "gate:way".to_owned(),
@@ -660,7 +668,7 @@ fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
         ),
         "a basic user-id carries no colon (RFC 7617 §2): {basic:?}"
     );
-    for error in [&bearer, &basic] {
+    for error in [&control, &basic] {
         let mut rendered = format!("{error}\n{error:?}");
         let mut cause = std::error::Error::source(error);
         while let Some(source) = cause {

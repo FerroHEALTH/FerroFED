@@ -671,7 +671,6 @@ messages! {
     /// `Password`
     Password = "password",
     /// `Bearer token`
-    BearerToken = "bearer-token",
     /// `Nuts`
     Nuts = "nuts",
     /// `FAPI 2.0`

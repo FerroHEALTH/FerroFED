@@ -106,11 +106,10 @@ list after it:
 [federation.consent]
 disclose = false               # Art 8: a restriction is never shown to a provider
 
-[[auth.issuer]]                # the issuer of the production guide's step 4
+[[trust.issuer]]               # the issuer of the production guide's step 4
 issuer = "https://idp.example.org/realms/ferrofed"
-jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
 
-[auth.issuer.assurance]
+[trust.issuer.assurance]
 claim = "acr"
 minimum = "substantial"        # Annex II 3.1; "high" for cross-border from 26 March 2032
 substantial = ["urn:example:loa:substantial"]
@@ -135,7 +134,7 @@ years = 3                      # Art 9(2): at least three years from each access
   ([Withholding consent exclusions](consent-exclusions.md)).
 - **The assurance level, per issuer.** Annex II, point 3.1, asks for
   "reliable mechanisms for the identification and authentication of health
-  professionals". Set `[auth.issuer.assurance]` for every issuer whose
+  professionals". Set `[trust.issuer.assurance]` for every issuer whose
   tokens reach patient data, with `minimum = "substantial"`; Implementing
   Regulation (EU) 2026/2099 Art 6(3) raises a cross-border exchange to
   `"high"` from 26 March 2032. List the values your issuer writes; no
@@ -343,7 +342,7 @@ deployment in the EU must plan for are:
 - **The access record names the professional only as the token does.** It
   records the professional's identifier and the assurance level when your
   issuer's tokens state them, and an assurance level only for an issuer
-  with `[auth.issuer.assurance]`
+  with `[trust.issuer.assurance]`
   ([The person behind an access](access-log.md#the-person-behind-an-access)).
 - **A received document is not yet checked in full.** Its profiles'
   invariants, its bindings and each entry's own profile are not all

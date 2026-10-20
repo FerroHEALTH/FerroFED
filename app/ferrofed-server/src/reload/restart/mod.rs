@@ -9,7 +9,7 @@
 //! specification governs this: our own design.
 
 use crate::binding;
-use crate::config::auth::AuthSettings;
+use crate::config::auth::{AuthSettings, Verification};
 use crate::config::settings::{ServerSettings, Settings};
 
 mod keys;
@@ -19,6 +19,26 @@ use keys::RESTART_KEYS;
 /// Returns the core's keys a reload leaves to the next start.
 pub(super) fn keys() -> Vec<&'static str> {
     RESTART_KEYS.iter().map(|(key, _)| *key).collect()
+}
+
+/// Returns `fresh`, its audiences the ones `boot` started with, at the
+/// section and at every issuer that took the section's.
+///
+/// The audience also names the gateway in its access records, read once at
+/// start, so a changed `[auth] audience` waits for a restart (no
+/// specification governs this: our own design).
+fn boot_audience(boot: &AuthSettings, mut fresh: AuthSettings) -> AuthSettings {
+    for issuer in &mut fresh.issuers {
+        let audience = match &mut issuer.verification {
+            Verification::KeySet(settings) => &mut settings.audience,
+            Verification::Introspection(endpoint) => &mut endpoint.audience,
+        };
+        if *audience == fresh.audience {
+            audience.clone_from(&boot.audience);
+        }
+    }
+    fresh.audience.clone_from(&boot.audience);
+    fresh
 }
 
 /// The settings a reload builds the federation from: the sections of `fresh`
@@ -35,12 +55,7 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
     }
     federation.consent_disclosure = fresh.federation.consent_disclosure;
     federation.consent_emergency = fresh.federation.consent_emergency;
-    // NOTE: no specification governs this: our own design; the audience also names the
-    // gateway in its access records, read once at start, so it keeps the boot's value.
-    let auth = AuthSettings {
-        audience: boot.server.auth.audience.clone(),
-        ..fresh.server.auth.clone()
-    };
+    let auth = boot_audience(&boot.server.auth, fresh.server.auth.clone());
     let mut effective = Settings {
         profile: boot.profile,
         server: ServerSettings {

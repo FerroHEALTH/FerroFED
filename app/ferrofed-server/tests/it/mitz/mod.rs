@@ -50,7 +50,7 @@ const URA_A: &str = "ura-test-0001";
 pub(crate) const URA_B: &str = "ura-test-0002";
 
 /// The names of the token claims the test issuer's
-/// `[auth.issuer.requester]` maps; configured, since no bound specification
+/// `[trust.issuer.requester]` maps; configured, since no bound specification
 /// names them.
 const PROFESSIONAL_CLAIM: &str = "test_uzi_number";
 const ROLE_CLAIM: &str = "test_uzi_role";

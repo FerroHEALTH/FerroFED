@@ -222,7 +222,7 @@ async fn a_country_the_deployment_adds_is_admitted() -> TestResult {
     let mut auth = declared()?;
     let mut names = claim_names();
     names.additional_countries = vec![String::from("XA")];
-    let resolved = names.resolve("auth.issuer[0].national_contact_point")?;
+    let resolved = names.resolve("trust.issuer[0].national_contact_point")?;
     for issuer in &mut auth.issuers {
         issuer.national_contact_point = Some(resolved.clone());
     }

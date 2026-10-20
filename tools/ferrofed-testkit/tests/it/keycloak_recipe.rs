@@ -42,10 +42,13 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
         "the clients type their tokens at+jwt: {commands}"
     );
     let auth = recipe.auth_against("http://127.0.0.1:8080");
-    assert!(auth.contains("[[auth.issuer]]"), "{auth}");
+    assert!(
+        auth.contains("[auth]") && auth.contains("[[trust.issuer]]"),
+        "{auth}"
+    );
     assert!(
         auth.contains("client_tokens_act_for_professional = true")
-            && auth.contains("[auth.issuer.assurance]"),
+            && auth.contains("[trust.issuer.assurance]"),
         "the service acts for a named professional, at a declared level: {auth}"
     );
     assert!(

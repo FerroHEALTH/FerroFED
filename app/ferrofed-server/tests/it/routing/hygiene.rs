@@ -11,7 +11,7 @@ use crate::facade::{EHR_A, PATIENT, wire};
 use crate::support::{error_body, send};
 
 use super::{
-    CLIENT_TOKEN, ONWARD_TOKEN, TestResult, VERSION_A, gateway_over, node, only_request, parts,
+    CLIENT_TOKEN, ONWARD_BASIC, TestResult, VERSION_A, gateway_over, node, only_request, parts,
     silent, to_a,
 };
 
@@ -62,7 +62,7 @@ async fn an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_au
     };
     uuid::Uuid::try_parse_ascii(id)?;
     assert_eq!(
-        Some(format!("Bearer {ONWARD_TOKEN}").as_str()),
+        Some(ONWARD_BASIC),
         received
             .headers
             .get(header::AUTHORIZATION)

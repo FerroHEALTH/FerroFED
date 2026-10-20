@@ -282,7 +282,9 @@ async fn gateway(
     std::fs::write(&key_file, ferrofed_testkit::oauth::es384_pem()?)?;
     let definitions = dir.join("stored.redb");
     stored_queries(&definitions)?;
-    let [document, key_file, definitions] = [document, key_file, definitions]
+    let jwks = dir.join("issuer-jwks.json");
+    std::fs::write(&jwks, provider.jwks())?;
+    let [document, key_file, definitions, jwks] = [document, key_file, definitions, jwks]
         .map(|file| toml::Value::String(file.display().to_string()));
     let mut text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
@@ -290,9 +292,8 @@ async fn gateway(
          best_effort = true\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
          [stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [auth]\naudience = \"{AUDIENCE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n\
-         jwks = '{}'\noperator_scope = \"{OPERATOR_SCOPE}\"\n",
-        provider.jwks()
+         [auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\
+         product_scope = \"{OPERATOR_SCOPE}\"\n"
     );
     for (member, ehr_id) in [("node-a", EHR_A), ("node-b", EHR_B)] {
         // NOTE: writing to a String cannot fail, so the result is dropped.

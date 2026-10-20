@@ -95,33 +95,37 @@ fn managed_needs_the_admin_listener_and_a_store_path() -> TestResult {
 
 #[test]
 fn managed_refuses_a_secret_inline_outside_the_core() -> TestResult {
-    let managed = "[metrics]\nlisten = \"127.0.0.1:9\"\nscrape_token = \"synthetic-core-token\"\n\n\
-                   [config]\nui = \"managed\"\npath = \"r.redb\"\n";
+    let managed = format!(
+        "[metrics]\nlisten = \"127.0.0.1:9\"\n{}\n\
+         [config]\nui = \"managed\"\npath = \"r.redb\"\n",
+        crate::support::scraping()
+    );
     assert!(
-        resolved(managed)?.is_ok(),
+        resolved(&managed)?.is_ok(),
         "a secret of the core stays inline"
     );
     let refused = resolved(&format!(
-        "{managed}\n[credentials.\"node-a-pub\"]\nbearer_token = \"synthetic-inline-token\"\n"
+        "{managed}\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-token\"\n"
     ))?;
     let Err(Error::Revisions(RevisionsFault::InlineSecret { key })) = &refused else {
         return Err(format!("refused as inline: {refused:?}").into());
     };
-    assert_eq!("credentials.node-a-pub.bearer_token", key);
+    assert_eq!("credentials.node-a-pub.password", key);
     let message = refused
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
     assert!(!message.contains("synthetic-inline-token"), "{message}");
-    let off =
-        resolved("[credentials.\"node-a-pub\"]\nbearer_token = \"synthetic-inline-token\"\n")?;
+    let off = resolved(
+        "[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-token\"\n",
+    )?;
     assert!(off.is_ok(), "off keeps an inline secret as before: {off:?}");
     Ok(())
 }
 
 #[tokio::test]
 async fn off_serves_no_revision_route() -> TestResult {
-    let access = Access::new(&crate::support::auth(), Profile::Development, None);
+    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
     let app = admin::router(Arc::new(AppState::default()), access)
         .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
     for (method, path) in [

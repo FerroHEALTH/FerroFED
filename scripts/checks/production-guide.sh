@@ -200,11 +200,17 @@ if [[ -z "$NGINX" ]]; then
   exit 1
 fi
 mkdir "$work/secrets" "$work/tls"
-# A synthetic value for every secret file the configuration names, and a
+# A synthetic value for every secret file the configuration names, the
+# Argon2id PHC string of a synthetic password for each password hash, and a
 # synthetic ES384 key for each signing key, which is read as one.
+# shellcheck disable=SC2016 # a PHC string, whose dollars are literal
+readonly SYNTHETIC_HASH='$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA'
 while IFS= read -r secret; do
   printf 'synthetic-%s\n' "$secret" > "$work/secrets/$secret"
 done < <(sed -nE 's|^[a-z_]+_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)".*$|\1|p' "$work/ferrofed.toml")
+while IFS= read -r hash; do
+  printf '%s\n' "$SYNTHETIC_HASH" > "$work/secrets/$hash"
+done < <(sed -nE 's|^password_hash_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)".*$|\1|p' "$work/ferrofed.toml")
 while IFS= read -r key; do
   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
     -out "$work/secrets/$key" 2> /dev/null ||

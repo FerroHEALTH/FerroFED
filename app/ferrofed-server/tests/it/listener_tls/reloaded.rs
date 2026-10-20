@@ -59,9 +59,9 @@ async fn options_as(app: &Router, issuer: &Issuer) -> Result<StatusCode, Box<dyn
 /// `[auth]` trusting the suite's issuer and `added`.
 fn with_added(added: &Issuer) -> Result<String, Box<dyn Error>> {
     Ok(format!(
-        "{}\n[[auth.issuer]]\nissuer = \"{ADDED}\"\njwks = '{}'\n",
-        auth_toml()?,
-        added.jwks_json()?
+        "{}{}",
+        auth_toml(),
+        crate::support::issuer_toml(added)?
     ))
 }
 
@@ -72,7 +72,7 @@ async fn a_renewed_certificate_is_presented_after_the_reload() -> TestResult {
     let files = first.write(dir.path())?;
     let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
     let address = ready_over(Arc::clone(&certificates)).await?;
-    let (_, reloader, _) = gateway(dir.path(), &certificates, &auth_toml()?)?;
+    let (_, reloader, _) = gateway(dir.path(), &certificates, &auth_toml())?;
 
     let second = ListenerCertificates::generate()?;
     second.write(dir.path())?;
@@ -92,7 +92,7 @@ async fn files_that_do_not_form_a_pair_refuse_the_whole_reload() -> TestResult {
     let files = first.write(dir.path())?;
     let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
     let address = ready_over(Arc::clone(&certificates)).await?;
-    let (config, reloader, app) = gateway(dir.path(), &certificates, &auth_toml()?)?;
+    let (config, reloader, app) = gateway(dir.path(), &certificates, &auth_toml())?;
     let added = Issuer::new(ADDED)?;
 
     std::fs::write(

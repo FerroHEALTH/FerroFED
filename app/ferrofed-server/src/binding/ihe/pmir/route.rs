@@ -7,16 +7,18 @@
 
 use std::sync::Arc;
 
+use axum::Extension;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use ferrofed_identity::ihe::pmir;
 use http::header::{CONTENT_TYPE, WWW_AUTHENTICATE};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderMap, StatusCode};
 use ihe_iti::balp::AuditError;
 use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
+use crate::auth::trust::Trust;
 use crate::binding::ihe::metrics::FeedResult;
 use crate::facade::security::TARGET;
 use crate::state::AppState;
@@ -25,25 +27,30 @@ use crate::state::AppState;
 /// Z.6).
 const FHIR_JSON: &str = "application/fhir+json";
 
-/// The `realm` of the route's `WWW-Authenticate` challenge (RFC 6750 §3).
+/// The `realm` of the route's `WWW-Authenticate` challenge (RFC 7617 §2).
 const REALM: &str = "ferrofed-pmir";
 
 /// `POST {base}{pmir.path}`: one ITI-93 message, applied to the resolution
 /// bindings when it is authenticated and holds to the PMIR profiles.
-pub async fn feed(State(state): State<Arc<AppState>>, headers: HeaderMap, body: Bytes) -> Response {
+pub async fn feed(
+    State(state): State<Arc<AppState>>,
+    Extension(trust): Extension<Arc<Trust>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let Some(identity_feed) = state.identity_feed() else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    if !identity_feed.authenticated(&headers) {
+    if let Err(refusal) = identity_feed.authenticate(&trust.gate(), &headers).await {
         tracing::warn!(
             target: TARGET,
             event = "identity-feed-refused",
-            reason = "unauthenticated",
-            "an ITI-93 message without the feed token was refused, and nothing was applied"
+            reason = refusal.reason(),
+            "an ITI-93 message without the credentials of a feed user was refused, and nothing was applied"
         );
         state.metrics().identity_feed(FeedResult::Unauthenticated);
-        let mut response = StatusCode::UNAUTHORIZED.into_response();
-        if let Ok(challenge) = HeaderValue::from_str(&format!("Bearer realm=\"{REALM}\"")) {
+        let mut response = refusal.status().into_response();
+        if let Some(challenge) = refusal.challenge(REALM) {
             response.headers_mut().insert(WWW_AUTHENTICATE, challenge);
         }
         return response;

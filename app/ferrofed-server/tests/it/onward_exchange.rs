@@ -13,7 +13,7 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
@@ -21,9 +21,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::{
-    AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
-};
+use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::state::AppState;
@@ -315,20 +313,11 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
     );
     let auth = AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(EDGE_HEADER)),
-        audience: Some(AUDIENCE.to_owned()),
-        issuers: vec![IssuerSettings {
-            issuer: EDGE.to_owned(),
-            verification: Verification::KeySet(KeySource::Set(edge.jwks())),
-            backend_clients: BTreeSet::new(),
-            demographic_clients: BTreeSet::new(),
-            operator_scope: None,
-            patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
-            professional_issuing_authority: None,
-            national_contact_point: None,
-        }],
+        audience: vec![AUDIENCE.to_owned()],
+        issuers: vec![IssuerSettings::new(
+            EDGE,
+            crate::support::key_set(EDGE, &crate::support::jwks_file_of(&edge)?),
+        )],
         ..AuthSettings::default()
     };
     let app = gateway(dir.path(), &a.uri(), &tables, auth)?;

@@ -103,13 +103,14 @@ impl Binding for Ihe {
         settings.pixm = config
             .pixm
             .as_ref()
-            .map(|section| pixm::resolve(section, &ServiceContext::of(settings)))
+            .map(|section| pixm::resolve(section, ServiceContext::of(settings)))
             .transpose()?;
         settings.xcpd = xcpd::resolve(config)?;
         settings.pmir = pmir::config::resolve(
             config,
-            &ServiceContext::of(settings),
+            ServiceContext::of(settings),
             settings.server.public_url.as_ref(),
+            settings.server.auth.basic.as_ref(),
         )?;
         if let (Some(fhir), Some(pmir)) = (&settings.fhir, &settings.pmir) {
             let route = settings.server.base_path.join(&pmir.path);
@@ -125,12 +126,12 @@ impl Binding for Ihe {
             .map(|directory| {
                 mcsd::resolve(
                     directory,
-                    &ServiceContext::of(settings),
+                    ServiceContext::of(settings),
                     settings.audit.clone(),
                 )
             })
             .transpose()?;
-        settings.pdqm = pdqm::resolve(config, &ServiceContext::of(settings))?;
+        settings.pdqm = pdqm::resolve(config, ServiceContext::of(settings))?;
         Ok(())
     }
 
@@ -421,10 +422,14 @@ fn token_endpoints(settings: &Settings) -> Vec<(String, ProtectedSite)> {
         .chain(directory)
         .chain(feed)
         .filter_map(|(section, scheme)| match scheme {
-            Some(Scheme::ServiceGrant(grant)) => Some((
-                grant.grant().token_endpoint().to_string(),
-                service_grant::site(&format!("{section}.oauth2")),
-            )),
+            Some(Scheme::Oauth { grant, .. }) => {
+                crate::config::oauth::token_endpoint(grant).map(|endpoint| {
+                    (
+                        endpoint.to_string(),
+                        service_grant::site(&format!("{section}.oauth")),
+                    )
+                })
+            }
             _ => None,
         })
         .collect()

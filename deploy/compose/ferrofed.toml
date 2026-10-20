@@ -61,7 +61,8 @@ format = "toml"
 # max_entries = 50000
 #
 # [registry.mcsd.credentials]
-# bearer_token_file = "/run/secrets/ferrofed/directory-token"
+# user = "ferrofed"
+# password_file = "/run/secrets/ferrofed/directory-password"
 
 [federation]
 # EDIT: your federation's identifier, which OPTIONS / names.
@@ -75,24 +76,35 @@ overall_timeout_ms = 25000
 
 # Client authentication: every caller presents an RFC 9068 access token from
 # an issuer listed here, with a SMART on openEHR scope for the operation and a
-# purpose of use. A gateway that federates refuses to start without an issuer.
+# purpose of use. [auth] is the section of ferrohealth-smart, which checks
+# tokens and never issues them; [trust] is the gateway's own policy over the
+# callers it verifies. A gateway that federates refuses to start without an
+# issuer.
 # https://ferrofed.eu/docs/operate/authentication.html
 [auth]
+# EDIT: an authorization server your callers get their tokens from. The
+# gateway reads its metadata (RFC 8414) and the key set it names; set
+# jwks_file for keys handed over out of band. Several issuers are an
+# [[auth.issuer]] list.
+issuer = "https://idp.example.org"
 # EDIT: the audience your issuers name this gateway by in `aud`.
-audience = "https://gateway.example.org/fed"
-# The clock skew allowed on exp and nbf, at most 300 seconds.
-clock_skew_s = 60
+audience = ["https://gateway.example.org/fed"]
+# The clock skew allowed on exp, nbf and iat, at most 300 seconds.
+clock_skew_seconds = 60
+# EDIT: the scope that admits an operator to {base}/operator/ and to the
+# admin listener's write actions, a string starting with __ or a full URI;
+# unset, no caller reaches either.
+# product_scope = "__ferrofed.operator"
+
 # A token with no purpose of use is refused (§13.4). Set false only with the
 # reason recorded in your deployment's security decisions.
-# [auth.purpose_of_use]
+# [trust.purpose_of_use]
 # required = true
 
-# EDIT: an authorization server your callers get their tokens from. Verify
-# its tokens by its JWK Set (jwks_uri, or jwks_file for keys handed over out
-# of band), or by RFC 7662 introspection.
-[[auth.issuer]]
+# What the issuer's tokens are honoured for beyond their user/ and system/
+# grants.
+[[trust.issuer]]
 issuer = "https://idp.example.org"
-jwks_uri = "https://idp.example.org/jwks"
 # The client_ids whose system/aql-* grant is honoured.
 # backend_clients = ["example-reporting-service"]
 # The client_ids admitted to the DEMOGRAPHIC API.
@@ -104,16 +116,11 @@ jwks_uri = "https://idp.example.org/jwks"
 # national_provider_identifier, which each node is told.
 # professional_issuing_authority = "hp_issuing_authority"
 #
-# Introspection instead of jwks_uri:
-# introspection_endpoint = "https://idp.example.org/introspect"
-# client_id = "ferrofed"
-# client_secret_file = "/run/secrets/ferrofed/introspection-secret"
-#
 # Honour this issuer's patient/ grants, confined to the patient its tokens'
 # ehrId names: the one member whose platform issues them, and the identifier
 # system under which the cross-reference knows that member's ehr_ids.
 # https://ferrofed.eu/docs/operate/authentication.html#patient-grants
-# [auth.issuer.patient]
+# [trust.issuer.patient]
 # endpoint = "node-a-query"
 # ehr_id_system = "urn:oid:2.999.9.1"
 # Whether the RFC 8693 act claim of these tokens names the patient's
@@ -124,11 +131,19 @@ jwks_uri = "https://idp.example.org/jwks"
 # tokens, and the least level patient data needs; without it, no level is
 # read or required, and config check notes it.
 # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-# [auth.issuer.assurance]
+# [trust.issuer.assurance]
 # claim = "acr"
 # minimum = "substantial"
 # substantial = ["urn:example:loa:substantial"]
 # high = ["urn:example:loa:high"]
+
+# Or an issuer whose opaque tokens are verified by RFC 7662 introspection, in
+# place of an [auth] issuer:
+# [[trust.issuer]]
+# issuer = "https://opaque-idp.example.org"
+# introspection_endpoint = "https://opaque-idp.example.org/introspect"
+# client_id = "ferrofed"
+# client_secret_file = "/run/secrets/ferrofed/introspection-secret"
 
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html
@@ -142,10 +157,13 @@ url = "https://pix.example.org/fhir/"
 "node-a" = "urn:oid:2.999.10"
 "node-b" = "urn:oid:2.999.20"
 
-# How the gateway authenticates to the Manager. Remove the section when the
-# transport does, or use `user` with `password_file` instead.
+# How the gateway authenticates to the Manager: a user with password_file,
+# or the OAuth 2.0 client credentials grant of IUA ITI-71 under
+# [pixm.manager.credentials.oauth]. Remove the section when the transport
+# authenticates the gateway.
 [pixm.manager.credentials]
-bearer_token_file = "/run/secrets/ferrofed/pix-token"
+user = "ferrofed"
+password_file = "/run/secrets/ferrofed/pix-password"
 
 # A client namespace mapped to the assigning authority the Manager knows it
 # by; a namespace that is itself an absolute URI needs no entry.
@@ -198,39 +216,46 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
 # Optionally, hear of identity merges as they happen: subscribe at your IHE
-# PMIR Patient Identity Registry, which sends each change to callback_url with
-# the feed token you agree with its operator. A merge drops the resolution
-# bindings it could have made stale.
+# PMIR Patient Identity Registry, which sends each change to callback_url as
+# a Basic user of its own whose password you agree with its operator. A merge
+# drops the resolution bindings it could have made stale.
 # https://ferrofed.eu/docs/operate/identity.html#the-identity-feed-pmir
 # [pmir]
 # url = "https://pmir.example.org/fhir"                    # EDIT
 # callback_url = "https://gateway.example.org/pmir/feed"   # EDIT
-# feed_token_file = "/run/secrets/ferrofed/pmir-feed-token"
+# feed_users = ["pmir-registry"]
 #
-# [pmir.credentials]
-# bearer_token_file = "/run/secrets/ferrofed/pmir-registry-token"
+# [pmir.credentials.oauth]
+# token_endpoint = "https://pmir.example.org/auth/token"   # EDIT
+# client_id = "ferrofed-pmir-subscriber"
+# client_auth = "client_secret_basic"
+# client_secret_file = "/run/secrets/ferrofed/pmir-subscriber-secret"
+# scope = "*"
+#
+# [[auth.basic.users]]
+# user = "pmir-registry"
+# password_hash_file = "/run/secrets/ferrofed/pmir-registry-hash"   # its Argon2id PHC string
 
 # EDIT: the credentials the gateway sends each endpoint of registry.toml, one
-# section per endpoint id: a bearer token, or a user and a password. Leave an
-# endpoint out when it needs none.
-[credentials."node-a-query"]
-bearer_token_file = "/run/secrets/ferrofed/node-a-token"
+# section per endpoint id: the OAuth 2.0 client credentials grant, the
+# default onward mechanism of the Federation Tier (§13.1), or a user and a
+# password. Leave an endpoint out when it needs none.
+# https://ferrofed.eu/docs/operate/onward-credentials.html#oauth-20-to-a-node
+[credentials."node-a-query".oauth]
+issuer = "https://auth.node-a.example.org"
+client_id = "ferrofed-gateway"
+client_auth = "client_secret_basic"
+client_secret_file = "/run/secrets/ferrofed/node-a-client-secret"
+scope = "system/aql-*.s"
+# Or a private_key_jwt client assertion (RFC 7523 §2.2), its public key
+# published in the gateway's JWK Set:
+# client_auth = "private_key_jwt"
+# private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
+# assertion_alg = "ES384"
 
 [credentials."node-b-query"]
 user = "ferrofed"
 password_file = "/run/secrets/ferrofed/node-b-password"
-
-# Or OAuth 2.0 client credentials with a signed JWT client assertion, the
-# default onward mechanism of the Federation Tier (§13.1): the gateway
-# obtains a token at the node's token endpoint and sends that. Use it in
-# place of the section above for that endpoint.
-# https://ferrofed.eu/docs/operate/onward-credentials.html#oauth-20-to-a-node
-# [credentials."node-b-query".oauth2]
-# grant = "client_credentials"
-# client_auth = "private_key_jwt"
-# token_endpoint = "https://auth.node-b.example.org/oauth2/token"
-# client_id = "ferrofed-gateway"
-# scope = "system/aql-*.s"
 
 # The gateway's signing key, a P-384 (ES384) or P-256 (ES256) key in PKCS#8
 # PEM, required: it signs the caller's identity onto every request to a

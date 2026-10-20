@@ -335,7 +335,6 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
     let credentials = service::service_authentication(
         "registry.mcsd.credentials",
         settings.credentials.as_ref(),
-        &tls,
     )?;
     let source = DirectorySource::new(DirectoryConfig {
         base: settings.url.clone(),

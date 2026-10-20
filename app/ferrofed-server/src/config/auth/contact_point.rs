@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[auth.issuer.national_contact_point]`, as written and as resolved.
+//! `[trust.issuer.national_contact_point]`, as written and as resolved.
 //!
 //! The table declares an issuer as a national contact point for digital
 //! health, whose national connector relays the requests of health
@@ -21,7 +21,7 @@ use serde::Deserialize;
 use crate::config::auth::{AuthFault, fault};
 use crate::config::error::Error;
 
-/// `[auth.issuer.national_contact_point]`: the names of the string claims
+/// `[trust.issuer.national_contact_point]`: the names of the string claims
 /// that carry the 2026/2099 Annex attributes IHE IUA defines no claim for,
 /// and the header a correlation identifier travels in.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

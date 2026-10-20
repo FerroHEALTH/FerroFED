@@ -254,7 +254,8 @@ pub fn loopback_payload(
     }
 }
 /// The sites each endpoint's onward credentials send to: the endpoint's own
-/// URL in `registry`, an OAuth 2.0 grant's token endpoint, a Nuts grant's
+/// URL in `registry`, an OAuth 2.0 grant's token endpoint when it is
+/// configured outright, a Nuts grant's
 /// authorization server and a FAPI 2.0 grant's issuer, in key order.
 fn credential_sites(
     settings: &Settings,
@@ -285,6 +286,17 @@ fn credential_sites(
                 site(
                     format!("{section}.oauth2.token_endpoint"),
                     format!("{section}.oauth2"),
+                ),
+            ));
+        }
+        if let Scheme::Oauth { grant, .. } = scheme
+            && let Some(endpoint) = crate::config::oauth::token_endpoint(grant)
+        {
+            sites.push((
+                endpoint.as_str().to_owned(),
+                site(
+                    format!("{section}.oauth.token_endpoint"),
+                    format!("{section}.oauth"),
                 ),
             ));
         }
@@ -560,24 +572,24 @@ mod tests {
     #[test]
     fn a_trust_anchor_is_https_or_loopback_http() {
         for good in [
-            "https://issuer.example.test/jwks",
-            "http://127.0.0.1:8443/jwks",
-            "http://[::1]:8443/jwks",
-            "http://localhost/jwks",
+            "https://issuer.example.test/introspect",
+            "http://127.0.0.1:8443/introspect",
+            "http://[::1]:8443/introspect",
+            "http://localhost/introspect",
         ] {
             let url = Url::parse(good).expect("a test URL parses");
             assert_eq!(
                 Ok(()),
-                trust_anchor("auth.issuer[0].jwks_uri", &url),
+                trust_anchor("trust.issuer[0].introspection_endpoint", &url),
                 "{good}"
             );
         }
-        let url = Url::parse("http://issuer.example.test/jwks").expect("a test URL parses");
+        let url = Url::parse("http://issuer.example.test/introspect").expect("a test URL parses");
         assert_eq!(
             Err(TrustAnchorError {
-                key: String::from("auth.issuer[0].jwks_uri")
+                key: String::from("trust.issuer[0].introspection_endpoint")
             }),
-            trust_anchor("auth.issuer[0].jwks_uri", &url)
+            trust_anchor("trust.issuer[0].introspection_endpoint", &url)
         );
     }
 }

@@ -27,8 +27,8 @@ pub(super) mod search;
 
 use axum::response::Response;
 use eehrxf::category::Category;
+use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily};
 use http::{Method, StatusCode};
-use openehr_sdt::smart_scopes::{Permission, ResourceFamily};
 
 use crate::auth::permission::{Requirement, Resource};
 use crate::config::fhir::FhirSettings;

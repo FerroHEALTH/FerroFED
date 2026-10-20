@@ -23,7 +23,7 @@ over time.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener; unset, nothing listens
 allow_remote = false          # true lets listen name a non-loopback address
-scrape_token_file = "/run/secrets/ferrofed/metrics-scrape-token"   # the bearer token a scrape must carry; unset, the scrape is open
+scrape_users = ["prometheus"]  # the [[auth.basic.users]] a scrape may authenticate as; empty, the scrape is open
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothing is pushed
 ```
 
@@ -45,18 +45,18 @@ gateway's own listener, so no client of the federation reaches it.
 
 | Request | Admitted | Refused |
 |---|---|---|
-| `GET /metrics`, no `scrape_token` set | every peer | never |
-| `GET /metrics`, `scrape_token` set | a scrape with `Authorization: Bearer <the scrape token>` | `401 unauthenticated` with a `WWW-Authenticate: Bearer` challenge, for a scrape with no token, another token or another scheme |
-| A write action, such as the distribution | a caller whose access token carries the `operator_scope` of its [`[[auth.issuer]]`](authentication.md#the-operator-surface), from any peer | `401 unauthenticated` without a token that verifies, `403 scope-insufficient` without the operator scope |
+| `GET /metrics`, no `scrape_users` named | every peer | never |
+| `GET /metrics`, `scrape_users` named | a scrape with the HTTP Basic credentials (RFC 7617) of a user `scrape_users` names | `401 unauthenticated` with a `WWW-Authenticate: Basic` challenge, for a scrape with no credentials, a password that does not verify or another scheme; `403 operation-refused` for another `[[auth.basic.users]]` user |
+| A write action, such as the distribution | a caller whose access token carries [`auth.product_scope`](authentication.md#the-operator-surface), from any peer | `401 unauthenticated` without a token that verifies, `403 scope-insufficient` without the operator scope |
 | A write action under `profile = "development"` | as above, and a loopback peer (`127.0.0.0/8`, `::1`) that sends no credential | as above |
 | A read of the configuration revisions, `GET /admin/config…` | as a write action, and never recorded as one | as a write action |
 
 A write action is verified by the same client authentication as the
 gateway's own listener, against the issuers of `[auth]` and in its mode,
-and needs no purpose of use. An issuer that names no `operator_scope`
-admits no operator, so with none the write actions are refused to every
-caller outside the development profile. The scrape token admits the scrape
-alone, never a write action. Every refusal is counted under
+and needs no purpose of use. Without `auth.product_scope` no caller is an
+operator, so the write actions are refused to every caller outside the
+development profile. A scrape user admits the scrape alone, never a write
+action. Every refusal is counted under
 `ferrofed_security_events_total` as `admin-write-refused` or
 `scrape-refused`, and logged under the target `ferrofed::security` with
 its reason, never the credential.
@@ -81,16 +81,24 @@ and restrict who reads them. No `[telemetry] filter` quiets the
 `ferrofed::security` target below `info`, so the records are written
 whatever the filter says.
 
-`scrape_token`, or `scrape_token_file` with the token in a file read at
-start, sets the scrape token; give one or the other. Prometheus sends it
-with `authorization` in the scrape job:
+`scrape_users` names users of `[[auth.basic.users]]`, each with the
+Argon2id hash of its password ([Client authentication](authentication.md#configuration)):
+
+```toml
+[[auth.basic.users]]
+user = "prometheus"
+password_hash_file = "/run/secrets/ferrofed/metrics-scrape-hash"
+```
+
+The gateway takes no static bearer token, here or anywhere else. Prometheus sends the Basic credentials with `basic_auth` in the
+scrape job:
 
 ```yaml
 scrape_configs:
   - job_name: ferrofed
-    authorization:
-      type: Bearer
-      credentials_file: /etc/prometheus/secrets/ferrofed-scrape-token
+    basic_auth:
+      username: prometheus
+      password_file: /etc/prometheus/secrets/ferrofed-scrape-password
     static_configs:
       - targets: ["gateway.example.org:9464"]
 ```
@@ -111,9 +119,8 @@ answers. `serve` and `config check` refuse:
   enforces it;
 - outside `profile = "development"`, a `listen` address that is not a
   loopback address with nothing to authenticate the scrape: neither
-  `scrape_token` nor `[metrics.tls] client_ca_file`;
-- `scrape_token` and `scrape_token_file` both set, and a
-  `scrape_token_file` that cannot be read or holds nothing;
+  `scrape_users` nor `[metrics.tls] client_ca_file`;
+- a `scrape_users` entry that no `[[auth.basic.users]]` entry writes;
 - a `listen` address equal to `server.listen`;
 - an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
   without TLS, so run the collector beside the gateway, on the same host or
@@ -229,7 +236,7 @@ path reaches the surface:
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
 | `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`, `admin-write-admitted`, `write-unrecorded`: the `event` field of the log line |
-| `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic`, `natural-person`, `assurance`, `contact-point-attributes`, `correlation` |
+| `reason` | on `ferrofed_security_events_total`, why the gate refused the caller: `missing`, `malformed`, `invalid`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic`, `natural-person`, `assurance`, `contact-point-attributes`, `correlation` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
 
@@ -318,11 +325,11 @@ scrape counts nothing. `scripts/checks/observability.sh` holds both files to
 the metrics the gateway exports, and runs `promtool check rules`.
 
 The Kubernetes example (`deploy/kubernetes/`) serves the admin listener on
-port `9464` of each pod, with the scrape token in the `metrics-scrape-token`
-key of the `ferrofed-secrets` Secret, annotates the pods for a Prometheus
+port `9464` of each pod, with the scrape user's password hash in the
+`metrics-scrape-hash` key of the `ferrofed-secrets` Secret, annotates the pods for a Prometheus
 that reads `prometheus.io/scrape`, and opens the port to the Prometheus pods
 of the `monitoring` namespace alone with a network policy. Give the
-Prometheus job the same token with `authorization.credentials_file`. The
+Prometheus job the scrape user's password with `basic_auth.password_file`. The
 gateway authenticates the scrape and every write action by itself, so the
 policy is defence in depth.
 

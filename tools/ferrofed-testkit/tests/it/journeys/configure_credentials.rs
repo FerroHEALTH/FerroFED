@@ -42,7 +42,7 @@ const STANDING: &str = r#"{"ui":"managed","head":3,"current":{"revision":2,"prev
 const RESOURCES: &str = r#"{"running":2,"head":3,"members":[],"stored_query_registry":"absent",
     "stored_queries":[],
     "sections":[{"resource":{"credentials":"node-a-pub"},"owner":"console","state":"running",
-      "settings":"{}","secrets":[{"key":"bearer_token","reference":"/var/lib/ferrofed/secrets/a.secret"}]}],
+      "settings":"{ user = \"gateway\" }","secrets":[{"key":"password","reference":"/var/lib/ferrofed/secrets/a.secret"}]}],
     "bindings":["localization","consent"]}"#;
 
 /// No history.
@@ -54,7 +54,7 @@ const DIFF_3: &str = r#"{"from":2,"to":3,"changes":[
 
 /// What revision 4, the save, changes against revision 2.
 const DIFF_4: &str = r#"{"from":2,"to":4,"changes":[
-    {"key":"credentials.node-a-pub.bearer_token_file","change":"changed",
+    {"key":"credentials.node-a-pub.password_file","change":"changed",
      "from":"\"/var/lib/ferrofed/secrets/a.secret\"","to":"\"/var/lib/ferrofed/secrets/b.secret\""}]}"#;
 
 /// Revision 4 as the save answers it.
@@ -122,7 +122,7 @@ fn value_field(key: &str) -> By {
     ))
 }
 
-/// Saves the credentials of node A with a bearer token typed into its Set
+/// Saves the credentials of node A with a password typed into its Set
 /// a value field: the value goes to the replica in the save and is never
 /// shown again, in the answer or the page drawn afterwards.
 async fn secret_saved(
@@ -139,7 +139,7 @@ async fn secret_saved(
         ),
     )
     .await?;
-    let password = browser.element(value_field("bearer_token")).await?;
+    let password = browser.element(value_field("password")).await?;
     assert!(
         !password.is_displayed().await?,
         "the value field shows once Set a value is chosen"
@@ -150,11 +150,7 @@ async fn secret_saved(
         "a password field is never filled"
     );
     browser
-        .press(
-            &browser
-                .element(choice("bearer_token", "Set a value"))
-                .await?,
-        )
+        .press(&browser.element(choice("password", "Set a value")).await?)
         .await?;
     assert!(
         password.is_displayed().await?,

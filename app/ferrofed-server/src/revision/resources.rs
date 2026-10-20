@@ -622,14 +622,14 @@ mod tests {
 
     #[test]
     fn settings_that_name_a_secret_and_a_change_that_reads_badly_are_refused() {
-        let refused = compose(table("bearer_token_file = \"/x\""), None, &[], |_, _| {
+        let refused = compose(table("password_file = \"/x\""), None, &[], |_, _| {
             Err(SectionFault::Settings)
         });
         assert!(matches!(
             refused,
             Err(SectionFault::SecretInSettings { .. })
         ));
-        let mut both = change("bearer_token");
+        let mut both = change("password");
         both.file = Some(String::from("/x"));
         both.clear = true;
         assert!(matches!(
@@ -638,7 +638,7 @@ mod tests {
             )),
             Err(SectionFault::Change { .. })
         ));
-        let mut relative = change("bearer_token");
+        let mut relative = change("password");
         relative.file = Some(String::from("x"));
         assert!(matches!(
             compose(toml::Table::new(), None, &[relative], |_, _| Err(
@@ -666,15 +666,15 @@ mod tests {
 
     #[test]
     fn a_value_is_written_by_the_callback_and_referenced() {
-        let mut valued = change("bearer_token");
+        let mut valued = change("password");
         valued.value = Some(WriteOnly::new("synthetic-token-91"));
         let composed = compose(toml::Table::new(), None, &[valued], |key, value| {
-            assert_eq!("bearer_token", key);
+            assert_eq!("password", key);
             assert_eq!("synthetic-token-91", value.expose());
             Ok(PathBuf::from("/secrets/written"))
         })
         .unwrap();
-        assert_eq!(table("bearer_token_file = \"/secrets/written\""), composed);
+        assert_eq!(table("password_file = \"/secrets/written\""), composed);
     }
 
     #[test]

@@ -88,7 +88,7 @@ fn operator() -> Result<String, Box<dyn Error>> {
 /// The admin listener's application under `profile`, as a request from
 /// `peer` reaches it.
 fn listener(profile: Profile, peer: SocketAddr) -> Router {
-    let access = Access::new(&support::auth(), profile, None);
+    let access = Access::new(&support::auth(), profile, Vec::new());
     admin::router(Arc::new(AppState::default()), access).layer(MockConnectInfo(peer))
 }
 

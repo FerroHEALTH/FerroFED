@@ -549,7 +549,7 @@ fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
 #[test]
 fn a_pix_manager_secret_never_reaches_debug_output() -> TestResult {
     let text = format!(
-        "{NO_REGISTRY_AUDIT}{}\n[pixm.manager.credentials]\nbearer_token = \"synthetic-pix-token\"\n",
+        "{NO_REGISTRY_AUDIT}{}\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"synthetic-pix-token\"\n",
         pixm("https://127.0.0.1:9")
     );
     let settings =
@@ -558,7 +558,7 @@ fn a_pix_manager_secret_never_reaches_debug_output() -> TestResult {
     // leaked secret into the test log it is meant to keep it out of.
     assert!(
         !format!("{settings:?}").contains("synthetic-pix-token"),
-        "Debug output carries the PIX Manager token"
+        "Debug output carries the PIX Manager password"
     );
     Ok(())
 }

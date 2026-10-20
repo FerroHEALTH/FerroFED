@@ -100,6 +100,7 @@ pub mod state;
 pub mod stored;
 pub mod support;
 pub mod telemetry;
+pub mod upstream;
 
 use std::future::Future;
 use std::sync::Arc;
@@ -221,7 +222,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
         )
         .fallback(facade::route::unrouted);
     let surface = operator::routes(surface, state.replica());
-    let surface = state.processes().routes(surface);
+    let surface = state.processes().routes(surface, &trust);
     let routes = if server.base_path.is_root() {
         surface.route("/", base_root())
     } else {

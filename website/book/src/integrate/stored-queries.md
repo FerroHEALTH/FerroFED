@@ -264,7 +264,7 @@ version is a `409` (§12.7). The specification gives drift repair no
 request, so the gateway offers it to its operator alone, on the
 [admin listener](../operate/metrics.md) beside the metrics. Where
 `[metrics] listen` is unset, the action does not exist. It answers a
-caller whose access token carries the `operator_scope` of its issuer, from
+caller whose access token carries `auth.product_scope`, from
 any address; without a token it is `401` (`unauthenticated`), and without
 the scope `403` (`scope-insufficient`)
 ([Who the admin listener serves](../operate/metrics.md#who-the-admin-listener-serves)).

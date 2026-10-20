@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The issuer-bound `patient/` opt-in (`[auth.issuer.patient]`): a token's
+//! The issuer-bound `patient/` opt-in (`[trust.issuer.patient]`): a token's
 //! `ehrId` (SMART on openEHR master04 §Capabilities, master07 §Context
 //! Selection) read as an identifier in the bound member's `ehr_id` system,
 //! resolved through the cross-reference at every member (§5.2), and every
@@ -556,10 +556,10 @@ fn configured(dir: &Path, endpoint: &str, resolving: bool) -> Result<String, Box
     Ok(format!(
         "{profile}[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{crossref}\n\
-         [auth]\naudience = \"urn:example:gateway\"\n\n\
-         [[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\
-         jwks_uri = \"https://issuer.example.test/jwks\"\n\n\
-         [auth.issuer.patient]\nendpoint = \"{endpoint}\"\nehr_id_system = \"{EHR_SYSTEM}\"\n"
+         [auth]\naudience = [\"urn:example:gateway\"]\n\n\
+         [[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n\
+         [[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n\
+         [trust.issuer.patient]\nendpoint = \"{endpoint}\"\nehr_id_system = \"{EHR_SYSTEM}\"\n"
     ))
 }
 
@@ -580,7 +580,8 @@ fn config_check_refuses_a_binding_to_an_endpoint_the_registry_lacks() -> TestRes
     let (code, stderr) = checked(&configured(dir.path(), "node-z-pub", true)?)?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), code, "{stderr}");
     assert!(
-        stderr.contains("auth.issuer[0].patient") && stderr.contains("node-z-pub"),
+        stderr.contains("trust.issuer \"https://issuer.example.test\".patient")
+            && stderr.contains("node-z-pub"),
         "{stderr}"
     );
     let (code, stderr) = checked(&configured(dir.path(), "node-a-pub", true)?)?;
@@ -596,7 +597,8 @@ fn config_check_refuses_a_binding_without_a_resolver() -> TestResult {
     let (code, stderr) = checked(&configured(dir.path(), "node-a-pub", false)?)?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), code, "{stderr}");
     assert!(
-        stderr.contains("auth.issuer[0].patient") && stderr.contains("resolver"),
+        stderr.contains("trust.issuer \"https://issuer.example.test\".patient")
+            && stderr.contains("resolver"),
         "{stderr}"
     );
     Ok(())

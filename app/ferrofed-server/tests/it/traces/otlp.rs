@@ -158,7 +158,7 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
         collector.endpoint(),
         toml::Value::String(document.display().to_string()),
         resolving(PATIENT)?,
-        auth_toml()?,
+        auth_toml(),
     ));
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(config.as_bytes())?;

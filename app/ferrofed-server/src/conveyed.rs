@@ -73,6 +73,9 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Result<Signer, F
             Scheme::Fapi2(grant) => {
                 signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
             }
+            Scheme::Oauth { grant, .. } => {
+                signer = signer.with_issuer_at(endpoint.clone(), &grant.client_id);
+            }
             _ => {}
         }
     }

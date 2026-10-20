@@ -5,13 +5,15 @@
 
 How the gateway authenticates to each node it sends a request to (§13.1,
 N25). Each endpoint's `[credentials."<id>"]` section names one scheme: a
-bearer token or a user and a password
-([Configuration](configuration.md#the-file)), or one of the grants on this
-page, which obtain a token at the node's authorization server before the
-request:
+user and a password ([Configuration](configuration.md#the-file)), or one of
+the grants on this page, which obtain a token at the node's authorization
+server before the request:
 
-- `oauth2`: the client-credentials grant or token exchange, authenticated
-  by an ES256 or ES384 assertion signed with the `[signing]` key;
+- `oauth`: the client-credentials grant of `ferrohealth-smart`, the table
+  every FerroHEALTH product reads for an upstream it calls as itself;
+- `oauth2`: token exchange, or a client-credentials token bound to a key or
+  a certificate, authenticated by an ES256 or ES384 assertion signed with
+  the `[signing]` key;
 - `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4);
 - `fapi2`: an authorization server under the FAPI 2.0 Security Profile,
   such as the BgZ/eOverdracht track (Annex B §B.4a).
@@ -25,10 +27,48 @@ token.
 
 ## OAuth 2.0 to a node
 
-An `oauth2` section makes the gateway authenticate to that node as itself
+An `oauth` section makes the gateway authenticate to that node as itself
 (§13.1, N25). Before a request, it asks the node's token endpoint for an
-access token with the client-credentials grant (RFC 6749 §4.4). It
-authenticates there with a JWT client assertion (RFC 7523 §2.2), signed
+access token with the client-credentials grant (RFC 6749 §4.4), and sends
+the token as `Authorization: Bearer` (RFC 6750 §2.1):
+
+```toml
+[credentials."cdr-c".oauth]
+token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"   # or issuer, read from its RFC 8414 metadata
+client_id = "ferrofed-gateway"
+client_auth = "private_key_jwt"                 # or client_secret_basic, client_secret_post
+private_key_file = "/run/secrets/cdr-c-client.pem"
+# assertion_alg = "ES256"                       # by the key type when unset
+scope = "system/aql-*.s system/composition-*.cru"
+# resource = "https://cdr-c.example.org/openehr"   # RFC 8707
+```
+
+- `client_auth = "private_key_jwt"`, the default mechanism of §13.1, signs
+  a JWT client assertion (RFC 7523 §2.2) with the key in
+  `private_key_file`; the gateway publishes its public half in its JWK Set
+  ([Signing keys and the JWK Set](#signing-keys-and-the-jwk-set)), under the
+  RFC 7638 thumbprint as its `kid` unless `kid` names another. The
+  assertion names `client_id` as its `iss` and `sub` and the token endpoint
+  as its `aud`. `client_secret_basic` and `client_secret_post` send
+  `client_secret` or `client_secret_file` instead (RFC 6749 §2.3.1).
+- `scope` is held to the system compartment of the SMART on openEHR
+  grammar, as for `oauth2` below.
+- `token_endpoint` is `https` outside `profile = "development"`; one read
+  from `issuer` is always `https`.
+- `refresh_margin_ms`, 30 seconds by default, is how long before the token
+  expires a new one is fetched; `timeout_ms` bounds each call to the
+  authorization server.
+
+A node that answers `401` drops the cached token, and the next request
+obtains a new one. When no token can be obtained, that node is reported
+`node-error` and is sent nothing.
+
+An `oauth2` section does what `oauth` does not: token exchange, a token
+bound to a `DPoP` key or the TLS client certificate, authentication by that
+certificate, or an assertion naming the authorization server's issuer. An
+`oauth2` section that asks for none of these, a plain client-credentials
+token, is refused at load, naming the section, and points at `oauth`. It
+authenticates with a JWT client assertion (RFC 7523 §2.2), signed
 with the `[signing]` key, ES256 or ES384 as its curve says. The assertion
 names `client_id` as its `iss` and `sub` and the token endpoint as its
 `aud`, lives

@@ -40,7 +40,7 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |
 | `national_provider_identifier_authority` | the name of the agency that issued that identifier, when the caller's issuer sets `professional_issuing_authority` and the token states it (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`) |
 | `subject_role` | the professional's roles, each as `{"system", "code"}`, when the caller's token states `extensions.ihe_iua.subject_role` (IHE IUA) |
-| `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[auth.issuer.assurance]` and the token states a value it lists |
+| `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[trust.issuer.assurance]` and the token states a value it lists |
 | `national_contact_point` | for a caller a [national contact point](authentication.md#national-contact-points) vouched for: `health_professional`, every row of Implementing Regulation (EU) 2026/2099 Annex Table 1 under its data identifier, `healthcare_provider`, every row of Table 2, and `asserted_by`, the contact point's issuer, which marks them as its assertion |
 
 With `subject_organization_id`, the provider's identifier, the professional

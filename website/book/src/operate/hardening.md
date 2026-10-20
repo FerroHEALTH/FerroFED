@@ -75,40 +75,39 @@ page: our own design.
 
 - [ ] **Trust as few issuers as you can.** Every token an issuer signs is
   admitted for the scopes it carries, so an issuer you list is trusted for
-  every caller it vouches for (B7). Give each `jwks_uri` or
-  `introspection_endpoint` over `https`.
+  every caller it vouches for (B7). Serve each issuer's metadata, key set
+  and `introspection_endpoint` over `https`.
 - [ ] **Name the privileged clients per issuer.** `backend_clients` for
-  `system/aql-*`, `demographic_clients` for the DEMOGRAPHIC API, and an
-  `operator_scope` only on the issuer your operators sign in at
-  ([Client authentication](authentication.md)).
+  `system/aql-*` and `demographic_clients` for the DEMOGRAPHIC API, under
+  `[[trust.issuer]]`, and have only the issuer your operators sign in at
+  grant `auth.product_scope` ([Client authentication](authentication.md)).
 - [ ] **Require an assurance level per issuer.** Set
-  `[auth.issuer.assurance]` on every issuer whose tokens reach patient data,
+  `[trust.issuer.assurance]` on every issuer whose tokens reach patient data,
   with the values it writes for each level and the least level you accept;
   `config check` names each issuer without one. Declare
   `client_tokens_act_for_professional` only for an issuer whose client
   tokens name the professional they act for
   ([Professionals and assurance](authentication.md#professionals-and-assurance)).
-- [ ] **Keep `auth.purpose_of_use.required = true`**, its default, unless
+- [ ] **Keep `trust.purpose_of_use.required = true`**, its default, unless
   your §13.4 decisions say why not
   ([Purpose of use](authentication.md#purpose-of-use)).
 - [ ] **Bind a patient grant only with a cross-reference you trust.** An
-  `[auth.issuer.patient]` binding confines a `patient/` grant through your
+  `[trust.issuer.patient]` binding confines a `patient/` grant through your
   identity service's links; leave it unset otherwise
   ([Patient grants](authentication.md#patient-grants)).
-- [ ] **Use the edge mode only with a signing proxy.** `auth.mode = "edge"`
+- [ ] **Use the edge mode only with a signing proxy.** `trust.mode = "edge"`
   verifies a signed assertion and nothing else; never configure a proxy that
   forwards an unsigned identity header (RFC 7239 §8.1).
 - [ ] **Know how to remove an issuer.** Remove its `[[auth.issuer]]` and
-  reload, with `SIGHUP` or `POST /admin/reload`
+  `[[trust.issuer]]` entries and reload, with `SIGHUP` or `POST /admin/reload`
   ([Reloading the registry](registry.md#reloading-the-registry)); write the
   steps into your incident runbook.
 
 ## Secrets
 
 - [ ] **Read every secret from a file.** Each credential has a `_file` key:
-  `bearer_token_file`, `password_file`, `client_secret_file`,
-  `client_identity_file`, `key_file`, `feed_token_file`,
-  `scrape_token_file`. Setting a secret both inline and by file is refused
+  `password_file`, `password_hash_file`, `client_secret_file`,
+  `private_key_file`, `client_identity_file`, `key_file`. Setting a secret both inline and by file is refused
   ([Configuration](configuration.md#running-it)).
 - [ ] **Make each file readable by the gateway's user alone.** The image
   runs as `65532:65532`; mount the files read-only with mode `0400`, or
@@ -152,19 +151,19 @@ page: our own design.
   it to an internal address the console's server can reach and no public
   network can ([The operator console](operator-console.md#configuration)).
   The console presents no client certificate: guard the scrape with
-  `scrape_token_file` on a listener the console calls, never with a
+  `scrape_users` on a listener the console calls, never with a
   `client_ca_file`.
-- [ ] **Authenticate the scrape off loopback.** Set `scrape_token_file` to
-  a file holding a long random token, such as `openssl rand -hex 32`, and
-  give your Prometheus the same token with `authorization.credentials_file`;
-  or set `[metrics.tls]` with a `client_ca_file` that admits the scraper.
+- [ ] **Authenticate the scrape off loopback.** Name a scrape user in
+  `metrics.scrape_users`, write it under `[[auth.basic.users]]` with the
+  Argon2id hash of a long random password, such as `openssl rand -hex 32`,
+  and give your Prometheus the password with `basic_auth.password_file`; or
+  set `[metrics.tls]` with a `client_ca_file` that admits the scraper.
   Outside the development profile the gateway refuses to start with a
-  listener off loopback and neither. Rotate the token with your scraper:
-  both read it at start.
-- [ ] **Name an `operator_scope` on the issuer your operators use**, and
-  grant it to them alone. A write action, such as the stored-query
+  listener off loopback and neither.
+- [ ] **Set `auth.product_scope`** and have only your operators' issuer
+  grant it, to them alone. A write action, such as the stored-query
   distribution, needs a token carrying it from every peer, loopback
-  included; an issuer that names none admits no operator
+  included; without it no caller is an operator
   ([The operator surface](authentication.md#the-operator-surface)).
 - [ ] **Never run a production gateway under `profile = "development"`.**
   It admits any process that reaches the listener's loopback address to the
@@ -200,8 +199,10 @@ page: our own design.
 
 - [ ] **Use `https` and, where offered, mutual TLS** to the PIX Manager,
   the PDQm Supplier, the XCPD gateways, the NVI and Mitz (B3).
-- [ ] **Agree the PMIR feed token with the Registry's operator** and keep it
-  in `feed_token_file`; a message without it changes nothing.
+- [ ] **Give the PMIR Registry its own Basic user.** Write it under
+  `[[auth.basic.users]]`, name it in `pmir.feed_users`, and agree the
+  password with the Registry's operator; a message without its credentials
+  changes nothing.
 - [ ] **Set `federation.binding_ttl_ms`** no longer than you would accept a
   follow-up routed on a superseded identity
   ([Resolution bindings](registry.md#resolution-bindings)).

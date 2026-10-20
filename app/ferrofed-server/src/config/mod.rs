@@ -28,6 +28,7 @@ pub mod fhir;
 pub mod grant;
 pub mod limits;
 mod load;
+pub mod oauth;
 pub mod public_url;
 pub mod registry;
 pub(crate) mod resolve;
@@ -126,8 +127,12 @@ pub struct Config {
     /// assertion of every OAuth 2.0 grant to a node and which the gateway
     /// publishes as a JWK Set (§13.1, N25).
     pub signing: Option<Signing>,
-    /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25).
+    /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25):
+    /// the section `ferrohealth-smart` reads.
     pub auth: auth::Auth,
+    /// What each trusted issuer's tokens are honoured for, the introspected
+    /// issuer, the edge mode and the purpose-of-use rule (`[trust]`).
+    pub trust: auth::trust::Trust,
     /// The category map every access record is classified with
     /// (`[access_log]`, #623).
     pub access_log: crate::access::config::AccessLog,
@@ -169,6 +174,7 @@ impl Default for Config {
             metrics: server::Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
+            trust: auth::trust::Trust::default(),
             access_log: crate::access::config::AccessLog::default(),
             audit: crate::audit::config::Audit::default(),
             revisions: revisions::Revisions::default(),
@@ -477,9 +483,12 @@ impl Default for Telemetry {
 
 /// The credentials one endpoint expects.
 ///
-/// A section names a bearer token, basic credentials, an OAuth 2.0 grant, a
-/// Nuts grant or a FAPI 2.0 grant, and for a node the TLS client
-/// certificate the gateway presents to it and to its authorization server.
+/// A section names basic credentials, the OAuth 2.0 client credentials grant
+/// of `ferrohealth-smart` (`oauth`), FerroFED's own OAuth 2.0 grant for what
+/// that one does not carry (`oauth2`), a Nuts grant or a FAPI 2.0 grant, and
+/// for a node the TLS client certificate the gateway presents to it and to
+/// its authorization server. Machine-to-machine authentication is HTTP
+/// Basic or an OAuth 2.0 grant, never a static bearer token.
 /// Every secret is reachable inline or through its `_file` sibling; setting
 /// both is a boot error, and so is naming two schemes. A node's section may
 /// name its TLS material alone, when the transport authenticates the
@@ -487,19 +496,23 @@ impl Default for Telemetry {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Credentials {
-    /// An RFC 6750 bearer token.
-    pub bearer_token: Option<Secret>,
-    /// A file holding the bearer token, read at boot.
-    pub bearer_token_file: Option<PathBuf>,
     /// The user name of RFC 7617 basic authentication.
     pub user: Option<String>,
     /// The password of RFC 7617 basic authentication.
     pub password: Option<Secret>,
     /// A file holding the password, read at boot.
     pub password_file: Option<PathBuf>,
-    /// An OAuth 2.0 client-credentials grant at the node's token endpoint
-    /// (`[credentials."<endpoint id>".oauth2]`), the default onward mechanism
-    /// of §13.1 (N25).
+    /// The OAuth 2.0 client credentials grant (RFC 6749 §4.4) of
+    /// `ferrohealth-smart` (`[credentials."<endpoint id>".oauth]`), the
+    /// default onward mechanism of §13.1 (N25): a token obtained with a
+    /// client secret or a `private_key_jwt` assertion, cached, and renewed
+    /// once on a `401`.
+    pub oauth: Option<oauth::Oauth>,
+    /// FerroFED's own OAuth 2.0 grant at the node's token endpoint
+    /// (`[credentials."<endpoint id>".oauth2]`), for what `oauth` does not
+    /// carry: token exchange, tokens bound with `DPoP` or to the TLS client
+    /// certificate, authentication by that certificate, and an assertion
+    /// naming the issuer.
     pub oauth2: Option<OAuth2>,
     /// The Nuts grant of the Dutch Generic Functions
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of

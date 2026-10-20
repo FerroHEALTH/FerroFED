@@ -20,13 +20,14 @@
 //!
 //! Every write or administrative action, the distribution, the clear, the export and the reload among them, is
 //! admitted by the gateway's client authentication ([`Gate`](crate::auth::Gate), built from
-//! `[auth]`) only for a caller whose token carries the operator scope its
-//! issuer's entry names, from any peer ([`operator_only`]). Under
-//! `profile = "development"` a loopback peer that presents no credential is
-//! admitted as well. `GET /metrics` is open unless `[metrics] scrape_token`
-//! is set, and then answers only a scrape that carries that token as its
-//! bearer token ([`scrape`]). Every refusal is an [`AdminRefusal`], and every
-//! write action that ran is recorded with its [`Operator`].
+//! `[auth]`) only for a caller whose token carries `[auth] product_scope`,
+//! from any peer ([`operator_only`]). Under `profile = "development"` a
+//! loopback peer that presents no credential is admitted as well. `GET
+//! /metrics` is open unless `[metrics] scrape_users` names Basic users, and
+//! then answers only a scrape that authenticates as one of them with HTTP
+//! Basic, checked against `[[auth.basic.users]]` ([`scrape`]). Every refusal
+//! is an [`AdminRefusal`], and every write action that ran is recorded with
+//! its [`Operator`].
 // NOTE: no specification governs this: our own design; §12.7 gives drift repair
 // no request, so the gateway offers it to the operator only, beside the metrics.
 
@@ -45,12 +46,11 @@ use axum::{Json, Router};
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::EhrId;
-use ferrofed_registry::secret::Secret;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 
 use crate::auth::caller::Caller;
 use crate::auth::permission::Requirement;
-use crate::auth::refusal::{REALM, Refusal};
+use crate::auth::refusal::{BasicRefusal, Refused};
 use crate::auth::trust::Trust;
 use crate::config::auth::AuthSettings;
 use crate::config::settings::Settings;
@@ -89,17 +89,13 @@ pub const RELOAD: &str = "/admin/reload";
 pub enum AdminRefusal {
     /// Client authentication refused the caller of a write action: no
     /// credential, one that does not verify, or a token without the
-    /// operator scope.
-    #[error("client authentication refused the caller of an admin action: {}", .0.description())]
-    Caller(Refusal),
-    /// A scrape of `GET /metrics` carries no credential, and the listener
-    /// has a scrape token.
-    #[error("the scrape carries no bearer token")]
-    ScrapeMissing,
-    /// A scrape of `GET /metrics` carries a credential that is not the
-    /// scrape token as its one bearer token.
-    #[error("the scrape carries a credential other than the scrape token")]
-    ScrapeToken,
+    /// product scope.
+    #[error("client authentication refused the caller of an admin action: {}", .0.refusal.description())]
+    Caller(Refused),
+    /// A scrape of `GET /metrics` carries no Basic credential of a user in
+    /// `[metrics] scrape_users`.
+    #[error("the scrape carries no Basic credential of a scrape user: {}", .0.reason())]
+    Scrape(BasicRefusal),
 }
 
 impl AdminRefusal {
@@ -108,7 +104,7 @@ impl AdminRefusal {
     pub const fn event(self) -> Event {
         match self {
             Self::Caller(_) => Event::AdminWriteRefused,
-            Self::ScrapeMissing | Self::ScrapeToken => Event::ScrapeRefused,
+            Self::Scrape(_) => Event::ScrapeRefused,
         }
     }
 
@@ -116,31 +112,20 @@ impl AdminRefusal {
     #[must_use]
     pub const fn reason(self) -> &'static str {
         match self {
-            Self::Caller(refusal) => refusal.reason(),
-            Self::ScrapeMissing => "missing",
-            Self::ScrapeToken => "scrape-token",
+            Self::Caller(refused) => refused.refusal.reason(),
+            Self::Scrape(refusal) => refusal.reason(),
         }
     }
 
-    /// The answer to the refused request: the gate's answer for a caller,
-    /// and `401` with the RFC 6750 §3 challenge for a scrape.
+    /// The answer to the refused request, its challenge naming `realm`: the
+    /// gate's answer for a caller, and the Basic challenge of RFC 7617 for a
+    /// scrape.
     #[must_use]
-    pub fn response(self, request_id: &str) -> Response {
-        let challenge = match self {
-            Self::Caller(refusal) => return refusal.response(request_id),
-            Self::ScrapeMissing => format!("Bearer realm=\"{REALM}\""),
-            Self::ScrapeToken => format!(
-                "Bearer realm=\"{REALM}\", error=\"invalid_token\", error_description=\"{self}\""
-            ),
-        };
-        let mut response =
-            error::response(Code::Unauthenticated, self.to_string(), request_id).into_response();
-        if let Ok(value) = HeaderValue::from_str(&challenge) {
-            response
-                .headers_mut()
-                .insert(header::WWW_AUTHENTICATE, value);
+    pub fn response(self, realm: &str, request_id: &str) -> Response {
+        match self {
+            Self::Caller(refused) => refused.refusal.response(realm, request_id),
+            Self::Scrape(refusal) => refusal.response(realm, request_id),
         }
-        response
     }
 }
 
@@ -176,47 +161,53 @@ impl Operator {
 }
 
 /// Who the admin listener admits: the verifier of `[auth]`, the deployment
-/// profile, and the scrape token.
+/// profile, and the Basic users a scrape may authenticate as.
 #[derive(Debug)]
 pub struct Access {
-    /// The verifier of every write action's caller, replaced whole on a
-    /// reload.
+    /// The verifier of every write action's caller and every scrape,
+    /// replaced whole on a reload.
     trust: Arc<Trust>,
     /// The deployment profile.
     profile: Profile,
-    /// The bearer token a scrape must carry, when one is set.
-    scrape_token: Option<Secret>,
+    /// The Basic users a scrape may authenticate as; empty leaves the
+    /// scrape open.
+    scrape_users: Vec<String>,
 }
 
 impl Access {
     /// Returns the access that verifies a write action's caller as `auth`
-    /// describes, under `profile`, with `scrape_token` guarding the scrape.
+    /// describes, under `profile`, with `scrape_users` guarding the scrape.
     #[must_use]
-    pub fn new(auth: &AuthSettings, profile: Profile, scrape_token: Option<Secret>) -> Self {
-        Self::sharing(Arc::new(Trust::new(auth)), profile, scrape_token)
+    pub fn new(auth: &AuthSettings, profile: Profile, scrape_users: Vec<String>) -> Self {
+        Self::sharing(Arc::new(Trust::new(auth)), profile, scrape_users)
     }
 
     /// Returns the access that verifies a write action's caller with the
     /// gate `trust` holds when the request arrives, the one the client
     /// listener shares, so a reload of `[auth]` reaches both.
     #[must_use]
-    pub fn sharing(trust: Arc<Trust>, profile: Profile, scrape_token: Option<Secret>) -> Self {
+    pub fn sharing(trust: Arc<Trust>, profile: Profile, scrape_users: Vec<String>) -> Self {
         Self {
             trust,
             profile,
-            scrape_token,
+            scrape_users,
         }
     }
 
     /// Returns the access `settings` describe: `[auth]`, the profile, and
-    /// `[metrics] scrape_token`.
+    /// `[metrics] scrape_users`.
     #[must_use]
     pub fn of(settings: &Settings) -> Self {
         Self::new(
             &settings.server.auth,
             settings.profile,
-            settings.metrics.scrape_token.clone(),
+            settings.metrics.scrape_users.clone(),
         )
+    }
+
+    /// Returns the realm every challenge of the gate in place names.
+    fn realm(&self) -> String {
+        self.trust.gate().realm().to_owned()
     }
 
     /// Admits the caller of a write action with `headers` from `peer`, and
@@ -244,24 +235,22 @@ impl Access {
             .map_err(AdminRefusal::Caller)
     }
 
-    /// Admits a scrape with `headers`: any, unless a scrape token is set.
+    /// Admits a scrape with `headers`: any, unless scrape users are named,
+    /// and then one whose Basic credential is one of theirs.
     ///
     /// # Errors
-    /// Returns [`AdminRefusal::ScrapeMissing`] for a scrape with no
-    /// `Authorization`, and [`AdminRefusal::ScrapeToken`] for one whose
-    /// credential is not the scrape token.
-    pub fn admit_scrape(&self, headers: &HeaderMap) -> Result<(), AdminRefusal> {
-        let Some(expected) = &self.scrape_token else {
+    /// Returns [`AdminRefusal::Scrape`] with the gate's refusal of the Basic
+    /// credential.
+    pub async fn admit_scrape(&self, headers: &HeaderMap) -> Result<(), AdminRefusal> {
+        if self.scrape_users.is_empty() {
             return Ok(());
-        };
-        if !headers.contains_key(header::AUTHORIZATION) {
-            return Err(AdminRefusal::ScrapeMissing);
         }
-        if crate::auth::bearer_matches(headers, expected.expose()) {
-            Ok(())
-        } else {
-            Err(AdminRefusal::ScrapeToken)
-        }
+        self.trust
+            .gate()
+            .admit_basic(headers, &self.scrape_users)
+            .await
+            .map(|_user| ())
+            .map_err(AdminRefusal::Scrape)
     }
 }
 
@@ -456,7 +445,7 @@ pub async fn operator_only(
             running.answered(response.status());
             response
         }
-        Err(refusal) => refuse(refusal, request.headers()),
+        Err(refusal) => refuse(&access, refusal, request.headers()),
     }
 }
 
@@ -474,7 +463,7 @@ pub async fn operator_read(
     let peer = peer.ok().map(|ConnectInfo(peer)| peer);
     match access.admit_operator(peer, request.headers()).await {
         Ok(_operator) => next.run(request).await,
-        Err(refusal) => refuse(refusal, request.headers()),
+        Err(refusal) => refuse(&access, refusal, request.headers()),
     }
 }
 
@@ -549,26 +538,33 @@ impl Drop for Running {
 /// The `event` of the record that closes an admitted write action.
 pub const FINISHED: &str = "admin-write-finished";
 
-/// The middleware in front of `GET /metrics`: a scrape passes unless a
-/// scrape token is set and the scrape does not carry it
+/// The middleware in front of `GET /metrics`: a scrape passes unless
+/// scrape users are named and the scrape authenticates as none of them
 /// ([`Access::admit_scrape`]).
 pub async fn scrape(State(access): State<Arc<Access>>, request: Request, next: Next) -> Response {
-    match access.admit_scrape(request.headers()) {
+    match access.admit_scrape(request.headers()).await {
         Ok(()) => next.run(request).await,
-        Err(refusal) => refuse(refusal, request.headers()),
+        Err(refusal) => refuse(&access, refusal, request.headers()),
     }
 }
 
 /// Counts, logs and answers `refusal` of a request with `headers`.
-fn refuse(refusal: AdminRefusal, headers: &HeaderMap) -> Response {
+fn refuse(access: &Access, refusal: AdminRefusal, headers: &HeaderMap) -> Response {
     refusal.event().record();
+    let check = match refusal {
+        AdminRefusal::Caller(refused) => refused
+            .check
+            .map(ferrohealth_smart::refusal::Reason::as_str),
+        AdminRefusal::Scrape(_) => None,
+    };
     tracing::warn!(
         target: crate::facade::security::TARGET,
         event = refusal.event().as_str(),
         reason = refusal.reason(),
+        check,
         "a request to the admin listener was refused at its authentication"
     );
-    refusal.response(request_id::of(headers).unwrap_or_default())
+    refusal.response(&access.realm(), request_id::of(headers).unwrap_or_default())
 }
 
 /// `POST` [`DISTRIBUTE`]: the registry's held copy sent to the members the

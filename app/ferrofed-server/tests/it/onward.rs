@@ -4,10 +4,10 @@
 //! The onward grant through the real configuration path: the gateway
 //! publishes its JWK Set at `{base}/.well-known/jwks.json`, declares it as
 //! `federation.auth.jwks_uri` in `OPTIONS {base}/`, obtains a token at each
-//! node's token endpoint with a client assertion that endpoint verifies
-//! against the published set, and sends the node that token and never the
-//! caller's (§13.1, N25, N30, CP-17 onward half; RFC 6749 §4.4, RFC 7523
-//! §2.2, RFC 7517).
+//! node's token endpoint with the client credentials grant of
+//! `ferrohealth-smart`, its client assertion verified against the published
+//! set, and sends the node that token and never the caller's (§13.1, N25,
+//! N30, CP-17 onward half; RFC 6749 §4.4, RFC 7523 §2.2, RFC 7517).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -24,6 +24,7 @@ use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
+use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_server::telemetry::{Rendering, subscriber};
@@ -79,10 +80,21 @@ fn signing(dir: &Path, rotating: bool) -> Result<String, Box<dyn Error>> {
     ))
 }
 
-/// The `[credentials]` table of node A's OAuth 2.0 grant at `token_url`.
-fn oauth2(token_url: &str) -> String {
+/// The `[credentials]` table of node A's client credentials grant at
+/// `token_url`, its `private_key_jwt` assertion signed by the `[signing]`
+/// key [`signing`] writes into `dir`, which the gateway publishes.
+fn oauth(dir: &Path, token_url: &str) -> String {
+    let key = toml::Value::String(dir.join("current.pem").display().to_string());
     format!(
-        "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
+        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
+    )
+}
+
+/// The `[credentials]` table of node A's token-exchange grant at
+/// `token_url`, the gateway's own grant the `[signing]` key signs.
+fn exchange(token_url: &str) -> String {
+    format!(
+        "[credentials.\"node-a-pub\".oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\nresource = \"https://node-a.example.org/openehr\"\n"
     )
 }
 
@@ -168,7 +180,7 @@ async fn the_node_receives_the_token_its_endpoint_issued_against_the_published_j
     let tables = format!(
         "{}\n{}",
         signing(dir.path(), false)?,
-        oauth2(&endpoint.token_url())
+        oauth(dir.path(), &endpoint.token_url())
     );
     let app = gateway(dir.path(), &a.uri(), unreachable::BASE, &tables)?;
     endpoint.trust(published(&app).await?);
@@ -211,7 +223,7 @@ async fn options_declares_the_jwks_uri_and_validates_against_the_schema() -> Tes
     let tables = format!(
         "{}\n{}",
         signing(dir.path(), false)?,
-        oauth2("https://idp.example.org/token")
+        oauth(dir.path(), "https://idp.example.org/token")
     );
     let app = gateway(
         dir.path(),
@@ -321,7 +333,11 @@ async fn a_token_endpoint_down_fails_the_node_and_sends_it_nothing() -> TestResu
     let b = node_requiring(&endpoint).await;
     let dir = tempfile::tempdir()?;
     let down = format!("{}{}", unreachable::BASE, oauth::TOKEN_PATH);
-    let tables = format!("{}\n{}", signing(dir.path(), false)?, oauth2(&down));
+    let tables = format!(
+        "{}\n{}",
+        signing(dir.path(), false)?,
+        oauth(dir.path(), &down)
+    );
     let app = gateway(dir.path(), &a.uri(), &b.uri(), &tables)?;
 
     let (status, text) = call(
@@ -376,7 +392,7 @@ async fn a_refusal_description_reaches_the_log_and_never_the_answer() -> TestRes
     let tables = format!(
         "{}\n{}",
         signing(dir.path(), false)?,
-        oauth2(&endpoint.token_url())
+        oauth(dir.path(), &endpoint.token_url())
     );
     let app = gateway(dir.path(), &a.uri(), unreachable::BASE, &tables)?;
 
@@ -411,10 +427,13 @@ async fn a_refusal_description_reaches_the_log_and_never_the_answer() -> TestRes
 }
 
 /// `config check` refuses an OAuth 2.0 grant it cannot use, naming the key:
-/// a key on neither P-256 nor P-384 (a P-521 key), a missing `client_id`, a
-/// missing `[signing]`, a scope outside the `system` grammar, a lifetime
-/// past 300 s, an overlap shorter than the lifetime plus the nodes' cache
-/// time, a token endpoint with a query, and a `jwks_uri` that is no URL.
+/// a signing key on neither P-256 nor P-384 (a P-521 key), a client
+/// credentials grant without its `client_id` or its assertion key, a scope
+/// outside the `system` grammar, a token-exchange grant without
+/// `[signing]` or with a token endpoint carrying a query, a plain
+/// `oauth2` grant the `oauth` table carries, a lifetime past 300 s, an
+/// overlap shorter than the lifetime plus the nodes' cache time, and a
+/// `jwks_uri` that is no URL.
 #[test]
 fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     let dir = tempfile::tempdir()?;
@@ -422,7 +441,8 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     let p521 = dir.path().join("p521.pem");
     std::fs::write(&p521, oauth::p521_pem()?)?;
     let p521 = toml::Value::String(p521.display().to_string());
-    let grant = oauth2("https://idp.example.org/token");
+    std::fs::write(dir.path().join("current.pem"), oauth::es384_pem()?)?;
+    let grant = oauth(dir.path(), "https://idp.example.org/token");
     let signing_with = |extra: &str, key: &toml::Value| {
         format!("[signing]\nkey_file = {key}\njwks_uri = \"{JWKS_URI}\"\n{extra}\n")
     };
@@ -438,21 +458,38 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         matches!(&error, ConfigError::Credentials(CredentialsFault::SigningKey { key, .. }) if key == "signing.key_file"),
         "{error:?}"
     );
-    let error = resolve(&format!(
-        "{}{}",
-        signing_with("", &good_key),
-        grant.replace(&format!("client_id = \"{CLIENT_ID}\"\n"), "")
-    ))?;
-    assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.oauth2.client_id"),
-        "{error:?}"
-    );
-    let error = resolve(&grant)?;
+    for missing in [
+        format!("client_id = \"{CLIENT_ID}\"\n"),
+        format!(
+            "private_key_file = {}\n",
+            toml::Value::String(dir.path().join("current.pem").display().to_string())
+        ),
+    ] {
+        let error = resolve(&format!(
+            "{}{}",
+            signing_with("", &good_key),
+            grant.replace(&missing, "")
+        ))?;
+        assert!(
+            matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.oauth"),
+            "{missing}: {error:?}"
+        );
+    }
+    let error = resolve(&exchange("https://idp.example.org/token"))?;
     assert!(
         matches!(
             error,
             ConfigError::Credentials(CredentialsFault::GrantWithoutSigning { .. })
         ),
+        "{error:?}"
+    );
+    let plain = exchange("https://idp.example.org/token").replace(
+        "grant = \"token_exchange\"",
+        "grant = \"client_credentials\"",
+    );
+    let error = resolve(&format!("{}{plain}", signing_with("", &good_key)))?;
+    assert!(
+        matches!(&error, ConfigError::GrantFault(GrantFault::Plain { section }) if section == "credentials.node-a-pub.oauth2"),
         "{error:?}"
     );
     let error = resolve(&format!(
@@ -486,7 +523,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     let error = resolve(&format!(
         "{}{}",
         signing_with("", &good_key),
-        oauth2("https://idp.example.org/token?secret=x")
+        exchange("https://idp.example.org/token?secret=x")
     ))?;
     assert!(
         matches!(

@@ -12,16 +12,16 @@
 //! (the Federation Tier's Annex B §B.4a.3), and the SMART on openEHR `ehrId`,
 //! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
 //! (master04 §Capabilities). The string claims an issuer's
-//! `[auth.issuer.requester]` names are read as the requester the consent
+//! `[trust.issuer.requester]` names are read as the requester the consent
 //! pre-filter asks about (§13.4). The IUA `subject_name`,
 //! `national_provider_identifier` and `subject_role` are read as the
 //! professional's identification, the string claim an issuer's
 //! `professional_issuing_authority` names as the agency that issued the
 //! identifier, and the string claim an issuer's
-//! `[auth.issuer.assurance]` names as the authentication assurance, by
+//! `[trust.issuer.assurance]` names as the authentication assurance, by
 //! default `acr` (RFC 9068 §2.2.1). For an issuer declared a national contact
 //! point, the IUA `subject_organization` and `subject_role` and the string
-//! claims its `[auth.issuer.national_contact_point]` names are read as the
+//! claims its `[trust.issuer.national_contact_point]` names are read as the
 //! Implementing Regulation (EU) 2026/2099 Annex attributes. The `iss` and
 //! `sub` of the RFC 8693 §4.1 `act` claim are read as the current actor,
 //! which a patient token of an issuer that declares `act_is_representative`
@@ -40,39 +40,16 @@ use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
-use crate::auth::caller::{Actor, Professional, PurposeOfUse, Stated};
+use crate::auth::caller::{Actor, Professional, PurposeOfUse};
 use crate::config::auth::IssuerSettings;
 use crate::config::auth::requester::RequesterClaims;
 
-/// The claims of an RFC 9068 access token, as read after its signature, its
-/// issuer, its audience and its validity window were verified.
-#[derive(Debug, Deserialize)]
-pub(super) struct AccessToken {
-    /// `iss`.
-    iss: String,
-    /// `sub`.
-    sub: String,
-    /// `client_id`.
-    client_id: String,
-    /// `iat`, required and otherwise unread.
-    #[expect(
-        dead_code,
-        reason = "RFC 9068 §2.2 requires the claim, so it is read to be required"
-    )]
-    iat: f64,
-    /// `jti`, required and otherwise unread.
-    #[expect(
-        dead_code,
-        reason = "RFC 9068 §2.2 requires the claim, so it is read to be required"
-    )]
-    jti: String,
-    /// `scope`.
-    #[serde(default)]
-    scope: Option<String>,
-    /// The SMART on openEHR `ehrId`, the launch context a `patient/` grant
-    /// is confined to.
-    #[serde(default, rename = "ehrId")]
-    ehr_id: Option<String>,
+/// The claims of a verified caller the gateway reads beside its `sub`,
+/// `client_id`, `scope` and `ehrId`, which `ferrohealth-smart` reads: the
+/// claims of a verified access token, or the members of an introspection
+/// answer.
+#[derive(Debug, Default, Deserialize)]
+pub(super) struct Claims {
     /// The organisation and the purposes of use.
     #[serde(flatten)]
     declared: Declared,
@@ -81,14 +58,25 @@ pub(super) struct AccessToken {
     others: Others,
 }
 
-impl AccessToken {
-    /// Returns the token's `ehrId` claim, when it carries one.
-    pub(super) fn launch_ehr_id(&self) -> Option<String> {
-        self.ehr_id.clone()
+impl Claims {
+    /// Reads `claims`, every claim of a verified caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns the JSON reader's error for a claim the gateway reads that
+    /// does not have its shape.
+    #[expect(
+        clippy::disallowed_types,
+        reason = "the token-claims seam: ferrohealth-smart hands a verified caller's claims over as a JSON map"
+    )]
+    pub(super) fn read(
+        claims: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<Self, serde_json::Error> {
+        serde_json::from_value(serde_json::Value::Object(claims.clone()))
     }
 
     /// Returns the string claim `name`, the claim an issuer's
-    /// `[auth.issuer.assurance]` names, when the token carries it.
+    /// `[trust.issuer.assurance]` names, when the token carries it.
     pub(super) fn text(&self, name: &str) -> Option<String> {
         self.others.text(name)
     }
@@ -118,20 +106,18 @@ impl AccessToken {
         self.declared.annex()
     }
 
-    /// Returns what the token states about its caller.
-    pub(super) fn stated(self) -> Stated {
-        Stated {
-            issuer: self.iss,
-            subject: self.sub,
-            client_id: self.client_id,
-            organisation: self.declared.organisation(),
-            granted: self.scope.unwrap_or_default(),
-            purposes: self.declared.purposes(),
-        }
+    /// Returns the organisation the token names.
+    pub(super) fn organisation(&self) -> Option<String> {
+        self.declared.organisation()
+    }
+
+    /// Returns every purpose of use the token declares.
+    pub(super) fn purposes(&self) -> Vec<PurposeOfUse> {
+        self.declared.purposes()
     }
 }
 
-/// An RFC 7662 §2.2 introspection answer.
+/// An RFC 7662 §2.2 introspection answer: the members the gateway checks.
 #[derive(Debug, Deserialize)]
 pub(super) struct Introspected {
     /// `active`, the one member RFC 7662 §2.2 requires.
@@ -157,15 +143,6 @@ pub(super) struct Introspected {
     /// `nbf`, in seconds since the epoch.
     #[serde(default)]
     pub(super) nbf: Option<i64>,
-    /// The SMART on openEHR `ehrId`.
-    #[serde(default, rename = "ehrId")]
-    pub(super) ehr_id: Option<String>,
-    /// The organisation and the purposes of use.
-    #[serde(flatten)]
-    pub(super) declared: Declared,
-    /// Every other member.
-    #[serde(flatten)]
-    pub(super) others: Others,
 }
 
 /// The claims a token carries besides the ones read by name: a string claim

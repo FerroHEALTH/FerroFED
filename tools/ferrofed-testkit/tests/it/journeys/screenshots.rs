@@ -303,7 +303,7 @@ const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
       {"name":"org.example::vital_signs","version":"1.1.0","owner":"store"},
       {"name":"org.example::problem_list","version":"2.0.0","owner":"store"}],
     "sections":[{"resource":{"credentials":"node-a-pub"},"owner":"console","state":"running",
-      "settings":"{}","secrets":[{"key":"bearer_token","reference":"/var/lib/ferrofed/secrets/a.secret"}]}],
+      "settings":"{ user = \"gateway\" }","secrets":[{"key":"password","reference":"/var/lib/ferrofed/secrets/a.secret"}]}],
     "bindings":["localization","consent"]}"#;
 
 /// The history of revisions 1 and 2.
