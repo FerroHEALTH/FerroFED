@@ -10,26 +10,25 @@
 //! names then checks everything, the issuer included (RFC 8725 §3.10). A
 //! token that is no JWS goes to the introspected issuer, except in the edge
 //! mode, which verifies one signed assertion. Each issuer's metadata and key
-//! set are read when a token first needs them, so a gate is built without
-//! calling out; a read that fails answers `503` and is tried again no sooner
-//! than the issuer's `jwks_refresh_interval_seconds`. No specification
-//! governs when the key set is first read: our own design.
+//! set are read when a token first needs them (`ResourceServer::lazy`), so a
+//! gate is built without calling out; a read that fails answers `503` and is
+//! tried again no sooner than the issuer's `jwks_refresh_interval_seconds`.
+//! No specification governs when the key set is first read: our own design.
 
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Instant;
 
 use base64::Engine as _;
 use ferrohealth_smart::refusal::Reason;
 use ferrohealth_smart::resource::{
-    Caller as SmartCaller, Rejection, ResourceError, ResourceServer, Settings as KeySetSettings,
-    Verifier,
+    Caller as SmartCaller, LazyResourceServer, Rejection, ResourceError, ResourceServer,
+    Settings as KeySetSettings, Verifier,
 };
-use tokio::sync::OnceCell;
 
 use crate::auth::introspection::Introspector;
+use crate::config::auth::IssuerSettings;
 use crate::facade::security::TARGET;
 use crate::metrics::security::Event;
 
@@ -47,17 +46,28 @@ pub(super) struct Verifiers {
 
 impl Verifiers {
     /// Returns the verifiers of `keyed` and `introspected`; nothing is read
-    /// yet.
+    /// yet. Each keyed issuer's trust entry rides on every caller it admits.
+    #[expect(
+        clippy::expect_used,
+        reason = "every key-set issuer's settings passed Settings::validate when [auth] resolved, the one check ResourceServer::lazy repeats"
+    )]
     pub(super) fn new(
-        keyed: Vec<KeySetSettings>,
+        keyed: Vec<(KeySetSettings, Arc<IssuerSettings>)>,
         introspected: Option<Introspector>,
         edge: bool,
     ) -> Self {
+        let keyed = keyed
+            .into_iter()
+            .map(|(settings, trusted)| {
+                let issuer = settings.issuer.clone();
+                let server = ResourceServer::lazy(settings)
+                    .expect("the issuer's settings should have been validated when [auth] resolved")
+                    .with_extension(trusted);
+                (issuer, Keyed::new(server))
+            })
+            .collect();
         Self {
-            keyed: keyed
-                .into_iter()
-                .map(|settings| (settings.issuer.clone(), Keyed::new(settings)))
-                .collect(),
+            keyed,
             introspected,
             edge,
         }
@@ -82,7 +92,7 @@ impl Verifiers {
         }
         let issuer = unverified_issuer(token).ok_or(malformed)?;
         if let Some(keyed) = self.keyed.get(&issuer) {
-            return keyed.server().await?.authenticate(token).await;
+            return keyed.authenticate(token).await;
         }
         match &self.introspected {
             Some(introspector) if introspector.issuer() == issuer => {
@@ -102,88 +112,52 @@ impl Verifier for Verifiers {
     }
 }
 
-/// One issuer verified by its key set, its resource server built when a
-/// token first needs it.
+/// One issuer verified by its key set, which `ferrohealth-smart` reads when
+/// a token first needs it and reads again no sooner than the refresh
+/// interval after a failure.
 #[derive(Debug)]
 struct Keyed {
-    /// What the deployment configured.
-    settings: KeySetSettings,
-    /// The resource server, once its metadata and key set were read.
-    server: OnceCell<Arc<ResourceServer>>,
-    /// When the last read failed and why, so the next is not made inside
-    /// the refresh interval and a token meanwhile meets the same failure.
-    failed: Mutex<Option<(Instant, Arc<ResourceError>)>>,
+    /// The issuer's resource server.
+    server: LazyResourceServer,
+    /// The failure last logged, so each failed read is logged once.
+    logged: Mutex<Option<Arc<ResourceError>>>,
 }
 
 impl Keyed {
-    /// Returns the issuer `settings` names; nothing is read yet.
-    fn new(settings: KeySetSettings) -> Self {
+    /// Returns the keyed issuer `server` verifies.
+    fn new(server: LazyResourceServer) -> Self {
         Self {
-            settings,
-            server: OnceCell::new(),
-            failed: Mutex::new(None),
+            server,
+            logged: Mutex::new(None),
         }
     }
 
-    /// Returns the resource server, reading the issuer's metadata and key
-    /// set when no read has succeeded yet.
-    async fn server(&self) -> Result<&Arc<ResourceServer>, Rejection> {
-        if let Some(server) = self.server.get() {
-            return Ok(server);
+    /// Returns the caller `token` authenticates, logging a failed read of the
+    /// issuer's metadata or key set once.
+    async fn authenticate(&self, token: &str) -> Result<SmartCaller, Rejection> {
+        let outcome = self.server.authenticate(token).await;
+        if let Err(Rejection::Unavailable { source }) = &outcome
+            && self.server.get().is_none()
+        {
+            let mut logged = self.logged.lock().unwrap_or_else(PoisonError::into_inner);
+            // NOTE: no specification governs this: our own design; inside the refresh
+            // interval the crate hands back the same failure, which is logged once.
+            if !logged
+                .as_ref()
+                .is_some_and(|held| Arc::ptr_eq(held, source))
+            {
+                *logged = Some(Arc::clone(source));
+                Event::KeySetUnavailable.record();
+                tracing::warn!(
+                    target: TARGET,
+                    event = "key-set-unavailable",
+                    issuer = self.server.settings().issuer,
+                    error = crate::chain(source.as_ref()),
+                    "an issuer's metadata or key set could not be read, so its tokens cannot be verified"
+                );
+            }
         }
-        let interval = self.settings.jwks_refresh_interval;
-        let recent = self
-            .failed
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_ref()
-            .filter(|(at, _)| at.elapsed() < interval)
-            .map(|(_, source)| Arc::clone(source));
-        if let Some(source) = recent {
-            return Err(Rejection::Unavailable { source });
-        }
-        let read = self
-            .server
-            .get_or_try_init(|| discover(self.settings.clone()))
-            .await;
-        read.map_err(|source| {
-            *self.failed.lock().unwrap_or_else(PoisonError::into_inner) =
-                Some((Instant::now(), Arc::clone(&source)));
-            Event::KeySetUnavailable.record();
-            tracing::warn!(
-                target: TARGET,
-                event = "key-set-unavailable",
-                issuer = self.settings.issuer,
-                error = crate::chain(source.as_ref()),
-                "an issuer's metadata or key set could not be read, so its tokens cannot be verified"
-            );
-            Rejection::Unavailable { source }
-        })
-    }
-}
-
-/// Returns the resource server `settings` name, its metadata and key set
-/// read.
-///
-/// The crate's discovery future holds a value that is not `Send` across an
-/// await, so it runs to completion on a blocking thread of the runtime, and
-/// the request's own future stays `Send`.
-async fn discover(settings: KeySetSettings) -> Result<Arc<ResourceServer>, Arc<ResourceError>> {
-    let runtime = tokio::runtime::Handle::current();
-    let discovered = tokio::task::spawn_blocking(move || {
-        runtime
-            .block_on(ResourceServer::discover(settings))
-            .map(Arc::new)
-            .map_err(Arc::new)
-    })
-    .await;
-    match discovered {
-        Ok(read) => read,
-        // NOTE: no specification governs this: our own design; a read that never
-        // finished leaves the key set unread, which the gate answers as unavailable.
-        Err(_unfinished) => Err(Arc::new(ResourceError::MissingMember {
-            member: "key set, whose read did not finish",
-        })),
+        outcome
     }
 }
 

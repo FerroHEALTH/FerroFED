@@ -13,7 +13,9 @@
 //! public half the gateway publishes in its JWK Set. The token is cached
 //! until shortly before it expires, and dropped and asked for once more when
 //! the upstream answers `401`. The token endpoint is reached with the
-//! platform's trust roots.
+//! platform's trust roots and those of `ca_file`, and with a client
+//! certificate (`client_certificate_file`, `client_key_file`) under the RFC
+//! 8705 §2 methods `tls_client_auth` and `self_signed_tls_client_auth`.
 //!
 //! ```toml
 //! [credentials."cdr-a".oauth]
