@@ -142,7 +142,10 @@ impl Keyed {
             let mut logged = self.logged.lock().unwrap_or_else(PoisonError::into_inner);
             // NOTE: no specification governs this: our own design; inside the refresh
             // interval the crate hands back the same failure, which is logged once.
-            if !logged.as_ref().is_some_and(|held| Arc::ptr_eq(held, source)) {
+            if !logged
+                .as_ref()
+                .is_some_and(|held| Arc::ptr_eq(held, source))
+            {
                 *logged = Some(Arc::clone(source));
                 Event::KeySetUnavailable.record();
                 tracing::warn!(
