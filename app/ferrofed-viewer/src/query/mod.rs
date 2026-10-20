@@ -33,6 +33,7 @@ mod tabs;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
+use crate::locale::{Msg, tr};
 use crate::query::run::RunQuery;
 use crate::views::model::Outcome;
 use crate::views::{fault, refusal, titled};
@@ -52,20 +53,18 @@ pub fn QueryPage() -> impl IntoView {
     let options = Resource::new_blocking(|| (), |()| run::query_options());
     let action = ServerAction::<RunQuery>::new();
     let header = page_header(
-        "Query console",
-        Some(String::from(
-            "Run AQL or a stored query across the federation.",
-        )),
+        tr(Msg::QueryConsole),
+        Some(tr(Msg::RunAqlStoredQueryAcrossFederation)),
         (),
     )
     .into_any();
     let results = results::results_section(action);
     view! {
-        <Title text=titled("Query") />
+        <Title text=titled(&tr(Msg::Query)) />
         {header}
         <div class="fui-stack">
             <Suspense fallback=|| {
-                busy("Loading what the gateway offers a query.", Busy::Section)
+                busy(tr(Msg::LoadingWhatGatewayOffersQuery), Busy::Section)
             }>
                 {move || Suspend::new(async move {
                     match options.await {

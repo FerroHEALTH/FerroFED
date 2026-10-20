@@ -26,6 +26,7 @@ use crate::configure::render::parts::{
     Text, add_button, confirmed, error_line, form, head, hidden, reason, remove_button, save_bar,
     template, text, trail,
 };
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::Refusal;
 
 /// The path of the member `node`'s form or detail.
@@ -37,27 +38,27 @@ fn href(node: &str) -> String {
 /// console changes it.
 pub(super) fn owner(owner: Owner) -> AnyView {
     let (word, tone) = match owner {
-        Owner::Console => ("Console", Tone::Accent),
-        Owner::File => ("File, read-only", Tone::Neutral),
-        Owner::Directory => ("Directory, read-only", Tone::Neutral),
-        Owner::Gateway => ("Gateway, read-only", Tone::Neutral),
-        Owner::Store => ("Store, immutable", Tone::Neutral),
-        _ => ("Elsewhere, read-only", Tone::Neutral),
+        Owner::Console => (tr(Msg::Console), Tone::Accent),
+        Owner::File => (tr(Msg::FileReadOnly), Tone::Neutral),
+        Owner::Directory => (tr(Msg::DirectoryReadOnly), Tone::Neutral),
+        Owner::Gateway => (tr(Msg::GatewayReadOnly), Tone::Neutral),
+        Owner::Store => (tr(Msg::StoreImmutable), Tone::Neutral),
+        _ => (tr(Msg::ElsewhereReadOnly), Tone::Neutral),
     };
-    badge(tone, word).into_any()
+    badge(tone, &word).into_any()
 }
 
 /// Where a console resource stands, as a pill that says so in words; one
 /// the console does not hold runs as its source provides it.
 pub(super) fn state(state: Option<ConsoleState>) -> AnyView {
     let (word, tone) = match state {
-        None | Some(ConsoleState::Running) => ("running", Tone::Ok),
-        Some(ConsoleState::Pending) => ("saved, not applied", Tone::Warn),
-        Some(ConsoleState::Removing) => ("removed, not applied", Tone::Warn),
-        Some(ConsoleState::Shadowed) => ("shadowed by the file", Tone::Neutral),
-        Some(_) => ("unknown", Tone::Neutral),
+        None | Some(ConsoleState::Running) => (tr(Msg::StateRunning), Tone::Ok),
+        Some(ConsoleState::Pending) => (tr(Msg::SavedNotApplied), Tone::Warn),
+        Some(ConsoleState::Removing) => (tr(Msg::RemovedNotApplied), Tone::Warn),
+        Some(ConsoleState::Shadowed) => (tr(Msg::ShadowedByTheFile), Tone::Neutral),
+        Some(_) => (tr(Msg::StateUnknown), Tone::Neutral),
     };
-    pill(tone, word).into_any()
+    pill(tone, &word).into_any()
 }
 
 /// The removal of the console member `node`, a confirmation step asking
@@ -75,21 +76,18 @@ fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
                 format!("remove-{node}"),
                 (
                     view! {
-                        "Remove"
+                        {tr(Msg::Remove)}
                         <span class="fui-sr-only">{format!(" {node}")}</span>
                     },
                     Variant::Ghost,
                 ),
                 (
-                    format!(
-                        "Remove member {node}? It is saved as {} without it, which you apply separately.",
-                        loaded.next(),
-                    ),
-                    "Save the removal",
+                    tr_with(Msg::RemoveMemberSavedWithoutWhichYou, &[("node", (node).to_string().into()), ("loaded", (loaded.next()).clone().into())]),
+                    tr(Msg::SaveTheRemoval),
                 ),
                 text(
                     (&reason_id, "form[reason]"),
-                    String::from("Reason"),
+                    tr(Msg::Reason),
                     String::new(),
                     Text {
                         required: true,
@@ -120,7 +118,7 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
     let actions = if editable {
         let edit = view! {
             <a href=href(&node) class=Variant::Ghost.class()>
-                "Edit"
+                {tr(Msg::Edit)}
                 <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
         }
@@ -133,7 +131,7 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
     } else {
         view! {
             <a href=href(&node) class=Variant::Ghost.class()>
-                "View"
+                {tr(Msg::View)}
                 <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
         }
@@ -144,31 +142,33 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
             <th scope="row">
                 <code>{node.clone()}</code>
             </th>
-            <td data-label="Organisation">{member.organisation.as_str().to_owned()}</td>
-            <td data-label="system_id">
+            <td data-label=tr(Msg::Organisation)>{member.organisation.as_str().to_owned()}</td>
+            <td data-label=tr(Msg::SystemId)>
                 <code>{member.system_id.as_str().to_owned()}</code>
             </td>
-            <td data-label="Endpoints" class=NUM title=ids>
+            <td data-label=tr(Msg::Endpoints) class=NUM title=ids>
                 {count}
             </td>
-            <td data-label="Owner">{owner(member.owner)}</td>
-            <td data-label="State">{state(member.state)}</td>
-            <td data-label="Actions" class=ACTIONS>{actions}</td>
+            <td data-label=tr(Msg::Owner)>{owner(member.owner)}</td>
+            <td data-label=tr(Msg::State)>{state(member.state)}</td>
+            <td data-label=tr(Msg::Actions) class=ACTIONS>{actions}</td>
         </tr>
     }
     .into_any()
 }
 
 /// The columns of the Members tab.
-const MEMBER_COLUMNS: [Column; 7] = [
-    Column::text("node", "Node"),
-    Column::text("organisation", "Organisation"),
-    Column::text("system_id", "system_id").mono(),
-    Column::text("endpoints", "Endpoints").numeric(),
-    Column::text("owner", "Owner"),
-    Column::text("state", "State"),
-    Column::text("actions", "Actions"),
-];
+fn member_columns() -> [Column; 7] {
+    [
+        Column::text("node", tr(Msg::Node)),
+        Column::text("organisation", tr(Msg::Organisation)),
+        Column::text("system_id", tr(Msg::SystemId)),
+        Column::text("endpoints", tr(Msg::Endpoints)).numeric(),
+        Column::text("owner", tr(Msg::Owner)),
+        Column::text("state", tr(Msg::State)),
+        Column::text("actions", tr(Msg::Actions)),
+    ]
+}
 
 /// The Members tab: every member with its owner and state.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
@@ -177,7 +177,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         view! {
             <tr>
                 <td colspan="7" class="fui-muted">
-                    "No member is configured yet."
+                    {tr(Msg::NoMemberConfiguredYet)}
                 </td>
             </tr>
         }
@@ -191,19 +191,19 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     };
     view! {
         {head(
-            ("members-title", String::from("Members")),
+            ("members-title", tr(Msg::Members)),
             (
-                "A member the registry document or a care services directory provides is read-only here.",
+                tr(Msg::MemberRegistryDocumentCareServicesDirectory),
                 "console-managed-resources",
             ),
             view! {
                 <a href="/configuration/members/new" class=Variant::Primary.class()>
                     {icon(Glyph::PLUS, "16")}
-                    "Add member"
+                    {tr(Msg::AddMember)}
                 </a>
             },
         )}
-        {crate::views::table("Members and their owners", &MEMBER_COLUMNS, rows)}
+        {crate::views::table(&tr(Msg::MembersAndTheirOwners), &member_columns(), rows)}
     }
     .into_any()
 }
@@ -220,7 +220,10 @@ pub(super) fn member(loaded: &Loaded<'_>, node: &str) -> Result<AnyView, Refusal
         .iter()
         .find(|member| member.node.as_str() == node)
         .ok_or_else(|| Refusal::Invalid {
-            reason: format!("No member has the node_id {node}."),
+            reason: tr_with(
+                Msg::NoMemberHasNodeId,
+                &[("node", (node).to_string().into())],
+            ),
         })?;
     let editable = matches!(
         found.state,
@@ -236,19 +239,11 @@ pub(super) fn member(loaded: &Loaded<'_>, node: &str) -> Result<AnyView, Refusal
 /// that provides it.
 fn detail(member: &MemberResource) -> AnyView {
     let source = match (member.owner, member.state) {
-        (Owner::File, _) => {
-            "The configuration file's registry document provides this member: change it there."
-        }
-        (Owner::Directory, _) => {
-            "The care services directory provides this member: change it there."
-        }
-        (_, Some(ConsoleState::Removing)) => {
-            "The newest revision removes this member; apply it from the card above."
-        }
-        (_, Some(ConsoleState::Shadowed)) => {
-            "The registry document provides a member with the same identity, which runs in its place."
-        }
-        _ => "The console does not change this member.",
+        (Owner::File, _) => tr(Msg::ConfigurationFileSRegistryDocumentProvides),
+        (Owner::Directory, _) => tr(Msg::CareServicesDirectoryProvidesMemberChange),
+        (_, Some(ConsoleState::Removing)) => tr(Msg::NewestRevisionRemovesMemberApplyFrom),
+        (_, Some(ConsoleState::Shadowed)) => tr(Msg::RegistryDocumentProvidesMemberSameIdentity),
+        _ => tr(Msg::ConsoleDoesNotChangeMember),
     };
     let endpoints = member
         .endpoints
@@ -262,7 +257,7 @@ fn detail(member: &MemberResource) -> AnyView {
         })
         .collect_view();
     view! {
-        {trail(("Members", "/configuration/members"), member.node.as_str().to_owned())}
+        {trail((tr(Msg::Members), "/configuration/members"), member.node.as_str().to_owned())}
         <h2 id="member-title" class="fui-card-title">
             <code>{member.node.as_str().to_owned()}</code>
         </h2>
@@ -270,14 +265,14 @@ fn detail(member: &MemberResource) -> AnyView {
             {source}
         </p>
         {definitions(vec![
-            ("Organisation", member.organisation.as_str().to_owned().into_any()),
+            (tr(Msg::Organisation), member.organisation.as_str().to_owned().into_any()),
             (
-                "system_id",
+                tr(Msg::SystemId),
                 view! { <code>{member.system_id.as_str().to_owned()}</code> }.into_any(),
             ),
-            ("Owner", owner(member.owner)),
-            ("State", state(member.state)),
-            ("Endpoints", view! { <ul class="fui-bullets">{endpoints}</ul> }.into_any()),
+            (tr(Msg::Owner), owner(member.owner)),
+            (tr(Msg::State), state(member.state)),
+            (tr(Msg::Endpoints), view! { <ul class="fui-bullets">{endpoints}</ul> }.into_any()),
         ])}
     }
     .into_any()
@@ -306,7 +301,7 @@ fn in_service(id: String, name: String, on: bool) -> AnyView {
                 value="on"
                 checked=on
             />
-            <label for=label_for>"In service"</label>
+            <label for=label_for>{tr(Msg::InService)}</label>
         </div>
     }
     .into_any()
@@ -317,8 +312,13 @@ fn in_service(id: String, name: String, on: bool) -> AnyView {
 fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
     let row = format!("cfg-q-{key}");
     let named = endpoint.map_or_else(
-        || String::from("New Query API endpoint"),
-        |endpoint| format!("Query API endpoint {}", endpoint.id.as_str()),
+        || tr(Msg::NewQueryApiEndpoint),
+        |endpoint| {
+            tr_with(
+                Msg::QueryApiEndpoint,
+                &[("endpoint", (endpoint.id.as_str()).to_string().into())],
+            )
+        },
     );
     let name = |part: &str| format!("form[query][{key}][{part}]");
     view! {
@@ -328,7 +328,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
             <div class="fui-field-row fui-field-row-narrow-wide">
                 {text(
                     (&query_field(key, "id"), &name("id")),
-                    String::from("Endpoint id"),
+                    tr(Msg::EndpointId),
                     endpoint.map(|endpoint| endpoint.id.as_str().to_owned()).unwrap_or_default(),
                     Text {
                         required: true,
@@ -338,7 +338,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                 )}
                 {text(
                     (&query_field(key, "url"), &name("url")),
-                    String::from("Base URL"),
+                    tr(Msg::BaseUrl),
                     endpoint.map(|endpoint| endpoint.url.clone()).unwrap_or_default(),
                     Text {
                         kind: "url",
@@ -353,7 +353,7 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                     query_field(key, "service"),
                     name("in_service"),
                     endpoint.is_none_or(|endpoint| endpoint.status != EndpointStatus::Suspended),
-                )} {remove_button(&row, format!("Remove {named}"))}
+                )} {remove_button(&row, tr_with(Msg::Remove3, &[("named", (named).clone().into())]))}
             </div>
         </fieldset>
     }
@@ -364,20 +364,20 @@ fn query_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
 // categories by the codes the exchange format names them.
 /// The categories the console offers for a FHIR endpoint, each its code and
 /// its name.
-const CATEGORIES: [(&str, &str); 6] = [
-    ("Patient-Summaries", "Patient summaries"),
-    ("Electronic-Prescriptions", "Electronic prescriptions"),
-    ("Electronic-Dispensations", "Electronic dispensations"),
-    ("Medical-Imaging", "Medical imaging"),
-    ("Laboratory-Reports", "Laboratory reports"),
-    ("Discharge-Reports", "Discharge reports"),
+const CATEGORIES: [(&str, Msg); 6] = [
+    ("Patient-Summaries", Msg::PatientSummaries2),
+    ("Electronic-Prescriptions", Msg::ElectronicPrescriptions2),
+    ("Electronic-Dispensations", Msg::ElectronicDispensations2),
+    ("Medical-Imaging", Msg::MedicalImaging2),
+    ("Laboratory-Reports", Msg::LaboratoryReports2),
+    ("Discharge-Reports", Msg::DischargeReports2),
 ];
 
 /// A profile item `item` of the FHIR endpoint row `key`, holding `value`.
 fn profile(key: &str, item: &str, value: String) -> AnyView {
     let id = format!("cfg-f-{key}-p-{item}");
     let body = view! {
-            {Field::new(id.clone(), "Profile")
+            {Field::new(id.clone(), tr(Msg::Profile))
                 .label_hidden()
                 .view(view! {
                     <input
@@ -390,7 +390,7 @@ fn profile(key: &str, item: &str, value: String) -> AnyView {
                         spellcheck="false"
                     />
                 })}
-            {remove_button(&format!("{id}-row"), String::from("Remove this profile"))}
+            {remove_button(&format!("{id}-row"), tr(Msg::RemoveThisProfile))}
     };
     keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
 }
@@ -401,7 +401,7 @@ fn categories(key: &str, served: &[String]) -> AnyView {
     let group = fhir_field(key, "categories");
     let mut offered: Vec<(String, String)> = CATEGORIES
         .iter()
-        .map(|(code, name)| ((*code).to_owned(), (*name).to_owned()))
+        .map(|(code, name)| ((*code).to_owned(), tr(*name)))
         .collect();
     for code in served {
         if !offered.iter().any(|(known, _)| known == code) {
@@ -434,7 +434,7 @@ fn categories(key: &str, served: &[String]) -> AnyView {
             class="fui-fieldset fui-choice"
             aria-describedby=format!("{group}-error")
         >
-            <legend class="fui-label">"Categories"</legend>
+            <legend class="fui-label">{tr(Msg::Categories)}</legend>
             <div class="fui-chip-checks">{boxes}</div>
             {error_line(&group)}
         </fieldset>
@@ -446,8 +446,13 @@ fn categories(key: &str, served: &[String]) -> AnyView {
 fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
     let row = format!("cfg-f-{key}");
     let named = endpoint.map_or_else(
-        || String::from("New FHIR endpoint"),
-        |endpoint| format!("FHIR endpoint {}", endpoint.id.as_str()),
+        || tr(Msg::NewFhirEndpoint),
+        |endpoint| {
+            tr_with(
+                Msg::FhirEndpoint,
+                &[("endpoint", (endpoint.id.as_str()).to_string().into())],
+            )
+        },
     );
     let name = |part: &str| format!("form[fhir][{key}][{part}]");
     let profiles = endpoint
@@ -469,7 +474,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
             <div class="fui-field-row fui-field-row-narrow-wide">
                 {text(
                     (&fhir_field(key, "id"), &name("id")),
-                    String::from("Endpoint id"),
+                    tr(Msg::EndpointId),
                     endpoint.map(|endpoint| endpoint.id.as_str().to_owned()).unwrap_or_default(),
                     Text {
                         required: true,
@@ -479,7 +484,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                 )}
                 {text(
                     (&fhir_field(key, "url"), &name("url")),
-                    String::from("Base URL"),
+                    tr(Msg::BaseUrl),
                     endpoint.map(|endpoint| endpoint.url.clone()).unwrap_or_default(),
                     Text {
                         kind: "url",
@@ -491,27 +496,27 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
             </div>
             {text(
                 (&fhir_field(key, "system"), &name("system")),
-                String::from("Identifier system of the ehr_id"),
+                tr(Msg::IdentifierSystemEhrId),
                 endpoint.and_then(|endpoint| endpoint.ehr_id_system.clone()).unwrap_or_default(),
                 Text {
                     required: true,
                     mono: true,
                     hint: Some(
-                        "The system the endpoint is told the ehr_id in, such as urn:oid:2.999.1.",
+                        tr(Msg::SystemEndpointToldEhrIdSuch),
                     ),
                     ..Text::default()
                 },
             )}
             {categories(key, &served)}
             <fieldset class="fui-fieldset fui-choice">
-                <legend class="fui-label">"Profiles"</legend>
+                <legend class="fui-label">{tr(Msg::Profiles)}</legend>
                 <div id=list.clone() class="fui-stack">
                     {profiles}
                 </div>
                 {add_button(
                     &fhir_field(key, "add-profile"),
                     (&profile_template, &list),
-                    ("Add profile", "__ITEM__"),
+                    (tr(Msg::AddProfile), "__ITEM__"),
                 )}
                 {template(profile_template.clone(), profile(key, "__ITEM__", String::new()))}
             </fieldset>
@@ -520,7 +525,7 @@ fn fhir_row(key: &str, endpoint: Option<&ConsoleEndpoint>) -> AnyView {
                     fhir_field(key, "service"),
                     name("in_service"),
                     endpoint.is_none_or(|endpoint| endpoint.status != EndpointStatus::Suspended),
-                )} {remove_button(&row, format!("Remove {named}"))}
+                )} {remove_button(&row, tr_with(Msg::Remove4, &[("named", (named).clone().into())]))}
             </div>
         </fieldset>
     }
@@ -558,54 +563,53 @@ fn identity(member: Option<&ConsoleMember>) -> AnyView {
     };
     view! {
         <fieldset class=GROUP>
-            <legend>"Organisation"</legend>
+            <legend>{tr(Msg::Organisation)}</legend>
             <div class="fui-field-row fui-field-row-halves">
                 {text(
                     (&field("organisation"), "form[organisation]"),
-                    String::from("Organisation id"),
+                    tr(Msg::OrganisationId),
                     value(|m| m.organisation.id.as_str().to_owned()),
                     required(None),
                 )}
                 {text(
                     (&field("organisation_name"), "form[organisation_name]"),
-                    String::from("Organisation name"),
+                    tr(Msg::OrganisationName),
                     value(|m| m.organisation.name.clone().unwrap_or_default()),
                     Text::default(),
                 )}
             </div>
         </fieldset>
         <fieldset class=GROUP>
-            <legend>"Node"</legend>
+            <legend>{tr(Msg::Node)}</legend>
             <div class="fui-field-row fui-field-row-halves">
                 {text(
                     (&field("node"), "form[node]"),
-                    String::from("node_id"),
+                    tr(Msg::NodeIdLabel),
                     value(|m| m.node.id.as_str().to_owned()),
                     Text {
                         readonly: editing,
-                        ..required(
-                            editing
-                                .then_some(
-                                    "A member's node_id is its identity: add a new member to change it.",
-                                ),
-                        )
+                        ..required(Some(if editing {
+                            tr(Msg::MemberSNodeIdIdentityAdd)
+                        } else {
+                            tr_with(Msg::ConfigurationKey, &[("key", "node_id".into())])
+                        }))
                     },
                 )}
                 {text(
                     (&field("system_id"), "form[system_id]"),
-                    String::from("system_id"),
+                    tr(Msg::SystemId),
                     value(|m| m.node.system_id.as_str().to_owned()),
-                    required(None),
+                    required(Some(tr_with(Msg::ConfigurationKey, &[("key", "system_id".into())]))),
                 )}
                 {text(
                     (&field("product"), "form[product]"),
-                    String::from("CDR product"),
+                    tr(Msg::CdrProduct),
                     value(|m| m.node.product.clone().unwrap_or_default()),
                     Text::default(),
                 )}
                 {text(
                     (&field("product_version"), "form[product_version]"),
-                    String::from("CDR product version"),
+                    tr(Msg::CdrProductVersion),
                     value(|m| m.node.version.clone().unwrap_or_default()),
                     Text::default(),
                 )}
@@ -629,26 +633,26 @@ fn endpoint_groups(member: Option<&ConsoleMember>) -> AnyView {
     let fresh_query = member.is_none().then(|| query_row("0", None));
     view! {
         <fieldset class=GROUP>
-            <legend>"Query API endpoints"</legend>
+            <legend>{tr(Msg::QueryApiEndpoints)}</legend>
             <p class="fui-muted">
-                "The ITS-REST endpoints the gateway sends each member's AQL to."
+                {tr(Msg::RestEndpointsGatewaySendsEachMember)}
             </p>
             <div id="cfg-query-rows" class="fui-stack">
                 {query_rows}
                 {fresh_query}
             </div>
-            {add_button(ADD_QUERY, ("tpl-query", "cfg-query-rows"), ("Add endpoint", "__KEY__"))}
+            {add_button(ADD_QUERY, ("tpl-query", "cfg-query-rows"), (tr(Msg::AddEndpoint), "__KEY__"))}
             {template(String::from("tpl-query"), query_row("__KEY__", None))}
         </fieldset>
         <fieldset class=GROUP>
-            <legend>"FHIR endpoints"</legend>
+            <legend>{tr(Msg::FhirEndpoints)}</legend>
             <p class="fui-muted">
-                "The exchange-format endpoints that serve the categories each one names."
+                {tr(Msg::ExchangeFormatEndpointsServeCategoriesEach)}
             </p>
             <div id="cfg-fhir-rows" class="fui-stack">
                 {fhir_rows}
             </div>
-            {add_button(ADD_FHIR, ("tpl-fhir", "cfg-fhir-rows"), ("Add FHIR endpoint", "__KEY__"))}
+            {add_button(ADD_FHIR, ("tpl-fhir", "cfg-fhir-rows"), (tr(Msg::AddFhirEndpoint), "__KEY__"))}
             {template(String::from("tpl-fhir"), fhir_row("__KEY__", None))}
         </fieldset>
     }
@@ -661,8 +665,13 @@ fn endpoint_groups(member: Option<&ConsoleMember>) -> AnyView {
 pub(super) fn member_form(loaded: &Loaded<'_>, member: Option<&ConsoleMember>) -> AnyView {
     let editing = member.is_some();
     let title = member.map_or_else(
-        || String::from("Add a member"),
-        |member| format!("Edit member {}", member.node.id.as_str()),
+        || tr(Msg::AddAMember),
+        |member| {
+            tr_with(
+                Msg::EditMember,
+                &[("member", (member.node.id.as_str()).to_string().into())],
+            )
+        },
     );
     let body = view! {
         {hidden("action", String::from(if editing { "save-member" } else { "add-member" }))}
@@ -674,11 +683,11 @@ pub(super) fn member_form(loaded: &Loaded<'_>, member: Option<&ConsoleMember>) -
         {save_bar(loaded, "/configuration/members")}
     };
     view! {
-        {trail(("Members", "/configuration/members"), title.clone())}
+        {trail((tr(Msg::Members), "/configuration/members"), title.clone())}
         {head(
             ("member-title", title),
             (
-                "A member is saved as a new revision, which you apply separately.",
+                tr(Msg::MemberSavedNewRevisionWhichYou),
                 "console-managed-resources",
             ),
             (),

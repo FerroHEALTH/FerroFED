@@ -11,6 +11,7 @@ use leptos::prelude::*;
 
 use crate::configure::render::parts::{diff_table, error_line, form, head, hidden, reason};
 use crate::configure::render::{Loaded, author};
+use crate::locale::{Msg, tr, tr_with};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
@@ -21,7 +22,10 @@ use ferrohealth_ui::view::time::timestamp;
 /// Where `revision` came from, as a badge.
 fn origin(revision: &Revision) -> AnyView {
     let word = match (revision.restores, revision.origin) {
-        (Some(restored), _) => format!("rollback to {restored}"),
+        (Some(restored), _) => tr_with(
+            Msg::RollbackTo,
+            &[("restored", (restored).to_string().into())],
+        ),
         (None, Origin::File) => String::from("file"),
         (None, Origin::Operator) => String::from("operator"),
         (None, Origin::Rollback) => String::from("rollback"),
@@ -41,17 +45,17 @@ fn standing(
     (running, previous): (Option<RevisionId>, Option<RevisionId>),
 ) -> AnyView {
     let (word, tone) = if Some(revision.id) == running {
-        ("running", Tone::Ok)
+        (tr(Msg::StateRunning), Tone::Ok)
     } else if running.is_some_and(|running| revision.id > running) {
-        ("saved, not applied", Tone::Warn)
+        (tr(Msg::SavedNotApplied), Tone::Warn)
     } else if Some(revision.id) == previous
         || matches!(revision.origin, Origin::File | Origin::Rollback)
     {
-        ("applied before", Tone::Neutral)
+        (tr(Msg::AppliedBefore), Tone::Neutral)
     } else {
-        ("not running", Tone::Neutral)
+        (tr(Msg::NotRunning), Tone::Neutral)
     };
-    pill(tone, word).into_any()
+    pill(tone, &word).into_any()
 }
 
 /// One revision of the timeline.
@@ -63,8 +67,8 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
     let compare = (Some(id) != running && running.is_some()).then(|| {
         view! {
             <a href=format!("/configuration/history?compare={id}") class=Variant::Ghost.class()>
-                "Compare with running"
-                <span class="fui-sr-only">{format!(" (revision {id})")}</span>
+                {tr(Msg::CompareWithRunning)}
+                <span class="fui-sr-only">{tr_with(Msg::Revision, &[("id", (id).to_string().into())])}</span>
             </a>
         }
     });
@@ -74,7 +78,7 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
     view! {
         <li class="fui-stack">
             <div class="fui-cluster">
-                <h3 class="fui-card-title">{format!("Revision {id}")}</h3>
+                <h3 class="fui-card-title">{tr_with(Msg::Revision2, &[("id", (id).to_string().into())])}</h3>
                 {origin(revision)}
                 {standing(revision, (running, previous))}
             </div>
@@ -92,7 +96,7 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
                     class=Variant::Ghost.class()
                 >
                     {icon(Glyph::DOWNLOAD, "16")}
-                    {format!("Export revision {id} as TOML")}
+                    {tr_with(Msg::ExportRevisionAsToml, &[("id", (id).to_string().into())])}
                 </a>
                 {compare}
                 {rollback}
@@ -107,10 +111,12 @@ pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
     let Some(history) = loaded.history else {
         return ().into_any();
     };
-    let shown = format!(
-        "The {} newest of {} revisions, newest first.",
-        history.items.len(),
-        history.total
+    let shown = tr_with(
+        Msg::NewestRevisionsNewestFirst,
+        &[
+            ("history", (history.items.len()).to_string().into()),
+            ("total", (history.total).to_string().into()),
+        ],
     );
     let entries = history
         .items
@@ -119,9 +125,9 @@ pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
         .collect_view();
     view! {
         {head(
-            ("history-title", String::from("History")),
+            ("history-title", tr(Msg::History)),
             (
-                "Every revision, who made it and why; each one downloads as TOML.",
+                tr(Msg::EveryRevisionWhoMadeWhyEach),
                 "export-and-import",
             ),
             (),
@@ -142,8 +148,16 @@ pub(super) fn compared(loaded: &Loaded<'_>) -> AnyView {
     };
     let running = loaded.running();
     let title = running.map_or_else(
-        || format!("Revision {other}"),
-        |running| format!("Revision {other} against the running revision {running}"),
+        || tr_with(Msg::Revision3, &[("other", (other).to_string().into())]),
+        |running| {
+            tr_with(
+                Msg::RevisionAgainstRunningRevision,
+                &[
+                    ("other", (other).to_string().into()),
+                    ("running", (running).to_string().into()),
+                ],
+            )
+        },
     );
     view! {
         <section class="fui-card" aria-labelledby="compare-title">
@@ -152,7 +166,7 @@ pub(super) fn compared(loaded: &Loaded<'_>) -> AnyView {
                     {title}
                 </h2>
                 <a href="/configuration/history" class=Variant::Ghost.class()>
-                    "Close the comparison"
+                    {tr(Msg::CloseTheComparison)}
                 </a>
             </div>
             {diff_table(changes, (running, other))}
@@ -172,20 +186,20 @@ pub(super) fn export(loaded: &Loaded<'_>) -> AnyView {
                 class=Variant::Secondary.class()
             >
                 {icon(Glyph::DOWNLOAD, "16")}
-                "Download as TOML"
+                {tr(Msg::DownloadAsToml)}
             </a>
         }
         .into_any(),
         None => {
-            view! { <p class="fui-muted">"No revision runs, so none downloads."</p> }.into_any()
+            view! { <p class="fui-muted">{tr(Msg::NoRevisionRunsSoNoneDownloads)}</p> }.into_any()
         }
     };
     view! {
         <section class="fui-card" aria-labelledby="export-title">
             {head(
-                ("export-title", String::from("Export")),
+                ("export-title", tr(Msg::Export)),
                 (
-                    "The configuration less its bootstrap core, each secret as its file reference alone.",
+                    tr(Msg::ConfigurationLessBootstrapCoreEachSecret),
                     "export-and-import",
                 ),
                 (),
@@ -201,10 +215,10 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
     let body = view! {
         {hidden("action", String::from("import"))}
         {hidden("base", loaded.base())}
-        {Field::new("cfg-toml", "TOML")
+        {Field::new("cfg-toml", tr(Msg::Toml))
             .after(view! {
                 <p id="cfg-toml-lines" class="fui-help">
-                    "0 lines"
+                    {tr(Msg::N0Lines)}
                 </p>
                 {error_line("cfg-toml")}
             })
@@ -223,21 +237,18 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
         {reason()}
         <div class="fui-action-bar">
             <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-import-hint">
-                "Import as a dry-run revision"
+                {tr(Msg::ImportDryRunRevision)}
             </button>
             <p id="cfg-import-hint" class="fui-help">
-                {format!(
-                    "It is saved as {} and not applied; the outcome shows what it changes.",
-                    loaded.next(),
-                )}
+                {tr_with(Msg::SavedNotAppliedOutcomeShowsWhat, &[("loaded", (loaded.next()).clone().into())])}
             </p>
         </div>
     };
     view! {
         {head(
-            ("import-title", String::from("Import")),
+            ("import-title", tr(Msg::Import)),
             (
-                "Paste the TOML an export wrote, or one kept in version control.",
+                tr(Msg::PasteTomlExportWroteOneKept),
                 "export-and-import",
             ),
             (),

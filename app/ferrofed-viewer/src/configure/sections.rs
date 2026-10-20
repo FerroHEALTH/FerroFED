@@ -14,6 +14,7 @@ use crate::admin::act::server::{Acted, ReplicaAnswer};
 use crate::admin::answer::replica_said;
 use crate::admin::model::ActionAnswer;
 use crate::configure::render::answers::said;
+use crate::locale::{Msg, tr, tr_with};
 
 /// How a removal names `resource`: `credentials:<endpoint id>` or
 /// `binding:<section>`.
@@ -40,12 +41,9 @@ pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
 fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
     said(view! {
         <strong>
-            {format!(
-                "Replica {replica} recorded the confirmation of revision {}.",
-                mark.revision,
-            )}
+            {tr_with(Msg::ReplicaRecordedConfirmationRevision, &[("replica", (replica).to_string().into()), ("revision", (mark.revision).to_string().into())])}
         </strong>
-        " It stays running, and the gateway no longer rolls it back."
+        {tr(Msg::StaysRunningGatewayNoLongerRolls)}
     })
 }
 
@@ -62,16 +60,13 @@ pub fn approved(answer: &ReplicaAnswer<Review>) -> ActionAnswer {
 /// What a replica reports of an approval.
 fn approved_line(replica: &str, review: &Review) -> AnyView {
     let next = if review.approved {
-        " It may now be applied."
+        tr(Msg::MayNowApplied)
     } else {
-        " It still takes an approval before it applies."
+        tr(Msg::StillTakesApprovalBeforeApplies)
     };
     said(view! {
         <strong>
-            {format!(
-                "Replica {replica} recorded the approval of revision {}.",
-                review.revision,
-            )}
+            {tr_with(Msg::ReplicaRecordedApprovalRevision, &[("replica", (replica).to_string().into()), ("revision", (review.revision).to_string().into())])}
         </strong>
         {next}
     })

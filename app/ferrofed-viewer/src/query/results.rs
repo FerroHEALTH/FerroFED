@@ -15,6 +15,7 @@ use ferrohealth_ui::view::empty::empty_quiet;
 use leptos::prelude::*;
 
 use super::tabs::{TabPair, tab_list};
+use crate::locale::{Msg, tr, tr_with};
 use crate::query::model::{PAGE_ROWS, RenderedAnswer};
 use crate::query::run::RunQuery;
 use crate::views::fault;
@@ -47,10 +48,10 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
             matches!(answer, Some(Ok(answer)) if !answer.refused).then(|| {
                 tab_list(
                     TabPair {
-                        label: "Answer",
+                        label: tr(Msg::Answer),
                         tabs: ["query-tab-table", "query-tab-raw"],
                         panels: ["query-panel-table", "query-panel-raw"],
-                        names: ["Table", "Raw"],
+                        names: [tr(Msg::Table), tr(Msg::Raw)],
                     },
                     raw,
                 )
@@ -70,13 +71,13 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
                     node_ref=heading
                     class="fui-card-title"
                 >
-                    "Results"
+                    {tr(Msg::Results)}
                 </h2>
                 {tabs}
             </div>
             <div class="fui-panel-body fui-stack">
                 <p role="status" class="fui-help">
-                    {move || if pending.get() { "Running the query." } else { "" }}
+                    {move || if pending.get() { tr(Msg::RunningTheQuery) } else { String::new() }}
                 </p>
                 {move || {
                     value
@@ -97,8 +98,8 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
 fn waiting() -> AnyView {
     empty_quiet(
         Glyph::SQUARE_TERMINAL,
-        "No query has run yet.",
-        "Write AQL or name a stored query, then run it.",
+        tr(Msg::NoQueryHasRunYet),
+        tr(Msg::WriteAqlNameStoredQueryThen),
     )
     .into_any()
 }
@@ -161,7 +162,7 @@ fn shown(rendered: &RenderedAnswer, raw: RwSignal<bool>, paged: Paged) -> AnyVie
                 class="fui-code-panel"
                 role="region"
                 tabindex="0"
-                aria-label="The federated result set as JSON"
+                aria-label=tr(Msg::FederatedResultSetJson)
             >
                 <pre>{text}</pre>
             </div>
@@ -178,10 +179,17 @@ fn pages_section(rows: u32, paged: Paged) -> AnyView {
     let shown = move || {
         let first = paged.current().saturating_mul(PAGE_ROWS);
         let end = first.saturating_add(PAGE_ROWS).min(rows);
-        format!("Rows {} to {end} of {rows}", first.saturating_add(1))
+        tr_with(
+            Msg::RowsToOf,
+            &[
+                ("first", (first.saturating_add(1)).to_string().into()),
+                ("end", (end).to_string().into()),
+                ("rows", (rows).to_string().into()),
+            ],
+        )
     };
     view! {
-        <nav aria-label="Pages of rows" class="fui-pager">
+        <nav aria-label=tr(Msg::PagesOfRows) class="fui-pager">
             <p class="fui-num" aria-live="polite">
                 {shown}
             </p>
@@ -193,7 +201,7 @@ fn pages_section(rows: u32, paged: Paged) -> AnyView {
                     on:click=move |_| paged.turn(paged.current().saturating_sub(1))
                 >
                     {icon(Glyph::CHEVRON_LEFT, "14")}
-                    "Previous"
+                    {tr(Msg::Previous)}
                 </button>
                 <button
                     type="button"
@@ -201,7 +209,7 @@ fn pages_section(rows: u32, paged: Paged) -> AnyView {
                     disabled=at_last
                     on:click=move |_| paged.turn(paged.current().saturating_add(1).min(last))
                 >
-                    "Next"
+                    {tr(Msg::Next)}
                     {icon(Glyph::CHEVRON_RIGHT, "14")}
                 </button>
             </div>
@@ -218,7 +226,13 @@ fn show_page(rows: NodeRef<leptos::html::Div>, to: u32) {
         let Some(rows) = rows.get_untracked() else {
             return;
         };
-        let selector = format!("#{} table", crate::query::model::ROWS_TABLE);
+        let selector = tr_with(
+            Msg::Table2,
+            &[(
+                "value0",
+                (crate::query::model::ROWS_TABLE).to_string().into(),
+            )],
+        );
         let Ok(Some(table)) = rows.query_selector(&selector) else {
             return;
         };

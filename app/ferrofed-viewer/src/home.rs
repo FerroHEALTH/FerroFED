@@ -20,6 +20,7 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::app::SIGN_IN;
+use crate::locale::{Msg, tr};
 use crate::views::titled;
 
 /// The markup `render` writes on the server, which the browser reads back
@@ -49,7 +50,7 @@ pub(crate) fn rendered(render: impl FnOnce() -> String) -> String {
 pub fn SignInPage() -> impl IntoView {
     let html = SharedValue::new_str(|| rendered(sign_in)).into_inner();
     view! {
-        <Title text=titled("Sign in") />
+        <Title text=titled(&tr(Msg::SignIn)) />
         <div inner_html=html></div>
     }
 }
@@ -70,13 +71,13 @@ pub fn sign_in() -> String {
         basic: None,
         provider: Some(Provider {
             href: String::from(SIGN_IN),
-            label: String::from("Sign in"),
+            label: tr(Msg::SignIn),
         }),
         links: Vec::new(),
     });
     view! {
         <div class="fui-centred">
-            <h1 class="fui-sr-only">"Sign in to the console"</h1>
+            <h1 class="fui-sr-only">{tr(Msg::SignConsole)}</h1>
             {card}
         </div>
     }
@@ -84,7 +85,9 @@ pub fn sign_in() -> String {
 }
 
 /// The subtitle of the dashboard.
-const DASHBOARD: &str = "The state of the federation, as this console reads it.";
+fn dashboard_line() -> String {
+    tr(Msg::StateFederationConsoleReads)
+}
 
 /// The dashboard a signed-in operator lands on: the counts of the
 /// federation, each endpoint's health and the recent incidents, rendered on
@@ -97,9 +100,9 @@ const DASHBOARD: &str = "The state of the federation, as this console reads it."
 pub fn DashboardPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| crate::views::load::dashboard());
     view! {
-        <Title text=titled("Dashboard") />
-        {page_header("Dashboard", Some(String::from(DASHBOARD)), ())}
-        <Suspense fallback=|| busy("Loading the dashboard.", Busy::Section)>
+        <Title text=titled(&tr(Msg::Dashboard)) />
+        {page_header(tr(Msg::Dashboard), Some(dashboard_line()), ())}
+        <Suspense fallback=|| busy(tr(Msg::LoadingTheDashboard), Busy::Section)>
             {move || Suspend::new(async move {
                 crate::views::shown(
                     loaded.await,

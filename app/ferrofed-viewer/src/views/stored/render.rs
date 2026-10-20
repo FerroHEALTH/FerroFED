@@ -31,6 +31,7 @@ use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::config::settings::ReplicaSettings;
 use crate::gateway::{AccessToken, Gateway, GatewayError};
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::STORED_QUERIES;
 use crate::views::load::server::answered_by;
 use crate::views::stored::{StoredDetail, StoredView, console_href, detail_href};
@@ -76,7 +77,7 @@ pub fn list(report: &Page<Listed>, replicas: &[ReplicaSettings]) -> StoredView {
         repair_form: replicas
             .first()
             .map(|replica| crate::admin::fields::repair(replica, &names)),
-        answered_by: answered_by(&[("stored queries", report.replica.as_deref())]),
+        answered_by: answered_by(&[(&tr(Msg::StoredQueries2), report.replica.as_deref())]),
     }
 }
 
@@ -84,7 +85,7 @@ pub fn list(report: &Page<Listed>, replicas: &[ReplicaSettings]) -> StoredView {
 fn none_held() -> String {
     view! {
         <div class="fui-card">
-            {empty_state(Glyph::DATABASE, "No stored queries", "The gateway holds no stored query.", ())}
+            {empty_state(Glyph::DATABASE, tr(Msg::NoStoredQueries), tr(Msg::GatewayHoldsNoStoredQuery), ())}
         </div>
     }
     .to_html()
@@ -105,7 +106,7 @@ fn namespaces(items: &[Listed]) -> String {
         .map(|(index, (namespace, entries))| namespace_card(index, namespace, &entries))
         .collect_view();
     view! {
-        <section class="fui-stack" aria-label="Namespaces">
+        <section class="fui-stack" aria-label=tr(Msg::Namespaces)>
             {cards}
         </section>
     }
@@ -123,14 +124,14 @@ fn namespace_card(
     let heading = format!("namespace-{index}");
     let labelled = heading.clone();
     let count = match entries.len() {
-        1 => String::from("1 version"),
-        n => format!("{n} versions"),
+        1 => tr(Msg::N1Version),
+        n => tr_with(Msg::Versions2, &[("n", (n).to_string().into())]),
     };
     let read_only = entries
         .iter()
         .all(|entry| entry.read_only)
-        .then(|| badge(Tone::Neutral, "read-only"));
-    let title = namespace.map_or_else(|| String::from("No namespace"), str::to_owned);
+        .then(|| badge(Tone::Neutral, &tr(Msg::ReadOnlyBadge)));
+    let title = namespace.map_or_else(|| tr(Msg::NoNamespace), str::to_owned);
     let tiles = entries
         .iter()
         .map(|entry| {
@@ -157,7 +158,7 @@ fn namespace_card(
                 {badge(Tone::Accent, &count)}
                 {read_only}
             </div>
-            {tile_list("Versions", tiles)}
+            {tile_list(tr(Msg::Versions), tiles)}
         </section>
     }
 }
@@ -254,27 +255,35 @@ pub fn detail(
             Tone::Warn,
             Announce::Alert,
             None,
-            format!("The gateway holds no version {asked} of this query. The newest is shown."),
+            tr_with(
+                Msg::GatewayHoldsNoVersionQueryNewest,
+                &[("asked", (asked).to_string().into())],
+            ),
         )
     });
     let shown = chosen.unwrap_or(newest);
-    let read_only = shown.read_only.then(|| badge(Tone::Neutral, "read-only"));
+    let read_only = shown
+        .read_only
+        .then(|| badge(Tone::Neutral, &tr(Msg::ReadOnlyBadge)));
     let shown = &shown.definition;
     let (namespace, short) = split(name);
     let open = view! {
         {read_only}
         <a href=console_href(name, &shown.version) rel="external" class=Variant::Primary.class()>
-            {label(Some(Glyph::SQUARE_TERMINAL), "Open in query console")}
+            {label(Some(Glyph::SQUARE_TERMINAL), tr(Msg::OpenInQueryConsole))}
         </a>
     };
     let header = page_heading(
         Header {
             title: name.to_owned(),
-            subtitle: Some(format!(
-                "Version {}, stored {}.",
-                shown.version, shown.saved
+            subtitle: Some(tr_with(
+                Msg::VersionStored,
+                &[
+                    ("version", (shown.version).clone().into()),
+                    ("saved", (shown.saved).clone().into()),
+                ],
             )),
-            crumbs: vec![Crumb::new("Stored queries", STORED_QUERIES)],
+            crumbs: vec![Crumb::new(tr(Msg::StoredQueries), STORED_QUERIES)],
             mono: true,
         },
         open,
@@ -282,13 +291,19 @@ pub fn detail(
     let versions = versions_nav(name, held, &shown.version);
     let mono = |text: String| view! { <span class="fui-mono fui-break">{text}</span> }.into_any();
     let facts = definitions(vec![
-        ("Namespace", mono(namespace.unwrap_or("none").to_owned())),
-        ("Name", mono(short.to_owned())),
-        ("Version", mono(shown.version.clone())),
-        ("Stored", shown.saved.clone().into_any()),
+        (
+            tr(Msg::Namespace),
+            mono(namespace.unwrap_or("none").to_owned()),
+        ),
+        (tr(Msg::Name), mono(short.to_owned())),
+        (tr(Msg::Version), mono(shown.version.clone())),
+        (tr(Msg::Stored), shown.saved.clone().into_any()),
     ]);
     let aql = code_panel(
-        &format!("The AQL of version {}", shown.version),
+        &tr_with(
+            Msg::TheAqlOfVersion,
+            &[("version", (shown.version).clone().into())],
+        ),
         Language::Aql,
         &shown.q,
     );
@@ -298,10 +313,10 @@ pub fn detail(
         <div class="fui-stack">
             {missing}
             {main_aside(
-                card("AQL", aql),
+                card(tr(Msg::Aql), aql),
                 stack(view! {
-                    {card("Versions", versions)}
-                    {card("Details", facts)}
+                    {card(tr(Msg::Versions), versions)}
+                    {card(tr(Msg::Details), facts)}
                 }),
             )}
             {replica}
@@ -320,7 +335,7 @@ fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView + use
             let entry = &entry.definition;
             let here = entry.version == shown;
             let current = here.then_some("page");
-            let mark = here.then(|| view! { <span class="fui-small">"shown"</span> });
+            let mark = here.then(|| view! { <span class="fui-small">{tr(Msg::Shown)}</span> });
             view! {
                 <li>
                     <a
@@ -337,7 +352,7 @@ fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView + use
         })
         .collect_view();
     view! {
-        <nav aria-label="Versions">
+        <nav aria-label=tr(Msg::Versions)>
             <ul class="fui-nav-list">{links}</ul>
         </nav>
     }
@@ -346,22 +361,22 @@ fn versions_nav(name: &str, held: &[Listed], shown: &str) -> impl IntoView + use
 /// The line naming the replica that answered, or saying none was named;
 /// nothing when the replica has no name.
 fn replica_line(replica: Option<&str>) -> impl IntoView + use<> {
-    page_meta(answered_by(&[("stored queries", replica)]))
+    page_meta(answered_by(&[(&tr(Msg::StoredQueries2), replica)]))
 }
 
 /// The empty state of a stored query the gateway does not hold.
 fn not_held(name: &str) -> String {
     let back = view! {
         <a href=STORED_QUERIES class=Variant::Secondary.class()>
-            {label(Some(Glyph::ARROW_LEFT), "Back to the stored queries")}
+            {label(Some(Glyph::ARROW_LEFT), tr(Msg::BackStoredQueries))}
         </a>
     };
     view! {
         <div class="fui-card">
             {empty_state(
                 Glyph::SEARCH_X,
-                "No such stored query",
-                format!("The gateway holds no stored query named {name}."),
+                tr(Msg::NoSuchStoredQuery),
+                tr_with(Msg::GatewayHoldsNoStoredQueryNamed, &[("name", (name).to_string().into())]),
                 back,
             )}
         </div>

@@ -32,6 +32,7 @@ use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
 use crate::configure::settings::fields::TLS;
 use crate::configure::settings::{self, Field, Grant, Kind, Secret, TLS_SECRET};
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::Refusal;
 
 /// The path of `resource`'s form.
@@ -46,7 +47,7 @@ fn href(resource: &Resource) -> String {
 /// The secrets `slots` name, each set and read from its file, or none.
 fn secrets_said(slots: &[SecretSlot]) -> AnyView {
     if slots.is_empty() {
-        return view! { <span class="fui-muted">"not set"</span> }.into_any();
+        return view! { <span class="fui-muted">{tr(Msg::NotSet2)}</span> }.into_any();
     }
     let items = slots
         .iter()
@@ -54,7 +55,7 @@ fn secrets_said(slots: &[SecretSlot]) -> AnyView {
             view! {
                 <li>
                     <code>{slot.key.clone()}</code>
-                    ": set, read from "
+                    {tr(Msg::SetReadFrom)}
                     <code>{slot.reference.clone()}</code>
                 </li>
             }
@@ -67,18 +68,18 @@ fn secrets_said(slots: &[SecretSlot]) -> AnyView {
 /// it sets.
 fn settings_said(section: &SectionResource) -> String {
     let Ok(table) = settings::build::held(section.settings.as_deref()) else {
-        return String::from("not readable");
+        return tr(Msg::NotReadable);
     };
     let count = match settings::build::scalars(&table).len() {
-        0 => String::from("no settings"),
-        1 => String::from("1 setting"),
-        many => format!("{many} settings"),
+        0 => tr(Msg::NoSettings),
+        1 => tr(Msg::N1Setting),
+        many => tr_with(Msg::Settings2, &[("many", (many).to_string().into())]),
     };
     match &section.resource {
         Resource::Credentials(_) => {
             format!(
                 "{} · {count}",
-                Grant::held(&table, &section.secrets).label()
+                tr(Grant::held(&table, &section.secrets).label())
             )
         }
         _ => count,
@@ -101,21 +102,18 @@ fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
                 format!("remove-{}", named.replace(':', "-")),
                 (
                     view! {
-                        "Remove"
+                        {tr(Msg::Remove)}
                         <span class="fui-sr-only">{format!(" {shown}")}</span>
                     },
                     Variant::Ghost,
                 ),
                 (
-                    format!(
-                        "Remove {shown}? It is saved as {} without it, which you apply separately.",
-                        loaded.next(),
-                    ),
-                    "Save the removal",
+                    tr_with(Msg::RemoveSavedWithoutWhichYouApply, &[("shown", (shown).clone().into()), ("loaded", (loaded.next()).clone().into())]),
+                    tr(Msg::SaveTheRemoval),
                 ),
                 text(
                     (&reason_id, "form[reason]"),
-                    String::from("Reason"),
+                    tr(Msg::Reason),
                     String::new(),
                     Text {
                         required: true,
@@ -140,7 +138,7 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
     let actions = editable.then(|| {
         let edit = view! {
             <a href=href(&section.resource) class=Variant::Ghost.class()>
-                "Edit"
+                {tr(Msg::Edit)}
                 <span class="fui-sr-only">{format!(" {shown}")}</span>
             </a>
         }
@@ -155,11 +153,11 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             <th scope="row">
                 <code>{shown.clone()}</code>
             </th>
-            <td data-label="Owner">{owner(section.owner)}</td>
-            <td data-label="State">{state(if console { section.state } else { None })}</td>
-            <td data-label="Secrets">{secrets_said(&section.secrets)}</td>
-            <td data-label="Settings">{settings_said(section)}</td>
-            <td data-label="Actions" class=ACTIONS>{actions}</td>
+            <td data-label=tr(Msg::Owner)>{owner(section.owner)}</td>
+            <td data-label=tr(Msg::State)>{state(if console { section.state } else { None })}</td>
+            <td data-label=tr(Msg::Secrets)>{secrets_said(&section.secrets)}</td>
+            <td data-label=tr(Msg::Settings)>{settings_said(section)}</td>
+            <td data-label=tr(Msg::Actions) class=ACTIONS>{actions}</td>
         </tr>
     }
     .into_any()
@@ -183,14 +181,16 @@ pub(super) fn addable(loaded: &Loaded<'_>) -> Vec<BindingSection> {
 }
 
 /// The columns of the Credentials and bindings tab.
-const SECTION_COLUMNS: [Column; 6] = [
-    Column::text("resource", "Resource"),
-    Column::text("owner", "Owner"),
-    Column::text("state", "State"),
-    Column::text("secrets", "Secrets"),
-    Column::text("settings", "Settings"),
-    Column::text("actions", "Actions"),
-];
+fn section_columns() -> [Column; 6] {
+    [
+        Column::text("resource", tr(Msg::Resource)),
+        Column::text("owner", tr(Msg::Owner)),
+        Column::text("state", tr(Msg::State)),
+        Column::text("secrets", tr(Msg::Secrets)),
+        Column::text("settings", tr(Msg::Settings)),
+        Column::text("actions", tr(Msg::Actions)),
+    ]
+}
 
 /// The Credentials and bindings tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
@@ -199,7 +199,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         view! {
             <tr>
                 <td colspan="6" class="fui-muted">
-                    "No onward credential or binding section is set."
+                    {tr(Msg::NoOnwardCredentialBindingSectionSet)}
                 </td>
             </tr>
         }
@@ -214,28 +214,28 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let binding = (!addable(loaded).is_empty()).then(|| {
         view! {
             <a href="/configuration/bindings/new" class=Variant::Secondary.class()>
-                "Add binding section"
+                {tr(Msg::AddBindingSection)}
             </a>
         }
     });
     view! {
         {head(
-            ("credentials-title", String::from("Credentials and bindings")),
+            ("credentials-title", tr(Msg::CredentialsAndBindings)),
             (
-                "A credential or a binding section the file provides is read-only here; a secret shows as set, never by value.",
+                tr(Msg::CredentialBindingSectionFileProvidesRead),
                 "credentials-and-binding-sections",
             ),
             view! {
                 {binding}
                 <a href="/configuration/credentials/new" class=Variant::Primary.class()>
                     {icon(Glyph::PLUS, "16")}
-                    "Add credentials"
+                    {tr(Msg::AddCredentials)}
                 </a>
             },
         )}
         {crate::views::table(
-            "Credentials and binding sections and their owners",
-            &SECTION_COLUMNS,
+            &tr(Msg::CredentialsBindingSectionsTheirOwners),
+            &section_columns(),
             rows,
         )}
     }
@@ -252,23 +252,28 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
     let (key, label) = secret;
     let name = |part: &str| format!("form[secret][{row}][{part}]");
     let status = slot.map_or_else(
-        || String::from("Not set."),
-        |slot| format!("Set, read from {}.", slot.reference),
+        || tr(Msg::NotSet),
+        |slot| {
+            tr_with(
+                Msg::SetReadFrom2,
+                &[("reference", (slot.reference).clone().into())],
+            )
+        },
     );
     let mut choices = vec![
         (
             "keep",
             if slot.is_some() {
-                "Keep"
+                tr(Msg::Keep)
             } else {
-                "Leave unset"
+                tr(Msg::LeaveUnset)
             },
         ),
-        ("set", "Set a value"),
-        ("file", "Read from a file"),
+        ("set", tr(Msg::SetAValue)),
+        ("file", tr(Msg::ReadFromAFile)),
     ];
     if slot.is_some() {
-        choices.push(("clear", "Clear"));
+        choices.push(("clear", tr(Msg::Clear)));
     }
     let segments = choices
         .into_iter()
@@ -292,7 +297,7 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
         .collect_view();
     let group = secret_field(row, "choice");
     let value_id = secret_field(row, "value");
-    let set = FormField::new(value_id.clone(), "Value, never shown again")
+    let set = FormField::new(value_id.clone(), tr(Msg::ValueNeverShownAgain))
         .after(error_line(&value_id))
         .view(view! {
             <input
@@ -306,7 +311,7 @@ pub(super) fn secret_row(row: &str, secret: (&str, String), slot: Option<&Secret
         });
     let file = text(
         (&secret_field(row, "file"), &name("file")),
-        String::from("Absolute path of the file it is read from"),
+        tr(Msg::AbsolutePathFileReadFrom),
         String::new(),
         Text {
             mono: true,
@@ -343,7 +348,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
     let item = |item: &str, value: String| {
         let id = format!("{into}-{item}");
         let body = view! {
-                {FormField::new(id.clone(), "Value")
+                {FormField::new(id.clone(), tr(Msg::Value))
                     .label_hidden()
                     .view(view! {
                         <input
@@ -355,7 +360,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
                             autocomplete="off"
                         />
                     })}
-                {remove_button(&format!("{id}-row"), String::from("Remove this value"))}
+                {remove_button(&format!("{id}-row"), tr(Msg::RemoveThisValue))}
         };
         keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
     };
@@ -369,7 +374,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
         <div id=into.clone() class="fui-stack">
             {items}
         </div>
-        {add_button(&setting_field(row, "add"), (&tpl, &into), ("Add value", "__ITEM__"))}
+        {add_button(&setting_field(row, "add"), (&tpl, &into), (tr(Msg::AddValue), "__ITEM__"))}
         {template(tpl.clone(), item("__ITEM__", String::new()))}
     }
     .into_any()
@@ -388,12 +393,12 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
                 .map(|(choice, label)| {
                     view! {
                         <option value=*choice selected=*choice == value.as_str()>
-                            {*label}
+                            {tr(*label)}
                         </option>
                     }
                 })
                 .collect_view();
-            FormField::new(id.clone(), field.label)
+            FormField::new(id.clone(), tr(field.label))
                 .after(error_line(&id))
                 .view(view! {
                     <select id=id.clone() name=name("value") class=SELECT aria-describedby=error_id(&id)>
@@ -412,20 +417,20 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
                     value="true"
                     checked=value == "true"
                 />
-                <label for=id.clone()>{field.label}</label>
+                <label for=id.clone()>{tr(field.label)}</label>
             </div>
         }
         .into_any(),
         Kind::List => view! {
             <fieldset class="fui-fieldset fui-choice">
-                <legend class="fui-label">{field.label}</legend>
+                <legend class="fui-label">{tr(field.label)}</legend>
                 {list(row, settings::build::listed(held, field.key))}
             </fieldset>
         }
         .into_any(),
         Kind::Text | Kind::Url | Kind::Path => text(
             (&id, &name("value")),
-            field.label.to_owned(),
+            tr(field.label),
             value,
             Text {
                 kind: if field.kind == Kind::Url {
@@ -434,8 +439,7 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
                     "text"
                 },
                 mono: field.kind != Kind::Text,
-                hint: (field.kind == Kind::Path)
-                    .then_some("An absolute path on the gateway's host."),
+                hint: (field.kind == Kind::Path).then_some(tr(Msg::AbsolutePathGatewaySHost)),
                 ..Text::default()
             },
         )
@@ -472,7 +476,7 @@ fn part(
             let slot = slots.iter().find(|slot| slot.key == secret.key);
             secret_row(
                 &format!("x{}", next()),
-                (secret.key, secret.label.to_owned()),
+                (secret.key, tr(secret.label)),
                 slot,
             )
         })
@@ -510,7 +514,7 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>) -> AnyView {
     if let Some(endpoint) = endpoint {
         return view! {
             {hidden("endpoint", endpoint.to_owned())}
-            <p>"Endpoint " <code>{endpoint.to_owned()}</code></p>
+            <p>{tr(Msg::Endpoint2)} <code>{endpoint.to_owned()}</code></p>
         }
         .into_any();
     }
@@ -532,8 +536,8 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>) -> AnyView {
             {options}
         </select>
     };
-    FormField::new("cfg-endpoint", "Endpoint")
-        .help("The endpoints the members declare that hold no credentials yet.")
+    FormField::new("cfg-endpoint", tr(Msg::Endpoint))
+        .help(tr(Msg::EndpointsMembersDeclareHoldNoCredentials))
         .after(error_line("cfg-endpoint"))
         .view(select)
 }
@@ -546,7 +550,7 @@ fn grant_choice(grant: Grant) -> AnyView {
         .map(|option| {
             view! {
                 <option value=option.as_str() selected=option == grant>
-                    {option.label()}
+                    {tr(option.label())}
                 </option>
             }
         })
@@ -562,8 +566,8 @@ fn grant_choice(grant: Grant) -> AnyView {
             {grants}
         </select>
     };
-    FormField::new("cfg-grant", "Grant type")
-        .help("How the gateway reaches the endpoint; the form shows that grant's fields.")
+    FormField::new("cfg-grant", tr(Msg::GrantType))
+        .help(tr(Msg::HowGatewayReachesEndpointFormShows))
         .after(error_line("cfg-grant"))
         .view(select)
 }
@@ -588,7 +592,10 @@ pub(super) fn credential_form(
                         && section.resource == Resource::Credentials(endpoint.to_owned())
                 })
                 .ok_or_else(|| Refusal::Invalid {
-                    reason: format!("The console holds no credentials of {endpoint}."),
+                    reason: tr_with(
+                        Msg::ConsoleHoldsNoCredentials,
+                        &[("endpoint", (endpoint).to_string().into())],
+                    ),
                 })?,
         ),
         None => None,
@@ -619,23 +626,28 @@ pub(super) fn credential_form(
         .collect_view();
     let tls = part(TLS, &[TLS_SECRET], (&table, slots), &mut rows);
     let title = endpoint.map_or_else(
-        || String::from("Add onward credentials"),
-        |endpoint| format!("Edit the credentials of {endpoint}"),
+        || tr(Msg::AddOnwardCredentials),
+        |endpoint| {
+            tr_with(
+                Msg::EditTheCredentialsOf,
+                &[("endpoint", (endpoint).to_string().into())],
+            )
+        },
     );
     let body = view! {
         {hidden("action", String::from("save-credentials"))}
         {hidden("base", loaded.base())}
         <fieldset class=GROUP>
-            <legend>"Endpoint and grant"</legend>
+            <legend>{tr(Msg::EndpointAndGrant)}</legend>
             {endpoint_choice(loaded, endpoint)}
             {grant_choice(grant)}
         </fieldset>
         <fieldset class=GROUP>
-            <legend>"Grant settings"</legend>
+            <legend>{tr(Msg::GrantSettings)}</legend>
             <div id=crate::configure::browser::GRANT_PARTS>{parts}</div>
         </fieldset>
         <fieldset class=GROUP>
-            <legend>"TLS"</legend>
+            <legend>{tr(Msg::Tls)}</legend>
             {tls}
         </fieldset>
         {reason()}
@@ -646,7 +658,7 @@ pub(super) fn credential_form(
         {head(
             ("credential-title", title),
             (
-                "Saved as a revision; once applied it awaits a confirmation, or the gateway rolls it back.",
+                tr(Msg::SavedRevisionOnceAppliedAwaitsConfirmation),
                 "commit-confirm",
             ),
             (),
@@ -659,7 +671,10 @@ pub(super) fn credential_form(
 /// The trail from the tab to the form titled `current`.
 pub(super) fn back(current: String) -> AnyView {
     trail(
-        ("Credentials and bindings", "/configuration/credentials"),
+        (
+            tr(Msg::CredentialsAndBindings),
+            "/configuration/credentials",
+        ),
         current,
     )
 }

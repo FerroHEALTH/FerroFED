@@ -17,24 +17,25 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 
 use crate::app::{PRODUCT, VERSION};
+use crate::locale::{Msg, tr};
 use crate::manufacturer::MANUFACTURER;
 use crate::views::titled;
 
 /// The value of one row of a card.
 enum Value {
     /// Plain text.
-    Text(&'static str),
+    Text(String),
     /// A link to the address `href`, showing `text`.
     Link {
         /// Where it leads.
         href: String,
         /// What it says.
-        text: &'static str,
+        text: String,
     },
     /// A value in the monospace stack.
     Code(String),
     /// A line saying what is not shown, and why.
-    Missing(&'static str),
+    Missing(String),
 }
 
 /// The view of `value`.
@@ -48,7 +49,7 @@ fn value(value: Value) -> impl IntoView {
 }
 
 /// A card titled `title` listing `rows`, each a term and its value.
-fn facts(title: &'static str, rows: Vec<(&'static str, Value)>) -> AnyView {
+fn facts(title: String, rows: Vec<(String, Value)>) -> AnyView {
     let rows = rows
         .into_iter()
         .map(|(term, shown)| (term, value(shown).into_any()))
@@ -60,45 +61,42 @@ fn facts(title: &'static str, rows: Vec<(&'static str, Value)>) -> AnyView {
 /// `gateway` holds for a signed-in operator alone, and the manufacturer
 /// (Art 30(1)(g): the name, the postal address and the single point of
 /// contact).
-fn cards(gateway: String) -> Vec<(&'static str, Vec<(&'static str, Value)>)> {
+fn cards(gateway: String) -> Vec<(String, Vec<(String, Value)>)> {
     let gateway = if gateway.is_empty() {
-        Value::Missing("Sign in to see the gateway this console reads.")
+        Value::Missing(tr(Msg::SignSeeGatewayConsoleReads))
     } else {
         Value::Code(gateway)
     };
     vec![
         (
-            "Product",
+            tr(Msg::Product),
             vec![
-                ("Product", Value::Text(PRODUCT)),
-                ("Version", Value::Text(VERSION)),
-                (
-                    "Purpose",
-                    Value::Text(
-                        "The operator console of FerroFED, the openEHR federation gateway. \
-                         It holds no clinical data.",
-                    ),
-                ),
-                ("Gateway", gateway),
+                (tr(Msg::Product), Value::Text(PRODUCT.to_owned())),
+                (tr(Msg::Version), Value::Text(VERSION.to_owned())),
+                (tr(Msg::Purpose), Value::Text(tr(Msg::AboutPurpose))),
+                (tr(Msg::Gateway), gateway),
             ],
         ),
         (
-            "Manufacturer",
+            tr(Msg::Manufacturer),
             vec![
-                ("Name", Value::Text(MANUFACTURER.name)),
-                ("Postal address", Value::Text(MANUFACTURER.postal_address)),
+                (tr(Msg::Name), Value::Text(MANUFACTURER.name.to_owned())),
                 (
-                    "Contact",
+                    tr(Msg::PostalAddress),
+                    Value::Text(MANUFACTURER.postal_address.to_owned()),
+                ),
+                (
+                    tr(Msg::Contact),
                     Value::Link {
                         href: format!("mailto:{}", MANUFACTURER.email),
-                        text: MANUFACTURER.email,
+                        text: MANUFACTURER.email.to_owned(),
                     },
                 ),
                 (
-                    "Website",
+                    tr(Msg::Website),
                     Value::Link {
                         href: MANUFACTURER.website.to_owned(),
-                        text: MANUFACTURER.website,
+                        text: MANUFACTURER.website.to_owned(),
                     },
                 ),
             ],
@@ -123,7 +121,7 @@ pub fn AboutPage(
     let html =
         SharedValue::new_str(move || crate::home::rendered(move || about(gateway))).into_inner();
     view! {
-        <Title text=titled("About") />
+        <Title text=titled(&tr(Msg::About)) />
         <div inner_html=html></div>
     }
 }
@@ -137,8 +135,8 @@ pub fn about(gateway: String) -> String {
         .collect_view();
     view! {
         {page_header(
-            "About",
-            Some(String::from("The product, the gateway it reads, and who makes it.")),
+            tr(Msg::About),
+            Some(tr(Msg::ProductGatewayReadsWhoMakes)),
             (),
         )}
         {grid_start(cards)}

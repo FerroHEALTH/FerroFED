@@ -490,6 +490,20 @@ async fn an_empty_stored_query_registry_still_offers_a_version() -> Result<(), B
     );
     assert!(!member.contains(">Reason</legend>"), "{member}");
     assert!(member.contains(">Reason</label>"), "{member}");
+    for (label, key) in [("Node id", "node_id"), ("System id", "system_id")] {
+        assert!(
+            member.contains(&format!(">{label}</label>")),
+            "{label}: {member}"
+        );
+        assert!(
+            member.contains(&format!("Configuration key: {key}")),
+            "the key is the hint: {member}"
+        );
+        assert!(
+            !member.contains(&format!(">{key}</label>")),
+            "{key}: {member}"
+        );
+    }
     Ok(())
 }
 

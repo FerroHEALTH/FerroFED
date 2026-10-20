@@ -54,6 +54,7 @@ use ferrohealth_ui::view::surface::page_meta;
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
 
+use crate::locale::{Msg, tr, tr_with};
 use crate::views::model::{Outcome, PAGE_SIZE, Refusal, ViewError};
 
 /// The tone of the state word `word`, written in either case.
@@ -142,9 +143,16 @@ pub(crate) fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -
     let shown = u64::try_from(shown).unwrap_or(u64::MAX);
     let end = offset.saturating_add(shown);
     let place = if shown == 0 {
-        format!("No row on this page, of {total} in all.")
+        tr_with(Msg::NoRowPageAll, &[("total", (total).to_string().into())])
     } else {
-        format!("Rows {} to {end} of {total}.", offset.saturating_add(1))
+        tr_with(
+            Msg::RowsToOf2,
+            &[
+                ("offset", (offset.saturating_add(1)).to_string().into()),
+                ("end", (end).to_string().into()),
+                ("total", (total).to_string().into()),
+            ],
+        )
     };
     let previous = step(
         Step::Previous,
@@ -160,7 +168,7 @@ pub(crate) fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -
         (end < total).then(|| (format!("{path}?offset={end}"), "next")),
     );
     view! {
-        <nav class="fui-pager" aria-label="Pages">
+        <nav class="fui-pager" aria-label=tr(Msg::Pages)>
             <p role="status">{place}</p>
             <div class="fui-pager-steps">{previous} {next}</div>
         </nav>
@@ -251,23 +259,28 @@ pub(crate) fn shown<T>(
 pub(crate) fn refusal(refused: &Refusal) -> AnyView {
     match refused {
         Refusal::NotAuthenticated { code } => {
-            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
             alert(view! {
-                {format!("The gateway did not accept your sign-in ({code}). ")}
+                {tr_with(Msg::GatewayDidNotAcceptYourSign2, &[("code", (code).clone().into())])}
                 <a href=crate::app::SIGN_IN rel="external">
-                    "Sign in again"
+                    {tr(Msg::SignInAgain)}
                 </a>
             })
         }
         Refusal::Gateway { status, code } => {
-            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
             let hint = if code == "scope-insufficient" {
-                " Your access token may carry no operator scope."
+                tr(Msg::YourAccessTokenMayCarryNo)
             } else {
-                ""
+                String::new()
             };
-            alert(format!(
-                "The gateway refused this view: {status} ({code}).{hint}"
+            alert(tr_with(
+                Msg::GatewayRefusedView,
+                &[
+                    ("status", (status).to_string().into()),
+                    ("code", (code).clone().into()),
+                    ("hint", (hint).clone().into()),
+                ],
             ))
         }
         Refusal::Invalid { reason } => alert(reason.clone()),
@@ -279,9 +292,9 @@ pub(crate) fn refusal(refused: &Refusal) -> AnyView {
 pub(crate) fn fault(error: &ViewError) -> AnyView {
     match error {
         ViewError::SignedOut => alert(view! {
-            "Sign in to see this view. "
+            {tr(Msg::SignSeeView)}
             <a href=crate::app::SIGN_IN rel="external">
-                "Sign in"
+                {tr(Msg::SignIn)}
             </a>
         }),
         ViewError::Unreadable { .. }

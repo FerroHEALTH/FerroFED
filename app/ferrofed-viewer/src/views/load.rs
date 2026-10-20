@@ -158,6 +158,7 @@ pub async fn deployment() -> Result<Outcome<DeploymentView>, ViewError> {
 /// bodies onto the view models.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use crate::locale::{Msg, tr_served, tr_served_with};
     use ferrofed_registry::health::DependencyReport;
     use ferrofed_registry::id::{EndpointId, NodeId};
     use ferrofed_registry::operator::{
@@ -420,7 +421,7 @@ pub mod server {
                 let id = endpoint.id.to_string();
                 MemberRow {
                     health: dependencies.endpoints.get(&id).map_or_else(
-                        || String::from("not reported"),
+                        || tr_served(Msg::NotReported),
                         |observed| observed.as_str().to_owned(),
                     ),
                     endpoint_id: id,
@@ -579,7 +580,7 @@ pub mod server {
                     endpoint: entry.endpoint.clone(),
                 })
                 .collect(),
-            answered_by: answered_by(&[("routing table", routes.replica.as_deref())]),
+            answered_by: answered_by(&[(&tr_served(Msg::RoutingTable), routes.replica.as_deref())]),
         }
     }
 
@@ -596,22 +597,35 @@ pub mod server {
         let named: BTreeSet<Option<&str>> = reports.iter().map(|(_, replica)| *replica).collect();
         match named.into_iter().collect::<Vec<_>>().as_slice() {
             [Some(UNNAMED)] => None,
-            [Some(replica)] => Some(format!("Answered by replica {replica}.")),
-            [None] => Some(String::from(
-                "The gateway did not name the replica that answered.",
+            [Some(replica)] => Some(tr_served_with(
+                Msg::AnsweredByReplica,
+                &[("replica", (replica).to_string().into())],
             )),
+            [None] => Some(tr_served(Msg::GatewayDidNotNameReplicaAnswered)),
             _ => {
                 let parts: Vec<String> = reports
                     .iter()
                     .map(|(what, replica)| match replica {
-                        Some(UNNAMED) => format!("the {what} by a replica that has no name"),
-                        Some(replica) => format!("the {what} by replica {replica}"),
-                        None => format!("the {what} by a replica that gave no name"),
+                        Some(UNNAMED) => tr_served_with(
+                            Msg::ReplicaHasNoName,
+                            &[("what", (what).to_string().into())],
+                        ),
+                        Some(replica) => tr_served_with(
+                            Msg::TheByReplica,
+                            &[
+                                ("what", (what).to_string().into()),
+                                ("replica", (replica).to_string().into()),
+                            ],
+                        ),
+                        None => tr_served_with(
+                            Msg::ReplicaGaveNoName,
+                            &[("what", (what).to_string().into())],
+                        ),
                     })
                     .collect();
-                Some(format!(
-                    "Each part names its replica: {}.",
-                    parts.join(", ")
+                Some(tr_served_with(
+                    Msg::EachPartNamesReplica,
+                    &[("parts", (parts.join(", ")).clone().into())],
                 ))
             }
         }

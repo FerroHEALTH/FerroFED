@@ -8,16 +8,16 @@
 use leptos::prelude::*;
 
 /// The two tabs of one tab list.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct TabPair {
     /// What the tab list is for.
-    pub label: &'static str,
+    pub label: String,
     /// The ids of the two tabs.
     pub tabs: [&'static str; 2],
     /// The ids of the two panels, in the order of the tabs.
     pub panels: [&'static str; 2],
     /// What each tab says.
-    pub names: [&'static str; 2],
+    pub names: [String; 2],
 }
 
 /// The tab list of `pair`, its second tab shown while `second` holds.

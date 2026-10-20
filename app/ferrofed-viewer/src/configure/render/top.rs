@@ -17,14 +17,13 @@ use leptos::prelude::*;
 
 use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden, lede, text};
 use crate::configure::render::{Loaded, ROLLBACK_REASON, author};
+use crate::locale::{Msg, tr, tr_with};
 
 /// The page's title and its one line, with `pills` at its end.
 pub(super) fn title(pills: impl IntoView) -> impl IntoView {
     page_header(
-        "Configuration",
-        Some(String::from(
-            "The gateway's settings as revisions: each change is saved, then applied.",
-        )),
+        tr(Msg::Configuration),
+        Some(tr(Msg::GatewaySSettingsRevisionsEachChange)),
         pills,
     )
 }
@@ -34,14 +33,29 @@ pub(super) fn title(pills: impl IntoView) -> impl IntoView {
 pub(super) fn header(loaded: &Loaded<'_>) -> impl IntoView + use<> {
     let running = loaded.running();
     let runs = match running {
-        Some(running) => pill(Tone::Ok, &format!("Revision {running} running")).into_any(),
-        None => pill(Tone::Neutral, "No revision runs").into_any(),
+        Some(running) => pill(
+            Tone::Ok,
+            &tr_with(
+                Msg::RevisionRunning2,
+                &[("running", (running).to_string().into())],
+            ),
+        )
+        .into_any(),
+        None => pill(Tone::Neutral, &tr(Msg::NoRevisionRuns)).into_any(),
     };
     let saved = loaded
         .standing
         .head
         .filter(|head| Some(*head) != running)
-        .map(|head| pill(Tone::Warn, &format!("Revision {head} saved, not applied")));
+        .map(|head| {
+            pill(
+                Tone::Warn,
+                &tr_with(
+                    Msg::RevisionSavedNotApplied,
+                    &[("head", (head).to_string().into())],
+                ),
+            )
+        });
     title(view! {
         {runs}
         {saved}
@@ -63,16 +77,14 @@ pub(super) fn rollback(mark: &Current, slot: &'static str) -> AnyView {
             {hidden("current", running.to_string())}
             {confirmed(
                 String::from("rollback-confirm"),
-                (String::from("Roll back"), Variant::Danger),
+                (tr(Msg::RollBack), Variant::Danger),
                 (
-                    format!(
-                        "Roll back revision {running}? The content of revision {previous} is saved and applied in one step.",
-                    ),
-                    "Roll back",
+                    tr_with(Msg::RollBackRevisionContentRevisionSaved, &[("running", (running).to_string().into()), ("previous", (previous).to_string().into())]),
+                    tr(Msg::RollBack),
                 ),
                 text(
                     (ROLLBACK_REASON, "form[reason]"),
-                    String::from("Reason"),
+                    tr(Msg::Reason),
                     String::new(),
                     Text {
                         required: true,
@@ -106,10 +118,10 @@ fn awaiting(mark: &Current) -> AnyView {
         <div class="fui-split">
             <div>
                 <h2 id="awaiting-title" class="fui-card-title">
-                    {format!("Revision {revision} awaits your confirmation")}
+                    {tr_with(Msg::RevisionAwaitsYourConfirmation, &[("revision", (revision).to_string().into())])}
                 </h2>
                 {lede(
-                    "Confirm it once the gateway works with it, or roll it back.",
+                    tr(Msg::ConfirmOnceGatewayWorksRollBack),
                     "commit-confirm",
                 )}
             </div>
@@ -120,8 +132,8 @@ fn awaiting(mark: &Current) -> AnyView {
             </span>
         </div>
         <p>
-            "It changed "{changed}". Unless an operator confirms it by "{by}
-            ", the gateway rolls it back."
+            {tr(Msg::ItChanged)}{changed}{tr(Msg::UnlessOperatorConfirms)}{by}
+            {tr(Msg::GatewayRollsBack)}
         </p>
         <div class="fui-cluster">
             {form(
@@ -132,12 +144,10 @@ fn awaiting(mark: &Current) -> AnyView {
                     {hidden("revision", revision.to_string())}
                     {confirmed(
                         String::from("confirm-confirm"),
-                        (String::from("Confirm"), Variant::Primary),
+                        (tr(Msg::Confirm), Variant::Primary),
                         (
-                            format!(
-                                "Confirm revision {revision}? The gateway keeps it and stops the countdown.",
-                            ),
-                            "Confirm",
+                            tr_with(Msg::ConfirmRevisionGatewayKeepsStopsCountdown, &[("revision", (revision).to_string().into())]),
+                            tr(Msg::Confirm),
                         ),
                         (),
                     )}
@@ -150,10 +160,12 @@ fn awaiting(mark: &Current) -> AnyView {
 
 /// Who signed `signed`, and when, in words.
 fn signed_said(signed: &Signed) -> String {
-    format!(
-        "{} at {}",
-        author(&signed.by),
-        reading(&signed.at.to_string())
+    tr_with(
+        Msg::At2,
+        &[
+            ("value0", (author(&signed.by)).clone().into()),
+            ("value1", (reading(&signed.at.to_string())).clone().into()),
+        ],
     )
 }
 
@@ -161,14 +173,14 @@ fn signed_said(signed: &Signed) -> String {
 /// and the approval when it still takes one.
 fn review(review: &Review) -> AnyView {
     let confirms = (!review.confirms.is_empty()).then(|| {
-        format!(
-            "Once applied, it awaits a confirmation: it changes {}.",
-            review.confirms.join(", ")
+        tr_with(
+            Msg::OnceAppliedAwaitsConfirmationChanges,
+            &[("review", (review.confirms.join(", ")).clone().into())],
         )
     });
     let approval = (!review.approval.is_empty()).then(|| {
         let approvals = if review.approvals.is_empty() {
-            String::from("none yet")
+            tr(Msg::NoneYet)
         } else {
             review
                 .approvals
@@ -177,10 +189,13 @@ fn review(review: &Review) -> AnyView {
                 .collect::<Vec<_>>()
                 .join("; ")
         };
-        format!(
-            "It changes {}, which take the approval of an operator other than its author, {}. Approved by: {approvals}.",
-            review.approval.join(", "),
-            author(&review.author)
+        tr_with(
+            Msg::ChangesWhichTakeApprovalOperatorOther,
+            &[
+                ("review", (review.approval.join(", ")).clone().into()),
+                ("value1", (author(&review.author)).clone().into()),
+                ("approvals", (approvals).clone().into()),
+            ],
         )
     });
     let approve = (!review.approval.is_empty() && !review.approved).then(|| {
@@ -193,12 +208,10 @@ fn review(review: &Review) -> AnyView {
                 {hidden("revision", revision.to_string())}
                 {confirmed(
                     String::from("approve-confirm"),
-                    (format!("Approve revision {revision}"), Variant::Secondary),
+                    (tr_with(Msg::ApproveRevision, &[("revision", (revision).to_string().into())]), Variant::Secondary),
                     (
-                        format!(
-                            "Approve revision {revision} as an operator other than its author? The approval names you.",
-                        ),
-                        "Approve",
+                        tr_with(Msg::ApproveRevisionOperatorOtherThanAuthor, &[("revision", (revision).to_string().into())]),
+                        tr(Msg::Approve),
                     ),
                     (),
                 )}
@@ -224,13 +237,22 @@ fn review(review: &Review) -> AnyView {
 fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
     let changes = loaded.pending.unwrap_or_default();
     let count = match changes.len() {
-        1 => String::from("1 setting"),
-        many => format!("{many} settings"),
+        1 => tr(Msg::N1Setting),
+        many => tr_with(Msg::Settings3, &[("many", (many).to_string().into())]),
     };
     let heading = if loaded.pending.is_some() {
-        format!("Revision {head} changes {count}")
+        tr_with(
+            Msg::RevisionChanges,
+            &[
+                ("head", (head).to_string().into()),
+                ("count", (count).clone().into()),
+            ],
+        )
     } else {
-        format!("Revision {head} is saved and not applied")
+        tr_with(
+            Msg::RevisionSavedNotApplied2,
+            &[("head", (head).to_string().into())],
+        )
     };
     let table = loaded
         .pending
@@ -249,12 +271,10 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
             {hidden("revision", head.to_string())}
             {confirmed(
                 String::from("apply-confirm"),
-                (format!("Apply revision {head}"), Variant::Primary),
+                (tr_with(Msg::ApplyRevision, &[("head", (head).to_string().into())]), Variant::Primary),
                 (
-                    format!(
-                        "Apply revision {head} to the running gateway? Every replica follows it.",
-                    ),
-                    "Apply",
+                    tr_with(Msg::ApplyRevisionRunningGatewayEveryReplica, &[("head", (head).to_string().into())]),
+                    tr(Msg::Apply),
                 ),
                 (),
             )}
@@ -267,7 +287,7 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
                     {heading}
                 </h2>
                 {lede(
-                    "Saved and not applied. Read what it changes, then apply it.",
+                    tr(Msg::SavedNotAppliedReadWhatChanges),
                     "what-a-revision-holds",
                 )}
             </div>

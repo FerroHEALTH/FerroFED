@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::PageRequest;
 use ferrofed_registry::revision::{RevisionId, Standing};
-use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::model::filled_columns;
 use ferrohealth_ui::table::view::{Column, NUM};
 use ferrohealth_ui::tone::Tone;
@@ -27,12 +27,15 @@ use ferrohealth_ui::view::empty::empty_quiet;
 use ferrohealth_ui::view::layout::main_aside;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::{badge, pill};
-use ferrohealth_ui::view::surface::{Stat, panel_body, stat_card_marked, stat_grid, titled_panel};
+use ferrohealth_ui::view::surface::{
+    Stat, card_action, panel_body, stat_card_marked, stat_grid, titled_panel,
+};
 use ferrohealth_ui::view::time::timestamp;
 use leptos::either::Either;
 use leptos::prelude::*;
 
 use crate::gateway::{AccessToken, GatewayError};
+use crate::locale::{Msg, tr, tr_with};
 use crate::server::ViewerState;
 use crate::views::load::server::{self as load, Stop};
 use crate::views::model::{IncidentRow, MemberRow, Refusal};
@@ -86,16 +89,29 @@ pub struct Board {
 /// the gateway's status and code, or the console's fault.
 fn not_shown(error: &GatewayError) -> String {
     match load::refused(error) {
-        Stop::Refused(Refusal::Gateway { status, code }) => format!(
-            "The gateway refused this part: {status} ({}).",
-            code.as_deref().unwrap_or("no code")
+        Stop::Refused(Refusal::Gateway { status, code }) => tr_with(
+            Msg::GatewayRefusedPart,
+            &[
+                ("status", (status).to_string().into()),
+                (
+                    "code",
+                    (code.as_deref().unwrap_or(&tr(Msg::NoCode)))
+                        .to_string()
+                        .into(),
+                ),
+            ],
         ),
-        Stop::Refused(Refusal::NotAuthenticated { code }) => format!(
-            "The gateway did not accept your sign-in ({}).",
-            code.as_deref().unwrap_or("no code")
+        Stop::Refused(Refusal::NotAuthenticated { code }) => tr_with(
+            Msg::GatewayDidNotAcceptYourSign,
+            &[(
+                "code",
+                (code.as_deref().unwrap_or(&tr(Msg::NoCode)))
+                    .to_string()
+                    .into(),
+            )],
         ),
         Stop::Refused(Refusal::Invalid { reason }) => reason,
-        Stop::Fault(fault) => format!("Not shown: {fault}."),
+        Stop::Fault(fault) => tr_with(Msg::NotShown2, &[("fault", (fault).to_string().into())]),
     }
 }
 
@@ -192,15 +208,18 @@ pub fn nodes(members: &[MemberRow]) -> Nodes {
 /// The tone and the word of `nodes`, or of health that was not reported.
 fn nodes_mark(nodes: Nodes, reported: bool) -> (Tone, String) {
     if !reported {
-        (Tone::Neutral, String::from("not reported"))
+        (Tone::Neutral, tr(Msg::NotReported))
     } else if nodes.total == 0 {
-        (Tone::Neutral, String::from("no nodes"))
+        (Tone::Neutral, tr(Msg::NoNodes))
     } else if nodes.up == nodes.total {
-        (Tone::Ok, String::from("all up"))
+        (Tone::Ok, tr(Msg::AllUp))
     } else if nodes.down > 0 {
-        (Tone::Bad, format!("{} down", nodes.down))
+        (
+            Tone::Bad,
+            tr_with(Msg::Down, &[("down", (nodes.down).to_string().into())]),
+        )
     } else {
-        (Tone::Warn, String::from("not yet observed"))
+        (Tone::Warn, tr(Msg::NotYetObserved))
     }
 }
 
@@ -222,7 +241,7 @@ pub fn render(board: &Board) -> String {
 
 /// The badge of a stat whose part was not shown.
 fn unknown_mark() -> impl IntoView {
-    badge(Tone::Neutral, "not shown")
+    badge(Tone::Neutral, &tr(Msg::NotShown))
 }
 
 /// A stat card of `value` that `label` names, beside `glyph`, leading to
@@ -230,7 +249,7 @@ fn unknown_mark() -> impl IntoView {
 fn stat(
     glyph: Glyph,
     value: String,
-    label: &'static str,
+    label: String,
     href: &'static str,
     mark: impl IntoView + 'static,
 ) -> AnyView {
@@ -259,8 +278,14 @@ fn stats(board: &Board) -> impl IntoView + use<> {
     .unwrap_or(u64::MAX);
     let members = stat(
         Glyph::USERS,
-        format!("{active} of {total}"),
-        "Members active",
+        tr_with(
+            Msg::Of,
+            &[
+                ("active", (active).to_string().into()),
+                ("total", (total).to_string().into()),
+            ],
+        ),
+        tr(Msg::MembersActive),
         crate::views::MEMBERS,
         (),
     );
@@ -269,11 +294,17 @@ fn stats(board: &Board) -> impl IntoView + use<> {
     let nodes = stat(
         Glyph::HEART_PULSE,
         if board.health.is_ok() {
-            format!("{} of {}", standing.up, standing.total)
+            tr_with(
+                Msg::Of2,
+                &[
+                    ("up", (standing.up).to_string().into()),
+                    ("total", (standing.total).to_string().into()),
+                ],
+            )
         } else {
             String::from("n/a")
         },
-        "Nodes up",
+        tr(Msg::NodesUp),
         crate::views::MEMBERS,
         pill(tone, &word),
     );
@@ -281,14 +312,14 @@ fn stats(board: &Board) -> impl IntoView + use<> {
         Ok(rows) => stat(
             Glyph::SHIELD_OFF,
             rows.iter().filter(|row| !row.resolved).count().to_string(),
-            "Open incidents",
+            tr(Msg::OpenIncidents),
             crate::views::INTEGRITY,
             (),
         ),
         Err(_) => stat(
             Glyph::SHIELD_OFF,
             String::from("n/a"),
-            "Open incidents",
+            tr(Msg::OpenIncidents),
             crate::views::INTEGRITY,
             unknown_mark(),
         ),
@@ -297,14 +328,14 @@ fn stats(board: &Board) -> impl IntoView + use<> {
         Ok(total) => stat(
             Glyph::DATABASE,
             total.to_string(),
-            "Stored queries",
+            tr(Msg::StoredQueries),
             crate::views::STORED_QUERIES,
             (),
         ),
         Err(_) => stat(
             Glyph::DATABASE,
             String::from("n/a"),
-            "Stored queries",
+            tr(Msg::StoredQueries),
             crate::views::STORED_QUERIES,
             unknown_mark(),
         ),
@@ -327,9 +358,15 @@ fn revision_stat(revisions: &Part<Revisions>) -> AnyView {
             revisions
                 .running
                 .map_or_else(|| String::from("none"), |running| format!("r{running}")),
-            revisions
-                .pending
-                .map(|pending| badge(Tone::Warn, &format!("revision {pending} pending"))),
+            revisions.pending.map(|pending| {
+                badge(
+                    Tone::Warn,
+                    &tr_with(
+                        Msg::RevisionPending,
+                        &[("pending", (pending).to_string().into())],
+                    ),
+                )
+            }),
         ),
         Err(_) => (String::from("n/a"), None),
     };
@@ -337,7 +374,7 @@ fn revision_stat(revisions: &Part<Revisions>) -> AnyView {
     stat(
         Glyph::SETTINGS,
         value,
-        "Running revision",
+        tr(Msg::RunningRevision),
         crate::configure::CONFIGURATION,
         view! {
             {mark}
@@ -346,20 +383,14 @@ fn revision_stat(revisions: &Part<Revisions>) -> AnyView {
     )
 }
 
-/// A panel titled `title` with a link to `href` that says `more`, holding
-/// `body`.
+/// A panel titled `title` holding `body`, its header action leading to
+/// `href` with the words `more`.
 fn panel(
-    title: &'static str,
-    (href, more): (&'static str, &'static str),
+    title: String,
+    (href, more): (&'static str, String),
     body: impl IntoView + 'static,
 ) -> impl IntoView {
-    let link = view! {
-        <a href=href>
-            {more}
-            {icon(Glyph::ARROW_RIGHT, "14")}
-        </a>
-    };
-    titled_panel(title, link, body)
+    titled_panel(title, card_action(href, more), body)
 }
 
 /// The notice of a part the gateway did not answer.
@@ -368,25 +399,29 @@ fn not_answered(line: &str) -> impl IntoView + use<> {
 }
 
 /// The columns of the member health table.
-const HEALTH_COLUMNS: [Column; 4] = [
-    Column::text("endpoint", "Endpoint"),
-    Column::text("node", "Node"),
-    Column::text("health", "Health"),
-    Column::text("latency", "Median latency").numeric(),
-];
+fn health_columns() -> [Column; 4] {
+    [
+        Column::text("endpoint", tr(Msg::Endpoint)),
+        Column::text("node", tr(Msg::Node)),
+        Column::text("health", tr(Msg::Health)),
+        Column::text("latency", tr(Msg::MedianLatency)).numeric(),
+    ]
+}
 
 /// The columns of the recent incidents table.
-const INCIDENT_COLUMNS: [Column; 3] = [
-    Column::text("at", "At"),
-    Column::text("kind", "Kind"),
-    Column::text("state", "State"),
-];
+fn incident_columns() -> [Column; 3] {
+    [
+        Column::text("at", tr(Msg::At)),
+        Column::text("kind", tr(Msg::Kind)),
+        Column::text("state", tr(Msg::State)),
+    ]
+}
 
 /// The member health panel: each endpoint, its node, its health and its
 /// median latency.
 fn health_panel(board: &Board) -> impl IntoView + use<> {
     let notice = board.health.as_ref().err().map(|line| not_answered(line));
-    let columns = filled_columns(&HEALTH_COLUMNS, &board.members, &[], |member, key| {
+    let columns = filled_columns(&health_columns(), &board.members, &[], |member, key| {
         key != "latency" || member.latency_ms_p50.is_some()
     });
     let timed = crate::views::has(&columns, "latency");
@@ -404,17 +439,17 @@ fn health_panel(board: &Board) -> impl IntoView + use<> {
                     <th scope="row" class="fui-mono">
                         {name}
                     </th>
-                    <td data-label="Node" class="fui-mono">
+                    <td data-label=tr(Msg::Node) class="fui-mono">
                         {member.node_id.clone().unwrap_or_default()}
                     </td>
-                    <td data-label="Health">{state_pill(&member.health)}</td>
+                    <td data-label=tr(Msg::Health)>{state_pill(&member.health)}</td>
                     {timed
                         .then(|| {
                             view! {
-                                <td data-label="Median latency" class=NUM>
+                                <td data-label=tr(Msg::MedianLatency) class=NUM>
                                     {member
                                         .latency_ms_p50
-                                        .map(|latency| format!("{latency} ms"))
+                                        .map(|latency| tr_with(Msg::Ms, &[("latency", (latency).to_string().into())]))
                                         .unwrap_or_default()}
                                 </td>
                             }
@@ -423,19 +458,19 @@ fn health_panel(board: &Board) -> impl IntoView + use<> {
             }
         })
         .collect_view();
-    let table = crate::views::table("Member health", &columns, rows.into_any());
+    let table = crate::views::table(&tr(Msg::MemberHealth), &columns, rows.into_any());
     let body = if board.members.is_empty() {
         Either::Left(panel_body(empty_quiet(
             Glyph::USERS,
-            "No members",
-            "The gateway declares no member endpoint.",
+            tr(Msg::NoMembers),
+            tr(Msg::GatewayDeclaresNoMemberEndpoint),
         )))
     } else {
         Either::Right(table)
     };
     panel(
-        "Member health",
-        (crate::views::MEMBERS, "All members"),
+        tr(Msg::MemberHealth),
+        (crate::views::MEMBERS, tr(Msg::AllMembers)),
         view! {
             {notice}
             {body}
@@ -449,8 +484,8 @@ fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> 
         Err(line) => not_answered(line).into_any(),
         Ok(rows) if rows.is_empty() => panel_body(empty_quiet(
             Glyph::SHIELD_CHECK,
-            "No incidents",
-            "None since the gateway started.",
+            tr(Msg::NoIncidents),
+            tr(Msg::NoneSinceGatewayStarted),
         ))
         .into_any(),
         Ok(rows) => {
@@ -459,27 +494,31 @@ fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> 
                 .take(RECENT)
                 .map(|row| {
                     let (tone, word) = if row.resolved {
-                        (Tone::Ok, "resolved")
+                        (Tone::Ok, tr(Msg::StateResolved))
                     } else {
-                        (Tone::Bad, "open")
+                        (Tone::Bad, tr(Msg::StateOpen))
                     };
                     view! {
                         <tr>
-                            <td data-label="At">
+                            <td data-label=tr(Msg::At)>
                                 {timestamp(&row.at)}
                             </td>
                             <th scope="row">{row.kind.clone()}</th>
-                            <td data-label="State">{pill(tone, word)}</td>
+                            <td data-label=tr(Msg::State)>{pill(tone, &word)}</td>
                         </tr>
                     }
                 })
                 .collect_view();
-            crate::views::table("Recent incidents", &INCIDENT_COLUMNS, rows.into_any())
+            crate::views::table(
+                &tr(Msg::RecentIncidents),
+                &incident_columns(),
+                rows.into_any(),
+            )
         }
     };
     panel(
-        "Recent incidents",
-        (crate::views::INTEGRITY, "All incidents"),
+        tr(Msg::RecentIncidents),
+        (crate::views::INTEGRITY, tr(Msg::AllIncidents)),
         body,
     )
 }

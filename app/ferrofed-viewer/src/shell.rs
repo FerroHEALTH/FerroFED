@@ -27,6 +27,7 @@ use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use crate::app::{ABOUT, PRODUCT, SIGN_OUT, VERSION};
+use crate::locale::{Msg, tr, tr_with};
 use crate::theme::SetTheme;
 use crate::views::model::{DeploymentView, GatewayView, Outcome, Refusal, ViewError};
 
@@ -56,106 +57,108 @@ pub struct Bar {
 }
 
 /// The entry of the dashboard.
-const OVERVIEW: [Entry; 1] = [Entry {
-    href: "/",
-    label: "Dashboard",
-    glyph: Glyph::LAYOUT_DASHBOARD,
-    exact: true,
-}];
+fn overview() -> [Entry; 1] {
+    [Entry {
+        href: "/",
+        label: tr(Msg::Dashboard).into(),
+        glyph: Glyph::LAYOUT_DASHBOARD,
+        exact: true,
+    }]
+}
 
 /// The entries of the federation's views.
-const FEDERATION: [Entry; 3] = [
-    Entry {
-        href: crate::views::MEMBERS,
-        label: "Members",
-        glyph: Glyph::USERS,
-        exact: false,
-    },
-    Entry {
-        href: crate::views::ROUTING,
-        label: "Routing",
-        glyph: Glyph::ROUTE,
-        exact: false,
-    },
-    Entry {
-        href: crate::views::INTEGRITY,
-        label: "Integrity",
-        glyph: Glyph::SHIELD_CHECK,
-        exact: false,
-    },
-];
-
-/// The entries of the queries.
-const QUERIES: [Entry; 2] = [
-    Entry {
-        href: crate::query::QUERY,
-        label: "Query console",
-        glyph: Glyph::SQUARE_TERMINAL,
-        exact: false,
-    },
-    Entry {
-        href: crate::views::STORED_QUERIES,
-        label: "Stored queries",
-        glyph: Glyph::DATABASE,
-        exact: false,
-    },
-];
-
-/// The self-description entry of the gateway's group.
-const SELF_DESCRIPTION: Entry = Entry {
-    href: crate::views::FEDERATION,
-    label: "Self-description",
-    glyph: Glyph::SERVER,
-    exact: false,
-};
-
-/// The gateway's group of a console with no admin listener.
-const GATEWAY: [Entry; 1] = [SELF_DESCRIPTION];
-
-/// The gateway's group of a console with a replica's admin listener, which
-/// serves the configuration.
-const GATEWAY_ADMINISTERED: [Entry; 2] = [
-    SELF_DESCRIPTION,
-    Entry {
-        href: crate::configure::CONFIGURATION,
-        label: "Configuration",
-        glyph: Glyph::SETTINGS,
-        exact: false,
-    },
-];
-
-/// The navigation, grouped by what each view is about, with `gateway` as
-/// the gateway's group.
-const fn navigation(gateway: &'static [Entry]) -> [Group; 4] {
+fn federation() -> [Entry; 3] {
     [
-        Group {
-            id: "nav-overview",
-            title: "Overview",
-            entries: &OVERVIEW,
+        Entry {
+            href: crate::views::MEMBERS,
+            label: tr(Msg::Members).into(),
+            glyph: Glyph::USERS,
+            exact: false,
         },
-        Group {
-            id: "nav-federation",
-            title: "Federation",
-            entries: &FEDERATION,
+        Entry {
+            href: crate::views::ROUTING,
+            label: tr(Msg::Routing).into(),
+            glyph: Glyph::ROUTE,
+            exact: false,
         },
-        Group {
-            id: "nav-queries",
-            title: "Queries",
-            entries: &QUERIES,
-        },
-        Group {
-            id: "nav-gateway",
-            title: "Gateway",
-            entries: gateway,
+        Entry {
+            href: crate::views::INTEGRITY,
+            label: tr(Msg::Integrity).into(),
+            glyph: Glyph::SHIELD_CHECK,
+            exact: false,
         },
     ]
 }
 
-/// The navigation of a console with no admin listener.
-const NAVIGATION: [Group; 4] = navigation(&GATEWAY);
+/// The entries of the queries.
+fn queries() -> [Entry; 2] {
+    [
+        Entry {
+            href: crate::query::QUERY,
+            label: tr(Msg::QueryConsole).into(),
+            glyph: Glyph::SQUARE_TERMINAL,
+            exact: false,
+        },
+        Entry {
+            href: crate::views::STORED_QUERIES,
+            label: tr(Msg::StoredQueries).into(),
+            glyph: Glyph::DATABASE,
+            exact: false,
+        },
+    ]
+}
 
-/// The navigation of a console with a replica's admin listener.
-const NAVIGATION_ADMINISTERED: [Group; 4] = navigation(&GATEWAY_ADMINISTERED);
+/// The self-description entry of the gateway's group.
+fn self_description() -> Entry {
+    Entry {
+        href: crate::views::FEDERATION,
+        label: tr(Msg::SelfDescription).into(),
+        glyph: Glyph::SERVER,
+        exact: false,
+    }
+}
+
+/// The gateway's group: its self-description, and the configuration when a
+/// replica's admin listener is configured.
+fn gateway(administered: bool) -> Vec<Entry> {
+    let mut entries = vec![self_description()];
+    if administered {
+        entries.push(Entry {
+            href: crate::configure::CONFIGURATION,
+            label: tr(Msg::Configuration).into(),
+            glyph: Glyph::SETTINGS,
+            exact: false,
+        });
+    }
+    entries
+}
+
+/// The navigation, grouped by what each view is about, with the
+/// configuration in the gateway's group when `administered`.
+fn navigation(administered: bool) -> Vec<Group> {
+    vec![
+        Group {
+            id: "nav-overview",
+            title: tr(Msg::Overview).into(),
+            entries: overview().into(),
+        },
+        Group {
+            id: "nav-federation",
+            title: tr(Msg::Federation).into(),
+            entries: federation().into(),
+        },
+        Group {
+            id: "nav-queries",
+            title: tr(Msg::Queries).into(),
+            entries: queries().into(),
+        },
+        Group {
+            id: "nav-gateway",
+            title: tr(Msg::Gateway).into(),
+            entries: gateway(administered),
+        },
+    ]
+}
 
 /// The mark and the product name, which lead to the dashboard.
 #[must_use]
@@ -164,7 +167,7 @@ pub fn lockup() -> impl IntoView {
         "/",
         brand_mark(MARK_LIGHT, MARK_DARK),
         "FerroFED",
-        "Console",
+        tr(Msg::Console),
     )
 }
 
@@ -175,7 +178,7 @@ pub fn topbar(bar: Bar) -> AnyView {
     let (gateway, deployment) = (bar.gateway, bar.deployment);
     let state = view! {
         <Suspense fallback=|| {
-            status(Tone::Neutral, Glyph::SERVER, "Gateway", None)
+            status(Tone::Neutral, Glyph::SERVER, &tr(Msg::Gateway), None)
         }>
             {move || Suspend::new(async move { gateway_status(&gateway.await, &deployment.await) })}
         </Suspense>
@@ -201,7 +204,7 @@ pub fn topbar(bar: Bar) -> AnyView {
             OperatorMenu {
                 id: MENU_ID,
                 name: bar.operator,
-                subtitle: "Signed in to this console",
+                subtitle: tr(Msg::SignedConsole).into(),
                 sign_out: Some(String::from(SIGN_OUT)),
             },
             (),
@@ -225,30 +228,45 @@ pub fn gateway_words(
     match answer {
         Ok(Outcome::Shown(view)) => (
             Tone::Ok,
-            String::from("Gateway UP"),
+            tr(Msg::GatewayUp),
             Some(match deployment {
                 Ok(Outcome::Shown(deployed)) => match &deployed.replica {
-                    Some(replica) => format!("· v{} · {replica}", deployed.version),
-                    None => format!("· v{}", deployed.version),
+                    Some(replica) => tr_with(
+                        Msg::V,
+                        &[
+                            ("version", (deployed.version).clone().into()),
+                            ("replica", (replica).clone().into()),
+                        ],
+                    ),
+                    None => tr_with(Msg::V2, &[("version", (deployed.version).clone().into())]),
                 },
                 // NOTE: no specification governs this: our own design; an operator the
                 // deployment is refused to reads the status without the version.
-                _ => format!("· spec {} · {}", view.spec_version, view.federation),
+                _ => tr_with(
+                    Msg::Spec,
+                    &[
+                        ("spec_version", (view.spec_version).clone().into()),
+                        ("federation", (view.federation).clone().into()),
+                    ],
+                ),
             }),
         ),
         Ok(Outcome::Refused(Refusal::Gateway { status, code })) => (
             Tone::Bad,
-            format!("Gateway refused {status}"),
+            tr_with(
+                Msg::GatewayRefused,
+                &[("status", (status).to_string().into())],
+            ),
             code.as_ref().map(|code| format!("· {code}")),
         ),
         Ok(Outcome::Refused(Refusal::NotAuthenticated { code })) => (
             Tone::Bad,
-            String::from("Gateway refused 401"),
+            tr(Msg::GatewayRefused401),
             code.as_ref().map(|code| format!("· {code}")),
         ),
-        Err(ViewError::Unreachable) => (Tone::Bad, String::from("Gateway DOWN"), None),
+        Err(ViewError::Unreachable) => (Tone::Bad, tr(Msg::GatewayDown), None),
         Ok(Outcome::Refused(Refusal::Invalid { .. })) | Err(_) => {
-            (Tone::Warn, String::from("Gateway UNKNOWN"), None)
+            (Tone::Warn, tr(Msg::GatewayUnknown), None)
         }
     }
 }
@@ -294,16 +312,14 @@ pub fn deployment_banner(
 /// The words of the development banner, with the cross-reference when it
 /// is in service.
 fn development(crossref: bool) -> impl IntoView {
-    let mut body = String::from(
-        "this gateway runs the development profile and must not hold real patient data.",
-    );
+    let mut body = tr(Msg::GatewayRunsDevelopmentProfileMustNot);
     if crossref {
-        body.push_str(" Patients resolve through the static development cross-reference.");
+        body.push_str(&tr(Msg::PatientsResolveThroughStaticDevelopmentCross));
     }
     banner(
         Tone::Warn,
         Glyph::TRIANGLE_ALERT,
-        "Development deployment",
+        tr(Msg::DevelopmentDeployment),
         &body,
     )
 }
@@ -314,12 +330,12 @@ fn kept(keep: ServerAction<SetTheme>) -> Option<impl IntoView> {
     let why = keep.value().with(|answer| match answer {
         None | Some(Ok(Outcome::Shown(()))) => None,
         Some(Ok(Outcome::Refused(Refusal::Invalid { reason }))) => Some(reason.clone()),
-        Some(Ok(Outcome::Refused(_))) => Some(String::from("the console refused it")),
+        Some(Ok(Outcome::Refused(_))) => Some(tr(Msg::TheConsoleRefusedIt)),
         Some(Err(error)) => Some(error.to_string()),
     })?;
     Some(view! {
         <span role="status">
-            {status(Tone::Bad, Glyph::CIRCLE_ALERT, "Theme not kept", Some(format!("· {why}")))}
+            {status(Tone::Bad, Glyph::CIRCLE_ALERT, &tr(Msg::ThemeNotKept), Some(format!("· {why}")))}
         </span>
     })
 }
@@ -329,12 +345,7 @@ fn kept(keep: ServerAction<SetTheme>) -> Option<impl IntoView> {
 /// configured.
 #[must_use]
 pub fn sidebar(administered: bool) -> AnyView {
-    let groups = if administered {
-        &NAVIGATION_ADMINISTERED
-    } else {
-        &NAVIGATION
-    };
-    ferrohealth_ui::widget::nav::sidebar(SIDEBAR_ID, "Views", groups)
+    ferrohealth_ui::widget::nav::sidebar(SIDEBAR_ID, tr(Msg::Views), navigation(administered))
 }
 
 /// The one line at the foot of every page: the product, its version, its
@@ -350,9 +361,9 @@ pub fn footer() -> impl IntoView {
 
 /// What the footer names: the product, its version and the About page.
 #[must_use]
-pub const fn footing() -> Footer {
+pub fn footing() -> Footer {
     Footer {
-        product: PRODUCT,
+        product: PRODUCT.into(),
         version: VERSION,
         about: ABOUT,
     }

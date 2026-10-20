@@ -23,16 +23,17 @@ use leptos::server_fn::ServerFn as _;
 
 use crate::configure::act::Configure;
 use crate::configure::render::Loaded;
+use crate::locale::{Msg, tr, tr_with};
 
 /// The book page that explains the configuration page.
 pub(crate) const LEARN: &str = "https://ferrofed.eu/docs/operate/configuration-revisions.html";
 
 /// One line of explanation and a link to the book's section `anchor`.
-pub(crate) fn lede(text: &'static str, anchor: &'static str) -> AnyView {
+pub(crate) fn lede(text: String, anchor: &'static str) -> AnyView {
     view! {
         <p class="fui-muted">
             {text} " " <a href=format!("{LEARN}#{anchor}") rel="external">
-                "Learn more"
+                {tr(Msg::LearnMore)}
             </a>
         </p>
     }
@@ -43,7 +44,7 @@ pub(crate) fn lede(text: &'static str, anchor: &'static str) -> AnyView {
 /// `line` explaining it with the book's `anchor`, and `actions` at its end.
 pub(crate) fn head(
     (id, title): (&'static str, String),
-    (line, anchor): (&'static str, &'static str),
+    (line, anchor): (String, &'static str),
     actions: impl IntoView,
 ) -> impl IntoView {
     view! {
@@ -71,7 +72,7 @@ pub(crate) fn error_line(id: &str) -> impl IntoView + use<> {
 }
 
 /// What a text field shows and takes beside its value.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct Text {
     /// The input's type: `text` when empty.
     pub(crate) kind: &'static str,
@@ -82,7 +83,7 @@ pub(crate) struct Text {
     /// Whether it holds an identifier, set in the monospace stack.
     pub(crate) mono: bool,
     /// Its one line of help.
-    pub(crate) hint: Option<&'static str>,
+    pub(crate) hint: Option<String>,
     /// The id of the `datalist` that offers its values.
     pub(crate) list: Option<&'static str>,
 }
@@ -127,9 +128,9 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
 /// The breadcrumb trail from the tab `(label, href)` to the form or view
 /// titled `current`, the current one last (WAI-ARIA Authoring Practices, the
 /// breadcrumb pattern).
-pub(crate) fn trail((label, href): (&'static str, &'static str), current: String) -> AnyView {
+pub(crate) fn trail((label, href): (String, &'static str), current: String) -> AnyView {
     view! {
-        <nav class="fui-crumbs" aria-label="Breadcrumb">
+        <nav class="fui-crumbs" aria-label=tr(Msg::Breadcrumb)>
             <ol>
                 <li>
                     <a href=href>{label}</a>
@@ -148,11 +149,11 @@ pub(crate) fn trail((label, href): (&'static str, &'static str), current: String
 pub(crate) fn reason() -> AnyView {
     text(
         (crate::configure::plan::REASON, "form[reason]"),
-        String::from("Reason"),
+        tr(Msg::Reason),
         String::new(),
         Text {
             required: true,
-            hint: Some("The history records it with the revision."),
+            hint: Some(tr(Msg::HistoryRecordsRevision)),
             ..Text::default()
         },
     )
@@ -177,7 +178,7 @@ pub(crate) fn form(slot: &'static str, class: &'static str, body: impl IntoView)
 pub(crate) fn confirmed(
     id: String,
     (open, variant): (impl IntoView, Variant),
-    (question, submit): (String, &'static str),
+    (question, submit): (String, String),
     inside: impl IntoView,
 ) -> impl IntoView {
     let question_id = format!("{id}-question");
@@ -209,7 +210,7 @@ pub(crate) fn confirmed(
                     popovertarget=closes
                     popovertargetaction="hide"
                 >
-                    {label(Some(Glyph::X), "Cancel")}
+                    {label(Some(Glyph::X), tr(Msg::Cancel))}
                 </button>
                 <button type="submit" class=confirm.class() autofocus>
                     {submit}
@@ -224,7 +225,7 @@ pub(crate) fn confirmed(
 /// revision it saves as, Cancel back to `back`, and the hint that saving
 /// does not apply it.
 pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
-    let next = format!("Save as {}", loaded.next());
+    let next = tr_with(Msg::SaveAs, &[("loaded", (loaded.next()).clone().into())]);
     view! {
         <div class="fui-action-bar">
             <button
@@ -236,10 +237,10 @@ pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
                 {next}
             </button>
             <a href=back class=Variant::Secondary.class()>
-                "Cancel"
+                {tr(Msg::Cancel)}
             </a>
             <p id="cfg-save-hint" class="fui-help">
-                "Saving does not apply it: apply it from the card at the top."
+                {tr(Msg::SavingDoesNotApplyApplyFrom)}
             </p>
         </div>
     }
@@ -252,7 +253,7 @@ pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
 pub(crate) fn add_button(
     id: &str,
     (template, into): (&str, &str),
-    (label, placeholder): (&'static str, &'static str),
+    (label, placeholder): (String, &'static str),
 ) -> AnyView {
     let button = view! {
         <button
@@ -281,7 +282,7 @@ pub(crate) fn remove_button(row: &str, named: String) -> AnyView {
             aria-label=named
         >
             {icon(Glyph::TRASH, "16")}
-            "Remove"
+            {tr(Msg::Remove)}
         </button>
     }
     .into_any()
@@ -301,7 +302,7 @@ fn diff_value(value: Option<&String>, sign: &'static str, removed: bool) -> AnyV
                 <span aria-hidden="true" class="fui-change-sign">
                     {sign}
                 </span>
-                <span class="fui-sr-only">"Running value: "</span>
+                <span class="fui-sr-only">{tr(Msg::RunningValue2)}</span>
                 <code>{value.clone()}</code>
             </del>
         }
@@ -311,12 +312,12 @@ fn diff_value(value: Option<&String>, sign: &'static str, removed: bool) -> AnyV
                 <span aria-hidden="true" class="fui-change-sign">
                     {sign}
                 </span>
-                <span class="fui-sr-only">"New value: "</span>
+                <span class="fui-sr-only">{tr(Msg::NewValue)}</span>
                 <code>{value.clone()}</code>
             </ins>
         }
         .into_any(),
-        None => view! { <span class="fui-muted">"not set"</span> }.into_any(),
+        None => view! { <span class="fui-muted">{tr(Msg::NotSet2)}</span> }.into_any(),
     }
 }
 
@@ -327,15 +328,18 @@ pub(crate) fn diff_table(
     (from, to): (Option<RevisionId>, RevisionId),
 ) -> AnyView {
     if changes.is_empty() {
-        return view! { <p class="fui-muted">"It changes no setting."</p> }.into_any();
+        return view! { <p class="fui-muted">{tr(Msg::ItChangesNoSetting)}</p> }.into_any();
     }
     let running = from.map_or_else(
-        || String::from("Running value"),
-        |from| format!("Revision {from} (running)"),
+        || tr(Msg::RunningValue),
+        |from| tr_with(Msg::RevisionRunning, &[("from", (from).to_string().into())]),
     );
-    let (from_label, to_label) = (running.clone(), format!("Revision {to}"));
+    let (from_label, to_label) = (
+        running.clone(),
+        tr_with(Msg::Revision5, &[("to", (to).to_string().into())]),
+    );
     let columns = [
-        Column::text("setting", "Setting"),
+        Column::text("setting", tr(Msg::Setting)),
         Column::owned("from", running),
         Column::owned("to", to_label.clone()),
     ];
@@ -357,7 +361,10 @@ pub(crate) fn diff_table(
         })
         .collect_view();
     crate::views::table(
-        &format!("What revision {to} changes, by key"),
+        &tr_with(
+            Msg::WhatRevisionChangesKey,
+            &[("to", (to).to_string().into())],
+        ),
         &columns,
         rows.into_any(),
     )

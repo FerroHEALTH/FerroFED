@@ -22,6 +22,7 @@ use leptos::prelude::*;
 use leptos::server_fn::ServerFn as _;
 
 use super::tabs::{TabPair, tab_list};
+use crate::locale::{Msg, tr};
 use crate::query::model::{QueryForm, QueryOptionsView};
 use crate::query::run::RunQuery;
 
@@ -73,10 +74,10 @@ pub(super) fn editor_section(
     };
     let kinds = tab_list(
         TabPair {
-            label: "Query kind",
+            label: tr(Msg::QueryKind),
             tabs: ["query-tab-aql", "query-tab-stored"],
             panels: ["query-panel-aql", "query-panel-stored"],
-            names: ["AQL", "Stored query"],
+            names: [tr(Msg::Aql), tr(Msg::StoredQuery)],
         },
         stored,
     )
@@ -87,14 +88,14 @@ pub(super) fn editor_section(
     let federation = federation_section(offered);
     let run_bar = action_bar(view! {
         <button type="submit" disabled=move || !hydrated.get() class=Variant::Primary.class()>
-            {label(Some(Glyph::PLAY), "Run query")}
+            {label(Some(Glyph::PLAY), tr(Msg::RunQuery))}
         </button>
         <p role="status" class="fui-help">
             {move || {
                 if hydrated.get() {
-                    ""
+                    String::new()
                 } else {
-                    "The form is ready once the page has loaded."
+                    tr(Msg::FormReadyOncePageHasLoaded)
                 }
             }}
         </p>
@@ -198,8 +199,8 @@ fn query_section(
         >
             {field(
                 AQL,
-                "AQL",
-                Some("Name a patient as a parameter, never in the AQL text."),
+                tr(Msg::Aql),
+                Some(tr(Msg::NamePatientParameterNeverAqlText)),
                 editor,
             )}
         </div>
@@ -215,7 +216,7 @@ fn query_section(
                 view! {
                     {field(
                         "query-version",
-                        "Version (optional)",
+                        tr(Msg::VersionOptional),
                         None,
                         view! {
                             <input
@@ -231,7 +232,7 @@ fn query_section(
                     )}
                     {field(
                         "query-name",
-                        "Stored query name",
+                        tr(Msg::StoredQueryName),
                         None,
                         view! {
                             <input
@@ -268,15 +269,15 @@ fn parameters_section() -> AnyView {
         .collect_view();
     view! {
         <fieldset class="fui-fieldset">
-            <legend class="fui-label">"Parameters"</legend>
+            <legend class="fui-label">{tr(Msg::Parameters)}</legend>
             <ul class="fui-divided">{rows}</ul>
             <div class="fui-cluster">
                 <button type="button" class=Variant::Secondary.class() disabled=full on:click=add>
-                    {label(Some(Glyph::PLUS), "Add parameter")}
+                    {label(Some(Glyph::PLUS), tr(Msg::AddParameter))}
                 </button>
             </div>
             <p id="query-parameters-help" class="fui-help">
-                "Name a patient here. Each value is sent as a string, in the request body."
+                {tr(Msg::NamePatientHereEachValueSent)}
             </p>
         </fieldset>
     }
@@ -292,7 +293,7 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
         <li class="fui-field-row fui-field-row-narrow-wide" hidden=waiting>
             {keyed_field(
                 name_id.clone(),
-                "Name",
+                tr(Msg::Name),
                 None,
                 view! {
                     <input
@@ -302,14 +303,14 @@ fn parameter_row(index: u32, shown: RwSignal<u32>) -> impl IntoView {
                         autocomplete="off"
                         spellcheck="false"
                         pattern=NAME_PATTERN
-                        title="Letters, digits and underscores"
+                        title=tr(Msg::LettersDigitsAndUnderscores)
                         class=format!("{INPUT} fui-mono")
                     />
                 },
             )}
             {keyed_field(
                 value_id.clone(),
-                "Value",
+                tr(Msg::Value),
                 None,
                 view! {
                     <input
@@ -334,8 +335,8 @@ fn window_section() -> AnyView {
         view! {
             {field(
                 "query-offset",
-                "Offset",
-                Some("The rows to skip. Empty starts at the first row."),
+                tr(Msg::Offset),
+                Some(tr(Msg::RowsSkipEmptyStartsFirstRow)),
                 view! {
                     <input
                         type="text"
@@ -350,8 +351,8 @@ fn window_section() -> AnyView {
             )}
             {field(
                 "query-fetch",
-                "Fetch",
-                Some("The rows to return. Empty leaves it to the gateway."),
+                tr(Msg::Fetch),
+                Some(tr(Msg::RowsReturnEmptyLeavesGateway)),
                 view! {
                     <input
                         type="text"
@@ -371,18 +372,18 @@ fn window_section() -> AnyView {
 /// targeting, dedup and the completeness opt-in (§8.4, §10, §11.4).
 fn federation_section(offered: &QueryOptionsView) -> AnyView {
     let endpoints = chips(Chips {
-        legend: "Endpoints",
+        legend: tr(Msg::Endpoints),
         prefix: "query-endpoint",
         name: "form[endpoints]",
         ids: &offered.endpoints,
-        none: "The gateway declares no member endpoint.",
+        none: tr(Msg::GatewayDeclaresNoMemberEndpoint),
     });
     let organisations = chips(Chips {
-        legend: "Organisations",
+        legend: tr(Msg::Organisations),
         prefix: "query-organisation",
         name: "form[organisation]",
         ids: &offered.organisations,
-        none: "The gateway declares no organisation.",
+        none: tr(Msg::GatewayDeclaresNoOrganisation),
     });
     let modes = offered
         .dedup_modes
@@ -393,26 +394,23 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
         })
         .collect_view();
     let (disabled, hint) = if offered.best_effort {
-        (
-            false,
-            "Answer with the rows that came back when a node does not answer.",
-        )
+        (false, tr(Msg::AnswerRowsCameBackWhenNode))
     } else {
-        (true, "This gateway does not offer best effort.")
+        (true, tr(Msg::GatewayDoesNotOfferBestEffort))
     };
     view! {
         <details id="federation-options" class="fui-disclosure">
-            <summary>"Federation options"</summary>
+            <summary>{tr(Msg::FederationOptions)}</summary>
             <div class="fui-form">
                 {endpoints}
                 {organisations}
                 {field(
                     "query-dedup",
-                    "Deduplication",
+                    tr(Msg::Deduplication),
                     None,
                     view! {
                         <select id="query-dedup" name="form[dedup]" class=SELECT>
-                            <option value="">"The gateway's default"</option>
+                            <option value="">{tr(Msg::TheGatewaySDefault)}</option>
                             {modes}
                         </select>
                     },
@@ -429,7 +427,7 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
                         aria-describedby="query-partial-help"
                     />
                     <span class="fui-check-text">
-                        <label for="query-partial">"Best effort"</label>
+                        <label for="query-partial">{tr(Msg::BestEffort)}</label>
                         <span id="query-partial-help" class="fui-help">
                             {hint}
                         </span>
@@ -442,10 +440,10 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
 }
 
 /// One group of target chips.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Chips<'a> {
     /// What the group names.
-    legend: &'static str,
+    legend: String,
     /// The start of each chip's id.
     prefix: &'static str,
     /// The field name each chip posts.
@@ -453,16 +451,16 @@ struct Chips<'a> {
     /// What the gateway declares, one chip each.
     ids: &'a [String],
     /// What the group says when the gateway declares none.
-    none: &'static str,
+    none: String,
 }
 
 /// The chips of `group`: a checkbox and its label for each identifier the
 /// gateway declares, which the form posts as the targeting header (§8.4).
 fn chips(group: Chips<'_>) -> AnyView {
     let help = if group.ids.is_empty() {
-        group.none
+        group.none.clone()
     } else {
-        "Leave all clear to let the gateway choose."
+        tr(Msg::LeaveAllClearLetGatewayChoose)
     };
     let chips = group
         .ids
