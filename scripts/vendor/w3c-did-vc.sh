@@ -10,7 +10,7 @@
 # Identifiers 1.0, DID Resolution, Bitstring Status List 1.0 and the did:web
 # Method Specification.
 #
-# The access token request of crates/nl-generic-functions feature
+# The access token request of nl-generic-functions feature
 # `nuts-auth` (#88) builds its Verifiable Presentation to VC Data Model 1.1
 # §4.10 and §6.3.1, names its holder by a did:web identifier (DID 1.0 §3,
 # the did:web method) and signs it with a key a DID URL names.
@@ -126,9 +126,9 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #88 (the Verifiable Presentation of the access token request of
-  \`crates/nl-generic-functions\` feature \`nuts-auth\`: VC Data Model 1.1
-  §4.10 and §6.3.1, and the did:web holder identifier)
+- Read by: the Nuts binding of \`app/ferrofed-server\` (\`src/binding/nl/nuts.rs\`) and the Nuts tests of \`app/ferrofed-engine\`, which cite VC Data Model 1.1 and did:web. Earlier, #88 (the Verifiable Presentation of the access token request of
+  \`nl-generic-functions\` feature \`nuts-auth\`: VC Data Model 1.1
+  §4.10 and §6.3.1, and the did:web holder identifier); \`nl-generic-functions\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

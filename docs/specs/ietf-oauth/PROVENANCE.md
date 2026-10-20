@@ -20,7 +20,7 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - RFC 9126: <https://www.rfc-editor.org/rfc/rfc9126.txt>, sha256 `a79d0e30fcc24a22b79c8e18aa82362f6e63a7b8a5d58b480e746360e97388db`
 - RFC 9396: <https://www.rfc-editor.org/rfc/rfc9396.txt>, sha256 `d6a8f032d8a585daae1c33a8c7b6e539d199f886ec8cc1c7898436f7f2eed29c`
 - RFC 9449: <https://www.rfc-editor.org/rfc/rfc9449.txt>, sha256 `3842c58e1f6043389416023b9bb8d765048266024982fbbd90640e05943f4e13`
-- Fetched: 2026-10-15
+- Fetched: 2026-10-20
 - Upstream licence: each RFC carries the notice "This document is subject to BCP 78 and the IETF Trust's Legal
   Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info)
   in effect on the date of publication of this document". The IETF Trust
@@ -33,14 +33,14 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: 11
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `36413b343e1f4e81e08bfea0ff643480c8503ad646f6a3c9fad50b93f32220d6`
-- Read by: #551 (the authorization server metadata of RFC 8414 in
+- Read by: the onward grants, the DPoP checks and the caller conveyance of `app/ferrofed-engine`, and the client authentication of `app/ferrofed-server`, which cite these RFCs. Earlier, #551 (the authorization server metadata of RFC 8414 in
   `crates/oauth-server-metadata`, which the Nuts grant of #88 and the
   FAPI 2.0 grant of #497 hold their metadata to), #88 (the access token
-  request of `crates/nl-generic-functions` feature `nuts-auth`: the DPoP
+  request of `nl-generic-functions` feature `nuts-auth`: the DPoP
   proof of RFC 9449; the research comparing the B.4 and B.4a tracks),
   #492 (the mutual-TLS client authentication and certificate-bound tokens
   of RFC 8705 on the onward grants), #1003 (the `act` claim of RFC 8693
-  §4.1, read as the representative who acts for a person)
+  §4.1, read as the representative who acts for a person); `nl-generic-functions` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

@@ -11,7 +11,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Documents: *RFC003 OAuth2 Authorization*, *RFC021 VP Token Grant Type* and
   *RFC022 Discovery Service*, published by the Nuts foundation as Requests for
   Comments
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: the repository has no licence file. Each document states
   its licence in its Copyright Notice, verbatim: "This document is released under the [Attribution-ShareAlike 4.0 International \(CC BY-SA 4.0\) license](https://creativecommons.org/licenses/by-sa/4.0/)."
   (<https://creativecommons.org/licenses/by-sa/4.0/legalcode>). The files are
@@ -20,8 +20,8 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 3
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `e7db37cb88a230b634bc7a54385e020ff15dc85b2ac791a0fd88e17aca676b21`
-- Read by: #88 (the access token request of `crates/nl-generic-functions`
-  feature `nuts-auth`, held to RFC021)
+- Read by: the Nuts grant of `app/ferrofed-engine` (`src/onward/grant/nl/nuts.rs`) and its tests, which cite RFC021. Earlier, #88 (the access token request of `nl-generic-functions`
+  feature `nuts-auth`, held to RFC021); `nl-generic-functions` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

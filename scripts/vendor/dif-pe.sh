@@ -11,7 +11,7 @@
 # Nuts RFC021 §3 sends a Presentation Submission with every access token
 # request and §5 serves a Presentation Definition per scope, both as
 # Presentation Exchange defines them. The access token request of
-# crates/nl-generic-functions feature `nuts-auth` (#88) reads the definition
+# nl-generic-functions feature `nuts-auth` (#88) reads the definition
 # and writes the submission, and its tests hold both to these schemas.
 #
 # The repository has no release tags, so the "DIF Presentation Exchange
@@ -115,9 +115,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #88 (the Presentation Definition the access token request of
-  \`crates/nl-generic-functions\` feature \`nuts-auth\` reads and the
-  Presentation Submission it writes, held to the schemas)
+- Read by: the Nuts binding of \`app/ferrofed-server\` and the Nuts node of \`tools/ferrofed-testkit\`, which cite Presentation Exchange 2.0.0. Earlier, #88 (the Presentation Definition the access token request of
+  \`nl-generic-functions\` feature \`nuts-auth\` reads and the
+  Presentation Submission it writes, held to the schemas); \`nl-generic-functions\` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 

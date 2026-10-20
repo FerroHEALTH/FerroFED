@@ -14,7 +14,7 @@
 # - the Implementatiehandleiding Berichtauthenticatie, the optional message
 #   token a connector may opt into when it is admitted.
 #
-# The Mitz feature of crates/nl-generic-functions (#475) is built over them.
+# The Mitz feature of nl-generic-functions (#475) is built over them.
 #
 # VZVZ publishes the documents as attachments of one page of the Mitz
 # afsprakenstelsel on its Confluence site, readable without an account, and
@@ -86,6 +86,6 @@ and migrate interfaces and define no closed authorization question, its
 publishes no Mitz repository; and the other attachments of the page, which
 define no part of the closed authorization question." \
   "" \
-  "#475 (the closed authorization question of \`crates/nl-generic-functions\` feature \`mitz\`, its harness service in \`tools/ferrofed-testkit\`, and the Mitz consent pre-filter of \`app/ferrofed-identity\`)"
+  "the Mitz pre-filter of \`app/ferrofed-identity\`, the Mitz binding of \`app/ferrofed-server\`, the Mitz device of \`tools/ferrofed-testkit\` and \`conformance/obligations.tsv\`; #475 built the closed authorization question of \`nl-generic-functions\` feature \`mitz\`, owned by FerroHEALTH/FerroPIX since #367"
 
 say "done"

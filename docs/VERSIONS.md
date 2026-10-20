@@ -350,7 +350,7 @@ AQL variable, which `columns[].path` now carries (#877).
 
 The FHIR model comes from the published `fhir-types` crate
 (`docs/architecture.md` §6, decisions A16 and A59), compiled in the binding
-crates `crates/ihe-iti` and `crates/nl-generic-functions` and in the
+crates `crates/ihe-iti` and `nl-generic-functions` (crates.io) and in the
 interoperability component `crates/eehrxf`, never in the engine, so the
 gateway core never builds it. `scripts/checks/versions.sh` fails when this row
 and the root `Cargo.toml` `[workspace.dependencies]` disagree.

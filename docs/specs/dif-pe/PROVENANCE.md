@@ -12,7 +12,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
   <https://github.com/decentralized-identity/claim-format-registry>, at commit `4a15817a7717efdda29912a1eef6e59135d8d02a`, under
   `claim-format-registry/`
 - Document: *Presentation Exchange 2.0.0*, Decentralized Identity Foundation
-- Fetched: 2026-10-04
+- Fetched: 2026-10-20
 - Upstream licence: the Apache License 2.0 (each repository's `LICENSE`,
   vendored beside its files)
 - Layout: the upstream paths, unchanged, the registry's under
@@ -20,9 +20,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: 11
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `a4632ffea5dbb879fdae4cabac74eba5806d8360ba5409197326692856751b10`
-- Read by: #88 (the Presentation Definition the access token request of
-  `crates/nl-generic-functions` feature `nuts-auth` reads and the
-  Presentation Submission it writes, held to the schemas)
+- Read by: the Nuts binding of `app/ferrofed-server` and the Nuts node of `tools/ferrofed-testkit`, which cite Presentation Exchange 2.0.0. Earlier, #88 (the Presentation Definition the access token request of
+  `nl-generic-functions` feature `nuts-auth` reads and the
+  Presentation Submission it writes, held to the schemas); `nl-generic-functions` is owned by FerroHEALTH/FerroPIX since #367
 
 ## What is taken
 
