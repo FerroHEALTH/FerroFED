@@ -52,14 +52,16 @@ fn refusal_codes() -> String {
     format!("consent_refusal_codes = [\"{REFUSAL_CODE}\"]\n")
 }
 
-/// The `[credentials]` tables of both endpoints' OAuth 2.0 grant at
-/// `token_url`.
-fn oauth2(token_url: &str) -> String {
+/// The `[credentials]` tables of both endpoints' OAuth 2.0 client
+/// credentials grant at `token_url`, its assertion signed with the gateway's
+/// signing key, which the JWK Set publishes.
+fn oauth(token_url: &str) -> String {
+    let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     ["node-a-pub", "node-b-pub"]
         .iter()
         .map(|endpoint| {
             format!(
-                "[credentials.\"{endpoint}\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n\n"
+                "[credentials.\"{endpoint}\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n\n"
             )
         })
         .collect::<Vec<_>>()
@@ -112,7 +114,7 @@ async fn each_node_is_reached_with_its_onward_token_and_told_the_caller() -> Tes
     issuer.expect_scope(SCOPE);
     let dir = tempfile::tempdir()?;
     let options = Options {
-        tables: oauth2(&issuer.token_url()),
+        tables: oauth(&issuer.token_url()),
         ..Options::default()
     };
     let app = gateway_with(dir.path(), &nodes, &options)?;
