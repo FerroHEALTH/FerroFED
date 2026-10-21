@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/ferropulse.sh
 #
-# Vendors FerroPULSE's installation report contract: docs/report-v2.md, the
-# envelope v2 JSON Schema and its valid and invalid examples
-# (.claude/rules/vendored-inputs.md). It reads the pin from the "FerroPULSE
-# report envelope v2" row of docs/VERSIONS.md (a commit and the sha256 of the
+# Vendors FerroPULSE's installation report contract: the report v2 document, the
+# envelope v2 JSON Schema and its valid and invalid examples. It reads the
+# pin from the "FerroPULSE report envelope v2" row of docs/VERSIONS.md (a
+# commit and the sha256 of the
 # schema), copies the files verbatim into docs/specs/ferropulse/, checks the
 # schema against the pinned digest, and writes a PROVENANCE.md beside them.
 # The server's tests validate every report it builds against the schema.

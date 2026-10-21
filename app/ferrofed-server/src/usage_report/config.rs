@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::error::Error;
 
 /// The collector every report goes to unless the deployment names another
-/// (`FerroPULSE` `docs/report-v2.md` §Transport).
+/// (`FerroPULSE` `docs/specs/ferropulse/docs/report-v2.md` §Transport).
 pub const ENDPOINT: &str = "https://report.ferropulse.eu/v1/report";
 
 /// The process environment variables that mark a CI runner, read in this
@@ -114,7 +114,7 @@ pub fn resolve(section: &UsageReport) -> Result<UsageReportSettings, Error> {
 /// Whether a report may be posted to `url`: `https`, or plain `http` to a
 /// loopback host, and no credentials in the authority.
 ///
-/// `FerroPULSE` `docs/report-v2.md` §Transport has a client use https except
+/// `FerroPULSE` `docs/specs/ferropulse/docs/report-v2.md` §Transport has a client use https except
 /// to a loopback host.
 fn admitted(url: &url::Url) -> bool {
     if !url.username().is_empty() || url.password().is_some() {

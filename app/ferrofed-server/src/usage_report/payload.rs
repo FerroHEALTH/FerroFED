@@ -5,7 +5,7 @@
 //! and `metrics` objects.
 //!
 //! The field set, the value sets and the bounds are `FerroPULSE`'s report v2
-//! contract (`docs/report-v2.md` §Envelope, §`status`, §`metrics`). Every type
+//! contract (`docs/specs/ferropulse/docs/report-v2.md` §Envelope, §`status`, §`metrics`). Every type
 //! here is closed: a member that is not declared cannot be serialized, a key
 //! is a variant name and never a string from a request, and the `start` and
 //! `daily` variants carry exactly the members their event admits. No

@@ -6,7 +6,7 @@
 //! request log and the node requests fill, the sends to a mock collector,
 //! and the configuration that switches it.
 //!
-//! The contract is `FerroPULSE` `docs/report-v2.md` at the commit
+//! The contract is `FerroPULSE` `docs/specs/ferropulse/docs/report-v2.md` at the commit
 //! `docs/VERSIONS.md` pins (`docs/specs/ferropulse/`); no other
 //! specification governs the report.
 #![allow(

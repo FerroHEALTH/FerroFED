@@ -6,7 +6,7 @@
 //!
 //! The channel is outbound only: nothing the collector answers is read beyond
 //! the status code, and no answer changes configuration or behaviour. A send
-//! is bounded by the timeouts and the body cap `FerroPULSE` `docs/report-v2.md`
+//! is bounded by the timeouts and the body cap `FerroPULSE` `docs/specs/ferropulse/docs/report-v2.md`
 //! §Transport names, and a failure is logged and tried again at the next
 //! schedule. The background task is detached from boot and from readiness, so
 //! a slow or unreachable collector reaches neither. No specification governs

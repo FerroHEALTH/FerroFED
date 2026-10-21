@@ -20,7 +20,7 @@ pub const LAST_START_FILE: &str = "last-start";
 
 /// How close to the previous start report a new one is skipped: the collector
 /// refuses a second start event within ten minutes (`FerroPULSE`
-/// `docs/report-v2.md` §Transport).
+/// `docs/specs/ferropulse/docs/report-v2.md` §Transport).
 pub const START_INTERVAL: jiff::SignedDuration = jiff::SignedDuration::from_mins(10);
 
 /// The file a writability probe creates and removes.
