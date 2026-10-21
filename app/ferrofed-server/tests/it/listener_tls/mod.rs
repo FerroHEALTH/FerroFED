@@ -103,6 +103,7 @@ fn ferrofed(args: &[&str], config: &Path) -> std::io::Result<Output> {
         .arg("--config")
         .arg(config)
         .env_remove("FERROFED_CONFIG")
+        .env("FERROFED__USAGE_REPORT__ENABLED", "false")
         .output()
 }
 

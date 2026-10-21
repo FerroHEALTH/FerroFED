@@ -142,6 +142,9 @@ pub struct Config {
     /// Configuration revisions (`[config]`): `ui`, off by default, and the store.
     #[serde(rename = "config")]
     pub revisions: revisions::Revisions,
+    /// The installation report to `FerroPULSE` (`[usage_report]`), on by
+    /// default.
+    pub usage_report: crate::usage_report::config::UsageReport,
     /// The deprecated keys the configuration set, already read under their
     /// new names; never read from the file itself.
     #[serde(skip)]
@@ -178,6 +181,7 @@ impl Default for Config {
             access_log: crate::access::config::AccessLog::default(),
             audit: crate::audit::config::Audit::default(),
             revisions: revisions::Revisions::default(),
+            usage_report: crate::usage_report::config::UsageReport::default(),
             deprecated: Vec::new(),
         }
     }

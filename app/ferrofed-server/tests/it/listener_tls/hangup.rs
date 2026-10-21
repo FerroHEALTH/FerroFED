@@ -61,6 +61,7 @@ async fn sighup_presents_the_replaced_certificate_without_a_restart() -> TestRes
             .args(["serve", "--config"])
             .arg(&config)
             .env_remove("FERROFED_CONFIG")
+            .env("FERROFED__USAGE_REPORT__ENABLED", "false")
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,

@@ -328,6 +328,7 @@ fn served_with_no_color(no_color: &str) -> Result<String, Box<dyn Error>> {
         .args(["serve", "--config"])
         .arg(file.path())
         .env_remove("FERROFED_CONFIG")
+        .env("FERROFED__USAGE_REPORT__ENABLED", "false")
         .env("NO_COLOR", no_color)
         .output()?;
     drop(taken);

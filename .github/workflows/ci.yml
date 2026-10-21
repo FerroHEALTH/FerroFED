@@ -585,6 +585,25 @@ jobs:
           bash scripts/checks/e2e-placement.sh --self-test
           bash scripts/checks/e2e-placement.sh
 
+  # The usage report guard (#1122): every shell script, workflow and Rust test
+  # that starts the gateway with serve switches the installation report off,
+  # so no CI run counts as an installation. Its self-test proves each launch
+  # form it catches and each one it leaves alone.
+  usage-report-off:
+    name: usage-report-off
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/usage-report-off.sh --self-test
+          bash scripts/checks/usage-report-off.sh
+
   # The AQL splice guard: no Rust source outside the tests builds AQL text
   # with format!, concat!, push_str or +; a query is a template parsed by
   # openehr-query, its values bound or sent as query parameters, and printed
@@ -1515,6 +1534,7 @@ jobs:
       - annex-ii
       - economic-operators
       - e2e-placement
+      - usage-report-off
       - aql-splice
       - site-links
       - tracker-helpers

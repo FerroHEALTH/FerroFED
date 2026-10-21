@@ -22,6 +22,7 @@
 //! ran on, never anything a request carries.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::dispatch::Contact;
@@ -44,6 +45,7 @@ use crate::metrics::{
     LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
     NODE_REQUESTS, OVERLOAD_REFUSALS, RESOLVER_REQUEST_DURATION, RESOLVER_REQUESTS,
 };
+use crate::usage_report::window::Window;
 
 /// The node request instruments of one meter provider, shared by every
 /// federation a reload builds.
@@ -59,6 +61,7 @@ pub struct Instruments {
     resolver: Counter<u64>,
     resolver_duration: Histogram<f64>,
     overload: Counter<u64>,
+    usage: Arc<Window>,
 }
 
 impl Instruments {
@@ -108,7 +111,16 @@ impl Instruments {
                 "The time the cross-reference resolver took to answer a call",
             ),
             overload: overload(meter),
+            usage: Arc::default(),
         }
+    }
+
+    /// Returns these instruments counting each node request in `usage` too,
+    /// the window of the installation report.
+    #[must_use]
+    pub fn with_usage(mut self, usage: Arc<Window>) -> Self {
+        self.usage = usage;
+        self
     }
 
     /// Counts one call to the cross-reference resolver that ended as
@@ -408,6 +420,7 @@ impl NodeRequests {
         let Some(endpoint) = self.endpoints.get(endpoint) else {
             return;
         };
+        instruments.usage.node(status);
         let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
         instruments.requests.add(
             1,

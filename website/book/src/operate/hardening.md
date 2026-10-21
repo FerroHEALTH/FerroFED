@@ -42,9 +42,10 @@ page: our own design.
   where the cluster's network plugin enforces NetworkPolicy (B5).
 - [ ] **Restrict egress.** The gateway connects only to the URLs in your
   configuration: the members and their token endpoints, the identity
-  services, the issuers' key sets, the audit repository and the collector.
-  Allow those and nothing else. The Kubernetes example leaves egress open
-  (B2, B3, B7).
+  services, the issuers' key sets, the audit repository and the collector,
+  and, while the usage report is on, `report.ferropulse.eu` on port 443
+  ([The usage report](usage-report.md#network)). Allow those and nothing
+  else. The Kubernetes example leaves egress open (B2, B3, B7).
 
 ## TLS
 

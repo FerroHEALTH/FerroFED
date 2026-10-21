@@ -20,6 +20,7 @@ use crate::revision::routes::Managed;
 use crate::revision::service::{Booted, Revisions};
 use crate::state::AppState;
 use crate::support::Support;
+use crate::usage_report::reporter::Usage;
 use crate::{
     EXIT_CONFIG, admin, banner, binding, body, chain, config, panic, reload, revision, serve,
     state, telemetry, trusted_router,
@@ -182,6 +183,7 @@ fn serve_command(
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let revision_poll = settings.revision_poll;
+    let usage = (std::time::Instant::now(), Usage::of(&settings));
     // NOTE: no specification governs this: our own design; the client and the admin
     // listener share one gate, so a reload of `[auth]` reaches both at once.
     let trust = Arc::new(Trust::new(&server.auth));
@@ -246,6 +248,7 @@ fn serve_command(
         tokio::spawn(reload::on_hangup(reloader));
         let app = trusted_router(Arc::clone(state), &server, trust);
         state.lifecycle().booted();
+        let report = usage.1.start(Arc::clone(state), usage.0).await;
         let lifecycle = state.lifecycle().clone();
         let stopped = match client_tls {
             None => serve(listener, app, &server, lifecycle).await,
@@ -259,6 +262,9 @@ fn serve_command(
                 .await
             }
         };
+        if let Some(report) = report {
+            report.abort();
+        }
         if let Some(watch) = watch {
             watch.stop(server.bindings_drain).await;
         }

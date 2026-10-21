@@ -72,6 +72,7 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
         revisions: boot.revisions.clone(),
         revision_poll: boot.revision_poll,
         revision_policy: boot.revision_policy.clone(),
+        usage_report: boot.usage_report.clone(),
         ..fresh
     };
     for binding in binding::compiled() {

@@ -41,6 +41,8 @@ use tracing::field::Empty;
 
 use crate::base_path::BasePath;
 use crate::metrics::inbound::{self, Instruments};
+use crate::usage_report::payload::Group;
+use crate::usage_report::window::Window;
 use crate::{ITS_REST_PREFIX, request_id};
 
 /// The route a request is logged under when no route matched it.
@@ -65,6 +67,7 @@ pub const MAX_VALUE_LENGTH: usize = 10;
 pub struct RequestLog {
     base: BasePath,
     inbound: Option<Instruments>,
+    usage: Option<(Arc<Window>, Option<String>)>,
 }
 
 impl RequestLog {
@@ -72,7 +75,19 @@ impl RequestLog {
     /// `inbound` when it is set.
     #[must_use]
     pub fn new(base: BasePath, inbound: Option<Instruments>) -> Self {
-        Self { base, inbound }
+        Self {
+            base,
+            inbound,
+            usage: None,
+        }
+    }
+
+    /// Returns this log recording each request into `usage` too, the window
+    /// of the installation report, grouped with the FHIR face at `fhir`.
+    #[must_use]
+    pub fn with_usage(mut self, usage: Arc<Window>, fhir: Option<String>) -> Self {
+        self.usage = Some((usage, fhir));
+        self
     }
 }
 
@@ -80,8 +95,9 @@ impl RequestLog {
 /// naming its route under the deployment's `base` path ([`route`]).
 ///
 /// The same method, route template and status are recorded in the inbound
-/// request metrics ([`crate::metrics::inbound`]), and nothing else of the
-/// request.
+/// request metrics ([`crate::metrics::inbound`]), and the route's group, the
+/// status and the latency in the installation report's window
+/// ([`crate::usage_report::window`]), and nothing else of the request.
 pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Next) -> Response {
     let method = request.method().clone();
     let route = route(&log.base, &request);
@@ -121,6 +137,13 @@ pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Nex
     let elapsed = started.elapsed();
     if let Some(inbound) = &log.inbound {
         inbound.served((&method, &route), status, elapsed);
+    }
+    if let Some((usage, fhir)) = &log.usage {
+        usage.record(
+            Group::of(&log.base, fhir.as_deref(), &route),
+            status,
+            elapsed,
+        );
     }
     drop(active);
     let latency_ms = elapsed.as_secs_f64() * 1000.0;

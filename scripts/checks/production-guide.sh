@@ -235,6 +235,7 @@ docker pull --quiet "$NGINX" > /dev/null
 gateway_run() {
   docker run --read-only --user 65532:65532 --cap-drop ALL \
     --security-opt no-new-privileges:true --network none \
+    --env FERROFED__USAGE_REPORT__ENABLED=false \
     --volume "$binary_path:/usr/local/bin/ferrofed:ro" \
     --volume "$work/ferrofed.toml:/etc/ferrofed/ferrofed.toml:ro" \
     --volume "$work/registry.toml:/etc/ferrofed/registry.toml:ro" \

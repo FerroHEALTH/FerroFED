@@ -66,6 +66,14 @@ services:
     restart: unless-stopped
     environment:
       FERROFED_CONFIG: /etc/ferrofed/ferrofed.toml
+      # The installation report to FerroPULSE: on by default, and
+      # FERROFED__USAGE_REPORT__ENABLED=false in your shell or .env stops it.
+      # What it sends and when:
+      # https://ferrofed.eu/docs/operate/usage-report.html
+      FERROFED__USAGE_REPORT__ENABLED: ${FERROFED__USAGE_REPORT__ENABLED:-true}
+      FERROFED__USAGE_REPORT__DEPLOYMENT: compose
+      # The instance id lives here, on the one writable volume.
+      FERROFED__USAGE_REPORT__STATE_DIR: /var/lib/ferrofed/usage-report
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
     volumes:
@@ -86,8 +94,9 @@ services:
       # The ITI-20 audit spools: of [audit] destination = "repository", with
       # audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool",
       # and of [xcpd] audit = "repository", with
-      # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool":
-      # the one directory the gateway writes. Docker fills a new named volume
+      # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool",
+      # and the usage report's instance id under usage-report/: the one
+      # directory the gateway writes. Docker fills a new named volume
       # from the image's /var/lib/ferrofed, which is owned by the gateway
       # user with mode 0700, so it needs no step on the host. It holds audit
       # messages that name a patient until the repository takes them, so put
@@ -99,7 +108,7 @@ services:
     # host.docker.internal.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # The gateway writes nothing but the audit spool volume above: no cache,
+    # The gateway writes nothing but the volume above: no cache,
     # no scratch file, and every secret is read at boot. So the root
     # filesystem is read-only with no tmpfs beside it.
     # The image runs as the numeric user 65532 and has no shell.

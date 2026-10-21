@@ -172,6 +172,7 @@ impl Config {
             revisions: crate::config::revisions::resolve(self)?,
             revision_poll: crate::config::revisions::poll(&self.revisions)?,
             revision_policy: crate::config::revisions::policy(&self.revisions)?,
+            usage_report: crate::usage_report::config::resolve(&self.usage_report)?,
             deprecated: self.deprecated.clone(),
         };
         // NOTE: no specification governs this: our own design; a request is an emergency

@@ -59,6 +59,7 @@ name both. Every row of the inventory below names what it carries.
 | The request log and every other log line | the method, route template, status, latency and request id; a security event's reason; in the edge mode, keyed HMAC references to the subject and client that change at every start; on an admin listener write action, the operator's issuer and subject | stdout, then your log pipeline | your log pipeline's retention | no request body, AQL text, header value, request path or patient identifier ([What the log records](../operate/configuration.md#what-the-log-records)) | `[telemetry] filter`, `format` |
 | Metrics | none: every label value comes from a closed set or the registry | the admin listener, the OTLP push | your metrics store's retention | [Metrics](../operate/metrics.md) | `[metrics]` |
 | Trace spans | none: route templates, registry ids, operations, statuses and counts; the trace id is the gateway's own, never the client's | your OpenTelemetry collector | your collector's retention | [Tracing](../operate/tracing.md) | `[telemetry] otlp_endpoint`, `trace_sample_ratio` |
+| The usage report | none of a patient or a caller: a random instance id, the version, the deployment kind, host size, the member count as a range, the configured services, latency per route group and node request counts; the collector adds the source IP address and its country | FerroPULSE, which Cadasto B.V. runs, at each start and once a day | 13 months at the collector | on by default once `state_dir` is set, off in CI and with `enabled = false`; no request path, AQL text, node name or URL ([The usage report](../operate/usage-report.md)) | `[usage_report]` |
 | Stored-query definitions | none: parameterised AQL, and a definition that names a patient by a literal is refused | `redb`, PostgreSQL or read-only files | durable; a stored version is immutable (§12.7, N44) | the bound values of an invocation are never written ([Stored queries](../operate/queries-and-areas.md#stored-queries)) | `[stored_queries]` |
 | The PMIR identity feed | the Patient Master Identities each ITI-93 message names, with their identifiers and demographics | process memory for one message, then the audit spool | one message; the audit record as above | `https` outside development; a feed token from a file; only the kind and count of each change is logged ([The identity feed](../operate/identity.md#the-identity-feed-pmir)) | `[pmir]` |
 | The operator console's sessions | the operator's ID Token claims, access token and refresh token, and the name (`name`, else `preferred_username`) the top bar shows | the console's process memory | `idle_timeout_s` (1 800) without a request, `absolute_timeout_s` (43 200) at most, and no longer than the access token unless the provider issued a refresh token; lost on restart | held on the server, known to the browser by an opaque `HttpOnly` cookie; every page `no-store`; a query answer is rendered and not kept ([The operator console](../operate/operator-console.md)) | `[session]`, `[oidc]` |
@@ -70,8 +71,9 @@ gateway learns. The signing key and the onward credentials are secrets: the
 gateway shows each as `***` wherever it renders the configuration, and the
 [hardening guide](../operate/hardening.md#secrets) has them read from files.
 
-The gateway sends nothing to its manufacturer. Every outbound connection goes
-to a URL your configuration names.
+The gateway sends its manufacturer one thing, the usage report above, which
+names no patient or caller and which `[usage_report] enabled = false` stops.
+Every other outbound connection goes to a URL your configuration names.
 
 ### The record of each access
 

@@ -39,7 +39,8 @@ Fourteen workflows:
   `plan` job runs too), the
   register of economic operators guard
   (`scripts/checks/economic-operators.sh`), the
-  e2e-placement guard, the tracker-helper self-tests, the crate-version
+  e2e-placement guard, the usage report guard
+  (`scripts/checks/usage-report-off.sh`), the tracker-helper self-tests, the crate-version
   guard's self-test, the changelog fragment check
   (`scripts/release/changelog.sh --check`, in the `changelog` job with the
   EU declaration of conformity's self-test and its `status` read of

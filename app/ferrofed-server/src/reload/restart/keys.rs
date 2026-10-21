@@ -65,6 +65,9 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),
+    ("usage_report", |boot, fresh| {
+        boot.usage_report != fresh.usage_report
+    }),
     ("server.tls", |boot, fresh| {
         boot.server.tls != fresh.server.tls
     }),
@@ -393,6 +396,12 @@ code = "ETREAT"
 [audit]
 destination = "log"
 
+[usage_report]
+enabled = false
+endpoint = "https://report.example.org/v1/report"
+state_dir = "@DIR@/usage-report"
+deployment = "compose"
+
 [config]
 ui = "managed"
 backend = "redb"
@@ -526,6 +535,7 @@ secrets_dir = "@DIR@/secrets"
         ("registry.format", "fhir"),
         ("stored_queries.backend", "files"),
         ("config.ui", "off"),
+        ("usage_report.deployment", "helm"),
     ];
 
     /// The values a change of the leaf `key`, now `value`, tries in order: a

@@ -101,6 +101,7 @@ pub mod stored;
 pub mod support;
 pub mod telemetry;
 pub mod upstream;
+pub mod usage_report;
 
 use std::future::Future;
 use std::sync::Arc;
@@ -247,6 +248,10 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
         Arc::clone(&state),
     ));
     let metrics = Arc::clone(state.metrics());
+    let usage = (
+        Arc::clone(metrics.usage()),
+        state.fhir().map(|fhir| fhir.base.as_str().to_owned()),
+    );
     let fhir_state = Arc::clone(&state);
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
     // and the caller rate, so a record names the verified caller and a refusal writes none.
@@ -297,7 +302,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
     layered(
         guarded,
         server,
-        Some(metrics.inbound().serving_tls(server.tls.is_some())),
+        Some((metrics.inbound().serving_tls(server.tls.is_some()), usage)),
     )
 }
 
@@ -330,13 +335,24 @@ pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
     layered(router, server, None)
 }
 
+/// What the request log of the client surface records each request into:
+/// the inbound request instruments, and the window of the installation
+/// report with the FHIR face's base.
+type Metered = (
+    metrics::inbound::Instruments,
+    (Arc<usage_report::window::Window>, Option<String>),
+);
+
 /// Applies the middleware of [`with_middleware`] to `router`, the request log
-/// recording each request through `inbound` when it is set.
-fn layered(
-    router: Router,
-    server: &ServerSettings,
-    inbound: Option<metrics::inbound::Instruments>,
-) -> Router {
+/// recording each request through `metered` when it is set.
+fn layered(router: Router, server: &ServerSettings, metered: Option<Metered>) -> Router {
+    let log = match metered {
+        Some((inbound, (usage, fhir))) => {
+            request_log::RequestLog::new(server.base_path.clone(), Some(inbound))
+                .with_usage(usage, fhir)
+        }
+        None => request_log::RequestLog::new(server.base_path.clone(), None),
+    };
     router
         .layer(RequestBodyLimitLayer::new(server.body_limit))
         .layer(TimeoutLayer::with_status_code(
@@ -345,10 +361,7 @@ fn layered(
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
         .layer(axum::middleware::from_fn_with_state(
-            Arc::new(request_log::RequestLog::new(
-                server.base_path.clone(),
-                inbound,
-            )),
+            Arc::new(log),
             request_log::log,
         ))
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))
