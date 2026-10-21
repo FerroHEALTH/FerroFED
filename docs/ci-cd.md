@@ -317,6 +317,20 @@ through `label-guards.yml`, so a label takes effect without a new push. The
 release cut turns
 the fragments into the version's section (`docs/release.md`).
 
+**Running the guards locally.** Run with no arguments, every guard under
+`scripts/checks/` that needs no built input passes on a clean branch
+(#1151). With no arguments, `changelog-guard.sh`
+compares `origin/main` with `HEAD` and passes a branch with no commit of its
+own, `crate-version-guard.sh` compares `origin/main` with the working tree,
+and `stray-literals.sh` reads `app/ferrofed-viewer/src`, as CI does. Some
+guards need an input first, and each one says which when it is missing:
+`kubernetes-example.sh` and `upgrade-notes.sh` need a built `ferrofed`
+binary, `viewer-bundle.sh` and `viewer-paths.sh` need the release site
+bundle from `scripts/release/viewer-site.sh --release`, and
+`release-compose.sh` needs Docker, and `fhir-validator.sh` needs the
+emitted documents and Java. `pin-freshness.sh` and `ehds-acts.sh` read
+upstream sites over the network.
+
 `hashFiles()` cannot do the detection. It is evaluated before checkout, when
 the workspace is empty, so an `if: hashFiles('Cargo.toml') != ''` gate on a job
 never sees the file. A detection job that checks out and tests for the file is

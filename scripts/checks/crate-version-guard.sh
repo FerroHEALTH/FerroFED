@@ -24,6 +24,9 @@
 # the change's own. The version a changed member must move away from is the
 # one the base holds now, so two changes cannot both claim one version.
 #
+# With no refs, as a local loop over the guards runs it, the base is
+# origin/main (main where there is no origin) and the head is WORKTREE (#1151).
+#
 # The head ref may be the literal WORKTREE, which compares the base with the
 # tree as it stands rather than with a commit. That is what the pre-commit hook
 # passes: the manifests and Cargo.lock are read from disk either way, so the
@@ -100,6 +103,20 @@ self_test() {
     fi
   }
 
+  # expect_local NAME WANT BRANCH: the guard run with no refs over the
+  # checked-out BRANCH, where the stub has no origin, exits WANT.
+  expect_local() {
+    local name=$1 want=$2 branch=$3
+    stub_git checkout -q "$branch"
+    status=0
+    (cd "$work" && bash scripts/checks/crate-version-guard.sh) > "$work/out" 2>&1 || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "crate-version-guard: self-test failed: $name exited $status, wanted $want." >&2
+      cat "$work/out" >&2
+      exit 1
+    fi
+  }
+
   stub_git init -q -b main
   printf '[workspace]\nmembers = ["crates/x", "crates/y"]\n\n[workspace.dependencies]\nserde = "1"\n' > "$work/Cargo.toml"
   crate x 0.0.1
@@ -154,6 +171,8 @@ self_test() {
     exit 1
   fi
   expect_merging "a branch merging main after it bumped what it changed" 0 bumped
+  expect_local "no refs, a branch that changed nothing packaged" 0 untouched
+  expect_local "no refs, a branch that changed packaged content without a bump" 1 unbumped
   echo "crate-version-guard: self-test passed."
 }
 
@@ -169,12 +188,20 @@ if [[ "${1:-}" == "--root" && $# -ge 2 ]]; then
 fi
 cd "$root"
 
-if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
-  echo "usage: crate-version-guard.sh [--root <dir>] <base-ref> [head-ref|WORKTREE] | --self-test" >&2
+if [[ $# -gt 2 || ($# -ge 1 && -z "$1") ]]; then
+  echo "usage: crate-version-guard.sh [--root <dir>] [base-ref [head-ref|WORKTREE]] | --self-test" >&2
   exit 2
 fi
-base="$1"
-head="${2:-HEAD}"
+if [[ $# -ge 1 ]]; then
+  base="$1"
+  head="${2:-HEAD}"
+elif git rev-parse --verify --quiet origin/main > /dev/null; then
+  base=origin/main
+  head=WORKTREE
+else
+  base=main
+  head=WORKTREE
+fi
 # The head that names the working tree instead of a commit.
 readonly WORKTREE=WORKTREE
 
