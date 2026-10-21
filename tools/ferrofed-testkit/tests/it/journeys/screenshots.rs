@@ -28,6 +28,9 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use ferrofed_registry::id::NodeId;
+use ferrofed_registry::incident::{Detection, Incident};
+use ferrofed_registry::operator::ClearedEhrId;
 use ferrofed_testkit::mock::Server;
 use serde::Deserialize;
 use serde_json::json;
@@ -319,6 +322,32 @@ const HISTORY: &str = r#"{"items":[
 const DIFF_2: &str = r#"{"from":1,"to":2,"changes":[
     {"key":"federation.per_node_timeout_ms","change":"changed","from":"2000","to":"2500"}]}"#;
 
+/// The synthetic `ehr_id` the integrity history names, a bare UUID.
+const COLLIDING: &str = "3333cccc-3333-4333-8333-333333333333";
+
+/// Gives the gateway, which runs in this process, an integrity history the
+/// dashboard and the Integrity view draw with its timestamps: an open
+/// `creating_system_id` conflict, and an `ehr_id` collision the operator's
+/// clear resolved (#1154).
+fn integrity_history() -> Result<(), Box<dyn Error>> {
+    Incident::LearnedCreatingSystemConflict {
+        creating_system_id: "legacy-shared.example.org".parse()?,
+        first: "node-a-pub".parse()?,
+        second: "node-b-pub".parse()?,
+    }
+    .emit();
+    let ehr_id = COLLIDING.parse()?;
+    Incident::EhrIdCollision {
+        ehr_id,
+        detection: Detection::AskAll,
+        claimants: vec!["node-a-pub".parse()?, "node-b-pub".parse()?],
+    }
+    .emit();
+    let held = [NodeId::new("node-a")?, NodeId::new("node-b")?];
+    ClearedEhrId::of(&COLLIDING.parse()?, &held, (0, &BTreeSet::new())).record();
+    Ok(())
+}
+
 /// A stub admin listener answering every route the pages read.
 async fn listener() -> Server {
     let listener = Server::start().await;
@@ -579,6 +608,7 @@ async fn the_book_shows_every_console_page_in_light_and_dark() -> Result<(), Box
     std::fs::create_dir_all(root().join(NARROW_IMAGES))?;
     let admin = listener().await;
     let stack = Stack::start_with_admin(&admin.uri()).await?;
+    integrity_history()?;
     with_browser(async |browser| {
         for width in [Width::Wide, Width::Narrow] {
             window(browser, width, HEIGHT).await?;
