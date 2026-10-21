@@ -108,7 +108,13 @@ fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
                     Variant::Ghost,
                 ),
                 (
-                    tr_with(Msg::RemoveSavedWithoutWhichYouApply, &[("shown", (shown).clone().into()), ("loaded", (loaded.next()).clone().into())]),
+                    tr_with(
+                        Msg::RemoveSavedWithoutWhichYouApply,
+                        &[
+                            ("shown", (shown).clone().into()),
+                            ("loaded", (loaded.next()).clone().into()),
+                        ],
+                    ),
                     tr(Msg::SaveTheRemoval),
                 ),
                 text(
@@ -157,7 +163,9 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             <td data-label=tr(Msg::State)>{state(if console { section.state } else { None })}</td>
             <td data-label=tr(Msg::Secrets)>{secrets_said(&section.secrets)}</td>
             <td data-label=tr(Msg::Settings)>{settings_said(section)}</td>
-            <td data-label=tr(Msg::Actions) class=ACTIONS>{actions}</td>
+            <td data-label=tr(Msg::Actions) class=ACTIONS>
+                {actions}
+            </td>
         </tr>
     }
     .into_any()
@@ -221,10 +229,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {head(
             ("credentials-title", tr(Msg::CredentialsAndBindings)),
-            (
-                tr(Msg::CredentialBindingSectionFileProvidesRead),
-                "credentials-and-binding-sections",
-            ),
+            (tr(Msg::CredentialBindingSectionFileProvidesRead), "credentials-and-binding-sections"),
             view! {
                 {binding}
                 <a href="/configuration/credentials/new" class=Variant::Primary.class()>
@@ -348,9 +353,10 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
     let item = |item: &str, value: String| {
         let id = format!("{into}-{item}");
         let body = view! {
-                {FormField::new(id.clone(), tr(Msg::Value))
-                    .label_hidden()
-                    .view(view! {
+            {FormField::new(id.clone(), tr(Msg::Value))
+                .label_hidden()
+                .view(
+                    view! {
                         <input
                             type="text"
                             id=id.clone()
@@ -359,8 +365,9 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
                             class=format!("{INPUT} fui-mono")
                             autocomplete="off"
                         />
-                    })}
-                {remove_button(&format!("{id}-row"), tr(Msg::RemoveThisValue))}
+                    },
+                )}
+            {remove_button(&format!("{id}-row"), tr(Msg::RemoveThisValue))}
         };
         keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
     };
@@ -401,7 +408,12 @@ fn setting(row: &str, field: &Field, held: &toml::Table) -> AnyView {
             FormField::new(id.clone(), tr(field.label))
                 .after(error_line(&id))
                 .view(view! {
-                    <select id=id.clone() name=name("value") class=SELECT aria-describedby=error_id(&id)>
+                    <select
+                        id=id.clone()
+                        name=name("value")
+                        class=SELECT
+                        aria-describedby=error_id(&id)
+                    >
                         {options}
                     </select>
                 })
@@ -657,10 +669,7 @@ pub(super) fn credential_form(
         {back(title.clone())}
         {head(
             ("credential-title", title),
-            (
-                tr(Msg::SavedRevisionOnceAppliedAwaitsConfirmation),
-                "commit-confirm",
-            ),
+            (tr(Msg::SavedRevisionOnceAppliedAwaitsConfirmation), "commit-confirm"),
             (),
         )}
         {form("main", "fui-stack", body)}

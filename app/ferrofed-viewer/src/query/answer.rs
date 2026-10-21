@@ -142,7 +142,9 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
     let elapsed = answer.elapsed_ms.map(|elapsed| {
         view! {
             <span aria-hidden="true">"·"</span>
-            <span class="fui-num">{tr_with(Msg::Ms2, &[("elapsed", (elapsed).to_string().into())])}</span>
+            <span class="fui-num">
+                {tr_with(Msg::Ms2, &[("elapsed", (elapsed).to_string().into())])}
+            </span>
         }
     });
     let dedup = answer.dedup.clone().map(|mode| {
@@ -152,7 +154,12 @@ fn summary_section(answer: &QueryAnswer) -> AnyView {
             .unwrap_or_default();
         view! {
             <span aria-hidden="true">"·"</span>
-            <span>{tr_with(Msg::Deduplication2, &[("mode", (mode).clone().into()), ("suppressed", (suppressed).clone().into())])}</span>
+            <span>
+                {tr_with(
+                    Msg::Deduplication2,
+                    &[("mode", (mode).clone().into()), ("suppressed", (suppressed).clone().into())],
+                )}
+            </span>
         }
     });
     view! {
@@ -185,7 +192,9 @@ fn outcome_section(answer: &QueryAnswer) -> AnyView {
             Announce::Alert,
             None,
             view! {
-                <strong>{tr_with(Msg::GatewayFailedQuery, &[("status", (status).to_string().into())])}</strong>
+                <strong>
+                    {tr_with(Msg::GatewayFailedQuery, &[("status", (status).to_string().into())])}
+                </strong>
                 {why}
                 {tr(Msg::NodesBelowSayWhatEachOne)}
             },
@@ -225,7 +234,11 @@ fn nodes_section(endpoints: &[EndpointLine]) -> AnyView {
                 view! { <span class="fui-muted fui-num">{counted_u64(count)}</span> }
             });
             let latency = endpoint.latency_ms.map(|latency| {
-                view! { <span class="fui-muted fui-num">{tr_with(Msg::Ms3, &[("latency", (latency).to_string().into())])}</span> }
+                view! {
+                    <span class="fui-muted fui-num">
+                        {tr_with(Msg::Ms3, &[("latency", (latency).to_string().into())])}
+                    </span>
+                }
             });
             view! {
                 <span class="fui-mono">{endpoint.id.clone()}</span>
@@ -308,24 +321,49 @@ pub(crate) fn endpoints_table(endpoints: &[EndpointLine]) -> AnyView {
         .map(|endpoint| {
             view! {
                 <tr>
-                    <th scope="row" class="fui-mono">{endpoint.id.clone()}</th>
+                    <th scope="row" class="fui-mono">
+                        {endpoint.id.clone()}
+                    </th>
                     <td data-label=tr(Msg::Status)>{endpoint.status.clone()}</td>
-                    {latency.then(|| view! {
-                        <td data-label=tr(Msg::Latency) class=NUM>
-                            {reported(endpoint.latency_ms.map(|latency| tr_with(Msg::Ms4, &[("latency", (latency).to_string().into())])))}
-                        </td>
-                    })}
-                    {counted.then(|| view! {
-                        <td data-label=tr(Msg::Rows) class=NUM>
-                            {reported(endpoint.row_count.map(|count| count.to_string()))}
-                        </td>
-                    })}
-                    {organised.then(|| view! {
-                        <td data-label=tr(Msg::Organisation)>{reported(endpoint.organisation.clone())}</td>
-                    })}
-                    {failed.then(|| view! {
-                        <td data-label=tr(Msg::Error)>{reported(endpoint.error.clone())}</td>
-                    })}
+                    {latency
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(Msg::Latency) class=NUM>
+                                    {reported(
+                                        endpoint
+                                            .latency_ms
+                                            .map(|latency| tr_with(
+                                                Msg::Ms4,
+                                                &[("latency", (latency).to_string().into())],
+                                            )),
+                                    )}
+                                </td>
+                            }
+                        })}
+                    {counted
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(Msg::Rows) class=NUM>
+                                    {reported(endpoint.row_count.map(|count| count.to_string()))}
+                                </td>
+                            }
+                        })}
+                    {organised
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(
+                                    Msg::Organisation,
+                                )>{reported(endpoint.organisation.clone())}</td>
+                            }
+                        })}
+                    {failed
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(
+                                    Msg::Error,
+                                )>{reported(endpoint.error.clone())}</td>
+                            }
+                        })}
                 </tr>
             }
         })
@@ -384,12 +422,7 @@ fn cell(value: &str, label: &str) -> AnyView {
     } else {
         timestamp(value).into_any()
     };
-    view! {
-        <td data-label=label.to_owned()>
-            {shown}
-        </td>
-    }
-    .into_any()
+    view! { <td data-label=label.to_owned()>{shown}</td> }.into_any()
 }
 
 /// The rows, under the columns as the gateway renders them (§9.4), in the

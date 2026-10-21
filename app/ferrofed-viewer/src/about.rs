@@ -134,11 +134,7 @@ pub fn about(gateway: String) -> String {
         .map(|(title, rows)| facts(title, rows))
         .collect_view();
     view! {
-        {page_header(
-            tr(Msg::About),
-            Some(tr(Msg::ProductGatewayReadsWhoMakes)),
-            (),
-        )}
+        {page_header(tr(Msg::About), Some(tr(Msg::ProductGatewayReadsWhoMakes)), ())}
         {grid_start(cards)}
     }
     .to_html()

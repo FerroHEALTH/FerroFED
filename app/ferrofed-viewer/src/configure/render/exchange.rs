@@ -68,7 +68,9 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
         view! {
             <a href=format!("/configuration/history?compare={id}") class=Variant::Ghost.class()>
                 {tr(Msg::CompareWithRunning)}
-                <span class="fui-sr-only">{tr_with(Msg::Revision, &[("id", (id).to_string().into())])}</span>
+                <span class="fui-sr-only">
+                    {tr_with(Msg::Revision, &[("id", (id).to_string().into())])}
+                </span>
             </a>
         }
     });
@@ -78,14 +80,14 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
     view! {
         <li class="fui-stack">
             <div class="fui-cluster">
-                <h3 class="fui-card-title">{tr_with(Msg::Revision2, &[("id", (id).to_string().into())])}</h3>
+                <h3 class="fui-card-title">
+                    {tr_with(Msg::Revision2, &[("id", (id).to_string().into())])}
+                </h3>
                 {origin(revision)}
                 {standing(revision, (running, previous))}
             </div>
             <p class="fui-muted">
-                {author(&revision.author)}
-                " · "
-                {timestamp(&revision.at.to_string())}
+                {author(&revision.author)} " · " {timestamp(&revision.at.to_string())}
             </p>
             <p class="fui-small">{revision.reason.clone()}</p>
             <div class="fui-cluster">
@@ -126,10 +128,7 @@ pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {head(
             ("history-title", tr(Msg::History)),
-            (
-                tr(Msg::EveryRevisionWhoMadeWhyEach),
-                "export-and-import",
-            ),
+            (tr(Msg::EveryRevisionWhoMadeWhyEach), "export-and-import"),
             (),
         )}
         <p class="fui-help">{shown}</p>
@@ -198,10 +197,7 @@ pub(super) fn export(loaded: &Loaded<'_>) -> AnyView {
         <section class="fui-card" aria-labelledby="export-title">
             {head(
                 ("export-title", tr(Msg::Export)),
-                (
-                    tr(Msg::ConfigurationLessBootstrapCoreEachSecret),
-                    "export-and-import",
-                ),
+                (tr(Msg::ConfigurationLessBootstrapCoreEachSecret), "export-and-import"),
                 (),
             )}
             {download}
@@ -216,41 +212,45 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
         {hidden("action", String::from("import"))}
         {hidden("base", loaded.base())}
         {Field::new("cfg-toml", tr(Msg::Toml))
-            .after(view! {
-                <p id="cfg-toml-lines" class="fui-help">
-                    {tr(Msg::N0Lines)}
-                </p>
-                {error_line("cfg-toml")}
-            })
-            .view(view! {
-                <textarea
-                    id="cfg-toml"
-                    name="form[toml]"
-                    rows="12"
-                    spellcheck="false"
-                    required
-                    class=format!("{TEXTAREA} fui-mono")
-                    data-lines="cfg-toml-lines"
-                    aria-describedby="cfg-toml-lines cfg-toml-error"
-                ></textarea>
-            })}
+            .after(
+                view! {
+                    <p id="cfg-toml-lines" class="fui-help">
+                        {tr(Msg::N0Lines)}
+                    </p>
+                    {error_line("cfg-toml")}
+                },
+            )
+            .view(
+                view! {
+                    <textarea
+                        id="cfg-toml"
+                        name="form[toml]"
+                        rows="12"
+                        spellcheck="false"
+                        required
+                        class=format!("{TEXTAREA} fui-mono")
+                        data-lines="cfg-toml-lines"
+                        aria-describedby="cfg-toml-lines cfg-toml-error"
+                    ></textarea>
+                },
+            )}
         {reason()}
         <div class="fui-action-bar">
             <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-import-hint">
                 {tr(Msg::ImportDryRunRevision)}
             </button>
             <p id="cfg-import-hint" class="fui-help">
-                {tr_with(Msg::SavedNotAppliedOutcomeShowsWhat, &[("loaded", (loaded.next()).clone().into())])}
+                {tr_with(
+                    Msg::SavedNotAppliedOutcomeShowsWhat,
+                    &[("loaded", (loaded.next()).clone().into())],
+                )}
             </p>
         </div>
     };
     view! {
         {head(
             ("import-title", tr(Msg::Import)),
-            (
-                tr(Msg::PasteTomlExportWroteOneKept),
-                "export-and-import",
-            ),
+            (tr(Msg::PasteTomlExportWroteOneKept), "export-and-import"),
             (),
         )}
         {form("main", "fui-stack", body)}

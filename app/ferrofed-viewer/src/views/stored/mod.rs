@@ -120,12 +120,11 @@ pub fn StoredQueriesPage() -> impl IntoView {
     let repair = ServerAction::<RepairDrift>::new();
     view! {
         <Title text=titled(&tr(Msg::StoredQueries)) />
-        {page_header(
-            tr(Msg::StoredQueries),
-            Some(tr(Msg::QueriesGatewayHoldsNamespace)),
-            (),
-        )}
-        <Transition fallback=|| busy(tr(Msg::LoadingTheStoredQueries), Busy::Section)>
+        {page_header(tr(Msg::StoredQueries), Some(tr(Msg::QueriesGatewayHoldsNamespace)), ())}
+        <Transition fallback=|| busy(
+            tr(Msg::LoadingTheStoredQueries),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| list_section(view, repair))
             })}
@@ -147,11 +146,13 @@ fn list_section(view: StoredView, repair: ServerAction<RepairDrift>) -> AnyView 
     let repair = crate::admin::repair_section(repair, view.repair_form);
     view! {
         {answered_by}
-        {stack(view! {
-            <div inner_html=view.html></div>
-            {stored_pager}
-            {repair}
-        })}
+        {stack(
+            view! {
+                <div inner_html=view.html></div>
+                {stored_pager}
+                {repair}
+            },
+        )}
     }
     .into_any()
 }
@@ -181,13 +182,14 @@ pub fn StoredQueryPage() -> impl IntoView {
     let loaded = Resource::new_blocking(asked, |(name, version)| stored_query(name, version));
     view! {
         <Title text=move || titled(&name()) />
-        <Transition fallback=|| busy(tr(Msg::LoadingTheStoredQuery), Busy::Section)>
+        <Transition fallback=|| busy(
+            tr(Msg::LoadingTheStoredQuery),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
-                    |detail| {
-                        view! { <div inner_html=detail.html></div> }.into_any()
-                    },
+                    |detail| { view! { <div inner_html=detail.html></div> }.into_any() },
                 )
             })}
         </Transition>

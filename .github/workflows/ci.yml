@@ -790,6 +790,13 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
+      # The console's view! bodies are formatted by leptosfmt, which rustfmt
+      # leaves alone (#1155). install-action's manifest has no leptosfmt, so a
+      # version-pinned `cargo install --locked` builds it; it runs before
+      # rustfmt, whose chain breaks depend on where leptosfmt left them.
+      - name: Install leptosfmt
+        run: cargo install leptosfmt --locked --version 0.1.33
+      - run: leptosfmt --check app/ferrofed-viewer/src app/ferrofed-viewer/tests
       - run: cargo fmt --all --check
 
   # fuzz/ is a cargo-fuzz crate outside the workspace with its own lockfile

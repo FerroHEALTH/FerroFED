@@ -128,7 +128,12 @@ fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>) -> AnyView 
         })
         .collect_view();
     let select = view! {
-        <select id="cfg-section" name="form[section]" class=SELECT aria-describedby=error_id("cfg-section")>
+        <select
+            id="cfg-section"
+            name="form[section]"
+            class=SELECT
+            aria-describedby=error_id("cfg-section")
+        >
             {options}
         </select>
     };
@@ -267,10 +272,7 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
         {back(title.clone())}
         {head(
             ("binding-title", title),
-            (
-                tr(Msg::EachSettingOwnFieldNumberTrue),
-                "credentials-and-binding-sections",
-            ),
+            (tr(Msg::EachSettingOwnFieldNumberTrue), "credentials-and-binding-sections"),
             (),
         )}
         {form("main", "fui-stack", body)}

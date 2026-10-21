@@ -98,7 +98,7 @@ in `ci.yml` and `release-viewer.yml`, so every comparison runs.
 
 **Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
-`needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt,
+`needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt (after leptosfmt over the console's `view!` bodies, #1155),
 clippy at `-D warnings`, nextest plus doctests, rustdoc, `cargo deny check`,
 MSRV through `cargo hack check --rust-version`, and `dependency-review` on
 pull requests. Each lane mirrors the local command in `.claude/rules/ci-cd.md`.

@@ -88,7 +88,14 @@ pub(crate) fn replica_said<T>(
         Acted::Refused(Refusal::NotAuthenticated { code }) => {
             let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
             refused_by(view! {
-                {tr_with(Msg::ReplicaDidNotAcceptYourSign, &[("replica", (replica).to_string().into()), ("what", (what).to_string().into()), ("code", (code).clone().into())])}
+                {tr_with(
+                    Msg::ReplicaDidNotAcceptYourSign,
+                    &[
+                        ("replica", (replica).to_string().into()),
+                        ("what", (what).to_string().into()),
+                        ("code", (code).clone().into()),
+                    ],
+                )}
                 <a href=crate::app::SIGN_IN rel="external">
                     {tr(Msg::SignInAgain)}
                 </a>
@@ -147,8 +154,23 @@ fn clear_line(replica: &str, line: &ClearLine) -> AnyView {
         Announce::Status,
         None,
         view! {
-            <strong>{tr_with(Msg::ReplicaCleared, &[("replica", (replica).to_string().into()), ("ehr_id", (ehr_id).clone().into())])}</strong>
-            {tr_with(Msg::ForgotBindingsSessions, &[("held", (held).clone().into()), ("index", (index).clone().into()), ("sessions", (line.sessions).to_string().into())])}
+            <strong>
+                {tr_with(
+                    Msg::ReplicaCleared,
+                    &[
+                        ("replica", (replica).to_string().into()),
+                        ("ehr_id", (ehr_id).clone().into()),
+                    ],
+                )}
+            </strong>
+            {tr_with(
+                Msg::ForgotBindingsSessions,
+                &[
+                    ("held", (held).clone().into()),
+                    ("index", (index).clone().into()),
+                    ("sessions", (line.sessions).to_string().into()),
+                ],
+            )}
         },
     )
     .into_any()
@@ -193,7 +215,16 @@ fn repair_line(replica: &str, line: &RepairLine) -> AnyView {
     let endpoints = crate::query::answer::endpoints_table(&line.endpoints);
     view! {
         <p>
-            {tr_with(Msg::ReplicaSentVersionAgain, &[("replica", (replica).to_string().into()), ("name", (line.name).clone().into()), ("version", (line.version).clone().into()), ("status", (line.status).to_string().into()), ("registry", (registry).clone().into())])}
+            {tr_with(
+                Msg::ReplicaSentVersionAgain,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("name", (line.name).clone().into()),
+                    ("version", (line.version).clone().into()),
+                    ("status", (line.status).to_string().into()),
+                    ("registry", (registry).clone().into()),
+                ],
+            )}
         </p>
         {completeness}
         {endpoints}

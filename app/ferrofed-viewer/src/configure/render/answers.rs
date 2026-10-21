@@ -54,7 +54,12 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
     let id = line.revision.id;
     let preview = match (&line.changes, line.running) {
         (Some(changes), Some(running)) => view! {
-            <p>{tr_with(Msg::WhatChangesAgainstRunningRevision, &[("running", (running).to_string().into())])}</p>
+            <p>
+                {tr_with(
+                    Msg::WhatChangesAgainstRunningRevision,
+                    &[("running", (running).to_string().into())],
+                )}
+            </p>
             {diff_table(changes, (Some(running), id))}
         }
         .into_any(),
@@ -67,10 +72,20 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
         .into_any(),
     };
     view! {
-        {said(view! {
-            <strong>{tr_with(Msg::ReplicaSavedRevision, &[("replica", (replica).to_string().into()), ("id", (id).to_string().into())])}</strong>
-            {tr(Msg::NotAppliedApplyFromCardTop)}
-        })}
+        {said(
+            view! {
+                <strong>
+                    {tr_with(
+                        Msg::ReplicaSavedRevision,
+                        &[
+                            ("replica", (replica).to_string().into()),
+                            ("id", (id).to_string().into()),
+                        ],
+                    )}
+                </strong>
+                {tr(Msg::NotAppliedApplyFromCardTop)}
+            },
+        )}
         {preview}
     }
     .into_any()
@@ -105,7 +120,14 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
         .map(|_| tr(Msg::AwaitsYourConfirmationConfirmCardTop));
     said(view! {
         <strong>
-            {tr_with(Msg::ReplicaAppliedRevision, &[("replica", (replica).to_string().into()), ("id", (line.revision.id).to_string().into()), ("restored", (restored).clone().into())])}
+            {tr_with(
+                Msg::ReplicaAppliedRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("id", (line.revision.id).to_string().into()),
+                    ("restored", (restored).clone().into()),
+                ],
+            )}
         </strong>
         " "
         {mark_said(&line.current)}
@@ -127,7 +149,14 @@ pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
 fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
     said(view! {
         <strong>
-            {tr_with(Msg::ReplicaStoredVersion, &[("replica", (replica).to_string().into()), ("name", (line.name).clone().into()), ("version", (line.version).clone().into())])}
+            {tr_with(
+                Msg::ReplicaStoredVersion,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("name", (line.name).clone().into()),
+                    ("version", (line.version).clone().into()),
+                ],
+            )}
         </strong>
     })
 }
@@ -146,11 +175,26 @@ pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
 fn imported_line(replica: &str, line: &Imported) -> AnyView {
     let id = line.revision.id;
     view! {
-        {said(view! {
-            <strong>{tr_with(Msg::ReplicaImportedRevisionDryRun, &[("replica", (replica).to_string().into()), ("id", (id).to_string().into())])}</strong>
-            {tr(Msg::NotAppliedApplyFromCardTop)}
-        })}
-        <p>{tr_with(Msg::WhatChangesAgainstRunningRevision2, &[("from", (line.diff.from).to_string().into())])}</p>
+        {said(
+            view! {
+                <strong>
+                    {tr_with(
+                        Msg::ReplicaImportedRevisionDryRun,
+                        &[
+                            ("replica", (replica).to_string().into()),
+                            ("id", (id).to_string().into()),
+                        ],
+                    )}
+                </strong>
+                {tr(Msg::NotAppliedApplyFromCardTop)}
+            },
+        )}
+        <p>
+            {tr_with(
+                Msg::WhatChangesAgainstRunningRevision2,
+                &[("from", (line.diff.from).to_string().into())],
+            )}
+        </p>
         {diff_table(&line.diff.changes, (Some(line.diff.from), id))}
     }
     .into_any()
