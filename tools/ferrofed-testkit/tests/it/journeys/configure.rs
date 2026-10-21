@@ -17,7 +17,8 @@ use std::error::Error;
 
 use ferrofed_testkit::mock::Server;
 use ferrofed_viewer::app::PRODUCT;
-use thirtyfour::{By, Key};
+use thirtyfour::error::{WebDriverError, WebDriverErrorInner};
+use thirtyfour::{By, Key, WebElement};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -130,6 +131,42 @@ pub(crate) async fn hydrated(
         .map_err(|error| format!("the configuration page never hydrated: {error}").into())
 }
 
+/// Whether `error` says the element it read is no longer in the page: the
+/// page re-rendered it between the read that found it and the next.
+pub(crate) fn stale(error: &WebDriverError) -> bool {
+    matches!(**error, WebDriverErrorInner::StaleElementReference(..))
+}
+
+/// Reads `read` of the element the focus is on, read afresh on every poll,
+/// until `holds` holds of it; an element the page re-renders between two
+/// reads is read again on the next poll, never retried as it was.
+async fn until_focused<T, R, H>(
+    browser: &Browser,
+    what: &str,
+    read: R,
+    holds: H,
+) -> Result<WebElement, Box<dyn Error>>
+where
+    R: AsyncFn(&WebElement) -> Result<T, WebDriverError>,
+    H: Fn(&T) -> bool,
+{
+    let mut found = None;
+    until(what, async || {
+        let focused = browser.driver().active_element().await?;
+        match read(&focused).await {
+            Ok(value) if holds(&value) => {
+                found = Some(focused);
+                Ok(true)
+            }
+            Ok(_) => Ok(false),
+            Err(error) if stale(&error) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    })
+    .await?;
+    found.ok_or_else(|| format!("{what}, and no element held the focus").into())
+}
+
 /// Opens the confirmation step `id` from its button, and runs it with its
 /// submit, which the focus moved to as it opened.
 pub(crate) async fn confirmed(browser: &Browser, id: &str) -> Result<(), Box<dyn Error>> {
@@ -143,29 +180,28 @@ pub(crate) async fn confirmed(browser: &Browser, id: &str) -> Result<(), Box<dyn
     browser
         .element(By::Css(format!("#{id}:popover-open")))
         .await?;
-    let focused = browser.driver().active_element().await?;
-    assert_eq!(
-        Some(String::from("submit")),
-        focused.attr("type").await?,
-        "the focus moves into the confirmation step"
-    );
-    focused.click().await?;
+    let submit = until_focused(
+        browser,
+        "the focus moves into the confirmation step",
+        async |focused| focused.attr("type").await,
+        |kind| kind.as_deref() == Some("submit"),
+    )
+    .await?;
+    submit.click().await?;
     Ok(())
 }
 
-/// Waits until the focus is on the outcome of the last form.
+/// Waits until the focus is on the outcome of the last form, which the save
+/// re-renders.
 pub(crate) async fn focused_on_outcome(browser: &Browser) -> Result<(), Box<dyn Error>> {
-    until("the focus is on the outcome", async || {
-        Ok(browser
-            .driver()
-            .active_element()
-            .await?
-            .id()
-            .await?
-            .as_deref()
-            == Some("config-outcome"))
-    })
-    .await
+    until_focused(
+        browser,
+        "the focus is on the outcome",
+        async |focused| focused.id().await,
+        |id| id.as_deref() == Some("config-outcome"),
+    )
+    .await?;
+    Ok(())
 }
 
 /// The bodies `admin` received at `route`.
