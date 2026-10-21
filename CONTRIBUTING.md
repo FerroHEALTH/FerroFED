@@ -93,10 +93,10 @@ with the Chrome it launched, when its browser closes, so the journeys run in
 parallel and share no driver. `FERROFED_CHROMEDRIVER` names another
 chromedriver, and without either the journeys use the one on `PATH`.
 
-`viewer-tools.sh` installs the Tailwind CSS CLI and wasm-opt the bundle is
-built with, each checked against its pinned SHA-256 (Linux x86-64 and macOS
-arm64), and `viewer-site.sh` refuses to build until both are on `PATH`, so
-cargo-leptos never downloads either itself.
+`viewer-tools.sh` installs the wasm-opt the bundle is built with, checked
+against its pinned SHA-256 (Linux x86-64 and macOS arm64), and
+`viewer-site.sh` refuses to build until it is on `PATH`, so cargo-leptos never
+downloads it itself.
 `FERROFED_WEBDRIVER` names a running WebDriver endpoint every journey shares
 instead, and `FERROFED_CHROME` another Chrome binary. A journey lives in the
 testkit's `tests/it/journeys/`, where the guard above keeps it.

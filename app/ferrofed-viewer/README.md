@@ -34,10 +34,9 @@ scripts/release/viewer-site.sh --release
 cargo build --release -p ferrofed-viewer
 ```
 
-The first line installs the Tailwind CSS CLI and wasm-opt at their pinned
-releases, each checked against its SHA-256, and the site script refuses to
-run cargo-leptos unless the ones on `PATH` match those digests, so it never
-downloads either itself. That writes the site bundle under `target/site`
+The first line installs wasm-opt at its pinned release, checked against its
+SHA-256, and the site script refuses to run cargo-leptos unless the one on
+`PATH` matches those digests, so it never downloads it itself. That writes the site bundle under `target/site`
 and the server binary under `target/release`.
 `ferrofed-viewer --config viewer.toml serve` runs it,
 `config check` checks a configuration without binding a socket, and

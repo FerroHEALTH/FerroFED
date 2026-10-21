@@ -1280,9 +1280,9 @@ jobs:
         uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: wasm-bindgen@0.2.129
-      # Pinned and checked against their SHA-256 before use, so cargo-leptos
-      # finds both on PATH and downloads neither itself.
-      - name: Install the Tailwind CSS CLI and wasm-opt
+      # Pinned and checked against its SHA-256 before use, so cargo-leptos
+      # finds it on PATH and never downloads it itself.
+      - name: Install wasm-opt
         run: |
           bash scripts/release/viewer-tools.sh "$RUNNER_TEMP/viewer-tools"
           echo "$RUNNER_TEMP/viewer-tools/bin" >> "$GITHUB_PATH"
@@ -1330,9 +1330,9 @@ jobs:
         uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: wasm-bindgen@0.2.129
-      # Pinned and checked against their SHA-256 before use, so cargo-leptos
-      # finds both on PATH and downloads neither itself.
-      - name: Install the Tailwind CSS CLI and wasm-opt
+      # Pinned and checked against its SHA-256 before use, so cargo-leptos
+      # finds it on PATH and never downloads it itself.
+      - name: Install wasm-opt
         run: |
           bash scripts/release/viewer-tools.sh "$RUNNER_TEMP/viewer-tools"
           echo "$RUNNER_TEMP/viewer-tools/bin" >> "$GITHUB_PATH"
