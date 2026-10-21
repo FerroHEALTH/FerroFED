@@ -7,8 +7,8 @@
 # envelope v2 JSON Schema and its valid and invalid examples. It reads the
 # pin from the "FerroPULSE report envelope v2" row of docs/VERSIONS.md (a
 # commit and the sha256 of the schema), copies the files verbatim into
-# docs/specs/ferropulse/, checks the
-# schema against the pinned digest, and writes a PROVENANCE.md beside them.
+# docs/specs/ferropulse/, checks the schema against the pinned digest, and
+# writes a PROVENANCE.md beside them.
 # The server's tests validate every report it builds against the schema.
 # FerroPULSE owns the contract; never hand-edit the copy, move the pin and
 # re-run.
