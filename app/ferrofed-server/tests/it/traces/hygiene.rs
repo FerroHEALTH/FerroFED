@@ -19,8 +19,9 @@ use super::{Exported, NAMESPACE, TestResult, named, resolving};
 use crate::facade::{gateway, node_answering, registry};
 use crate::support::{MINTED_REQUEST_ID, is_minted_form, send};
 
-/// The synthetic patient identifier, under the example OID arc.
-const PATIENT: &str = "12345";
+/// The synthetic patient identifier, under the example OID arc, with letters
+/// so no timing or count a span records can spell it (#1198).
+const PATIENT: &str = "synthetic-patient-q8z";
 
 /// A literal of the query that is no identifier, which no span may quote
 /// either.

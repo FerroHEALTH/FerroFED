@@ -29,12 +29,13 @@ use super::{NAMESPACE, TestResult, resolving};
 use crate::facade::{body, node_answering, registry};
 use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, signed};
 
-/// The synthetic patient identifier, under the example OID arc.
-const PATIENT: &str = "12345";
+/// The synthetic patient identifier, under the example OID arc, with letters
+/// so no timing or count a span records can spell it (#1198).
+const PATIENT: &str = "Qz7pt";
 
 /// [`PATIENT`] written as the hexadecimal of its ASCII bytes, the form a
 /// client can hide it in inside a trace id.
-const HEX_PATIENT: &str = "3132333435";
+const HEX_PATIENT: &str = "517a377074";
 
 /// The client's trace id: [`HEX_PATIENT`], zero-padded to 32 digits.
 static CLIENT_TRACE: LazyLock<String> = LazyLock::new(|| format!("{HEX_PATIENT:0>32}"));
