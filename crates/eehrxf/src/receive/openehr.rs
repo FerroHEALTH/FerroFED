@@ -22,7 +22,7 @@ use std::fmt;
 
 use fhir_types::r4::operation_outcome::OperationOutcome;
 use fhir_types::r4::schema::SCHEMAS;
-use fhirconnect::engine::traverse::functions::NoMappingFunctions;
+use fhirconnect::engine::seam::Seams;
 use fhirconnect::operations::contract::ToOpenehrRequest;
 use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run;
@@ -124,7 +124,7 @@ impl Mapping {
         let response = run::to_openehr(
             self.programs(),
             &SCHEMAS,
-            &NoMappingFunctions,
+            &Seams::default(),
             settings,
             &request,
         )

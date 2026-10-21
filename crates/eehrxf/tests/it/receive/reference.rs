@@ -393,7 +393,13 @@ proptest! {
         };
         for holder in [COMPOSITION, PATIENT, ALLERGY] {
             if document.resolve(holder, &reference) == Ok(Target::Entry(PATIENT)) {
-                prop_assert!(PATIENT_SPELLINGS.contains(&text.as_str()), "{text:?} from {holder}");
+                // NOTE: FHIR R4 references.html §2.3.0.4: `#` alone names the holding
+                // resource, so from the Patient entry it names the Patient entry.
+                let itself = holder == PATIENT && text == "#";
+                prop_assert!(
+                    itself || PATIENT_SPELLINGS.contains(&text.as_str()),
+                    "{text:?} from {holder}"
+                );
             }
         }
     }
