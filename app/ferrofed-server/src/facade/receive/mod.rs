@@ -191,7 +191,7 @@ async fn resolve(
         return Err(Unresolved::NoIdentifier);
     };
     let first = PatientIdentifier {
-        namespace: first.system.clone(),
+        namespace: Some(first.system.clone()),
         value: SecretString::from(first.value.clone()),
     };
     let resolver = federation.resolver().ok_or(Unresolved::NoResolver)?;
@@ -379,6 +379,7 @@ fn accessed(
         template_id: Some(prepared.composition.template_id().to_owned()),
         archetype_id: Some(model.archetype_node_id.clone()),
         version_uid: written.and_then(WrittenVersion::named).map(str::to_owned),
+        kind: None,
     };
     let category = ehds_logging::category::Category::priority(prepared.category.code());
     let mut evidence = Evidence::reached(Basis::Written, vec![object]);

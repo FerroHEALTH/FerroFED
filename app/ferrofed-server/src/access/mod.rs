@@ -276,10 +276,10 @@ impl Accessed {
             .origins
             .iter()
             .map(|asked| Origin {
-                endpoint: asked.endpoint.clone(),
+                endpoint: Some(asked.endpoint.clone()),
                 node: asked.node.clone(),
                 system_id: asked.system_id.clone(),
-                status: asked.status.clone(),
+                status: Some(asked.status.clone()),
                 rows: asked.rows,
                 version: asked.version.clone(),
                 created_ehr: asked.created_ehr.clone(),
@@ -308,14 +308,17 @@ impl Accessed {
             action: self.action,
             recorded,
             outcome: outcome(status),
+            outcome_description: None,
             accessor,
             subject: self.subject.clone(),
             categories,
             delivered: self.delivered,
             origins,
+            origin_count: None,
             request: ehds_logging::record::Request {
-                id: outbound.to_owned(),
+                id: Some(outbound.to_owned()),
                 operation: self.operation.to_owned(),
+                operation_system: None,
                 resource: self.resource.clone(),
                 query: self.query.clone(),
                 stored_query: self.stored_query.clone(),
@@ -387,20 +390,22 @@ fn outcome(status: StatusCode) -> Outcome {
 fn accessor(caller: &Caller) -> Accessor {
     let requester = caller.requester();
     Accessor {
-        issuer: caller.issuer().to_owned(),
+        issuer: Some(caller.issuer().to_owned()),
         subject: caller.subject().to_owned(),
-        client_id: caller.client_id().to_owned(),
+        client_id: Some(caller.client_id().to_owned()),
         audience: caller.audience().map(str::to_owned),
         provider: requester
             .map(|requester| requester.organisation().to_owned())
             .or_else(|| caller.organisation().map(str::to_owned)),
         // NOTE: Annex II 3.2(b), no specification governs the mapping: our own design; only
         // a caller authentication verified as a natural person is recorded as one.
-        acting: if caller.acting() == Acting::Person {
+        acting: Some(if caller.acting() == Acting::Person {
             ehds_logging::record::Acting::Person
         } else {
             ehds_logging::record::Acting::Client
-        },
+        }),
+        roles: Vec::new(),
+        token_id: None,
         assurance: caller.assurance().map(|level| match level {
             AssuranceLevel::Low => ehds_logging::record::AssuranceLevel::Low,
             AssuranceLevel::Substantial => ehds_logging::record::AssuranceLevel::Substantial,

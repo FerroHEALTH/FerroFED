@@ -408,11 +408,11 @@ async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> Tes
     for (transaction, profile) in [
         (
             Transaction::Search,
-            ihe_iti::pdqm::audit::QUERY_CONSUMER.profile,
+            ihe_iti::pdqm::audit::query_consumer().profile,
         ),
         (
             Transaction::Match,
-            ihe_iti::pdqm::audit::MATCH_CONSUMER.profile,
+            ihe_iti::pdqm::audit::match_consumer().profile,
         ),
     ] {
         let kept = Arc::new(Recorder::default());

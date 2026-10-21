@@ -231,6 +231,7 @@ pub(crate) fn resolve(
                 .clone()
                 .unwrap_or_else(|| table.hostname.clone()),
             enterprise_site: table.enterprise_site.clone(),
+            type_codes: Vec::new(),
         },
         sender,
         spool_dir: table.spool_dir.clone(),

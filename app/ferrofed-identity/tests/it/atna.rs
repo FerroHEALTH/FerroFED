@@ -118,6 +118,7 @@ fn recorder(repository: &AuditRepository, spool: Spool) -> Result<RepositoryAudi
     let source = AuditSource {
         id: "gateway.example.org".to_owned(),
         enterprise_site: None,
+        type_codes: Vec::new(),
     };
     Ok(RepositoryAudit::new(
         Forwarder::new(spool, connection, RETRY_MAX),
@@ -318,6 +319,7 @@ async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
         AuditSource {
             id: "gateway.example.org".to_owned(),
             enterprise_site: None,
+            type_codes: Vec::new(),
         },
     ));
     let short = Arc::clone(&audit);

@@ -456,7 +456,7 @@ managing_organisation = "org-a"
             endpoint,
             ehr_id: &ehr_id,
             named: PatientIdentifier {
-                namespace: NAMESPACE.to_owned(),
+                namespace: Some(NAMESPACE.to_owned()),
                 value: SecretString::from(PATIENT),
             },
             inserted: None,

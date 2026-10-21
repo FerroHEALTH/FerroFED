@@ -27,8 +27,8 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   (#85).
 - The protocols live in the published, spec-named crates `ihe-iti` (a
   feature per profile, moved to FerroHEALTH/FerroPIX by #367 and pinned from
-  crates.io as `=0.0.40`), `nl-generic-functions` (a feature per function,
-  moved there too and pinned as `=0.0.25`) and `oauth-server-metadata` (RFC
+  crates.io as `=0.0.41`), `nl-generic-functions` (a feature per function,
+  moved there too and pinned as `=0.0.26`) and `oauth-server-metadata` (RFC
   8414, which the onward grants read),
   which depend on nothing in FerroFED; the adapters onto the seams sit in
   `app/ferrofed-identity` (#106, [[published-crate-naming]]). FerroPIX can use

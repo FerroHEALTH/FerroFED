@@ -117,7 +117,7 @@ pub fn feed_repository(
 ) -> Result<FeedRepository, FeedConfigError> {
     let http = fhir::http_client(&Authentication::None, tls).map_err(FeedConfigError::Client)?;
     if cleartext {
-        FeedRepository::cleartext_for_development(base, http, timeout)
+        FeedRepository::cleartext(base, http, timeout)
     } else {
         FeedRepository::new(base, http, timeout)
     }
@@ -254,7 +254,7 @@ impl AuditRecorder for LogFeedAudit {
             .kind
             .subtypes
             .iter()
-            .map(|subtype| subtype.code)
+            .map(|subtype| subtype.code.as_ref())
             .collect();
         // NOTE: Regulation (EU) 2025/327 Annex II 3.2: a client that sent a request may be
         // the application of the person who accessed data, so a log line names no client.
