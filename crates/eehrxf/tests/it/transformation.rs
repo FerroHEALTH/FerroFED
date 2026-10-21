@@ -127,8 +127,9 @@ fn a_report_carries_no_code_value_or_text() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The outcome of a run that declared each kind of loss once, each located
-/// as the engine locates it, and a skipped mapping with no FHIR element.
+/// The outcome of a run that declared each kind of loss, each located as the
+/// engine locates it, a skipped mapping with no FHIR element, and a skipped
+/// reference with no literal reference.
 fn losses() -> Option<fhir_types::r4::operation_outcome::OperationOutcome> {
     issues::of_warnings(&[
         Warning::new(
@@ -158,8 +159,9 @@ fn losses() -> Option<fhir_types::r4::operation_outcome::OperationOutcome> {
                 .with_fhir("AllergyIntolerance.reaction[1].manifestation[0].coding[2].code"),
         ),
         Warning::new(
-            Loss::DeferredReference {
-                reference: REFERENCE.to_owned(),
+            Loss::Skipped {
+                mapping: "allergy.recorder".to_owned(),
+                reason: SkipReason::EmptyReference,
             },
             Location::default().with_fhir("AllergyIntolerance.recorder"),
         ),
