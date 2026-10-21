@@ -168,6 +168,7 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
             .args(["serve", "--config"])
             .arg(file.path())
             .env_remove("FERROFED_CONFIG")
+            .env("FERROFED__USAGE_REPORT__ENABLED", "false")
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,

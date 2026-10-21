@@ -232,6 +232,9 @@ pub struct Metrics {
         )
     )]
     bindings: crate::binding::process::Instruments,
+    /// The window of the installation report, which the request log and the
+    /// node requests record into beside the instruments.
+    usage: Arc<crate::usage_report::window::Window>,
 }
 
 impl Metrics {
@@ -315,7 +318,8 @@ impl Metrics {
                 "Whether this replica runs the configuration revision the store marks running",
             )
             .build();
-        let nodes = Instruments::new(&meter);
+        let usage = Arc::new(crate::usage_report::window::Window::default());
+        let nodes = Instruments::new(&meter).with_usage(Arc::clone(&usage));
         let inbound = inbound::Instruments::new(&meter);
         let security = security::observe(&meter);
         let dispensations = dispensations::observe(&meter);
@@ -333,7 +337,14 @@ impl Metrics {
             _incidents: incidents,
             _audit: crate::audit::metrics::Instruments::new(&meter),
             bindings,
+            usage,
         })
+    }
+
+    /// Returns the window of the installation report.
+    #[must_use]
+    pub const fn usage(&self) -> &Arc<crate::usage_report::window::Window> {
+        &self.usage
     }
 
     /// Returns the node request instruments a federation records through.

@@ -73,6 +73,7 @@
 - [Overload protection](operate/overload.md)
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
+- [The usage report](operate/usage-report.md)
 - [The operator console](operate/operator-console.md)
 - [Hardening](operate/hardening.md)
 - [Troubleshooting](operate/troubleshooting.md)

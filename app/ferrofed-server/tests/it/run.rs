@@ -34,6 +34,7 @@ pub(crate) fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdErr
         .arg("--config")
         .arg(file.path())
         .env_remove("FERROFED_CONFIG")
+        .env("FERROFED__USAGE_REPORT__ENABLED", "false")
         .output()?;
     Ok(output)
 }

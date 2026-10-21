@@ -132,6 +132,7 @@ mod traces;
 mod track10;
 mod transport;
 mod troubleshooting;
+mod usage_report;
 mod versioned_write;
 #[cfg(feature = "binding-ihe")]
 mod xcpd;

@@ -89,3 +89,4 @@ docs/specs/openid|OpenID FAPI 2.0 Security Profile
 docs/specs/openid|OpenID for Verifiable Credential Issuance 1.0
 docs/specs/openid|OpenID for Verifiable Presentations draft 18
 docs/specs/mitz|Mitz closed authorization question
+docs/specs/ferropulse|FerroPULSE report envelope v2

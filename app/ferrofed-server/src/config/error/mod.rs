@@ -174,6 +174,15 @@ pub enum Error {
         /// The key that holds it.
         key: String,
     },
+    /// The collector of the installation report is plain `http` to a host
+    /// that is not a loopback one, or carries credentials.
+    #[error(
+        "{key} must be an https URL, or http to a loopback host, with no user name or password"
+    )]
+    ReportEndpoint {
+        /// The key that holds it.
+        key: String,
+    },
     /// A URL that carries a patient identifier or a credential is not
     /// `https`, outside a configuration marked for development.
     #[error(transparent)]

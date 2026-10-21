@@ -286,6 +286,7 @@ async fn serve_answers_the_exposition_on_the_admin_listener() -> TestResult {
             .args(["serve", "--config"])
             .arg(file.path())
             .env_remove("FERROFED_CONFIG")
+            .env("FERROFED__USAGE_REPORT__ENABLED", "false")
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?,

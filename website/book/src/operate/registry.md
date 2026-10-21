@@ -449,7 +449,7 @@ Ten sections take effect on a reload:
 | `[nl_gf]` | `[audit]` and `[config]` |
 | `[access_log]` | `[fhir]` and `[eehrxf]` |
 | `[auth]`: the issuers, how each is verified, its key set read again | `auth.audience`, and a changed `[server.tls]` or `[metrics.tls]` path |
-| `[trust]`: each issuer's policy, its edge and its purpose of use | |
+| `[trust]`: each issuer's policy, its edge and its purpose of use | `[usage_report]` |
 
 The same reload reads the certificate files of `[server.tls]` and
 `[metrics.tls]` again ([TLS on the listeners](configuration.md#tls-on-the-listeners)).

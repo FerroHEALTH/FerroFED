@@ -19,6 +19,12 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   into this repository (`spec-adherence.md`).
 - `docs/specs/its-rest/`: the openEHR ITS-REST 1.1.0 OpenAPI documents
   (content CC-BY-ND 3.0).
+- `docs/specs/ferropulse/`: FerroPULSE's installation report contract,
+  `docs/report-v2.md`, the envelope v2 JSON Schema and its examples, pinned by
+  commit and schema sha256 and fetched through the authenticated GitHub API
+  (the repository is private; Cadasto B.V. holds the copyright of both), which
+  the usage report tests validate every report against
+  (`scripts/vendor/ferropulse.sh`).
 - `docs/specs/aql/`: the openEHR AQL 1.1.0 specification source, its examples
   and the grammar `.g4` files (CC-BY-SA 3.0).
 - `docs/specs/openehr-rm/`: the openEHR Reference Model 1.1.0 AsciiDoc

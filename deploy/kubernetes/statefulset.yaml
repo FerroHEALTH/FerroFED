@@ -95,6 +95,12 @@ spec:
           env:
             - name: FERROFED_CONFIG
               value: /etc/ferrofed/ferrofed.toml
+            # The installation report to FerroPULSE keeps its instance id on
+            # the writable volume below; set FERROFED__USAGE_REPORT__ENABLED
+            # to "false" to stop it
+            # (https://ferrofed.eu/docs/operate/usage-report.html).
+            - name: FERROFED__USAGE_REPORT__STATE_DIR
+              value: /var/lib/ferrofed/usage-report
           startupProbe:
             httpGet:
               path: /health/readiness
@@ -142,8 +148,9 @@ spec:
             # The ITI-20 audit spool of [xcpd] audit = "repository", with
             # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool",
             # and of [audit] destination = "repository", with
-            # audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool":
-            # the one directory the gateway writes. fsGroup above lets the
+            # audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool",
+            # and the usage report's instance id under usage-report/: the one
+            # directory the gateway writes. fsGroup above lets the
             # gateway write the volume, and it creates each spool under it
             # with mode 0700.
             - name: audit-spool
