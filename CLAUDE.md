@@ -268,7 +268,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`,
   with `balp` and `atna` turning on their audit records, written through
   `ihe-atna`) is owned and published by FerroHEALTH/FerroPIX since #367;
-  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.41"`) and keeps
+  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.43"`) and keeps
   no copy.
 - `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`, `lrza`,
   `nuts-auth`, the FHIR-free request `authorizer` the engine implements, and
