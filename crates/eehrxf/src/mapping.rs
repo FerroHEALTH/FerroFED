@@ -23,6 +23,7 @@ use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::resource::Resource;
 use fhir_types::r4::schema::SCHEMAS;
 use fhirconnect::engine::context::CallContext;
+use fhirconnect::engine::outcome::Warning;
 use fhirconnect::engine::seam::Seams;
 use fhirconnect::model::load::load_set;
 use fhirconnect::model::semantic::StaticMappingCodes;
@@ -177,6 +178,7 @@ impl Mapping {
         settings: &Settings,
     ) -> Result<ToFhirResponse, MappingError> {
         self.run(composition, settings, None)
+            .map(|(response, _)| response)
     }
 
     /// Runs the mapping over one canonical-JSON composition under the call
@@ -197,6 +199,23 @@ impl Mapping {
         context: CallContext,
     ) -> Result<ToFhirResponse, MappingError> {
         self.run(composition, settings, Some(context))
+            .map(|(response, _)| response)
+    }
+
+    /// Runs the mapping as [`Mapping::to_fhir_with`] does, and answers beside
+    /// the Bundle the losses the run declared, typed, in the order the engine
+    /// raised them: the same losses the Bundle's `OperationOutcome` renders.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Mapping::to_fhir`].
+    pub fn to_fhir_with_warnings(
+        &self,
+        composition: &str,
+        settings: &Settings,
+        context: CallContext,
+    ) -> Result<(ToFhirResponse, Vec<Warning>), MappingError> {
+        self.run(composition, settings, Some(context))
     }
 
     /// Runs the mapping over `composition`, under `context` when given.
@@ -205,7 +224,7 @@ impl Mapping {
         composition: &str,
         settings: &Settings,
         context: Option<CallContext>,
-    ) -> Result<ToFhirResponse, MappingError> {
+    ) -> Result<(ToFhirResponse, Vec<Warning>), MappingError> {
         let payload =
             CompositionPayload::parse(composition).map_err(|source| MappingError::Run {
                 source: Box::new(source),
@@ -222,14 +241,15 @@ impl Mapping {
         let refused = |source: OperationError| MappingError::Run {
             source: Box::new(source),
         };
-        let response = run::to_fhir(
+        let (response, warnings) = run::to_fhir_with_warnings(
             &self.programs,
             &SCHEMAS,
             &Seams::default(),
             settings,
             &request,
         )
-        .map_err(refused)?;
+        .map_err(refused)?
+        .into_parts();
         let template = template.ok_or_else(|| refused(OperationError::CanonicalTemplate))?;
         let program = select_by_template(self.programs.programs(), &template)
             .map_err(|source| refused(OperationError::Select { source }))?;
@@ -239,7 +259,7 @@ impl Mapping {
             program.resource().as_str(),
             program.profile().url().as_str(),
         )?;
-        Ok(ToFhirResponse::new(bundle))
+        Ok((ToFhirResponse::new(bundle), warnings))
     }
 }
 

@@ -348,9 +348,9 @@ deployment in the EU must plan for are:
   invariants, its bindings and each entry's own profile are not all
   evaluated, and the constraints the check cannot evaluate are listed
   ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The
-  terminology rules of the exchange format are not yet applied to the
-  patient summary the gateway writes
-  ([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)).
+  patient summary the gateway writes keeps a code in no preferred code
+  system as recorded and does not yet ask a terminology server to translate
+  it ([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
 - **Each replica holds its own resolution bindings.** Behind several
   replicas, a follow-up write that names no node is refused `400`
   `target-required` by a replica that did not resolve the patient. Send

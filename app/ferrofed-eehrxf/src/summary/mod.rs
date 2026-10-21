@@ -19,6 +19,10 @@
 //!   source composition and that member;
 //! - the `OperationOutcome` a lossy run returns is counted in that run's
 //!   transformation report and never becomes an entry of the document;
+//! - a term mapping a run wrote as no coding, because its `match` states a
+//!   broader, a narrower or an unknown relation, is written into the
+//!   section's narrative, naming the member it came from (eHN PS Art 10(3),
+//!   [`eehrxf::terminology::withheld`]);
 //! - a member's data are listed as mapped, beside every other member's,
 //!   never merged with them;
 //! - each section's narrative is generated and says that it is not
@@ -43,6 +47,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use eehrxf::category::Category;
 use eehrxf::document::{Document, DocumentError, EmptyReason};
 use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::terminology::withheld::Withheld;
 use eehrxf::transformation::{Direction, Pin, Report, ReportError};
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use fhir_types::r4::address::Address;
@@ -336,6 +341,7 @@ impl Assembly {
             })
             .collect();
         let mut uncovered: BTreeMap<(usize, String), usize> = BTreeMap::new();
+        let mut withheld = Vec::new();
         for (index, answer) in &answers.answers {
             let origin = origins
                 .get(*index)
@@ -359,7 +365,13 @@ impl Assembly {
                 }
                 let member = self.member(*index, origin)?;
                 for mapping in runs {
-                    entries.extend(self.run(mapping, composition, &member)?);
+                    let (entry, lines) = self.run(mapping, composition, &member)?;
+                    entries.extend(entry);
+                    withheld.extend(
+                        lines
+                            .into_iter()
+                            .map(|line| format!("{line}, from {}.", origin.organisation.shown())),
+                    );
                 }
                 authors.insert(member);
                 self.mapped.insert((*index, composition.uid.clone()));
@@ -367,6 +379,7 @@ impl Assembly {
         }
         let shown = authors_shown(&authors, &self.members, origins);
         let mut paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
+        paragraphs.extend(withheld);
         paragraphs.extend(covered_elsewhere(elsewhere));
         let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {
@@ -389,23 +402,29 @@ impl Assembly {
     }
 
     /// Runs `mapping` over `composition` for the member at `member`, adds
-    /// what it mapped, and returns the `fullUrl` of the mapped resource.
+    /// what it mapped, and returns the `fullUrl` of the mapped resource and
+    /// the narrative line of each term mapping the run wrote as no coding.
     fn run(
         &mut self,
         mapping: &Mapping,
         composition: &Held,
         member: &str,
-    ) -> Result<Option<String>, AssemblyError> {
+    ) -> Result<(Option<String>, Vec<String>), AssemblyError> {
         let context = CallContext::new()
             .with_patient(reference(&self.subject))
             .with_who(reference(&self.device))
             .with_on_behalf_of(reference(member));
-        let answer = mapping
-            .to_fhir_with(&composition.composition, &self.settings, context)
+        let (answer, warnings) = mapping
+            .to_fhir_with_warnings(&composition.composition, &self.settings, context)
             .map_err(|source| AssemblyError::Mapping {
                 template: composition.template.clone(),
                 source,
             })?;
+        let withheld = warnings
+            .iter()
+            .filter_map(Withheld::of)
+            .map(|mapping| mapping.narrative())
+            .collect();
         let resources: Vec<Resource> = answer
             .bundle()
             .entry
@@ -419,7 +438,7 @@ impl Assembly {
             .into_iter()
             .filter(|resource| !matches!(resource, Resource::OperationOutcome(_)))
             .collect();
-        Ok(self.document.add(&entries)?.into_iter().next())
+        Ok((self.document.add(&entries)?.into_iter().next(), withheld))
     }
 
     /// Counts what `mapping` did to a composition of `template`, which it

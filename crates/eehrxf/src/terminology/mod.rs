@@ -21,6 +21,8 @@
 //!   operational template, by which a `local` code is rendered;
 //! - `system` (feature `openehr`): the FHIR `Coding.system` an openEHR
 //!   terminology id is written as, and none for an id with no known system;
+//! - `withheld` (feature `openehr`): a term mapping a FHIRconnect run wrote
+//!   as no coding, read back so the narrative carries it;
 //! - [`expansion`]: the value set expansions a FHIR package carries;
 //! - [`bindings`]: the `required` bindings of a profile checked against
 //!   those expansions, every binding with no expansion named as not
@@ -43,6 +45,8 @@ pub mod system;
 #[cfg(feature = "openehr")]
 pub mod transcode;
 pub(crate) mod walk;
+#[cfg(feature = "openehr")]
+pub mod withheld;
 
 use std::fmt;
 use std::sync::Arc;
