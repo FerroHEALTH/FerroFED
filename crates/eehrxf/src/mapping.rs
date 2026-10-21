@@ -23,7 +23,7 @@ use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::resource::Resource;
 use fhir_types::r4::schema::SCHEMAS;
 use fhirconnect::engine::context::CallContext;
-use fhirconnect::engine::traverse::functions::NoMappingFunctions;
+use fhirconnect::engine::seam::Seams;
 use fhirconnect::model::load::load_set;
 use fhirconnect::model::semantic::StaticMappingCodes;
 use fhirconnect::operations::contract::CompositionPayload;
@@ -225,7 +225,7 @@ impl Mapping {
         let response = run::to_fhir(
             &self.programs,
             &SCHEMAS,
-            &NoMappingFunctions,
+            &Seams::default(),
             settings,
             &request,
         )

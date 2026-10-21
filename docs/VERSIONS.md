@@ -265,7 +265,9 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.87 since 2026-10-15.
+pin is 0.0.90 since 2026-10-21, the line `fhirconnect`, `openehr-mapping-core`
+and `ferrohealth-smart` build on, so the lock holds one copy of each
+member (#1181).
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
 the onward grant (#81) writes and checks the scope it requests with it, and client
@@ -273,11 +275,11 @@ authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.87 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.87 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.87 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.87 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.87 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.90 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.90 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -343,6 +345,12 @@ node clients use it in place of the local transport that bounded the body
 string, quotes removed (#870). The third is
 `IdentifiedPath::column_path_with_variable`, the column path that keeps the
 AQL variable, which `columns[].path` now carries (#877).
+0.0.89, published on 2026-10-19, and 0.0.90, published on 2026-10-20, change
+nothing the gateway reads: they add the PARTY builder, the caller's
+`rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
+#3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect` and
+`ferrohealth-smart` require exactly 0.0.90, since a 0.0.x caret requirement
+admits one version.
 
 ## FHIR model crate (crates.io)
 
@@ -355,14 +363,14 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.113 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.1.127 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
 `Bundle`). The `pdqm` feature takes `r4` and `resources`, every R4 resource,
 because ITI-78 answers with `Patient` resources, which only `resources`
 carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
-from the same set. 0.1.113 is the release the FHIRconnect engine builds on
+from the same set. 0.1.127 is the release the FHIRconnect engine builds on
 (#684), so the build carries one `fhir-types`.
 
 ## FHIRconnect engine (crates.io)
@@ -376,8 +384,8 @@ on the `openehr-*` line above.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhirconnect` | =0.1.117 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.111 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhirconnect` | =0.1.173 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.124 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
