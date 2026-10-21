@@ -522,8 +522,10 @@ published binary on this toolchain, with no cache.
 | Cargo resolver | 3 | root `Cargo.toml` `[workspace]` `resolver` |
 | MSRV | 1.98 | root `Cargo.toml` `[workspace.package]` `rust-version` |
 
-The deliverable is a server binary, so the MSRV tracks the pinned stable
-toolchain.
+The toolchain is the newest stable Rust release and the MSRV is the
+toolchain minus one minor release, the rule every FerroHEALTH repository
+follows. Both move in one pull request when a new stable release ships, and
+an MSRV is only ever raised.
 
 ## Databases
 
