@@ -445,6 +445,10 @@ the `wasm-bindgen` requirement of the root `Cargo.toml` and the version
 `Cargo.lock` locks. Both tools are fetched by `taiki-e/install-action`, which
 verifies the upstream release checksum, at the release whose manifest names
 these versions. Every version was the latest on crates.io on 2026-10-05.
+leptosfmt formats the console's `view!` bodies, which rustfmt leaves alone.
+install-action's manifest has no leptosfmt, so CI builds it with a
+version-pinned `cargo install --locked`, and runs it before rustfmt, whose
+breaking of a method chain depends on where leptosfmt left it (#1155).
 `scripts/checks/versions.sh` holds every row.
 
 | Item | Pin | Repeated in |
@@ -454,6 +458,7 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
+| `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
 | Tailwind CSS standalone CLI | 4.3.3 | `scripts/release/viewer-tools.sh`, and `LEPTOS_TAILWIND_VERSION` in `scripts/release/viewer-site.sh` |
 | Tailwind CSS standalone CLI, `tailwindcss-linux-x64` SHA-256 | `dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a` | `scripts/release/viewer-tools.sh` |

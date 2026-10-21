@@ -41,7 +41,13 @@ pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
 fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
     said(view! {
         <strong>
-            {tr_with(Msg::ReplicaRecordedConfirmationRevision, &[("replica", (replica).to_string().into()), ("revision", (mark.revision).to_string().into())])}
+            {tr_with(
+                Msg::ReplicaRecordedConfirmationRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("revision", (mark.revision).to_string().into()),
+                ],
+            )}
         </strong>
         {tr(Msg::StaysRunningGatewayNoLongerRolls)}
     })
@@ -66,7 +72,13 @@ fn approved_line(replica: &str, review: &Review) -> AnyView {
     };
     said(view! {
         <strong>
-            {tr_with(Msg::ReplicaRecordedApprovalRevision, &[("replica", (replica).to_string().into()), ("revision", (review.revision).to_string().into())])}
+            {tr_with(
+                Msg::ReplicaRecordedApprovalRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("revision", (review.revision).to_string().into()),
+                ],
+            )}
         </strong>
         {next}
     })

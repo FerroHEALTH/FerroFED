@@ -65,12 +65,7 @@ pub(super) fn results_section(action: ServerAction<RunQuery>) -> AnyView {
             aria-busy=move || pending.get().to_string()
         >
             <div class="fui-panel-head">
-                <h2
-                    id="query-results-title"
-                    tabindex="-1"
-                    node_ref=heading
-                    class="fui-card-title"
-                >
+                <h2 id="query-results-title" tabindex="-1" node_ref=heading class="fui-card-title">
                     {tr(Msg::Results)}
                 </h2>
                 {tabs}

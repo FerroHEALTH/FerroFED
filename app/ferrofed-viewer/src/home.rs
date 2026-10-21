@@ -102,7 +102,10 @@ pub fn DashboardPage() -> impl IntoView {
     view! {
         <Title text=titled(&tr(Msg::Dashboard)) />
         {page_header(tr(Msg::Dashboard), Some(dashboard_line()), ())}
-        <Suspense fallback=|| busy(tr(Msg::LoadingTheDashboard), Busy::Section)>
+        <Suspense fallback=|| busy(
+            tr(Msg::LoadingTheDashboard),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 crate::views::shown(
                     loaded.await,

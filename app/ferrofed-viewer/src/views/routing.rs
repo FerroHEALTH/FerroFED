@@ -28,12 +28,11 @@ pub fn RoutingPage() -> impl IntoView {
     let filter = RwSignal::new(String::new());
     view! {
         <Title text=titled(&tr(Msg::Routing)) />
-        {page_header(
-            tr(Msg::Routing),
-            Some(tr(Msg::WhereEachCreatingSystemIdRoutes)),
-            (),
-        )}
-        <Transition fallback=|| busy(tr(Msg::LoadingTheRoutingTable), Busy::Section)>
+        {page_header(tr(Msg::Routing), Some(tr(Msg::WhereEachCreatingSystemIdRoutes)), ())}
+        <Transition fallback=|| busy(
+            tr(Msg::LoadingTheRoutingTable),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| routing_section(view, filter))
             })}
@@ -104,40 +103,36 @@ fn routing_section(view: RoutingView, filter: RwSignal<String>) -> AnyView {
     let none = move || kept.with(Vec::is_empty);
     let answered_by = replica_line(view.answered_by);
     let body = view! {
-                    <For
-                        each=move || kept.get()
-                        key=|route| route.creating_system_id.clone()
-                        let(route)
-                    >
-                        <tr>
-                            <th scope="row" class="fui-mono">
-                                {route.creating_system_id}
-                            </th>
-                            <td data-label=tr(Msg::Source)>{badge(source_tone(&route.source), &route.source)}</td>
-                            <td data-label=tr(Msg::Node) class="fui-mono">{route.node.unwrap_or_default()}</td>
-                            <td data-label=tr(Msg::Endpoint) class="fui-mono">
-                                {route.endpoint.unwrap_or_default()}
-                            </td>
-                        </tr>
-                    </For>
-                    <Show when=none>
-                        <tr>
-                            <td colspan="4" class="fui-muted">
-                                {tr(Msg::NoRowPageMatchesFilter)}
-                            </td>
-                        </tr>
-                    </Show>
+        <For each=move || kept.get() key=|route| route.creating_system_id.clone() let(route)>
+            <tr>
+                <th scope="row" class="fui-mono">
+                    {route.creating_system_id}
+                </th>
+                <td data-label=tr(
+                    Msg::Source,
+                )>{badge(source_tone(&route.source), &route.source)}</td>
+                <td data-label=tr(Msg::Node) class="fui-mono">
+                    {route.node.unwrap_or_default()}
+                </td>
+                <td data-label=tr(Msg::Endpoint) class="fui-mono">
+                    {route.endpoint.unwrap_or_default()}
+                </td>
+            </tr>
+        </For>
+        <Show when=none>
+            <tr>
+                <td colspan="4" class="fui-muted">
+                    {tr(Msg::NoRowPageMatchesFilter)}
+                </td>
+            </tr>
+        </Show>
     }
     .into_any();
     let table = table(&tr(Msg::CreatingSystemIdRoutingTable), &columns(), body);
     let filtered = table_filter("routing-filter", tr(Msg::Filter), filter, count).into_any();
     view! {
         {answered_by}
-        <div class="fui-stack">
-            {filtered}
-            {table}
-            {routes_pager}
-        </div>
+        <div class="fui-stack">{filtered} {table} {routes_pager}</div>
     }
     .into_any()
 }

@@ -79,7 +79,13 @@ pub(super) fn rollback(mark: &Current, slot: &'static str) -> AnyView {
                 String::from("rollback-confirm"),
                 (tr(Msg::RollBack), Variant::Danger),
                 (
-                    tr_with(Msg::RollBackRevisionContentRevisionSaved, &[("running", (running).to_string().into()), ("previous", (previous).to_string().into())]),
+                    tr_with(
+                        Msg::RollBackRevisionContentRevisionSaved,
+                        &[
+                            ("running", (running).to_string().into()),
+                            ("previous", (previous).to_string().into()),
+                        ],
+                    ),
                     tr(Msg::RollBack),
                 ),
                 text(
@@ -118,12 +124,12 @@ fn awaiting(mark: &Current) -> AnyView {
         <div class="fui-split">
             <div>
                 <h2 id="awaiting-title" class="fui-card-title">
-                    {tr_with(Msg::RevisionAwaitsYourConfirmation, &[("revision", (revision).to_string().into())])}
+                    {tr_with(
+                        Msg::RevisionAwaitsYourConfirmation,
+                        &[("revision", (revision).to_string().into())],
+                    )}
                 </h2>
-                {lede(
-                    tr(Msg::ConfirmOnceGatewayWorksRollBack),
-                    "commit-confirm",
-                )}
+                {lede(tr(Msg::ConfirmOnceGatewayWorksRollBack), "commit-confirm")}
             </div>
             <span class="fui-pill fui-tone-warn" role="timer" aria-live="off">
                 <span id="confirm-countdown" data-deadline=deadline.to_string()>
@@ -146,7 +152,10 @@ fn awaiting(mark: &Current) -> AnyView {
                         String::from("confirm-confirm"),
                         (tr(Msg::Confirm), Variant::Primary),
                         (
-                            tr_with(Msg::ConfirmRevisionGatewayKeepsStopsCountdown, &[("revision", (revision).to_string().into())]),
+                            tr_with(
+                                Msg::ConfirmRevisionGatewayKeepsStopsCountdown,
+                                &[("revision", (revision).to_string().into())],
+                            ),
                             tr(Msg::Confirm),
                         ),
                         (),
@@ -208,9 +217,18 @@ fn review(review: &Review) -> AnyView {
                 {hidden("revision", revision.to_string())}
                 {confirmed(
                     String::from("approve-confirm"),
-                    (tr_with(Msg::ApproveRevision, &[("revision", (revision).to_string().into())]), Variant::Secondary),
                     (
-                        tr_with(Msg::ApproveRevisionOperatorOtherThanAuthor, &[("revision", (revision).to_string().into())]),
+                        tr_with(
+                            Msg::ApproveRevision,
+                            &[("revision", (revision).to_string().into())],
+                        ),
+                        Variant::Secondary,
+                    ),
+                    (
+                        tr_with(
+                            Msg::ApproveRevisionOperatorOtherThanAuthor,
+                            &[("revision", (revision).to_string().into())],
+                        ),
                         tr(Msg::Approve),
                     ),
                     (),
@@ -219,14 +237,8 @@ fn review(review: &Review) -> AnyView {
         )
     });
     view! {
-        {confirms
-            .map(|said| {
-                notice(Tone::Info, Announce::Status, None, said)
-            })}
-        {approval
-            .map(|said| {
-                notice(Tone::Info, Announce::Status, None, said)
-            })}
+        {confirms.map(|said| { notice(Tone::Info, Announce::Status, None, said) })}
+        {approval.map(|said| { notice(Tone::Info, Announce::Status, None, said) })}
         {approve}
     }
     .into_any()
@@ -271,9 +283,15 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
             {hidden("revision", head.to_string())}
             {confirmed(
                 String::from("apply-confirm"),
-                (tr_with(Msg::ApplyRevision, &[("head", (head).to_string().into())]), Variant::Primary),
                 (
-                    tr_with(Msg::ApplyRevisionRunningGatewayEveryReplica, &[("head", (head).to_string().into())]),
+                    tr_with(Msg::ApplyRevision, &[("head", (head).to_string().into())]),
+                    Variant::Primary,
+                ),
+                (
+                    tr_with(
+                        Msg::ApplyRevisionRunningGatewayEveryReplica,
+                        &[("head", (head).to_string().into())],
+                    ),
                     tr(Msg::Apply),
                 ),
                 (),
@@ -286,10 +304,7 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
                 <h2 id="pending-title" class="fui-card-title">
                     {heading}
                 </h2>
-                {lede(
-                    tr(Msg::SavedNotAppliedReadWhatChanges),
-                    "what-a-revision-holds",
-                )}
+                {lede(tr(Msg::SavedNotAppliedReadWhatChanges), "what-a-revision-holds")}
             </div>
             <div class="fui-cluster">{apply}</div>
         </div>

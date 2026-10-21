@@ -51,17 +51,13 @@ pub fn FederationPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| federation());
     view! {
         <Title text=titled(&tr(Msg::SelfDescription)) />
-        {page_header(
-            tr(Msg::SelfDescription),
-            Some(tr(Msg::WhatGatewayDeclaresItselfOptions)),
-            (),
-        )}
-        <Suspense fallback=|| busy(tr(Msg::LoadingTheSelfDescription), Busy::Section)>
+        {page_header(tr(Msg::SelfDescription), Some(tr(Msg::WhatGatewayDeclaresItselfOptions)), ())}
+        <Suspense fallback=|| busy(
+            tr(Msg::LoadingTheSelfDescription),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
-                shown(
-                    loaded.await,
-                    |view| view! { <div inner_html=view.html></div> }.into_any(),
-                )
+                shown(loaded.await, |view| view! { <div inner_html=view.html></div> }.into_any())
             })}
         </Suspense>
     }
@@ -138,14 +134,21 @@ pub mod render {
         let gateway = &description.federation;
         let html = stack(view! {
             {main_aside(
-                stack(view! {
-                    {card(tr_served(Msg::Federation), identity(gateway, description.endpoints.len()))}
-                    {card(tr_served(Msg::Capabilities), capabilities(gateway))}
-                }),
-                stack(view! {
-                    {card(tr_served(Msg::BudgetsAndPaging), budgets(gateway))}
-                    {card(tr_served(Msg::Manufacturer), manufacturer(description))}
-                }),
+                stack(
+                    view! {
+                        {card(
+                            tr_served(Msg::Federation),
+                            identity(gateway, description.endpoints.len()),
+                        )}
+                        {card(tr_served(Msg::Capabilities), capabilities(gateway))}
+                    },
+                ),
+                stack(
+                    view! {
+                        {card(tr_served(Msg::BudgetsAndPaging), budgets(gateway))}
+                        {card(tr_served(Msg::Manufacturer), manufacturer(description))}
+                    },
+                ),
             )}
             {card(tr_served(Msg::ItsRestAreas), its_rest(gateway))}
             {endpoints(&description.endpoints)}
@@ -371,15 +374,22 @@ pub mod render {
                         <th scope="row" class="fui-mono">
                             {endpoint.id.to_string()}
                         </th>
-                        <td data-label=tr_served(Msg::Organisation)>{endpoint.organisation.clone()}</td>
-                        <td data-label=tr_served(Msg::Membership)>{state_pill(endpoint.status.as_str())}</td>
+                        <td data-label=tr_served(
+                            Msg::Organisation,
+                        )>{endpoint.organisation.clone()}</td>
+                        <td data-label=tr_served(
+                            Msg::Membership,
+                        )>{state_pill(endpoint.status.as_str())}</td>
                         <td data-label=tr_served(Msg::Node) class="fui-mono">
                             {endpoint.node_id.clone().unwrap_or_default()}
                         </td>
                         <td data-label=tr_served(Msg::SystemId) class="fui-mono">
                             {endpoint.system_id.clone().unwrap_or_default()}
                         </td>
-                        {products.then(|| view! { <td data-label=tr_served(Msg::Product)>{product}</td> })}
+                        {products
+                            .then(|| {
+                                view! { <td data-label=tr_served(Msg::Product)>{product}</td> }
+                            })}
                     </tr>
                 }
             })

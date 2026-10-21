@@ -335,7 +335,12 @@ fn kept(keep: ServerAction<SetTheme>) -> Option<impl IntoView> {
     })?;
     Some(view! {
         <span role="status">
-            {status(Tone::Bad, Glyph::CIRCLE_ALERT, &tr(Msg::ThemeNotKept), Some(format!("· {why}")))}
+            {status(
+                Tone::Bad,
+                Glyph::CIRCLE_ALERT,
+                &tr(Msg::ThemeNotKept),
+                Some(format!("· {why}")),
+            )}
         </span>
     })
 }

@@ -31,10 +31,12 @@ and report on the first hard failure; run the cheap gates first.
 ## The battery, in order
 
 ```bash
-# 1. Formatting. tests/ carries no view! today, and leptosfmt covers it the
+# 1. Formatting, as the rustfmt job of ci.yml runs it: leptosfmt first, at
+#    the docs/VERSIONS.md pin (`cargo install leptosfmt --locked --version 0.1.33`),
+#    then rustfmt. tests/ carries no view! today, and leptosfmt covers it the
 #    day it does.
-cargo fmt --all --check
 leptosfmt --check app/ferrofed-viewer/src app/ferrofed-viewer/tests
+cargo fmt --all --check
 
 # 2. Clippy on both halves: the host build is the server half, the wasm32
 #    lib build the browser half. The wasm32 pass catches a dependency that

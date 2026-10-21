@@ -85,7 +85,12 @@ pub fn list(report: &Page<Listed>, replicas: &[ReplicaSettings]) -> StoredView {
 fn none_held() -> String {
     view! {
         <div class="fui-card">
-            {empty_state(Glyph::DATABASE, tr(Msg::NoStoredQueries), tr(Msg::GatewayHoldsNoStoredQuery), ())}
+            {empty_state(
+                Glyph::DATABASE,
+                tr(Msg::NoStoredQueries),
+                tr(Msg::GatewayHoldsNoStoredQuery),
+                (),
+            )}
         </div>
     }
     .to_html()
@@ -314,12 +319,13 @@ pub fn detail(
             {missing}
             {main_aside(
                 card(tr(Msg::Aql), aql),
-                stack(view! {
-                    {card(tr(Msg::Versions), versions)}
-                    {card(tr(Msg::Details), facts)}
-                }),
-            )}
-            {replica}
+                stack(
+                    view! {
+                        {card(tr(Msg::Versions), versions)}
+                        {card(tr(Msg::Details), facts)}
+                    },
+                ),
+            )} {replica}
         </div>
     }
     .to_html();
@@ -376,7 +382,10 @@ fn not_held(name: &str) -> String {
             {empty_state(
                 Glyph::SEARCH_X,
                 tr(Msg::NoSuchStoredQuery),
-                tr_with(Msg::GatewayHoldsNoStoredQueryNamed, &[("name", (name).to_string().into())]),
+                tr_with(
+                    Msg::GatewayHoldsNoStoredQueryNamed,
+                    &[("name", (name).to_string().into())],
+                ),
                 back,
             )}
         </div>

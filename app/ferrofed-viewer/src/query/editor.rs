@@ -92,11 +92,7 @@ pub(super) fn editor_section(
         </button>
         <p role="status" class="fui-help">
             {move || {
-                if hydrated.get() {
-                    String::new()
-                } else {
-                    tr(Msg::FormReadyOncePageHasLoaded)
-                }
+                if hydrated.get() { String::new() } else { tr(Msg::FormReadyOncePageHasLoaded) }
             }}
         </p>
     });
@@ -110,13 +106,7 @@ pub(super) fn editor_section(
         {federation}
     });
     view! {
-        <form
-            method="post"
-            action=RunQuery::url()
-            node_ref=form
-            on:submit=submit
-            class="fui-card"
-        >
+        <form method="post" action=RunQuery::url() node_ref=form on:submit=submit class="fui-card">
             <input
                 type="hidden"
                 name="form[kind]"
@@ -197,12 +187,7 @@ fn query_section(
             hidden=move || stored.get()
             class="fui-tab-panel"
         >
-            {field(
-                AQL,
-                tr(Msg::Aql),
-                Some(tr(Msg::NamePatientParameterNeverAqlText)),
-                editor,
-            )}
+            {field(AQL, tr(Msg::Aql), Some(tr(Msg::NamePatientParameterNeverAqlText)), editor)}
         </div>
         <div
             role="tabpanel"
@@ -402,8 +387,7 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
         <details id="federation-options" class="fui-disclosure">
             <summary>{tr(Msg::FederationOptions)}</summary>
             <div class="fui-form">
-                {endpoints}
-                {organisations}
+                {endpoints} {organisations}
                 {field(
                     "query-dedup",
                     tr(Msg::Deduplication),
@@ -414,8 +398,7 @@ fn federation_section(offered: &QueryOptionsView) -> AnyView {
                             {modes}
                         </select>
                     },
-                )}
-                <div class="fui-check">
+                )} <div class="fui-check">
                     <input
                         type="checkbox"
                         role="switch"

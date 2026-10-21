@@ -235,9 +235,7 @@ type Outcome = (
 /// one, or the console's fault; nothing before the first.
 fn answered((value, pending): Outcome) -> AnyView {
     view! {
-        {move || {
-            pending.get().then(|| busy(tr(Msg::RunningTheAction), Busy::Inline))
-        }}
+        {move || { pending.get().then(|| busy(tr(Msg::RunningTheAction), Busy::Inline)) }}
         {move || {
             value
                 .with(|answer| match answer {

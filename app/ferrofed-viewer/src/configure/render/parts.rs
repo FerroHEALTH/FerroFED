@@ -228,11 +228,7 @@ pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
     let next = tr_with(Msg::SaveAs, &[("loaded", (loaded.next()).clone().into())]);
     view! {
         <div class="fui-action-bar">
-            <button
-                type="submit"
-                class=Variant::Primary.class()
-                aria-describedby="cfg-save-hint"
-            >
+            <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-save-hint">
                 {icon(Glyph::SAVE, "16")}
                 {next}
             </button>
@@ -354,8 +350,10 @@ pub(crate) fn diff_table(
                         " "
                         {badge(Tone::Neutral, what)}
                     </th>
-                    <td data-label=from_label.clone()>{diff_value(change.from.as_ref(), "−", true)}</td>
-                    <td data-label=to_label.clone()>{diff_value(change.to.as_ref(), "+", false)}</td>
+                    <td data-label=from_label
+                        .clone()>{diff_value(change.from.as_ref(), "−", true)}</td>
+                    <td data-label=to_label
+                        .clone()>{diff_value(change.to.as_ref(), "+", false)}</td>
                 </tr>
             }
         })

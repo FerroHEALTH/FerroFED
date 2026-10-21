@@ -231,10 +231,7 @@ pub fn render(board: &Board) -> String {
     let incidents = incidents_panel(&board.incidents);
     view! {
         {replica_line(board.answered_by.clone())}
-        <div class="fui-stack">
-            {stat_grid(stats)}
-            {main_aside(health, incidents)}
-        </div>
+        <div class="fui-stack">{stat_grid(stats)} {main_aside(health, incidents)}</div>
     }
     .to_html()
 }
@@ -449,7 +446,10 @@ fn health_panel(board: &Board) -> impl IntoView + use<> {
                                 <td data-label=tr(Msg::MedianLatency) class=NUM>
                                     {member
                                         .latency_ms_p50
-                                        .map(|latency| tr_with(Msg::Ms, &[("latency", (latency).to_string().into())]))
+                                        .map(|latency| tr_with(
+                                            Msg::Ms,
+                                            &[("latency", (latency).to_string().into())],
+                                        ))
                                         .unwrap_or_default()}
                                 </td>
                             }
@@ -500,9 +500,7 @@ fn incidents_panel(incidents: &Part<Vec<IncidentRow>>) -> impl IntoView + use<> 
                     };
                     view! {
                         <tr>
-                            <td data-label=tr(Msg::At)>
-                                {timestamp(&row.at)}
-                            </td>
+                            <td data-label=tr(Msg::At)>{timestamp(&row.at)}</td>
                             <th scope="row">{row.kind.clone()}</th>
                             <td data-label=tr(Msg::State)>{pill(tone, &word)}</td>
                         </tr>

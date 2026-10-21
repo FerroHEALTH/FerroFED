@@ -70,11 +70,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         .into_any();
     }
     let read_only = (registry == QueryRegistry::ReadOnly).then(|| {
-        view! {
-            <p role="note">
-                {tr(Msg::StoredQueriesComeFromReadOnly)}
-            </p>
-        }
+        view! { <p role="note">{tr(Msg::StoredQueriesComeFromReadOnly)}</p> }
     });
     let groups = grouped(&loaded.resources.stored_queries);
     let rows = if groups.is_empty() {
@@ -176,10 +172,7 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
             {confirmed(
                 String::from("store-confirm"),
                 (tr(Msg::StoreTheVersion), Variant::Primary),
-                (
-                    tr(Msg::StoreVersionStoredVersionCannotChanged),
-                    tr(Msg::Store),
-                ),
+                (tr(Msg::StoreVersionStoredVersionCannotChanged), tr(Msg::Store)),
                 (),
             )} <a href="/configuration/stored-queries" class=Variant::Secondary.class()>
                 {tr(Msg::Cancel)}
@@ -187,13 +180,13 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
         </div>
     };
     view! {
-        {trail((tr(Msg::StoredQueries), "/configuration/stored-queries"), tr(Msg::StoreANewVersion))}
+        {trail(
+            (tr(Msg::StoredQueries), "/configuration/stored-queries"),
+            tr(Msg::StoreANewVersion),
+        )}
         {head(
             ("query-title", tr(Msg::StoreANewVersion)),
-            (
-                tr(Msg::GatewayStoresOnceEveryReplicaServes),
-                "console-managed-resources",
-            ),
+            (tr(Msg::GatewayStoresOnceEveryReplicaServes), "console-managed-resources"),
             (),
         )}
         {form("main", "fui-stack", body)}

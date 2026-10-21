@@ -1322,6 +1322,22 @@ if [[ -f Cargo.lock ]] && [[ -n "$want" ]]; then
     note "OK: Cargo.lock locks wasm-bindgen $want"
   fi
 fi
+# leptosfmt, which formats the console's view! bodies: the version the CI
+# formatting job installs and the version the ui-gates skill names (#1155).
+want="$(pin_of "leptosfmt" "$matrix")"
+if [[ -z "$want" ]]; then
+  bad "$matrix has no 'leptosfmt' row"
+else
+  for file in .github/workflows/ci.yml .claude/skills/ui-gates/SKILL.md; do
+    [[ -f "$file" ]] || continue
+    found="$(sed -nE 's|.*cargo install leptosfmt --locked --version ([0-9][0-9.]*).*|\1|p' "$file" | sort -u)"
+    if [[ "$found" != "$want" ]]; then
+      bad "leptosfmt: $file installs ${found:-nothing}, $matrix pins $want"
+    else
+      note "OK: $file installs leptosfmt $want"
+    fi
+  done
+fi
 # The Tailwind CSS CLI and wasm-opt cargo-leptos builds the site bundle with:
 # each version and SHA-256 the install script checks against its row, and the
 # Tailwind version the site script names to cargo-leptos.

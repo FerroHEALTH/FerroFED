@@ -53,12 +53,11 @@ pub fn IntegrityPage() -> impl IntoView {
     let clear = ServerAction::<ClearEhrId>::new();
     view! {
         <Title text=titled(&tr(Msg::Integrity)) />
-        {page_header(
-            tr(Msg::Integrity),
-            Some(tr(Msg::IncidentsReplicaKeepsCollisionsCleared)),
-            (),
-        )}
-        <Transition fallback=|| busy(tr(Msg::LoadingTheIncidents), Busy::Section)>
+        {page_header(tr(Msg::Integrity), Some(tr(Msg::IncidentsReplicaKeepsCollisionsCleared)), ())}
+        <Transition fallback=|| busy(
+            tr(Msg::LoadingTheIncidents),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 shown(loaded.await, move |view| integrity_section(view, clear))
             })}
@@ -153,16 +152,17 @@ pub fn integrity_html(shown: &Incidents) -> String {
     view! {
         {replica_line(shown.answered_by.clone())}
         <div class="fui-stack">
-            {filter_tabs(shown.resolved, open, closed)}
-            {incidents_table(&rows, shown.resolved)}
-            {grid_start(view! {
-                {table_unstacked(
-                    &tr(Msg::IncidentsSinceGatewayStarted),
-                    &count_columns(),
-                    counts.into_any(),
-                )}
-                {cleared_section(&shown.cleared)}
-            })}
+            {filter_tabs(shown.resolved, open, closed)} {incidents_table(&rows, shown.resolved)}
+            {grid_start(
+                view! {
+                    {table_unstacked(
+                        &tr(Msg::IncidentsSinceGatewayStarted),
+                        &count_columns(),
+                        counts.into_any(),
+                    )}
+                    {cleared_section(&shown.cleared)}
+                },
+            )}
         </div>
     }
     .to_html()
@@ -224,9 +224,7 @@ fn incidents_table(rows: &[&IncidentRow], resolved: bool) -> AnyView {
             };
             view! {
                 <tr>
-                    <td data-label=tr(Msg::At)>
-                        {timestamp(&row.at)}
-                    </td>
+                    <td data-label=tr(Msg::At)>{timestamp(&row.at)}</td>
                     <th scope="row">{row.kind.clone()}</th>
                     <td data-label=tr(Msg::Description)>{row.description.clone()}</td>
                     <td data-label=tr(Msg::State)>{pill(tone, &word)}</td>
@@ -256,9 +254,7 @@ fn cleared_section(cleared: &[ClearedRow]) -> AnyView {
         .map(|cleared| {
             view! {
                 <tr>
-                    <td data-label=tr(Msg::ClearedAt)>
-                        {timestamp(&cleared.at)}
-                    </td>
+                    <td data-label=tr(Msg::ClearedAt)>{timestamp(&cleared.at)}</td>
                     <th scope="row" class="fui-mono">
                         {cleared.ehr_id.clone().unwrap_or_else(|| tr(Msg::NotABareUuid))}
                     </th>

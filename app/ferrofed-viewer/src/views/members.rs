@@ -43,11 +43,7 @@ pub fn MembersPage() -> impl IntoView {
     let loaded = Resource::new_blocking(|| (), |()| load::members());
     view! {
         <Title text=titled(&tr(Msg::Members)) />
-        {page_header(
-            tr(Msg::Members),
-            Some(tr(Msg::EachMemberEndpointHealthOneReplica)),
-            (),
-        )}
+        {page_header(tr(Msg::Members), Some(tr(Msg::EachMemberEndpointHealthOneReplica)), ())}
         <Suspense fallback=|| {
             busy(tr(Msg::LoadingTheMembers), Busy::Section)
         }>{move || Suspend::new(async move { shown(loaded.await, drawn) })}</Suspense>
@@ -150,11 +146,19 @@ fn members_section(view: MembersView) -> AnyView {
                     {products
                         .then(|| {
                             view! {
-                                <td data-label=tr(Msg::Product)>{member.product.clone().unwrap_or_default()}</td>
+                                <td data-label=tr(
+                                    Msg::Product,
+                                )>{member.product.clone().unwrap_or_default()}</td>
                             }
                         })}
                     {timed
-                        .then(|| view! { <td data-label=tr(Msg::MedianLatency) class=NUM>{latency(member)}</td> })}
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(Msg::MedianLatency) class=NUM>
+                                    {latency(member)}
+                                </td>
+                            }
+                        })}
                 </tr>
             }
         })
@@ -199,7 +203,10 @@ pub fn MemberPage() -> impl IntoView {
     let loaded = Resource::new_blocking(key.clone(), load::member);
     view! {
         <Title text=move || titled(&tr_with(Msg::Member, &[("value0", (key()).clone().into())])) />
-        <Transition fallback=|| busy(tr(Msg::LoadingTheMember), Busy::Section)>
+        <Transition fallback=|| busy(
+            tr(Msg::LoadingTheMember),
+            Busy::Section,
+        )>
             {move || Suspend::new(async move {
                 shown(
                     loaded.await,
@@ -251,7 +258,13 @@ fn member_section(key: &str, view: MembersView) -> Option<AnyView> {
                     <td data-label=tr(Msg::Membership)>{state_pill(&member.status)}</td>
                     <td data-label=tr(Msg::Health)>{state_pill(&member.health)}</td>
                     {timed
-                        .then(|| view! { <td data-label=tr(Msg::MedianLatency) class=NUM>{latency(member)}</td> })}
+                        .then(|| {
+                            view! {
+                                <td data-label=tr(Msg::MedianLatency) class=NUM>
+                                    {latency(member)}
+                                </td>
+                            }
+                        })}
                 </tr>
             }
         })
@@ -299,8 +312,8 @@ fn member_section(key: &str, view: MembersView) -> Option<AnyView> {
         {heading}
         {answered_by}
         <div class="fui-stack">
-        {card(tr(Msg::Overview), facts)}
-        {table(&tr(Msg::EndpointsOfThisMember), &columns, rows.into_any())}
+            {card(tr(Msg::Overview), facts)}
+            {table(&tr(Msg::EndpointsOfThisMember), &columns, rows.into_any())}
         </div>
     }
     .into_any()
