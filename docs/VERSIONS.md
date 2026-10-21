@@ -460,9 +460,6 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
 | `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
-| Tailwind CSS standalone CLI | 4.3.3 | `scripts/release/viewer-tools.sh`, and `LEPTOS_TAILWIND_VERSION` in `scripts/release/viewer-site.sh` |
-| Tailwind CSS standalone CLI, `tailwindcss-linux-x64` SHA-256 | `dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a` | `scripts/release/viewer-tools.sh` |
-| Tailwind CSS standalone CLI, `tailwindcss-macos-arm64` SHA-256 | `cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d` | `scripts/release/viewer-tools.sh` |
 | Binaryen (wasm-opt) | version_123 | `scripts/release/viewer-tools.sh` |
 | Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/viewer-tools.sh` |
 | Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/viewer-tools.sh` |
@@ -472,20 +469,18 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 
 The console's stylesheet is the `ferrohealth-ui` crate's, which the server
 serves beside the console's brand theme, so the site build compiles no CSS
-and needs no Node. cargo-leptos runs the Tailwind CSS standalone CLI and
-Binaryen's wasm-opt it finds on `PATH`, and downloads either unchecked when it
-finds none, so `scripts/release/viewer-tools.sh` installs both at these
-releases and checks each against its digest first, and
-`scripts/release/viewer-site.sh` refuses to build without them. Binaryen
-version_123 is the release cargo-leptos 0.3.11 fetches by default. Each digest
-equals the one the upstream release publishes beside its asset
-(`sha256sums.txt` for Tailwind CSS, a `.sha256` file per archive for
-Binaryen), read on 2026-10-15. `scripts/release/viewer-tools.sh --check`,
-which the site script runs before every build, compares the files on `PATH`
-with the pins: the Tailwind CSS CLI is its release asset, and for Binaryen it
-digests the `wasm-opt` inside the verified archive, and on macOS the
-`libbinaryen.dylib` that `wasm-opt` loads, both taken from the archives above
-on 2026-10-15.
+and needs no Node or Tailwind CSS CLI: the crate's manifest names no
+Tailwind input, so cargo-leptos runs none (#1150). cargo-leptos runs the
+Binaryen wasm-opt it finds on `PATH`, and downloads one unchecked when it
+finds none, so `scripts/release/viewer-tools.sh` installs it at this release
+and checks it against its digest first, and `scripts/release/viewer-site.sh`
+refuses to build without it. Binaryen version_123 is the release cargo-leptos
+0.3.11 fetches by default. Each archive digest equals the `.sha256` file the
+upstream release publishes beside it, read on 2026-10-15.
+`scripts/release/viewer-tools.sh --check`, which the site script runs before
+every build, digests the `wasm-opt` on `PATH` and, on macOS, the
+`libbinaryen.dylib` it loads, both taken from the archives above on
+2026-10-15.
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

@@ -1338,18 +1338,14 @@ else
     fi
   done
 fi
-# The Tailwind CSS CLI and wasm-opt cargo-leptos builds the site bundle with:
-# each version and SHA-256 the install script checks against its row, and the
-# Tailwind version the site script names to cargo-leptos.
+# The wasm-opt cargo-leptos builds the site bundle with: each version and
+# SHA-256 the install script checks against its row.
 tools=scripts/release/viewer-tools.sh
 # The value VAR is set to in the install script.
 tool_pin() {
   sed -nE "s|^$1=\"([^\"]+)\"\$|\1|p" "$tools" 2>/dev/null
 }
 for pair in \
-  "Tailwind CSS standalone CLI|tailwind_version" \
-  "Tailwind CSS standalone CLI, tailwindcss-linux-x64 SHA-256|tailwind_linux_x64_sha256" \
-  "Tailwind CSS standalone CLI, tailwindcss-macos-arm64 SHA-256|tailwind_macos_arm64_sha256" \
   "Binaryen (wasm-opt)|binaryen_version" \
   "Binaryen, binaryen-version_123-x86_64-linux.tar.gz SHA-256|binaryen_x86_64_linux_sha256" \
   "Binaryen, binaryen-version_123-arm64-macos.tar.gz SHA-256|binaryen_arm64_macos_sha256" \
@@ -1367,12 +1363,6 @@ for pair in \
     note "OK: $item $want"
   fi
 done
-want="$(pin_of "Tailwind CSS standalone CLI" "$matrix")"
-site=scripts/release/viewer-site.sh
-found="$(sed -nE 's|^export LEPTOS_TAILWIND_VERSION="v([^"]+)".*|\1|p' "$site" 2>/dev/null)"
-if [[ "$found" != "$want" ]]; then
-  bad "Tailwind CSS: $site names ${found:-nothing} to cargo-leptos, $matrix pins $want"
-fi
 # The browser journeys: the WebDriver client against the root Cargo.toml, and
 # the Chrome for Testing release the journeys job installs.
 want="$(pin_of "thirtyfour" "$matrix")"
