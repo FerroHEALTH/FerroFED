@@ -109,7 +109,10 @@ async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -
         },
         (Some(Scope::parse(super::SCOPE)?), None),
     )?;
-    assert!(by_certificate.published_client_keys().keys.is_empty());
+    assert_eq!(
+        by_certificate.published_client_keys().keys,
+        Vec::<jsonwebtoken::jwk::Jwk>::new()
+    );
     assert!(by_certificate.previous_client_key().is_none());
     let refused = by_certificate.with_previous_client_key(key);
     assert!(

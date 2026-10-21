@@ -103,7 +103,7 @@ async fn a_well_formed_version_at_time_reaches_the_node_byte_identical() -> Test
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(vec![Some(query.to_owned())], queries(&a).await?);
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 
@@ -179,7 +179,7 @@ async fn a_body_sent_without_a_content_type_travels_with_the_one_its_operation_d
             .and_then(|value| value.to_str().ok()),
         "ITS-REST EHR API: the media type composition_create's body is declared in"
     );
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 

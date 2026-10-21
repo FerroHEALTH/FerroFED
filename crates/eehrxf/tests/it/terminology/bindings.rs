@@ -217,7 +217,7 @@ async fn a_server_that_admits_the_concept_leaves_no_finding() -> TestResult {
     let completed = checked(&composition("final", "T-1")?)?
         .complete(&terminology)
         .await?;
-    assert!(completed.findings().is_empty());
+    assert_eq!(completed.findings(), []);
     assert_eq!(
         completed.unevaluated().len(),
         2,
@@ -256,7 +256,7 @@ fn the_vendored_patient_summary_package_carries_no_expansion() -> TestResult {
         return Err("the document is no object".into());
     };
     let bundle = check_required(&eps(BUNDLE_PROFILE)?, &tree, "Bundle", &expansions)?;
-    assert!(bundle.findings().is_empty());
+    assert_eq!(bundle.findings(), []);
     assert!(bundle.unevaluated().iter().any(|binding| {
         binding.element == "Bundle.type"
             && binding.value_set.as_deref() == Some("http://hl7.org/fhir/ValueSet/bundle-type")
@@ -275,7 +275,7 @@ fn the_vendored_patient_summary_package_carries_no_expansion() -> TestResult {
         "Bundle.entry[0].resource",
         &expansions,
     )?;
-    assert!(composition.findings().is_empty());
+    assert_eq!(composition.findings(), []);
     assert!(composition.unevaluated().iter().any(|binding| {
         binding.element == "Composition.status" && binding.gap == BindingGap::NoExpansion
     }));

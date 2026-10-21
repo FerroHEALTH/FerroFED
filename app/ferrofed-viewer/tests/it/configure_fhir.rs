@@ -240,7 +240,7 @@ async fn a_save_adds_a_fhir_endpoint_with_every_key() -> Result<(), Box<dyn Erro
     );
     assert_eq!(vec![String::from("http://example.org/ps")], added.profiles);
     assert_eq!(Some("urn:oid:2.999.1"), added.ehr_id_system.as_deref());
-    assert!(added.consent_refusal_codes.is_empty());
+    assert_eq!(added.consent_refusal_codes, Vec::<String>::new());
     Ok(())
 }
 
@@ -286,7 +286,7 @@ async fn a_save_removes_a_fhir_endpoint_the_form_no_longer_names() -> Result<(),
     let listener = listener(HELD_FHIR).await;
     let (service, session) = signed_in_console(&listener)?;
     configured(&service, &session, save_c(&[])).await?;
-    assert!(saved_fhir(&listener).await?.is_empty());
+    assert_eq!(saved_fhir(&listener).await?, Vec::<ConsoleEndpoint>::new());
     Ok(())
 }
 

@@ -277,7 +277,7 @@ async fn a_create_at_the_member_holding_the_ehr_id_is_forwarded_for_its_own_409(
         ],
         asked(&a).await?
     );
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     assert!(incidents(&logs)?.is_empty(), "{logs}");
     Ok(())
 }

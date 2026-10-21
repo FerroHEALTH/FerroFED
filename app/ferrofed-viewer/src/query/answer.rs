@@ -707,7 +707,7 @@ mod tests {
         assert!(!refused.complete);
         assert!(refused.refused);
         assert_eq!(0, refused.rows);
-        assert!(refused.raw.is_empty());
+        assert_eq!(refused.raw, "");
         let html = &refused.html;
         assert!(
             html.contains(r#"<div role="alert" class="fui-notice fui-tone-bad">"#),

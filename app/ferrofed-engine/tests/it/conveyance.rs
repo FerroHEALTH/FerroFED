@@ -410,7 +410,7 @@ async fn the_admission_checks_ehr_create_and_read_convey_the_gateway() -> TestRe
         assert_eq!(None, read.iss_upstream);
         assert_eq!(None, read.verified_by);
         assert_eq!(None, read.subject_organization_id);
-        assert!(read.purpose_of_use.is_empty());
+        assert_eq!(read.purpose_of_use, Vec::<ReadPurpose>::new());
         assert_eq!(None, read.scope);
         assert_eq!(
             (None, None, None, None),
@@ -423,7 +423,7 @@ async fn the_admission_checks_ehr_create_and_read_convey_the_gateway() -> TestRe
             "the gateway names no professional and no assurance of its own"
         );
         assert_eq!(None, read.national_provider_identifier_authority);
-        assert!(read.subject_role.is_empty());
+        assert_eq!(read.subject_role, Vec::<ReadPurpose>::new());
     }
     Ok(())
 }

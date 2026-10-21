@@ -203,7 +203,7 @@ async fn an_unconfirmed_change_rolls_back_at_its_deadline() -> TestResult {
     assert_eq!(revision.id, mark.revision);
     assert_eq!(None, mark.awaiting);
     assert_eq!(id(3)?, gateway.mark()?.revision);
-    assert!(revision.console.is_empty());
+    assert_eq!(revision.console, Vec::<Resource>::new());
     let (status, text) = gateway
         .post("/admin/config/revisions/2/confirm", None)
         .await?;
@@ -628,7 +628,7 @@ async fn a_binding_section_the_file_comes_to_provide_is_the_files() -> TestResul
         .store()
         .revision(gateway.mark()?.revision)?
         .ok_or("the file's revision is held")?;
-    assert!(recorded.console.is_empty());
+    assert_eq!(recorded.console, Vec::<Resource>::new());
     assert_eq!(
         vec![Resource::Binding(BindingSection::Consent)],
         gateway.revisions.file_owned()?

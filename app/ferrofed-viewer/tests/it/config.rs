@@ -93,7 +93,10 @@ fn the_example_configuration_in_the_book_resolves() -> Result<(), Box<dyn Error>
 #[test]
 fn a_console_with_no_admin_table_offers_no_admin_action() -> Result<(), Box<dyn Error>> {
     let settings = Config::from_sources(None, &BTreeMap::new())?.resolve()?;
-    assert!(settings.admin.is_empty());
+    assert_eq!(
+        settings.admin,
+        Vec::<ferrofed_viewer::config::settings::ReplicaSettings>::new()
+    );
     Ok(())
 }
 

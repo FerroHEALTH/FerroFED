@@ -90,7 +90,10 @@ async fn the_report_names_the_owner_of_every_member_and_stored_query() -> TestRe
         vec![(String::from("node-a"), Owner::File, None)],
         owners(&resources)
     );
-    assert!(!resources.stored_queries.is_empty());
+    assert_ne!(
+        resources.stored_queries,
+        Vec::<ferrofed_registry::console::QueryResource>::new()
+    );
     assert!(
         resources
             .stored_queries
@@ -168,7 +171,10 @@ async fn the_report_says_when_no_stored_query_registry_is_offered() -> TestResul
     let gateway = Gateway::start("")?;
     let resources = gateway.resources().await?;
     assert_eq!(QueryRegistry::Absent, resources.stored_query_registry);
-    assert!(resources.stored_queries.is_empty());
+    assert_eq!(
+        resources.stored_queries,
+        Vec::<ferrofed_registry::console::QueryResource>::new()
+    );
     Ok(())
 }
 

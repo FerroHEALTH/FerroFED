@@ -124,7 +124,7 @@ async fn one_member_in_scope_where_the_patient_is_not_resolved_answers_200() -> 
         vec![("node-a-pub", "excluded"), ("node-b-pub", "not-resolved")],
         statuses(&answer)
     );
-    assert!(answer.rows.is_empty());
+    assert_eq!(answer.rows, Vec::<Vec<String>>::new());
     assert!(
         !answer.meta.federation.complete,
         "not-resolved is in scope and clears complete (§11.3)"

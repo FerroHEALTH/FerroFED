@@ -97,7 +97,10 @@ fn an_issuer_resolves_with_every_default() -> Result<(), Box<dyn Error>> {
 #[test]
 fn an_absent_auth_section_trusts_no_issuer() -> Result<(), Box<dyn Error>> {
     let settings = Config::from_sources(None, &BTreeMap::new())?.resolve()?;
-    assert!(settings.server.auth.issuers.is_empty());
+    assert_eq!(
+        settings.server.auth.issuers,
+        Vec::<ferrofed_server::config::auth::IssuerSettings>::new()
+    );
     Ok(())
 }
 

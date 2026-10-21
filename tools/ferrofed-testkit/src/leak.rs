@@ -321,7 +321,10 @@ mod tests {
         let needles = Needles::new("ffd-test-0010", "").unwrap();
         let found = needles.in_text("x=%2566fd-test-0010");
         assert_eq!(Some(&"ffd-test-0010"), found.first());
-        assert!(!needles.in_text("FFD-TEST-0010").is_empty());
-        assert!(needles.in_text("7f4c-0010 and port 40010").is_empty());
+        assert_ne!(needles.in_text("FFD-TEST-0010"), Vec::<&str>::new());
+        assert_eq!(
+            needles.in_text("7f4c-0010 and port 40010"),
+            Vec::<&str>::new()
+        );
     }
 }

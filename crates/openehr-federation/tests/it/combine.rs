@@ -396,7 +396,7 @@ fn an_avg_whose_sum_and_count_disagree_refuses_its_node() {
             NodeAnswer::new("node-b", vec![row.clone()]),
         ];
         let merged = combined(nodes, &avg);
-        assert!(merged.rows().is_empty());
+        assert_eq!(merged.rows(), Vec::<ResultSetRow>::new());
         assert_eq!(
             refusals(&merged),
             [("node-b", Disagreement::AggregateValue)],
@@ -435,7 +435,7 @@ fn a_node_that_does_not_answer_one_row_is_refused() {
             NodeAnswer::new("node-b", rows.clone()),
         ];
         let merged = combined(nodes, &recombination);
-        assert!(merged.rows().is_empty());
+        assert_eq!(merged.rows(), Vec::<ResultSetRow>::new());
         assert_eq!(
             refusals(&merged),
             [("node-b", Disagreement::AggregateRows)],

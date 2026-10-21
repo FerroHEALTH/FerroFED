@@ -137,7 +137,7 @@ fn without_a_public_url_each_copy_is_read_as_written() -> TestResult {
         JWKS_URI,
         settings.signing.ok_or("[signing]")?.jwks_uri.as_str()
     );
-    assert!(settings.server.auth.audience.is_empty());
+    assert_eq!(settings.server.auth.audience, Vec::<String>::new());
     Ok(())
 }
 

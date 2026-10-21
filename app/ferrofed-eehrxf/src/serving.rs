@@ -273,7 +273,10 @@ mod tests {
             vec![Category::Prescription, Category::Dispensation],
             serving.unserved().collect::<Vec<_>>()
         );
-        assert!(serving.resources().is_empty());
+        assert_eq!(
+            serving.resources(),
+            Vec::<fhir_types::r4::capability_statement::CapabilityStatementRestResource>::new()
+        );
     }
 
     #[test]

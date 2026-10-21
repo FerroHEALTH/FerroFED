@@ -182,7 +182,7 @@ async fn a_summary_records_its_transformation_by_path_with_nothing_dropped_as_ze
         "a summary is held to no received package"
     );
     assert_eq!(detail(record, "ehds-transcoded"), ["0"]);
-    assert!(detail(record, "ehds-transcoded-path").is_empty());
+    assert_eq!(detail(record, "ehds-transcoded-path"), Vec::<String>::new());
     assert_eq!(
         detail(record, "ehds-untranscoded"),
         ["4"],
@@ -200,7 +200,7 @@ async fn a_summary_records_its_transformation_by_path_with_nothing_dropped_as_ze
         ["0"],
         "a mapping that drops nothing records zero"
     );
-    assert!(detail(record, "ehds-dropped-path").is_empty());
+    assert_eq!(detail(record, "ehds-dropped-path"), Vec::<String>::new());
     Ok(())
 }
 

@@ -509,7 +509,7 @@ published binary on this toolchain, with no cache.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Rust toolchain | 1.98.1 | `rust-toolchain.toml` `channel` (stable) |
+| Rust toolchain | 1.99.1 | `rust-toolchain.toml` `channel` (stable) |
 | Edition | 2024 | root `Cargo.toml` `[workspace.package]` `edition` |
 | Cargo resolver | 3 | root `Cargo.toml` `[workspace]` `resolver` |
 | MSRV | 1.98 | root `Cargo.toml` `[workspace.package]` `rust-version` |

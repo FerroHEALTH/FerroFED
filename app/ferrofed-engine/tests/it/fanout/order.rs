@@ -252,7 +252,10 @@ async fn a_bounded_window_out_of_the_federation_order_fails_the_query_424() -> T
     let plan = paged_plan(&["node-a-pub", "node-b-pub"], 3, 1)?;
     let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
     assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY, "N37");
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     let refused = record(&answer, "node-a-pub")?;
     assert_eq!(
         refused.status(),

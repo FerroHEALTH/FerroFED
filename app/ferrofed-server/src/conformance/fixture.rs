@@ -626,7 +626,7 @@ mod tests {
             .expect("the vendored files match their recorded SHA-256");
         assert!(data.hospital().contains("\"_type\": \"COMPOSITION\""));
         assert!(data.clinic().contains("\"_type\": \"COMPOSITION\""));
-        assert!(!data.template().is_empty());
+        assert_ne!(data.template(), b"");
         let carrying = super::composition_carrying(
             data.hospital(),
             &patient("urn:oid:2.999.1.1", "ffd-test-0038").expect("admitted"),

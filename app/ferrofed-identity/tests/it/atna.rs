@@ -210,7 +210,7 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
     let before = audit.status().retries;
     tokio::time::sleep(Duration::from_millis(300)).await;
     retried(&audit, before).await?;
-    assert!(repository.messages().is_empty());
+    assert_eq!(repository.messages(), Vec::<String>::new());
     assert_eq!(3, audit.status().depth.messages, "every message is held");
 
     repository.set_up(true);

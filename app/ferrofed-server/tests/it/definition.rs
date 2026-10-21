@@ -364,7 +364,7 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
         "§5.4.1, N33: {composed}"
     );
     assert!(!composed.contains_ignoring_ascii_case("openehr-federation"));
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     for undeclared in [format!("patient={PATIENT}"), format!("ehr_id={EHR_A}")] {
         let a = Server::start().await;
         let b = Server::start().await;
@@ -603,6 +603,6 @@ async fn the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_
         asked(&a).await?,
         "one template list, at node A"
     );
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }

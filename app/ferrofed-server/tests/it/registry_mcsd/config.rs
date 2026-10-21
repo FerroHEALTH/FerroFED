@@ -109,7 +109,7 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
         ferrofed_server::binding::ihe::mcsd::registry::DirectoryRegistry::open(directory)?;
     assert!(!format!("{registry:?}").contains(TOKEN));
     let sent = harness.authorizations().await;
-    assert!(!sent.is_empty());
+    assert_ne!(sent, Vec::<Option<String>>::new());
     assert!(
         sent.iter()
             // NOTE: RFC 7617 §2, the base64 of `gateway:` and TOKEN.

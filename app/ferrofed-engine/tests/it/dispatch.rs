@@ -148,7 +148,10 @@ async fn a_result_set_is_active_and_carries_the_rows() -> TestResult {
     assert_eq!(reply.status(), EndpointStatus::Active);
     match reply {
         NodeReply::Answered { result_set, .. } => {
-            assert!(result_set.rows.is_empty());
+            assert_eq!(
+                result_set.rows,
+                Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+            );
             assert_eq!(result_set.columns.map(|columns| columns.len()), Some(1));
         }
         NodeReply::Failed { outcome, .. } => {
@@ -454,7 +457,7 @@ async fn a_broken_stream_is_offline() -> TestResult {
         .await?;
     closer.await?;
     assert_eq!(reply.status(), EndpointStatus::Offline);
-    assert!(!error_text(&reply)?.is_empty());
+    assert_ne!(error_text(&reply)?, "");
     Ok(())
 }
 

@@ -363,7 +363,7 @@ async fn a_passed_deadline_asks_nothing_and_is_unavailable() -> TestResult {
         ),
         "{decision:?}"
     );
-    assert!(mitz.questions().await.is_empty());
+    assert_eq!(mitz.questions().await, Vec::<String>::new());
     Ok(())
 }
 

@@ -146,7 +146,10 @@ async fn a_failing_424_envelope_records_the_mode() -> TestResult {
     )
     .await?;
     assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY, "N37");
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     assert_eq!(
         dedup_member(answer)?,
         r#""dedup":{"mode":"version-identity"}"#,

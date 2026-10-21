@@ -143,7 +143,10 @@ mod tests {
     #[test]
     fn a_configuration_without_the_old_key_is_left_alone() {
         let mut read = table("[server]\nbody_limit_bytes = 2048\n");
-        assert!(apply(&mut read, &[RENAME]).unwrap().is_empty());
+        assert_eq!(
+            apply(&mut read, &[RENAME]).unwrap(),
+            Vec::<Deprecated>::new()
+        );
         assert_eq!(table("[server]\nbody_limit_bytes = 2048\n"), read);
     }
 

@@ -204,7 +204,7 @@ async fn the_clear_at_one_replica_reaches_that_replica_alone() -> Result<(), Box
         .ok_or("the stub records requests")?;
     let request = received.first().ok_or("the replica was asked")?;
     assert_eq!("POST", request.method.as_str());
-    assert!(request.body.is_empty());
+    assert_eq!(request.body, Vec::<u8>::new());
     Ok(())
 }
 

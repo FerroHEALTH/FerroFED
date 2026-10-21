@@ -137,14 +137,14 @@ async fn an_ehr_create_reads_the_location_when_no_etag_names_it() -> TestResult 
 async fn an_ehr_create_whose_answer_names_no_ehr_id_is_recorded_unread() -> TestResult {
     let (status, record) = created(201, &[]).await?;
     assert_eq!(StatusCode::CREATED, status, "the create was made");
-    assert!(ehrs(&record).is_empty());
+    assert_eq!(ehrs(&record), Vec::<String>::new());
     assert_eq!(
         (Vec::new(), vec!["unnamed".to_owned()]),
         origin_says(&record)
     );
 
     let (_, record) = created(201, &[("ETag", "\"\"".to_owned())]).await?;
-    assert!(ehrs(&record).is_empty());
+    assert_eq!(ehrs(&record), Vec::<String>::new());
     assert_eq!(
         (Vec::new(), vec!["malformed".to_owned()]),
         origin_says(&record)
@@ -177,7 +177,7 @@ async fn an_answer_that_names_a_patient_identifier_in_place_of_an_ehr_id_records
     )
     .await?;
     assert_eq!(StatusCode::CREATED, status);
-    assert!(ehrs(&record).is_empty());
+    assert_eq!(ehrs(&record), Vec::<String>::new());
     assert_eq!(
         (Vec::new(), vec!["malformed".to_owned()]),
         origin_says(&record)

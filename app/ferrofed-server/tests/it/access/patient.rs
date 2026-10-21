@@ -215,7 +215,7 @@ async fn a_read_by_ehr_id_names_the_patient_the_identity_binding_holds() -> Test
 #[tokio::test]
 async fn a_patient_with_no_identifier_in_the_namespace_is_said_not_found() -> TestResult {
     let (record, _node) = record_of(&cross_reference(), &["urn:oid:2.999.7"]).await?;
-    assert!(patients(&record).is_empty());
+    assert_eq!(patients(&record), Vec::<(String, String)>::new());
     assert_eq!(
         profile(&record),
         Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read")
@@ -226,7 +226,7 @@ async fn a_patient_with_no_identifier_in_the_namespace_is_said_not_found() -> Te
 #[tokio::test]
 async fn with_no_namespace_configured_the_record_says_so() -> TestResult {
     let (record, _node) = record_of(&cross_reference(), &[]).await?;
-    assert!(patients(&record).is_empty());
+    assert_eq!(patients(&record), Vec::<(String, String)>::new());
     ehr_says(&record, "not-configured")
 }
 
@@ -261,7 +261,7 @@ fn pixm(pix: &Server) -> String {
 async fn an_identity_service_that_fails_leaves_the_patient_unavailable() -> TestResult {
     let pix = failing_manager().await;
     let (record, _node) = record_of(&pixm(&pix), &[NAMESPACE]).await?;
-    assert!(patients(&record).is_empty());
+    assert_eq!(patients(&record), Vec::<(String, String)>::new());
     ehr_says(&record, "unavailable")?;
     let asked = pix.received_requests().await.ok_or("recording is on")?;
     assert_eq!(1, asked.len(), "one ITI-83 for the ehr_id");

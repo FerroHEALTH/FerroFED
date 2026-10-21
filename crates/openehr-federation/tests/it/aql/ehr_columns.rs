@@ -34,7 +34,10 @@ fn the_whole_ehr_id_names_it_too() {
 
 #[test]
 fn a_query_that_projects_no_ehr_id_names_none() {
-    assert!(ehr_columns("SELECT c FROM EHR e CONTAINS COMPOSITION c").is_empty());
+    assert_eq!(
+        ehr_columns("SELECT c FROM EHR e CONTAINS COMPOSITION c"),
+        Vec::<usize>::new()
+    );
     assert!(
         ehr_columns("SELECT c/uid/value FROM COMPOSITION c").is_empty(),
         "a query that binds no EHR"
@@ -43,8 +46,9 @@ fn a_query_that_projects_no_ehr_id_names_none() {
 
 #[test]
 fn another_attribute_of_the_ehr_names_none() {
-    assert!(
-        ehr_columns("SELECT e/system_id/value, c FROM EHR e CONTAINS COMPOSITION c").is_empty()
+    assert_eq!(
+        ehr_columns("SELECT e/system_id/value, c FROM EHR e CONTAINS COMPOSITION c"),
+        Vec::<usize>::new()
     );
 }
 
@@ -53,7 +57,7 @@ fn a_patient_query_names_its_ehrs_by_resolution_never_by_a_column() {
     let aql = "SELECT e/ehr_id/value FROM EHR e \
                WHERE e/ehr_status/subject/external_ref/id/value = '12345' \
                AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1'";
-    assert!(ehr_columns(aql).is_empty());
+    assert_eq!(ehr_columns(aql), Vec::<usize>::new());
 }
 
 #[test]
@@ -76,5 +80,5 @@ fn a_recombined_aggregate_names_no_ehr() {
     let context = ask_all().with_decomposable_aggregates(AggregateFunction::ALL);
     let analysis = analysed(aql, &context).expect("a decomposable aggregate is analysed");
     assert!(analysis.recombination().is_some(), "recombined at the Tier");
-    assert!(analysis.ehr_columns().is_empty());
+    assert_eq!(analysis.ehr_columns(), Vec::<usize>::new());
 }
