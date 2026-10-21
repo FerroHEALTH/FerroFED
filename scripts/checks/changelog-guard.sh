@@ -8,17 +8,21 @@
 # edits CHANGELOG.md itself. scripts/release/changelog.sh --check judges the
 # fragment's form; this guard asks only whether there is one.
 #
-#   changelog-guard.sh <base-ref> [head-ref]
+#   changelog-guard.sh [base-ref [head-ref]]
 #   changelog-guard.sh --self-test
+#
+# With no refs, as a local loop over the guards runs it, the base is
+# origin/main (main where there is no origin) and the head is HEAD; a head
+# with no commit since the fork changes nothing and passes (#1151).
 #
 # The change is what the head added since it forked from the base, read from
 # the diff against the merge base of the two, so a fragment that reached the
 # base after the fork is never counted as the change's own.
 #
-# Exit 0 when the change carries an entry, 1 when it carries none, and 2 on a
-# usage error or a base and head with no merge base. The `no-changelog`
-# pull-request label is the CI escape for a change with no user-visible effect;
-# this script does not read labels.
+# Exit 0 when the change carries an entry or has no commit, 1 when it carries
+# none, and 2 on a usage error or a base and head with no merge base. The
+# `no-changelog` pull-request label is the CI escape for a change with no
+# user-visible effect; this script does not read labels.
 set -euo pipefail
 
 # The self-test builds a stub repository in a temporary directory, with a copy
@@ -51,11 +55,17 @@ self_test() {
     stub_git checkout -q main
     stub_git checkout -q -b "$name"
   }
-  # expect NAME WANT BRANCH: the guard over BRANCH against main exits WANT.
+  # expect NAME WANT BRANCH: the guard over BRANCH against main exits WANT;
+  # with BRANCH checked out and no refs given when LOCAL is set.
   expect() {
     local name=$1 want=$2 branch=$3
     status=0
-    (cd "$work" && bash scripts/checks/changelog-guard.sh main "$branch") > "$work/out" 2>&1 || status=$?
+    if [[ -n "${LOCAL:-}" ]]; then
+      stub_git checkout -q "$branch"
+      (cd "$work" && bash scripts/checks/changelog-guard.sh) > "$work/out" 2>&1 || status=$?
+    else
+      (cd "$work" && bash scripts/checks/changelog-guard.sh main "$branch") > "$work/out" 2>&1 || status=$?
+    fi
     if [[ "$status" -ne "$want" ]]; then
       echo "changelog-guard: self-test failed: $name exited $status, wanted $want." >&2
       cat "$work/out" >&2
@@ -91,6 +101,8 @@ self_test() {
   stub_git rm -q -- changelog.d/1-old.added.md
   commit "a change that removes a fragment"
 
+  branch empty
+
   stub_git checkout -q main
   printf -- '- An entry from main.\n' > "$work/changelog.d/3-main.fixed.md"
   commit "main gains a fragment after every branch forked"
@@ -106,6 +118,10 @@ self_test() {
   expect "a change to the README alone" 1 readme
   expect "a change that rewords a fragment it did not add" 1 reworded
   expect "a change that removes a fragment" 1 removed
+  expect "a branch with no commit since the fork" 0 empty
+  LOCAL=1 expect "no refs, a change that adds a fragment" 0 fragment
+  LOCAL=1 expect "no refs, a change with no entry" 1 none
+  LOCAL=1 expect "no refs, a branch with no commit since the fork" 0 empty
   echo "changelog-guard: self-test passed."
 }
 
@@ -116,16 +132,27 @@ fi
 
 cd "$(dirname "$0")/../.."
 
-if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
-  echo "usage: changelog-guard.sh <base-ref> [head-ref] | --self-test" >&2
+if [[ $# -gt 2 || ($# -ge 1 && -z "$1") ]]; then
+  echo "usage: changelog-guard.sh [base-ref [head-ref]] | --self-test" >&2
   exit 2
 fi
-base="$1"
+if [[ $# -ge 1 ]]; then
+  base="$1"
+elif git rev-parse --verify --quiet origin/main > /dev/null; then
+  base=origin/main
+else
+  base=main
+fi
 head="${2:-HEAD}"
 
 if ! fork="$(git merge-base "$base" "$head")"; then
   echo "changelog-guard: $base and $head have no merge base; check out the full history (fetch-depth: 0)." >&2
   exit 2
+fi
+
+if [[ "$fork" = "$(git rev-parse "$head")" ]]; then
+  echo "changelog-guard: $head has no commit since it forked from $base, so it changes nothing."
+  exit 0
 fi
 
 # A rename is read as a removal and an addition, so a fragment renamed into

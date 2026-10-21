@@ -34,7 +34,9 @@
 # moves strings to the catalogs should need.
 #
 # Usage:
-#   scripts/checks/stray-literals.sh [--update] ROOT...
+#   scripts/checks/stray-literals.sh [--update] [ROOT...]
+#
+# With no ROOT it reads app/ferrofed-viewer/src, the tree CI reads (#1151).
 #
 # The allow file is scripts/checks/stray-literals.allow and the baseline
 # scripts/checks/stray-literals.baseline, both optional.
@@ -52,8 +54,7 @@ if [ "${1:-}" = "--update" ]; then
   shift
 fi
 if [ "$#" -eq 0 ]; then
-  echo "usage: scripts/checks/stray-literals.sh [--update] ROOT..." >&2
-  exit 2
+  set -- app/ferrofed-viewer/src
 fi
 for dir in "$@"; do
   if [ ! -d "$dir" ]; then
