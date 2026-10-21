@@ -1,3 +1,2 @@
 # Known file-length breaches: "<lines> <path> #<issue>". A listed file passes
 # while it does not grow past its recorded count; the split removes the entry.
-1552 app/ferrofed-viewer/src/locale.rs #1172
