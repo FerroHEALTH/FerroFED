@@ -365,7 +365,7 @@ mod tests {
         let text = serde_json::to_string(&sent).unwrap();
         let read: Error = serde_json::from_str(&text).unwrap();
         assert_eq!("no member in scope", read.message);
-        assert!(read.validation_errors.is_empty());
+        assert_eq!(read.validation_errors, Vec::<String>::new());
         let member = |name: &str| {
             read.additional_properties
                 .get(name)

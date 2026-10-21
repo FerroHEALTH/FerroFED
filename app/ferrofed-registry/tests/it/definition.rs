@@ -248,7 +248,10 @@ fn a_list_names_every_version_of_every_name_the_pattern_starts() -> TestResult {
         ],
         listed
     );
-    assert!(definitions.list("none").is_empty());
+    assert_eq!(
+        definitions.list("none"),
+        Vec::<Arc<StoredDefinition>>::new()
+    );
     Ok(())
 }
 

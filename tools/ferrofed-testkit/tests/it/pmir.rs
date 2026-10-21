@@ -65,7 +65,10 @@ async fn a_subscription_is_created_read_and_deleted() -> TestResult {
     );
     client.unsubscribe(&subscribed, PROMPT).await?;
     assert_eq!(1, registry.deleted());
-    assert!(registry.subscriptions().is_empty());
+    assert_eq!(
+        registry.subscriptions(),
+        Vec::<ferrofed_testkit::pmir::Held>::new()
+    );
     Ok(())
 }
 

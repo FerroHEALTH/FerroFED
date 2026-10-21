@@ -137,7 +137,10 @@ async fn a_node_that_does_not_answer_fails_the_aggregate_504() -> TestResult {
         "§11.1"
     );
     assert_eq!(answer.status(), StatusCode::GATEWAY_TIMEOUT, "§11.4");
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     assert!(!answer.federation().complete());
     Ok(())
 }

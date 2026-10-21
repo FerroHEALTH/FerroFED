@@ -211,7 +211,7 @@ async fn a_dispensation_by_identifier_and_the_faces_reference_reaches_its_owner(
     let (status, text) = call(gateway(&members, dir.path())?, post(&dispensation(&both))?).await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     assert_eq!(1, creates(&members.own_b).await?.len());
-    assert!(creates(&members.own_a).await?.is_empty());
+    assert_eq!(creates(&members.own_a).await?, Vec::<Vec<u8>>::new());
     Ok(())
 }
 

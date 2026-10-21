@@ -159,7 +159,7 @@ async fn a_failing_answer_still_records_the_mode() -> TestResult {
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.4: {text}");
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
-    assert!(answer.rows.is_empty());
+    assert_eq!(answer.rows, Vec::<Vec<String>>::new());
     assert_eq!(answer.meta.federation.dedup.mode, "version-identity");
     Ok(())
 }

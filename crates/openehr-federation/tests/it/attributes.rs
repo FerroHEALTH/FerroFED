@@ -48,7 +48,7 @@ fn each_row_keeps_the_attributes_of_its_endpoint_in_the_tier_order() {
         ],
         &order,
     );
-    assert!(merged.refused().is_empty());
+    assert_eq!(merged.refused(), []);
     assert_eq!(
         vec![
             ("alpha".to_owned(), "node-a".to_owned()),

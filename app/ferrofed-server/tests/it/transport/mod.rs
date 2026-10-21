@@ -428,7 +428,7 @@ fn a_production_banner_names_no_cleartext_credential() -> TestResult {
         false,
     )
     .with_cleartext(checked.as_deref());
-    assert!(deployment.cleartext.is_empty());
+    assert_eq!(deployment.cleartext, Vec::<ProtectedSite>::new());
     Ok(())
 }
 

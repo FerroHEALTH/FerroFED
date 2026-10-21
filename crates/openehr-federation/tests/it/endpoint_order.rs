@@ -73,7 +73,7 @@ fn an_attribute_key_before_a_node_key_orders_first_and_a_tie_falls_to_the_node_k
         ],
         &order,
     );
-    assert!(merged.refused().is_empty());
+    assert_eq!(merged.refused(), []);
     assert_eq!(["u4", "u2", "u3"].as_slice(), uids(&merged), "org-b first");
 
     let shared = merge(
@@ -112,7 +112,7 @@ fn an_attribute_key_after_a_node_key_breaks_its_ties() {
         vec![rows("node-a", &["u1", "u3"]), rows("node-b", &["u2", "u4"])],
         &order,
     );
-    assert!(merged.refused().is_empty());
+    assert_eq!(merged.refused(), []);
     let uids: Vec<&str> = merged
         .rows()
         .iter()
@@ -194,5 +194,8 @@ fn an_endpoint_without_the_attribute_value_is_refused() {
             .iter()
             .all(|refused| refused.reason() == Disagreement::ShortRow)
     );
-    assert!(merged.rows().is_empty());
+    assert_eq!(
+        merged.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
 }

@@ -243,7 +243,10 @@ fn the_remaining_dispensations_extension_is_written_when_a_value_is_given()
 fn the_remaining_dispensations_extension_is_absent_when_none_is_given() -> Result<(), Box<dyn Error>>
 {
     let request = one(single(None).to_json()?)?;
-    assert!(dispense_extensions(&request, REMAINING_DISPENSATIONS).is_empty());
+    assert_eq!(
+        dispense_extensions(&request, REMAINING_DISPENSATIONS),
+        Vec::<&std::collections::BTreeMap<String, Value>>::new()
+    );
     assert_eq!(dispense_extensions(&request, PRESCRIBED_QUANTITY).len(), 1);
     let mut bare = single(None);
     for item in &mut bare.items {

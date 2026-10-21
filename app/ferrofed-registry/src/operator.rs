@@ -627,7 +627,7 @@ mod tests {
     fn a_report_without_clears_still_reads() {
         let report: IncidentReport =
             serde_json::from_str(r#"{"counts":{},"recent":[]}"#).expect("a report");
-        assert!(report.cleared.is_empty());
+        assert_eq!(report.cleared, Vec::<RecordedClear>::new());
     }
 
     #[test]

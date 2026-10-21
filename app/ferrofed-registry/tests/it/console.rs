@@ -55,7 +55,7 @@ fn joined(
 fn a_console_member_joins_the_documents_and_is_marked_the_consoles() -> TestResult {
     let c = member("c", "org-c", "https://cdr-c.example.org/openehr")?;
     let joined = joined(&[c])?;
-    assert!(joined.shadowed.is_empty());
+    assert_eq!(joined.shadowed, Vec::<NodeId>::new());
     let snapshot = joined.snapshot;
     assert_eq!(2, snapshot.nodes().count());
     assert!(snapshot.is_console(&"node-c".parse::<NodeId>()?));

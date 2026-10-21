@@ -198,7 +198,7 @@ async fn a_contribution_amending_a_registered_mapping_s_version_reaches_its_node
     assert_eq!(StatusCode::CREATED, status, "N21, §12.2: {text}");
     assert_eq!(Some(ENDPOINT_A), acting.as_deref());
     assert_eq!(vec![("POST".to_owned(), at)], asked(&a).await?);
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 
@@ -219,7 +219,7 @@ async fn a_contribution_of_creations_alone_routes_by_its_path_ehr_id() -> TestRe
     let requests = b.received_requests().await.ok_or("recording is on")?;
     let received = requests.first().ok_or("node B was sent the CONTRIBUTION")?;
     assert_eq!(sent.as_bytes(), received.body.as_slice(), "N22");
-    assert!(asked(&a).await?.is_empty());
+    assert_eq!(asked(&a).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 

@@ -275,7 +275,10 @@ async fn the_subscription_is_deleted_on_unsubscribe() -> TestResult {
     feed.check().await;
     feed.unsubscribe().await;
     assert_eq!(1, registry.deleted());
-    assert!(registry.subscriptions().is_empty());
+    assert_eq!(
+        registry.subscriptions(),
+        Vec::<ferrofed_testkit::pmir::Held>::new()
+    );
     Ok(())
 }
 

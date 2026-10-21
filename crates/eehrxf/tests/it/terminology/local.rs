@@ -101,7 +101,7 @@ fn a_local_code_is_rendered_from_the_template_in_the_language_asked() -> TestRes
         Some((EVALUATION_SYSTEM, "at0002")),
         "the code as recorded, under the system of its archetype"
     );
-    assert!(transcoded.unmapped().is_empty());
+    assert_eq!(transcoded.unmapped(), []);
     assert_eq!(display(&transcoded), Some("Substance"));
     assert_eq!(transcoded.narrative(), ["Substance"]);
     assert!(transcoded.is_from_template());
@@ -164,7 +164,7 @@ fn a_language_the_template_does_not_carry_follows_article_10_7() -> TestResult {
         "displayed as recorded"
     );
     assert_eq!(transcoded.narrative(), ["Substance"]);
-    assert!(transcoded.unmapped().is_empty());
+    assert_eq!(transcoded.unmapped(), []);
     assert!(transcoded.untranscoded());
     assert!(!transcoded.is_from_template());
     Ok(())

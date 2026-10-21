@@ -427,7 +427,10 @@ mod tests {
             .map(|interaction| interaction.code.value.as_deref().unwrap_or_default())
             .collect();
         assert_eq!(interactions, ["create"]);
-        assert!(resource.supported_profile.is_empty());
+        assert_eq!(
+            resource.supported_profile,
+            Vec::<fhir_types::r4::primitives::Canonical>::new()
+        );
         let documentation = resource.documentation.unwrap().value.unwrap();
         assert!(
             documentation.contains(

@@ -76,7 +76,10 @@ fn under_dedup_a_node_cut_on_two_case_variants_is_refused() {
         [Disagreement::Distinct],
         "§11.6.1: the node kept both at its LIMIT, so a distinct row may lie past its cut"
     );
-    assert!(merged.rows().is_empty());
+    assert_eq!(
+        merged.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
 }
 
 // conformance: CP-8 CP-9

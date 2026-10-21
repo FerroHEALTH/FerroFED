@@ -143,7 +143,10 @@ async fn an_unmapped_template_is_unclassified_with_its_id_and_answered() -> Test
         details(record, "ehds-categories", "ehds-unclassified")
     );
     assert!(details(record, "ehds-categories", "unmapped-id").contains(&UNMAPPED.to_owned()));
-    assert!(details(record, "ehds-categories", "ehds-category").is_empty());
+    assert_eq!(
+        details(record, "ehds-categories", "ehds-category"),
+        Vec::<String>::new()
+    );
     Ok(())
 }
 
@@ -157,7 +160,10 @@ async fn a_template_declared_none_is_of_no_category() -> TestResult {
         vec!["true"],
         details(record, "ehds-categories", "ehds-no-category")
     );
-    assert!(details(record, "ehds-categories", "ehds-unclassified").is_empty());
+    assert_eq!(
+        details(record, "ehds-categories", "ehds-unclassified"),
+        Vec::<String>::new()
+    );
     Ok(())
 }
 
@@ -198,7 +204,10 @@ async fn leaf_values_of_an_unbound_class_are_unclassified_never_none() -> TestRe
     let [record] = records.as_slice() else {
         return Err(format!("one record, got {records:?}").into());
     };
-    assert!(details(record, "ehds-categories", "ehds-no-category").is_empty());
+    assert_eq!(
+        details(record, "ehds-categories", "ehds-no-category"),
+        Vec::<String>::new()
+    );
     assert_eq!(
         vec!["named-nothing"],
         details(record, "ehds-categories", "ehds-unclassified")

@@ -88,7 +88,7 @@ fn the_openehr_names_map_to_their_fhir_systems() -> TestResult {
         let transcoded = transcode(&coded(name, "1001", None)?, &PreferredSystems::default())?;
         assert_eq!(codes(&transcoded), [(uri, "1001")], "{name}");
         assert!(!transcoded.untranscoded(), "{name} is preferred");
-        assert!(transcoded.unmapped().is_empty());
+        assert_eq!(transcoded.unmapped(), []);
     }
     Ok(())
 }

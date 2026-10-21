@@ -388,7 +388,7 @@ async fn a_localizer_that_is_down_fails_closed_dispatches_nothing_and_names_its_
         answer.meta.federation.complete,
         "§14.1: complete stays true"
     );
-    assert!(answer.rows.is_empty());
+    assert_eq!(answer.rows, Vec::<Vec<String>>::new());
     assert_eq!(1, asked.load(Ordering::SeqCst));
     assert_eq!(
         [0, 0, 0],

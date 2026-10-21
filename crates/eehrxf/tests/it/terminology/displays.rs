@@ -82,7 +82,10 @@ async fn a_server_gives_every_missing_display() -> TestResult {
     let terminology = Terminology::server(Arc::new(Scripted(Script::Display("Synthetic term"))));
     let document = ReceivedDocument::read(DOCUMENT)?;
     let displayed = document.displayed(&terminology).await?;
-    assert!(displayed.missing_displays()?.is_empty());
+    assert_eq!(
+        displayed.missing_displays()?,
+        Vec::<eehrxf::receive::displays::MissingDisplay>::new()
+    );
     assert_eq!(displayed.original(), DOCUMENT, "the original is kept");
     let Some(Resource::Composition(composition)) = displayed
         .bundle()

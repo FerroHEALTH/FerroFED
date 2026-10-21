@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(None, xcpd.audit_repository);
 
         let same = settings("log", "");
-        assert!(needs_restart(&boot, &same).is_empty());
+        assert_eq!(needs_restart(&boot, &same), Vec::<&str>::new());
     }
 
     /// The settings of a development gateway asking the PDQm Supplier at

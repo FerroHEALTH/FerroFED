@@ -261,7 +261,7 @@ fn a_learned_endpoint_that_left_the_snapshot_is_a_miss() -> TestResult {
         Err(CreatingSystemMiss::Unknown(system(EXTERNAL)?)),
         "a stale mapping is a miss, never a route to a non-member"
     );
-    assert!(learned.reconcile(&after).is_empty());
+    assert_eq!(learned.reconcile(&after), Vec::<Incident>::new());
     assert_eq!(learned, LearnedMap::new(), "the stale mapping is dropped");
     Ok(())
 }

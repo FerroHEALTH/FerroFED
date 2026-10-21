@@ -187,7 +187,10 @@ async fn replicas_with_their_own_callback_each_apply_every_change() -> TestResul
     let [left] = <[_; 1]>::try_from(registry.subscriptions()).map_err(|_held| "one left")?;
     assert_eq!(second_callback, left.endpoint, "only its own was deleted");
     second_running.drain().await;
-    assert!(registry.subscriptions().is_empty());
+    assert_eq!(
+        registry.subscriptions(),
+        Vec::<ferrofed_testkit::pmir::Held>::new()
+    );
     for server in servers {
         server.abort();
     }

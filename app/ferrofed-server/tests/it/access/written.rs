@@ -284,7 +284,10 @@ async fn a_write_the_node_refused_left_no_version_and_is_a_node_error() -> TestR
     let (status, record) = recorded(sent, &at, Answer::tagged(422)).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status);
     assert_eq!((Vec::new(), Vec::new()), version(&record));
-    assert!(details(&record, "ehds-categories", "version-uid").is_empty());
+    assert_eq!(
+        details(&record, "ehds-categories", "version-uid"),
+        Vec::<String>::new()
+    );
     assert_eq!(
         vec!["node-error"],
         details(&record, "origin", "status"),

@@ -340,7 +340,7 @@ fn an_offset_past_every_row_leaves_an_empty_page() {
         vec![NodeAnswer::new("node-a", vec![vec![json!(1), json!("a1")]])],
         &order(Direction::Ascending, Some(12)).with_offset(10),
     );
-    assert!(merged.refused().is_empty());
+    assert_eq!(merged.refused(), []);
     assert!(
         merged.rows().is_empty(),
         "AQL: OFFSET skips rows that exist"

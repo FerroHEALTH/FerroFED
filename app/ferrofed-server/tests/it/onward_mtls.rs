@@ -240,7 +240,7 @@ async fn a_node_is_reached_with_a_token_bound_to_the_certificate_its_section_nam
     assert!(sent.starts_with("Bearer "), "{sent}");
     assert!(!sent.contains(CLIENT_TOKEN.as_str()));
     let presented = a.front.presented();
-    assert!(!presented.is_empty());
+    assert_ne!(presented, Vec::<String>::new());
     assert!(
         presented
             .iter()

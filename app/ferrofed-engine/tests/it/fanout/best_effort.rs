@@ -187,7 +187,10 @@ async fn no_node_answering_under_best_effort_is_a_200_with_no_rows() -> TestResu
     );
     assert_eq!(answer.verdict(), Verdict::Partial);
     assert_eq!(answer.status(), StatusCode::OK);
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     assert!(!answer.federation().complete());
     validated_body(answer)?;
     Ok(())
@@ -265,7 +268,10 @@ async fn every_node_not_resolved_is_a_200_with_no_rows_in_either_mode() -> TestR
         let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
         assert_eq!(answer.verdict(), Verdict::Answered, "{mode:?}");
         assert_eq!(answer.status(), StatusCode::OK, "found nowhere: {mode:?}");
-        assert!(answer.rows().is_empty());
+        assert_eq!(
+            answer.rows(),
+            Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+        );
         assert!(!answer.federation().complete(), "{mode:?}");
         validated_body(answer)?;
     }
@@ -344,7 +350,10 @@ async fn a_candidate_set_localization_left_empty_answers_two_hundred() -> TestRe
             assert!(!plan.has_no_destination(), "§14.1 is not the 404 of §11.2");
             let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
             assert_eq!(answer.status(), StatusCode::OK, "{mode:?}");
-            assert!(answer.rows().is_empty());
+            assert_eq!(
+                answer.rows(),
+                Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+            );
             assert!(
                 answer.federation().complete(),
                 "no node in scope failed: {mode:?}"

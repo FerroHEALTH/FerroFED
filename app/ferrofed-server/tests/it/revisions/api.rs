@@ -159,7 +159,7 @@ async fn an_apply_runs_the_revision_through_the_reload_path() -> TestResult {
     assert_eq!(RevisionId::new(2), Some(applied.current.revision));
     assert_eq!(Some(RevisionId::FIRST), applied.current.previous);
     assert_eq!(Outcome::Applied, applied.current.outcome);
-    assert!(applied.current.needs_restart.is_empty());
+    assert_eq!(applied.current.needs_restart, Vec::<String>::new());
     assert_eq!(the_operator(), applied.current.applied_by);
     assert_eq!(2, gateway.members()?, "member B serves now");
 

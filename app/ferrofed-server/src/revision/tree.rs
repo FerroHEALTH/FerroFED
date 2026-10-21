@@ -247,7 +247,7 @@ mod tests {
         let running = table(
             "[registry]\ndocument = \"/old.toml\"\n[[registry.members]]\nnode = { id = \"node-c\" }\n",
         );
-        assert!(console_keys(&file).is_empty());
+        assert_eq!(console_keys(&file), Vec::<String>::new());
         assert_eq!(vec!["registry.members"], console_keys(&running));
         let carried = with_console_of(&file, &running);
         assert_eq!(vec!["registry.members"], console_keys(&carried));

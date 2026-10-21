@@ -133,7 +133,7 @@ fn a_query_selecting_no_attribute_keeps_the_single_cdr_shape() {
         columns(&analysis)
     );
     assert_eq!([ColumnSource::Node(0)], analysis.sources(), "N17");
-    assert!(analysis.attributes().is_empty());
+    assert_eq!(analysis.attributes(), Vec::<EndpointAttribute>::new());
 }
 
 // conformance: CP-35

@@ -126,7 +126,10 @@ async fn one_node_error_fails_the_query_424_with_the_nodes_error() -> TestResult
     assert_eq!(answer.verdict(), Verdict::NodeFailed);
     assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY);
     assert!(!answer.federation().complete());
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     let error = answer
         .federation()
         .endpoints()
@@ -211,7 +214,10 @@ async fn every_node_not_resolved_is_a_200_with_no_rows_and_incomplete() -> TestR
         StatusCode::OK,
         "a patient found nowhere is not a 404 or a 424"
     );
-    assert!(answer.rows().is_empty());
+    assert_eq!(
+        answer.rows(),
+        Vec::<openehr_its::rest::generated::query::ResultSetRow>::new()
+    );
     assert!(!answer.federation().complete());
     for record in answer.federation().endpoints() {
         assert_eq!(record.status(), EndpointStatus::NotResolved);

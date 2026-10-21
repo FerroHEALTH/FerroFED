@@ -493,7 +493,7 @@ mod tests {
             r#"{"extensions":{"ihe_iua":{"purpose_of_use":[{"system":"x"}]}},"authorization_details":[{"purpose_of_use":"x|"}]}"#,
         )
         .unwrap();
-        assert!(declared.purposes().is_empty());
+        assert_eq!(declared.purposes(), Vec::<PurposeOfUse>::new());
         assert_eq!(None, token(""));
         assert_eq!(
             Some(PurposeOfUse {

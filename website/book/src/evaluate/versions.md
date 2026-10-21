@@ -22,7 +22,7 @@ so the guard can hold every row here to its source.
 | IHE mCSD FHIR package | `ihe.iti.mcsd`, version 4.0.0 | the addressing binding: the registry read from a care services directory (ITI-90, ITI-91) |
 | IHE PMIR FHIR package | `ihe.iti.pmir`, version 1.6.0 | the identity lifecycle: the subscription and the identity feed (ITI-94, ITI-93) |
 | IHE IUA supplement | tag 2.5 | the access token claims and the bearer presentation client authentication reads (ITI-71, ITI-72), Revision 2.5, Trial Implementation |
-| Rust toolchain | 1.98.1, edition 2024 | the toolchain the workspace builds with |
+| Rust toolchain | 1.99.1, edition 2024 | the toolchain the workspace builds with |
 
 The other identity bindings (XCPD and the Dutch Generic Functions) are listed in `docs/VERSIONS.md` with the version each
 binding uses, and each package is vendored by the issue that first reads it.

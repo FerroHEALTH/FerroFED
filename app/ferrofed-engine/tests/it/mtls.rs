@@ -311,7 +311,7 @@ async fn a_bound_token_travels_only_over_connections_presenting_its_certificate(
     );
     assert_eq!(1, harness.node_requests().await?);
     let presented = harness.front.presented();
-    assert!(!presented.is_empty());
+    assert_ne!(presented, Vec::<String>::new());
     assert!(
         presented
             .iter()
@@ -375,7 +375,10 @@ async fn without_its_certificate_the_gateway_reaches_neither_the_token_endpoint_
     let reply = query(&client, crate::conveyed::conveyance()).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
     assert!(harness.front.refused() >= 1);
-    assert!(harness.endpoint.forms().is_empty());
+    assert_eq!(
+        harness.endpoint.forms(),
+        Vec::<Vec<(String, String)>>::new()
+    );
     assert_eq!(0, harness.node_requests().await?);
     Ok(())
 }
@@ -394,7 +397,10 @@ async fn an_assertion_grant_without_a_key_sends_nothing() -> TestResult {
         .and_then(|source| source.downcast_ref::<TokenError>())
         .ok_or("the cause is the token error")?;
     assert!(matches!(unsigned, TokenError::Unsigned));
-    assert!(harness.endpoint.forms().is_empty());
+    assert_eq!(
+        harness.endpoint.forms(),
+        Vec::<Vec<(String, String)>>::new()
+    );
     Ok(())
 }
 

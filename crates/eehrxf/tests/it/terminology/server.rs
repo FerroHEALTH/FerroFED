@@ -106,7 +106,10 @@ fn a_translation_whose_result_is_false_gives_nothing() {
         }],
         ..ConceptMapTranslateResponse::default()
     };
-    assert!(accepted(&response).is_empty());
+    assert_eq!(
+        accepted(&response),
+        Vec::<fhir_types::r4::coding::Coding>::new()
+    );
 }
 
 #[test]

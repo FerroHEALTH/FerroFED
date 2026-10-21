@@ -189,7 +189,7 @@ fn development_and_loopback_need_no_scrape_authentication() -> TestResult {
             remote(listen, "")
         ))?;
         assert_eq!(Some(listen.parse()?), settings.metrics.listen);
-        assert!(settings.metrics.scrape_users.is_empty());
+        assert_eq!(settings.metrics.scrape_users, Vec::<String>::new());
     }
     for loopback in ["127.0.0.1:9464", "[::1]:9464"] {
         let settings = resolved(&format!("[metrics]\nlisten = \"{loopback}\"\n"))?;

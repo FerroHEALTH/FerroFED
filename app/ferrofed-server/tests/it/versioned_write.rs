@@ -239,7 +239,7 @@ async fn a_registered_creating_system_mapping_makes_its_node_the_controlling_cdr
     assert_eq!(StatusCode::OK, status, "N21, §12.2: {text}");
     assert_eq!(Some(ENDPOINT_A), acting.as_deref());
     assert_eq!(vec![("PUT".to_owned(), at)], asked(&a).await?);
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 
@@ -482,7 +482,7 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
         !composed.to_ascii_lowercase().contains("openehr-federation"),
         "{composed}"
     );
-    assert!(asked(&b).await?.is_empty());
+    assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     Ok(())
 }
 

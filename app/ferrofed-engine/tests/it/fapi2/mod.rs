@@ -534,7 +534,10 @@ async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
 
     let reply = query(&client, verified_caller(PATIENT)?).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
-    assert!(server.endpoint().exchanges().is_empty());
+    assert_eq!(
+        server.endpoint().exchanges(),
+        Vec::<oauth::Exchanged>::new()
+    );
     for form in server.endpoint().forms() {
         for (_, value) in form {
             assert!(!value.contains(PATIENT), "the patient reached the server");
