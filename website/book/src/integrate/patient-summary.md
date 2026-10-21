@@ -520,9 +520,15 @@ that code system's versions take:
   vendored source shows it.
 
 These rules are built into the component. The summary the face writes
-today carries the codings its FHIRconnect mappings write; applying the rules
-to each mapped composition is planned
-([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)).
+carries the codings its FHIRconnect mappings write: the original code as
+recorded, and a coding after it for each `TERM_MAPPING` whose `match` is
+`'='`. A mapping whose `match` is `'>'`, `'<'` or `'?'` is written as no
+coding, and its section's narrative carries it as one line, such as
+`AllergyIntolerance.code: broader term SNOMED-CT 762952008, from Hospital A.`
+([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)). A code in no
+preferred system is kept as recorded (Art 10(7)); translating it through
+the configured terminology server is planned
+([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
 
 ### The terminology server
 

@@ -145,6 +145,18 @@ pub enum Relation {
 }
 
 impl Relation {
+    /// Returns the relation of the `match` code `code`: `'>'`, `'<'` or
+    /// `'?'`, and `None` for `'='` or any other code.
+    #[must_use]
+    pub const fn of(code: char) -> Option<Self> {
+        match code {
+            '>' => Some(Self::Broader),
+            '<' => Some(Self::Narrower),
+            '?' => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+
     /// Returns the words the narrative names the relation with.
     #[must_use]
     pub const fn words(self) -> &'static str {
@@ -272,7 +284,6 @@ pub enum TranscodeError {
 /// [`TranscodeError::InvalidMatch`] for a mapping whose `match` the RM does
 /// not admit, and [`TranscodeError::Uncoded`] for a code phrase with no
 /// terminology or no code.
-// TODO(#926): apply these rules to each composition the summary maps through FHIRconnect.
 pub fn transcode(
     text: &DvText,
     preferred: &PreferredSystems,

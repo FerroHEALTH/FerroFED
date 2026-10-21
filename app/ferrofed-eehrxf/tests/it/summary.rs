@@ -608,3 +608,101 @@ fn a_header_with_no_name_writes_no_document() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+/// The SNOMED CT code the term mappings of [`mapped_allergy`] name.
+const MAPPED_CODE: &str = "762952008";
+
+/// One allergy composition whose substance carries an RM `TERM_MAPPING` of
+/// `match` to [`MAPPED_CODE`].
+fn mapped_allergy(relation_code: &str) -> Result<Held, Box<dyn Error>> {
+    let uid = "7c4e1d20-0000-4000-8000-0000000000c1::cdr-a.example.org::1";
+    let mut composition: serde_json::Value = serde_json::from_str(&eps::allergy_composition(
+        uid,
+        eps::TEMPLATE,
+        "Synthetic substance",
+    ))?;
+    let substance = composition
+        .pointer_mut("/content/0/data/items/0/value")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or("the substance")?;
+    substance.insert(
+        String::from("mappings"),
+        serde_json::json!([{
+            "_type": "TERM_MAPPING",
+            "match": relation_code,
+            "target": {
+                "_type": "CODE_PHRASE",
+                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "SNOMED-CT" },
+                "code_string": MAPPED_CODE
+            }
+        }]),
+    );
+    Ok(Held {
+        uid: uid.to_owned(),
+        template: eps::TEMPLATE.to_owned(),
+        composition: composition.to_string(),
+    })
+}
+
+/// The allergies section and its narrative in the document node A's
+/// composition with a term mapping of `match` makes.
+fn mapped_section(relation_code: &str) -> Result<(serde_json::Value, String), Box<dyn Error>> {
+    let assembled = document(&answers(
+        &[mapped_allergy(relation_code)?],
+        &Answer::Answered(Vec::new()),
+    ))?;
+    let text = serde_json::to_string(&assembled.bundle)?;
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "{findings:#?}");
+    let bundle: serde_json::Value = serde_json::from_str(&text)?;
+    let allergies = section(&bundle, "48765-2").ok_or("the allergies section")?;
+    let div = allergies["text"]["div"]
+        .as_str()
+        .ok_or("a narrative")?
+        .to_owned();
+    Ok((bundle, div))
+}
+
+/// Holds that a term mapping of `match` is written as no coding and as the
+/// narrative line naming `words`, the target and the member.
+fn withheld_into_the_narrative(relation_code: &str, words: &str) -> Result<(), Box<dyn Error>> {
+    let (bundle, div) = mapped_section(relation_code)?;
+    let line =
+        format!("AllergyIntolerance.code: {words} SNOMED-CT {MAPPED_CODE}, from Synthetic org-a.");
+    assert!(div.contains(&line), "eHN PS Art 10(3): {div}");
+    assert!(
+        !bundle
+            .to_string()
+            .contains(&format!("\"code\":\"{MAPPED_CODE}\"")),
+        "RM TERM_MAPPING `{relation_code}`: a mapping that is no equivalence is no coding"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_broader_term_mapping_reaches_the_narrative_and_no_coding() -> Result<(), Box<dyn Error>> {
+    withheld_into_the_narrative(">", "broader term")
+}
+
+#[test]
+fn a_narrower_term_mapping_reaches_the_narrative_and_no_coding() -> Result<(), Box<dyn Error>> {
+    withheld_into_the_narrative("<", "narrower term")
+}
+
+#[test]
+fn an_unknown_term_mapping_reaches_the_narrative_and_no_coding() -> Result<(), Box<dyn Error>> {
+    withheld_into_the_narrative("?", "related term of unknown kind")
+}
+
+#[test]
+fn an_equivalent_term_mapping_is_a_coding_and_no_narrative_line() -> Result<(), Box<dyn Error>> {
+    let (bundle, div) = mapped_section("=")?;
+    assert!(
+        bundle
+            .to_string()
+            .contains(&format!("\"code\":\"{MAPPED_CODE}\"")),
+        "RM TERM_MAPPING `=`: an equivalent term is written as a coding"
+    );
+    assert!(!div.contains(MAPPED_CODE), "{div}");
+    Ok(())
+}
