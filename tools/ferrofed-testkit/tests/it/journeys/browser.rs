@@ -101,9 +101,28 @@ struct Chromedriver {
 }
 
 impl Chromedriver {
-    /// Starts a chromedriver on a port the system picks, waits until it
-    /// says it listens, and returns it with its endpoint.
+    /// Starts a chromedriver on a port the system picks, and returns it with
+    /// its endpoint once it listens; one that exits before it listens is
+    /// replaced by another, at most [`STARTS`] times in all.
     async fn start() -> Result<(Self, String), Box<dyn Error>> {
+        let mut attempt = 1;
+        loop {
+            match Self::start_once().await {
+                Err(Start::Exited) if attempt < STARTS => attempt += 1,
+                Err(Start::Exited) => {
+                    return Err(
+                        format!("chromedriver exited before it listened, {STARTS} times").into(),
+                    );
+                }
+                Err(Start::Failed(error)) => return Err(error),
+                Ok(started) => return Ok(started),
+            }
+        }
+    }
+
+    /// Starts one chromedriver on a port the system picks, waits until it
+    /// says it listens, and returns it with its endpoint.
+    async fn start_once() -> Result<(Self, String), Start> {
         let binary = std::env::var_os(CHROMEDRIVER_ENV)
             .map(PathBuf::from)
             .or_else(|| installed().0)
@@ -119,32 +138,57 @@ impl Chromedriver {
             .kill_on_drop(true)
             .spawn()
             .map_err(|error| {
-                format!(
+                Start::Failed(format!(
                     "{} does not start (run scripts/release/journey-tools.sh target/journey-tools, or name chromedriver in {CHROMEDRIVER_ENV}): {error}",
                     binary.display()
-                )
+                ).into())
             })?;
         let stdout = child
             .stdout
             .take()
-            .ok_or("chromedriver's standard output")?;
+            .ok_or_else(|| Start::Failed("chromedriver's standard output".into()))?;
         let mut lines = BufReader::new(stdout).lines();
         let port = tokio::time::timeout(WAIT, async {
-            while let Some(line) = lines.next_line().await? {
+            while let Some(line) = lines
+                .next_line()
+                .await
+                .map_err(|error| Start::Failed(error.into()))?
+            {
                 if let Some(port) = line.strip_prefix(LISTENING) {
-                    return Ok(port.trim_end_matches('.').parse::<u16>()?);
+                    return port
+                        .trim_end_matches('.')
+                        .parse::<u16>()
+                        .map_err(|error| Start::Failed(error.into()));
                 }
             }
-            Err::<u16, Box<dyn Error>>("chromedriver exited before it listened".into())
+            // NOTE: no specification governs this: our own design; a driver that
+            // lost its port to another process exits here, and the next draws anew.
+            Err(Start::Exited)
         })
         .await
-        .map_err(|_elapsed| format!("chromedriver never listened within {WAIT:?}"))??;
+        .map_err(|_elapsed| {
+            Start::Failed(format!("chromedriver never listened within {WAIT:?}").into())
+        })??;
         let chromedriver = Self {
             child,
             _stdout: lines,
         };
         Ok((chromedriver, format!("http://127.0.0.1:{port}")))
     }
+}
+
+/// How many chromedrivers one session starts before it gives up on one that
+/// exits before it listens.
+const STARTS: u32 = 3;
+
+/// Why one chromedriver did not start.
+#[derive(Debug)]
+enum Start {
+    /// It exited before it said it listens, as one does that cannot bind the
+    /// port it drew.
+    Exited,
+    /// Any other failure, which a fresh start would not cure.
+    Failed(Box<dyn Error>),
 }
 
 impl Drop for Chromedriver {
