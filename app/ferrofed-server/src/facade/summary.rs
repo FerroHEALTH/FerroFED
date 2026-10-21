@@ -703,7 +703,7 @@ pub(crate) fn subject(
 ) -> DataSubject {
     DataSubject {
         patient: Some(PatientIdentifier {
-            namespace: system.to_owned(),
+            namespace: Some(system.to_owned()),
             value: SecretString::from(value.to_owned()),
         }),
         ehrs: gathered

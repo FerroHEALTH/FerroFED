@@ -40,7 +40,7 @@ use ferrofed_registry::health::{Indication, Observed};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
-use ihe_atna::balp::AuditRecorder;
+use ihe_atna::balp::{AuditRecorder, NetworkAddress};
 use serde::Deserialize;
 
 use crate::audit::config::{AuditSettings, FeedRepositorySettings};
@@ -381,7 +381,10 @@ pub fn recorder(
 pub fn access_sink(settings: &Settings) -> Result<Option<Arc<dyn AccessSink>>, AuditTrailError> {
     Ok(
         recorder(&settings.audit)?.map(|recorder| -> Arc<dyn AccessSink> {
-            Arc::new(BalpSink::new(recorder, gateway(settings)))
+            Arc::new(BalpSink::new(
+                recorder,
+                NetworkAddress::uri(&gateway(settings)),
+            ))
         }),
     )
 }

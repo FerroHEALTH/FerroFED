@@ -297,7 +297,7 @@ fn subject(
         }
         Analysis::Patient(query) => DataSubject {
             patient: Some(PatientIdentifier {
-                namespace: query.subject().namespace().to_owned(),
+                namespace: Some(query.subject().namespace().to_owned()),
                 value: SecretString::from(query.subject().value().to_owned()),
             }),
             ehrs: answered

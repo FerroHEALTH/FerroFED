@@ -293,6 +293,7 @@ fn resolve_repository(
                 .unwrap_or_else(|| table.hostname.clone()),
             site: table.enterprise_site.clone(),
             host: NetworkAddress::host(&table.hostname),
+            source_types: Vec::new(),
         },
         spool_dir: table.spool_dir.clone(),
         bounds: Bounds {

@@ -82,7 +82,7 @@ async fn lookup(
             named
                 .iter()
                 .map(|patient| PatientIdentifier {
-                    namespace: patient.namespace().as_str().to_owned(),
+                    namespace: Some(patient.namespace().as_str().to_owned()),
                     value: patient.withheld(),
                 })
                 .collect(),

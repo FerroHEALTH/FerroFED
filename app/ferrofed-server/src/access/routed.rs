@@ -132,7 +132,10 @@ impl Routed {
         let patient = subject::serves(matched)
             .then(|| subject::named(matched, query))
             .flatten()
-            .map(|(namespace, value)| PatientIdentifier { namespace, value });
+            .map(|(namespace, value)| PatientIdentifier {
+                namespace: Some(namespace),
+                value,
+            });
         let unread = (matched.path_param(EHR_ID).is_some() && ehr_id.is_none())
             || (subject::serves(matched) && patient.is_none());
         Some(Self {
@@ -440,5 +443,6 @@ fn root(composition: &Composition, uid: Option<String>) -> RootObject {
             Some(UidBasedId::ObjectVersionId(version)) => Some(version.value().to_owned()),
             Some(_) | None => None,
         }),
+        kind: None,
     }
 }

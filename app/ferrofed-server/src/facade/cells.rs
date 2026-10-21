@@ -309,6 +309,7 @@ fn root(cell: &Value) -> Option<RootObject> {
             .and_then(|uid| uid.get("value"))
             .and_then(Value::as_str)
             .map(str::to_owned),
+        kind: None,
     })
 }
 
