@@ -22,9 +22,3 @@ Closes #NNN
 - [ ] No patient data or real patient identifier in a fixture, test, or example.
 - [ ] Every commit is signed.
 - [ ] No AI or assistant attribution anywhere in the commits or this PR.
-
-Contributions carry the licensing terms in
-[CONTRIBUTING.md](../CONTRIBUTING.md#licensing-of-contributions); the
-`contribution-licence-guard` check reads the box above, and there is no separate
-agreement to sign. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full
-contribution guide.
