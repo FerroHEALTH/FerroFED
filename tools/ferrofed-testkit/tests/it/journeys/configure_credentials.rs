@@ -19,8 +19,10 @@ use thirtyfour::By;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, with_browser};
-use crate::journeys::configure::{bodies, confirmed, fill, focused_on_outcome, hydrated, submit};
+use crate::journeys::browser::{Browser, until, with_browser};
+use crate::journeys::configure::{
+    bodies, confirmed, fill, focused_on_outcome, hydrated, stale, submit,
+};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -152,11 +154,26 @@ async fn secret_saved(
     browser
         .press(&browser.element(choice("password", "Set a value")).await?)
         .await?;
-    assert!(
-        password.is_displayed().await?,
-        "Set a value shows its field"
-    );
-    password.send_keys(VALUE).await?;
+    // The choice may re-render the field, so it is found afresh on every poll,
+    // never read through the element found before the press (#1149).
+    until("Set a value shows its field", async || {
+        match browser
+            .element(value_field("password"))
+            .await?
+            .is_displayed()
+            .await
+        {
+            Ok(shown) => Ok(shown),
+            Err(error) if stale(&error) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    })
+    .await?;
+    browser
+        .element(value_field("password"))
+        .await?
+        .send_keys(VALUE)
+        .await?;
     fill(browser, "cfg-reason", "rotate").await?;
     browser
         .press(&browser.element(submit("Save as revision 4")).await?)
