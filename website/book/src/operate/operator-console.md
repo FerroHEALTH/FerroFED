@@ -286,7 +286,7 @@ A signed-in operator lands on the dashboard: the members active, the nodes
 up, the open incidents, the stored queries and the running revision, with
 each member's health and the recent incidents.
 
-![The dashboard: five tiles reading 2 of 2 members active, 1 of 2 nodes up with 1 down, 0 open incidents, 113 stored queries and running revision r1 with revision 2 pending, over a member health table where node-a-pub is up and node-b-pub is failing, and an empty recent incidents card.](img/console/dashboard.png)
+![The dashboard: five tiles reading 2 of 2 members active, 0 of 2 nodes up and not yet observed, 1 open incident, 113 stored queries and running revision r1 with revision 2 pending, over a member health table where both endpoints are unknown, and a recent incidents card listing a resolved EhrIdCollision and an open LearnedCreatingSystemConflict, each with its time.](img/console/dashboard.png)
 
 [The dashboard in the dark theme](img/console/dashboard-dark.png)
 
@@ -310,7 +310,7 @@ A member's page, `/members/{node}`, shows one node with its endpoints.
 
 ### Integrity
 
-![The integrity page: Open and Resolved tabs with no open incident, the count of each incident kind since the gateway started, all 0, and the form that clears a held ehr_id at one replica or every replica.](img/console/integrity.png)
+![The integrity page: Open and Resolved tabs, the open tab listing a LearnedCreatingSystemConflict with its time and description, the count of each incident kind since the gateway started, a cleared collision with its time, ehr_id and the members that claimed it, and the form that clears a held ehr_id at one replica or every replica.](img/console/integrity.png)
 
 [The integrity page in the dark theme](img/console/integrity-dark.png)
 
