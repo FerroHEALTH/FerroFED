@@ -552,8 +552,10 @@ member CDRs beside it, four FerroEHR instances on the same pin, each with its
 own `system_id` and its own database on one FerroEHR PostgreSQL container
 (`docs/architecture.md` §13, decisions A44 and A47). Every
 image is pinned by tag and by the digest of its image index, resolved on
-2026-10-01. The two FerroEHR images were resolved on 2026-10-15 from FerroEHR
-v4.3.9. FerroEHR publishes them under `ghcr.io/ferrohealth` from v4.3.3, the
+2026-10-01, and the base image again on 2026-10-22 for the `ca-certificates`
+20250419+deb13u1 it ships (Debian DSA-6572-1, #1226). The two FerroEHR images
+were resolved on 2026-10-22 from FerroEHR v5.3.2, the release on that same
+base. FerroEHR publishes them under `ghcr.io/ferrohealth` from v4.3.3, the
 release that makes AQL honour `EHR_ACCESS` on every query form (FerroEHR
 #3562, #566).
 `scripts/checks/versions.sh` holds every row equal to the file that repeats
@@ -561,9 +563,9 @@ it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM`, `docker/viewer/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:4.3.9@sha256:5c0b6c331fd7a6356c924209face04f7022f46ba23d47fd104835e5d2721cdfb` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.9@sha256:c907bb1e35ef97063f2735082e79a43c4847db2f7497fb9cff4063431d6746cd` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/viewer/Dockerfile` `FROM` |
+| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.3.2@sha256:1cee9ad59e2e1f05eecc1cd8e2b7d2b2c86efe385944c74de509908779f7f998` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.3.2@sha256:21673ec220915824c03a78faa28b9e7f82d46b116074fde0291d1a8df2f93101` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers/images.rs` |

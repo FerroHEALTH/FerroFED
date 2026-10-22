@@ -67,7 +67,7 @@ name: ferrofed
 # What the four nodes share; each service below merges it and adds its own
 # database, system_id and port.
 x-ferroehr-node: &ferroehr-node
-  image: ghcr.io/ferrohealth/ferroehr:4.3.9@sha256:5c0b6c331fd7a6356c924209face04f7022f46ba23d47fd104835e5d2721cdfb
+  image: ghcr.io/ferrohealth/ferroehr:5.3.2@sha256:1cee9ad59e2e1f05eecc1cd8e2b7d2b2c86efe385944c74de509908779f7f998
   restart: unless-stopped
   depends_on:
     ferroehr-postgres:
@@ -155,7 +155,7 @@ services:
 
   # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
   ferroehr-postgres:
-    image: ghcr.io/ferrohealth/ferroehr-postgres:4.3.9@sha256:c907bb1e35ef97063f2735082e79a43c4847db2f7497fb9cff4063431d6746cd
+    image: ghcr.io/ferrohealth/ferroehr-postgres:5.3.2@sha256:21673ec220915824c03a78faa28b9e7f82d46b116074fde0291d1a8df2f93101
     restart: unless-stopped
     environment:
       # The development superuser password of FerroEHR's own quickstart.
@@ -249,13 +249,19 @@ configs:
       [auth]
       enabled = true
 
+      # FerroEHR checks the SMART on openEHR scopes a Basic user holds on
+      # every route: these grant every resource family, and the product scope
+      # admits the ADMIN and DEMOGRAPHIC APIs.
       [[auth.basic.users]]
-      username = "ferroehr"
+      user = "ferroehr"
       password_hash = "$$argon2id$$v=19$$m=19456,t=2,p=1$$ZmVycm9laHJEZXZTYWx0$$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
-      roles = ["ADMIN", "USER"]
+      scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
 
       [authz.rbac]
       enabled = false
+
+      [authz.rbac.basic_roles]
+      ferroehr = ["ADMIN", "USER"]
 
 volumes:
   ferroehr-pgdata:

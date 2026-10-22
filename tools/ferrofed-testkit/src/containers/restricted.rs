@@ -33,16 +33,23 @@ const RESTRICTED_CONFIG_TARGET: &str = "/tmp/ferrofed-harness-restricted.toml";
 /// The configuration file of a restricted node: its two Basic users, each
 /// password stored as the Argon2id hash FerroEHR requires, with cost
 /// parameters above the floor it checks at boot. The users are an array of
-/// tables, which only a file can carry.
+/// tables, which only a file can carry. Both hold every clinical SMART on
+/// openEHR scope, so a refusal of the clinician is the role gate's decision
+/// and never a missing scope; the administrator also holds the product scope
+/// of the ADMIN API.
 const RESTRICTED_CONFIG: &str = r#"[[auth.basic.users]]
-username = "harness-admin"
+user = "harness-admin"
 password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1h$t/ra6Wz0qdF31frrVsd1pXhVK2mQdTQLx53fDeIgDS8"
-roles = ["ADMIN"]
+scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
 
 [[auth.basic.users]]
-username = "harness-clinician"
+user = "harness-clinician"
 password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1j$eBo26o4ip9ZdPKtCbzkJIjvpp+SfoLqTK0a07Qw6jcU"
-roles = ["USER"]
+scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds"]
+
+[authz.rbac.basic_roles]
+harness-admin = ["ADMIN"]
+harness-clinician = ["USER"]
 "#;
 
 /// Starts FerroEHR as `system_id` on a database server of its own with its

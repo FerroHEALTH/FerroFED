@@ -2611,10 +2611,10 @@ the variable first and returns early, and CI runs an `e2e (containers)` job.
 
 | Role | Image, pinned by tag and image-index digest (2026-10-01; FerroEHR 2026-10-15) |
 |---|---|
-| node A, FerroEHR, `system_id` `cdr-a.example.org` | `ghcr.io/ferrohealth/ferroehr:4.3.9@sha256:5c0b6c331fd7a6356c924209face04f7022f46ba23d47fd104835e5d2721cdfb` |
+| node A, FerroEHR, `system_id` `cdr-a.example.org` | `ghcr.io/ferrohealth/ferroehr:5.3.2@sha256:1cee9ad59e2e1f05eecc1cd8e2b7d2b2c86efe385944c74de509908779f7f998` |
 | node B, FerroEHR, `system_id` `cdr-b.example.org` | the same pin (decision A44) |
 | node C, for three-node cases | a third FerroEHR on the same pin, with its own `system_id` (decision A44) |
-| the nodes' database server | one `ghcr.io/ferrohealth/ferroehr-postgres:4.3.9@sha256:c907bb1e35ef97063f2735082e79a43c4847db2f7497fb9cff4063431d6746cd` container per topology a test starts, holding a database per node, each owned by its own role (decision A47) |
+| the nodes' database server | one `ghcr.io/ferrohealth/ferroehr-postgres:5.3.2@sha256:21673ec220915824c03a78faa28b9e7f82d46b116074fde0291d1a8df2f93101` container per topology a test starts, holding a database per node, each owned by its own role (decision A47) |
 | the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
 | PIX Manager | the in-testkit PIXm fake, no image (decision A39); and SanteMPI, `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` on `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550`, the deployable Manager (#622) |
 | capture and fault proxy | in-testkit, one per node, no image |
