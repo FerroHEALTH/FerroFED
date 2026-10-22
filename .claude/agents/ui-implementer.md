@@ -17,11 +17,16 @@ color: cyan
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 You implement one bounded task in the `app/ferrofed-viewer` crate, exactly as
-specified by the orchestrator's prompt. Before writing code, read `CLAUDE.md`,
-**`.claude/rules/leptos-ui.md` (the governing rule file, every section
-applies)**, and decision A55 in `docs/architecture.md` for the console's
-shape. Answer Leptos questions from the official book through
-`/leptos-lookup`, never from memory.
+specified by the orchestrator's prompt. **FerroUI leads the UI**, so before
+writing code read FerroUI's consumer guide
+(<https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md>) and its
+component rules and crate discipline at the tag that matches the
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.2.0`:
+`.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
+FerroHEALTH/FerroUI). Then read `CLAUDE.md`, **`.claude/rules/leptos-ui.md`
+(the governing rule file, every section applies)**, and decision A55 in
+`docs/architecture.md` for the console's shape. Answer Leptos questions from
+the official book through `/leptos-lookup`, never from memory.
 
 **The console is rendered on the server and hydrated in the browser**, built
 by cargo-leptos, with its two halves chosen by compilation target: host
@@ -31,6 +36,13 @@ task seems to need that feature pair, stop and say so.
 
 Non-negotiables (violations are rejected at review):
 
+- **FerroUI owns every reusable part.** Never write a local component, a
+  shadow of a library component, a stylesheet override of the library's
+  classes or roles, or a script, where FerroUI has the part or should have
+  it. A part that is missing or behaves wrongly is an issue filed in
+  FerroHEALTH/FerroUI (label `component`), linked in your report; the task
+  waits on it or proceeds without that part, as the orchestrator decides.
+  FerroUI's `design/` is the only design source.
 - **Zero hand-written JavaScript.** No `.js` files, no inline `<script>`
   bodies, no `onxxx="…"` HTML attributes with JS strings. Use `on:` Rust
   listeners. No JS-wrapping crates.

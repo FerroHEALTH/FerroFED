@@ -30,7 +30,18 @@ and report on the first hard failure; run the cheap gates first.
 
 ## The battery, in order
 
+Stage 0 is a read of the diff, before any build: FerroUI leads the UI
+(`.claude/rules/leptos-ui.md`, its opening section). A new component that
+FerroUI has or should have, a stylesheet rule beyond the brand theme in
+`app/ferrofed-viewer/style/theme.css`, or any script is a FAIL whose fix is
+an issue filed in FerroHEALTH/FerroUI (label `component`).
+
 ```bash
+# 0. FerroUI ownership: list what the change adds under style/ and any
+#    script file, and read every hit against the rule above.
+git diff --name-status origin/main -- app/ferrofed-viewer \
+  | grep -E '\.(css|js|mjs)$|/style/' || echo "no stylesheet or script change"
+
 # 1. Formatting, as the rustfmt job of ci.yml runs it: leptosfmt first, at
 #    the docs/VERSIONS.md pin (`cargo install leptosfmt --locked --version 0.1.33`),
 #    then rustfmt. tests/ carries no view! today, and leptosfmt covers it the

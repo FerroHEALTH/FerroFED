@@ -21,6 +21,10 @@ Leptos is pre-1.0 and moves, so training data drifts. The distilled rules live
 in `.claude/rules/leptos-ui.md`; this skill goes back to the source when a
 case is not covered or needs full context.
 
+**FerroUI leads the UI.** A question about a component, the design, a token,
+an icon, the accessibility bar, the interaction contract or a word goes to
+FerroUI first (step 0), and the book second.
+
 **The console is rendered on the server and hydrated in the browser**, built
 by cargo-leptos, with its two halves chosen by compilation target rather than
 by the `ssr`/`hydrate` features the book's examples use. Read the SSR,
@@ -30,6 +34,24 @@ explicitly: under this crate's target split it may not apply as the book
 states it.
 
 ## Procedure
+
+0. **Read FerroUI at the pinned tag** for anything the library owns:
+
+   ```bash
+   FUI=~/.cache/ferrofed/ferroui
+   [ -d "$FUI/.git" ] || git clone https://github.com/FerroHEALTH/FerroUI "$FUI"
+   git -C "$FUI" fetch --tags -q
+   PIN=$(grep -E '^ferrohealth-ui = ' Cargo.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+   git -C "$FUI" show "v$PIN:.claude/rules/leptos-ui.md"
+   git -C "$FUI" show "v$PIN:crates/ferrohealth-ui/CLAUDE.md"
+   git -C "$FUI" show origin/main:docs/consoles.md
+   ```
+
+   `docs/consoles.md` (the consumer guide) and `design/` (`README.md`,
+   `COMPONENTS.md`, `consoles/`) are newer than the `v0.2.0` pin, so read
+   them on `main`. When FerroUI lacks the part or its rule is wrong, the
+   answer is an issue to file in FerroHEALTH/FerroUI (label `component`),
+   never a local component, stylesheet override or script.
 
 1. **Ensure the book cache exists** (shared, survives sessions):
 
@@ -77,5 +99,6 @@ states it.
    Context7 is the preferred fetcher for a pinned crate's documentation.
    cargo-leptos configuration questions go to its README
    (<https://github.com/leptos-rs/cargo-leptos>). If the answer belongs in the
-   standing rules, propose the `.claude/rules/leptos-ui.md` addition
-   explicitly.
+   standing rules, propose the addition explicitly: to FerroUI as an issue
+   when it holds for every console, to `.claude/rules/leptos-ui.md` when it
+   is particular to this one.

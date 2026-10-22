@@ -7,23 +7,42 @@ paths: ["app/ferrofed-viewer/**"]
 
 # Leptos viewer rules (`app/ferrofed-viewer`, and any Leptos code)
 
-The operator console's shape is decision A55 of `docs/architecture.md`; this
-file is the enforceable discipline. The oracle for every Leptos question is
-the official Leptos book (<https://github.com/leptos-rs/book>, `main`, which
-targets Leptos 0.8) through `/leptos-lookup`, never memory. Citations below
-are book chapters (`view/04_iteration`, `ssr/23_ssr_modes`) and pinned crate
-documentation. The discipline is the family's, carried from FerroEHR's
-server-rendered viewer and FerroTERM's client-rendered one, and adapted to
-this crate's shape.
+**FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
+exactly in the root `[workspace.dependencies]` (today `=0.2.0`), and the
+FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
+design, tokens, icons, accessibility bar, interaction contract, words and
+quality control. Read these first, at the git tag that matches the pin
+(today `v0.2.0`), and on `main` only while the console moves to the next
+release:
 
-**The components, tokens, icons, accessibility bar and quality control are
-FerroUI's**: the console draws with `ferrohealth-ui`, pinned exactly in the
-root `[workspace.dependencies]`, and that library's own
-`.claude/rules/leptos-ui.md` (FerroHEALTH/FerroUI) is the rule set for
-every view. This file keeps what is particular to this console: the BFF, the
-session, the server functions, the gateway client, the admin actions and
-the bundle budget. A component this console needs and the library lacks is
-added to the library, never written here.
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md):
+  the consumer guide, how a console uses the library. It is newer than
+  `v0.2.0`, so read it on `main`.
+- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.2.0/.claude/rules/leptos-ui.md):
+  the component rules of every FerroHEALTH console. The section numbers this
+  file cites (FerroUI §N) are those of the `v0.2.0` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.2.0/crates/ferrohealth-ui/CLAUDE.md):
+  the crate's own discipline.
+
+The move to `ferrohealth-ui` 0.3.x, with its islands mode and its four-layer
+interaction contract, is FerroUI #161 (milestone v0.4.0), which rewrites the
+consoles once FerroUI 0.3.2 is out. New UI work here waits for it. FerroUI's
+`design/` is the only design source; a design folder anywhere else is stale
+and is never synced from. A component this console needs and the library
+lacks, or a component that behaves wrongly, is an issue filed in
+FerroHEALTH/FerroUI and linked from the work here: never a local copy, a
+shadow component, a stylesheet override or a hand-written script in this
+repository.
+
+This file keeps only what is particular to the operator console: its routes
+and pages, the BFF and its session, the server functions, the gateway client
+and the admin actions, the configuration and security headers, the bundle
+budget measurement, the journeys and screenshots, and the console's own
+words. The console's shape is decision A55 of `docs/architecture.md`. The
+oracle for every Leptos question is the official Leptos book
+(<https://github.com/leptos-rs/book>, `main`, which targets Leptos 0.8)
+through `/leptos-lookup`, never memory; citations below are book chapters
+(`view/04_iteration`, `ssr/23_ssr_modes`) and pinned crate documentation.
 
 **The console is rendered on the server and hydrated in the browser**, with a
 backend-for-frontend (BFF) on the same server, built by cargo-leptos. Unlike
@@ -37,13 +56,11 @@ the orchestrator, never made in a slice.
 
 ## 0. The mandates (absolute)
 
-- **Rust only, zero hand-written JavaScript.** No authored `.js` files, no
-  inline `<script>` bodies, no HTML `onxxx="..."` attributes carrying JS
-  strings (the book's `oninput="this.form.requestSubmit()"` trick in
-  `router/20_form` is forbidden here). Use an `on:` Rust listener. JS-wrapping
-  crates are banned; a chart is drawn in Rust as SVG. The only JavaScript in
-  the product is the `wasm-bindgen` glue and the hydration bootstrap the
-  toolchain generates.
+- **Rust only, zero hand-written JavaScript, no inline style**: FerroUI §0.
+  What this console adds: the book's `oninput="this.form.requestSubmit()"`
+  trick in `router/20_form` is forbidden here (use an `on:` Rust listener),
+  and the only JavaScript in the product is the `wasm-bindgen` glue and the
+  hydration bootstrap the toolchain generates.
 - **The console is a client of the gateway and nothing else.** It reaches the
   gateway over HTTP, on the public surface any client uses, through
   `crate::gateway` and the `openehr-its` client. It links no part of the
@@ -132,52 +149,51 @@ the orchestrator, never made in a slice.
 
 ## 2. Reactivity
 
-- Component functions are **setup functions and run once**. Anything dynamic
-  in a view is a signal or a closure reading signals
-  (`reactivity/interlude_functions`).
-- Access discipline (`reactivity/working_with_signals`): `.get()`/`.set()`
-  for cheap `Copy`-ish values; `.read()`/`.write()` guards or
-  `.with()`/`.update()` for collections. Never `sig.get().is_empty()`, which
-  clones the whole value. Never hold a `.read()` guard across a write.
-- A signal derived from a signal is a derived closure or a `Memo`. **Writing
-  one signal from an `Effect` that reads another is forbidden**
-  (`working_with_signals` §4). Effects only sync with the non-reactive outside
-  world.
+The reactivity rules are FerroUI §3 (setup functions run once, the access
+discipline, no signal written from an `Effect` that reads another). Beside
+them (`reactivity/working_with_signals`, `15_global_state`):
+
+- Never `sig.get().is_empty()`, which clones the whole value, and never hold
+  a `.read()` guard across a write.
+- A signal derived from a signal is a derived closure or a `Memo`. Effects
+  only sync with the non-reactive outside world.
 - Prefer local component state. Escalate in this order: the URL (router),
-  then a context signal, then a `Store` (`15_global_state`). Context values
-  use the newtype pattern; `expect_context` only where provision is
-  structurally guaranteed.
+  then a context signal, then a `Store`. Context values use the newtype
+  pattern; `expect_context` only where provision is structurally guaranteed.
 
 ## 3. Components and props
 
-- Props that change over time are signal types (`view/03_components`): a
-  reusable component takes `#[prop(into)] x: Signal<T>`.
-- Doc-comment every component and every prop.
-- Child to parent is a callback prop or an `on:` listener. Pass a
-  `WriteSignal` down only where genuinely needed.
+The prop rules are FerroUI §3: a changing value is a `Signal<T>` prop, and a
+change reports back through a callback prop or an `on:` listener. Every
+component and every prop carries a doc comment, and a `WriteSignal` goes
+down only where it is needed.
 
 ## 4. Views: iteration, control flow and errors
 
-- Dynamic lists use `<For each key children>` with a **stable, unique,
-  data-derived key, never an index** (`view/04_iteration`): an `endpoint_id`,
-  a stored-query name and version, an incident id. UI state in a list that can
-  reorder is keyed by the same id, never by position.
+The view rules are FerroUI §4: a `<For>` key that is stable and
+data-derived, never an index; an error that never renders as nothing; valid
+HTML; `rel="external"` on an anchor to a BFF axum route (the sign-in link to
+`/login`). What is particular here:
+
+- A `<For>` key of this console is an `endpoint_id`, a stored-query name and
+  version, or an incident id. UI state in a list that can reorder is keyed
+  by the same id, never by position.
+- A gateway refusal renders its status and its stable error `code`, in the
+  section whose data failed; an incomplete federated answer renders as
+  incomplete, never hidden (§11.4).
 - Expensive branches go behind `<Show when fallback>`; divergent branch types
   use `Either` or `.into_any()`.
-- **An error never renders as nothing.** Resolve a `Result` where it arrives
-  and render the content or an explicit inline error view in the section whose
-  data failed. A gateway refusal renders its status and its stable error
-  `code`; an incomplete federated answer renders as incomplete, never hidden
-  (§11.4).
 - **Never create a resource inside a `Suspend` closure.** A `Suspend` re-runs
   on every notification of what it awaits, and each re-run re-creates what is
   inside it; resource ids then diverge between the server pass and
   hydration, and hydration reads the wrong serialized slot.
-- **An anchor to a BFF axum route carries `rel="external"`** (the sign-in
-  link to `/login`): after hydration the client router intercepts same-origin
-  anchors and 404s a route it does not own.
 
 ## 5. Forms
+
+The form rules are FerroUI §5: a stable `id` and `name` on every control
+with its label's `for`, a `<textarea>` filled through `prop:value` alone,
+and no `GET` form for a field that can carry clinical content. What is
+particular here:
 
 - Controlled inputs use `prop:value` with `on:input:target`, or the
   `bind:value`/`bind:checked`/`bind:group` sugar (`view/05_forms`). The
@@ -204,10 +220,7 @@ the orchestrator, never made in a slice.
   form that posts to a server route, such as the sign-out in `shell.rs`, is
   a plain `<form>` with no Leptos action.
 - Parse user input yourself. `type="number"` is not validation.
-- Give every input an explicit, stable `id` and `name`, and associate the
-  label with `for`.
-- A form whose field can carry a patient identifier is never a `GET` form:
-  its values would land in the URL and the history (§0).
+- A form whose field can carry a patient identifier is a `POST` form (§0).
 
 ## 6. Async data (the BFF pattern)
 
@@ -266,11 +279,8 @@ the orchestrator, never made in a slice.
 - Browser-only calls (`window`, storage, timers) go inside `Effect::new` or a
   `leptos-use` wrapper; server-only code goes in a server function or the
   BFF modules.
-- Views emit **valid HTML**: no block element inside `<p>`, and every
-  `<table>` gets an explicit `<tbody>`. Hydration walks the DOM, so invalid
-  HTML is a hydration error.
-- No non-determinism in the initial render (random ids, timestamps) that
-  differs between the server pass and hydration.
+- Valid HTML and a deterministic first render are FerroUI §4; hydration
+  walks the DOM, so a breach of either is a hydration error here.
 - **A route whose content comes from the gateway renders `SsrMode::Async`**
   (`ssr/23_ssr_modes`): the server waits for every resource and sends the
   whole page, so nothing arrives in a `<template>` for an inline script to
@@ -296,13 +306,14 @@ the orchestrator, never made in a slice.
 
 ## 10. Accessibility
 
-The bar is **WCAG 2.2 Level AA** (<https://www.w3.org/TR/WCAG22/>), checked
-per slice. Every control is keyboard operable with a visible focus state;
-tables carry real `<th scope=…>` headers; no meaning rides on colour alone,
-so a node status is a word as well as a tint; contrast meets AA in the light
-and the dark theme; motion respects `prefers-reduced-motion`. A view uses the
-components and the role classes of `ferrohealth-ui`, never a colour of its
-own. The console keeps only its brand theme, `style/theme.css`, the "Azure &
+The bar is FerroUI §7: **WCAG 2.2 Level AA**
+(<https://www.w3.org/TR/WCAG22/>) in the light and the dark theme, keyboard
+operable with a visible focus, no meaning on colour alone, reduced motion
+respected, a reflow at 320 px, the sticky top bar never covering the focus
+(SC 2.4.11). A view uses the components and the role classes of
+`ferrohealth-ui`, never a colour of its own. Checked per slice here: tables
+carry real `<th scope=…>` headers, and a node status is a word as well as a
+tint. The console keeps only its brand theme, `style/theme.css`, the "Azure &
 Iron" accent of `assets/brand/tokens.css` over the library's roles.
 
 `tests/it/contrast.rs` reads the role tokens of the library's stylesheet with
@@ -569,11 +580,10 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
 
 ## 13. Icons
 
-- **Icons are `ferrohealth_ui::icon::Glyph`**, the Lucide outlines the
-  library vendors; no icon crate of the console's own. A glyph the console
-  needs and the library lacks is added to the library.
-- An icon never carries meaning alone (§10): it sits beside the word it
-  illustrates.
+The icon rule is FerroUI §9: `ferrohealth_ui::icon::Glyph`, the Lucide
+outlines the library vendors, each beside the word it illustrates, and no
+icon crate of the console's own. A glyph the console needs and the library
+lacks is a FerroUI issue.
 
 ## 14. Strings and locales
 

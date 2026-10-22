@@ -336,7 +336,10 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   sign-out ends the server session and, when configured, the provider's
   (`oidc`, #584). Its
   discipline is
-  `.claude/rules/leptos-ui.md`.
+  `.claude/rules/leptos-ui.md`. FerroUI (`ferrohealth-ui`, pinned exactly)
+  leads its UI: its components, design and component rules come from the
+  FerroUI repository at the tag of the pin, and a missing part is a FerroUI
+  issue, never a local copy.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned
@@ -528,8 +531,11 @@ apply always. Read the relevant one before working in that area.
 - `.claude/rules/ci-cd.md`, `ai-code-review.md`, `crates-publishing.md`: the
   workflow-security discipline, the advisory-analyzer policy (SonarQube Cloud,
   CodeQL), and the crates.io rules behind the `publish` switch.
-- `.claude/rules/leptos-ui.md`: the operator console's Leptos discipline,
-  carried from FerroEHR's and FerroTERM's viewers.
+- `.claude/rules/leptos-ui.md`: the operator console's Leptos discipline.
+  FerroUI leads the UI: the rule, the `ui-implementer` and `leptos-reviewer`
+  agents and the `/leptos-lookup` and `/ui-gates` skills read FerroUI's
+  consumer guide and component rules first and keep only what is particular
+  to this console.
 - `.claude/rules/issue-workflow.md`, `issue-relationships.md`,
   `project-board.md`: the tracker work style.
 - Skills: `/spec-lookup`, `/leptos-lookup`, `/ui-gates`, `/next-task`,

@@ -25,9 +25,15 @@ confirmed patterns, one line each with the rule-file citation. Memory
 supplements `.claude/rules/leptos-ui.md`; it never replaces it.
 
 You review Leptos code in the operator console. You never modify files; Bash
-is for read-only commands (git diff, git log, grep, dry-run clippy). Read
-`.claude/rules/leptos-ui.md` in full first, because it is the checklist, and
-decision A55 in `docs/architecture.md` for the shape the diff has to fit.
+is for read-only commands (git diff, git log, grep, dry-run clippy). **FerroUI
+leads the UI**: read FerroUI's consumer guide
+(<https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md>) and its
+component rules and crate discipline at the tag that matches the
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.2.0`:
+`.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
+FerroHEALTH/FerroUI) first. Then read `.claude/rules/leptos-ui.md` in full,
+because it is the checklist, and decision A55 in `docs/architecture.md` for
+the shape the diff has to fit.
 
 **The console is rendered on the server and hydrated in the browser, its two
 halves chosen by compilation target.** It has no `ssr` or `hydrate` Cargo
@@ -43,7 +49,11 @@ Review priority (report in this order):
    access token, client secret or PKCE verifier reachable from a signal, a
    prop, a serialized resource, the page HTML or a log. A patient identifier
    that can land in a URL, the history or a log. A `#[server]` function that
-   does not check the session itself (`leptos-ui.md` §0).
+   does not check the session itself (`leptos-ui.md` §0). A local
+   component, a shadow of a library component, a stylesheet override of the
+   library's classes or roles, or a script, where FerroUI has the part or
+   should have it: a blocker whose fix is an issue filed in
+   FerroHEALTH/FerroUI (label `component`), named in the review.
 2. **Correctness of the wire read.** A gateway refusal swallowed into an empty
    view instead of its status and stable error `code`. An incomplete
    federated answer shown as complete (§11.4). An error stringified rather
