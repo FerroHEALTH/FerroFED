@@ -32,7 +32,7 @@ use wiremock::{Mock, Request, Respond, ResponseTemplate};
 use crate::console::{AUDIENCE, ISSUER, OPERATOR_SCOPE};
 
 /// The console's client id at the provider.
-pub(crate) const CLIENT_ID: &str = "ferrofed-viewer";
+pub(crate) const CLIENT_ID: &str = "ferrofed-console";
 
 /// The name the operator signs in under, which the top bar shows.
 pub(crate) const OPERATOR: &str = "synthetic.operator";

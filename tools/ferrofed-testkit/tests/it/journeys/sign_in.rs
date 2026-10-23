@@ -12,7 +12,7 @@
 
 use std::error::Error;
 
-use ferrofed_viewer::app::PRODUCT;
+use ferrofed_console::app::PRODUCT;
 use thirtyfour::{By, SameSite};
 
 use crate::journeys::browser::{Browser, until, with_browser};

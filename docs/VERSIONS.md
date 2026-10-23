@@ -436,7 +436,7 @@ on 2026-10-04.
 
 ## Operator console crates and build tools
 
-The operator console, `app/ferrofed-viewer` (#275), is a Leptos app rendered
+The operator console, `app/ferrofed-console` (#275), is a Leptos app rendered
 on the server and hydrated in the browser, the shape of FerroEHR's viewer.
 Each Leptos crate is on a release line of its own and is held to the root
 `Cargo.toml` alone. cargo-leptos builds the site bundle, and it runs the
@@ -458,27 +458,27 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 | `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
+| `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-console.yml` |
 | `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
-| `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
-| Binaryen (wasm-opt) | version_123 | `scripts/release/viewer-tools.sh` |
-| Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/viewer-tools.sh` |
-| Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/viewer-tools.sh` |
-| Binaryen, `bin/wasm-opt` of the x86_64 Linux archive, SHA-256 | `d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a` | `scripts/release/viewer-tools.sh` |
-| Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/viewer-tools.sh` |
-| Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/viewer-tools.sh` |
+| `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-console.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
+| Binaryen (wasm-opt) | version_123 | `scripts/release/console-tools.sh` |
+| Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/console-tools.sh` |
+| Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/console-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the x86_64 Linux archive, SHA-256 | `d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a` | `scripts/release/console-tools.sh` |
+| Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/console-tools.sh` |
+| Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/console-tools.sh` |
 
 The console's stylesheet is the `ferrohealth-ui` crate's, which the server
 serves beside the console's brand theme, so the site build compiles no CSS
 and needs no Node or Tailwind CSS CLI: the crate's manifest names no
 Tailwind input, so cargo-leptos runs none (#1150). cargo-leptos runs the
 Binaryen wasm-opt it finds on `PATH`, and downloads one unchecked when it
-finds none, so `scripts/release/viewer-tools.sh` installs it at this release
-and checks it against its digest first, and `scripts/release/viewer-site.sh`
+finds none, so `scripts/release/console-tools.sh` installs it at this release
+and checks it against its digest first, and `scripts/release/console-site.sh`
 refuses to build without it. Binaryen version_123 is the release cargo-leptos
 0.3.11 fetches by default. Each archive digest equals the `.sha256` file the
 upstream release publishes beside it, read on 2026-10-15.
-`scripts/release/viewer-tools.sh --check`, which the site script runs before
+`scripts/release/console-tools.sh --check`, which the site script runs before
 every build, digests the `wasm-opt` on `PATH` and, on macOS, the
 `libbinaryen.dylib` it loads, both taken from the archives above on
 2026-10-15.
@@ -563,7 +563,7 @@ it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/viewer/Dockerfile` `FROM` |
+| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/console/Dockerfile` `FROM` |
 | FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.3.2@sha256:1cee9ad59e2e1f05eecc1cd8e2b7d2b2c86efe385944c74de509908779f7f998` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.3.2@sha256:21673ec220915824c03a78faa28b9e7f82d46b116074fde0291d1a8df2f93101` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
@@ -728,9 +728,9 @@ release without a reviewed change.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `cargo-auditable` | 0.7.5 | `.github/workflows/release-build.yml`, `.github/workflows/release-viewer.yml` |
+| `cargo-auditable` | 0.7.5 | `.github/workflows/release-build.yml`, `.github/workflows/release-console.yml` |
 | `cargo-cyclonedx` | 0.5.9 | `.github/workflows/release-build.yml` |
-| `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml`, `.github/workflows/release-viewer.yml` |
+| `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml`, `.github/workflows/release-console.yml` |
 | `cargo-fuzz` | 0.13.2 | `.github/workflows/fuzz.yml` (the fuzz lane, the one nightly-toolchain job; #134) |
 
 `scripts/checks/versions.sh` reads every `tool:` line of the release and fuzz

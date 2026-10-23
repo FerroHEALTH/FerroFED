@@ -94,11 +94,11 @@ Fourteen workflows:
   stages them for `docker/Dockerfile`, pushes the multi-platform image to GHCR,
   attests the index and both platform manifests as OCI referrers, and verifies
   its own output as a consumer would.
-- `.github/workflows/release-viewer.yml`: the reusable operator console
-  lane. It builds the musl `ferrofed-viewer` binaries with `cargo auditable`
+- `.github/workflows/release-console.yml`: the reusable operator console
+  lane. It builds the musl `ferrofed-console` binaries with `cargo auditable`
   and the site bundle with cargo-leptos, attests each, verifies them against
   its own signer, and pushes, attests and verifies
-  `ghcr.io/ferrohealth/ferrofed-viewer` as the image lane does the gateway.
+  `ghcr.io/ferrohealth/ferrofed-console` as the image lane does the gateway.
   The three are reusable workflows because SLSA Build Level 3 needs the
   signing identity out of reach of caller-defined steps.
 - `.github/workflows/pin-freshness.yml`: the weekly freshness read over every
@@ -192,7 +192,7 @@ matches the workspace); the `release compose` job (`ferrofed config check`,
 built as a static musl binary, over the release compose assets and the
 example Kubernetes ConfigMap, and over the example the last release attached,
 which, when refused, needs a pending upgrade note:
-`scripts/checks/upgrade-notes.sh`); the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release`, the bundle budget, `scripts/checks/viewer-bundle.sh`, and the build-host path check, `scripts/checks/viewer-paths.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
+`scripts/checks/upgrade-notes.sh`); the `console` job (`cargo clippy --locked -p ferrofed-console --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/console-site.sh --release`, the bundle budget, `scripts/checks/console-bundle.sh`, and the build-host path check, `scripts/checks/console-paths.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 the changelog guard on pull requests (`scripts/checks/changelog-guard.sh`: a
 new fragment under `changelog.d/`, or an edit of `CHANGELOG.md` from a pull

@@ -151,7 +151,7 @@ self_test() {
   printf 'Command::new(env!("CARGO_BIN_EXE_ferrofed"))\n    .args(["serve", "--config"])\n    .output()\n' > "$tmp/app/server/tests/on.rs"
   printf 'Command::new(env!("CARGO_BIN_EXE_ferrofed"))\n    .args(["serve", "--config"])\n    .env(\n        "FERROFED__USAGE_REPORT__ENABLED",\n        "false",\n    )\n' > "$tmp/app/server/tests/off.rs"
   printf 'Command::new(env!("CARGO_BIN_EXE_ferrofed"))\n    .args(["config", "check"])\n' > "$tmp/app/server/tests/job.rs"
-  printf 'Command::new(env!("CARGO_BIN_EXE_ferrofed-viewer"))\n    .arg("serve")\n' > "$tmp/app/server/tests/viewer.rs"
+  printf 'Command::new(env!("CARGO_BIN_EXE_ferrofed-console"))\n    .arg("serve")\n' > "$tmp/app/server/tests/console.rs"
 
   found="$(cd "$tmp" && findings find scripts docker .github app -type f 2> /dev/null)"
   for name in scripts/on.sh scripts/bin-on.sh scripts/cargo-on.sh scripts/compose-on.sh scripts/wrapped-on.sh \
@@ -163,7 +163,7 @@ self_test() {
   done
   for name in scripts/off.sh scripts/compose-off.sh scripts/wrapped-off.sh scripts/wrapped-check.sh scripts/commented.sh \
     scripts/jobs.sh .github/workflows/run-off.yml .github/workflows/one-shot.yml .github/workflows/bin-off.yml "$SELF" \
-    app/server/tests/off.rs app/server/tests/job.rs app/server/tests/viewer.rs; do
+    app/server/tests/off.rs app/server/tests/job.rs app/server/tests/console.rs; do
     if grep -qxF "$name" <<< "$found"; then
       echo "self-test: $name was flagged" >&2
       failures=1

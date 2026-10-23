@@ -36,7 +36,7 @@ has run on every change since the workspace landed.
 | `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
-| `release-viewer.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-viewer` binaries built with `cargo auditable` and the site bundle built with cargo-leptos, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-viewer` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
+| `release-console.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-console` binaries built with `cargo auditable` and the site bundle built with cargo-leptos, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-console` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
@@ -55,7 +55,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `zizmor` | `zizmor --min-severity=low .github/`, with `GH_TOKEN` so the online audits work |
 | `actionlint` | the official image, pinned by tag and digest |
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
-| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` and `docker/viewer/Dockerfile` |
+| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` and `docker/console/Dockerfile` |
 | `kubeconform` | the official image, pinned by tag and digest, in strict mode over the example manifests under `deploy/kubernetes/`, against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` |
 | `observability` | `scripts/checks/observability.sh --self-test` (a missing tool skips outside CI and fails in it), then `scripts/checks/observability.sh` over `deploy/observability/`, with `promtool` from the Prometheus release tarball, its SHA-256 checked before it runs |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
@@ -94,8 +94,8 @@ workflows under `docs/specs/` are never audited as if they ran here.
 skip with its reason. Every subject file it reads exists today, the
 architecture pin rows in `docs/architecture.md`, the workspace rows in the root
 `Cargo.toml`, the release tool pins in `release-build.yml`,
-`release-image.yml` and `release-viewer.yml`, and the console's build tools
-in `ci.yml` and `release-viewer.yml`, so every comparison runs.
+`release-image.yml` and `release-console.yml`, and the console's build tools
+in `ci.yml` and `release-console.yml`, so every comparison runs.
 
 **Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
@@ -258,23 +258,23 @@ default features, each as
 fixture names no section of a binding it does not test, so it fails here
 when it is neither (#881).
 
-`viewer (wasm32 and site bundle)` covers the half of the operator console,
-`app/ferrofed-viewer`, that the workspace lanes never compile. The workspace
+`console (wasm32 and site bundle)` covers the half of the operator console,
+`app/ferrofed-console`, that the workspace lanes never compile. The workspace
 lanes build, lint and test its server half on the host; this job runs
-`cargo clippy -p ferrofed-viewer --lib --target wasm32-unknown-unknown` at
+`cargo clippy -p ferrofed-console --lib --target wasm32-unknown-unknown` at
 `-D warnings`, so a dependency that cannot compile for the browser fails here,
-and then builds the release site bundle with `scripts/release/viewer-site.sh
---release`, after `scripts/release/viewer-tools.sh` has put wasm-opt on
+and then builds the release site bundle with `scripts/release/console-site.sh
+--release`, after `scripts/release/console-tools.sh` has put wasm-opt on
 `PATH`, checked against the SHA-256 `docs/VERSIONS.md` pins, so cargo-leptos
 never downloads it (the journeys job and the release lane's site job do the
 same). The site script refuses to start without it, freezes `Cargo.lock` around cargo-leptos and checks the
 WebAssembly, its JavaScript glue, the stylesheet and the favicon are all written.
-`scripts/checks/viewer-bundle.sh` then writes the WebAssembly and JavaScript
+`scripts/checks/console-bundle.sh` then writes the WebAssembly and JavaScript
 sizes, raw and compressed with gzip and brotli, to the job summary, and fails
 when the brotli-compressed WebAssembly is over the byte budget the console's
-rule file sets, and `scripts/checks/viewer-paths.sh` fails when the bundle
+rule file sets, and `scripts/checks/console-paths.sh` fails when the bundle
 names a home, runner, registry or toolchain directory of the build host,
-which `viewer-site.sh` remaps away. The console chooses its two halves by compilation target,
+which `console-site.sh` remaps away. The console chooses its two halves by compilation target,
 never by Cargo feature, so the workspace `--all-features` lanes build it like
 any other member and `features (cargo-hack)` has nothing to add for it.
 
@@ -322,11 +322,11 @@ the fragments into the version's section (`docs/release.md`).
 (#1151). With no arguments, `changelog-guard.sh`
 compares `origin/main` with `HEAD` and passes a branch with no commit of its
 own, `crate-version-guard.sh` compares `origin/main` with the working tree,
-and `stray-literals.sh` reads `app/ferrofed-viewer/src`, as CI does. Some
+and `stray-literals.sh` reads `app/ferrofed-console/src`, as CI does. Some
 guards need an input first, and each one says which when it is missing:
 `kubernetes-example.sh` and `upgrade-notes.sh` need a built `ferrofed`
-binary, `viewer-bundle.sh` and `viewer-paths.sh` need the release site
-bundle from `scripts/release/viewer-site.sh --release`, and
+binary, `console-bundle.sh` and `console-paths.sh` need the release site
+bundle from `scripts/release/console-site.sh --release`, and
 `release-compose.sh` needs Docker, and `fhir-validator.sh` needs the
 emitted documents and Java. `pin-freshness.sh` and `ehds-acts.sh` read
 upstream sites over the network.
@@ -582,9 +582,9 @@ These are repository settings only the owner can change. The state on
 | Registration at bestpractices.dev | done: project [15130](https://www.bestpractices.dev/projects/15130), badge in the README |
 | The `github-pages` environment, deploying from `main` only | done |
 | A `crates-io` environment with a required reviewer, and one Trusted Publisher entry per crate naming `publish-crates.yml` | pending: the owner's two steps when the `publish` switch is flipped (`docs/release.md` § The crates.io lane) |
-| Artifact attestations for the release lane's provenance and SBOM bundles | done: available to a public repository with no setting; the lane writes them from `release-build.yml`, `release-image.yml` and `release-viewer.yml` |
+| Artifact attestations for the release lane's provenance and SBOM bundles | done: available to a public repository with no setting; the lane writes them from `release-build.yml`, `release-image.yml` and `release-console.yml` |
 | The visibility of the `ghcr.io/ferrohealth/ferrofed` package | pending: GHCR creates it private on the first image push; the owner sets it public and links it to the repository |
-| The visibility of the `ghcr.io/ferrohealth/ferrofed-viewer` package | pending: the same as the gateway's, on the first release that pushes the console image |
+| The visibility of the `ghcr.io/ferrohealth/ferrofed-console` package | pending: the same as the gateway's, on the first release that pushes the console image |
 
 ## Sources
 

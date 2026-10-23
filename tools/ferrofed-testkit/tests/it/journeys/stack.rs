@@ -142,15 +142,15 @@ impl Stack {
             None => text,
         };
         let settings =
-            ferrofed_viewer::config::Config::from_sources(Some(&text), &BTreeMap::new())?
+            ferrofed_console::config::Config::from_sources(Some(&text), &BTreeMap::new())?
                 .resolve()?;
-        let state = ferrofed_viewer::server::ViewerState::new(settings)?;
+        let state = ferrofed_console::server::ConsoleState::new(settings)?;
         let cookie = state
             .sessions()
-            .cookie_name(ferrofed_viewer::session::COOKIE);
+            .cookie_name(ferrofed_console::session::COOKIE);
         tokio::spawn(ferrofed_server::serve_until(
             listener,
-            ferrofed_viewer::server::router(state),
+            ferrofed_console::server::router(state),
             Duration::from_secs(1),
             std::future::pending(),
         ));
@@ -187,10 +187,10 @@ fn site_root() -> Result<PathBuf, Box<dyn Error>> {
         || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/site"),
         PathBuf::from,
     );
-    let bundle = site.join("pkg/ferrofed-viewer.wasm");
+    let bundle = site.join("pkg/ferrofed-console.wasm");
     if !bundle.is_file() {
         return Err(format!(
-            "{} holds no site bundle: build it with scripts/release/viewer-site.sh --release, or name its directory in {SITE_ENV}",
+            "{} holds no site bundle: build it with scripts/release/console-site.sh --release, or name its directory in {SITE_ENV}",
             site.display()
         )
         .into());

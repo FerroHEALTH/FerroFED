@@ -24,7 +24,7 @@ under `rubentalstra` on that date.
 - Every URL names `FerroHEALTH/FerroFED`; GitHub redirects the old one, but
   nothing new is written against it. FerroFED's own image is
   `ghcr.io/ferrohealth/ferrofed`, the console's
-  `ghcr.io/ferrohealth/ferrofed-viewer`, and the FerroEHR node images are
+  `ghcr.io/ferrohealth/ferrofed-console`, and the FerroEHR node images are
   under `ghcr.io/ferrohealth/` too since FerroEHR 4.3.3.
 - The transfer turned secret scanning and push protection off (the
   organization default); they were switched back on at once. A later

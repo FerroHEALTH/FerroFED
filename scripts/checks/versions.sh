@@ -71,9 +71,9 @@
 #                          tracing-opentelemetry row and the tonic row
 #                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
-#  14. viewer toolchain    the Leptos rows against the root Cargo.toml
+#  14. console toolchain    the Leptos rows against the root Cargo.toml
 #                          requirements, and the cargo-leptos and wasm-bindgen
-#                          versions ci.yml and release-viewer.yml install,
+#                          versions ci.yml and release-console.yml install,
 #                          the wasm-bindgen CLI equal to the wasm-bindgen
 #                          crate the root Cargo.toml requires and Cargo.lock
 #                          locks, and the thirtyfour row against the root
@@ -85,7 +85,7 @@
 #                          of its support period five years on (Regulation
 #                          (EU) 2024/2847 Art 13(8)).
 #
-# The container images check (9) holds docker/viewer/Dockerfile to the same
+# The container images check (9) holds docker/console/Dockerfile to the same
 # base-image row as docker/Dockerfile.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
@@ -1077,7 +1077,7 @@ else
   note "no $ci yet, skipped"
 fi
 
-release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml .github/workflows/release-viewer.yml .github/workflows/fuzz.yml)
+release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml .github/workflows/release-console.yml .github/workflows/fuzz.yml)
 # Every version of TOOL the release and fuzz workflows install, deduplicated, so a tool
 # named in both files has to carry the same pin in both.
 release_tool_pins() {
@@ -1262,7 +1262,7 @@ for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus openteleme
   fi
 done
 
-echo "== viewer toolchain ($matrix <-> Cargo.toml, Cargo.lock, ci.yml, release-viewer.yml)"
+echo "== console toolchain ($matrix <-> Cargo.toml, Cargo.lock, ci.yml, release-console.yml)"
 # The Leptos crates are released on lines of their own, each held to its row.
 if [[ -f Cargo.toml ]]; then
   for crate in leptos leptos_axum leptos_meta leptos_router; do
@@ -1279,26 +1279,26 @@ if [[ -f Cargo.toml ]]; then
     fi
   done
 fi
-viewer_workflows=(.github/workflows/ci.yml .github/workflows/release-viewer.yml)
-# Every version of TOOL the viewer workflows install, deduplicated.
-viewer_tool_pins() {
+console_workflows=(.github/workflows/ci.yml .github/workflows/release-console.yml)
+# Every version of TOOL the console workflows install, deduplicated.
+console_tool_pins() {
   local tool="$1" wf
-  for wf in "${viewer_workflows[@]}"; do
+  for wf in "${console_workflows[@]}"; do
     [[ -f "$wf" ]] || continue
     sed -nE "s|^[[:space:]]*tool:[[:space:]]*$tool@([^[:space:]]+).*|\1|p" "$wf"
   done | sort -u
 }
 for tool in cargo-leptos wasm-bindgen; do
   want="$(pin_of "$tool" "$matrix")"
-  found="$(viewer_tool_pins "$tool")"
+  found="$(console_tool_pins "$tool")"
   if [[ -z "$want" ]]; then
     bad "$matrix has no '$tool' row"
   elif [[ -z "$found" ]]; then
-    bad "the viewer workflows pin no $tool version"
+    bad "the console workflows pin no $tool version"
   elif [[ "$(line_count "$found")" != "1" ]]; then
-    bad "$tool: the viewer workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
+    bad "$tool: the console workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
   elif [[ "$found" != "$want" ]]; then
-    bad "$tool: the viewer workflows pin $found, $matrix pins $want"
+    bad "$tool: the console workflows pin $found, $matrix pins $want"
   else
     note "OK: $tool $found"
   fi
@@ -1340,7 +1340,7 @@ else
 fi
 # The wasm-opt cargo-leptos builds the site bundle with: each version and
 # SHA-256 the install script checks against its row.
-tools=scripts/release/viewer-tools.sh
+tools=scripts/release/console-tools.sh
 # The value VAR is set to in the install script.
 tool_pin() {
   sed -nE "s|^$1=\"([^\"]+)\"\$|\1|p" "$tools" 2>/dev/null
@@ -1488,10 +1488,10 @@ if [[ -f "$spec_prov" ]]; then
   fi
 fi
 
-echo "== container images (docker/Dockerfile, docker/viewer/Dockerfile, compose.yaml <-> $matrix)"
+echo "== container images (docker/Dockerfile, docker/console/Dockerfile, compose.yaml <-> $matrix)"
 # The gateway image and the operator console image build on the one pinned
 # base.
-for dockerfile in docker/Dockerfile docker/viewer/Dockerfile; do
+for dockerfile in docker/Dockerfile docker/console/Dockerfile; do
   shipped "$dockerfile" || continue
   # The base is the last stage; an earlier one only stages files for it.
   base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' "$dockerfile" | tail -n1)"

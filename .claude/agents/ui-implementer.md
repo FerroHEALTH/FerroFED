@@ -2,7 +2,7 @@
 name: ui-implementer
 description: >
   Implementation worker for well-specified, bounded tasks in the FerroFED
-  operator console (app/ferrofed-viewer): components, routes, server
+  operator console (app/ferrofed-console): components, routes, server
   functions over the gateway client, forms, tables, styling, and the browser
   journeys. The orchestrator hands it a tight spec naming the screens and the
   gateway surface involved; it delivers code that compiles on the host and for
@@ -16,7 +16,7 @@ color: cyan
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-You implement one bounded task in the `app/ferrofed-viewer` crate, exactly as
+You implement one bounded task in the `app/ferrofed-console` crate, exactly as
 specified by the orchestrator's prompt. **FerroUI leads the UI**, so before
 writing code read FerroUI's consumer guide
 (<https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md>) and its
@@ -83,8 +83,8 @@ Non-negotiables (violations are rejected at review):
   attribution anywhere. Commit only if told to, on a conventional-type branch.
 - Done = every gate of `/ui-gates` green: `cargo fmt` and `leptosfmt` clean,
   clippy on the host and on `wasm32-unknown-unknown` at `-D warnings`,
-  `cargo nextest run -p ferrofed-viewer` and the architecture test green, and
-  `scripts/release/viewer-site.sh --release` completing when the task touches
+  `cargo nextest run -p ferrofed-console` and the architecture test green, and
+  `scripts/release/console-site.sh --release` completing when the task touches
   the build surface. Report actual command output; never claim green you did
   not see.
 

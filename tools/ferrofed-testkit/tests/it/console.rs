@@ -19,7 +19,7 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use ferrofed_viewer::session::SignedIn;
+use ferrofed_console::session::SignedIn;
 use secrecy::SecretString;
 use tokio::net::TcpListener;
 
@@ -109,14 +109,14 @@ impl Running {
             std::future::pending(),
         ));
 
-        let console_settings = ferrofed_viewer::config::Config::from_sources(
+        let console_settings = ferrofed_console::config::Config::from_sources(
             Some(&format!(
                 "[gateway]\nbase_url = \"http://{gateway_address}/\"\n\n[session]\nsecure_cookie = false\n"
             )),
             &BTreeMap::new(),
         )?
         .resolve()?;
-        let state = ferrofed_viewer::server::ViewerState::new(console_settings)?;
+        let state = ferrofed_console::server::ConsoleState::new(console_settings)?;
         let mut claims = Claims::new(ISSUER, AUDIENCE);
         let scope = claims.scope.take().unwrap_or_default();
         claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}"));
@@ -131,7 +131,7 @@ impl Running {
         let console_address = console.local_addr()?;
         tokio::spawn(ferrofed_server::serve_until(
             console,
-            ferrofed_viewer::server::router(state),
+            ferrofed_console::server::router(state),
             Duration::from_secs(1),
             std::future::pending(),
         ));
@@ -139,7 +139,7 @@ impl Running {
             _node: node,
             _dir: dir,
             console: format!("http://{console_address}"),
-            cookie: format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
+            cookie: format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
         })
     }
 

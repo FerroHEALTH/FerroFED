@@ -5,7 +5,7 @@ description: >
   effects, <For>, Resource, Suspense and Transition, server functions,
   hydration, router, forms, cargo-leptos, binary size) in the official Leptos
   book, cached locally. Use before implementing or reviewing any operator
-  console (app/ferrofed-viewer) behaviour the rule file does not fully
+  console (app/ferrofed-console) behaviour the rule file does not fully
   settle, or when a "how does Leptos do X" question comes up.
 allowed-tools: Read, Grep, Glob, Bash
 argument-hint: "<signal / resource / server fn / hydration / router / form / cargo-leptos topic>"

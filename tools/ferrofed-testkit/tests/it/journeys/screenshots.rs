@@ -81,7 +81,7 @@ const HEIGHT: u32 = 900;
 const TALLEST: u32 = 8000;
 
 /// The name of the console's theme cookie.
-const THEME_COOKIE: &str = "ferrofed_viewer_theme";
+const THEME_COOKIE: &str = "ferrofed_console_theme";
 
 /// One screenshot of a console page.
 #[derive(Debug)]
@@ -623,7 +623,7 @@ async fn the_book_shows_every_console_page_in_light_and_dark() -> Result<(), Box
 
 /// The routes the console's router declares, read from its source.
 fn routes() -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let source = std::fs::read_to_string(root().join("app/ferrofed-viewer/src/app.rs"))?;
+    let source = std::fs::read_to_string(root().join("app/ferrofed-console/src/app.rs"))?;
     let routes: BTreeSet<String> = source
         .split("path!(\"")
         .skip(1)

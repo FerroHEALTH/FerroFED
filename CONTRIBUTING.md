@@ -78,9 +78,9 @@ the journeys look first, then run the journeys behind their own gate, as the
 `journeys (browser)` job runs them:
 
 ```
-scripts/release/viewer-tools.sh "$HOME/.cache/ferrofed-viewer-tools"
-export PATH="$HOME/.cache/ferrofed-viewer-tools/bin:$PATH"
-scripts/release/viewer-site.sh --release
+scripts/release/console-tools.sh "$HOME/.cache/ferrofed-console-tools"
+export PATH="$HOME/.cache/ferrofed-console-tools/bin:$PATH"
+scripts/release/console-site.sh --release
 scripts/release/journey-tools.sh target/journey-tools
 FERROFED_JOURNEYS=1 cargo nextest run --locked -p ferrofed-testkit \
   -E 'test(/^journeys::/)'
@@ -93,9 +93,9 @@ with the Chrome it launched, when its browser closes, so the journeys run in
 parallel and share no driver. `FERROFED_CHROMEDRIVER` names another
 chromedriver, and without either the journeys use the one on `PATH`.
 
-`viewer-tools.sh` installs the wasm-opt the bundle is built with, checked
+`console-tools.sh` installs the wasm-opt the bundle is built with, checked
 against its pinned SHA-256 (Linux x86-64 and macOS arm64), and
-`viewer-site.sh` refuses to build until it is on `PATH`, so cargo-leptos never
+`console-site.sh` refuses to build until it is on `PATH`, so cargo-leptos never
 downloads it itself.
 `FERROFED_WEBDRIVER` names a running WebDriver endpoint every journey shares
 instead, and `FERROFED_CHROME` another Chrome binary. A journey lives in the
