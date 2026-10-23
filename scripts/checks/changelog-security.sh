@@ -27,7 +27,8 @@
 # <file> defaults to CHANGELOG.md, --section to Unreleased. A VEX path is
 # resolved against the directory that holds <file>. VEX_DIR names the VEX
 # directory relative to it (default security/vex). CHANGELOG_RULE names the
-# document a refusal points at (default .claude/rules/changelog.md).
+# document a refusal points at (default: the Security entries section of the
+# fragment format note).
 #
 # Exit codes: 0 clean, 1 a finding, 2 a usage error or a missing section.
 set -euo pipefail
@@ -175,7 +176,7 @@ run() {
     echo "changelog security check FAILED ([$section] of $file):" >&2
     # In line order, so the subsection's own finding precedes its items.
     printf '%s\n' "$out" | sort -t: -k2,2n >&2
-    echo "(the rule: ${CHANGELOG_RULE:-.claude/rules/changelog.md, Security fixes, advisories and the per-release reviews})" >&2
+    echo "(the rule: ${CHANGELOG_RULE:-changelog.d/README.md, Security entries})" >&2
     exit 1
     ;;
   *) exit 2 ;;

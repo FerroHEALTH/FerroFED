@@ -30,7 +30,6 @@ guard_no_args "$@"
 cd "$(dirname "$0")/../.."
 
 export CHANGELOG_EXTRA_TYPES="${CHANGELOG_EXTRA_TYPES:-Upgrade notes}"
-export CHANGELOG_RULE="${CHANGELOG_RULE:-changelog.d/README.md, Security entries}"
 
 preview="$(mktemp ./.changelog-preview.XXXXXX)"
 trap 'rm -f -- "$preview"' EXIT

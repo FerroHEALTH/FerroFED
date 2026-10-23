@@ -210,8 +210,7 @@ check_changelog_structure() {
 # every advisory.
 check_changelog_security() {
   bash scripts/checks/changelog-security.sh --self-test
-  CHANGELOG_RULE="changelog.d/README.md, Security entries" \
-    bash scripts/checks/changelog-security.sh --section "$VERSION"
+  bash scripts/checks/changelog-security.sh --section "$VERSION"
 }
 
 # Regulation (EU) 2025/327 Art 30(2): a release that changes a harmonised
