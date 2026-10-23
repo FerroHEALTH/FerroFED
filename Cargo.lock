@@ -1052,9 +1052,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.2"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
+checksum = "12218662ccac37d9714f2191252553d67585b97df8c839cbe49e0bde278dc865"
 dependencies = [
  "cmov",
 ]
@@ -1428,6 +1428,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrofed-console"
+version = "0.0.11"
+dependencies = [
+ "aws-lc-rs",
+ "axum",
+ "base64 0.23.1",
+ "clap",
+ "console_error_panic_hook",
+ "cookie",
+ "ferrofed-registry",
+ "ferrofed-testkit",
+ "ferrohealth-ui",
+ "fluent-templates",
+ "http",
+ "http-body-util",
+ "hyper",
+ "jiff",
+ "jsonwebtoken",
+ "leptos",
+ "leptos_axum",
+ "leptos_meta",
+ "leptos_router",
+ "openehr-federation",
+ "openehr-its",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http 0.7.1",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "wasm-bindgen",
+ "wiremock",
+]
+
+[[package]]
 name = "ferrofed-eehrxf"
 version = "0.0.1"
 dependencies = [
@@ -1608,11 +1650,11 @@ dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
  "bytes",
+ "ferrofed-console",
  "ferrofed-eehrxf",
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-server",
- "ferrofed-console",
  "fhir-types",
  "flate2",
  "http",
@@ -1645,48 +1687,6 @@ dependencies = [
  "tonic",
  "url",
  "uuid",
- "wiremock",
-]
-
-[[package]]
-name = "ferrofed-console"
-version = "0.0.11"
-dependencies = [
- "aws-lc-rs",
- "axum",
- "base64 0.23.1",
- "clap",
- "console_error_panic_hook",
- "cookie",
- "ferrofed-registry",
- "ferrofed-testkit",
- "ferrohealth-ui",
- "fluent-templates",
- "http",
- "http-body-util",
- "hyper",
- "jiff",
- "jsonwebtoken",
- "leptos",
- "leptos_axum",
- "leptos_meta",
- "leptos_router",
- "openehr-federation",
- "openehr-its",
- "reqwest",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "tower",
- "tower-http 0.7.1",
- "tracing",
- "tracing-subscriber",
- "url",
- "wasm-bindgen",
  "wiremock",
 ]
 

@@ -12,8 +12,8 @@
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_testkit::mock::Server;
 use ferrofed_console::session::COOKIE;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};

@@ -13,8 +13,8 @@
 
 use std::error::Error;
 
-use ferrofed_testkit::mock::Server;
 use ferrofed_console::app::PRODUCT;
+use ferrofed_testkit::mock::Server;
 use thirtyfour::By;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};

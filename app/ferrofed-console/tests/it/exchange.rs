@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_testkit::issuer::{Issuer, JWKS_PATH};
-use ferrofed_testkit::mock::Server;
 use ferrofed_console::server::ConsoleState;
 use ferrofed_console::session::Occupancy;
+use ferrofed_testkit::issuer::{Issuer, JWKS_PATH};
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use jsonwebtoken::{Algorithm, Header};
 use secrecy::ExposeSecret as _;
