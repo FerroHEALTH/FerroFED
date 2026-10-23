@@ -526,7 +526,7 @@ async fn content_security_policy(
 /// carries the nonce the response header authorizes.
 ///
 /// `leptos_axum` provides a nonce of its own before this runs, and the
-/// request parts it provides carry the one [`content_security_policy`]
+/// request parts it provides carry the one `content_security_policy`
 /// minted, which replaces it.
 pub fn provide_request_nonce() {
     let Some(parts) = leptos::context::use_context::<http::request::Parts>() else {

@@ -47,7 +47,7 @@ fn standing(
     let (word, tone) = if Some(revision.id) == running {
         (tr(Msg::StateRunning), Tone::Ok)
     } else if running.is_some_and(|running| revision.id > running) {
-        (tr(Msg::SavedNotApplied), Tone::Warn)
+        (tr(Msg::StatePendingWord), Tone::Warn)
     } else if Some(revision.id) == previous
         || matches!(revision.origin, Origin::File | Origin::Rollback)
     {

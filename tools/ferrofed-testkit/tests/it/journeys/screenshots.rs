@@ -107,7 +107,7 @@ const SIGN_IN: Shot = Shot {
 };
 
 /// The pages a signed-in operator loads and reads as they are.
-const PAGES: [Shot; 25] = [
+const PAGES: [Shot; 26] = [
     Shot {
         image: "dashboard",
         route: "/",
@@ -227,6 +227,12 @@ const PAGES: [Shot; 25] = [
         route: "/configuration/:tab",
         url: "/configuration/history",
         ready: "//a[@data-tab = 'tab-history'][@aria-current = 'page']",
+    },
+    Shot {
+        image: "configuration-import-export",
+        route: "/configuration/:tab",
+        url: "/configuration/import-export",
+        ready: "//a[@data-tab = 'tab-import-export'][@aria-current = 'page']",
     },
     Shot {
         image: "configuration-member-form",

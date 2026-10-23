@@ -52,8 +52,8 @@ pub(super) fn owner(owner: Owner) -> AnyView {
 pub(super) fn state(state: Option<ConsoleState>) -> AnyView {
     let (word, tone) = match state {
         None | Some(ConsoleState::Running) => (tr(Msg::StateRunning), Tone::Ok),
-        Some(ConsoleState::Pending) => (tr(Msg::SavedNotApplied), Tone::Warn),
-        Some(ConsoleState::Removing) => (tr(Msg::RemovedNotApplied), Tone::Warn),
+        Some(ConsoleState::Pending) => (tr(Msg::StatePendingWord), Tone::Warn),
+        Some(ConsoleState::Removing) => (tr(Msg::StateRemovingWord), Tone::Warn),
         Some(ConsoleState::Shadowed) => (tr(Msg::ShadowedByTheFile), Tone::Neutral),
         Some(_) => (tr(Msg::StateUnknown), Tone::Neutral),
     };

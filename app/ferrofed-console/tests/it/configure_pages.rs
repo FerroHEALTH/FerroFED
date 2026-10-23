@@ -19,7 +19,7 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
         let body = page(&service, &session, path).await?;
         assert!(body.contains("<title>Configuration · "), "{body}");
         assert!(body.contains("File, read-only"), "{body}");
-        assert!(body.contains("saved, not applied"), "{body}");
+        assert!(body.contains(">pending<"), "{body}");
         assert!(
             body.contains(r#"href="/configuration/members/node-c""#),
             "{body}"

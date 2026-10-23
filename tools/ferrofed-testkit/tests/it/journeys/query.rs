@@ -16,7 +16,7 @@
 use std::error::Error;
 
 use ferrofed_console::app::PRODUCT;
-use thirtyfour::{By, Key, WebElement};
+use thirtyfour::{By, WebElement};
 
 use crate::journeys::browser::{Browser, hydrated, with_browser};
 use crate::journeys::journeys_enabled;
@@ -39,17 +39,20 @@ pub(crate) struct Run<'a> {
     pub(crate) partial: bool,
 }
 
-/// Replaces the text of the field `id` with `text`, as typing does: the
-/// whole text selected and deleted, then the new text typed, so an island
-/// that keeps the field's text sees every key.
+/// Replaces the text of the field `id` with `text`: the field emptied, then
+/// the new text typed.
 async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Error>> {
     let field = browser.element(By::Id(id)).await?;
     browser.press(&field).await?;
+    // NOTE: no specification governs this: our own design; the text is cleared
+    // with an input event, so an island that keeps the field's text sees it.
     browser
         .driver()
-        .execute("arguments[0].select();", vec![field.to_json()?])
+        .execute(
+            "arguments[0].value = ''; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            vec![field.to_json()?],
+        )
         .await?;
-    field.send_keys(Key::Backspace).await?;
     if !text.is_empty() {
         field.send_keys(text).await?;
     }
@@ -78,9 +81,25 @@ async fn endpoint(browser: &Browser, id: &str) -> Result<WebElement, Box<dyn Err
         .await
 }
 
+/// Pastes `text` into the field `id`: one input event with the whole text,
+/// as a paste is (FerroHEALTH/FerroUI#333 tracks the editor losing keys typed
+/// faster than it redraws).
+async fn paste(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Error>> {
+    let field = browser.element(By::Id(id)).await?;
+    browser.press(&field).await?;
+    browser
+        .driver()
+        .execute(
+            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            vec![field.to_json()?, serde_json::json!(text)],
+        )
+        .await?;
+    Ok(())
+}
+
 /// Fills the form with `run` and submits it.
 pub(crate) async fn submit(browser: &Browser, run: &Run<'_>) -> Result<(), Box<dyn Error>> {
-    fill(browser, "aql", run.aql).await?;
+    paste(browser, "aql", run.aql).await?;
     fill(browser, "parameter-name-1", run.parameter.0).await?;
     fill(browser, "parameter-value-1", run.parameter.1).await?;
     options(browser).await?;

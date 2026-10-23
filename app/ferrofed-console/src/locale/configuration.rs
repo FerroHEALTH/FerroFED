@@ -472,8 +472,8 @@ messages! {
     RemoveThisProfile = "remove-this-profile",
     /// `Remove this value`
     RemoveThisValue = "remove-this-value",
-    /// `removed, not applied`
-    RemovedNotApplied = "removed-not-applied",
+    /// `removing`
+    StateRemovingWord = "state-removing-word",
     /// `Replica …: …`
     Replica2 = "replica-2",
     /// `Replica …: ….`
@@ -556,8 +556,8 @@ messages! {
     SaveAs = "save-as",
     /// `Save the removal`
     SaveTheRemoval = "save-the-removal",
-    /// `saved, not applied`
-    SavedNotApplied = "saved-not-applied",
+    /// `pending`
+    StatePendingWord = "state-pending-word",
     /// `It is saved as … and not applied; the outcome shows what it changes.`
     SavedNotAppliedOutcomeShowsWhat = "saved-not-applied-outcome-shows-what",
     /// `Saved and not applied. Read what it changes, then apply it.`
