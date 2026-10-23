@@ -37,11 +37,13 @@ jobs:
     timeout-minutes: 60
     permissions:
       actions: write # read the CI run and re-run one of its jobs
+      pull-requests: read # the head commit of the pull request now
     steps:
       - name: Re-run the guard the label escapes when its result is stale
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
@@ -52,7 +54,6 @@ jobs:
             no-crate-bump) JOB=crate-version-guard ;;
             *) echo "::error::no guard reads the label ${LABEL}"; exit 1 ;;
           esac
-          export JOB
           run=""
           for _ in $(seq 1 30); do
             run=$(gh run list --workflow ci.yml --commit "${HEAD}" --event pull_request \
@@ -70,8 +71,24 @@ jobs:
               echo "CI run ${run} was cancelled; a newer run reads the labels itself"
               exit 0
             fi
-            read -r job outcome < <(gh run view "${run}" --json jobs \
-              --jq '.jobs[] | select(.name == env.JOB) | "\(.databaseId) \(.conclusion)"')
+            # Re-running an older commit's run would cancel the newer commit's
+            # run, which shares its concurrency group.
+            if [ "$(gh api "repos/${GH_REPO}/pulls/${PR}" --jq .head.sha)" != "${HEAD}" ]; then
+              echo "the pull request moved past ${HEAD}; the run of its new head reads the labels itself"
+              exit 0
+            fi
+            # A failed read is retried, never taken for a missing or settled guard.
+            if ! jobs=$(gh run view "${run}" --json jobs \
+              --jq '.jobs[] | "\(.name)\t\(.databaseId) \(.conclusion)"'); then
+              sleep 15
+              continue
+            fi
+            job="" outcome=""
+            read -r job outcome < <(awk -F '\t' -v g="${JOB}" '$1 == g { print $2; exit }' <<<"${jobs}") || true
+            if [ -z "${job}" ]; then
+              echo "::error::${JOB} is not a job of CI run ${run}"
+              exit 1
+            fi
             case "${ACTION}:${outcome}" in
               labeled:failure | unlabeled:success) ;;
               *)
