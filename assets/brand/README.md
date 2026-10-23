@@ -35,6 +35,7 @@ values from `tokens.css` here verbatim.
 | File | What it is |
 |---|---|
 | `ferrofed-icon.svg` | primary icon, full colour, transparent background, 64-unit viewBox at a 512 intrinsic size |
+| `ferrofed-icon-dark.svg` | the icon on a dark ground, as FerroUI's FerroFED design draws it in the console's top bar |
 | `tokens.css` | the palette as CSS custom properties |
 | `favicon.svg` | the browser-tab icon, byte-identical to `ferrofed-icon.svg` |
 | `favicon-32.png` | the 32-pixel raster of `favicon.svg` |
