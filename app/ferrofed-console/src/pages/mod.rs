@@ -143,6 +143,13 @@ pub fn query_param(name: &str) -> Option<String> {
     leptos_router::hooks::use_query_map().with_untracked(|query| query.get(name))
 }
 
+/// Every value of the query parameter `name` of the request, in order.
+#[must_use]
+pub fn query_values(name: &str) -> Vec<String> {
+    leptos_router::hooks::use_query_map()
+        .with_untracked(|query| query.get_all(name).unwrap_or_default())
+}
+
 /// The path of the page being drawn.
 #[must_use]
 pub fn here() -> String {
@@ -185,16 +192,51 @@ pub fn relative(at: &str) -> AnyView {
     .into_any()
 }
 
-/// A state as its shape, its colour and its word (family rule 12); an
-/// excluded part is a muted word with no shape.
-// TODO(#1233): draw FerroUI's F12 state once the library exposes it.
+/// The first character of a slot's marker in a message's text: a private
+/// use character no message holds.
+const SLOT_OPEN: char = '\u{E000}';
+
+/// The last character of a slot's marker.
+const SLOT_CLOSE: char = '\u{E001}';
+
+/// The message `msg` with each placeable of `slots` drawn as its view.
+///
+/// The placeables `args` are filled in as text, and each of `slots`, such
+/// as a link or a code span, is drawn where the message puts it, for
+/// phrasing content such as a page subtitle (`Header::subtitle_view`).
 #[must_use]
-pub fn state(health: crate::read::federation::Health) -> AnyView {
-    let word = health.word();
-    if health == crate::read::federation::Health::Excluded {
-        return view! { <span class="fui-muted">{word}</span> }.into_any();
+pub fn marked(
+    msg: Msg,
+    args: &[(&'static str, ferrohealth_ui::i18n::Arg)],
+    slots: Vec<(&'static str, AnyView)>,
+) -> AnyView {
+    let mut all = args.to_vec();
+    let mut views: Vec<Option<AnyView>> = Vec::with_capacity(slots.len());
+    for (index, (name, slot)) in slots.into_iter().enumerate() {
+        all.push((name, format!("{SLOT_OPEN}{index}{SLOT_CLOSE}").into()));
+        views.push(Some(slot));
     }
-    ferrohealth_ui::view::status::pill(health.tone(), &word).into_any()
+    let text = tr_with(msg, &all);
+    let mut parts: Vec<AnyView> = Vec::new();
+    let mut pieces = text.split(SLOT_OPEN);
+    if let Some(lead) = pieces.next() {
+        parts.push(lead.to_owned().into_any());
+    }
+    for piece in pieces {
+        let (index, rest) = piece.split_once(SLOT_CLOSE).unwrap_or(("", piece));
+        // A marker the catalog never wrote is no slot: its text stays as written.
+        match index
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| views.get_mut(index))
+            .and_then(Option::take)
+        {
+            Some(slot) => parts.push(slot),
+            None => parts.push(index.to_owned().into_any()),
+        }
+        parts.push(rest.to_owned().into_any());
+    }
+    parts.into_iter().collect_view().into_any()
 }
 
 /// Who made or applied a revision, in words.

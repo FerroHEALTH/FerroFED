@@ -458,7 +458,7 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 | `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_router` | 0.8.17 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrohealth-ui` (FerroUI) | 0.3.2 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/leptos-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.3.3 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly, with the `split` feature), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/leptos-ui.md` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-console.yml` |
 | `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-console.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
@@ -478,8 +478,9 @@ Binaryen wasm-opt it finds on `PATH`, and downloads one unchecked when it
 finds none, so `scripts/release/console-tools.sh` installs it at this release
 and checks it against its digest first, and `scripts/release/console-site.sh`
 refuses to build without it. The build splits the WebAssembly
-(`cargo leptos build --split`), which FerroUI's lazy islands need
-(FerroHEALTH/FerroUI#331). Binaryen version_123 is the release cargo-leptos
+(`cargo leptos build --split`), and the `ferrohealth-ui` dependency turns
+on the crate's `split` feature with it, so FerroUI's lazy islands load from
+chunks of their own (FerroHEALTH/FerroUI#331). Binaryen version_123 is the release cargo-leptos
 0.3.11 fetches by default. Each archive digest equals the `.sha256` file the
 upstream release publishes beside it, read on 2026-10-15.
 `scripts/release/console-tools.sh --check`, which the site script runs before

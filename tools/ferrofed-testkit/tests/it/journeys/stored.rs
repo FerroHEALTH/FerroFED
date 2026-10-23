@@ -116,7 +116,7 @@ async fn the_detail_shows_each_version_its_versions_tab_names() -> Result<(), Bo
             .await?;
         browser.titled(&titled(VERSIONED)).await?;
         browser
-            .text("p", &format!("Version {SECOND_VERSION} shown."))
+            .text("p", &format!("Version {SECOND_VERSION} of {VERSIONED}"))
             .await?;
         browser.console_clean("the detail of a stored query").await?;
 
@@ -135,7 +135,9 @@ async fn the_detail_shows_each_version_its_versions_tab_names() -> Result<(), Bo
             .await?
             .click()
             .await?;
-        browser.text("p", "Version 1.0.0 shown.").await?;
+        browser
+            .text("p", &format!("Version 1.0.0 of {VERSIONED}"))
+            .await?;
         browser
             .at(&stack.url(&format!("/stored-queries/{VERSIONED}?version=1.0.0")))
             .await?;

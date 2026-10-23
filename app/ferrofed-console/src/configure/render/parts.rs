@@ -6,19 +6,23 @@
 //! its refusal is shown, a confirmation step in a popover, a repeatable row
 //! and the button that adds one, and the table of what a revision changes.
 //!
-//! An Add or a Remove button submits its form with `form[edit]` naming the
-//! row, and the page answers with the form drawn again from what was
-//! posted (`crate::configure::draft`), so the rows change with no
-//! WebAssembly. A refused field's line shows the refusal the page was
+//! The repeatable rows are FerroUI's F7 rows: an Add or a Remove submits
+//! its form with `form[edit]` naming the row, and the page answers with the
+//! form drawn again from what was posted (`crate::configure::draft`), so
+//! the rows change with no WebAssembly; with it, FerroUI's island changes
+//! them in place and the form posts the rows it holds. A refused field's line shows the refusal the page was
 //! drawn with.
+
+use std::borrow::Cow;
 
 use ferrofed_registry::revision::{Difference, RevisionId};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::form::{ERROR, Field, INPUT, action_field, described_by, error_id};
+use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
+use ferrohealth_ui::widget::repeat::{RepeatAdd, RowEnd};
 use leptos::prelude::*;
 
 use crate::configure::draft::{Draft, EDIT, Edit};
@@ -199,11 +203,12 @@ pub(crate) fn form(class: &'static str, body: impl IntoView) -> impl IntoView {
 /// closes with Cancel. The dialog sits inside the form it confirms, so its
 /// submit posts that form, with no WebAssembly.
 pub(crate) fn confirmed(
-    id: &'static str,
+    id: impl Into<Cow<'static, str>>,
     (glyph, words, variant): (Glyph, String, Variant),
     (question, submit): (String, String),
     inside: impl IntoView + 'static,
 ) -> AnyView {
+    let id: Cow<'static, str> = id.into();
     let confirm = if variant == Variant::Danger {
         Variant::Destructive
     } else {
@@ -212,7 +217,12 @@ pub(crate) fn confirmed(
     let body = view! {
         <div class="fui-form">{inside}</div>
         <div class="fui-dialog-actions">
-            <button type="button" class=Variant::Secondary.class() command="close" commandfor=id>
+            <button
+                type="button"
+                class=Variant::Secondary.class()
+                command="close"
+                commandfor=id.to_string()
+            >
                 {ferrohealth_ui::view::button::label(Some(Glyph::X), tr(Msg::Cancel))}
             </button>
             <button type="submit" class=confirm.class()>
@@ -254,43 +264,24 @@ pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
     .into_any()
 }
 
-// TODO(#1233): draw these rows as F7 rows once FerroUI's Repeat holds sub-cards.
-/// The button that adds a row by `edit`, labelled `label`, with the id
-/// `id`, and the line where a refusal of the list shows.
-pub(crate) fn add_button(id: &str, edit: &Edit, label: String) -> AnyView {
-    let button = view! {
-        <button
-            type="submit"
-            id=id.to_owned()
-            name=EDIT
-            value=edit.value()
-            formnovalidate=true
-            class=Variant::Secondary.class()
-            aria-describedby=error_id(id)
-        >
-            {icon(Glyph::PLUS, "16")}
-            {label}
-        </button>
-    };
-    action_field(button, error_line(id))
+/// The Add under a list of F7 rows, labelled `label`, which posts the
+/// form with `edit`.
+pub(crate) fn row_add(edit: &Edit, label: String) -> RepeatAdd {
+    RepeatAdd {
+        label,
+        name: String::from(EDIT),
+        value: edit.value(),
+    }
 }
 
-/// The button that removes a row by `edit`, named for what the row holds.
-pub(crate) fn remove_button(edit: &Edit, named: String) -> AnyView {
-    view! {
-        <button
-            type="submit"
-            name=EDIT
-            value=edit.value()
-            formnovalidate=true
-            class=Variant::Ghost.class()
-            aria-label=named
-        >
-            {icon(Glyph::TRASH, "16")}
-            {tr(Msg::Remove)}
-        </button>
+/// The Remove that ends an F7 row, named `named` for what the row holds,
+/// which posts the form with `edit`.
+pub(crate) fn row_remove(edit: &Edit, named: String) -> RowEnd {
+    RowEnd::Remove {
+        label: named,
+        name: String::from(EDIT),
+        value: edit.value(),
     }
-    .into_any()
 }
 
 /// The value `value` of a setting in a diff, or "not set".

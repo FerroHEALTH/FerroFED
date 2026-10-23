@@ -185,7 +185,10 @@ async fn the_detail_shows_the_newest_version_and_reads_every_page() -> Result<()
         body.contains("<title>org.example::weights · FerroFED Console</title>"),
         "{body}"
     );
-    assert!(body.contains("Version 1.0.10 shown."), "{body}");
+    assert!(
+        body.contains("Version 1.0.10 of <code>org.example::weights</code>"),
+        "{body}"
+    );
     assert!(
         body.contains(r#"<span class="fui-tok-keyword">SELECT</span>"#),
         "{body}"
@@ -239,7 +242,10 @@ async fn the_version_switch_shows_the_version_the_url_names() -> Result<(), Box<
     )
     .await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("Version 1.0.2 shown."), "{body}");
+    assert!(
+        body.contains("Version 1.0.2 of <code>org.example::weights</code>"),
+        "{body}"
+    );
     assert!(body.contains("COMPOSITION"), "{body}");
     assert!(!body.contains("magnitude"), "{body}");
     assert!(
@@ -266,7 +272,10 @@ async fn a_version_the_gateway_does_not_hold_is_said_and_the_newest_shown()
         body.contains("Version 9.9.9 is not held; the newest is shown."),
         "{body}"
     );
-    assert!(body.contains("Version 1.0.10 shown."), "{body}");
+    assert!(
+        body.contains("Version 1.0.10 of <code>org.example::weights</code>"),
+        "{body}"
+    );
     Ok(())
 }
 

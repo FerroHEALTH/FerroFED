@@ -25,6 +25,19 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
             "{body}"
         );
         assert!(body.contains("Edit<span"), "{body}");
+        assert!(
+            body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
+            "a console member's row offers its own confirmed removal: {body}"
+        );
+        assert!(
+            !body.contains("cfg-remove-node-a-dialog"),
+            "a member the file provides offers none: {body}"
+        );
+        assert!(
+            body.contains(r#"command="show-modal" commandfor="config-how""#),
+            "{body}"
+        );
+        assert!(body.contains(r#"<dialog id="config-how""#), "{body}");
         assert!(body.contains("Revision 1 running"), "{body}");
         assert!(body.contains("Revision 2 saved, not applied"), "{body}");
         assert!(body.contains("Apply revision 2"), "{body}");
@@ -39,6 +52,18 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
     assert!(edit.contains("Edit member node-c"), "{edit}");
     assert!(edit.contains(r#"name="form[query][0][url]""#), "{edit}");
     assert!(edit.contains(r#"commandfor="remove-member""#), "{edit}");
+    assert!(
+        edit.contains(r#"class="fui-repeater-card""#),
+        "each endpoint is an F7 sub-card: {edit}"
+    );
+    assert!(
+        edit.contains(r#"<template data-repeat="blank">"#),
+        "Add copies a blank endpoint in place with WebAssembly: {edit}"
+    );
+    assert!(
+        edit.contains(r#"name="form[edit]" value="add-query""#),
+        "and posts the form without it: {edit}"
+    );
     assert!(
         edit.contains(r#"name="form[node]" value="node-c""#),
         "{edit}"

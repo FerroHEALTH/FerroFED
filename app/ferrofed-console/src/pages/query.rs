@@ -24,6 +24,7 @@ use ferrohealth_ui::view::surface::{
     Header, SectionHead, disclosure, page_heading, panel_section, panel_sections_card,
 };
 use ferrohealth_ui::view::tabs::{Tab, binder};
+use ferrohealth_ui::view::template::list::HeadingCount;
 use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatAdd, RepeatRow, RowEnd, repeat};
 use leptos::prelude::*;
 use openehr_federation::status::EndpointStatus;
@@ -239,6 +240,7 @@ fn parameter_row(key: &str, row: &ParameterRow) -> RepeatRow {
             value: key.to_owned(),
         },
         after: None,
+        heading: None,
     }
 }
 
@@ -529,7 +531,7 @@ fn answered(answer: &QueryAnswer) -> AnyView {
                 {panel_section(
                     Some(SectionHead {
                         title: tr(Msg::QueryRows),
-                        count: Some(count),
+                        count: Some(HeadingCount::All(count)),
                         actions: None,
                     }),
                     view! {

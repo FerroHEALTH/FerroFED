@@ -150,7 +150,9 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
             ))
             .await?;
         browser.text("span", "Complete").await?;
-        browser.text("p", "Version 1.0.0 shown.").await?;
+        browser
+            .text("p", &format!("Version 1.0.0 of {NAME}"))
+            .await?;
         browser.console_clean("a repaired drift").await
     })
     .await?;

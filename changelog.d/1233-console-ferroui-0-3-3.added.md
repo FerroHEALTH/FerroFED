@@ -1,0 +1,1 @@
+- The configuration page explains how it works in a dialog that How configuration works opens. The History tab filters its revisions by origin in an Origin menu that works with no WebAssembly, and each origin is a badge of its own colour. A secret's value field shows what you typed while you hold its eye, and stays masked otherwise (#1233).

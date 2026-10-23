@@ -46,7 +46,7 @@ messages! {
     StoredRun = "stored-run",
     /// `The queries the gateway holds, by namespace, each with its versions.`
     StoredSubtitle = "stored-subtitle",
-    /// `Version … shown.`
+    /// `Version … of …`
     StoredSubtitleOne = "stored-subtitle-one",
     /// `AQL`
     StoredTabAql = "stored-tab-aql",

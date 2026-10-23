@@ -100,8 +100,10 @@ messages! {
     DescribeStoredFanOut = "describe-stored-fan-out",
     /// `Whether a stored query goes to many nodes.`
     DescribeStoredFanOutLine = "describe-stored-fan-out-line",
-    /// `What clients see when they ask the gateway what it is; the OPTIONS …`
+    /// `What clients see when they ask the gateway what it is. The OPTIONS …`
     DescribeSubtitle = "describe-subtitle",
+    /// `About`
+    DescribeSubtitleAbout = "describe-subtitle-about",
     /// `Template upload fan-out`
     DescribeTemplateFanOut = "describe-template-fan-out",
     /// `Whether a template upload goes to many nodes.`

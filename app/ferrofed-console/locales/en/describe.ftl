@@ -1,7 +1,8 @@
 # The self-description.
 
 describe-title = Self-description
-describe-subtitle = What clients see when they ask the gateway what it is; the OPTIONS document itself is on About.
+describe-subtitle = What clients see when they ask the gateway what it is. The OPTIONS document itself is on { $about }.
+describe-subtitle-about = About
 describe-federation = Federation
 describe-capabilities = Capabilities
 describe-areas = ITS-REST areas

@@ -167,20 +167,44 @@ pub(crate) async fn bodies(admin: &Server, route: &str) -> Result<Vec<String>, B
 }
 
 /// Adds member C, its second Query API endpoint a row the form adds, and
-/// first has a refused `node_id` marked at its field.
-async fn add_member(browser: &Browser, admin: &Server) -> Result<(), Box<dyn Error>> {
+/// first has a refused `node_id` marked at its field. With scripts on,
+/// FerroUI's island copies the row in place under a fresh key; with none,
+/// Add posts the form and the page answers with the row the server keys.
+async fn add_member(
+    browser: &Browser,
+    admin: &Server,
+    scripted: bool,
+) -> Result<(), Box<dyn Error>> {
     fill(browser, "cfg-organisation", "org-c").await?;
     fill(browser, "cfg-node", "node c").await?;
     fill(browser, "cfg-system_id", "cdr-c.example.org").await?;
     fill(browser, "cfg-q-0-id", "node-c-pub").await?;
     fill(browser, "cfg-q-0-url", "https://cdr-c.example.org/openehr").await?;
     fill(browser, "cfg-reason", "add C").await?;
-    // Add endpoint posts the form, and the page answers with one row more
-    // and every field as it was typed.
-    let add = browser.element(By::Id("cfg-add-query")).await?;
+    // Add endpoint adds a sub-card, and every field typed stays as it was.
+    let add = browser
+        .element(By::Css(r#"button[name="form[edit]"][value="add-query"]"#))
+        .await?;
     browser.press(&add).await?;
-    fill(browser, "cfg-q-q1-id", "node-c-old").await?;
-    fill(browser, "cfg-q-q1-url", "https://old.example.org/openehr").await?;
+    let key = if scripted { "new-1" } else { "q1" };
+    let first = format!("cfg-q-{key}-id");
+    if scripted {
+        until("the focus moves into the new endpoint", async || {
+            Ok(!browser
+                .driver()
+                .find_all(By::Css(r#"[data-row="new-1"] :focus"#))
+                .await?
+                .is_empty())
+        })
+        .await?;
+    }
+    fill(browser, &first, "node-c-old").await?;
+    fill(
+        browser,
+        &format!("cfg-q-{key}-url"),
+        "https://old.example.org/openehr",
+    )
+    .await?;
     let kept = browser
         .element(By::Id("cfg-q-0-url"))
         .await?
@@ -302,7 +326,7 @@ async fn a_console_member_is_added_edited_and_applied() -> Result<(), Box<dyn Er
             .await?;
 
         hydrated(browser, &stack, "/configuration/members/new").await?;
-        add_member(browser, &admin).await?;
+        add_member(browser, &admin, true).await?;
         browser.console_clean("an added member").await?;
         edit_fhir_endpoint(browser, &stack, &admin).await?;
 
@@ -339,9 +363,88 @@ async fn a_member_is_added_with_no_script() -> Result<(), Box<dyn Error>> {
         browser
             .titled(&format!("Configuration · {PRODUCT}"))
             .await?;
-        add_member(browser, &admin).await?;
+        add_member(browser, &admin, false).await?;
         browser.scripts(true).await?;
         Ok(())
+    })
+    .await
+}
+
+// A console member's row offers its own confirmed removal, and the page
+// explains how the configuration works in a dialog of its own; both open
+// with the `show-modal` command and close with Escape or Cancel.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
+-> Result<(), Box<dyn Error>> {
+    if !journeys_enabled() {
+        return Ok(());
+    }
+    let admin = listener().await;
+    let stack = Stack::start_with_admin(&admin.uri()).await?;
+    with_browser(async |browser| {
+        sign_in(browser, &stack).await?;
+        hydrated(browser, &stack, "/configuration/members").await?;
+        browser
+            .element(By::Css(r#"button[commandfor="config-how"]"#))
+            .await?
+            .click()
+            .await?;
+        browser.element(By::Css("dialog#config-how[open]")).await?;
+        until("Close takes the focus", async || {
+            let active = browser.driver().active_element().await?;
+            Ok(active.attr("commandfor").await?.as_deref() == Some("config-how"))
+        })
+        .await?;
+        browser
+            .driver()
+            .active_element()
+            .await?
+            .send_keys(Key::Escape)
+            .await?;
+        until("Escape closes the explanation", async || {
+            Ok(browser
+                .driver()
+                .find_all(By::Css("dialog#config-how[open]"))
+                .await?
+                .is_empty())
+        })
+        .await?;
+
+        let dialog = "cfg-remove-node-b-dialog";
+        browser
+            .element(By::Css(format!(
+                r#"button[commandfor="{dialog}"][aria-haspopup="dialog"]"#
+            )))
+            .await?
+            .click()
+            .await?;
+        browser
+            .element(By::Css(format!("dialog#{dialog}[open]")))
+            .await?;
+        browser
+            .element(By::Css(format!(
+                r#"dialog#{dialog}[open] button[command="close"]"#
+            )))
+            .await?
+            .click()
+            .await?;
+        until("Cancel closes the removal", async || {
+            Ok(browser
+                .driver()
+                .find_all(By::Css(format!("dialog#{dialog}[open]")))
+                .await?
+                .is_empty())
+        })
+        .await?;
+        assert!(
+            bodies(&admin, "/admin/config/members/node-b")
+                .await?
+                .is_empty(),
+            "a cancelled removal asks no replica"
+        );
+        browser
+            .console_clean("a row's removal and the explanation")
+            .await
     })
     .await
 }

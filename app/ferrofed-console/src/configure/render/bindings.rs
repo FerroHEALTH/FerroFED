@@ -7,16 +7,17 @@
 
 use ferrofed_registry::console::Owner;
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
-use ferrohealth_ui::view::form::{Field, INPUT, SELECT, error_id};
+use ferrohealth_ui::view::form::{Field, SELECT, error_id};
+use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
 use leptos::prelude::*;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::ConfigForm;
 use crate::configure::render::Loaded;
-use crate::configure::render::credentials::{addable, back, secret_row};
+use crate::configure::render::credentials::{addable, back, masked, secret_row};
 use crate::configure::render::members::GROUP;
 use crate::configure::render::parts::{
-    Text, add_button, error_line, form, head, hidden, reason, remove_button, save_bar, text,
+    Text, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,
 };
 use crate::configure::settings;
 use crate::configure::settings::build::{secret_field, setting_field};
@@ -37,20 +38,14 @@ struct SettingRow {
     value: String,
 }
 
-/// A setting row of a binding section: its key, fixed for one the section
-/// holds, and its value.
-fn binding_row(setting: &SettingRow) -> AnyView {
+/// A setting row of a binding section (F7 sub-card): its key, fixed for
+/// one the section holds and then its heading, and its value.
+fn binding_row(setting: &SettingRow) -> RepeatRow {
     let row = setting.row.as_str();
     let name = |part: &str| format!("form[setting][{row}][{part}]");
     let value_id = setting_field(row, "value");
     let key = if setting.held {
-        view! {
-            <input type="hidden" name=name("key") value=setting.key.clone() />
-            <p class="fui-label">
-                <code>{setting.key.clone()}</code>
-            </p>
-        }
-        .into_any()
+        view! { <input type="hidden" name=name("key") value=setting.key.clone() /> }.into_any()
     } else {
         text(
             (&setting_field(row, "key"), &name("key")),
@@ -64,70 +59,71 @@ fn binding_row(setting: &SettingRow) -> AnyView {
         )
         .into_any()
     };
-    let (label, named) = if setting.held {
+    let (heading, label, named) = if setting.held {
         (
+            setting.key.clone(),
             tr_with(Msg::ValueOf, &[("key", setting.key.clone().into())]),
             setting.key.clone(),
         )
     } else {
-        (tr(Msg::Value), tr(Msg::ThisNewSetting))
+        (tr(Msg::NewSetting), tr(Msg::Value), tr(Msg::ThisNewSetting))
     };
-    view! {
-        <div id=format!("cfg-s-{row}-row") class="fui-well fui-stack">
-            <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
-            {key}
-            {text(
-                (&value_id, &name("value")),
-                label,
-                setting.value.clone(),
-                Text {
-                    mono: true,
-                    ..Text::default()
-                },
-            )}
-            {remove_button(
-                &Edit::RemoveSetting(row.to_owned()),
-                tr_with(Msg::Remove2, &[("named", named.into())]),
-            )}
-        </div>
+    let fields = view! {
+        <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
+        {key}
+        {text(
+            (&value_id, &name("value")),
+            label,
+            setting.value.clone(),
+            Text {
+                mono: true,
+                ..Text::default()
+            },
+        )}
     }
-    .into_any()
+    .into_any();
+    RepeatRow {
+        key: row.to_owned(),
+        heading: Some(heading),
+        fields,
+        end: row_remove(
+            &Edit::RemoveSetting(row.to_owned()),
+            tr_with(Msg::Remove2, &[("named", named.into())]),
+        ),
+        after: None,
+    }
 }
 
-/// A new secret row of a binding section, its key typed, `key` filled in.
-fn new_secret(row: &str, key: String) -> AnyView {
+/// A new secret row of a binding section (F7 sub-card), its key typed,
+/// `key` filled in, and its value masked and never filled.
+fn new_secret(row: &str, key: String) -> RepeatRow {
     let name = |part: &str| format!("form[secret][{row}][{part}]");
-    let line = format!("cfg-x-{row}-row");
-    view! {
-        <div id=line.clone() class="fui-well fui-stack">
-            <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
-            {text(
-                (&secret_field(row, "key"), &name("key")),
-                tr(Msg::SecretKey),
-                key,
-                Text {
-                    mono: true,
-                    hint: Some(tr(Msg::SuchOauth2ClientSecret)),
-                    ..Text::default()
-                },
-            )}
-            <input type="hidden" name=name("choice") value="set" />
-            <label for=secret_field(row, "value") class="fui-label">
-                {tr(Msg::ValueNeverShownAgain)}
-            </label>
-            <input
-                type="password"
-                id=secret_field(row, "value")
-                name=name("value")
-                class=INPUT
-                autocomplete="new-password"
-                aria-describedby=format!("{}-error", secret_field(row, "value"))
-            />
-            {error_line(&secret_field(row, "value"))}
-            {remove_button(&Edit::RemoveSecret(row.to_owned()), tr(Msg::RemoveThisNewSecret))}
-        </div>
+    let fields = view! {
+        <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
+        {text(
+            (&secret_field(row, "key"), &name("key")),
+            tr(Msg::SecretKey),
+            key,
+            Text {
+                mono: true,
+                hint: Some(tr(Msg::SuchOauth2ClientSecret)),
+                ..Text::default()
+            },
+        )}
+        <input type="hidden" name=name("choice") value="set" />
+        {masked(&secret_field(row, "value"), &name("value"))}
     }
-    .into_any()
+    .into_any();
+    RepeatRow {
+        key: row.to_owned(),
+        heading: Some(tr(Msg::NewSecret)),
+        fields,
+        end: row_remove(
+            &Edit::RemoveSecret(row.to_owned()),
+            tr(Msg::RemoveThisNewSecret),
+        ),
+        after: None,
+    }
 }
 
 /// The binding section of the form: `held` as it stands, or a choice of
@@ -197,13 +193,19 @@ fn setting_rows(table: &toml::Table, posted: Option<&ConfigForm>) -> Vec<Setting
     }
 }
 
-/// The settings of a binding section, a row each, and a button that adds
-/// one; its lists are kept and named.
+/// The settings of a binding section, a sub-card each (F7) with Add under
+/// them; its lists are kept and named.
 fn settings_group(table: &toml::Table, posted: Option<&ConfigForm>) -> AnyView {
     let rows = setting_rows(table, posted)
         .iter()
         .map(binding_row)
-        .collect_view();
+        .collect();
+    let blank = binding_row(&SettingRow {
+        row: String::from(ROW),
+        key: String::new(),
+        held: false,
+        value: String::new(),
+    });
     let kept: Vec<String> = table
         .iter()
         .filter(|(_, value)| value.is_array())
@@ -220,10 +222,17 @@ fn settings_group(table: &toml::Table, posted: Option<&ConfigForm>) -> AnyView {
         <fieldset class=GROUP>
             <legend>{tr(Msg::Settings)}</legend>
             {kept}
-            <div id="cfg-setting-rows" class="fui-stack">
-                {rows}
-            </div>
-            {add_button("cfg-add-setting", &Edit::AddSetting, tr(Msg::AddSetting))}
+            {repeat(Repeat {
+                id: String::from("cfg-setting-rows"),
+                label: tr(Msg::Settings),
+                fields: Fields::Card,
+                head: Vec::new(),
+                rows,
+                blank: Some(blank),
+                add: Some(row_add(&Edit::AddSetting, tr(Msg::AddSetting))),
+                empty: tr(Msg::NoSettingYet),
+                form: None,
+            })}
         </fieldset>
     }
     .into_any()
@@ -252,21 +261,30 @@ fn secrets_group(slots: &[SecretSlot], posted: Option<&ConfigForm>) -> AnyView {
             )
         })
         .collect_view();
-    let fresh = posted.map(|form| {
-        form.secrets
-            .iter()
-            .filter(|secret| !slots.iter().any(|slot| slot.key == secret.key))
-            .map(|secret| new_secret(&secret.row, secret.key.clone()))
-            .collect_view()
-    });
+    let fresh = posted
+        .map(|form| {
+            form.secrets
+                .iter()
+                .filter(|secret| !slots.iter().any(|slot| slot.key == secret.key))
+                .map(|secret| new_secret(&secret.row, secret.key.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
     view! {
         <fieldset class=GROUP>
             <legend>{tr(Msg::Secrets)}</legend>
             {secrets}
-            <div id="cfg-secret-rows" class="fui-stack">
-                {fresh}
-            </div>
-            {add_button("cfg-add-secret", &Edit::AddSecret, tr(Msg::AddSecret))}
+            {repeat(Repeat {
+                id: String::from("cfg-secret-rows"),
+                label: tr(Msg::Secrets),
+                fields: Fields::Card,
+                head: Vec::new(),
+                rows: fresh,
+                blank: Some(new_secret(ROW, String::new())),
+                add: Some(row_add(&Edit::AddSecret, tr(Msg::AddSecret))),
+                empty: tr(Msg::NoNewSecretYet),
+                form: None,
+            })}
         </fieldset>
     }
     .into_any()

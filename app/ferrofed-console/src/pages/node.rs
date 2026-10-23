@@ -28,9 +28,10 @@ use leptos::prelude::*;
 
 use crate::app::ORGANISATIONS;
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{median, owner_tag, state, stopped};
+use crate::pages::{median, owner_tag, stopped};
 use crate::read::Stop;
 use crate::read::federation::{Health, Node, Organisation};
+use ferrohealth_ui::view::state::state;
 
 /// The most pages of the routing table the Routes tab reads.
 const ROUTE_PAGES: u64 = 10;
@@ -170,19 +171,29 @@ fn node_page(
         {detail_page(DetailPage {
             header: Header {
                 title: node.id.clone().into(),
-                subtitle: Some(
-                    tr_with(
-                            Msg::NodeSubtitle,
-                            &[("organisation", organisation.shown().to_owned().into())],
-                        )
-                        .into(),
+                subtitle: None,
+                subtitle_view: Some(
+                    crate::pages::marked(
+                        Msg::NodeSubtitle,
+                        &[],
+                        vec![
+                            (
+                                "organisation",
+                                view! {
+                                    <a href=organisation
+                                        .href()>{organisation.shown().to_owned()}</a>
+                                }
+                                    .into_any(),
+                            ),
+                        ],
+                    ),
                 ),
                 crumbs: vec![
                     Crumb::new(tr(Msg::OrganisationsTitle), ORGANISATIONS),
                     Crumb::new(organisation.shown().to_owned(), organisation.href()),
                 ],
                 mono: true,
-                badge: Some(state(node.health())),
+                badge: Some(state(node.health().mark(), node.health().word(), None)),
             },
             actions,
             stepper: None,
@@ -226,7 +237,7 @@ fn overview(organisation: &Organisation, node: &Node) -> AnyView {
                 <li>
                     <code>{endpoint.id.clone()}</code>
                     " "
-                    {state(endpoint.health)}
+                    {state(endpoint.health.mark(), endpoint.health.word(), None)}
                 </li>
             }
         })
@@ -275,7 +286,7 @@ fn endpoints(node: &Node) -> AnyView {
                         &columns[1],
                         view! { <code>{endpoint.url.clone().unwrap_or_default()}</code> },
                     )} {cell(&columns[2], Tag::new(endpoint.status.clone()).view())}
-                    {cell(&columns[3], state(endpoint.health))}
+                    {cell(&columns[3], state(endpoint.health.mark(), endpoint.health.word(), None))}
                     {cell(&columns[4], median(endpoint.latency_ms_p50))}
                 </tr>
             }

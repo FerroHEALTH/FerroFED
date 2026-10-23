@@ -24,15 +24,16 @@ use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::surface::Header;
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::template::list::{
-    ActiveFilters, FilterChip, ListCard, ListPage, list_empty, list_page,
+    ActiveFilters, FilterChip, HeadingCount, ListCard, ListPage, list_empty, list_page,
 };
 use ferrohealth_ui::widget::action_menu::{Act, Action};
 use leptos::prelude::*;
 
 use crate::app::{ALL_NODES, ORGANISATIONS};
 use crate::locale::{Msg, message, tr, tr_with};
-use crate::pages::{state, stopped};
+use crate::pages::stopped;
 use crate::read::federation::{Federation, Health, Node, Organisation};
+use ferrohealth_ui::view::state::state;
 
 /// Which of the two views the page shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,7 +223,7 @@ fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool)
         filters,
         card: ListCard {
             title: tr(Msg::OrganisationsTitle),
-            count: Some(total),
+            count: Some(heading_count(shown, total)),
             order: None,
             tabs: Some(tabs),
             actions: None,
@@ -230,6 +231,17 @@ fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool)
             pager,
         },
     })
+}
+
+/// The count the card's heading draws: every row, or the `shown` rows the
+/// find keeps of `total`.
+fn heading_count(shown: usize, total: u64) -> HeadingCount {
+    let shown = u64::try_from(shown).unwrap_or(u64::MAX);
+    if shown == total {
+        HeadingCount::All(total)
+    } else {
+        HeadingCount::Shown { shown, total }
+    }
 }
 
 /// The filters set on the listing at `path`: the find's words, with the
@@ -332,7 +344,7 @@ fn organisation_table(organisations: &[&Organisation]) -> AnyView {
                         &columns[3],
                         u32::try_from(organisation.endpoint_count()).unwrap_or(u32::MAX),
                         Noun::new(message(Msg::NounEndpoints)),
-                    )} {cell(&columns[4], state(health))}
+                    )} {cell(&columns[4], state(health.mark(), health.word(), None))}
                 </tr>
             }
         })
@@ -380,7 +392,7 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> AnyView {
                     {cell(
                         &columns[2],
                         view! { <code>{node.system_id.clone().unwrap_or_default()}</code> },
-                    )} {cell(&columns[3], state(health))}
+                    )} {cell(&columns[3], state(health.mark(), health.word(), None))}
                     {cell(&columns[4], crate::pages::median(node.latency_ms_p50()))}
                 </tr>
             }

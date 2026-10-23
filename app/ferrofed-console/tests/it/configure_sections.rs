@@ -112,6 +112,18 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
     );
     assert!(body.contains("Add binding section"), "{body}");
     assert!(
+        body.contains(r#"commandfor="cfg-remove-credentials-node-c-pub-dialog""#),
+        "a console section's row offers its own confirmed removal: {body}"
+    );
+    assert!(
+        body.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
+        "{body}"
+    );
+    assert!(
+        !body.contains("cfg-remove-credentials-node-a-pub-dialog"),
+        "a section the file provides offers none: {body}"
+    );
+    assert!(
         body.contains("Revision 2 awaits your confirmation"),
         "{body}"
     );
@@ -133,6 +145,10 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         "the held grant is chosen: {edit}"
     );
     assert!(edit.contains(r#"type="password""#), "{edit}");
+    assert!(
+        edit.contains("Show the value while held"),
+        "a secret's value field carries the hold-to-show eye: {edit}"
+    );
     assert!(
         edit.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
         "the removal sits on the credential's own page: {edit}"

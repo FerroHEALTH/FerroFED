@@ -32,10 +32,11 @@ use leptos::prelude::*;
 
 use crate::app::{ALL_NODES, CONFIGURATION, INTEGRITY, ORGANISATIONS, TOPOLOGY};
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{relative, state, stopped};
+use crate::pages::{relative, stopped};
 use crate::read::Stop;
 use crate::read::federation::{Federation, Health};
 use crate::read::incidents::Incidents;
+use ferrohealth_ui::view::state::state;
 
 /// What the dashboard reads of the gateway.
 struct Reads {
@@ -207,7 +208,7 @@ fn stats(
         .max_by_key(|(_, node)| u8::from(node.health() == Health::Unreachable));
     let organisations = stat_card_marked(
         Stat {
-            glyph: Glyph::USERS,
+            glyph: Glyph::BUILDING_COMPLEX,
             value: ferrohealth_ui::i18n::number::grouped(u64::from(count(
                 federation.organisations.len(),
             ))),
@@ -379,7 +380,8 @@ fn attention(federation: &Federation) -> AnyView {
                     == Health::Excluded>
                     {title_cell(href.as_deref(), view! { <code>{node.id.clone()}</code> }, None)}
                     {cell(&columns[1], organisation.shown().to_owned())}
-                    {cell(&columns[2], state(node.health()))} {cell(&columns[3], why)}
+                    {cell(&columns[2], state(node.health().mark(), node.health().word(), None))}
+                    {cell(&columns[3], why)}
                 </tr>
             }
             .into_any()
@@ -414,7 +416,7 @@ fn topology_card(federation: &Federation) -> AnyView {
             let dots = organisation
                 .nodes
                 .iter()
-                .map(|node| state(node.health()))
+                .map(|node| state(node.health().mark(), node.health().word(), None))
                 .collect_view();
             let name = organisation.shown().to_owned();
             let link = if organisation.routable() {
