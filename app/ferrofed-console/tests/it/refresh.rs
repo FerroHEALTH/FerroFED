@@ -15,11 +15,11 @@ use std::io::Write;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use ferrofed_testkit::mock::Server;
 use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
 use ferrofed_console::server::{ConsoleState, router};
 use ferrofed_console::session::{SessionId, SignedIn};
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;

@@ -15,8 +15,8 @@
 
 use std::error::Error;
 
-use ferrofed_testkit::mock::Server;
 use ferrofed_console::app::PRODUCT;
+use ferrofed_testkit::mock::Server;
 use thirtyfour::error::{WebDriverError, WebDriverErrorInner};
 use thirtyfour::{By, Key, WebElement};
 use wiremock::matchers::{method, path};

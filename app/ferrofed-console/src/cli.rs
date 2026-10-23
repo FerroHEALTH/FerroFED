@@ -84,7 +84,10 @@ mod tests {
                     command: ConfigCommand::Check,
                 },
             ),
-            (vec!["ferrofed-console", "healthcheck"], Command::Healthcheck),
+            (
+                vec!["ferrofed-console", "healthcheck"],
+                Command::Healthcheck,
+            ),
         ] {
             let parsed = Cli::try_parse_from(&args).expect("the job parses");
             assert_eq!(command, parsed.command, "{args:?}");

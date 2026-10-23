@@ -14,12 +14,12 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_console::session::SignedIn;
 use ferrofed_registry::incident::{Detection, Incident};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use ferrofed_console::session::SignedIn;
 use secrecy::SecretString;
 use tokio::net::TcpListener;
 

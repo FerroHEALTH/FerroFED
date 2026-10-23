@@ -7,8 +7,8 @@
 
 use std::error::Error;
 
-use ferrofed_registry::operator::{IncidentReport, RecordedClear, RecordedIncident};
 use ferrofed_console::views::load::server::{answered_by, detail, incidents};
+use ferrofed_registry::operator::{IncidentReport, RecordedClear, RecordedIncident};
 use http::StatusCode;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
