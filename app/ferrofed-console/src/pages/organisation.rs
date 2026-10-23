@@ -24,8 +24,9 @@ use leptos::prelude::*;
 
 use crate::app::ORGANISATIONS;
 use crate::locale::{Msg, message, tr, tr_with};
-use crate::pages::{owner_tag, state, stopped};
+use crate::pages::{owner_tag, stopped};
 use crate::read::federation::{Health, Organisation};
+use ferrohealth_ui::view::state::state;
 
 /// One organisation, on the tab the path names.
 #[must_use]
@@ -97,16 +98,17 @@ fn organisation_page(organisation: &Organisation, tab: &str) -> AnyView {
         {detail_page(DetailPage {
             header: Header {
                 title: organisation.shown().to_owned().into(),
-                subtitle: Some(
-                    tr_with(
-                            Msg::OrganisationSubtitle,
-                            &[("id", organisation.id.clone().into()), ("count", Arg::from(count))],
-                        )
-                        .into(),
+                subtitle: None,
+                subtitle_view: Some(
+                    crate::pages::marked(
+                        Msg::OrganisationSubtitle,
+                        &[("count", Arg::from(count))],
+                        vec![("id", view! { <code>{organisation.id.clone()}</code> }.into_any())],
+                    ),
                 ),
                 crumbs: crumbs(),
                 mono: false,
-                badge: Some(state(health)),
+                badge: Some(state(health.mark(), health.word(), None)),
             },
             actions,
             stepper: None,
@@ -129,7 +131,14 @@ fn overview(organisation: &Organisation) -> AnyView {
             tr(Msg::ColumnId),
             view! { <code>{organisation.id.clone()}</code> }.into_any(),
         ),
-        (tr(Msg::ColumnState), state(organisation.health())),
+        (
+            tr(Msg::ColumnState),
+            state(
+                organisation.health().mark(),
+                organisation.health().word(),
+                None,
+            ),
+        ),
         (
             tr(Msg::ColumnNodes),
             u64::try_from(organisation.nodes.len())
@@ -187,7 +196,7 @@ fn nodes(organisation: &Organisation) -> AnyView {
                         &columns[3],
                         u32::try_from(node.endpoints.len()).unwrap_or(u32::MAX),
                         Noun::new(message(Msg::NounEndpoints)),
-                    )} {cell(&columns[4], state(node.health()))}
+                    )} {cell(&columns[4], state(node.health().mark(), node.health().word(), None))}
                 </tr>
             }
         })

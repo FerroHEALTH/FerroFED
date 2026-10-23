@@ -8,20 +8,21 @@ paths: ["app/ferrofed-console/**"]
 # Leptos console rules (`app/ferrofed-console`, and any Leptos code)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.3.2`), and the
+exactly in the root `[workspace.dependencies]` (today `=0.3.3`, with its
+`split` feature), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, accessibility bar, interaction contract, words and
 quality control. Read these first, at the git tag that matches the pin
-(today `v0.3.2`):
+(today `v0.3.3`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.2/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.3/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.2/.claude/rules/leptos-ui.md):
+- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.3/.claude/rules/leptos-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.3.2` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.2/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.3.3` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.3/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.3.2/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.3.3/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.
@@ -88,17 +89,24 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
   `act::render`, with the outcome provided as context; the page draws the
   outcome at its top. A route's `POST` is registered at the same path
   pattern as the Leptos route so the two merge.
-- **Rows grow and shrink by posting the form.** An Add or Remove button is a
-  submit button with a name and a value (`add-parameter`, `form[edit]`); the
-  page answers with the form drawn again from what was posted and runs
-  nothing (`crate::configure::draft`). A form whose action was refused, or
+- **Rows are FerroUI's F7 rows** (`widget::repeat`): a sub-card per
+  endpoint, setting or new secret (`Fields::Card`), a row of one field per
+  profile or list value (`Fields::One`). Add and Remove are submit buttons
+  with a name and a value (`add-parameter`, `form[edit]`); with no
+  WebAssembly the page answers with the form drawn again from what was
+  posted and runs nothing (`crate::configure::draft`), and with it FerroUI's
+  island adds a copy of the blank row under a fresh key (`new-1`) or takes a
+  row out in place, and the form posts the rows it holds. A form whose action was refused, or
   that a replica refused, is drawn again as posted, the refused field marked
   with its line and `aria-invalid`. A secret is never drawn again.
 - **A confirmation is a native modal dialog.** `popover_form` and the
   console's `confirmed` part hold the reason and post `confirm`; an action
-  without it asks no replica. FerroUI's dialogs take a fixed id, so a table
-  never draws one per row: a member's or a section's removal sits on its own
-  page.
+  without it asks no replica. Each dialog id is unique on its page: a table
+  row's removal takes an id made from its row (`plan::removal_dialog`), and
+  the item's own page keeps a removal of its own. An explanation, such as
+  How configuration works, is FerroUI's `info_dialog`.
+- **A secret's value field is FerroUI's masked input** (R10) with the
+  hold-to-show eye, never filled.
 - **Return paths are checked.** A preference post returns to the page it
   names only when that is a plain path of the console
   (`prefs::return_path`).
@@ -161,16 +169,19 @@ below. The script reads the budget from this table.
 
 - The gating number is the brotli-compressed WebAssembly of the entry, the
   download every page makes (the Leptos book, `deployment/binary_size`).
-  The build splits (`cargo leptos build --split`): FerroUI's lazy islands
-  load from chunks of their own on a page that draws them, and without the
-  split their placeholder import stops every island from hydrating
+  The build splits (`cargo leptos build --split`) and the dependency turns
+  on `ferrohealth-ui`'s `split` feature with it: FerroUI's lazy islands
+  load from chunks of their own on a page that draws them, and a split
+  build without the feature keeps their code in the entry
   (FerroHEALTH/FerroUI#331).
 - The budget was raised step by step from 220 KiB (the operator views of
   #276) to 500 KiB (`ferrohealth-ui` 0.1.7, #1162, 479645 bytes), each step
   recorded in the pull request that took it. The islands console on
   `ferrohealth-ui` 0.3.2 (#1230) measured 315488 bytes split, 442611
   unsplit (2026-10-23, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Rust
-  1.99.1): the islands FerroUI's components carry and the AQL editor. A change that needs more
+  1.99.1): the islands FerroUI's components carry and the AQL editor. On
+  `ferrohealth-ui` 0.3.3 with its `split` feature (#1233) it measured
+  321296 bytes. A change that needs more
   raises the budget here in its own pull request, with the measured size
   and the reason.
 - The `wasm-release` profile (`opt-level = "z"`, `lto = true`,

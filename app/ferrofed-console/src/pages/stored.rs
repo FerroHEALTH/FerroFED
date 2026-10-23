@@ -36,6 +36,7 @@ use ferrohealth_ui::view::surface::{
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
+use ferrohealth_ui::view::template::list::HeadingCount;
 use ferrohealth_ui::widget::action_menu::{Act, Action};
 use leptos::prelude::*;
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -310,7 +311,9 @@ fn namespace_card(namespace: &str, names: &BTreeMap<String, Vec<&Held>>) -> AnyV
         panel_section(
             Some(SectionHead {
                 title: namespace.to_owned(),
-                count: Some(u64::try_from(names.len()).unwrap_or(u64::MAX)),
+                count: Some(HeadingCount::All(
+                    u64::try_from(names.len()).unwrap_or(u64::MAX),
+                )),
                 actions: Some(provenance),
             }),
             data_table(DataTable {
@@ -432,8 +435,13 @@ fn detail(
         {detail_page(DetailPage {
             header: Header {
                 title: name.to_owned().into(),
-                subtitle: Some(
-                    tr_with(Msg::StoredSubtitleOne, &[("version", version.clone().into())]).into(),
+                subtitle: None,
+                subtitle_view: Some(
+                    crate::pages::marked(
+                        Msg::StoredSubtitleOne,
+                        &[("version", version.clone().into())],
+                        vec![("name", view! { <code>{name.to_owned()}</code> }.into_any())],
+                    ),
                 ),
                 crumbs: vec![Crumb::new(tr(Msg::StoredTitle), STORED_QUERIES)],
                 mono: true,
@@ -576,7 +584,7 @@ fn repair_form(name: &str, version: &str) -> AnyView {
     }
     .into_any();
     popover_form(PopoverForm {
-        id: REPAIR_DIALOG,
+        id: REPAIR_DIALOG.into(),
         variant: Variant::Secondary,
         glyph: Glyph::REFRESH_CW,
         label: tr(Msg::RepairAction).into(),

@@ -26,8 +26,9 @@ use leptos::prelude::*;
 
 use crate::app::{SELF_DESCRIPTION, TOPOLOGY};
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{median, state, stopped};
+use crate::pages::{median, stopped};
 use crate::read::federation::{Federation, Health, Node, Organisation, ServiceGroup};
+use ferrohealth_ui::view::state::state;
 
 /// Every state of the Status menu, in its order.
 const STATES: [FlowState; 5] = [
@@ -268,7 +269,7 @@ fn organisation_group(
             edge_label: label,
             ..card(
                 organisation.id.clone(),
-                Glyph::USERS,
+                Glyph::BUILDING_COMPLEX,
                 organisation.shown().to_owned(),
                 tr_with(
                     Msg::TopologyOrgLine,
@@ -303,7 +304,7 @@ fn services(federation: &Federation, asked: &Asked) -> Option<TopologySide> {
                 edge_label: service.health.is_problem().then(|| service.health.word()),
                 ..card(
                     service.key.clone(),
-                    Glyph::LINK,
+                    Glyph::PLUG,
                     service.name(),
                     service.health.word(),
                     service.health,
@@ -357,7 +358,7 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
                     <li>
                         <code>{endpoint.id.clone()}</code>
                         " "
-                        {state(endpoint.health)}
+                        {state(endpoint.health.mark(), endpoint.health.word(), None)}
                     </li>
                 }
             })
@@ -374,7 +375,10 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
             body: view! {
                 {facts_row(
                     vec![
-                        (tr(Msg::ColumnState), state(node.health())),
+                        (
+                            tr(Msg::ColumnState),
+                            state(node.health().mark(), node.health().word(), None),
+                        ),
                         (tr(Msg::ColumnMedian), median(node.latency_ms_p50())),
                     ],
                 )}
@@ -393,7 +397,14 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
         line: Some(organisation.id.clone()),
         close,
         body: view! {
-            {facts_row(vec![(tr(Msg::ColumnState), state(organisation.health()))])}
+            {facts_row(
+                vec![
+                    (
+                        tr(Msg::ColumnState),
+                        state(organisation.health().mark(), organisation.health().word(), None),
+                    ),
+                ],
+            )}
             <p>
                 <a href=organisation.href()>{tr(Msg::TopologyOpenPage)}</a>
             </p>

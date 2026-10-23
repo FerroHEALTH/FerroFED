@@ -21,7 +21,7 @@ use ferrohealth_ui::view::template::settings::{Setting, setting_row, settings_pa
 use leptos::prelude::*;
 use openehr_federation::options::{GatewayDescription, OptionsRoot};
 
-use crate::app::SELF_DESCRIPTION;
+use crate::app::{ABOUT, SELF_DESCRIPTION};
 use crate::locale::{Msg, tr, tr_with};
 use crate::pages::stopped;
 
@@ -62,7 +62,14 @@ pub fn page() -> AnyView {
         let heading = page_heading(
             Header {
                 title: tr(Msg::DescribeTitle).into(),
-                subtitle: Some(tr(Msg::DescribeSubtitle).into()),
+                subtitle_view: Some(crate::pages::marked(
+                    Msg::DescribeSubtitle,
+                    &[],
+                    vec![(
+                        "about",
+                        view! { <a href=ABOUT>{tr(Msg::DescribeSubtitleAbout)}</a> }.into_any(),
+                    )],
+                )),
                 ..Header::default()
             },
             ActionGroup::none(),

@@ -189,7 +189,7 @@ fn clear_form(replicas: &[String], held: &[String]) -> AnyView {
     }
     .into_any();
     popover_form(PopoverForm {
-        id: CLEAR_DIALOG,
+        id: CLEAR_DIALOG.into(),
         variant: Variant::Primary,
         glyph: Glyph::ROTATE_CCW,
         label: tr(Msg::ClearAction).into(),

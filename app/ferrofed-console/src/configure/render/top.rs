@@ -7,9 +7,10 @@
 //! confirm and its roll back (§13.1 onward credentials, commit-confirm).
 
 use ferrofed_registry::revision::{Current, Review, RevisionId, Signed};
-use ferrohealth_ui::icon::Glyph;
+use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::dialog::{Explanation, info_dialog};
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
 use ferrohealth_ui::view::time::{reading, timestamp};
@@ -35,8 +36,47 @@ pub(super) fn title(pills: impl IntoView + 'static) -> impl IntoView {
             },
             ferrohealth_ui::view::action::ActionGroup::none(),
         )}
-        {ferrohealth_ui::view::template::settings::revision_line(pills.into_any())}
+        {ferrohealth_ui::view::template::settings::revision_line(
+            view! {
+                {pills}
+                <button
+                    type="button"
+                    class=Variant::Ghost.class()
+                    command="show-modal"
+                    commandfor=HOW
+                    aria-haspopup="dialog"
+                >
+                    {icon(Glyph::INFO, "16")}
+                    {tr(Msg::ConfigHowTitle)}
+                </button>
+            }
+                .into_any(),
+        )}
+        {how()}
     }
+}
+
+/// The id of the dialog that explains how the configuration works.
+const HOW: &str = "config-how";
+
+/// The dialog that explains how the configuration works: what stays in
+/// the file, what a revision holds, and how to stop managing revisions.
+fn how() -> impl IntoView {
+    info_dialog(
+        Explanation {
+            id: HOW.into(),
+            title: tr(Msg::ConfigHowTitle).into(),
+        },
+        view! {
+            <p>{tr(Msg::ConfigHowLead)}</p>
+            <h3>{tr(Msg::ConfigHowCoreTitle)}</h3>
+            <p class="fui-small fui-muted">{tr(Msg::ConfigHowCore)}</p>
+            <h3>{tr(Msg::ConfigHowRestTitle)}</h3>
+            <p class="fui-small fui-muted">{tr(Msg::ConfigHowRest)}</p>
+            <p class="fui-small fui-muted">{tr(Msg::ConfigHowOwners)}</p>
+            <p class="fui-small fui-muted">{tr(Msg::ConfigHowOff)}</p>
+        },
+    )
 }
 
 /// The page header: the revision that runs and, when one is saved and not

@@ -16,19 +16,20 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column};
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{
-    Field as FormField, INPUT, SELECT, SWITCH, described_by, error_id,
+    Field as FormField, INPUT, Inner, SELECT, SWITCH, described_by, error_id, masked_input,
 };
-use ferrohealth_ui::view::layout::{FieldRow, keyed_field_row};
+use ferrohealth_ui::widget::masked::HoldWords;
+use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
 use leptos::prelude::*;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::{ConfigForm, SettingInput};
-use crate::configure::plan::removal_reason;
+use crate::configure::plan::{removal_dialog, removal_reason};
 use crate::configure::render::Loaded;
 use crate::configure::render::members::{GROUP, owner, state};
 use crate::configure::render::parts::{
-    Text, add_button, confirmed, error_line, form, head, hidden, reason, remove_button, save_bar,
-    text, trail,
+    Text, confirmed, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,
+    trail,
 };
 use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
@@ -88,8 +89,19 @@ fn settings_said(section: &SectionResource) -> String {
     }
 }
 
-/// The removal of `resource`, a confirmation step asking for the reason.
+/// The removal of `resource` from its own page, a confirmation step
+/// asking for the reason.
 pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
+    removal(
+        loaded,
+        resource,
+        (String::from("remove-section"), tr(Msg::Remove)),
+    )
+}
+
+/// The removal of `resource`, a confirmation step in the dialog `dialog`
+/// asking for the reason, opened by a button named `label`.
+fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, String)) -> AnyView {
     let named = choice(resource);
     let reason_id = removal_reason(&named);
     let shown = resource.to_string();
@@ -100,8 +112,8 @@ pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
             {hidden("base", loaded.base())}
             {hidden("resource", named.clone())}
             {confirmed(
-                "remove-section",
-                (Glyph::TRASH, tr(Msg::Remove), Variant::Danger),
+                dialog,
+                (Glyph::TRASH, label, Variant::Danger),
                 (
                     tr_with(
                         Msg::RemoveSavedWithoutWhichYouApply,
@@ -127,8 +139,9 @@ pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
     .into_any()
 }
 
-/// One credential's or binding section's row.
-fn row(section: &SectionResource) -> AnyView {
+/// One credential's or binding section's row; one the console holds ends
+/// in its confirmed Remove.
+fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
     let shown = section.resource.to_string();
     let console = section.owner == Owner::Console;
     let editable = console
@@ -137,11 +150,19 @@ fn row(section: &SectionResource) -> AnyView {
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
     let actions = editable.then(|| {
+        let removes = removal(
+            loaded,
+            &section.resource,
+            (removal_dialog(&choice(&section.resource)), tr(Msg::Remove)),
+        );
         view! {
-            <a href=href(&section.resource) class=Variant::Ghost.class()>
-                {tr(Msg::Edit)}
-                <span class="fui-sr-only">{format!(" {shown}")}</span>
-            </a>
+            <span class="fui-cluster">
+                <a href=href(&section.resource) class=Variant::Ghost.class()>
+                    {tr(Msg::Edit)}
+                    <span class="fui-sr-only">{format!(" {shown}")}</span>
+                </a>
+                {removes}
+            </span>
         }
         .into_any()
     });
@@ -204,7 +225,11 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         }
         .into_any()
     } else {
-        sections.iter().map(row).collect_view().into_any()
+        sections
+            .iter()
+            .map(|section| row(loaded, section))
+            .collect_view()
+            .into_any()
     };
     let binding = (!addable(loaded).is_empty()).then(|| {
         view! {
@@ -295,18 +320,7 @@ pub(super) fn secret_row(
         .collect_view();
     let group = secret_field(row, "choice");
     let value_id = secret_field(row, "value");
-    let set = FormField::new(value_id.clone(), tr(Msg::ValueNeverShownAgain))
-        .after(error_line(&value_id))
-        .view(view! {
-            <input
-                type="password"
-                id=value_id.clone()
-                name=name("value")
-                class=INPUT
-                autocomplete="new-password"
-                aria-describedby=error_id(&value_id)
-            />
-        });
+    let set = masked(&value_id, &name("value"));
     let file = text(
         (&secret_field(row, "file"), &name("file")),
         tr(Msg::AbsolutePathFileReadFrom),
@@ -340,39 +354,76 @@ pub(super) fn secret_row(
     .into_any()
 }
 
-/// The values of the list setting in row `row`, `values` filled in.
+/// The secret value field `id` named `name` (R10): masked, never filled,
+/// with the eye that shows what was typed while it is held.
+pub(super) fn masked(id: &str, name: &str) -> AnyView {
+    FormField::new(id.to_owned(), tr(Msg::ValueNeverShownAgain))
+        .trailing(Inner::HoldToShow(
+            HoldWords::of_page().named(tr(Msg::ShowSecretWhileHeld)),
+        ))
+        .after(error_line(id))
+        .view(masked_input(id, name, Some(error_id(id))))
+}
+
+/// The value at `at` of the list setting in row `row`, holding `value`, a
+/// row of one field (F7).
+fn list_value(row: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
+    let id = format!("{}-{at}", setting_field(row, "list"));
+    let fields = FormField::new(id.clone(), tr(Msg::Value))
+        .label_hidden()
+        .view(view! {
+            <input
+                type="text"
+                id=id.clone()
+                name=format!("form[setting][{row}][values]")
+                value=value
+                class=format!("{INPUT} fui-mono")
+                autocomplete="off"
+            />
+        });
+    RepeatRow {
+        key: at.to_owned(),
+        heading: None,
+        fields,
+        end: row_remove(removes, tr(Msg::RemoveThisValue)),
+        after: None,
+    }
+}
+
+/// The values of the list setting in row `row`, `values` filled in, a row
+/// of one field each (F7).
 fn list(row: &str, values: Vec<String>) -> AnyView {
-    let into = setting_field(row, "list");
-    let items = values
+    let count = values.len();
+    let rows = values
         .into_iter()
         .enumerate()
         .map(|(at, value)| {
-            let id = format!("{into}-{at}");
-            let body = view! {
-                {FormField::new(id.clone(), tr(Msg::Value))
-                    .label_hidden()
-                    .view(
-                        view! {
-                            <input
-                                type="text"
-                                id=id.clone()
-                                name=format!("form[setting][{row}][values]")
-                                value=value
-                                class=format!("{INPUT} fui-mono")
-                                autocomplete="off"
-                            />
-                        },
-                    )}
-                {remove_button(&Edit::RemoveValue(row.to_owned(), at), tr(Msg::RemoveThisValue))}
-            };
-            keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
+            list_value(
+                row,
+                &at.to_string(),
+                value,
+                &Edit::RemoveValue(row.to_owned(), at),
+            )
         })
-        .collect_view();
+        .collect();
+    let blank = list_value(
+        row,
+        ROW,
+        String::new(),
+        &Edit::RemoveValue(row.to_owned(), count),
+    );
     view! {
-        <div id=into.clone() class="fui-stack">
-            {items}
-        </div>
-        {add_button(&setting_field(row, "add"), &Edit::AddValue(row.to_owned()), tr(Msg::AddValue))}
+        {repeat(Repeat {
+            id: setting_field(row, "list"),
+            label: tr(Msg::Value),
+            fields: Fields::One,
+            head: vec![tr(Msg::Value)],
+            rows,
+            blank: Some(blank),
+            add: Some(row_add(&Edit::AddValue(row.to_owned()), tr(Msg::AddValue))),
+            empty: tr(Msg::NoValueYet),
+            form: None,
+        })}
     }
     .into_any()
 }

@@ -57,14 +57,15 @@ pub const ADD_QUERY: &str = "cfg-add-query";
 /// The id of the button that adds a FHIR endpoint row.
 pub const ADD_FHIR: &str = "cfg-add-fhir";
 
-/// The form of a row key: 1 to 16 lowercase letters and digits, as the
-/// page writes them, so a key names a field id and nothing else.
+/// The form of a row key: 1 to 16 lowercase letters, digits and hyphens,
+/// as the page and FerroUI's F7 island (`new-1`) write them, so a key names
+/// a field id and nothing else.
 fn row_key(key: &str) -> Result<&str, Refused> {
     let fits = !key.is_empty()
         && key.len() <= 16
         && key
             .chars()
-            .all(|letter| letter.is_ascii_lowercase() || letter.is_ascii_digit());
+            .all(|letter| letter.is_ascii_lowercase() || letter.is_ascii_digit() || letter == '-');
     if fits {
         Ok(key)
     } else {
@@ -431,5 +432,6 @@ mod tests {
             assert!(row_key(key).is_err(), "{key}");
         }
         assert!(row_key("n12").is_ok());
+        assert!(row_key("new-1").is_ok(), "a row FerroUI's island adds");
     }
 }

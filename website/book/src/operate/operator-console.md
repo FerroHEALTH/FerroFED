@@ -206,17 +206,17 @@ service worker or a URL.
   file each is read from, never by value; `/configuration/stored-queries`,
   the stored versions by name; `/configuration/history`, the newest
   revisions, each with its download as TOML and its comparison with the
-  running revision; and `/configuration/import-export`, the running
+  running revision, filtered by origin in the Origin menu; and `/configuration/import-export`, the running
   revision's download and the import of TOML as a dry-run revision. A
   member the registry document or a care services directory provides opens
   as a read-only detail that names its source. A console member is added
   or edited on a page of its own (`/configuration/members/new`,
   `/configuration/members/{node_id}`), each Query API and FHIR endpoint a
-  row of its own fields, with its categories as checkboxes and its profiles
-  as a list, and saved as a new revision, which you then apply. A
+  sub-card of its own fields, with its categories as checkboxes and its
+  profiles as a list of rows, and saved as a new revision, which you then apply. A
   credential's form shows the fields of the grant you choose, and each
-  secret is kept, set by its value in a password field the page never
-  fills, read from a file, or cleared; a binding section's form shows each
+  secret is kept, set by its value in a masked field the page never
+  fills, whose eye shows what you typed while you hold it, read from a file, or cleared; a binding section's form shows each
   setting as a field of its own. When the running revision awaits its
   confirmation, the card counts down to its deadline and offers Confirm and
   Roll back; when the saved revision takes a second operator's approval, it
@@ -224,10 +224,13 @@ service worker or a URL.
   ([Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
   An apply, a roll back, a confirmation, an approval, a removal and a
   stored version each ask you to confirm in a dialog of their own, which the
-  console checks again; a save is not applied and asks none. A member's or a
-  section's removal sits on its own page. Every form is a plain post to its
-  page: Add and Remove of a row post the form and answer with it one row
-  longer or shorter, a form's answer shows at the top of the page, and a
+  console checks again; a save is not applied and asks none. A console member's or
+  section's removal is offered on its row of the tab and on its own page.
+  How configuration works opens an explanation of what stays in the file
+  and what a revision holds. Every form is a plain post to its page: with
+  no WebAssembly, Add and Remove of a row post the form and answer with it
+  one row longer or shorter, and with it they add or remove the row in
+  place; a form's answer shows at the top of the page, and a
   form the console or a replica refuses is drawn again as you typed it, the
   field the console refuses marked with what is wrong under it. A secret you
   typed is never drawn again. A replica whose configuration is not managed answers
@@ -377,7 +380,7 @@ A console route with no screenshot fails the testkit's
 
 ### Configuration page
 
-![The Members tab of the configuration page: revision 1 running and revision 2 saved, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states.](img/console/configuration-members.png)
+![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its Edit and Remove.](img/console/configuration-members.png)
 
 [The Members tab of the configuration page in the dark theme](img/console/configuration-members-dark.png)
 
@@ -385,11 +388,11 @@ A console route with no screenshot fails the testkit's
 
 [The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
 
-![The History tab: each revision with its author, its reason and its download as TOML.](img/console/configuration-history.png)
+![The History tab: the Origin menu, and each revision with its origin, its author, its reason and its download as TOML.](img/console/configuration-history.png)
 
 [The History tab in the dark theme](img/console/configuration-history-dark.png)
 
-![The member form: the organisation, the node, one Query API endpoint row with the Add endpoint and Add FHIR endpoint buttons, a reason, and the Save as revision 3 button.](img/console/configuration-member-form.png)
+![The member form: the organisation, the node, one Query API endpoint sub-card with its Remove, the Add endpoint and Add FHIR endpoint buttons, a reason, and the Save as revision 3 button.](img/console/configuration-member-form.png)
 
 [The member form in the dark theme](img/console/configuration-member-form-dark.png)
 

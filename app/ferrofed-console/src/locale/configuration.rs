@@ -124,6 +124,22 @@ messages! {
     CloseTheComparison = "close-the-comparison",
     /// `Compare with running`
     CompareWithRunning = "compare-with-running",
+    /// `The profile, the client and admin listeners, client …`
+    ConfigHowCore = "config-how-core",
+    /// `The bootstrap core: always in ferrofed.toml`
+    ConfigHowCoreTitle = "config-how-core-title",
+    /// `Revisions are managed on this gateway (config.ui = …`
+    ConfigHowLead = "config-how-lead",
+    /// `To stop managing revisions, set config.ui = "off" and …`
+    ConfigHowOff = "config-how-off",
+    /// `A member the file or a care services directory provides, …`
+    ConfigHowOwners = "config-how-owners",
+    /// `Members, stored queries, onward credentials and binding …`
+    ConfigHowRest = "config-how-rest",
+    /// `Everything else: a revision`
+    ConfigHowRestTitle = "config-how-rest-title",
+    /// `How configuration works`
+    ConfigHowTitle = "config-how-title",
     /// `This console is configured with no admin listener: it reads the …`
     ConfigNoAdminBody = "config-no-admin-body",
     /// `Name a replica's admin listener in the [[admin]] section of the …`
@@ -270,6 +286,12 @@ messages! {
     GrantType = "grant-type",
     /// `History`
     History = "history",
+    /// `None of the newest revisions has an origin you chose.`
+    HistoryNoneOfOrigin = "history-none-of-origin",
+    /// `Origin`
+    HistoryOrigin = "history-origin",
+    /// `Show the revisions by origin`
+    HistoryOriginTitle = "history-origin-title",
     /// `The history records it with the revision.`
     HistoryRecordsRevision = "history-records-revision",
     /// `How the gateway reaches the endpoint; the form shows that grant's …`
@@ -350,6 +372,10 @@ messages! {
     NewFhirEndpoint = "new-fhir-endpoint",
     /// `New Query API endpoint`
     NewQueryApiEndpoint = "new-query-api-endpoint",
+    /// `New secret`
+    NewSecret = "new-secret",
+    /// `New setting`
+    NewSetting = "new-setting",
     /// `New value:…`
     NewValue = "new-value",
     /// `The newest revision removes this member; apply it from the card above.`
@@ -360,18 +386,30 @@ messages! {
     NoBindingSectionCalled = "no-binding-section-called",
     /// `no code`
     NoCode = "no-code",
+    /// `No FHIR endpoint yet.`
+    NoFhirEndpointYet = "no-fhir-endpoint-yet",
     /// `No member is configured yet.`
     NoMemberConfiguredYet = "no-member-configured-yet",
     /// `No member has the node_id ….`
     NoMemberHasNodeId = "no-member-has-node-id",
+    /// `No new secret.`
+    NoNewSecretYet = "no-new-secret-yet",
     /// `No onward credential or binding section is set.`
     NoOnwardCredentialBindingSectionSet = "no-onward-credential-binding-section-set",
+    /// `No profile yet.`
+    NoProfileYet = "no-profile-yet",
+    /// `No Query API endpoint yet.`
+    NoQueryEndpointYet = "no-query-endpoint-yet",
     /// `No revision runs`
     NoRevisionRuns = "no-revision-runs",
     /// `No revision runs, so none downloads.`
     NoRevisionRunsSoNoneDownloads = "no-revision-runs-so-none-downloads",
+    /// `No setting yet.`
+    NoSettingYet = "no-setting-yet",
     /// `no settings`
     NoSettings = "no-settings",
+    /// `No value yet.`
+    NoValueYet = "no-value-yet",
     /// `No version is stored yet.`
     NoVersionStoredYet = "no-version-stored-yet",
     /// `Node`
@@ -414,6 +452,16 @@ messages! {
     OrganisationIdNot = "organisation-id-not",
     /// `Organisation name`
     OrganisationName = "organisation-name",
+    /// `File`
+    OriginFile = "origin-file",
+    /// `Import`
+    OriginImport = "origin-import",
+    /// `Operator`
+    OriginOperator = "origin-operator",
+    /// `Other`
+    OriginOther = "origin-other",
+    /// `Rollback`
+    OriginRollback = "origin-rollback",
     /// `Owner`
     Owner = "owner",
     /// `Its parts joined by dots, such as oauth2.scope.`
@@ -472,6 +520,8 @@ messages! {
     RemoveThisProfile = "remove-this-profile",
     /// `Remove this value`
     RemoveThisValue = "remove-this-value",
+    /// `Show the value while held`
+    ShowSecretWhileHeld = "show-secret-while-held",
     /// `removing`
     StateRemovingWord = "state-removing-word",
     /// `Replica …: …`

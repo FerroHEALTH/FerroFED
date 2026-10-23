@@ -16,14 +16,15 @@ use ferrohealth_ui::table::view::{
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::surface::{Crumb, Header, card, facts_row, page_heading};
 use ferrohealth_ui::view::template::list::{
-    ActiveFilters, ListCard, ListPage, list_empty, list_page,
+    ActiveFilters, HeadingCount, ListCard, ListPage, list_empty, list_page,
 };
 use leptos::prelude::*;
 
 use crate::app::SERVICES;
 use crate::locale::{Msg, tr};
-use crate::pages::{state, stopped};
+use crate::pages::stopped;
 use crate::read::federation::{Federation, Service};
+use ferrohealth_ui::view::state::state;
 
 /// The services.
 #[must_use]
@@ -81,7 +82,8 @@ fn services(federation: &Federation) -> AnyView {
                         Some(&service.href()),
                         service.name(),
                         Some(service.role().into_any()),
-                    )} {cell(&columns[1], state(service.health))}
+                    )}
+                    {cell(&columns[1], state(service.health.mark(), service.health.word(), None))}
                     {cell(
                         &columns[2],
                         view! { <code>{service.fault.clone().unwrap_or_default()}</code> },
@@ -112,7 +114,7 @@ fn services(federation: &Federation) -> AnyView {
         filters: ActiveFilters::default(),
         card: ListCard {
             title: tr(Msg::ServicesTitle),
-            count: Some(count),
+            count: Some(HeadingCount::All(count)),
             order: None,
             tabs: None,
             actions: None,
@@ -146,14 +148,18 @@ fn service_page(service: &Service, replica: Option<&str>) -> AnyView {
             subtitle: Some(service.role().into()),
             crumbs: vec![Crumb::new(tr(Msg::ServicesTitle), SERVICES)],
             mono: false,
-            badge: Some(state(service.health)),
+            subtitle_view: None,
+            badge: Some(state(service.health.mark(), service.health.word(), None)),
         },
         ActionGroup::none(),
     )
     .into_any();
     let facts = facts_row(vec![
         (tr(Msg::ColumnGroup), service.group.title().into_any()),
-        (tr(Msg::ColumnState), state(service.health)),
+        (
+            tr(Msg::ColumnState),
+            state(service.health.mark(), service.health.word(), None),
+        ),
         (
             tr(Msg::ColumnKey),
             view! { <code>{service.key.clone()}</code> }.into_any(),

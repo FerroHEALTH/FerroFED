@@ -11,19 +11,19 @@ use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{Field, INPUT, SWITCH};
-use ferrohealth_ui::view::layout::{FieldRow, keyed_field_row};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::definitions;
+use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
 use leptos::prelude::*;
 
 use crate::configure::draft::{self, Edit};
 use crate::configure::member::{ADD_FHIR, ADD_QUERY, fhir_field, field, query_field};
 use crate::configure::model::{ConfigForm, FhirEndpointInput, QueryEndpointInput};
-use crate::configure::plan::removal_reason;
+use crate::configure::plan::{removal_dialog, removal_reason};
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{
-    Text, add_button, confirmed, error_line, form, head, hidden, reason, remove_button, save_bar,
-    text, trail,
+    Text, confirmed, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,
+    trail,
 };
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::Refusal;
@@ -60,9 +60,10 @@ pub(super) fn state(state: Option<ConsoleState>) -> AnyView {
     pill(tone, &word).into_any()
 }
 
-/// The removal of the console member `node`, a confirmation step asking
-/// for the reason.
-fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
+/// The removal of the console member `node`, a confirmation step in the
+/// dialog `dialog` asking for the reason, opened by a button named
+/// `label`.
+fn removal(loaded: &Loaded<'_>, node: &str, (dialog, label): (String, String)) -> AnyView {
     let reason_id = removal_reason(node);
     form(
         "",
@@ -71,8 +72,8 @@ fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
             {hidden("base", loaded.base())}
             {hidden("node", node.to_owned())}
             {confirmed(
-                "remove-member",
-                (Glyph::TRASH, tr(Msg::Remove), Variant::Danger),
+                dialog,
+                (Glyph::TRASH, label, Variant::Danger),
                 (
                     tr_with(
                         Msg::RemoveMemberSavedWithoutWhichYou,
@@ -98,8 +99,8 @@ fn remove(loaded: &Loaded<'_>, node: &str) -> AnyView {
     .into_any()
 }
 
-/// One member's row.
-fn row(member: &MemberResource) -> AnyView {
+/// One member's row; a console member's ends in its confirmed Remove.
+fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
     let node = member.node.as_str().to_owned();
     let ids = member
         .endpoints
@@ -114,11 +115,16 @@ fn row(member: &MemberResource) -> AnyView {
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
     let actions = if editable {
+        let removes = (member.member.is_some())
+            .then(|| removal(loaded, &node, (removal_dialog(&node), tr(Msg::Remove))));
         view! {
-            <a href=href(&node) class=Variant::Ghost.class()>
-                {tr(Msg::Edit)}
-                <span class="fui-sr-only">{format!(" {node}")}</span>
-            </a>
+            <span class="fui-cluster">
+                <a href=href(&node) class=Variant::Ghost.class()>
+                    {tr(Msg::Edit)}
+                    <span class="fui-sr-only">{format!(" {node}")}</span>
+                </a>
+                {removes}
+            </span>
         }
         .into_any()
     } else {
@@ -178,7 +184,11 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
         }
         .into_any()
     } else {
-        members.iter().map(row).collect_view().into_any()
+        members
+            .iter()
+            .map(|member| row(loaded, member))
+            .collect_view()
+            .into_any()
     };
     view! {
         {head(
@@ -218,11 +228,11 @@ pub(super) fn member(loaded: &Loaded<'_>, node: &str) -> Result<AnyView, Refusal
         Some(ConsoleState::Running | ConsoleState::Pending)
     );
     match (&found.member, editable) {
-        // NOTE: no specification governs this: our own design; FerroUI's confirmation
-        // takes a fixed id, so a member's removal sits on its own page, one per page.
         (Some(held), true) => Ok(view! {
             {member_form(loaded, Some(held))}
-            <div class="fui-actions">{remove(loaded, node)}</div>
+            <div class="fui-actions">
+                {removal(loaded, node, (String::from("remove-member"), tr(Msg::Remove)))}
+            </div>
         }
         .into_any()),
         _ => Ok(detail(found).into_any()),
@@ -277,12 +287,6 @@ fn detail(member: &MemberResource) -> AnyView {
 /// The classes of one group of a form: a legend over its fields.
 pub(super) const GROUP: &str = "fui-fieldset";
 
-/// The classes of one repeatable row: a sunken box of its own fields.
-const ROW: &str = "fui-fieldset fui-well";
-
-/// The classes of a row's legend.
-const ROW_TITLE: &str = "fui-label";
-
 /// The "In service" switch of the endpoint field `id`, named `name`.
 fn in_service(id: String, name: String, on: bool) -> AnyView {
     let label_for = id.clone();
@@ -303,55 +307,61 @@ fn in_service(id: String, name: String, on: bool) -> AnyView {
     .into_any()
 }
 
-/// A Query API endpoint row, holding what `row` holds.
-fn query_row(row: &QueryEndpointInput) -> AnyView {
-    let key = row.key.as_str();
-    let named = if row.id.trim().is_empty() {
+/// The heading of the Query API endpoint row `row`.
+fn query_named(row: &QueryEndpointInput) -> String {
+    if row.id.trim().is_empty() {
         tr(Msg::NewQueryApiEndpoint)
     } else {
         tr_with(
             Msg::QueryApiEndpoint,
             &[("endpoint", row.id.clone().into())],
         )
-    };
-    let name = |part: &str| format!("form[query][{key}][{part}]");
-    view! {
-        <fieldset id=format!("cfg-q-{key}") class=ROW>
-            <legend class=ROW_TITLE>{named.clone()}</legend>
-            <input type="hidden" name="form[query_rows]" value=key.to_owned() />
-            <div class="fui-field-row fui-field-row-narrow-wide">
-                {text(
-                    (&query_field(key, "id"), &name("id")),
-                    tr(Msg::EndpointId),
-                    row.id.clone(),
-                    Text {
-                        required: true,
-                        mono: true,
-                        ..Text::default()
-                    },
-                )}
-                {text(
-                    (&query_field(key, "url"), &name("url")),
-                    tr(Msg::BaseUrl),
-                    row.url.clone(),
-                    Text {
-                        kind: "url",
-                        required: true,
-                        mono: true,
-                        ..Text::default()
-                    },
-                )}
-            </div>
-            <div class="fui-split">
-                {in_service(query_field(key, "service"), name("in_service"), row.in_service)}
-                {remove_button(
-                    &Edit::RemoveQuery(key.to_owned()),
-                    tr_with(Msg::Remove3, &[("named", named.into())]),
-                )}
-            </div>
-        </fieldset>
     }
-    .into_any()
+}
+
+/// A Query API endpoint row (F7 sub-card), holding what `row` holds.
+fn query_row(row: &QueryEndpointInput) -> RepeatRow {
+    let key = row.key.as_str();
+    let named = query_named(row);
+    let name = |part: &str| format!("form[query][{key}][{part}]");
+    let fields = view! {
+        <input type="hidden" name="form[query_rows]" value=key.to_owned() />
+        <div class="fui-field-row fui-field-row-narrow-wide">
+            {text(
+                (&query_field(key, "id"), &name("id")),
+                tr(Msg::EndpointId),
+                row.id.clone(),
+                Text {
+                    required: true,
+                    mono: true,
+                    ..Text::default()
+                },
+            )}
+            {text(
+                (&query_field(key, "url"), &name("url")),
+                tr(Msg::BaseUrl),
+                row.url.clone(),
+                Text {
+                    kind: "url",
+                    required: true,
+                    mono: true,
+                    ..Text::default()
+                },
+            )}
+        </div>
+        {in_service(query_field(key, "service"), name("in_service"), row.in_service)}
+    }
+    .into_any();
+    RepeatRow {
+        key: key.to_owned(),
+        heading: Some(named.clone()),
+        fields,
+        end: row_remove(
+            &Edit::RemoveQuery(key.to_owned()),
+            tr_with(Msg::Remove3, &[("named", named.into())]),
+        ),
+        after: None,
+    }
 }
 
 // NOTE: Regulation (EU) 2025/327 Art 14(1), points (a) to (f): the priority
@@ -367,28 +377,74 @@ const CATEGORIES: [(&str, Msg); 6] = [
     ("Discharge-Reports", Msg::DischargeReports2),
 ];
 
-/// The profile at `at` of the FHIR endpoint row `key`, holding `value`.
-fn profile(key: &str, at: usize, value: String) -> AnyView {
+/// The profile at `at` of the FHIR endpoint row `key`, holding `value`,
+/// a row of one field (F7).
+fn profile(key: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
     let id = format!("cfg-f-{key}-p-{at}");
-    let body = view! {
-        {Field::new(id.clone(), tr(Msg::Profile))
-            .label_hidden()
-            .view(
-                view! {
-                    <input
-                        type="url"
-                        id=id.clone()
-                        name=format!("form[fhir][{key}][profiles]")
-                        value=value
-                        class=format!("{INPUT} fui-mono")
-                        autocomplete="off"
-                        spellcheck="false"
-                    />
-                },
-            )}
-        {remove_button(&Edit::RemoveProfile(key.to_owned(), at), tr(Msg::RemoveThisProfile))}
-    };
-    keyed_field_row(format!("{id}-row"), FieldRow::WithActions, body)
+    let fields = Field::new(id.clone(), tr(Msg::Profile))
+        .label_hidden()
+        .view(view! {
+            <input
+                type="url"
+                id=id.clone()
+                name=format!("form[fhir][{key}][profiles]")
+                value=value
+                class=format!("{INPUT} fui-mono")
+                autocomplete="off"
+                spellcheck="false"
+            />
+        });
+    RepeatRow {
+        key: at.to_owned(),
+        heading: None,
+        fields,
+        end: row_remove(removes, tr(Msg::RemoveThisProfile)),
+        after: None,
+    }
+}
+
+/// The profiles of the FHIR endpoint row `key`, a row of one field each,
+/// and the line where a refusal of the list shows. A row Add copies in
+/// place is offered only on a row the server drew, since a copied row's
+/// own list would keep the blank row's key.
+fn profiles(key: &str, held: &[String]) -> AnyView {
+    let rows = held
+        .iter()
+        .enumerate()
+        .map(|(at, value)| {
+            profile(
+                key,
+                &at.to_string(),
+                value.clone(),
+                &Edit::RemoveProfile(key.to_owned(), at),
+            )
+        })
+        .collect();
+    let blank = (key != ROW).then(|| {
+        profile(
+            key,
+            ROW,
+            String::new(),
+            &Edit::RemoveProfile(key.to_owned(), held.len()),
+        )
+    });
+    let list_id = format!("cfg-f-{key}-profiles");
+    let refused = fhir_field(key, "add-profile");
+    view! {
+        {repeat(Repeat {
+            id: list_id,
+            label: tr(Msg::Profiles),
+            fields: Fields::One,
+            head: vec![tr(Msg::Profile)],
+            rows,
+            blank,
+            add: Some(row_add(&Edit::AddProfile(key.to_owned()), tr(Msg::AddProfile))),
+            empty: tr(Msg::NoProfileYet),
+            form: None,
+        })}
+        {error_line(&refused)}
+    }
+    .into_any()
 }
 
 /// The categories of the FHIR endpoint row `key`, those it serves
@@ -438,81 +494,72 @@ fn categories(key: &str, served: &[String]) -> AnyView {
     .into_any()
 }
 
-/// A FHIR endpoint row, holding what `row` holds.
-fn fhir_row(row: &FhirEndpointInput) -> AnyView {
-    let key = row.key.as_str();
-    let named = if row.id.trim().is_empty() {
+/// The heading of the FHIR endpoint row `row`.
+fn fhir_named(row: &FhirEndpointInput) -> String {
+    if row.id.trim().is_empty() {
         tr(Msg::NewFhirEndpoint)
     } else {
         tr_with(Msg::FhirEndpoint, &[("endpoint", row.id.clone().into())])
-    };
+    }
+}
+
+/// A FHIR endpoint row (F7 sub-card), holding what `row` holds, its
+/// profiles a list of its own.
+fn fhir_row(row: &FhirEndpointInput) -> RepeatRow {
+    let key = row.key.as_str();
+    let named = fhir_named(row);
     let name = |part: &str| format!("form[fhir][{key}][{part}]");
-    let profiles = row
-        .profiles
-        .iter()
-        .enumerate()
-        .map(|(at, value)| profile(key, at, value.clone()))
-        .collect_view();
-    view! {
-        <fieldset id=format!("cfg-f-{key}") class=ROW>
-            <legend class=ROW_TITLE>{named.clone()}</legend>
-            <input type="hidden" name="form[fhir_rows]" value=key.to_owned() />
-            <div class="fui-field-row fui-field-row-narrow-wide">
-                {text(
-                    (&fhir_field(key, "id"), &name("id")),
-                    tr(Msg::EndpointId),
-                    row.id.clone(),
-                    Text {
-                        required: true,
-                        mono: true,
-                        ..Text::default()
-                    },
-                )}
-                {text(
-                    (&fhir_field(key, "url"), &name("url")),
-                    tr(Msg::BaseUrl),
-                    row.url.clone(),
-                    Text {
-                        kind: "url",
-                        required: true,
-                        mono: true,
-                        ..Text::default()
-                    },
-                )}
-            </div>
+    let fields = view! {
+        <input type="hidden" name="form[fhir_rows]" value=key.to_owned() />
+        <div class="fui-field-row fui-field-row-narrow-wide">
             {text(
-                (&fhir_field(key, "system"), &name("system")),
-                tr(Msg::IdentifierSystemEhrId),
-                row.system.clone(),
+                (&fhir_field(key, "id"), &name("id")),
+                tr(Msg::EndpointId),
+                row.id.clone(),
                 Text {
                     required: true,
                     mono: true,
-                    hint: Some(tr(Msg::SystemEndpointToldEhrIdSuch)),
                     ..Text::default()
                 },
             )}
-            {categories(key, &row.categories)}
-            <fieldset class="fui-fieldset fui-choice">
-                <legend class="fui-label">{tr(Msg::Profiles)}</legend>
-                <div id=format!("cfg-f-{key}-profiles") class="fui-stack">
-                    {profiles}
-                </div>
-                {add_button(
-                    &fhir_field(key, "add-profile"),
-                    &Edit::AddProfile(key.to_owned()),
-                    tr(Msg::AddProfile),
-                )}
-            </fieldset>
-            <div class="fui-split">
-                {in_service(fhir_field(key, "service"), name("in_service"), row.in_service)}
-                {remove_button(
-                    &Edit::RemoveFhir(key.to_owned()),
-                    tr_with(Msg::Remove4, &[("named", named.into())]),
-                )}
-            </div>
-        </fieldset>
+            {text(
+                (&fhir_field(key, "url"), &name("url")),
+                tr(Msg::BaseUrl),
+                row.url.clone(),
+                Text {
+                    kind: "url",
+                    required: true,
+                    mono: true,
+                    ..Text::default()
+                },
+            )}
+        </div>
+        {text(
+            (&fhir_field(key, "system"), &name("system")),
+            tr(Msg::IdentifierSystemEhrId),
+            row.system.clone(),
+            Text {
+                required: true,
+                mono: true,
+                hint: Some(tr(Msg::SystemEndpointToldEhrIdSuch)),
+                ..Text::default()
+            },
+        )}
+        {categories(key, &row.categories)}
+        {profiles(key, &row.profiles)}
+        {in_service(fhir_field(key, "service"), name("in_service"), row.in_service)}
     }
-    .into_any()
+    .into_any();
+    RepeatRow {
+        key: key.to_owned(),
+        heading: Some(named.clone()),
+        fields,
+        end: row_remove(
+            &Edit::RemoveFhir(key.to_owned()),
+            tr_with(Msg::Remove4, &[("named", named.into())]),
+        ),
+        after: None,
+    }
 }
 
 /// The organisation and the node of the member form, filled in from
@@ -587,26 +634,53 @@ fn identity(form: &ConfigForm) -> AnyView {
     .into_any()
 }
 
-/// The Query API and FHIR endpoints of the member form, a row each.
+/// The Query API and FHIR endpoints of the member form, a sub-card each
+/// (F7), and the lines where a refusal of either list shows.
 fn endpoint_groups(form: &ConfigForm) -> AnyView {
-    let query_rows = form.query_endpoints.iter().map(query_row).collect_view();
-    let fhir_rows = form.fhir_endpoints.iter().map(fhir_row).collect_view();
+    let query_rows = form.query_endpoints.iter().map(query_row).collect();
+    let fhir_rows = form.fhir_endpoints.iter().map(fhir_row).collect();
+    let query_blank = query_row(&QueryEndpointInput {
+        key: String::from(ROW),
+        in_service: true,
+        ..QueryEndpointInput::default()
+    });
+    let fhir_blank = fhir_row(&FhirEndpointInput {
+        key: String::from(ROW),
+        in_service: true,
+        ..FhirEndpointInput::default()
+    });
     view! {
         <fieldset class=GROUP>
             <legend>{tr(Msg::QueryApiEndpoints)}</legend>
             <p class="fui-muted">{tr(Msg::RestEndpointsGatewaySendsEachMember)}</p>
-            <div id="cfg-query-rows" class="fui-stack">
-                {query_rows}
-            </div>
-            {add_button(ADD_QUERY, &Edit::AddQuery, tr(Msg::AddEndpoint))}
+            {repeat(Repeat {
+                id: String::from("cfg-query-rows"),
+                label: tr(Msg::QueryApiEndpoints),
+                fields: Fields::Card,
+                head: Vec::new(),
+                rows: query_rows,
+                blank: Some(query_blank),
+                add: Some(row_add(&Edit::AddQuery, tr(Msg::AddEndpoint))),
+                empty: tr(Msg::NoQueryEndpointYet),
+                form: None,
+            })}
+            {error_line(ADD_QUERY)}
         </fieldset>
         <fieldset class=GROUP>
             <legend>{tr(Msg::FhirEndpoints)}</legend>
             <p class="fui-muted">{tr(Msg::ExchangeFormatEndpointsServeCategoriesEach)}</p>
-            <div id="cfg-fhir-rows" class="fui-stack">
-                {fhir_rows}
-            </div>
-            {add_button(ADD_FHIR, &Edit::AddFhir, tr(Msg::AddFhirEndpoint))}
+            {repeat(Repeat {
+                id: String::from("cfg-fhir-rows"),
+                label: tr(Msg::FhirEndpoints),
+                fields: Fields::Card,
+                head: Vec::new(),
+                rows: fhir_rows,
+                blank: Some(fhir_blank),
+                add: Some(row_add(&Edit::AddFhir, tr(Msg::AddFhirEndpoint))),
+                empty: tr(Msg::NoFhirEndpointYet),
+                form: None,
+            })}
+            {error_line(ADD_FHIR)}
         </fieldset>
     }
     .into_any()

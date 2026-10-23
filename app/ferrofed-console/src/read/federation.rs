@@ -20,6 +20,7 @@ use ferrofed_registry::console::Owner;
 use ferrofed_registry::health::{DependencyReport, Indication, Observed};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::flow::FlowState;
+use ferrohealth_ui::view::state::Mark;
 use openehr_federation::options::OptionsRoot;
 
 use crate::locale::{Msg, tr};
@@ -64,6 +65,12 @@ impl Health {
             Self::Unreachable => FlowState::Unreachable,
             Self::Excluded => FlowState::Off,
         }
+    }
+
+    /// The state mark (F12) its word is drawn beside.
+    #[must_use]
+    pub fn mark(self) -> Mark {
+        Mark::from(self.flow())
     }
 
     /// The tone of its word.

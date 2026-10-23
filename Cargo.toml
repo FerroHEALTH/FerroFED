@@ -278,7 +278,7 @@ console_error_panic_hook = "0.1.7"
 # tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
 # moves to a new version deliberately. Verified against crates.io on
 # 2026-10-19.
-ferrohealth-ui = "=0.3.2"
+ferrohealth-ui = { version = "=0.3.3", features = ["split"] }
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic

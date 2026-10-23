@@ -13,26 +13,87 @@ use crate::configure::render::parts::{diff_table, error_line, form, head, hidden
 use crate::configure::render::{Loaded, author};
 use crate::locale::{Msg, tr, tr_with};
 use ferrohealth_ui::icon::{Glyph, icon};
+use ferrohealth_ui::table::filter::{FilterChoice, FilterMenu, MenuForm, filter_menu};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{Field, TEXTAREA};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::time::timestamp;
 
-/// Where `revision` came from, as a badge.
+/// The origins the history filters by, each its value in the address, its
+/// word and the tone of its badge.
+const ORIGINS: [(&str, Msg, Tone); 5] = [
+    ("operator", Msg::OriginOperator, Tone::Neutral),
+    ("file", Msg::OriginFile, Tone::Info),
+    ("rollback", Msg::OriginRollback, Tone::Warn),
+    ("import", Msg::OriginImport, Tone::Accent),
+    ("other", Msg::OriginOther, Tone::Neutral),
+];
+
+/// The value in the address of the origin of `revision`.
+const fn origin_of(revision: &Revision) -> &'static str {
+    match revision.origin {
+        Origin::Operator => "operator",
+        Origin::File => "file",
+        Origin::Rollback => "rollback",
+        Origin::Import => "import",
+        _ => "other",
+    }
+}
+
+/// Where `revision` came from, as a badge; a rollback names the revision
+/// it restores.
 fn origin(revision: &Revision) -> AnyView {
-    let word = match (revision.restores, revision.origin) {
-        (Some(restored), _) => tr_with(
+    let key = origin_of(revision);
+    let (word, tone) = ORIGINS
+        .iter()
+        .find(|(value, _, _)| *value == key)
+        .map_or((tr(Msg::OriginOther), Tone::Neutral), |(_, word, tone)| {
+            (tr(*word), *tone)
+        });
+    let word = revision.restores.map_or(word, |restored| {
+        tr_with(
             Msg::RollbackTo,
             &[("restored", (restored).to_string().into())],
-        ),
-        (None, Origin::File) => String::from("file"),
-        (None, Origin::Operator) => String::from("operator"),
-        (None, Origin::Rollback) => String::from("rollback"),
-        (None, Origin::Import) => String::from("import"),
-        (None, _) => String::from("other"),
-    };
-    badge(Tone::Neutral, &word).into_any()
+        )
+    });
+    badge(tone, &word).into_any()
+}
+
+/// The origin menu over `revisions` (T1's filter menu): a choice for each
+/// origin they hold, with how many hold it, those the address `asked`
+/// names checked, or every one when it names none.
+fn origin_menu(revisions: &[Revision], asked: &[String]) -> AnyView {
+    let choices = ORIGINS
+        .iter()
+        .filter_map(|(value, word, _)| {
+            let count = revisions
+                .iter()
+                .filter(|revision| origin_of(revision) == *value)
+                .count();
+            (count > 0).then(|| {
+                FilterChoice::new(
+                    *value,
+                    tr(*word),
+                    u64::try_from(count).unwrap_or(u64::MAX),
+                    asked.is_empty() || asked.iter().any(|origin| origin == value),
+                )
+            })
+        })
+        .collect();
+    filter_menu(FilterMenu {
+        id: "history-origin",
+        name: "origin",
+        glyph: Glyph::LIST_FILTER,
+        label: tr(Msg::HistoryOrigin).into(),
+        title: tr(Msg::HistoryOriginTitle),
+        choices,
+        note: None,
+        form: MenuForm::Own {
+            action: Some("/configuration/history"),
+            fields: &[],
+        },
+    })
 }
 
 /// Where `revision` stands against the running one `running` and the one
@@ -108,11 +169,16 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> AnyView {
     .into_any()
 }
 
-/// The History tab: the newest revisions, newest first.
+/// The History tab: the newest revisions, newest first, those of the
+/// origins the address names when it names some.
 pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
     let Some(history) = loaded.history else {
         return ().into_any();
     };
+    let asked: Vec<String> = crate::pages::query_values("origin")
+        .into_iter()
+        .filter(|origin| ORIGINS.iter().any(|(value, _, _)| value == origin))
+        .collect();
     let shown = tr_with(
         Msg::NewestRevisionsNewestFirst,
         &[
@@ -120,21 +186,38 @@ pub(super) fn history(loaded: &Loaded<'_>) -> AnyView {
             ("total", (history.total).to_string().into()),
         ],
     );
-    let entries = history
+    let kept: Vec<&Revision> = history
         .items
         .iter()
-        .map(|revision| entry(loaded, revision))
-        .collect_view();
+        .filter(|revision| {
+            asked.is_empty() || asked.iter().any(|origin| origin == origin_of(revision))
+        })
+        .collect();
+    let entries = if kept.is_empty() {
+        view! { <p class="fui-muted">{tr(Msg::HistoryNoneOfOrigin)}</p> }.into_any()
+    } else {
+        let items = kept
+            .into_iter()
+            .map(|revision| entry(loaded, revision))
+            .collect_view();
+        view! {
+            <ol class="fui-divided" aria-labelledby="history-title">
+                {items}
+            </ol>
+        }
+        .into_any()
+    };
     view! {
         {head(
             ("history-title", tr(Msg::History)),
             (tr(Msg::EveryRevisionWhoMadeWhyEach), "export-and-import"),
             (),
         )}
-        <p class="fui-help">{shown}</p>
-        <ol class="fui-divided" aria-labelledby="history-title">
-            {entries}
-        </ol>
+        <div class="fui-split">
+            <p class="fui-help">{shown}</p>
+            {origin_menu(&history.items, &asked)}
+        </div>
+        {entries}
     }
     .into_any()
 }

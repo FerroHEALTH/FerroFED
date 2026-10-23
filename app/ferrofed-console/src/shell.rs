@@ -344,10 +344,14 @@ fn navigation(open: Option<u32>, reachable: bool) -> Vec<Group> {
         Group {
             id: "nav-federation",
             title: tr(Msg::NavGroupFederation).into(),
-            // TODO(#1233): draw building-2 and plug once FerroUI vendors them.
             entries: vec![
-                entry(ORGANISATIONS, Msg::NavOrganisations, Glyph::USERS, false),
-                entry(SERVICES, Msg::NavServices, Glyph::LINK, false),
+                entry(
+                    ORGANISATIONS,
+                    Msg::NavOrganisations,
+                    Glyph::BUILDING_COMPLEX,
+                    false,
+                ),
+                entry(SERVICES, Msg::NavServices, Glyph::PLUG, false),
                 integrity,
             ],
         },

@@ -84,6 +84,43 @@ async fn exports(listener: &Server) {
         .await;
 }
 
+// NOTE: no specification governs this: our own design; the history filters its
+// newest revisions by origin in a GET form, with no WebAssembly (FerroUI T1).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_history_keeps_the_origins_its_address_names() -> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let (_response, every) = send(&service, get_as("/configuration/history", &session)?).await?;
+    assert!(
+        every.contains(r#"<form method="get" action="/configuration/history""#),
+        "{every}"
+    );
+    assert!(
+        every.contains(r#"name="origin" value="file" checked"#),
+        "{every}"
+    );
+    let (response, body) = send(
+        &service,
+        get_as("/configuration/history?origin=file", &session)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(body.contains("Export revision 1 as TOML"), "{body}");
+    assert!(!body.contains("Export revision 2 as TOML"), "{body}");
+    assert!(body.contains("Origin · 1 of 2"), "{body}");
+    let (_response, none) = send(
+        &service,
+        get_as("/configuration/history?origin=rollback", &session)?,
+    )
+    .await?;
+    assert!(
+        none.contains("None of the newest revisions has an origin you chose."),
+        "{none}"
+    );
+    assert_eq!(0, changes(&listener).await?);
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn each_revision_offers_its_download_and_the_page_offers_an_import()
 -> Result<(), Box<dyn Error>> {
@@ -100,7 +137,7 @@ async fn each_revision_offers_its_download_and_the_page_offers_an_import()
         );
     }
     assert!(
-        body.contains(r#"<span class="fui-badge fui-tone-neutral">import</span>"#),
+        body.contains(r#"<span class="fui-badge fui-tone-accent">Import</span>"#),
         "{body}"
     );
     let (_response, body) =

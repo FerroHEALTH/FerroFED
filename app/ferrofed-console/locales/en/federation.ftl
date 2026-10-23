@@ -58,13 +58,13 @@ noun-endpoints = { $count ->
 }
     .empty = No endpoints
     .opening = Endpoints
-organisation-subtitle = { $id } · { $count ->
+organisation-subtitle = Organisation { $id } · { $count ->
     [one] { $count } node
    *[other] { $count } nodes
 }
 organisation-facts = Facts
 new-node = New node
-node-subtitle = A node of { $organisation }.
+node-subtitle = Node of { $organisation }
 node-facts = Facts
 node-health = Health
 node-health-line = The last state the gateway observed of each endpoint.

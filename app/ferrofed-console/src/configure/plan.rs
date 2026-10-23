@@ -294,6 +294,14 @@ pub fn removal_reason(named: &str) -> String {
     format!("cfg-remove-{slug}-reason")
 }
 
+/// The id on the page of the dialog that confirms the removal of `named`
+/// from its row of a tab, one per row.
+#[must_use]
+pub fn removal_dialog(named: &str) -> String {
+    let reason = removal_reason(named);
+    format!("{}-dialog", reason.trim_end_matches("-reason"))
+}
+
 /// The actions that change the running gateway or the stored-query
 /// store, which the operator confirms in a step of their own; a save
 /// is not applied, and needs none.

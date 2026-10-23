@@ -30,7 +30,7 @@ messages! {
     NodeHealth = "node-health",
     /// `The last state the gateway observed of each endpoint.`
     NodeHealthLine = "node-health-line",
-    /// `A node of ….`
+    /// `Node of …`
     NodeSubtitle = "node-subtitle",
     /// `No node matches.`
     NodesNoMatch = "nodes-no-match",
@@ -44,7 +44,7 @@ messages! {
     OrganisationCount = "organisation-count",
     /// `Facts`
     OrganisationFacts = "organisation-facts",
-    /// `… · { $count ->`
+    /// `Organisation … · { $count ->`
     OrganisationSubtitle = "organisation-subtitle",
     /// `Add the first organisation`
     OrganisationsAddFirst = "organisations-add-first",

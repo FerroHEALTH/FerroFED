@@ -45,6 +45,14 @@ async fn a_nodes_page_shows_its_endpoints_and_an_unknown_one_is_not_found()
     assert!(body.contains("cdr1.rso.nl"), "{body}");
     assert!(!drawn(&body).contains("cdr2.rso.nl"), "{body}");
     assert!(body.contains("Reachable"), "{body}");
+    assert!(
+        body.contains(r#"<span class="fui-state fui-tone-ok">"#),
+        "a state is FerroUI's F12 mark: {body}"
+    );
+    assert!(
+        body.contains(r#"<p class="fui-page-subtitle">Node of <a href="/organisations/Org%20A">"#),
+        "the subtitle links the node's organisation: {body}"
+    );
     let (response, endpoints) = send(
         &service,
         get_as("/organisations/Org%20A/node_1/endpoints", &session)?,
