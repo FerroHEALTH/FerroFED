@@ -1222,6 +1222,48 @@ jobs:
       # Reads the same RustSec advisory database as cargo-audit and adds
       # yanked, licences, bans and sources, so there is no separate audit job.
       - run: cargo deny check
+      # An `ignore` entry that outlived its finding: cargo-deny reports it as a
+      # warning, so the step above stays green on one; this promotes it to an
+      # error. Here because cargo-deny and the toolchain are installed.
+      - name: No exception for an advisory that no longer fires
+        run: bash scripts/checks/advisory-exceptions.sh
+      # A VEX statement whose published argument names the wrong dependency
+      # path: compared with the graph cargo resolves, in both directions.
+      - name: Every VEX statement names the real dependency path
+        run: bash scripts/checks/vex-reachability.sh
+
+  # The published Rust advisory VEX is exactly what deny.toml and
+  # security/vex/rust-advisories.toml generate, every hand-written OpenVEX
+  # document is well formed, and the release's vulnerability-record detector
+  # refuses what it claims to. No specification
+  # governs the gate: our own design, the one FerroEHR runs.
+  vex:
+    name: vex
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # deny.toml and the prose file are TOML, which jq cannot read. Pinned by
+      # version and verified by checksum: this binary decides whether the gate
+      # passes.
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.53.3
+          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  $RUNNER_TEMP/yq" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
+          yq --version
+      - name: Every accepted advisory has a published VEX justification
+        run: bash scripts/checks/vex-advisories.sh
+      - name: The vulnerability-record detector refuses what it claims to
+        run: bash scripts/checks/vex-coverage.sh --self-test
 
   msrv:
     name: msrv (cargo-hack)
@@ -1561,6 +1603,7 @@ jobs:
       - release-compose
       - doc
       - cargo-deny
+      - vex
       - msrv
       - features
       - console

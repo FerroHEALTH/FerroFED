@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Trivy configuration for the image gate of the release lane
+# (.github/workflows/scan-and-tag.yml), the weekly scan of the published images
+# (.github/workflows/image-scan.yml) and its local replay
+# (scripts/security/scan-images.sh). No specification governs the floor: our
+# own design, the one FerroEHR runs.
+#
+#   * HIGH and CRITICAL only. The gate exists to stop an image that carries a
+#     severe finding a rebuild would fix.
+#   * `ignore-unfixed`. A finding in the distroless base with no fixed package
+#     cannot be resolved by a rebuild, so it does not block; it still reaches
+#     the release's vulnerability record, which scans with no floor and no
+#     ignore, and needs an OpenVEX statement there.
+#
+# The exception path for one finding is `.trivyignore.yaml`, each entry with
+# its reason and an expiry date.
+severity:
+  - HIGH
+  - CRITICAL
+
+vulnerability:
+  # The nesting matters: Trivy reads `ignore-unfixed` only under
+  # `vulnerability:`.
+  ignore-unfixed: true
+
+ignorefile: .trivyignore.yaml
+
+# Trivy takes VEX sources only as `--vex` arguments, so the OpenVEX documents
+# under security/vex/ are not named here; image-scan.yml and
+# scripts/security/scan-images.sh pass each one.

@@ -184,3 +184,14 @@ the `<major>.<minor>` and `latest` image tags move to the replacement.
 | Version | Withdrawn | Finding | Advisory |
 | ------- | --------- | ------- | -------- |
 <!-- withdrawn versions: rows above this line -->
+
+## Vulnerability exploitability (VEX)
+
+A scanner can report a finding in a FerroFED artifact that does not affect
+it, such as an unmaintained crate that only runs inside the compiler. Such
+findings are judged in OpenVEX documents under
+[`security/vex/`](security/vex/README.md), which a scanner reads with
+`trivy --vex`. Each release attaches its vulnerability record,
+`ferrofed-vX.Y.Z-vulnerability-record.json`: every finding of a full scan of
+both images and the binaries, each with the statement that judges it, and
+the release is refused while a finding has none.

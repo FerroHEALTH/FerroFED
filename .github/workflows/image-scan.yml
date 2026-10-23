@@ -1,0 +1,139 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The weekly vulnerability scan of the PUBLISHED images. The release gate
+# (scan-and-tag.yml) scans an image once, before it is tagged; a vulnerability
+# published the week after a release applies to the image people run, and
+# this lane reads it again where a user pulls it: `latest` on GHCR, both
+# platforms, the gateway and the operator console. No specification governs
+# the schedule: our own design, the one FerroEHR runs.
+#
+# The exceptions carry over: trivy.yaml brings .trivyignore.yaml, the
+# HIGH/CRITICAL floor and `ignore-unfixed`, and every OpenVEX document under
+# security/vex/ is passed as `--vex`, which binds here because the `pkg:oci/…`
+# products match a published reference. scripts/security/scan-images.sh is
+# the same scan, run locally.
+#
+# The run is red only when the probe fails (an image that cannot be pulled, a
+# trivy crash, a report jq cannot read). A finding opens one tracking issue,
+# or leaves the open one, and the run stays green: the issue is the alert.
+name: Published image scan
+
+on:
+  schedule:
+    # Mondays 07:13 UTC, off the hour and clear of pin-freshness.yml.
+    - cron: "13 7 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: image-scan
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  # `latest` moves only when a release becomes the latest (latest.sh), so it is
+  # what an operator following the quickstart pulls. The digest each scan
+  # resolved is recorded in the summary, so a finding names exact bytes.
+  SCAN_TAG: latest
+  TRIVY_VERSION: "0.73.0"
+
+jobs:
+  scan:
+    name: scan published images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read # trivy.yaml and security/vex/
+      packages: read # pull the published images
+      issues: write # open the tracking issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No cache: the lane decides whether published artifacts are safe, so
+      # nothing an earlier run wrote may influence its answer.
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v${{ env.TRIVY_VERSION }}
+          cache: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Scan every published image
+        id: scan
+        run: |
+          set -euo pipefail
+          vex_args=()
+          for doc in security/vex/*.json; do
+            [ -e "$doc" ] || continue
+            vex_args+=(--vex "$doc")
+          done
+          echo "VEX documents applied: $(( ${#vex_args[@]} / 2 ))"
+          total=0
+          : > findings.md
+          for image in ferrofed ferrofed-console; do
+            ref="ghcr.io/ferrohealth/${image}:${SCAN_TAG}"
+            digest="$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')"
+            for platform in linux/amd64 linux/arm64; do
+              arch="${platform##*/}"
+              echo "::group::${image} ${platform} (${digest})"
+              trivy image --config trivy.yaml --scanners vuln --platform "$platform" \
+                "${vex_args[@]}" --format json --output "${image}.${arch}.json" "${ref%:*}@${digest}"
+              count="$(jq '[.Results[]?.Vulnerabilities // [] | .[]] | length' "${image}.${arch}.json")"
+              trivy convert --format table "${image}.${arch}.json"
+              echo "::endgroup::"
+              echo "| \`${image}\` | \`${platform}\` | \`${digest}\` | ${count} |" >> findings.md
+              total=$((total + count))
+            done
+          done
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          {
+            printf '## Published image scan\n\n'
+            # shellcheck disable=SC2016 # Markdown backticks, not a command
+            printf 'Tag `%s`, Trivy %s, HIGH/CRITICAL with a fix available, VEX applied.\n\n' "$SCAN_TAG" "$TRIVY_VERSION"
+            printf '| image | platform | digest | findings |\n|---|---|---|---|\n'
+            cat findings.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "total findings: $total"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: image-scan-reports
+          path: "*.json"
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Open an issue when a published image carries a finding
+        if: steps.scan.outputs.total != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOTAL: ${{ steps.scan.outputs.total }}
+          TITLE: A published image carries a fixable HIGH or CRITICAL finding
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          open="$(gh issue list --state open --limit 500 --json number,title \
+            --jq "[.[] | select(.title == \"$TITLE\")] | length")"
+          if [ "$open" -ne 0 ]; then
+            echo "an open issue already carries this report; not opening a second"
+            exit 0
+          fi
+          {
+            printf 'The weekly scan of the published images found **%s** fixable HIGH or CRITICAL findings.\n\n' "$TOTAL"
+            printf '| image | platform | digest | findings |\n|---|---|---|---|\n'
+            cat findings.md
+            # shellcheck disable=SC2016 # Markdown backticks, not a command
+            printf '\nThe reports are attached to [this run](%s) as `image-scan-reports`.\n\n' "$RUN_URL"
+            # shellcheck disable=SC2016 # Markdown backticks, not a command
+            printf 'Each finding has a fix, so the remedy is a rebuild on the fixed base or dependency and a release. A finding FerroFED cannot reach gets its argument as an OpenVEX statement under `security/vex/` instead, as `security/vex/README.md` says.\n'
+          } > body.md
+          bash scripts/gh/fields.sh new bug high medium \
+            --title "$TITLE" --body-file body.md --label security

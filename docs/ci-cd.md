@@ -37,6 +37,8 @@ has run on every change since the workspace landed.
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
 | `release-console.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-console` binaries built with `cargo auditable` and the site bundle built with cargo-leptos, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-console` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
+| `scan-and-tag.yml` | called by `release.yml` | the image gate: both pushed digests scanned on both platforms for HIGH and CRITICAL findings that have a fix (`trivy.yaml`), then the `<version>`, `<major>.<minor>` and `latest` tags applied to the digests that passed |
+| `image-scan.yml` | Mondays, dispatch | the published `latest` images, both platforms, scanned with `trivy.yaml` and every OpenVEX document under `security/vex/`, one issue when one carries a finding |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
@@ -80,6 +82,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
 | `changelog` | `scripts/release/changelog.sh --self-test` and `scripts/checks/changelog-guard.sh --self-test`, each over a stub repository, then `scripts/release/changelog.sh --check`: every fragment under `changelog.d/` is named `<issue>-<kebab-slug>.<section>.md` with a Keep a Changelog 1.1.0 section and holds Markdown list items alone (`changelog.d/README.md`); `scripts/release/plan.sh --self-test` and `scripts/checks/changelog-security.sh --self-test`; then `scripts/checks/changelog-unreleased.sh`, the structure check (Keep a Changelog types and "Upgrade notes", each once per section) and the Security rules (every entry names a `GHSA-` id or `security/vex/` path, a Security section beside other changes opens with its reason) over the fragments assembled under `[Unreleased]` |
+| `vex` | `scripts/checks/vex-advisories.sh`: `security/vex/rust-advisories.openvex.json` is exactly what `deny.toml` and `security/vex/rust-advisories.toml` generate, and every OpenVEX document is well formed; then `scripts/checks/vex-coverage.sh --self-test`, the release's vulnerability-record detector (`security/vex/README.md`) |
 | `manifests` | `scripts/checks/manifests.sh --self-test`, then `scripts/checks/manifests.sh`: `cargo metadata --locked --format-version 1 --no-deps` over the root `Cargo.toml` and `fuzz/Cargo.toml`, so a manifest that does not parse (a dependency written twice by a merge) fails here with Cargo's own message; the self-test proves a manifest with a key written twice fails. It is the one tier-1 job that installs the pinned toolchain, with no build cache, and `detect` needs it, so a broken manifest starts no Rust job |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
@@ -100,7 +103,11 @@ in `ci.yml` and `release-console.yml`, so every comparison runs.
 **Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
 `needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt (after leptosfmt over the console's `view!` bodies, #1155),
-clippy at `-D warnings`, nextest plus doctests, rustdoc, `cargo deny check`,
+clippy at `-D warnings`, nextest plus doctests, rustdoc, `cargo deny check`
+(followed by `scripts/checks/advisory-exceptions.sh`, which fails an
+advisory exception that outlived its finding, and
+`scripts/checks/vex-reachability.sh`, which compares each VEX statement's
+dependency path with the graph cargo resolves),
 MSRV through `cargo hack check --rust-version`, and `dependency-review` on
 pull requests. Each lane mirrors the local command in `.claude/rules/ci-cd.md`.
 The lanes were written before the workspace, so the workspace pull request
@@ -404,6 +411,7 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows, and `pin-freshness.yml`, weekly, against the newest stable tag in each image's registry; a bump is a deliberate change to both |
 | the EU corpora, `docs/specs/eu-ehds/` and `docs/specs/eu-cra/`, against the acts adopted under, amending or correcting Regulation (EU) 2025/327 and Regulation (EU) 2024/2847 | `pin-freshness.yml`, weekly: `scripts/checks/ehds-acts.sh` reads EUR-Lex and the Have your say register |
 | the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
+| the Trivy version of the image scans and the vulnerability record, and the `yq` version of the `vex` job | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change |
 | the fuzz seeds generated from the vendored corpora (`fuzz/seeds/*/gen-*`) | `scripts/fuzz/seeds.sh --check`, the first job of `fuzz.yml` |
 | `fuzz/Cargo.lock` against the workspace crates the fuzz targets depend on | the `fuzz lockfile` job of `ci.yml`, on every pull request (`cargo metadata --locked`) |
 | every pin repeated in a second file | `scripts/checks/versions.sh` against `docs/VERSIONS.md` |

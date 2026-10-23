@@ -17,10 +17,11 @@
 # extracted, so the image provenance chains to attested inputs.
 #
 # What lands in the registry for one release:
-#   - the image index (linux/amd64, linux/arm64) tagged <version>, and for a
+#   - the image index (linux/amd64, linux/arm64), pushed by digest and
+#     tagged by scan-and-tag.yml once its scan passes: <version>, and for a
 #     release that is not a pre-release also <major>.<minor> and, when it is
-#     the highest version released, latest, with
-#     OCI labels and with annotations on the index and on both manifests;
+#     the highest version released, latest, with OCI labels and with
+#     annotations on the index and on both manifests;
 #   - GitHub attestations pushed as OCI referrers: SLSA provenance for the
 #     index and for each platform manifest, and an SPDX SBOM per platform.
 #
@@ -49,6 +50,9 @@ on:
       digest:
         description: The digest of the pushed image index.
         value: ${{ jobs.image.outputs.digest }}
+      tags:
+        description: The newline-separated tags scan-and-tag.yml applies to the digest once its scan passes.
+        value: ${{ jobs.image.outputs.tags }}
 
 permissions: {}
 
@@ -71,6 +75,7 @@ jobs:
       attestations: write # store them against this repository
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
     steps:
       # github.sha in a called workflow is the caller's, the commit the tag
       # points at. docker/Dockerfile is read from it.
@@ -188,11 +193,12 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          # By digest, with no tag: scan-and-tag.yml applies the tags below once
+          # the image scan passes, so a refused image is never referencable.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           no-cache: true
           provenance: false
           sbom: false
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
 
@@ -288,7 +294,6 @@ jobs:
         run: |
           set -euo pipefail
           signer="${GITHUB_REPOSITORY}/.github/workflows/release-image.yml"
-          gh attestation verify "oci://${IMAGE}:${VERSION}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
           gh attestation verify "oci://${IMAGE}@${DIGEST}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
           for manifest in "$AMD64" "$ARM64"; do
             gh attestation verify "oci://${IMAGE}@${manifest}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
@@ -296,7 +301,7 @@ jobs:
               --predicate-type https://spdx.dev/Document/v2.3
           done
           {
-            echo "image ${IMAGE}:${VERSION}"
+            echo "image ${IMAGE}:${VERSION} (tagged by scan-and-tag.yml after its scan)"
             echo "index ${DIGEST}"
             echo "amd64 ${AMD64}"
             echo "arm64 ${ARM64}"

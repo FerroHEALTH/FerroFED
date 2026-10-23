@@ -21,14 +21,12 @@ version = 2
 # naming the event that deletes it.
 yanked = "deny"
 ignore = [
-  # 2026-10-05: both are compile-time proc-macro crates under the Leptos 0.8
-  # family the operator console builds on (#275), with no runtime code in
-  # either binary, and 0.8.21 is the newest Leptos. Deleted by the first
-  # Leptos release that drops each.
+  # 2026-10-05: a compile-time proc-macro crate under the Leptos 0.8 family
+  # the operator console builds on (#275), with no runtime code in either
+  # binary. Deleted by the first Leptos release that drops it. Its OpenVEX
+  # statement is security/vex/rust-advisories.toml.
   # https://rustsec.org/advisories/RUSTSEC-2024-0436
   { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; a compile-time proc-macro under the Leptos 0.8 family of the operator console, with no runtime surface" },
-  # https://rustsec.org/advisories/RUSTSEC-2026-0173
-  { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained; a compile-time proc-macro under leptos_macro of the operator console, with no runtime surface" },
 ]
 
 [licenses]
