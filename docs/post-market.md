@@ -177,6 +177,36 @@ ENISA (Art 14(1), (3), (7)).
    serious incident (the section above) and whether a NIS 2 notification is
    due. Neither is covered by the CRA notifications.
 
+## A fixed vulnerability's advisory
+
+Every fixed vulnerability in FerroFED gets a GitHub security advisory on
+this repository, published with the release that fixes it: one in
+FerroFED's own code, and one for a dependency or base-image fix that
+changes what a shipped binary or image contains or how it behaves. A
+dependency finding that an OpenVEX statement under `security/vex/` shows
+does not affect FerroFED gets no advisory. What the advisory carries, and
+when its technical details may wait, is the FerroHEALTH
+[security policy](https://ferrohealth.eu/docs/security.html).
+
+1. **On the report or the finding:** open a draft advisory on this
+   repository, the package `ferrofed` (ecosystem "other") with the affected
+   range. It is the record until publication.
+2. **Ship the fix** as a security patch release
+   ([`release.md`](release.md#cutting-a-security-patch-release)). If it
+   ships beside functional changes instead, a `security-reason` fragment
+   gives the reason the release's `### Security` section opens with
+   (Regulation (EU) 2024/2847 Annex I Part II(2); `changelog.d/README.md`).
+3. **The changelog entry** under `### Security` carries the advisory's
+   `GHSA-` identifier (Annex I Part II(4), (8)). The release `plan` job
+   refuses a Security entry with neither a `GHSA-` id nor a `security/vex/`
+   path.
+4. **Publish the advisory** in the same hour as the release, with the
+   release as the patched version, and request a CVE through it where the
+   vulnerability warrants one.
+5. **Enter the register rows** the vulnerability needs (a complaint row
+   for a reported one, a non-conformity row where it is one), now that the
+   advisory is public.
+
 ## The register of economic operators
 
 EHDS Art 35 has economic operators "on request, identify ... to the market

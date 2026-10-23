@@ -740,6 +740,14 @@ jobs:
           bash scripts/release/declaration-of-conformity.sh --self-test
           bash scripts/release/declaration-of-conformity.sh status
           bash scripts/release/changelog.sh --check
+          bash scripts/release/plan.sh --self-test
+          bash scripts/checks/changelog-security.sh --self-test
+          # Regulation (EU) 2024/2847 Annex I Part II(2), (4) and (8), on the
+          # fragments assembled as the next release will carry them: every
+          # Security entry names its GHSA advisory or VEX statement, and a
+          # Security section beside other changes opens with its reason. The
+          # release plan runs the same checks over the section it cuts.
+          bash scripts/checks/changelog-unreleased.sh
 
   # The manifest guard (#454), the one tier-1 job with a toolchain: every
   # Cargo manifest of the workspace and of fuzz/ parses, read by `cargo

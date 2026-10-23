@@ -398,7 +398,8 @@ these matters into account:
   ([Intended purpose](#intended-purpose)). They can expect every
   vulnerability found to be fixed in a new release they can take free of
   charge: a security fix ships as a patch release of the newest release,
-  with no feature changes in it
+  with the fix alone, or with the reason a functional change ships with it
+  stated in the release notes
   ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 - **The nature of the product and its intended purpose.** FerroFED is
   software with no hardware part, and it holds no clinical data of its own,
