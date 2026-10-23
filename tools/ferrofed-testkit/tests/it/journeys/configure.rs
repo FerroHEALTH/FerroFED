@@ -378,22 +378,7 @@ async fn removed_with_no_script(
         .element(By::Css(format!("dialog#{dialog}[open]")))
         .await?;
     fill(browser, "cfg-remove-node-b-reason", "node B leaves").await?;
-    browser
-        .element(By::Css(format!(
-            r#"dialog#{dialog}[open] button[type="submit"]"#
-        )))
-        .await?
-        .click()
-        .await?;
-    browser
-        .text("strong", "Replica gateway-0 saved revision 3.")
-        .await?;
-    let removed = bodies(admin, "/admin/config/members/node-b/remove").await?;
-    let [removed] = removed.as_slice() else {
-        return Err(format!("one removal of member B, not {}", removed.len()).into());
-    };
-    assert!(removed.contains(r#""reason":"node B leaves""#), "{removed}");
-    Ok(())
+    saved_with_reason(browser, admin, dialog).await
 }
 
 // The configuration works with no WebAssembly: a row is added and a member
@@ -472,6 +457,32 @@ async fn menu_opens_edit(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn
         .await?;
     browser.element(By::Id("cfg-f-0-url")).await?;
     browser.at(&stack.url(edit)).await?;
+    Ok(())
+}
+
+/// Saves the removal of console member B from its open dialog `dialog`,
+/// whose reason reads "node B leaves", and checks the replica was asked
+/// once, with that reason.
+async fn saved_with_reason(
+    browser: &Browser,
+    admin: &Server,
+    dialog: &str,
+) -> Result<(), Box<dyn Error>> {
+    browser
+        .element(By::Css(format!(
+            r#"dialog#{dialog}[open] button[type="submit"]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    browser
+        .text("strong", "Replica gateway-0 saved revision 3.")
+        .await?;
+    let removed = bodies(admin, "/admin/config/members/node-b/remove").await?;
+    let [removed] = removed.as_slice() else {
+        return Err(format!("one removal of member B, not {}", removed.len()).into());
+    };
+    assert!(removed.contains(r#""reason":"node B leaves""#), "{removed}");
     Ok(())
 }
 
@@ -556,22 +567,7 @@ async fn removed(
         .await?
         .send_keys("node B leaves")
         .await?;
-    browser
-        .element(By::Css(format!(
-            r#"dialog#{dialog}[open] button[type="submit"]"#
-        )))
-        .await?
-        .click()
-        .await?;
-    browser
-        .text("strong", "Replica gateway-0 saved revision 3.")
-        .await?;
-    let removed = bodies(admin, "/admin/config/members/node-b/remove").await?;
-    let [removed] = removed.as_slice() else {
-        return Err(format!("one removal of member B, not {}", removed.len()).into());
-    };
-    assert!(removed.contains(r#""reason":"node B leaves""#), "{removed}");
-    Ok(())
+    saved_with_reason(browser, admin, dialog).await
 }
 
 // A console member's row menu offers Remove… after Edit, and the page
