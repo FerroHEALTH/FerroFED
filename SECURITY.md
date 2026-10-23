@@ -44,15 +44,18 @@ each release (Art 13(8)) and ships them only in the newest release
   each was taken into account, are recorded in the book's
   [basis of the five years](https://ferrofed.eu/docs/evaluate/regulatory-status.html#the-basis-of-the-five-years)
   (Annex VII, point 4).
-- **Where fixes ship:** a security fix ships in a new release, a patch
-  release with no feature changes in it, so the update is provided
-  separately from functionality updates (Annex I Part II(2)). Art 13(10)
-  lets Cadasto B.V. ship it only in the newest release, provided a user of
-  an earlier release gets the newest one free of charge and with no added
-  cost to adjust the environment it runs in. Every release is published
-  under the same licence terms as the one before it, and a published
-  release is never changed, so a user of an older release upgrades to the
-  newest release to get the fix.
+- **Where fixes ship:** a security fix ships in a new release. Where it
+  is technically feasible, that release is a patch with the fix alone, so
+  the update is provided separately from functionality updates (Annex I
+  Part II(2)); when a functional change has to ship with it, the
+  release's `### Security` section opens with "Shipped with functional
+  changes because:" and the reason, and the release notes carry it.
+  Art 13(10) lets Cadasto B.V. ship it only in the newest release,
+  provided a user of an earlier release gets the newest one free of charge
+  and with no added cost to adjust the environment it runs in. Every
+  release is published under the same licence terms as the one before it,
+  and a published release is never changed, so a user of an older release
+  upgrades to the newest release to get the fix.
 - **Updates stay available:** a published release, its tag and its image
   digest are never deleted ([`docs/release.md`](docs/release.md)).
 - **An older release:** a release that is not the newest receives no fix.
@@ -95,14 +98,24 @@ release to move to.
 
 ## Reporting a vulnerability
 
-**Do not open a public issue for a security vulnerability.** Report it
-privately through GitHub's private vulnerability reporting:
-<https://github.com/FerroHEALTH/FerroFED/security/advisories/new>. You will get
-an acknowledgement within seven days. If that window passes with no response,
-public disclosure to protect other users is your call. Without a GitHub
-account, use the manufacturer's email route on the family book's
-[Security](https://ferrohealth.eu/docs/security.html#reporting-a-vulnerability)
-page.
+**Do not open a public issue for a security vulnerability.** This route
+covers what this repository publishes: the `ferrofed` binary, the gateway
+and console images (`ferrofed`, `ferrofed-console`) and the library crates.
+Report privately, through either route:
+
+- [GitHub private vulnerability reporting](https://github.com/FerroHEALTH/FerroFED/security/advisories/new)
+  ("Report a vulnerability" on the repository's Security tab), which needs a
+  GitHub account; or
+- email to [info@cadasto.com](mailto:info@cadasto.com), the single point of
+  contact of Cadasto B.V., the manufacturer (CRA Art 13(17)), with "FerroFED
+  vulnerability" in the subject. No account is needed. The address has no
+  published encryption key, so send the details you are comfortable sending
+  by email and say that more is available; a channel for the rest is agreed
+  with you.
+
+Both routes reach the same people and the same procedure. You will get an
+acknowledgement within seven days. If that window passes with no response,
+public disclosure to protect other users is your call.
 
 A patient identifier reaching a node is a vulnerability in FerroFED: the
 gateway's central safety property is that no request it composes for a node
@@ -111,6 +124,22 @@ carries one. Report it here, privately.
 If you have evidence that someone is exploiting the vulnerability, say so in
 the report: an actively exploited vulnerability starts the 24-hour clock
 below.
+
+## Security advisories
+
+A reported vulnerability gets a private draft of a GitHub security advisory
+on this repository the day it is confirmed, and the draft is the record
+until the fix ships. Every fixed vulnerability is published as that
+advisory, in the same hour as the release that fixes it: one in FerroFED's
+own code, and one for a dependency or base-image fix that changes what a
+shipped binary or image contains. The `### Security` entry for the fix in
+[`CHANGELOG.md`](CHANGELOG.md) carries the advisory's `GHSA-` identifier,
+and the release notes repeat it (CRA Annex I Part II(4), (8)). A dependency
+finding that an OpenVEX statement under `security/vex/` shows does not
+affect FerroFED gets no advisory; the changelog entry names that statement
+instead. The advisories are machine-readable through the GitHub REST API
+(`GET /repos/FerroHEALTH/FerroFED/security-advisories`). The procedure is
+in [`docs/post-market.md`](docs/post-market.md#a-fixed-vulnerabilitys-advisory).
 
 ## Actively exploited vulnerabilities and severe incidents
 

@@ -17,9 +17,21 @@
 # own beside the six Keep a Changelog defines.
 # changelog.d/README.md is the format note and is never read as a fragment.
 #
+# One more kind of fragment, changelog.d/<issue>-<kebab-slug>.security-reason.md,
+# holds the paragraph a Security section opens with when it ships beside other
+# changes: "Shipped with functional changes because: <reason>", the reason
+# starting on that first line (Regulation (EU) 2024/2847 Annex I Part II(2);
+# scripts/checks/changelog-security.sh). At most one may exist, it is assembled
+# first under "### Security", and a release with no Security entry refuses it.
+#
 #   changelog.sh --check
 #       Validates every fragment's name and content. Exit 0 when every one
 #       holds, 1 otherwise, naming each defect.
+#   changelog.sh --preview [<file>]
+#       Writes CHANGELOG.md as the cut would read it, with the fragments
+#       assembled under [Unreleased] and nothing else changed, to <file>
+#       (standard output by default), so the changelog checks read the
+#       entries the next release will carry. Exit 1 on any defect.
 #   changelog.sh --assemble <version> <date>
 #       Writes a new "## [<version>] - <date>" section under a fresh, empty
 #       [Unreleased], holding the entries still under [Unreleased] followed by
@@ -33,7 +45,7 @@
 #       support table (Regulation (EU) 2024/2847 Art 13(8), (19)); the end
 #       date is printed. Exit 1 on any defect, with nothing written.
 #   changelog.sh --self-test
-#       Proves both modes over a stub repository.
+#       Proves every mode over a stub repository.
 #
 # The output is deterministic: fragments are read by section in the order
 # above, then by file name in the C locale. Exit 2 on a usage error.
@@ -45,7 +57,8 @@ export LC_ALL=C
 # Changelog 1.1.0 ones.
 readonly SECTIONS=(upgrade added changed deprecated removed fixed security)
 readonly FRAGMENT_DIR=changelog.d
-readonly NAME_RE='^[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.(upgrade|added|changed|deprecated|removed|fixed|security)\.md$'
+readonly NAME_RE='^[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.(upgrade|added|changed|deprecated|removed|fixed|security|security-reason)\.md$'
+readonly REASON_PREFIX='Shipped with functional changes because: '
 # The support period of a release, in years from its release date: the minimum
 # of Regulation (EU) 2024/2847 Art 13(8), third subparagraph. A longer period
 # changes this number, SECURITY.md and docs/release.md together.
@@ -58,7 +71,7 @@ die() {
 }
 
 usage() {
-  echo "usage: changelog.sh --check | --assemble <version> <date> | --self-test" >&2
+  echo "usage: changelog.sh --check | --preview [<file>] | --assemble <version> <date> | --self-test" >&2
   exit 2
 }
 
@@ -106,9 +119,31 @@ content_defect() {
   ' "$file"
 }
 
+# reason_defect FILE: prints why FILE is no reason paragraph, or nothing when
+# it is one: the prefix and a reason on line 1, then lines that open no list
+# item, with no blank line inside.
+reason_defect() {
+  local file="$1"
+  awk -v prefix="$REASON_PREFIX" '
+    { lines[NR] = $0 }
+    END {
+      last = NR
+      while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
+      if (last == 0) { print "it is empty"; exit }
+      if (index(lines[1], prefix) != 1 || substr(lines[1], length(prefix) + 1) !~ /[^[:space:]]/) {
+        print "line 1 does not open with \"" prefix "\" and a reason"; exit
+      }
+      for (i = 2; i <= last; i++) {
+        if (lines[i] ~ /^[[:space:]]*$/) { print "line " i " is blank inside the paragraph"; exit }
+        if (lines[i] ~ /^[[:space:]]*[-*+] /) { print "line " i " opens a list item"; exit }
+      }
+    }
+  ' "$file"
+}
+
 # check: every fragment's name and content, every defect named.
 check() {
-  local fail=0 count=0 path name defect
+  local fail=0 count=0 reasons=0 path name defect
   [[ -d "$FRAGMENT_DIR" ]] || die "$FRAGMENT_DIR/ is missing"
   for path in "$FRAGMENT_DIR"/* "$FRAGMENT_DIR"/.[!.]*; do
     [[ -e "$path" ]] || continue
@@ -120,8 +155,19 @@ check() {
       continue
     fi
     if [[ ! "$name" =~ $NAME_RE ]]; then
-      echo "changelog: $path is not named <issue>-<kebab-slug>.<section>.md with <section> one of ${SECTIONS[*]}." >&2
+      echo "changelog: $path is not named <issue>-<kebab-slug>.<section>.md with <section> one of ${SECTIONS[*]} security-reason." >&2
       fail=1
+      continue
+    fi
+    if [[ "$name" == *.security-reason.md ]]; then
+      reasons=$((reasons + 1))
+      defect="$(reason_defect "$path")"
+      if [[ -n "$defect" ]]; then
+        echo "changelog: $path is not a reason paragraph: $defect." >&2
+        fail=1
+      else
+        count=$((count + 1))
+      fi
       continue
     fi
     defect="$(content_defect "$path")"
@@ -132,13 +178,17 @@ check() {
     fi
     count=$((count + 1))
   done
+  if [[ "$reasons" -gt 1 ]]; then
+    echo "changelog: $reasons *.security-reason.md fragments under $FRAGMENT_DIR/; a Security section opens with one reason, so merge them into one." >&2
+    fail=1
+  fi
   [[ "$fail" -eq 0 ]] || exit 1
   echo "changelog: $count fragment(s) under $FRAGMENT_DIR/, every one well formed."
 }
 
 # assemble VERSION DATE: the cut, written to CHANGELOG.md in one move.
 assemble() {
-  local version="$1" date="$2" work start end total section file prev base out
+  local version="$1" date="$2" work start end total prev base out
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "'$version' is not a version such as 0.0.9 or 0.0.9-rc.1"
   [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "'$date' is not a date written YYYY-MM-DD"
   [[ -f CHANGELOG.md ]] || die "CHANGELOG.md is missing"
@@ -147,13 +197,7 @@ assemble() {
   if awk -v heading="## [$version]" 'index($0, heading) == 1 { found = 1 } END { exit !found }' CHANGELOG.md; then
     die "CHANGELOG.md already has a [$version] section"
   fi
-  start="$(grep -n -m1 -E '^## \[Unreleased\][[:space:]]*$' CHANGELOG.md | cut -d: -f1 || true)"
-  [[ -n "$start" ]] || die "CHANGELOG.md has no '## [Unreleased]' heading"
-  total="$(wc -l < CHANGELOG.md | tr -d ' ')"
-  # The [Unreleased] body ends at the next version heading or at the link
-  # reference block, whichever comes first.
-  end="$(awk -v s="$start" 'NR > s && (/^## \[/ || /^\[[^]]+\]: /) { print NR - 1; exit }' CHANGELOG.md)"
-  [[ -n "$end" ]] || end="$total"
+  unreleased_bounds
 
   prev="$(sed -nE 's|^\[Unreleased\]: (.*)/compare/([^/]+)\.\.\.HEAD$|\2|p' CHANGELOG.md)"
   base="$(sed -nE 's|^\[Unreleased\]: (.*)/compare/([^/]+)\.\.\.HEAD$|\1|p' CHANGELOG.md)"
@@ -176,42 +220,7 @@ assemble() {
   assemble_work="$work"
   trap 'rm -r -- "$assemble_work"' EXIT
 
-  # The entries still under [Unreleased], one file per section. Anything
-  # outside a known section heading is refused, never dropped.
-  sed -n "$((start + 1)),${end}p" CHANGELOG.md | awk -v dir="$work" '
-    /^### / {
-      heading = substr($0, 5)
-      sub(/[[:space:]]+$/, "", heading)
-      section = tolower(heading)
-      if (section == "upgrade notes") section = "upgrade"
-      if (section !~ /^(upgrade|added|changed|deprecated|removed|fixed|security)$/) {
-        print "changelog: [Unreleased] has a section \"" heading "\", which is neither Upgrade notes nor a Keep a Changelog 1.1.0 section." > "/dev/stderr"
-        exit 1
-      }
-      next
-    }
-    section == "" && /[^[:space:]]/ {
-      print "changelog: [Unreleased] holds text outside a section heading: " $0 > "/dev/stderr"
-      exit 1
-    }
-    section != "" { print > (dir "/old." section) }
-  ' || exit 1
-
-  # Each section of the release: the [Unreleased] entries first, in their
-  # order, then the fragments by file name.
-  local fragments=() entries=0
-  for section in "${SECTIONS[@]}"; do
-    {
-      [[ ! -f "$work/old.$section" ]] || trim "$work/old.$section"
-      for file in "$FRAGMENT_DIR"/*."$section".md; do
-        [[ -e "$file" ]] || continue
-        git ls-files --error-unmatch -- "$file" > /dev/null 2>&1 || die "$file is not tracked by git; commit it before the cut"
-        fragments+=("$file")
-        trim "$file"
-      done
-    } > "$work/new.$section"
-    [[ ! -s "$work/new.$section" ]] || entries=$((entries + 1))
-  done
+  collect "$start" "$end" "$work" tracked
   [[ "$entries" -gt 0 ]] || die "[$version] would be empty: no fragment under $FRAGMENT_DIR/ and no entry under [Unreleased]"
 
   out="$work/CHANGELOG.md"
@@ -222,11 +231,7 @@ assemble() {
       printf '\nSecurity fixes until %s, %s years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](%s/blob/main/SECURITY.md#supported-versions) says.\n' \
         "$support_end_date" "$SUPPORT_YEARS" "$base"
     fi
-    for section in "${SECTIONS[@]}"; do
-      [[ -s "$work/new.$section" ]] || continue
-      printf '\n### %s\n\n' "$(title "$section")"
-      cat "$work/new.$section"
-    done
+    sections "$work"
     printf '\n'
     if [[ "$end" -lt "$total" ]]; then
       sed -n "$((end + 1)),${total}p" CHANGELOG.md | awk -v ver="$version" -v prev="$prev" -v base="$base" '
@@ -257,6 +262,124 @@ assemble() {
     echo "changelog: security fixes are published until $support_end_date ($SUPPORT_YEARS years from $date), in the newest release; the row of v$version is added to SECURITY.md."
   else
     echo "changelog: $version is a pre-release, so it gets no support period."
+  fi
+}
+
+# unreleased_bounds: sets start, end and total, the line of the [Unreleased]
+# heading, the last line of its body and the length of CHANGELOG.md.
+unreleased_bounds() {
+  start="$(grep -n -m1 -E '^## \[Unreleased\][[:space:]]*$' CHANGELOG.md | cut -d: -f1 || true)"
+  [[ -n "$start" ]] || die "CHANGELOG.md has no '## [Unreleased]' heading"
+  total="$(wc -l < CHANGELOG.md | tr -d ' ')"
+  # The [Unreleased] body ends at the next version heading or at the link
+  # reference block, whichever comes first.
+  end="$(awk -v s="$start" 'NR > s && (/^## \[/ || /^\[[^]]+\]: /) { print NR - 1; exit }' CHANGELOG.md)"
+  [[ -n "$end" ]] || end="$total"
+}
+
+# preview [FILE]: CHANGELOG.md with the fragments assembled under
+# [Unreleased], written to FILE or standard output; nothing else changes.
+preview() {
+  local dest="${1:-}" work start end total
+  [[ -f CHANGELOG.md ]] || die "CHANGELOG.md is missing"
+  check > /dev/null
+  unreleased_bounds
+  work="$(mktemp -d)"
+  # Global, so the EXIT trap still sees it after the function returns.
+  assemble_work="$work"
+  trap 'rm -r -- "$assemble_work"' EXIT
+  collect "$start" "$end" "$work" untracked
+  {
+    sed -n "1,${start}p" CHANGELOG.md
+    sections "$work"
+    printf '\n'
+    if [[ "$end" -lt "$total" ]]; then
+      sed -n "$((end + 1)),${total}p" CHANGELOG.md
+    fi
+  } > "$work/preview"
+  if [[ -n "$dest" ]]; then
+    cat "$work/preview" > "$dest"
+  else
+    cat "$work/preview"
+  fi
+}
+
+# sections WORK: every non-empty section collect wrote, under its heading.
+sections() {
+  local work="$1" section
+  for section in "${SECTIONS[@]}"; do
+    [[ -s "$work/new.$section" ]] || continue
+    printf '\n### %s\n\n' "$(title "$section")"
+    cat "$work/new.$section"
+  done
+}
+
+# collect START END WORK tracked|untracked: writes WORK/new.<section> for each
+# section, the [Unreleased] entries between START and END first, in their
+# order, then the fragments by file name, the reason paragraph opening the
+# Security section. Sets the global `fragments` (the files read) and
+# `entries` (the sections with any entry). With `tracked`, a fragment git
+# does not track is refused, since the cut removes it with `git rm`.
+collect() {
+  local start="$1" end="$2" work="$3" mode="$4" section file reason=""
+  fragments=()
+  entries=0
+
+  # The entries still under [Unreleased], one file per section. Anything
+  # outside a known section heading is refused, never dropped.
+  sed -n "$((start + 1)),${end}p" CHANGELOG.md | awk -v dir="$work" '
+    /^### / {
+      heading = substr($0, 5)
+      sub(/[[:space:]]+$/, "", heading)
+      section = tolower(heading)
+      if (section == "upgrade notes") section = "upgrade"
+      if (section !~ /^(upgrade|added|changed|deprecated|removed|fixed|security)$/) {
+        print "changelog: [Unreleased] has a section \"" heading "\", which is neither Upgrade notes nor a Keep a Changelog 1.1.0 section." > "/dev/stderr"
+        exit 1
+      }
+      next
+    }
+    section == "" && /[^[:space:]]/ {
+      print "changelog: [Unreleased] holds text outside a section heading: " $0 > "/dev/stderr"
+      exit 1
+    }
+    section != "" { print > (dir "/old." section) }
+  ' || exit 1
+
+  # Each section of the release: the [Unreleased] entries first, in their
+  # order, then the fragments by file name.
+  for file in "$FRAGMENT_DIR"/*.security-reason.md; do
+    [[ -e "$file" ]] || continue
+    [[ "$mode" == untracked ]] || git ls-files --error-unmatch -- "$file" > /dev/null 2>&1 || die "$file is not tracked by git; commit it before the cut"
+    fragments+=("$file")
+    reason="$file"
+  done
+  for section in "${SECTIONS[@]}"; do
+    {
+      [[ ! -f "$work/old.$section" ]] || trim "$work/old.$section"
+      for file in "$FRAGMENT_DIR"/*."$section".md; do
+        [[ -e "$file" ]] || continue
+        [[ "$mode" == untracked ]] || git ls-files --error-unmatch -- "$file" > /dev/null 2>&1 || die "$file is not tracked by git; commit it before the cut"
+        fragments+=("$file")
+        trim "$file"
+      done
+    } > "$work/new.$section"
+    [[ ! -s "$work/new.$section" ]] || entries=$((entries + 1))
+  done
+
+  # The reason paragraph opens the Security section, so the section can carry
+  # one reason only and needs an entry for it to explain.
+  if [[ -n "$reason" ]]; then
+    [[ -s "$work/new.security" ]] || die "$reason gives a reason for a Security section, but no Security entry is pending"
+    if [[ "$(head -n1 "$work/new.security")" == "$REASON_PREFIX"* ]]; then
+      die "$reason gives a reason, and the Security section under [Unreleased] opens with one already; keep one"
+    fi
+    {
+      trim "$reason"
+      printf '\n'
+      cat "$work/new.security"
+    } > "$work/new.security.reasoned"
+    mv -- "$work/new.security.reasoned" "$work/new.security"
   fi
 }
 
@@ -349,6 +472,23 @@ self_test() {
   expect "a directory named as a fragment" 1 --check
   rmdir "$work/$FRAGMENT_DIR/5-dir.added.md"
 
+  # The reason paragraph of a Security section beside other changes: one
+  # fragment at most, opening with the prefix and a reason, with no list item.
+  fragment 6-why.security-reason.md "${REASON_PREFIX}a reason that runs" 'over two lines.'
+  expect "a reason paragraph" 0 --check
+  fragment 6-again.security-reason.md "${REASON_PREFIX}another reason."
+  expect "two reason paragraphs" 1 --check
+  grep -q 'merge them into one' "$work/out" || flunk "the second reason was not refused by name."
+  unfragment 6-again.security-reason.md
+  unfragment 6-why.security-reason.md
+  local reason
+  for reason in "A reason with no prefix." "$REASON_PREFIX" "${REASON_PREFIX}a reason|- and a list item." "${REASON_PREFIX}a reason||after a blank line."; do
+    tr '|' '\n' <<<"$reason" > "$work/$FRAGMENT_DIR/7-bad.security-reason.md"
+    expect "the reason paragraph '$reason'" 1 --check
+    grep -q 'is not a reason paragraph' "$work/out" || flunk "the reason paragraph '$reason' failed without naming it."
+  done
+  unfragment 7-bad.security-reason.md
+
   # --assemble: the [Unreleased] entries an in-flight change wrote, merged with
   # the fragments, section by section and by file name in the C locale.
   cat > "$work/CHANGELOG.md" <<'EOF'
@@ -385,8 +525,29 @@ EOF
   printf '%s\n' '# Security' '' '| Release | Released | Fixes published until |' '| --- | --- | --- |' \
     '| v0.0.1 | 2026-10-01 | 2031-10-01 |' "$SUPPORT_MARKER" '' '## Withdrawn' > "$work/SECURITY.md"
   cp "$work/SECURITY.md" "$work/security.before"
+  fragment 5-x.security-reason.md "${REASON_PREFIX}a reason."
   stub_git add -A
   stub_git commit -q -m "the stub"
+
+  # --preview: the cut's sections under [Unreleased], the rest untouched, and
+  # a fragment git does not track yet is read too.
+  fragment 14-untracked.fixed.md '- Fragment 14-untracked.'
+  expect "the preview" 0 --preview preview.md
+  awk '/^## \[Unreleased\]/ { on = 1; next } /^## \[/ { on = 0 } on' "$work/preview.md" > "$work/got"
+  printf '%s\n' '' '### Upgrade notes' '' '- An upgrade note written into CHANGELOG.md.' '- Upgrade fragment 9-u.' \
+    '' '### Added' '' '- An entry written into CHANGELOG.md' '  before the fragments.' '- Fragment 12-b.' \
+    '- An entry that runs' '  over two lines.' '  - and nests a list item.' '' '### Changed' '' '- Fragment 7-y.' \
+    '' '### Fixed' '' '- A fix written into CHANGELOG.md.' '- Fragment 14-untracked.' '' '### Security' '' \
+    "${REASON_PREFIX}a reason." '' '- Fragment 5-x.' '' > "$work/want"
+  diff -u "$work/want" "$work/got" > "$work/out" || flunk "the preview's [Unreleased] differs from the expected one."
+  cmp -s "$work/CHANGELOG.md" <(stub_git show HEAD:CHANGELOG.md) || flunk "the preview wrote CHANGELOG.md."
+  ! stub_git status --porcelain -- CHANGELOG.md "$FRAGMENT_DIR" | grep -v -q 14-untracked || flunk "the preview changed the tree."
+  (cd "$work" && bash scripts/release/changelog.sh --preview) > "$work/stdout" 2> "$work/out" || flunk "the preview to standard output failed."
+  cmp -s "$work/stdout" "$work/preview.md" || flunk "the preview to standard output differs from the one to a file."
+  rm -- "$work/preview.md" "$work/stdout"
+  expect "a cut with a fragment git does not track" 1 --assemble 0.0.2 2026-10-10
+  grep -q 'is not tracked' "$work/out" || flunk "the untracked fragment was not named."
+  unfragment 14-untracked.fixed.md
 
   # The end date: five years on, and 29 February never shortens the period.
   [[ "$(support_end 2026-10-10)" == 2031-10-10 ]] || flunk "the end date of 2026-10-10 is $(support_end 2026-10-10)."
@@ -442,6 +603,8 @@ Security fixes until 2031-10-10, 5 years from this release (Regulation (EU) 2024
 - A fix written into CHANGELOG.md.
 
 ### Security
+
+Shipped with functional changes because: a reason.
 
 - Fragment 5-x.
 
@@ -506,6 +669,13 @@ case "${1:-}" in
   [[ $# -eq 1 ]] || usage
   cd "$(dirname "$0")/../.."
   check
+  ;;
+--preview)
+  [[ $# -le 2 ]] || usage
+  dest="${2:-}"
+  [[ -z "$dest" || "$dest" == /* ]] || dest="$PWD/$dest"
+  cd "$(dirname "$0")/../.."
+  preview "$dest"
   ;;
 --assemble)
   [[ $# -eq 3 ]] || usage

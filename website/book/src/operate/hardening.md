@@ -278,6 +278,7 @@ page: our own design.
 - [ ] **Run the newest release.** Only the newest release is supported:
   when a new release is published, every earlier release stops receiving
   fixes, and upgrading is free. A security fix ships as a patch release of
-  the newest release, with no feature changes in it, and a published
+  the newest release, with the fix alone or the reason a functional change
+  ships with it stated in the notes, and a published
   release is never changed, so upgrade to the newest release to get the fix
   ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).

@@ -118,15 +118,6 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
 
-      # A release is cut only when its milestone is empty (no specification
-      # governs this: our own design), so this refuses the tag before anything
-      # is created and names every open item.
-      - name: The milestone titled as the tag holds no open item
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: bash scripts/release/milestone.sh check "$TAG"
-
       - id: latest
         name: Whether this release becomes the latest
         # Only the highest version, never a pre-release, becomes the
@@ -140,154 +131,34 @@ jobs:
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
           echo "the latest release: ${latest}"
 
-      - name: The tag matches the declared product version
-        # Every file that declares the product version has to agree with the
-        # tag: CITATION.cff, the product row of docs/VERSIONS.md and the root
-        # Cargo.toml [workspace.package] version. A tag missing any of the
-        # three fails here.
+      # Every release fact, as ONE list: the milestone titled as the tag, the
+      # declared product version, the changelog's structure and Security rules
+      # for this section, the technical documentation since the previous tag,
+      # the support periods, the Annex II checklist, the EU declaration of
+      # conformity, and the release notes with the support period and the CRA
+      # user-information link. The list is scripts/release/plan.sh;
+      # scripts/release/preflight.sh runs the same list before the tag is
+      # pushed, so the two cannot drift (no specification governs the list:
+      # our own design). It names every refused check, and writes
+      # release-notes.md for github-release. A missing or empty changelog
+      # section fails the release rather than falling back to notes generated
+      # from the commit range.
+      - name: Every release fact holds at the tagged commit
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
-          VERSION: ${{ steps.tag.outputs.version }}
-        run: |
-          set -euo pipefail
-          fail=0
-          check() {
-            if [ -z "$2" ]; then
-              echo "::error::$1 declares no product version." >&2
-              fail=1
-            elif [ "$2" != "$VERSION" ]; then
-              echo "::error::tag $TAG declares version $VERSION, but $1 says $2." >&2
-              fail=1
-            else
-              echo "OK: $1 declares $VERSION"
-            fi
-          }
-
-          if [ ! -f CITATION.cff ]; then
-            echo "::error::CITATION.cff is missing, so $TAG cannot be checked against a declared version." >&2
-            exit 1
-          fi
-          cff="$(sed -nE 's/^version:[[:space:]]*//p' CITATION.cff | head -n1 | tr -d '"'\''[:space:]')"
-          check "CITATION.cff" "$cff"
-
-          if [ ! -f docs/VERSIONS.md ]; then
-            echo "::error::docs/VERSIONS.md is missing, so $TAG cannot be checked against the pin matrix." >&2
-            exit 1
-          fi
-          # The first token of the second cell of the markdown row whose first
-          # cell is "Product version", backticks and padding removed. Same
-          # reading scripts/checks/versions.sh does.
-          matrix="$(awk -F'|' '
-            NF >= 3 {
-              k = $2; v = $3
-              gsub(/`/, "", k); gsub(/`/, "", v)
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
-              if (k == "Product version") { split(v, w, /[[:space:]]/); print w[1]; exit }
-            }
-          ' docs/VERSIONS.md)"
-          check "the docs/VERSIONS.md product-version row" "$matrix"
-
-          if [ ! -f Cargo.toml ]; then
-            echo "::error::the root Cargo.toml is missing at $TAG, so the tag cannot be checked against the workspace version." >&2
-            exit 1
-          fi
-          manifest="$(awk '
-            /^[[:space:]]*\[/ { h = $0; gsub(/[[:space:]]/, "", h); f = (h == "[workspace.package]"); next }
-            f && $0 ~ /^[[:space:]]*version[[:space:]]*=/ {
-              if (match($0, /"[^"]*"/)) { print substr($0, RSTART + 1, RLENGTH - 2); exit }
-            }
-          ' Cargo.toml)"
-          check "the root Cargo.toml [workspace.package] version" "$manifest"
-
-          # The compose.yaml asset runs the gateway image at its default tag,
-          # so a file left at the previous version would start the previous
-          # release. Same reading scripts/checks/versions.sh does.
-          if [ ! -f deploy/compose/compose.yaml ]; then
-            echo "::error::deploy/compose/compose.yaml is missing, so $TAG has no compose.yaml to attach." >&2
-            exit 1
-          fi
-          compose="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' deploy/compose/compose.yaml | sort -u | tr '\n' ' ' | sed 's/ $//')"
-          check "the deploy/compose/compose.yaml gateway image tag" "$compose"
-
-          [ "$fail" -eq 0 ] || exit 1
-
-      - id: notes
-        name: Extract the changelog section as the release notes
-        # The changelog is hand-curated and is the release notes. A missing or
-        # empty section fails the release rather than falling back to notes
-        # generated from the commit range, which would silently replace the
-        # record with a different one.
-        env:
-          VERSION: ${{ steps.tag.outputs.version }}
-        run: |
-          set -euo pipefail
-          if [ ! -f CHANGELOG.md ]; then
-            echo "::error::CHANGELOG.md is missing, so $VERSION has no release notes." >&2
-            exit 1
-          fi
-          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Cut the release before tagging: run scripts/release/changelog.sh --assemble $VERSION <date> and merge the result." >&2
-            exit 1
-          fi
-          # Everything under the version heading, stopping at the next version
-          # heading or at the trailing link-reference block, whichever comes
-          # first.
-          awk -v ver="$VERSION" '
-            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
-            found && /^## \[/ { exit }
-            found && /^\[[^]]+\]:/ { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if ! grep -q '[^[:space:]]' release-notes.md; then
-            echo "::error::the [$VERSION] changelog section is empty." >&2
-            exit 1
-          fi
-          echo "release notes ($(wc -l < release-notes.md) lines):"
-          cat release-notes.md
-
-      - name: The technical documentation reflects the harmonised components
-        # Regulation (EU) 2025/327 Art 30(2): a release whose harmonised
-        # components differ from the previous release tag needs its review
-        # rows in the clinical safety risk file and the technical
-        # documentation, and the Annex III and CRA Annex VII indexes must be
-        # whole. The guard fetches the previous tag alone into this shallow
-        # checkout.
-        run: bash scripts/checks/technical-documentation.sh
-
-      - name: The book states the support periods SECURITY.md records
-        # Regulation (EU) 2024/2847 Art 13(19) and Annex II point 7: the
-        # release's CRA information to the user lists the same end dates as
-        # the support table of SECURITY.md, the row of this release included.
-        run: bash scripts/checks/support-periods.sh
-
-      - name: The Annex II checklist is whole
-        # Regulation (EU) 2025/327 Art 30(1)(a), Art 37(2): every point of
-        # Annex II has its row with evidence that exists, and the book page
-        # lists each, so a release never ships a checklist that names a
-        # moved heading or a deleted test.
-        run: bash scripts/checks/annex-ii.sh
+        run: bash scripts/release/plan.sh checks "$TAG" --notes release-notes.md
 
       - id: declaration
-        name: The EU declaration of conformity is issued whole, or not at all
-        # Regulation (EU) 2025/327 Art 39 and Annex IV. The manufacturer's
-        # file says whether this tree issues a declaration. When it does,
-        # every value must be filled and the declaration is written here once,
-        # so a blank fails the release before it exists; when it does not,
-        # the release carries none and says so in a warning.
-        env:
-          VERSION: ${{ steps.tag.outputs.version }}
-          COMMIT: ${{ github.sha }}
+        name: Whether the release carries the EU declaration of conformity
+        # Regulation (EU) 2025/327 Art 39 and Annex IV. The plan step above
+        # refused a declaration with a blank; this reads whether the
+        # manufacturer's file issues one, for github-release and finalize.
         run: |
           set -euo pipefail
           issued="$(scripts/release/declaration-of-conformity.sh status)"
           case "$issued" in
-            true)
-              scripts/release/declaration-of-conformity.sh "$VERSION" "$COMMIT" "$RUNNER_TEMP/declaration"
-              ;;
-            false)
-              echo "::warning::the manufacturer issues no EU declaration of conformity from this tree (issue = false in conformance/eu-declaration-of-conformity.toml), so this release carries none."
-              ;;
+            true | false) ;;
             *)
               echo "::error::the declaration status is '$issued', neither true nor false." >&2
               exit 1

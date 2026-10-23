@@ -25,28 +25,28 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
                                └─ build-console ───────────────┘
 ```
 
-- **plan** validates the tag shape, refuses a dispatch that is not at the tag
-  it names, refuses the tag when no milestone is titled exactly as it or that
-  milestone still holds an open issue or pull request (naming each one),
-  decides with `scripts/release/latest.sh` whether the release
-  becomes the latest (a release with no pre-release suffix whose version no
-  `vX.Y.Z` tag of the repository exceeds), checks the tag against every
-  file that declares the product
-  version, and extracts the `## [X.Y.Z]` section of `CHANGELOG.md` as the
-  release notes. A tag whose tree has no root `Cargo.toml` fails here, since
-  the tag cannot be checked against the workspace version. A missing or empty
-  changelog section fails the release, so a cut can never ship with notes
-  generated from the commit range standing in for the changelog. It then
-  runs `scripts/checks/technical-documentation.sh`, which refuses a release
-  that changes a harmonised component with no review row for it (§ Before
-  the tag, step 6), and `scripts/checks/annex-ii.sh`, which refuses an
-  Annex II checklist with a point left out or evidence that does not exist,
-  before any release exists. Last it reads the
-  manufacturer's file of the EU declaration of conformity,
-  `conformance/eu-declaration-of-conformity.toml` (§ Before the tag, step
-  7): when it issues the declaration, `plan` writes the declaration once
-  and fails on any value left empty; when it does not, `plan` warns that
-  the release carries none.
+- **plan** validates the tag shape, refuses a dispatch that is not at the
+  tag it names, and decides with `scripts/release/latest.sh` whether the
+  release becomes the latest (a release with no pre-release suffix whose
+  version no `vX.Y.Z` tag of the repository exceeds). It then runs every
+  release fact as one list, `scripts/release/plan.sh checks`, the list
+  `scripts/release/preflight.sh` runs before the tag (§ Preflight): the
+  milestone titled exactly as the tag exists and holds no open issue or
+  pull request (naming each one); every file that declares the product
+  version agrees with the tag, so a tree with no root `Cargo.toml` fails;
+  the changelog's structure, and the Security rules of the section being
+  cut; the technical documentation (§ Before the tag, step 6); the support
+  periods; the Annex II checklist; the EU declaration of conformity
+  (§ Before the tag, step 7), written once when the manufacturer's file
+  `conformance/eu-declaration-of-conformity.toml` issues it, so a value
+  left empty fails, and a warning that the release carries none when it
+  does not; and the `## [X.Y.Z]` section of `CHANGELOG.md` as the release
+  notes, which must open with the support period and get the link to the
+  CRA information to the user appended. A missing or empty changelog
+  section fails the release, so a cut can never ship with notes generated
+  from the commit range standing in for the changelog. A failing check is
+  named and the list goes on, so one run reports every finding, before
+  any release exists.
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
@@ -226,6 +226,15 @@ slow one.
    the version heading is what the release notes say, so read it as the
    release notes before you tag, and edit the wording there if it needs it.
 
+   **The Security section.** Its entries name their advisories, and a
+   Security section beside other changes opens with the reason it does,
+   from the `security-reason` fragment the cut places first
+   (`changelog.d/README.md`, Security entries). CI checks the pending
+   entries on every pull request with `scripts/checks/changelog-unreleased.sh`,
+   and the `plan` job checks the section it cuts. Publish each drafted
+   advisory in the same hour the release is published
+   ([`post-market.md`](post-market.md#a-fixed-vulnerabilitys-advisory)).
+
    **The support period.** For a release without a pre-release suffix, the
    same command states the support period, which Regulation (EU) 2024/2847
    Art 13(8) and (19) and Annex II point 7 ask for. The section opens with
@@ -331,7 +340,47 @@ slow one.
 8. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
-   `contribution-licence-guard` are green on it (`docs/ci-cd.md`).
+   `contribution-licence-guard` are green on it (`docs/ci-cd.md`). Run
+   `scripts/release/preflight.sh vX.Y.Z` on the branch before it merges and
+   on the merge commit before the tag (§ Preflight).
+
+## Preflight
+
+The `plan` job verifies every release fact at the tagged commit before
+anything is built or published. Its checks are one list,
+`scripts/release/plan.sh`, and `scripts/release/preflight.sh` runs the same
+list on your machine:
+
+```sh
+scripts/release/preflight.sh vX.Y.Z
+scripts/release/preflight.sh vX.Y.Z --notes /tmp/notes.md   # keep the notes
+```
+
+Run it on the version-bump branch once the bump is ready, and again on
+`main` (or the patch branch) after the merge, at the commit you are about to
+tag. It exits 0 when the `plan` job would pass, names every check that
+refuses, and prints the path of the release notes it composed, so you read
+them before they are published. You need `gh` logged in, because the
+milestone check reads the tracker.
+
+| Check | Script |
+|---|---|
+| The milestone titled as the tag holds no open item | `scripts/release/milestone.sh check` |
+| `CITATION.cff`, `docs/VERSIONS.md`, `Cargo.toml` and the compose asset's image tag name the tag's version | `plan.sh` |
+| Every section of the changelog holds Keep a Changelog types and "Upgrade notes", each once | `scripts/checks/changelog-structure.sh` |
+| The section being cut opens its `### Security` with the reason when it sits beside other changes, and every Security entry names a GHSA id or an existing `security/vex/` path | `scripts/checks/changelog-security.sh --section X.Y.Z` |
+| The technical documentation follows the harmonised components since the previous release | `scripts/checks/technical-documentation.sh` |
+| The book lists the support periods `SECURITY.md` records | `scripts/checks/support-periods.sh` |
+| The Annex II checklist is whole | `scripts/checks/annex-ii.sh` |
+| The EU declaration of conformity is issued whole, or not at all | `scripts/release/declaration-of-conformity.sh` |
+| The changelog section becomes the notes, opening with the support period, with the CRA user-information link appended | `plan.sh notes` |
+
+The previous release, which the technical-documentation check compares
+against, is taken by version order from the tags of origin as well as the
+local ones, so a tag pushed whose release never published still counts and
+ancestry plays no part (`scripts/release/plan.sh prev-tag vX.Y.Z` prints
+it). To add a release fact, add a function and a line to `list()` in
+`scripts/release/plan.sh`; the `plan` job and the preflight both pick it up.
 
 ## The tag
 
@@ -444,9 +493,13 @@ without a version bump, because a published version is immutable
 
 Only the newest release is supported (`SECURITY.md`), so a security fix
 ships in a new release, never in an older one: there are no maintenance
-lines and no backports. The fix ships as a patch release of the newest
-release with no feature changes in it, so the update is provided separately
-from functionality updates (Regulation (EU) 2024/2847 Annex I Part II(2)).
+lines and no backports. Where it is technically feasible, the fix ships as
+a patch release of the newest release with nothing else in it, so the update
+is provided separately from functionality updates (Regulation (EU) 2024/2847
+Annex I Part II(2)). When it ships with the next release from `main`
+instead, beside functional changes, a `security-reason` fragment gives the
+reason the release's Security section opens with (`changelog.d/README.md`),
+and the release lane refuses the section without it.
 `main` carries feature work, so a security patch is never tagged on `main`.
 It is cut from the newest release's tag on a short-lived patch branch, and
 only its records come back to `main`.
@@ -491,10 +544,11 @@ planned under, so step 1 moves that milestone on by one.
    product behaviour, so the patch still carries no feature.
 3. **The fix lands on `main` first,** as an ordinary pull request with a
    `security` fragment, `changelog.d/<issue>-<slug>.security.md`
-   (`changelog.d/README.md`). Its `Closes #N` closes the issue: the keyword
-   closes nothing in a pull request into any other branch. While the
-   advisory is private, a public pull request discloses the vulnerability,
-   so the owner decides when the fix goes public.
+   (`changelog.d/README.md`), that names the draft advisory's `GHSA-` id.
+   Its `Closes #N` closes the issue: the keyword closes nothing in a pull
+   request into any other branch. While the advisory is private, a public
+   pull request discloses the vulnerability, so the owner decides when the
+   fix goes public.
 4. **Cherry-pick only the fix** onto a branch from the patch branch,
    and open a pull request into it:
 
