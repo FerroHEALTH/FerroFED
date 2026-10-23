@@ -69,9 +69,11 @@ export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="--remap-path-prefix=$cargo
 bash "$root/scripts/release/console-tools.sh" --check
 
 # cargo-leptos reads its configuration from the crate's own manifest
-# directory, so the build runs from there.
+# directory, so the build runs from there. FerroUI's lazy islands leave a
+# placeholder import in the glue unless cargo-leptos splits them into chunks
+# of their own, so the build always splits (FerroHEALTH/FerroUI#331).
 cd "$console"
-cargo leptos build --frontend-only --lib-cargo-args=--locked "$@"
+cargo leptos build --frontend-only --split --lib-cargo-args=--locked "$@"
 
 missing=0
 for file in pkg/ferrofed-console.wasm pkg/ferrofed-console.js favicon.ico; do

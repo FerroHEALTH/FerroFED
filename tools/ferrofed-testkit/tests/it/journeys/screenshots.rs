@@ -38,8 +38,9 @@ use thirtyfour::{By, Cookie};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, until, with_browser};
-use crate::journeys::query::{Run, hydrated, submit};
+use crate::journeys::browser::hydrated;
+use crate::journeys::browser::{Browser, with_browser};
+use crate::journeys::query::{Run, submit};
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::{PATIENT, Stack, patient_query};
 
@@ -102,34 +103,64 @@ const SIGN_IN: Shot = Shot {
     image: "sign-in",
     route: "/",
     url: "/",
-    ready: "//a[normalize-space(.) = 'Sign in']",
+    ready: "//a[normalize-space(.) = \"Sign in with your organisation's account\"]",
 };
 
 /// The pages a signed-in operator loads and reads as they are.
-const PAGES: [Shot; 16] = [
+const PAGES: [Shot; 26] = [
     Shot {
         image: "dashboard",
         route: "/",
         url: "/",
-        ready: "//h2[contains(., 'Member health')]",
+        ready: "//h2[contains(., 'Nodes that need attention')]",
     },
     Shot {
-        image: "members",
-        route: "/members",
-        url: "/members",
-        ready: "//caption[contains(., 'Member endpoints')]",
+        image: "topology",
+        route: "/topology",
+        url: "/topology",
+        ready: "//h1",
     },
     Shot {
-        image: "member",
-        route: "/members/:node",
-        url: "/members/node-a",
-        ready: "//caption[contains(., 'Endpoints of this member')]",
+        image: "organisations",
+        route: "/organisations",
+        url: "/organisations",
+        ready: "//main//a[@href = '/organisations/org-a']",
     },
     Shot {
-        image: "routing",
-        route: "/routing",
-        url: "/routing",
-        ready: "//caption[contains(., 'routing table')]",
+        image: "nodes",
+        route: "/organisations/nodes",
+        url: "/organisations/nodes",
+        ready: "//main//a[@href = '/organisations/org-a/node-a']",
+    },
+    Shot {
+        image: "organisation",
+        route: "/organisations/:org",
+        url: "/organisations/org-a",
+        ready: "//main//a[@href = '/organisations/org-a/node-a']",
+    },
+    Shot {
+        image: "node",
+        route: "/organisations/:org/:node",
+        url: "/organisations/org-a/node-a",
+        ready: "//h1",
+    },
+    Shot {
+        image: "node-routes",
+        route: "/organisations/:org/:node/:tab",
+        url: "/organisations/org-a/node-a/routes",
+        ready: "//caption[. = 'Routes']",
+    },
+    Shot {
+        image: "services",
+        route: "/services",
+        url: "/services",
+        ready: "//h1",
+    },
+    Shot {
+        image: "service",
+        route: "/services/:service",
+        url: "/services/resolver",
+        ready: "//h1",
     },
     Shot {
         image: "integrity",
@@ -141,7 +172,13 @@ const PAGES: [Shot; 16] = [
         image: "query",
         route: "/query",
         url: "/query",
-        ready: "//form//button[@type = 'submit' and not(@disabled) and normalize-space(.) = 'Run query']",
+        ready: "//form[@id = 'query-form']//button[@type = 'submit' and normalize-space(.) = 'Run']",
+    },
+    Shot {
+        image: "query-stored",
+        route: "/query/:tab",
+        url: "/query/stored",
+        ready: "//*[@id = 'query-name']",
     },
     Shot {
         image: "stored-queries",
@@ -156,46 +193,70 @@ const PAGES: [Shot; 16] = [
         ready: "//div[contains(@class, 'fui-code-panel')]",
     },
     Shot {
+        image: "stored-query-versions",
+        route: "/stored-queries/:name/:tab",
+        url: "/stored-queries/org.example::journey_001/versions",
+        ready: "//main//table",
+    },
+    Shot {
         image: "self-description",
-        route: "/federation",
-        url: "/federation",
-        ready: "//dd",
+        route: "/self-description",
+        url: "/self-description",
+        ready: "//code[. = 'example-federation']",
+    },
+    Shot {
+        image: "self-description-limits",
+        route: "/self-description/:tab",
+        url: "/self-description/limits",
+        ready: "//h1",
     },
     Shot {
         image: "configuration-members",
         route: "/configuration",
         url: "/configuration",
-        ready: "//*[@id = 'tab-members']",
+        ready: "//a[@data-tab = 'tab-members']",
     },
     Shot {
         image: "configuration-credentials",
         route: "/configuration/:tab",
         url: "/configuration/credentials",
-        ready: "//*[@id = 'tab-credentials']",
-    },
-    Shot {
-        image: "configuration-stored-queries",
-        route: "/configuration/:tab",
-        url: "/configuration/stored-queries",
-        ready: "//*[@id = 'tab-stored-queries']",
+        ready: "//a[@data-tab = 'tab-credentials'][@aria-current = 'page']",
     },
     Shot {
         image: "configuration-history",
         route: "/configuration/:tab",
         url: "/configuration/history",
-        ready: "//*[@id = 'tab-history']",
+        ready: "//a[@data-tab = 'tab-history'][@aria-current = 'page']",
     },
     Shot {
         image: "configuration-import-export",
         route: "/configuration/:tab",
         url: "/configuration/import-export",
-        ready: "//*[@id = 'tab-import-export']",
+        ready: "//a[@data-tab = 'tab-import-export'][@aria-current = 'page']",
     },
     Shot {
         image: "configuration-member-form",
         route: "/configuration/:tab/:item",
         url: "/configuration/members/new",
         ready: "//button[@type = 'submit' and contains(., 'Save as revision')]",
+    },
+    Shot {
+        image: "preferences",
+        route: "/preferences",
+        url: "/preferences",
+        ready: "//h1",
+    },
+    Shot {
+        image: "preferences-language",
+        route: "/preferences/:section",
+        url: "/preferences/language",
+        ready: "//h1",
+    },
+    Shot {
+        image: "search",
+        route: "/search",
+        url: "/search?q=node",
+        ready: "//h1",
     },
     Shot {
         image: "about",
@@ -218,7 +279,7 @@ const QUERY_COMPLETE: Shot = Shot {
     image: "query-complete",
     route: "/query",
     url: "/query",
-    ready: "//div[contains(., 'Every node in scope answered.')]",
+    ready: "//span[contains(@class, 'fui-pill') and . = 'Complete']",
 };
 
 /// An incomplete answer: both nodes, best effort, and node B fails.
@@ -226,7 +287,7 @@ const QUERY_PARTIAL: Shot = Shot {
     image: "query-partial",
     route: "/query",
     url: "/query",
-    ready: "//div[contains(., 'Not every node in scope answered')]",
+    ready: "//span[contains(@class, 'fui-pill') and . = 'Incomplete']",
 };
 
 /// A query the gateway refuses.
@@ -234,7 +295,7 @@ const QUERY_REFUSED: Shot = Shot {
     image: "query-refused",
     route: "/query",
     url: "/query",
-    ready: "//div[contains(., 'The gateway refused this view: 400')]",
+    ready: "//main//*[@role = 'alert'][contains(., '400')]",
 };
 
 /// Every shot the capture takes.
@@ -427,19 +488,18 @@ async fn scheme(browser: &Browser, theme: Theme) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Waits until the page has hydrated: no form section, confirmation button
-/// or submit is still disabled for want of the bundle.
+/// Waits until a signed-in page has hydrated, so each island is drawn as
+/// it runs; the sign-in has none to wait for.
 async fn settled(browser: &Browser) -> Result<(), Box<dyn Error>> {
-    until("the page has hydrated", async || {
-        Ok(browser
-            .driver()
-            .find_all(By::Css(
-                "fieldset[disabled], button[popovertarget][disabled], form button[type=submit][disabled]",
-            ))
-            .await?
-            .is_empty())
-    })
-    .await
+    let signed_in = !browser
+        .driver()
+        .find_all(By::Css(r#"button[popovertarget="user-menu"]"#))
+        .await?
+        .is_empty();
+    if signed_in {
+        hydrated(browser).await?;
+    }
+    Ok(())
 }
 
 /// The height of the page's content, in whole CSS pixels from [`HEIGHT`] to

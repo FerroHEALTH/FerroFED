@@ -305,7 +305,7 @@ pub fn merged(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::model::Refusal;
+    use crate::read::Refusal;
 
     /// The FHIR endpoint `row` names at position 2, or the refusal's field
     /// and reason.

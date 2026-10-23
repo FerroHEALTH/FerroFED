@@ -5,7 +5,10 @@
 
 use cookie::{Cookie, SameSite};
 
-use crate::session::{COOKIE, HOST_PREFIX, SIGN_IN_COOKIE, SessionId, Sessions, THEME_COOKIE};
+use crate::session::{
+    COOKIE, FLASH_COOKIE, HOST_PREFIX, PREFERENCE_PREFIX, SIDEBAR_COOKIE, SIGN_IN_COOKIE,
+    SessionId, Sessions,
+};
 
 impl Sessions {
     /// The name `base` takes on this console: [`HOST_PREFIX`] and `base` when
@@ -52,13 +55,53 @@ impl Sessions {
             .build()
     }
 
-    /// The `Set-Cookie` value that keeps the operator's theme choice `theme`
-    /// for 400 days, the longest a browser keeps a cookie (RFC 6265bis
-    /// §5.6.2).
+    /// The prefix the operator's preference cookies carry on this console.
     #[must_use]
-    pub fn theme_cookie(&self, theme: &str) -> Cookie<'static> {
-        self.cookie(THEME_COOKIE, theme)
-            .max_age(cookie::time::Duration::days(400))
+    pub fn preference_prefix(&self) -> String {
+        self.cookie_name(PREFERENCE_PREFIX)
+    }
+
+    /// The `Set-Cookie` value that keeps the preference `name` at `value`
+    /// for one year (FerroUI family rule 9).
+    #[must_use]
+    pub fn preference_cookie(&self, name: &str, value: &str) -> Cookie<'static> {
+        self.cookie(&format!("{PREFERENCE_PREFIX}{name}"), value)
+            .max_age(cookie::time::Duration::days(365))
+            .build()
+    }
+
+    /// The `Set-Cookie` value that removes the preference cookie `name`.
+    #[must_use]
+    pub fn preference_cookie_removal(&self, name: &str) -> Cookie<'static> {
+        self.cookie(&format!("{PREFERENCE_PREFIX}{name}"), "")
+            .max_age(cookie::time::Duration::ZERO)
+            .build()
+    }
+
+    /// The `Set-Cookie` value that keeps whether the navigation is folded,
+    /// `rail` or `full`, for one year.
+    #[must_use]
+    pub fn sidebar_cookie(&self, state: &str) -> Cookie<'static> {
+        self.cookie(SIDEBAR_COOKIE, state)
+            .max_age(cookie::time::Duration::days(365))
+            .build()
+    }
+
+    /// The `Set-Cookie` value that carries the outcome `value` of a form post
+    /// to the next page, for a minute at most.
+    #[must_use]
+    pub fn flash_cookie(&self, value: &str) -> Cookie<'static> {
+        self.cookie(FLASH_COOKIE, value)
+            .max_age(cookie::time::Duration::seconds(60))
+            .build()
+    }
+
+    /// The `Set-Cookie` value that removes the flash cookie once its page
+    /// read it.
+    #[must_use]
+    pub fn flash_cookie_removal(&self) -> Cookie<'static> {
+        self.cookie(FLASH_COOKIE, "")
+            .max_age(cookie::time::Duration::ZERO)
             .build()
     }
 
@@ -102,11 +145,18 @@ mod tests {
     }
 
     #[test]
-    fn the_theme_cookie_is_host_bound_http_only_lax_secure_and_kept_400_days() {
+    fn a_preference_cookie_is_host_bound_http_only_lax_secure_and_kept_a_year() {
         let sessions = Sessions::new(settings());
         assert_eq!(
-            "__Host-ferrofed_console_theme=dark; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=34560000",
-            sessions.theme_cookie("dark").to_string()
+            "__Host-ferrofed_console_theme=dark; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=31536000",
+            sessions.preference_cookie("theme", "dark").to_string()
+        );
+        assert_eq!("__Host-ferrofed_console_", sessions.preference_prefix());
+        assert!(
+            sessions
+                .preference_cookie_removal("density")
+                .to_string()
+                .contains("Max-Age=0")
         );
     }
 

@@ -1,18 +1,17 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The configuration page against a stub admin listener: each member and
-//! stored query is marked with its owner, a member the file provides offers
-//! no edit, a console change reaches the first replica with the operator's
-//! own token and the body the gateway takes, a saved revision is previewed
-//! before it is applied, and every value the gateway answers is escaped.
-//! The shared stub and form helpers live here; the refusals are in
-//! `configure_refusals`.
+//! The configuration page against a stub admin listener: a console change
+//! posts to the page, reaches the first replica with the operator's own
+//! token and the body the gateway takes, and the page answers with what
+//! the replica did; a saved revision is previewed before it is applied, a
+//! form the operator posted is drawn again as they posted it, and every
+//! value the gateway answers is escaped. The shared stub and form helpers
+//! live here; the refusals are in `configure_refusals`.
 
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_console::admin::model::ActionAnswer;
 use ferrofed_console::session::{COOKIE, SessionId};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
@@ -22,13 +21,13 @@ use wiremock::{Mock, ResponseTemplate};
 use crate::support::{OPERATOR_TOKEN, console, get_as, send, signed_in};
 
 /// The running revision 1, applied by the file, and revision 2 saved.
-const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"previous":null,
+pub(crate) const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"previous":null,
     "outcome":"applied","needs_restart":[],"applied_by":{"kind":"file"},
     "applied_at":"2026-10-15T08:00:00Z"},"running":1,"in_step":true,"refused":null}"#;
 
 /// Member A the file provides, member C the console holds, with a markup
 /// name and URL, and a stored query whose name carries markup.
-const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
+pub(crate) const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
     {"node":"node-a","organisation":"org-a","system_id":"cdr-a.example.org","endpoints":["node-a-pub"],"owner":"file"},
     {"node":"node-c","organisation":"org-c","system_id":"cdr-c.example.org","endpoints":["node-c-pub"],
      "owner":"console","state":"pending",
@@ -40,7 +39,7 @@ const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
     "stored_queries":[{"name":"org.example::<i>q</i>","version":"1.0.0","owner":"store"}]}"#;
 
 /// The history: revision 2 by an operator, with markup in its reason.
-const HISTORY: &str = r#"{"items":[
+pub(crate) const HISTORY: &str = r#"{"items":[
     {"id":2,"base":1,"origin":"operator","restores":null,
      "author":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-<b>1</b>"},
      "at":"2026-10-15T09:00:00Z","reason":"add C <script>x</script>","toml":"ignored = 1"},
@@ -49,11 +48,11 @@ const HISTORY: &str = r#"{"items":[
     "offset":0,"total":2}"#;
 
 /// What revision 2 changes against revision 1.
-const DIFF: &str = r#"{"from":1,"to":2,"changes":[
+pub(crate) const DIFF: &str = r#"{"from":1,"to":2,"changes":[
     {"key":"registry.members[0].node.id","change":"added","from":null,"to":"\"node-c\"<script>"}]}"#;
 
 /// Revision 2 as a save answers it.
-const SAVED: &str = r#"{"id":2,"base":1,"origin":"operator","restores":null,
+pub(crate) const SAVED: &str = r#"{"id":2,"base":1,"origin":"operator","restores":null,
     "author":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},
     "at":"2026-10-15T09:00:00Z","reason":"add C","toml":"x = 1"}"#;
 
@@ -115,7 +114,8 @@ pub(crate) fn signed_in_console(
     Ok((service, session))
 }
 
-/// The form body of a configuration form with `fields`.
+/// The form body of a configuration form with `fields`, each named as the
+/// page names it inside `form[…]`.
 pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
@@ -124,33 +124,40 @@ pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// Runs the configuration form `body` as the hydrated page sends it, and
-/// reads its rendered answer.
-pub(crate) async fn configured(
+/// Posts the configuration form `body` to the page at `path` as the
+/// operator's browser sends it, and reads the page it answers with.
+pub(crate) async fn posted(
     service: &axum::Router,
     session: &SessionId,
+    path: &str,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
-    Ok(answered(service, session, body).await?.html)
-}
-
-/// Runs the configuration form `body` as the hydrated page sends it, and
-/// reads its answer whole.
-pub(crate) async fn answered(
-    service: &axum::Router,
-    session: &SessionId,
-    body: String,
-) -> Result<ActionAnswer, Box<dyn Error>> {
-    let request = Request::post("/api/configure")
+    let request = Request::post(path)
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json")
         .header("sec-fetch-site", "same-origin")
         .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .body(Body::from(body))?;
     let (response, text) = send(service, request).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");
-    Ok(serde_json::from_str(&text)?)
+    Ok(text)
+}
+
+/// Posts the configuration form `body` to the configuration page, and
+/// reads the page it answers with.
+pub(crate) async fn configured(
+    service: &axum::Router,
+    session: &SessionId,
+    body: String,
+) -> Result<String, Box<dyn Error>> {
+    posted(service, session, "/configuration", body).await
+}
+
+/// The refusal line of the field `id` on `html`, when the page shows one.
+pub(crate) fn refusal_of<'a>(html: &'a str, id: &str) -> Option<&'a str> {
+    let (_, rest) = html.split_once(&format!(r#"<p id="{id}-error""#))?;
+    let (line, _) = rest.split_once("</p>")?;
+    (!line.contains("hidden")).then_some(line)
 }
 
 /// The requests `listener` received with `verb` to `route`, by body.
@@ -190,23 +197,26 @@ pub(crate) async fn page(
     Ok(body)
 }
 
-/// The fields of Query API endpoint row `row` of a member form: its key,
+/// The fields of Query API endpoint row `key` of a member form: its key,
 /// its `endpoint_id`, its base URL and whether it is in service.
 pub(crate) fn query_row(
-    row: usize,
+    key: &str,
     (id, url, in_service): (&str, &str, bool),
 ) -> Vec<(String, String)> {
-    let at = |part: &str| format!("query_endpoints][{row}][{part}");
-    vec![
-        (at("key"), row.to_string()),
+    let at = |part: &str| format!("query][{key}][{part}");
+    let mut row = vec![
+        (String::from("query_rows"), key.to_owned()),
         (at("id"), id.to_owned()),
         (at("url"), url.to_owned()),
-        (at("in_service"), in_service.to_string()),
-    ]
+    ];
+    if in_service {
+        row.push((at("in_service"), String::from("on")));
+    }
+    row
 }
 
-/// The form body of a configuration form with `fields` and the endpoint
-/// rows `rows`.
+/// The form body of a configuration form with `fields` and the rows
+/// `rows`.
 pub(crate) fn form_with(fields: &[(&str, &str)], rows: &[(String, String)]) -> String {
     let mut all: Vec<(&str, &str)> = fields.to_vec();
     all.extend(
@@ -216,34 +226,49 @@ pub(crate) fn form_with(fields: &[(&str, &str)], rows: &[(String, String)]) -> S
     form(&all)
 }
 
+/// The fields of the save of console member C, its endpoints two rows, the
+/// second out of service.
+pub(crate) fn save_c_fields() -> Vec<(String, String)> {
+    let mut all: Vec<(String, String)> = [
+        ("action", "save-member"),
+        ("base", "2"),
+        ("organisation", "org-c"),
+        ("organisation_name", "Organisation C"),
+        ("node", "node-c"),
+        ("system_id", "cdr-c.example.org"),
+        ("reason", "add C"),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.to_owned(), value.to_owned()))
+    .collect();
+    all.extend(query_row(
+        "0",
+        ("node-c-pub", "https://cdr-c.example.org/openehr", true),
+    ));
+    all.extend(query_row(
+        "1",
+        ("node-c-old", "https://old.example.org/openehr", false),
+    ));
+    all
+}
+
 /// The save of console member C, its endpoints two rows, the second out of
 /// service.
 pub(crate) fn save_c() -> String {
-    let mut rows = query_row(0, ("node-c-pub", "https://cdr-c.example.org/openehr", true));
-    rows.extend(query_row(
-        1,
-        ("node-c-old", "https://old.example.org/openehr", false),
-    ));
-    form_with(
-        &[
-            ("action", "save-member"),
-            ("base", "2"),
-            ("organisation", "org-c"),
-            ("organisation_name", "Organisation C"),
-            ("node", "node-c"),
-            ("system_id", "cdr-c.example.org"),
-            ("reason", "add C"),
-        ],
-        &rows,
-    )
+    let fields = save_c_fields();
+    let fields: Vec<(&str, &str)> = fields
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    form(&fields)
 }
 
 /// The body of a member's save, as the gateway reads it.
 #[derive(serde::Deserialize)]
-struct SaveBody {
-    base: Option<u64>,
-    reason: String,
-    member: ferrofed_registry::console::ConsoleMember,
+pub(crate) struct SaveBody {
+    pub(crate) base: Option<u64>,
+    pub(crate) reason: String,
+    pub(crate) member: ferrofed_registry::console::ConsoleMember,
 }
 
 #[tokio::test]
@@ -258,7 +283,13 @@ async fn a_save_reaches_the_replica_with_the_member_and_previews_its_changes()
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(&service, &session, save_c()).await?;
+    let html = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        save_c(),
+    )
+    .await?;
     assert!(
         html.contains("Replica gateway-0 saved revision 2."),
         "{html}"
@@ -344,9 +375,10 @@ async fn a_stored_query_version_is_put_with_its_aql() -> Result<(), Box<dyn Erro
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(
+    let html = posted(
         &service,
         &session,
+        "/configuration/stored-queries/new",
         form(&[
             ("action", "store-query"),
             ("name", "org.example::q"),
@@ -389,14 +421,14 @@ async fn a_gateway_whose_configuration_is_not_managed_shows_so_and_no_form()
     let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("its configuration is not managed"), "{body}");
-    assert!(!body.contains("Save as a new revision"), "{body}");
+    assert!(!body.contains("Save as"), "{body}");
     Ok(())
 }
 
 // The form shows a Query API endpoint's id, URL and status alone, so a save
 // keeps the consent refusal codes of one it names (§11.1, N27), and a form
-// drawn without the FHIR endpoints field, as a tab opened before it existed,
-// keeps every held `hl7-fhir-rest` endpoint whole.
+// drawn without the FHIR endpoints field keeps every held `hl7-fhir-rest`
+// endpoint whole.
 #[tokio::test]
 async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
@@ -514,11 +546,93 @@ async fn a_console_with_no_admin_listener_offers_no_configuration_link()
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n",
     )?;
     let session = state.sessions().establish(signed_in())?;
-    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(!body.contains(r#"href="/configuration""#), "{body}");
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains(r#"href="/configuration""#), "{body}");
+    Ok(())
+}
+
+// An endpoint row is added and removed by a plain post of the form, which
+// runs nothing and draws the form again as it was posted.
+#[tokio::test]
+async fn an_endpoint_row_is_added_and_removed_with_no_script_and_keeps_what_was_typed()
+-> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    let (service, session) = signed_in_console(&listener)?;
+    let mut fields = save_c_fields();
+    fields.push((String::from("edit"), String::from("add-query")));
+    let fields_shown: Vec<(&str, &str)> = fields
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let html = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        form(&fields_shown),
+    )
+    .await?;
+    assert!(html.contains(r#"id="cfg-q-q1-id""#), "a third row: {html}");
+    assert!(
+        html.contains(r#"value="https://old.example.org/openehr""#),
+        "{html}"
+    );
+    assert!(html.contains(r#"value="Organisation C""#), "{html}");
+    assert!(
+        html.contains(r#"value="add C""#),
+        "the reason is kept: {html}"
+    );
+    assert!(!html.contains("Replica gateway-0"), "nothing ran: {html}");
+
+    let mut fields = save_c_fields();
+    fields.push((String::from("edit"), String::from("remove-query:1")));
+    let fields_shown: Vec<(&str, &str)> = fields
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let html = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        form(&fields_shown),
+    )
+    .await?;
+    assert!(!html.contains(r#"id="cfg-q-1-id""#), "{html}");
+    assert!(html.contains(r#"id="cfg-q-0-id""#), "{html}");
+
+    let html = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        form(&[
+            ("action", "save-member"),
+            ("node", "node-c"),
+            ("edit", "add-fhir"),
+        ]),
+    )
+    .await?;
+    let html_after = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        form(&[
+            ("action", "save-member"),
+            ("node", "node-c"),
+            ("fhir_rows", "f1"),
+            ("fhir][f1][profiles", "http://example.org/a"),
+            ("edit", "add-profile:f1"),
+        ]),
+    )
+    .await?;
+    assert!(html.contains(r#"id="cfg-f-f1-id""#), "{html}");
+    assert!(html_after.contains(r#"id="cfg-f-f1-p-1""#), "{html_after}");
+    assert!(
+        html_after.contains(r#"value="http://example.org/a""#),
+        "{html_after}"
+    );
+    assert_eq!(0, changes(&listener).await?);
     Ok(())
 }

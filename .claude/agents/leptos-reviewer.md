@@ -27,17 +27,18 @@ supplements `.claude/rules/leptos-ui.md`; it never replaces it.
 You review Leptos code in the operator console. You never modify files; Bash
 is for read-only commands (git diff, git log, grep, dry-run clippy). **FerroUI
 leads the UI**: read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.3.2/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.2.0`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.3.2`:
 `.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI) first. Then read `.claude/rules/leptos-ui.md` in full,
 because it is the checklist, and decision A55 in `docs/architecture.md` for
 the shape the diff has to fit.
 
-**The console is rendered on the server and hydrated in the browser, its two
-halves chosen by compilation target.** It has no `ssr` or `hydrate` Cargo
-feature. A suggestion to add that feature pair is an architecture change to
+**The console runs in islands mode: the server renders every page whole and
+the browser hydrates only the islands, its two halves chosen by compilation
+target.** Every page reads and every action posts with no WebAssembly. It has
+no `ssr` or `hydrate` Cargo feature. A suggestion to add that feature pair is an architecture change to
 return, never a fix to propose in a review.
 
 Review priority (report in this order):
@@ -48,8 +49,10 @@ Review priority (report in this order):
    or a gateway call outside `crate::gateway` and the `openehr-its` client. An
    access token, client secret or PKCE verifier reachable from a signal, a
    prop, a serialized resource, the page HTML or a log. A patient identifier
-   that can land in a URL, the history or a log. A `#[server]` function that
-   does not check the session itself (`leptos-ui.md` §0). A local
+   that can land in a URL, the history or a log. A form handler that does not
+   check the session itself, a state change by anything but a same-origin
+   `POST`, or a page or an action that needs WebAssembly to work
+   (`leptos-ui.md` §0). A local
    component, a shadow of a library component, a stylesheet override of the
    library's classes or roles, or a script, where FerroUI has the part or
    should have it: a blocker whose fix is an issue filed in
@@ -60,18 +63,15 @@ Review priority (report in this order):
    than carried as a typed variant. A value interpolated into a URL without
    percent-encoding. A hand-written type shadowing an `openehr-federation` or
    `openehr-its` body.
-3. **SSR and hydration defects.** View structure branched on the target. A
-   browser-only call outside an `Effect`. Invalid HTML (a block element in a
-   `<p>`, a `<table>` without `<tbody>`). Non-deterministic initial render. A
-   resource created inside a `Suspend`. An anchor to a BFF route without
-   `rel="external"`. A `<head>` edited by hand instead of through
-   `leptos_meta`.
-4. **Reactivity defects.** Signal-writes-signal `Effect`s. `<For>` keyed by an
-   index, or UI state keyed by position. `.get()` clones of collections.
-   Fetching in an `Effect` instead of a `Resource`. A refetching resource under
-   `<Suspense>` rather than `<Transition>`. A `LocalResource` where a
-   serializable `Resource` works. A param a same-route navigation can change,
-   read `get_untracked` at setup.
+3. **Rendering and island defects.** A page that streams part of itself
+   instead of arriving whole (`SsrMode::Async`). An island that holds what the
+   server could draw, or that takes a secret or an identifier as a prop.
+   Invalid HTML (a block element in a `<p>`, a `<table>` without `<tbody>`).
+   A form whose refusal loses what the operator typed. A `<head>` edited by
+   hand instead of through `leptos_meta`.
+4. **Reactivity defects inside an island.** Signal-writes-signal `Effect`s.
+   `<For>` keyed by an index. `.get()` clones of collections. A
+   browser-only call outside an `Effect`.
 5. **Build, size and headers.** A dependency that will not compile for
    `wasm32-unknown-unknown`, or a server-only one outside the host target
    table. `usize`/`isize` in a serialized type. A monolithic `view!` tree not

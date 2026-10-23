@@ -47,7 +47,7 @@ fn standing(
     let (word, tone) = if Some(revision.id) == running {
         (tr(Msg::StateRunning), Tone::Ok)
     } else if running.is_some_and(|running| revision.id > running) {
-        (tr(Msg::SavedNotApplied), Tone::Warn)
+        (tr(Msg::StatePendingWord), Tone::Warn)
     } else if Some(revision.id) == previous
         || matches!(revision.origin, Origin::File | Origin::Rollback)
     {
@@ -208,18 +208,15 @@ pub(super) fn export(loaded: &Loaded<'_>) -> AnyView {
 
 /// The import of TOML as a dry-run revision on the newest one.
 pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
+    let posted = loaded
+        .drafted(&["import"])
+        .map(|form| form.toml.clone())
+        .unwrap_or_default();
     let body = view! {
         {hidden("action", String::from("import"))}
         {hidden("base", loaded.base())}
         {Field::new("cfg-toml", tr(Msg::Toml))
-            .after(
-                view! {
-                    <p id="cfg-toml-lines" class="fui-help">
-                        {tr(Msg::N0Lines)}
-                    </p>
-                    {error_line("cfg-toml")}
-                },
-            )
+            .after(error_line("cfg-toml"))
             .view(
                 view! {
                     <textarea
@@ -229,13 +226,14 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
                         spellcheck="false"
                         required
                         class=format!("{TEXTAREA} fui-mono")
-                        data-lines="cfg-toml-lines"
-                        aria-describedby="cfg-toml-lines cfg-toml-error"
-                    ></textarea>
+                        aria-describedby="cfg-toml-error"
+                    >
+                        {posted}
+                    </textarea>
                 },
             )}
         {reason()}
-        <div class="fui-action-bar">
+        <div class="fui-actions">
             <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-import-hint">
                 {tr(Msg::ImportDryRunRevision)}
             </button>
@@ -253,7 +251,7 @@ pub(super) fn import(loaded: &Loaded<'_>) -> AnyView {
             (tr(Msg::PasteTomlExportWroteOneKept), "export-and-import"),
             (),
         )}
-        {form("main", "fui-stack", body)}
+        {form("fui-stack", body)}
     }
     .into_any()
 }

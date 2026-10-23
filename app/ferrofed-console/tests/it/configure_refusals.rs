@@ -4,9 +4,10 @@
 //! The configuration page's refusals against a stub admin listener: a
 //! refusal shows its status and code, a configuration-invalid one the key
 //! the gateway names, a bare `404` is a refusal, a form that is not
-//! confirmed or not readable and a plain form post ask no replica, a save
-//! whose held member cannot be read sends nothing, and a refused action is
-//! logged as what it is.
+//! confirmed or not readable and a post from another origin ask no
+//! replica, a refused form is drawn again with the field it names marked,
+//! a save whose held member cannot be read sends nothing, and a refused
+//! action is logged as what it is.
 
 use std::error::Error;
 
@@ -16,10 +17,11 @@ use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 
 use crate::configure::{
-    answered, answers, changes, configured, form, form_with, listener, query_row, save_c,
+    answers, changes, configured, form, form_with, listener, posted, query_row, refusal_of, save_c,
     signed_in_console,
 };
 use crate::support::{Captured, OPERATOR_TOKEN, get_as, send};
+
 #[tokio::test]
 async fn a_change_the_gateway_refuses_shows_its_status_and_code() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
@@ -31,10 +33,20 @@ async fn a_change_the_gateway_refuses_shows_its_status_and_code() -> Result<(), 
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(&service, &session, save_c()).await?;
+    let html = posted(
+        &service,
+        &session,
+        "/configuration/members/node-c",
+        save_c(),
+    )
+    .await?;
     assert!(
         html.contains("Replica gateway-0 refused the save: 409 (resource-file-owned)."),
         "{html}"
+    );
+    assert!(
+        html.contains(r#"value="https://old.example.org/openehr""#),
+        "the form is drawn as posted: {html}"
     );
     Ok(())
 }
@@ -128,17 +140,12 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
         ("node", "node c", "The node_id is not", "cfg-node"),
         ("system_id", "", "The system_id is not", "cfg-system_id"),
         (
-            "query_endpoints][0][url",
+            "query][0][url",
             "",
             "The base URL of Query API endpoint 1 is not",
             "cfg-q-0-url",
         ),
-        (
-            "query_endpoints][0][key",
-            "",
-            "endpoint rows do not read",
-            "",
-        ),
+        ("query_rows", "", "endpoint rows do not read", ""),
         ("reason", " ", "Give the reason", "cfg-reason"),
     ] {
         let mut fields = vec![
@@ -148,7 +155,10 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
             ("system_id", "cdr-c.example.org"),
             ("reason", "add C"),
         ];
-        let mut rows = query_row(0, ("node-c-pub", "https://cdr-c.example.org/openehr", true));
+        let mut rows = query_row(
+            "0",
+            ("node-c-pub", "https://cdr-c.example.org/openehr", true),
+        );
         for slot in &mut fields {
             if slot.0 == field {
                 slot.1 = value;
@@ -159,34 +169,42 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
                 value.clone_into(&mut slot.1);
             }
         }
-        let answer = answered(&service, &session, form_with(&fields, &rows)).await?;
-        assert!(answer.html.contains(said), "{field}: {}", answer.html);
-        assert_eq!(
-            (!at.is_empty()).then(|| at.to_owned()),
-            answer.field.map(|note| note.id),
-            "{field}"
-        );
+        let html = posted(
+            &service,
+            &session,
+            "/configuration/members/node-c",
+            form_with(&fields, &rows),
+        )
+        .await?;
+        assert!(html.contains(said), "{field}: {html}");
+        if !at.is_empty() {
+            let line =
+                refusal_of(&html, at).ok_or_else(|| format!("{field} marks {at}: {html}"))?;
+            assert!(line.contains(said), "{field}: {line}");
+            assert!(html.contains(&format!(r#"id="{at}""#)), "{field}: {html}");
+        }
     }
-    let answer = answered(
+    let html = posted(
         &service,
         &session,
+        "/configuration/members/new",
         form(&[
-            ("action", "save-member"),
-            ("organisation", "org-c"),
-            ("node", "node-c"),
-            ("system_id", "cdr-c.example.org"),
-            ("reason", "add C"),
+            ("action", "add-member"),
+            ("organisation", "org-d"),
+            ("node", "node-d"),
+            ("system_id", "cdr-d.example.org"),
+            ("reason", "add D"),
         ]),
     )
     .await?;
     assert!(
-        answer
-            .html
-            .contains("Give at least one Query API endpoint.")
+        html.contains("Give at least one Query API endpoint."),
+        "{html}"
     );
-    assert_eq!(
-        Some(String::from("cfg-add-query")),
-        answer.field.map(|note| note.id)
+    assert!(refusal_of(&html, "cfg-add-query").is_some(), "{html}");
+    assert!(
+        html.contains(r#"value="cdr-d.example.org""#),
+        "the form is drawn as posted: {html}"
     );
     assert_eq!(0, changes(&listener).await?);
     Ok(())
@@ -201,25 +219,29 @@ async fn a_bare_not_found_is_shown_as_a_refusal() -> Result<(), Box<dyn Error>> 
     let (service, session) = signed_in_console(&listener)?;
     let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
     assert!(!body.contains("its configuration is not managed"), "{body}");
-    assert!(body.contains("404 (no code)"), "{body}");
+    assert!(
+        body.contains("404: The gateway refused the request."),
+        "{body}"
+    );
     Ok(())
 }
 
-// A plain form post, which a page without its bundle sends, asks no replica.
+// A post another origin sends, or one that names no origin, asks no
+// replica (`Sec-Fetch-Site`, Fetch Metadata Request Headers §2.1).
 #[tokio::test]
-async fn a_plain_form_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
+async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let request = Request::post("/api/configure")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "text/html")
-        .header("sec-fetch-site", "same-origin")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .body(Body::from(save_c()))?;
-    let (response, body) = send(&service, request).await?;
-    assert_ne!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("PlainPost"), "{body}");
-    assert_eq!(0, changes(&listener).await?);
+    for site in [Some("cross-site"), Some("same-site"), None] {
+        let mut request = Request::post("/configuration")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("cookie", format!("{COOKIE}={}", session.as_str()));
+        if let Some(site) = site {
+            request = request.header("sec-fetch-site", site);
+        }
+        let (response, body) = send(&service, request.body(Body::from(save_c()))?).await?;
+        assert_eq!(StatusCode::FORBIDDEN, response.status(), "{site:?}: {body}");
+    }
     let asked = listener
         .received_requests()
         .await
@@ -239,7 +261,12 @@ async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), B
     let listener = Server::start().await;
     answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(&service, &session, save_c()).await?;
+    let request = Request::post("/configuration")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("sec-fetch-site", "same-origin")
+        .header("cookie", format!("{COOKIE}={}", session.as_str()))
+        .body(Body::from(save_c()))?;
+    let (_response, html) = send(&service, request).await?;
     assert!(
         html.contains("Replica gateway-0 refused the save: 500"),
         "{html}"

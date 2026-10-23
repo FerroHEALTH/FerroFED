@@ -27,17 +27,27 @@ use crate::journeys::stack::Stack;
 const WIDTH: u32 = 320;
 
 /// The pages a signed-in operator reads.
-const PAGES: [&str; 19] = [
+const PAGES: [&str; 29] = [
     "/about",
     "/",
-    "/members",
-    "/members/node-a",
+    "/topology",
+    "/organisations",
+    "/organisations/nodes",
+    "/organisations/org-a",
+    "/organisations/org-a/node-a",
+    "/organisations/org-a/node-a/endpoints",
+    "/organisations/org-a/node-a/routes",
+    "/services",
     "/integrity",
-    "/routing",
     "/stored-queries",
     "/stored-queries/org.example::journey_001",
-    "/federation",
+    "/stored-queries/org.example::journey_001/versions",
+    "/self-description",
+    "/self-description/limits",
     "/query",
+    "/query/stored",
+    "/preferences",
+    "/search?q=node",
     "/configuration",
     "/configuration/members/new",
     "/configuration/members/node-b",
@@ -105,7 +115,9 @@ async fn every_page_fits_a_window_320_pixels_wide() -> Result<(), Box<dyn Error>
     with_browser(async |browser| {
         narrow(browser).await?;
         browser.goto(&stack.url("/")).await?;
-        browser.element(By::LinkText("Sign in")).await?;
+        browser
+            .element(By::LinkText("Sign in with your organisation's account"))
+            .await?;
         fits(browser, "/ (signed out)").await?;
 
         sign_in(browser, &stack).await?;

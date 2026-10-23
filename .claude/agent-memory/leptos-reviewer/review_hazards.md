@@ -41,7 +41,7 @@ Confirmed hazards worth checking on every console review. Verify each still appl
 - cargo-leptos 0.3.11 `Exe::get` uses a `tailwindcss` or `wasm-opt` found on PATH before downloading, so verified tools on PATH suffice and `LEPTOS_TAILWIND_VERSION` then has no effect on what runs (ci-cd.md; #1057).
 - A nav `aria-current` tint or a segmented `aria-pressed` that changes only colour fails §10 and WCAG 1.4.1/1.4.11; compute the state-to-state ratio in both themes (leptos-ui.md §10; #1075).
 - An `md:sticky` top bar with no `scroll-padding-top` lets Shift+Tab hide the focused control under it (WCAG 2.2 SC 2.4.11; leptos-ui.md §10; #1075).
-- A pre-hydration form post to a server function under `Referrer-Policy: no-referrer` always redirects to `/`; a form that should keep the operator's page needs an explicit, checked return path (leptos-ui.md §0, §5; #1075).
+- A form post under `Referrer-Policy: no-referrer` carries no `Referer`, so a handler that redirects keeps the operator's page only through an explicit, checked return path (`prefs::return_path`; leptos-ui.md §1; #1075).
 - A Tailwind `@custom-variant dark` written for `[data-theme=dark]` alone misses the System theme on a dark OS; any `dark:` utility needs the media-query twin (leptos-ui.md §10; #1075).
 - A popover nav shown from `md` by an author `display` override works because author rules beat the UA `[popover]:not(:popover-open)` rule; reset `position`, `inset`, `margin`, `border` and `width` too (HTML popover; #1075).
 - A second cookie contradicts any "one opaque cookie" text in leptos-ui.md §0, the session module doc and the data-protection table; update all three with the cookie (#1075).

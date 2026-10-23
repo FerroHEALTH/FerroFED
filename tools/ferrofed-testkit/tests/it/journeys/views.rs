@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The operator views in the browser: the members, the integrity incidents
-//! and the routing table, the stored queries and the self-description, each
-//! reached by the hydrated console's own navigation and loaded afresh from
-//! the server, with both pagers followed forward and back.
+//! The pages in the browser: the organisations and their nodes, the
+//! services, the integrity incidents, the stored queries, the
+//! self-description and the topology, each reached by the navigation and
+//! loaded whole from the server, and each drawn with no script too.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -15,188 +15,139 @@ use std::error::Error;
 use ferrofed_console::app::PRODUCT;
 use thirtyfour::By;
 
-use crate::journeys::browser::{Browser, with_browser};
+use crate::journeys::browser::{Browser, hydrated, with_browser};
 use crate::journeys::journeys_enabled;
-use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
-use crate::journeys::stack::{ROUTES, Stack, held};
-use crate::journeys::stored::list_page;
+use crate::journeys::stack::{Stack, VERSIONED};
 
-/// The most rows a page of a view shows.
-const PAGE: u64 = 100;
-
-/// The caption of the routing table.
-const ROUTING: &str = "The creating_system_id routing table";
-
-/// The title of the view called `section`.
+/// The title of the page called `section`.
 fn titled(section: &str) -> String {
     format!("{section} · {PRODUCT}")
 }
 
-/// Waits for the row headed `id` in the table captioned `caption`.
-async fn row(browser: &Browser, caption: &str, id: &str) -> Result<(), Box<dyn Error>> {
+/// Follows the navigation's entry `entry`.
+async fn navigate(browser: &Browser, entry: &str) -> Result<(), Box<dyn Error>> {
     browser
         .element(By::XPath(format!(
-            "//table[caption = '{caption}']/tbody/tr/th[@scope = 'row' and normalize-space(.) = '{id}']"
+            "//nav[@aria-label = 'Console']//a[normalize-space(.) = '{entry}']"
         )))
-        .await
-        .map_err(|error| format!("no row {id} in the table {caption:?}: {error}"))?;
+        .await?
+        .click()
+        .await?;
     Ok(())
 }
 
-/// The number of rows in the body of the table captioned `caption`.
-async fn rows(browser: &Browser, caption: &str) -> Result<u64, Box<dyn Error>> {
-    let found = browser
-        .driver()
-        .find_all(By::XPath(format!(
-            "//table[caption = '{caption}']/tbody/tr"
-        )))
-        .await?;
-    Ok(u64::try_from(found.len())?)
-}
-
-/// Waits for the pager of the page that starts at `offset`, of `total` rows
-/// in all, and checks the table captioned `caption` shows that page.
-async fn page(
-    browser: &Browser,
-    caption: &str,
-    offset: u64,
-    total: u64,
-) -> Result<(), Box<dyn Error>> {
-    let end = offset.saturating_add(PAGE).min(total);
+/// Checks what each page shows once the gateway answered.
+async fn each_page(browser: &Browser) -> Result<(), Box<dyn Error>> {
     browser
-        .text(
-            "p",
-            &format!("Rows {} to {end} of {total}.", offset.saturating_add(1)),
-        )
+        .element(By::XPath("//main//a[@href = '/organisations/org-a']"))
         .await?;
-    assert_eq!(
-        end.saturating_sub(offset),
-        rows(browser, caption).await?,
-        "the rows of {caption:?} from {offset}"
-    );
+    browser
+        .element(By::XPath("//main//a[@href = '/organisations/org-b']"))
+        .await?;
     Ok(())
-}
-
-/// Follows the pager of the view at `path` forward to its last page and back
-/// to its first, checking the URL names each page.
-async fn pages(
-    browser: &Browser,
-    stack: &Stack,
-    (path, caption, total): (&str, &str, u64),
-) -> Result<(), Box<dyn Error>> {
-    page(browser, caption, 0, total).await?;
-    browser.follow("Next").await?;
-    page(browser, caption, PAGE, total).await?;
-    browser
-        .at(&stack.url(&format!("{path}?offset={PAGE}")))
-        .await?;
-    browser.follow("Previous").await?;
-    page(browser, caption, 0, total).await?;
-    browser.at(&stack.url(&format!("{path}?offset=0"))).await?;
-    browser.console_clean(&format!("the pager of {path}")).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn each_view_renders_and_pages_through_the_hydrated_console() -> Result<(), Box<dyn Error>> {
+async fn each_page_is_reached_by_the_navigation_and_drawn_whole() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
         return Ok(());
     }
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
 
-        browser.follow("Members").await?;
-        browser.titled(&titled("Members")).await?;
-        row(browser, "Member endpoints", "node-a-pub").await?;
-        row(browser, "Member endpoints", "node-b-pub").await?;
-        browser.console_clean("the members view").await?;
+        navigate(browser, "Organisations").await?;
+        browser.titled(&titled("Organisations")).await?;
+        each_page(browser).await?;
+        browser
+            .element(By::Css(r#"a[data-tab="nodes"]"#))
+            .await?
+            .click()
+            .await?;
+        browser.titled(&titled("All nodes")).await?;
+        browser.text("td", "cdr-a.example.org").await?;
+        browser.console_clean("the organisations").await?;
 
-        browser.follow("Integrity").await?;
+        navigate(browser, "Services").await?;
+        browser.titled(&titled("Services")).await?;
+        browser.text("th", "Identity cross-reference").await?;
+        browser.console_clean("the services").await?;
+
+        navigate(browser, "Integrity").await?;
         browser.titled(&titled("Integrity")).await?;
-        browser
-            .text("caption", "Incidents since the gateway started")
-            .await?;
-        browser.console_clean("the integrity view").await?;
+        browser.text("p", "No incident is open.").await?;
+        browser.console_clean("the integrity page").await?;
 
-        browser.follow("Routing").await?;
-        browser.titled(&titled("Routing")).await?;
-        pages(browser, &stack, ("/routing", ROUTING, ROUTES)).await?;
-
-        browser.follow("Stored queries").await?;
+        navigate(browser, "Stored queries").await?;
         browser.titled(&titled("Stored queries")).await?;
-        list_page(browser, 0, held()?).await?;
-        browser.follow("Next").await?;
-        list_page(browser, PAGE, held()?).await?;
+        browser.text("caption", "eu.ferrofed.eehrxf").await?;
         browser
-            .at(&stack.url(&format!("/stored-queries?offset={PAGE}")))
+            .element(By::XPath(format!(
+                "//table[caption = 'org.example']//a[normalize-space(.) = '{VERSIONED}']"
+            )))
             .await?;
-        browser.follow("Previous").await?;
-        list_page(browser, 0, held()?).await?;
-        browser
-            .console_clean("the pager of /stored-queries")
-            .await?;
+        browser.console_clean("the stored queries").await?;
 
-        browser.follow("Self-description").await?;
+        navigate(browser, "Self-description").await?;
         browser.titled(&titled("Self-description")).await?;
-        browser.text("dd", "example-federation").await?;
-        browser.console_clean("the self-description view").await
+        browser.text("code", "example-federation").await?;
+        browser
+            .element(By::Css(r#"a[data-tab="limits"]"#))
+            .await?
+            .click()
+            .await?;
+        browser.at(&stack.url("/self-description/limits")).await?;
+        browser.console_clean("the self-description").await?;
+
+        navigate(browser, "Topology").await?;
+        browser.titled(&titled("Topology")).await?;
+        browser.text("span", "org-a").await?;
+        hydrated(browser).await?;
+        browser.console_clean("the topology").await
     })
     .await
 }
 
+// Every page reads with no WebAssembly: the server draws it whole, and the
+// navigation is plain links.
 #[tokio::test(flavor = "multi_thread")]
-async fn each_view_loads_from_the_server_and_hydrates() -> Result<(), Box<dyn Error>> {
+async fn each_page_reads_with_no_script() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
         return Ok(());
     }
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-
-        browser.goto(&stack.url("/members")).await?;
-        browser.titled(&titled("Members")).await?;
-        row(browser, "Member endpoints", "node-a-pub").await?;
-        browser.console_clean("the members view").await?;
-
-        browser.goto(&stack.url("/integrity")).await?;
-        browser.titled(&titled("Integrity")).await?;
-        browser.text("h2", "No open incidents").await?;
-        browser.console_clean("the integrity view").await?;
-
-        browser
-            .goto(&stack.url(&format!("/routing?offset={PAGE}")))
-            .await?;
-        browser.titled(&titled("Routing")).await?;
-        page(browser, ROUTING, PAGE, ROUTES).await?;
-        browser.follow("Previous").await?;
-        page(browser, ROUTING, 0, ROUTES).await?;
-        browser.console_clean("the routing view").await?;
-
-        browser
-            .goto(&stack.url(&format!("/stored-queries?offset={PAGE}")))
-            .await?;
-        browser.titled(&titled("Stored queries")).await?;
-        list_page(browser, PAGE, held()?).await?;
-        browser.follow("Previous").await?;
-        list_page(browser, 0, held()?).await?;
-        browser.console_clean("the stored-query view").await?;
-
-        browser.goto(&stack.url("/federation")).await?;
-        browser.titled(&titled("Self-description")).await?;
-        browser.text("dd", "example-federation").await?;
-        browser.console_clean("the self-description view").await?;
-
-        // The query console's submit is enabled once the bundle has run, so
-        // the navigation there ends the journey on a hydrated page, and the
-        // console check after it reads what the bundle logged on the way.
-        browser.follow("Query console").await?;
-        hydrated(browser).await?;
-        browser
-            .console_clean("the way back to the query console")
-            .await
+        browser.scripts(false).await?;
+        for (path, title, shown) in [
+            ("/", "Dashboard", "Nodes reachable"),
+            ("/organisations", "Organisations", "org-a"),
+            ("/organisations/org-a/node-a", "node-a", "node-a-pub"),
+            ("/services", "Services", "Identity cross-reference"),
+            ("/integrity", "Integrity", "No incident is open."),
+            ("/stored-queries", "Stored queries", VERSIONED),
+            (
+                "/self-description",
+                "Self-description",
+                "example-federation",
+            ),
+            ("/query", "Query console", "Run"),
+            ("/preferences", "Your preferences", "Appearance"),
+            ("/about", "About", "Cadasto B.V."),
+        ] {
+            browser.goto(&stack.url(path)).await?;
+            browser.titled(&titled(title)).await?;
+            browser
+                .element(By::XPath(format!("//main//*[contains(., '{shown}')]")))
+                .await
+                .map_err(|error| format!("{path} shows {shown:?} with no script: {error}"))?;
+        }
+        navigate(browser, "Organisations").await?;
+        browser.titled(&titled("Organisations")).await?;
+        browser.scripts(true).await?;
+        browser.console_clean("the pages with no script").await
     })
     .await
 }

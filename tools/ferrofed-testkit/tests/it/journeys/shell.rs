@@ -1,27 +1,30 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The shell in the browser: the theme toggle, which draws the page at once
-//! and keeps the choice for the next page the server draws, before any
-//! script runs; the navigation drawer below `md`, which the keyboard opens,
-//! moves the focus into, closes with Escape and returns the focus from; the
-//! operator's menu; and the sticky top bar, which never hides the control
-//! that holds the focus (WCAG 2.2 SC 2.4.11).
+//! The shell in the browser: the theme, chosen in the operator's menu,
+//! which the server keeps and draws the next page in before any script
+//! runs; the navigation drawer below 48 rem, a native modal dialog the
+//! keyboard opens and Escape closes, the focus returning to its button; the
+//! operator's menu; the sticky top bar, which never hides the control that
+//! holds the focus (WCAG 2.2 SC 2.4.11); and the development banner.
+#![allow(
+    clippy::panic_in_result_fn,
+    reason = "test assertions in tests that return their setup errors"
+)]
+
 use std::error::Error;
 
 use serde_json::json;
 use thirtyfour::{By, Key};
 
-use crate::journeys::browser::{Browser, until, with_browser};
+use crate::journeys::browser::{Browser, hydrated, until, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::provider::OPERATOR;
-use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
 
-/// Makes the window `width` CSS pixels wide, a desktop window as the reflow
-/// journey's is (the Chrome `DevTools` Protocol,
-/// `Emulation.setDeviceMetricsOverride`).
+/// Makes the window `width` CSS pixels wide (the Chrome `DevTools`
+/// Protocol, `Emulation.setDeviceMetricsOverride`).
 async fn wide(browser: &Browser, width: u32) -> Result<(), Box<dyn Error>> {
     browser
         .driver()
@@ -48,8 +51,25 @@ async fn focused(browser: &Browser) -> Result<String, Box<dyn Error>> {
     Ok(browser.driver().active_element().await?.text().await?)
 }
 
+/// The button that opens the operator's menu.
+const USER_MENU: &str = r#"button[popovertarget="user-menu"]"#;
+
+/// Opens the operator's menu and presses its theme choice `theme`.
+async fn choose_theme(browser: &Browser, theme: &str) -> Result<(), Box<dyn Error>> {
+    browser.element(By::Css(USER_MENU)).await?.click().await?;
+    browser.element(By::Css("#user-menu:popover-open")).await?;
+    browser
+        .element(By::Css(format!(
+            r#"#user-menu form button[name="theme"][value="{theme}"]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn the_theme_toggle_draws_the_page_and_the_server_keeps_the_choice()
+async fn the_theme_is_chosen_in_the_operators_menu_and_the_server_keeps_it()
 -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
         return Ok(());
@@ -57,60 +77,38 @@ async fn the_theme_toggle_draws_the_page_and_the_server_keeps_the_choice()
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        browser
-            .driver()
-            .cdp()
-            .send_raw(
-                "Emulation.setEmulatedMedia",
-                json!({ "features": [{ "name": "prefers-color-scheme", "value": "light" }] }),
-            )
-            .await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
         drawn_in(browser, "system").await?;
-        until("the toggle swaps the theme in place", async || {
-            let to_dark = browser.element(By::Id("theme-to-dark")).await?;
-            if to_dark.is_displayed().await? {
-                to_dark.click().await?;
-            }
-            Ok(!browser
-                .driver()
-                .find_all(By::Css(r#"html[data-theme="dark"]"#))
-                .await?
-                .is_empty())
-        })
-        .await?;
+        // The top bar carries no theme toggle of its own (FerroUI, family rule 5).
+        let outside = browser
+            .driver()
+            .find_all(By::XPath(
+                "//header//button[@name = 'theme'][not(ancestor::*[@id = 'user-menu'])]",
+            ))
+            .await?;
+        assert!(outside.is_empty(), "the top bar carries a theme toggle");
+
+        choose_theme(browser, "dark").await?;
         browser.at(&stack.url("/query")).await?;
-        browser.element(By::Id("theme-to-light")).await?;
-        browser.console_clean("the theme toggle").await?;
+        drawn_in(browser, "dark").await?;
+        browser.console_clean("the theme choice").await?;
 
         // The server draws the next page in the theme it keeps, before any
         // script runs, so the page never shows the wrong theme first.
-        until("the console keeps the theme", async || {
-            browser.scripts(false).await?;
-            browser.goto(&stack.url("/members")).await?;
-            let kept = browser
-                .driver()
-                .find_all(By::Css(r#"html[data-theme="dark"]"#))
-                .await?;
-            browser.scripts(true).await?;
-            Ok(!kept.is_empty())
-        })
-        .await?;
+        browser.scripts(false).await?;
+        browser.goto(&stack.url("/organisations")).await?;
+        let kept = browser
+            .driver()
+            .find_all(By::Css(r#"html[data-theme="dark"]"#))
+            .await?;
+        browser.scripts(true).await?;
+        assert!(!kept.is_empty(), "the console keeps the theme");
+
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        until("the toggle swaps back to the light theme", async || {
-            let to_light = browser.element(By::Id("theme-to-light")).await?;
-            if to_light.is_displayed().await? {
-                to_light.click().await?;
-            }
-            Ok(!browser
-                .driver()
-                .find_all(By::Css(r#"html[data-theme="light"]"#))
-                .await?
-                .is_empty())
-        })
-        .await?;
+        choose_theme(browser, "light").await?;
+        drawn_in(browser, "light").await?;
         browser
             .console_clean("the way back to the light theme")
             .await
@@ -130,15 +128,19 @@ async fn the_keyboard_opens_the_drawer_moves_into_it_and_escape_returns()
         wide(browser, 390).await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        let menu = r#"button[popovertarget="sidebar"]"#;
+        let menu = r#"button[commandfor="sidebar"][aria-label="Menu"]"#;
         browser
             .element(By::Css(menu))
             .await?
             .send_keys(Key::Enter)
             .await?;
-        browser.element(By::Css("#sidebar:popover-open")).await?;
-        until("the focus moves to the drawer's first link", async || {
-            Ok(focused(browser).await? == "Dashboard")
+        browser.element(By::Css("dialog#sidebar[open]")).await?;
+        until("the focus moves into the drawer", async || {
+            Ok(!browser
+                .driver()
+                .find_all(By::Css("dialog#sidebar[open] :focus"))
+                .await?
+                .is_empty())
         })
         .await?;
 
@@ -151,7 +153,7 @@ async fn the_keyboard_opens_the_drawer_moves_into_it_and_escape_returns()
         until("Escape closes the drawer", async || {
             Ok(browser
                 .driver()
-                .find_all(By::Css("#sidebar:popover-open"))
+                .find_all(By::Css("dialog#sidebar[open]"))
                 .await?
                 .is_empty())
         })
@@ -162,26 +164,26 @@ async fn the_keyboard_opens_the_drawer_moves_into_it_and_escape_returns()
         })
         .await?;
 
-        // A link the drawer leads to closes it as the page changes.
+        // A link the drawer leads to loads its page, with the drawer closed.
         browser.element(By::Css(menu)).await?.click().await?;
-        browser.element(By::Css("#sidebar:popover-open")).await?;
+        browser.element(By::Css("dialog#sidebar[open]")).await?;
         browser
             .element(By::XPath(
-                "//nav[@id = 'sidebar']//a[normalize-space(.) = 'Members']",
+                "//dialog[@id = 'sidebar']//a[normalize-space(.) = 'Organisations']",
             ))
             .await?
             .click()
             .await?;
-        browser.at(&stack.url("/members")).await?;
-        browser.text("caption", "Member endpoints").await?;
-        until("following a link closes the drawer", async || {
-            Ok(browser
+        browser.at(&stack.url("/organisations")).await?;
+        browser.titled("Organisations · FerroFED Console").await?;
+        assert!(
+            browser
                 .driver()
-                .find_all(By::Css("#sidebar:popover-open"))
+                .find_all(By::Css("dialog#sidebar[open]"))
                 .await?
-                .is_empty())
-        })
-        .await?;
+                .is_empty(),
+            "the drawer is closed on the page it led to"
+        );
         browser.console_clean("the navigation drawer").await
     })
     .await
@@ -196,24 +198,20 @@ async fn the_operators_menu_opens_from_the_keyboard_and_escape_closes_it()
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        let button = r#"button[popovertarget="operator-menu"]"#;
+        hydrated(browser).await?;
         browser
-            .element(By::Css(button))
+            .element(By::Css(USER_MENU))
             .await?
             .send_keys(Key::Enter)
             .await?;
-        browser
-            .element(By::Css("#operator-menu:popover-open"))
-            .await?;
-        // The next Tab goes into the open menu, to its sign-out.
-        browser
-            .driver()
-            .active_element()
-            .await?
-            .send_keys(Key::Tab)
-            .await?;
-        until("Tab reaches the sign-out", async || {
-            Ok(focused(browser).await?.trim() == "Sign out")
+        browser.element(By::Css("#user-menu:popover-open")).await?;
+        // The island moves the focus to the menu's first item as it opens.
+        until("the focus moves to the menu's first item", async || {
+            Ok(!browser
+                .driver()
+                .find_all(By::Css("#user-menu :focus"))
+                .await?
+                .is_empty())
         })
         .await?;
         browser
@@ -225,7 +223,7 @@ async fn the_operators_menu_opens_from_the_keyboard_and_escape_closes_it()
         until("Escape closes the operator's menu", async || {
             Ok(browser
                 .driver()
-                .find_all(By::Css("#operator-menu:popover-open"))
+                .find_all(By::Css("#user-menu:popover-open"))
                 .await?
                 .is_empty())
         })
@@ -282,7 +280,12 @@ async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<
             .await?;
         browser.goto(&stack.url("/query")).await?;
         hydrated(browser).await?;
-        let bar = browser.element(By::Tag("header")).await?.rect().await?.height;
+        let bar = browser
+            .element(By::Tag("header"))
+            .await?
+            .rect()
+            .await?
+            .height;
         // The last field of the form, far down the page: focusing it scrolls
         // the page, so the fields before it pass under the bar's place.
         let fields = browser
@@ -290,7 +293,7 @@ async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<
             .find_all(By::Css(r#"main form input[type="text"]"#))
             .await?;
         let last = fields.last().ok_or("the query form has a text field")?;
-        last.click().await?;
+        browser.press(last).await?;
         for step in 1..=6 {
             browser
                 .driver()
@@ -314,8 +317,7 @@ async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<
 
 // The stack's gateway runs the development profile with its static
 // cross-reference, so every signed-in page names it in the banner under the
-// top bar, before any script runs and after a navigation of the client
-// router, and the pill names the gateway's version.
+// top bar, with no script too, and the pill names the gateway's version.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_development_gateway_is_named_in_the_banner_on_every_page() -> Result<(), Box<dyn Error>>
 {
@@ -331,21 +333,19 @@ async fn a_development_gateway_is_named_in_the_banner_on_every_page() -> Result<
             .text("div", "the static development cross-reference")
             .await?;
         browser
-            .text("span", &format!("· v{}", ferrofed_console::app::VERSION))
+            .element(By::Css(r#"header .fui-topbar-status[title*="FerroFED"]"#))
             .await?;
         browser.console_clean("the banner on the dashboard").await?;
 
-        browser.follow("Members").await?;
+        browser.follow("Organisations").await?;
         browser.element(By::XPath(banner)).await?;
-        browser
-            .console_clean("the banner after a navigation")
-            .await?;
+        browser.console_clean("the banner after a link").await?;
 
         browser.scripts(false).await?;
-        browser.goto(&stack.url("/routing")).await?;
+        browser.goto(&stack.url("/integrity")).await?;
         browser.element(By::XPath(banner)).await?;
         browser.scripts(true).await?;
-        browser.goto(&stack.url("/members")).await?;
+        browser.goto(&stack.url("/stored-queries")).await?;
         browser.element(By::XPath(banner)).await?;
         browser.console_clean("the banner before any script").await
     })

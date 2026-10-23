@@ -3,10 +3,10 @@
 
 //! What the configuration page renders and what its forms post.
 //!
-//! The page is rendered on the server and crosses to the browser as HTML:
-//! the header with the revisions it names, the card of the revision saved
-//! and not applied, the tabs, and the tab's own cards with their forms. Its
-//! forms cross to the server in a `POST` body alone, as structured fields:
+//! The page is drawn on the server: the header with the revisions it names,
+//! the card of the revision saved and not applied, the tabs, and the tab's
+//! own cards with their forms. Its forms post to the server alone, as
+//! structured fields:
 //! each endpoint, setting and secret a row of its own, never one line of
 //! separated text. A form's `Debug` output names which fields are filled,
 //! never what they hold: a secret's value among them, which the page never
@@ -33,23 +33,21 @@ pub struct Screen {
     pub compare: String,
 }
 
-/// The configuration page as the server rendered it, in the parts the page
-/// places around the outcome of its forms.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The configuration page as the server draws it, in the parts the page
+/// places around the answer of a form.
+#[derive(Debug, Default)]
 pub struct ConfigView {
     /// The page header: its title, its subtitle and the revision pills.
-    pub header: String,
+    pub header: Option<leptos::prelude::AnyView>,
     /// The card of the revision saved and not applied, and of what the
-    /// running revision awaits; empty when neither applies.
-    pub pending: String,
-    /// The tabs.
-    pub tabs: String,
-    /// The id of the tab shown, which labels its panel.
-    pub tab: String,
+    /// running revision awaits.
+    pub pending: Option<leptos::prelude::AnyView>,
+    /// The tab shown, which the binder tabs mark.
+    pub tab: Option<crate::configure::render::Tab>,
     /// The cards above the tab's main card.
-    pub lead: String,
-    /// The tab's main card, whose outcome the page shows at its top.
-    pub main: String,
+    pub lead: Option<leptos::prelude::AnyView>,
+    /// The tab's main card.
+    pub main: Option<leptos::prelude::AnyView>,
 }
 
 /// One Query API endpoint row of the member form.
@@ -183,6 +181,114 @@ pub struct ConfigForm {
     pub secrets: Vec<SecretInput>,
     /// The TOML an import saves as a dry-run revision.
     pub toml: String,
+    /// The row an Add or a Remove button changes, which runs nothing
+    /// (`crate::configure::draft::Edit`).
+    pub edit: String,
+}
+
+impl ConfigForm {
+    /// The form the posted `fields` hold, by the field names the forms
+    /// post: each row's fields named by its key.
+    #[must_use]
+    pub fn of(fields: &[(String, String)]) -> Self {
+        let one = |name: &str| {
+            fields
+                .iter()
+                .rev()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.replace("\r\n", "\n"))
+                .unwrap_or_default()
+        };
+        let all = |name: &str| -> Vec<String> {
+            fields
+                .iter()
+                .filter(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+                .collect()
+        };
+        let field = |name: &str| one(&format!("form[{name}]"));
+        let query_endpoints = all("form[query_rows]")
+            .into_iter()
+            .map(|key| {
+                let part = |part: &str| one(&format!("form[query][{key}][{part}]"));
+                QueryEndpointInput {
+                    id: part("id"),
+                    url: part("url"),
+                    in_service: !part("in_service").is_empty(),
+                    key,
+                }
+            })
+            .collect();
+        let fhir_endpoints = all("form[fhir_rows]")
+            .into_iter()
+            .map(|key| {
+                let part = |part: &str| one(&format!("form[fhir][{key}][{part}]"));
+                let many = |part: &str| all(&format!("form[fhir][{key}][{part}]"));
+                FhirEndpointInput {
+                    id: part("id"),
+                    url: part("url"),
+                    system: part("system"),
+                    categories: many("categories"),
+                    profiles: many("profiles"),
+                    in_service: !part("in_service").is_empty(),
+                    key,
+                }
+            })
+            .collect();
+        let settings = all("form[setting_rows]")
+            .into_iter()
+            .map(|row| {
+                let part = |part: &str| format!("form[setting][{row}][{part}]");
+                SettingInput {
+                    key: one(&part("key")),
+                    value: one(&part("value")),
+                    values: all(&part("values")),
+                    row,
+                }
+            })
+            .collect();
+        let secrets = all("form[secret_rows]")
+            .into_iter()
+            .map(|row| {
+                let part = |part: &str| one(&format!("form[secret][{row}][{part}]"));
+                SecretInput {
+                    key: part("key"),
+                    choice: part("choice"),
+                    value: Typed::new(part("value")),
+                    file: part("file"),
+                    row,
+                }
+            })
+            .collect();
+        Self {
+            action: field("action"),
+            base: field("base"),
+            revision: field("revision"),
+            current: field("current"),
+            reason: field("reason"),
+            confirm: field("confirm"),
+            organisation: field("organisation"),
+            organisation_name: field("organisation_name"),
+            node: field("node"),
+            system_id: field("system_id"),
+            product: field("product"),
+            product_version: field("product_version"),
+            query_endpoints,
+            fhir_endpoints,
+            fhir_shown: field("fhir_shown"),
+            name: field("name"),
+            version: field("version"),
+            aql: field("aql"),
+            endpoint: field("endpoint"),
+            section: field("section"),
+            resource: field("resource"),
+            grant: field("grant"),
+            settings,
+            secrets,
+            toml: field("toml"),
+            edit: field("edit"),
+        }
+    }
 }
 
 impl fmt::Debug for QueryEndpointInput {
@@ -241,6 +347,7 @@ impl fmt::Debug for ConfigForm {
             .field("settings", &self.settings.len())
             .field("secrets", &self.secrets)
             .field("toml", &filled(&self.toml))
+            .field("edit", &self.edit)
             .finish_non_exhaustive()
     }
 }

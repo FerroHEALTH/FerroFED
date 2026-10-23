@@ -10,10 +10,10 @@ use ferrofed_registry::resource::Resource;
 use ferrofed_registry::revision::{Current, Review};
 use leptos::prelude::*;
 
-use crate::admin::act::server::{Acted, ReplicaAnswer};
-use crate::admin::answer::replica_said;
-use crate::admin::model::ActionAnswer;
+use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::render::answers::said;
+use crate::configure::said::ActionAnswer;
+use crate::configure::said::replica_said;
 use crate::locale::{Msg, tr, tr_with};
 
 /// How a removal names `resource`: `credentials:<endpoint id>` or
@@ -32,7 +32,7 @@ pub fn choice(resource: &Resource) -> String {
 pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, "confirmation", confirmed_line).to_html(),
+        view: replica_said(answer, "confirmation", confirmed_line).into_any(),
         field: None,
     }
 }
@@ -58,7 +58,7 @@ fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
 pub fn approved(answer: &ReplicaAnswer<Review>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, "approval", approved_line).to_html(),
+        view: replica_said(answer, "approval", approved_line).into_any(),
         field: None,
     }
 }

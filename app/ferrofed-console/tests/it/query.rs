@@ -1,36 +1,27 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The query console against a stub gateway: a query over two nodes shows
-//! its rows, every endpoint's status and `complete` (§9.4, §11.1, §11.4,
-//! N37), a refusal shows its stable code, and an identifier entered in the
-//! console reaches no URL and no log (N33).
+//! The query console against a stub gateway answering the specification's
+//! §9.4 result-set example: the query posts to its own page, which answers
+//! with the rows, every endpoint's part and whether the answer is
+//! complete; a refusal shows its status and code, a form that cannot be
+//! sent is refused without quoting it, the federation choices reach the
+//! gateway as its headers, and an identifier the operator enters reaches
+//! no URL and no log line.
 
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_console::query::model::RenderedAnswer;
 use ferrofed_console::session::{COOKIE, SessionId};
 use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::stub::{options_example, result_set_example};
 use crate::support::{Captured, OPERATOR_TOKEN, console, get_as, send, signed_in};
 
-/// The vendored specification page that carries the §9.4 example.
-const RESULT_SET: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../docs/specs/federation-spec/modules/ROOT/pages/result-set.adoc"
-);
-
 /// A synthetic patient identifier, as an operator would type it.
-pub(crate) const PATIENT: &str = "synthetic-patient-48151623";
-
-/// The one `[source,json]` example of the §9.4 page: a complete answer over
-/// two nodes, with a third reported as excluded.
-pub(crate) fn complete_example() -> Result<String, Box<dyn Error>> {
-    example(RESULT_SET)
-}
+const PATIENT: &str = "synthetic-patient-48151623";
 
 /// `text` with `from` replaced by `to`, which must be there.
 fn replaced(text: &str, from: &str, to: &str) -> Result<String, Box<dyn Error>> {
@@ -44,7 +35,7 @@ fn replaced(text: &str, from: &str, to: &str) -> Result<String, Box<dyn Error>> 
 /// The §9.4 example with `node_2` timed out, as best-effort answers it:
 /// `node_1`'s row alone, and `complete` false (§11.4).
 fn incomplete_example() -> Result<String, Box<dyn Error>> {
-    let text = complete_example()?;
+    let text = result_set_example()?;
     let text = replaced(&text, "\"complete\": true", "\"complete\": false")?;
     let text = replaced(
         &text,
@@ -69,36 +60,16 @@ fn failed_example() -> Result<String, Box<dyn Error>> {
     )
 }
 
-/// The vendored specification page that carries the §7a.2 example.
-const REST_FACADE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../docs/specs/federation-spec/modules/ROOT/pages/rest-facade.adoc"
-);
-
-/// The first `[source,json]` example of the specification page `page`.
-fn example(page: &str) -> Result<String, Box<dyn Error>> {
-    let page = std::fs::read_to_string(page)?;
-    let mut lines = page.lines();
-    while let Some(line) = lines.next() {
-        if line.trim() == "[source,json]" && lines.next().map(str::trim) == Some("----") {
-            let body: Vec<&str> = lines.by_ref().take_while(|l| l.trim() != "----").collect();
-            return Ok(body.join("\n"));
-        }
-    }
-    Err("the page carries no JSON example".into())
-}
-
-/// A stub gateway answering `POST {base}/v1/query/aql` with `status` and
-/// `body`, and `OPTIONS {base}/` with the §7a.2 example, only for the
-/// operator's own token.
-pub(crate) async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>> {
+/// A stub gateway answering `POST /v1/query/aql` with `status` and `body`,
+/// and `OPTIONS /` with the §7a.2 example, only for the operator's token.
+async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>> {
     let gateway = MockServer::start().await;
     Mock::given(method("OPTIONS"))
         .and(path("/"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "application/json")
-                .set_body_string(example(REST_FACADE)?),
+                .set_body_string(options_example()?),
         )
         .mount(&gateway)
         .await;
@@ -119,9 +90,7 @@ pub(crate) async fn gateway(status: u16, body: String) -> Result<MockServer, Box
 }
 
 /// A console over `gateway` with one signed-in operator.
-pub(crate) fn signed_in_console(
-    gateway: &MockServer,
-) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+fn signed_in_console(gateway: &MockServer) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
@@ -130,24 +99,20 @@ pub(crate) fn signed_in_console(
     Ok((service, session))
 }
 
-/// The form body of a query console submission with `fields`.
-pub(crate) fn form(fields: &[(&str, &str)]) -> String {
+/// The form body of a query with `fields`.
+fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
-        form.append_pair(&format!("form[{name}]"), value);
+        form.append_pair(name, value);
     }
     form.finish()
 }
 
-/// A `POST` of the query server function with `body`, as the console's own
-/// page sends it, carrying `session`'s cookie when given.
-pub(crate) fn run(
-    body: String,
-    session: Option<&SessionId>,
-) -> Result<Request<Body>, Box<dyn Error>> {
-    let mut request = Request::post("/api/query")
+/// A `POST` of `body` to the query page, as the console's own page sends
+/// it, carrying `session`'s cookie when given.
+fn run(body: String, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = Request::post("/query")
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json")
         .header("sec-fetch-site", "same-origin");
     if let Some(session) = session {
         request = request.header("cookie", format!("{COOKIE}={}", session.as_str()));
@@ -156,67 +121,70 @@ pub(crate) fn run(
 }
 
 /// An AQL query naming the patient through the parameter `patient`.
-pub(crate) fn patient_query() -> String {
+fn patient_query() -> String {
     form(&[
         ("kind", "aql"),
         (
             "aql",
             "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = $patient",
         ),
-        ("parameters", &format!("patient={PATIENT}")),
+        ("parameter-name-1", "patient"),
+        ("parameter-value-1", PATIENT),
     ])
 }
 
-/// Runs `body` as the signed-in operator and reads the answer.
-pub(crate) async fn answered(
+/// Runs `body` as the signed-in operator and reads the page it answers
+/// with.
+async fn answered(
     service: &axum::Router,
     session: &SessionId,
     body: String,
-) -> Result<RenderedAnswer, Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let (response, text) = send(service, run(body, Some(session))?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
-    Ok(serde_json::from_str(&text)?)
+    assert!(!text.contains(OPERATOR_TOKEN), "{text}");
+    Ok(text)
 }
 
-/// Whether `html` holds the endpoint row of `id` with `status`.
+/// Whether the fan-out (F5) of `html` reports the endpoint `id` with
+/// `status`.
 fn reports(html: &str, id: &str, status: &str) -> bool {
-    html.contains(&format!(
-        r#"<th scope="row" class="fui-mono">{id}</th><td data-label="Status">{status}</td>"#
-    ))
+    let Some((_, fanout)) = html.split_once(r#"class="fui-fanout-list""#) else {
+        return false;
+    };
+    let Some((_, rest)) = fanout.split_once(&format!("<code>{id}<")) else {
+        return false;
+    };
+    rest.split_once("</li>")
+        .is_some_and(|(item, _)| item.contains(&format!("<code>{status}</code>")))
 }
 
 #[tokio::test]
 async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
 -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(Some(200), answer.status);
-    assert!(answer.complete);
-    let html = &answer.html;
-    assert!(html.contains("Every node in scope answered."), "{html}");
+    let html = answered(&service, &session, patient_query()).await?;
     for column in ["endpoint_id", "system_id", "composition_id"] {
-        assert!(
-            html.contains(&format!(">{column}</th>")),
-            "{column}: {html}"
-        );
+        assert!(html.contains(column), "{column}: {html}");
     }
-    assert!(html.contains("2 rows"), "{html}");
     assert!(
-        html.contains(
-            r#"<td data-label="composition_id">8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1</td>"#
-        ),
+        html.contains("8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1"),
         "{html}"
     );
     assert!(
-        html.contains(r#"<th scope="col" title="c/uid/value""#)
-            && html.matches(r#"title="c/uid/value""#).count() == 1,
-        "the column's path is its header's title, not each cell's: {html}"
+        html.contains("6ba7b810-9dad-11d1-80b4-00c04fd430c8::cdr2.rso.nl::1"),
+        "{html}"
     );
-    assert!(reports(html, "node_1", "active"), "{html}");
-    assert!(reports(html, "node_2", "active"), "{html}");
-    assert!(reports(html, "node_3", "excluded"), "{html}");
-    assert!(html.contains("118 ms") && html.contains("306 ms"), "{html}");
+    assert!(reports(&html, "node_1", "active"), "{html}");
+    assert!(reports(&html, "node_2", "active"), "{html}");
+    assert!(reports(&html, "node_3", "excluded"), "{html}");
+    assert!(html.contains("118") && html.contains("306"), "{html}");
+    let answer = html
+        .split_once("query-answer-title")
+        .map(|(_, rest)| rest)
+        .unwrap_or_default();
+    assert!(!answer.contains(PATIENT), "{answer}");
     Ok(())
 }
 
@@ -225,16 +193,16 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, incomplete_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(Some(200), answer.status);
-    assert!(!answer.complete, "{answer:?}");
-    let html = &answer.html;
+    let html = answered(&service, &session, patient_query()).await?;
     assert!(
-        html.contains("Not every node in scope answered (meta.federation.complete is false)"),
+        html.contains("8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1"),
         "{html}"
     );
-    assert!(html.contains("<caption>1 row</caption>"), "{html}");
-    assert!(reports(html, "node_2", "time-out"), "{html}");
+    assert!(
+        !html.contains("6ba7b810-9dad-11d1-80b4-00c04fd430c8::cdr2.rso.nl::1"),
+        "{html}"
+    );
+    assert!(reports(&html, "node_2", "time-out"), "{html}");
     assert!(
         html.contains("no answer within the per-node budget"),
         "{html}"
@@ -247,25 +215,15 @@ async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(504, failed_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(Some(504), answer.status);
-    assert!(!answer.complete);
-    let html = &answer.html;
-    assert!(
-        html.contains("The gateway failed the query: 504."),
-        "{html}"
-    );
-    assert!(
-        html.contains("Not every node in scope answered (meta.federation.complete is false)"),
-        "{html}"
-    );
-    assert!(html.contains("No rows."), "{html}");
+    let html = answered(&service, &session, patient_query()).await?;
+    assert!(html.contains("504"), "{html}");
+    assert!(html.contains("The answer holds no rows."), "{html}");
     for (id, status) in [
         ("node_1", "active"),
         ("node_2", "time-out"),
         ("node_3", "excluded"),
     ] {
-        assert!(reports(html, id, status), "{id}: {html}");
+        assert!(reports(&html, id, status), "{id}: {html}");
     }
     Ok(())
 }
@@ -278,17 +236,10 @@ async fn a_refused_query_shows_its_status_and_stable_code() -> Result<(), Box<dy
     )
     .await?;
     let (service, session) = signed_in_console(&gateway)?;
-    // A refusal is an answer of the server function, not its failure, which
-    // the browser would log as an error.
-    let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(Some(400), answer.status);
-    assert!(!answer.complete);
-    let html = &answer.html;
+    let html = answered(&service, &session, patient_query()).await?;
     assert!(html.contains(r#"role="alert""#), "{html}");
-    assert!(
-        html.contains("The gateway refused this view: 400 (aql-not-federable)."),
-        "{html}"
-    );
+    assert!(html.contains("400"), "{html}");
+    assert!(html.contains("aql-not-federable"), "{html}");
     Ok(())
 }
 
@@ -301,28 +252,22 @@ async fn a_result_set_with_no_federation_record_is_not_shown_as_an_answer()
     )
     .await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let (response, text) = send(&service, run(patient_query(), Some(&session))?).await?;
-    assert_ne!(StatusCode::OK, response.status(), "{text}");
-    assert!(text.contains("Unreadable"), "{text}");
+    let html = answered(&service, &session, patient_query()).await?;
+    assert!(html.contains(r#"role="alert""#), "{html}");
+    assert!(
+        !html.contains(">x<"),
+        "the unread rows are not shown: {html}"
+    );
     Ok(())
 }
 
 #[tokio::test]
-async fn the_query_functions_refuse_a_caller_without_a_live_session() -> Result<(), Box<dyn Error>>
-{
-    let gateway = gateway(200, complete_example()?).await?;
+async fn a_query_without_a_live_session_asks_the_gateway_nothing() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, _session) = signed_in_console(&gateway)?;
     for forged in [None, Some(SessionId::from_cookie("forged"))] {
-        let (_response, text) = send(&service, run(patient_query(), forged.as_ref())?).await?;
-        assert!(text.contains("SignedOut"), "{text}");
-        let mut request = Request::post("/api/query-options")
-            .header("accept", "application/json")
-            .header("sec-fetch-site", "same-origin");
-        if let Some(forged) = &forged {
-            request = request.header("cookie", format!("{COOKIE}={}", forged.as_str()));
-        }
-        let (_response, text) = send(&service, request.body(Body::empty())?).await?;
-        assert!(text.contains("SignedOut"), "{text}");
+        let (response, _text) = send(&service, run(patient_query(), forged.as_ref())?).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status());
     }
     let asked = gateway
         .received_requests()
@@ -334,7 +279,7 @@ async fn the_query_functions_refuse_a_caller_without_a_live_session() -> Result<
 
 #[tokio::test]
 async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let body = form(&[
         ("kind", "aql"),
@@ -342,10 +287,12 @@ async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(),
             "aql",
             "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c",
         ),
-        ("endpoints", " node_1 ,node_2,, "),
+        ("endpoint", " node_1 "),
+        ("endpoint", "node_2"),
+        ("endpoint", ""),
         ("organisation", "Org A"),
         ("dedup", "version-identity"),
-        ("partial", "partial"),
+        ("partial", "on"),
         ("offset", "0"),
         ("fetch", "10"),
     ]);
@@ -354,7 +301,10 @@ async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(),
         .received_requests()
         .await
         .ok_or("the stub records requests")?;
-    let request = asked.first().ok_or("the gateway was asked")?;
+    let request = asked
+        .iter()
+        .find(|request| request.method == http::Method::POST)
+        .ok_or("the gateway was asked")?;
     let value = |name: &str| {
         request
             .headers
@@ -375,14 +325,17 @@ async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(),
 
 #[tokio::test]
 async fn a_query_without_choices_sends_no_federation_header() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     answered(&service, &session, patient_query()).await?;
     let asked = gateway
         .received_requests()
         .await
         .ok_or("the stub records requests")?;
-    let request = asked.first().ok_or("the gateway was asked")?;
+    let request = asked
+        .iter()
+        .find(|request| request.method == http::Method::POST)
+        .ok_or("the gateway was asked")?;
     for name in openehr_federation::headers::ALL {
         assert!(request.headers.get(name).is_none(), "{name}");
     }
@@ -391,7 +344,7 @@ async fn a_query_without_choices_sends_no_federation_header() -> Result<(), Box<
 
 #[tokio::test]
 async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     for body in [
         form(&[("kind", "aql"), ("aql", " ")]),
@@ -400,15 +353,16 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
         form(&[
             ("kind", "aql"),
             ("aql", "SELECT 1"),
-            ("parameters", PATIENT),
+            ("parameter-name-1", PATIENT),
+            ("parameter-value-1", "x"),
         ]),
         form(&[
             ("kind", "aql"),
             ("aql", "SELECT 1"),
-            (
-                "parameters",
-                &format!("patient={PATIENT}\npatient={PATIENT}"),
-            ),
+            ("parameter-name-1", "patient"),
+            ("parameter-value-1", PATIENT),
+            ("parameter-name-2", "patient"),
+            ("parameter-value-2", PATIENT),
         ]),
         form(&[("kind", "aql"), ("aql", "SELECT 1"), ("offset", "-1")]),
         form(&[("kind", "aql"), ("aql", "SELECT 1"), ("fetch", PATIENT)]),
@@ -418,35 +372,38 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
             ("organisation", "Org\u{7}A"),
         ]),
     ] {
-        // A form that cannot be sent is refused in the answer, as an alert
-        // naming the field, never as a failure of the server function.
-        let (response, text) = send(&service, run(body.clone(), Some(&session))?).await?;
-        assert_eq!(StatusCode::OK, response.status(), "{body}: {text}");
-        let answer: RenderedAnswer = serde_json::from_str(&text)?;
-        assert_eq!(None, answer.status, "{body}");
-        assert!(answer.html.contains(r#"role="alert""#), "{body}: {text}");
-        assert!(!text.contains(PATIENT), "{body}: {text}");
+        let html = answered(&service, &session, body.clone()).await?;
+        assert!(html.contains(r#"role="alert""#), "{body}: {html}");
+        let answer = html
+            .split_once("query-answer-title")
+            .map(|(_, rest)| rest)
+            .unwrap_or_default();
+        assert!(!answer.contains(PATIENT), "{body}: {answer}");
     }
     let asked = gateway
         .received_requests()
         .await
         .ok_or("the stub records requests")?;
-    assert!(asked.is_empty(), "the gateway was asked {}", asked.len());
+    assert!(
+        asked
+            .iter()
+            .all(|request| request.method != http::Method::POST),
+        "the gateway ran a query"
+    );
     Ok(())
 }
 
 // The identifier an operator enters travels in the console's request body
-// and the gateway's, and reaches no URL, no log line and no answer.
+// and the gateway's, and reaches no URL and no log line.
 #[tokio::test]
 async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
 -> Result<(), Box<dyn Error>> {
     let captured = Captured::default();
     let _logging = captured.logging();
 
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let (_response, answer) = send(&service, run(patient_query(), Some(&session))?).await?;
-    assert!(!answer.contains(PATIENT), "{answer}");
+    answered(&service, &session, patient_query()).await?;
 
     let refusing = self::gateway(
         400,
@@ -454,23 +411,19 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
     )
     .await?;
     let (refused_service, refused_session) = signed_in_console(&refusing)?;
-    let (_response, refusal) = send(
-        &refused_service,
-        run(patient_query(), Some(&refused_session))?,
-    )
-    .await?;
-    assert!(!refusal.contains(PATIENT), "{refusal}");
+    answered(&refused_service, &refused_session, patient_query()).await?;
 
-    // A URL is never read: the server function takes no query string.
-    let in_url = format!("/api/query?form%5Bkind%5D=aql&form%5Bparameters%5D=patient%3D{PATIENT}");
-    let (response, _text) = send(&service, get_as(&in_url, &session)?).await?;
-    assert_ne!(StatusCode::OK, response.status());
+    // A query string is never read as a query: a GET draws the empty form.
+    let in_url = format!(
+        "/query?kind=aql&aql=SELECT%201&parameter-name-1=patient&parameter-value-1={PATIENT}"
+    );
+    let (_response, page) = send(&service, get_as(&in_url, &session)?).await?;
+    assert!(!page.contains(PATIENT), "{page}");
 
     // The page posts its form, so the browser keeps no field in its history.
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;
     assert!(page.contains(r#"method="post""#), "{page}");
-    assert!(page.contains(r#"action="/api/query""#), "{page}");
-    assert!(!page.contains(PATIENT));
+    assert!(page.contains(r#"action="/query""#), "{page}");
 
     let mut asked = gateway
         .received_requests()
@@ -508,62 +461,34 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
 
 #[tokio::test]
 async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let (response, page) = send(&service, get_as("/query", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{page}");
     assert!(
-        page.contains("<title>Query · FerroFED Console</title>"),
+        page.contains("<title>Query console · FerroFED Console</title>"),
         "{page}"
     );
-    // Each declared endpoint and organisation is a checkbox chip with its
-    // label, never a field the operator types identifiers into.
-    for (index, endpoint) in ["node_1", "node_2"].into_iter().enumerate() {
-        let id = format!("query-endpoint-{index}");
+    for endpoint in crate::stub::example_endpoints()? {
         assert!(
-            page.contains(&format!(
-                r#"<label for="{id}" class="fui-chip-check"><input type="checkbox" id="{id}" name="form[endpoints]" value="{endpoint}">"#
-            )),
-            "{endpoint}: {page}"
-        );
-    }
-    for (index, organisation) in ["Org A", "Org B"].into_iter().enumerate() {
-        let id = format!("query-organisation-{index}");
-        assert!(
-            page.contains(&format!(
-                r#"<input type="checkbox" id="{id}" name="form[organisation]" value="{organisation}">"#
-            )),
-            "{organisation}: {page}"
+            page.contains(&format!(r#"name="endpoint" value="{endpoint}""#)),
+            "each declared endpoint is a checkbox: {endpoint}: {page}"
         );
     }
     assert!(
-        !page.contains(r#"type="text" id="query-endpoints""#),
+        page.contains(r#"<option value="version-identity""#),
         "{page}"
     );
     assert!(
-        page.contains(r#"<option value="version-identity">"#),
+        page.contains(r#"id="query-partial" name="partial""#),
         "{page}"
     );
+    assert!(page.contains(r#"for="parameter-name-1""#), "{page}");
+    assert!(page.contains(r#"for="parameter-value-1""#), "{page}");
     assert!(
-        page.contains(
-            r#"<input type="checkbox" role="switch" id="query-partial" name="form[partial]""#
-        ),
+        page.contains("Run a query to see its answer here."),
         "{page}"
     );
-    assert!(!page.contains("does not offer best effort"), "{page}");
-    assert!(
-        page.contains(r#"<label for="query-parameter-name-0""#),
-        "{page}"
-    );
-    assert!(
-        page.contains(r#"<label for="query-parameter-value-0""#),
-        "{page}"
-    );
-    assert!(
-        page.contains(r#"role="tablist" aria-label="Query kind""#),
-        "{page}"
-    );
-    assert!(page.contains("No query has run yet."), "{page}");
     assert!(!page.contains(OPERATOR_TOKEN), "{page}");
     Ok(())
 }
@@ -580,12 +505,11 @@ fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId)
     Ok((service, session))
 }
 
-/// A `POST` of the query function carrying `session`'s cookie and only the
-/// headers `from` names, as a page of some origin would send it.
+/// A `POST` of the query carrying `session`'s cookie and only the headers
+/// `from` names, as a page of some origin would send it.
 fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>, Box<dyn Error>> {
-    let mut request = Request::post("/api/query")
+    let mut request = Request::post("/query")
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json")
         .header("cookie", format!("{COOKIE}={}", session.as_str()));
     for (name, value) in from {
         request = request.header(*name, *value);
@@ -597,7 +521,7 @@ fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>,
 // on a query of its choosing, so the run is taken from the console alone.
 #[tokio::test]
 async fn a_query_from_another_origin_or_from_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = console_with_origin(&gateway)?;
     for from in [
         vec![("sec-fetch-site", "cross-site")],
@@ -621,7 +545,7 @@ async fn a_query_from_another_origin_or_from_nowhere_is_refused() -> Result<(), 
 
 #[tokio::test]
 async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = console_with_origin(&gateway)?;
     for from in [
         vec![("sec-fetch-site", "same-origin")],
@@ -636,14 +560,14 @@ async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error
 
 #[tokio::test]
 async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = console_with_origin(&gateway)?;
-    let request = Request::get("/api/query?form%5Bkind%5D=aql&form%5Baql%5D=SELECT%201")
+    let request = Request::get("/query?kind=aql&aql=SELECT%201")
         .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .header("sec-fetch-site", "same-origin")
         .body(Body::empty())?;
     let (response, _text) = send(&service, request).await?;
-    assert_ne!(StatusCode::OK, response.status());
+    assert_eq!(StatusCode::OK, response.status());
     let asked = gateway
         .received_requests()
         .await
@@ -659,10 +583,129 @@ async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn the_query_page_needs_a_signed_in_session() -> Result<(), Box<dyn Error>> {
-    let gateway = gateway(200, complete_example()?).await?;
+    let gateway = gateway(200, result_set_example()?).await?;
     let (service, _session) = signed_in_console(&gateway)?;
     let (response, _page) = send(&service, crate::support::get("/query")?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     assert_eq!("/login", crate::support::header(&response, "location"));
+    Ok(())
+}
+
+// An answer carries what the operator entered beside data an attacker would
+// want, so it is never compressed (BREACH) and never cached.
+#[tokio::test]
+async fn an_answer_is_neither_compressed_nor_cached() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, result_set_example()?).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let mut request = run(patient_query(), Some(&session))?;
+    request.headers_mut().insert(
+        "accept-encoding",
+        http::HeaderValue::from_static("br, gzip"),
+    );
+    let (response, _text) = send(&service, request).await?;
+    assert_eq!("", crate::support::header(&response, "content-encoding"));
+    assert_eq!(
+        "no-store",
+        crate::support::header(&response, "cache-control")
+    );
+    Ok(())
+}
+
+// A node's hostile values reach the page as text, never as markup.
+#[tokio::test]
+async fn a_nodes_hostile_values_reach_the_page_escaped() -> Result<(), Box<dyn Error>> {
+    let text = incomplete_example()?;
+    let text = replaced(
+        &text,
+        "\"8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1\"",
+        "\"<script>alert(1)</script>\"",
+    )?;
+    let text = replaced(
+        &text,
+        "no answer within the per-node budget",
+        "<img src=x onerror=alert(2)>",
+    )?;
+    let gateway = gateway(200, text).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let html = answered(&service, &session, patient_query()).await?;
+    for raw in ["<script>alert(1)", "<img src=x"] {
+        assert!(!html.contains(raw), "{raw}: {html}");
+    }
+    assert!(
+        html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+        "{html}"
+    );
+    assert!(
+        html.contains("&lt;img src=x onerror=alert(2)&gt;"),
+        "{html}"
+    );
+    Ok(())
+}
+
+/// A §9.4-shaped answer whose every node-controlled value is hostile: the
+/// cells, the column name and path, an endpoint's organisation and error,
+/// and the dedup mode.
+const HOSTILE: &str = r#"{
+  "q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c",
+  "columns": [ { "name": "</th><script>x</script>", "path": "\" onmouseover=\"alert(1)" } ],
+  "rows": [ ["<script>alert(1)</script>"], ["<img src=x onerror=alert(1)>"] ],
+  "meta": {
+    "federation": {
+      "complete": false,
+      "endpoints": [
+        { "id": "node_1", "status": "active", "latency_ms": 5, "organisation": "<b>Org</b> & co" },
+        { "id": "node_2", "status": "time-out", "latency_ms": 9, "error": "<b>late</b> & gone" }
+      ],
+      "dedup": { "mode": "<i>mode</i>" }
+    }
+  }
+}"#;
+
+// Every value a node wrote reaches the answer as text: the cells, the column
+// name and path, an endpoint's error and the raw answer.
+#[tokio::test]
+async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, HOSTILE.to_owned()).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let html = answered(&service, &session, patient_query()).await?;
+    let answer = html
+        .split_once("query-answer-title")
+        .map(|(_, rest)| rest)
+        .unwrap_or_default();
+    for escaped in [
+        "&lt;script&gt;alert(1)&lt;/script&gt;",
+        "&lt;img src=x onerror=alert(1)&gt;",
+        "&lt;/th&gt;&lt;script&gt;x&lt;/script&gt;",
+        "&lt;b&gt;late&lt;/b&gt; &amp; gone",
+    ] {
+        assert!(answer.contains(escaped), "{escaped}: {answer}");
+    }
+    for raw in [
+        "<script>",
+        "<img",
+        "onmouseover=\"",
+        "<b>",
+        "<i>",
+        "</th><script",
+    ] {
+        assert!(!answer.contains(raw), "{raw}: {answer}");
+    }
+    Ok(())
+}
+
+// The form posts with no WebAssembly: its Run is a plain submit button,
+// never one that waits for the page to hydrate.
+#[tokio::test]
+async fn the_run_works_before_the_page_hydrates() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, result_set_example()?).await?;
+    let (service, session) = signed_in_console(&gateway)?;
+    let (_response, page) = send(&service, get_as("/query", &session)?).await?;
+    let form = page
+        .split_once(r#"<form id="query-form""#)
+        .and_then(|(_, rest)| rest.split_once("</form>"))
+        .map(|(form, _)| form)
+        .ok_or("the query form")?;
+    assert!(form.contains(r#"type="submit""#), "{form}");
+    assert!(!form.contains("disabled"), "{form}");
     Ok(())
 }

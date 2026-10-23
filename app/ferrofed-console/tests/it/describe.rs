@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The self-description against a stub gateway: cards of what `OPTIONS
-//! {base}/` declares, the manufacturer it names, and the document itself
-//! highlighted behind a disclosure, every value escaped (§7a.2, N30).
-#![allow(
-    clippy::panic_in_result_fn,
-    reason = "test assertions in tests that return their setup errors"
-)]
+//! The self-description against a stub gateway: the tabs of what `OPTIONS
+//! {base}/` declares and the manufacturer it names, every value escaped
+//! (§7a.2, N30).
 
 use std::error::Error;
 
@@ -15,10 +11,10 @@ use http::StatusCode;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::stub::options_example;
 use crate::support::{console, get_as, send, signed_in};
-use crate::views::options_example;
 
-/// The page `/federation` renders over a gateway answering `OPTIONS` with
+/// The page `/self-description` renders over a gateway answering `OPTIONS` with
 /// `body`.
 async fn described(body: String) -> Result<String, Box<dyn Error>> {
     let gateway = MockServer::start().await;
@@ -36,7 +32,7 @@ async fn described(body: String) -> Result<String, Box<dyn Error>> {
         gateway.uri()
     ))?;
     let session = state.sessions().establish(signed_in())?;
-    let (response, page) = send(&service, get_as("/federation", &session)?).await?;
+    let (response, page) = send(&service, get_as("/self-description", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{page}");
     Ok(page)
 }
@@ -57,16 +53,14 @@ async fn the_self_description_shows_its_cards_and_the_document() -> Result<(), B
     )?)
     .await?;
     for shown in [
-        ">Federation</h2>",
-        ">Capabilities</h2>",
-        ">Budgets and paging</h2>",
-        ">Manufacturer</h2>",
+        r#"href="/self-description/capabilities""#,
+        r#"href="/self-description/limits""#,
+        r#"href="/self-description/endpoints""#,
+        "Manufacturer",
         "Example Manufacturer B.V.",
         "1 Example Street",
+        "info@example.org",
         "2031-10-16",
-        "<caption>Declared endpoints</caption>",
-        "<summary>The OPTIONS document</summary>",
-        r#"<span class="fui-tok-key">&quot;spec_version&quot;</span>"#,
     ] {
         assert!(page.contains(shown), "{shown}: {page}");
     }
@@ -76,10 +70,10 @@ async fn the_self_description_shows_its_cards_and_the_document() -> Result<(), B
 #[tokio::test]
 async fn a_self_description_without_a_manufacturer_says_so() -> Result<(), Box<dyn Error>> {
     let page = described(options_example()?).await?;
-    assert!(page.contains("not declared"), "{page}");
+    assert!(page.contains("Not declared"), "{page}");
     let unreadable = described(with_members(r#""manufacturer":"a string""#)?).await?;
     assert!(
-        unreadable.contains("declared in a form the console cannot read"),
+        unreadable.contains("Declared in a form the console cannot read"),
         "{unreadable}"
     );
     Ok(())
@@ -101,5 +95,45 @@ async fn hostile_values_in_the_self_description_render_escaped() -> Result<(), B
         "{page}"
     );
     assert!(page.contains("&lt;img src=x&gt;"), "{page}");
+    Ok(())
+}
+
+// The OPTIONS document has its one home on About: highlighted on the page,
+// and downloaded whole as an attachment by a signed-in operator alone.
+#[tokio::test]
+async fn about_carries_the_options_document_and_its_download() -> Result<(), Box<dyn Error>> {
+    let gateway = MockServer::start().await;
+    Mock::given(method("OPTIONS"))
+        .and(path("/"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(options_example()?),
+        )
+        .mount(&gateway)
+        .await;
+    let (state, service) = console(&format!(
+        "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
+        gateway.uri()
+    ))?;
+    let session = state.sessions().establish(signed_in())?;
+    let (_response, page) = send(&service, get_as("/about", &session)?).await?;
+    assert!(
+        page.contains(r#"<span class="fui-tok-key">&quot;spec_version&quot;</span>"#),
+        "{page}"
+    );
+    assert!(page.contains(r#"href="/about/options.json""#), "{page}");
+    let (response, document) = send(&service, get_as("/about/options.json", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{document}");
+    assert_eq!(
+        "attachment; filename=\"options.json\"",
+        crate::support::header(&response, "content-disposition")
+    );
+    let read: openehr_federation::options::OptionsRoot = serde_json::from_str(&document)?;
+    let example: openehr_federation::options::OptionsRoot =
+        serde_json::from_str(&options_example()?)?;
+    assert_eq!(example.federation.id, read.federation.id, "{document}");
+    let (response, _) = send(&service, crate::support::get("/about/options.json")?).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
     Ok(())
 }

@@ -20,9 +20,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::journeys::browser::{Browser, until, with_browser};
-use crate::journeys::configure::{
-    bodies, confirmed, fill, focused_on_outcome, hydrated, stale, submit,
-};
+use crate::journeys::configure::{bodies, confirmed, fill, hydrated, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -132,15 +130,7 @@ async fn secret_saved(
     stack: &Stack,
     admin: &Server,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(
-        browser,
-        stack,
-        (
-            "/configuration/credentials/node-a-pub",
-            submit("Save as revision 4"),
-        ),
-    )
-    .await?;
+    hydrated(browser, stack, "/configuration/credentials/node-a-pub").await?;
     let password = browser.element(value_field("password")).await?;
     assert!(
         !password.is_displayed().await?,
@@ -154,19 +144,14 @@ async fn secret_saved(
     browser
         .press(&browser.element(choice("password", "Set a value")).await?)
         .await?;
-    // The choice may re-render the field, so it is found afresh on every poll,
-    // never read through the element found before the press (#1149).
+    // The stylesheet shows the field once its choice is ticked, with no
+    // script (FerroUI's reveal).
     until("Set a value shows its field", async || {
-        match browser
+        Ok(browser
             .element(value_field("password"))
             .await?
             .is_displayed()
-            .await
-        {
-            Ok(shown) => Ok(shown),
-            Err(error) if stale(&error) => Ok(false),
-            Err(error) => Err(error.into()),
-        }
+            .await?)
     })
     .await?;
     browser
@@ -181,7 +166,6 @@ async fn secret_saved(
     browser
         .text("strong", "Replica gateway-0 saved revision 4.")
         .await?;
-    focused_on_outcome(browser).await?;
     let source = browser.driver().source().await?;
     assert!(!source.contains(VALUE), "the page shows the secret");
     let saved = bodies(admin, "/admin/config/credentials/node-a-pub").await?;
@@ -202,36 +186,26 @@ async fn rolled_back(
     stack: &Stack,
     admin: &Server,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(
-        browser,
-        stack,
-        (
-            "/configuration/credentials",
-            By::Css(r#"button[popovertarget="rollback-confirm"]"#),
-        ),
-    )
-    .await?;
+    hydrated(browser, stack, "/configuration/credentials").await?;
     browser
         .press(
             &browser
                 .element(By::Css(
-                    r#"button[popovertarget="rollback-confirm"][aria-haspopup]"#,
+                    r#"button[commandfor="rollback-confirm-pending"][aria-haspopup="dialog"]"#,
                 ))
                 .await?,
         )
         .await?;
     browser
-        .element(By::Css("#rollback-confirm:popover-open"))
+        .element(By::Css("dialog#rollback-confirm-pending[open]"))
         .await?;
-    fill(browser, "cfg-rollback-reason", "the token is wrong").await?;
+    fill(browser, "cfg-rollback-reason-pending", "the token is wrong").await?;
     browser
-        .press(
-            &browser
-                .element(By::XPath(
-                    "//div[@id = 'rollback-confirm']//button[@type = 'submit']",
-                ))
-                .await?,
-        )
+        .element(By::Css(
+            r#"dialog#rollback-confirm-pending[open] button[type="submit"]"#,
+        ))
+        .await?
+        .click()
         .await?;
     browser
         .text(
@@ -239,7 +213,6 @@ async fn rolled_back(
             "Replica gateway-0 applied revision 5, restoring the content of revision 1.",
         )
         .await?;
-    focused_on_outcome(browser).await?;
     assert_eq!(
         vec![String::from(
             r#"{"current":2,"reason":"the token is wrong"}"#
@@ -260,15 +233,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(
-            browser,
-            &stack,
-            (
-                "/configuration/credentials",
-                By::Css(r#"button[popovertarget="confirm-confirm"]"#),
-            ),
-        )
-        .await?;
+        hydrated(browser, &stack, "/configuration/credentials").await?;
         browser
             .text("li", "/var/lib/ferrofed/secrets/a.secret")
             .await?;
@@ -284,15 +249,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
         secret_saved(browser, &stack, &admin).await?;
 
         // The confirmation of the running revision before its deadline.
-        hydrated(
-            browser,
-            &stack,
-            (
-                "/configuration/credentials",
-                By::Css(r#"button[popovertarget="confirm-confirm"]"#),
-            ),
-        )
-        .await?;
+        hydrated(browser, &stack, "/configuration/credentials").await?;
         confirmed(browser, "confirm-confirm").await?;
         browser
             .text(
@@ -305,15 +262,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
         rolled_back(browser, &stack, &admin).await?;
 
         // The approval of the newest revision by a second operator.
-        hydrated(
-            browser,
-            &stack,
-            (
-                "/configuration/credentials",
-                By::Css(r#"button[popovertarget="approve-confirm"]"#),
-            ),
-        )
-        .await?;
+        hydrated(browser, &stack, "/configuration/credentials").await?;
         confirmed(browser, "approve-confirm").await?;
         browser
             .text(

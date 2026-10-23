@@ -19,28 +19,38 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
         let body = page(&service, &session, path).await?;
         assert!(body.contains("<title>Configuration · "), "{body}");
         assert!(body.contains("File, read-only"), "{body}");
-        assert!(body.contains("saved, not applied"), "{body}");
+        assert!(body.contains(">pending<"), "{body}");
         assert!(
             body.contains(r#"href="/configuration/members/node-c""#),
             "{body}"
         );
         assert!(body.contains("Edit<span"), "{body}");
-        assert!(body.contains(r#"popovertarget="remove-node-c""#), "{body}");
-        assert!(!body.contains(r#"popovertarget="remove-node-a""#), "{body}");
         assert!(body.contains("Revision 1 running"), "{body}");
         assert!(body.contains("Revision 2 saved, not applied"), "{body}");
         assert!(body.contains("Apply revision 2"), "{body}");
         assert!(body.contains("What revision 2 changes, by key"), "{body}");
         assert!(body.contains("registry.members[0].node.id"), "{body}");
-        assert!(body.contains(r#"aria-selected="true""#), "{body}");
+        assert!(
+            body.contains(r#"aria-current="page" data-tab="tab-members""#),
+            "{body}"
+        );
     }
     let edit = page(&service, &session, "/configuration/members/node-c").await?;
     assert!(edit.contains("Edit member node-c"), "{edit}");
     assert!(edit.contains(r#"name="form[query][0][url]""#), "{edit}");
+    assert!(edit.contains(r#"commandfor="remove-member""#), "{edit}");
+    assert!(
+        edit.contains(r#"name="form[node]" value="node-c""#),
+        "{edit}"
+    );
     let detail = page(&service, &session, "/configuration/members/node-a").await?;
     assert!(!detail.contains("Edit member node-a"), "{detail}");
     assert!(
         detail.contains("registry document provides this member"),
+        "{detail}"
+    );
+    assert!(
+        !detail.contains(r#"commandfor="remove-member""#),
         "{detail}"
     );
     let queries = page(&service, &session, "/configuration/stored-queries").await?;

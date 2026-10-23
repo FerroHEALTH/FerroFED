@@ -6,8 +6,8 @@
 //! download, which the console's server reads from the first replica with
 //! the operator's own token and answers as an attachment no cache keeps, a
 //! refusal shown with its status and code; an import sends the TOML to the
-//! replica alone, shows what it changes escaped, and a plain form post or an
-//! empty TOML asks no replica.
+//! replica alone, shows what it changes escaped, and a post from another
+//! origin or an empty TOML asks no replica.
 
 use std::error::Error;
 
@@ -18,7 +18,7 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::configure::{answers, changes, configured, form, signed_in_console};
+use crate::configure::{answers, changes, form, posted, signed_in_console};
 use crate::support::{OPERATOR_TOKEN, console, get_as, send};
 
 /// Revision 2 runs, applied by the file.
@@ -205,9 +205,10 @@ async fn an_import_sends_the_toml_to_the_replica_and_shows_its_changes_escaped()
     let listener = listener().await;
     answers(&listener, ("POST", "/admin/config/import"), 201, IMPORTED).await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(
+    let html = posted(
         &service,
         &session,
+        "/configuration/import-export",
         form(&[
             ("action", "import"),
             ("base", "2"),
@@ -279,9 +280,10 @@ async fn a_refused_import_shows_the_status_and_code() -> Result<(), Box<dyn Erro
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(
+    let html = posted(
         &service,
         &session,
+        "/configuration/import-export",
         form(&[
             ("action", "import"),
             ("base", "2"),
@@ -302,9 +304,10 @@ async fn a_refused_import_shows_the_status_and_code() -> Result<(), Box<dyn Erro
 async fn an_empty_import_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(
+    let html = posted(
         &service,
         &session,
+        "/configuration/import-export",
         form(&[
             ("action", "import"),
             ("base", "2"),
@@ -319,15 +322,15 @@ async fn an_empty_import_asks_no_replica() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// A plain form post, which a page without its bundle sends, asks no replica.
+// An import another origin posts asks no replica (`Sec-Fetch-Site`, Fetch
+// Metadata Request Headers §2.1).
 #[tokio::test]
-async fn a_plain_import_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
+async fn an_import_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
-    let request = Request::post("/api/configure")
+    let request = Request::post("/configuration/import-export")
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "text/html")
-        .header("sec-fetch-site", "same-origin")
+        .header("sec-fetch-site", "cross-site")
         .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .body(Body::from(form(&[
             ("action", "import"),
@@ -337,8 +340,7 @@ async fn a_plain_import_post_asks_no_replica() -> Result<(), Box<dyn Error>> {
             ("confirm", "yes"),
         ])))?;
     let (response, body) = send(&service, request).await?;
-    assert_ne!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("PlainPost"), "{body}");
+    assert_eq!(StatusCode::FORBIDDEN, response.status(), "{body}");
     let asked = listener
         .received_requests()
         .await

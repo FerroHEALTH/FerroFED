@@ -4,9 +4,9 @@
 //! The console's interaction states, captured behind the
 //! `FERROFED_SCREENSHOTS` gate for the visual review: the pointer on a
 //! navigation entry and on a table row, the keyboard focus on a navigation
-//! entry, the theme toggle and a form's button, the operator's menu open,
-//! the drawer open on a phone, and the top bar with a long operator name on
-//! a phone and at 1440 pixels, each in the light and the dark theme.
+//! entry and a form's button, the operator's menu open with its theme
+//! choice, the drawer open on a phone, and the top bar with a long operator
+//! name on a phone and at 1440 pixels, each in the light and the dark theme.
 //!
 //! The images go to the ignored `target/console-screenshots/states/`, as
 //! `<state>.png` and `<state>-dark.png`; the book shows the pages, not the
@@ -18,9 +18,8 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 use thirtyfour::{By, Cookie, WebElement};
 
-use crate::journeys::browser::{Browser, with_browser};
+use crate::journeys::browser::{Browser, hydrated, with_browser};
 use crate::journeys::provider::OPERATOR;
-use crate::journeys::query::hydrated;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
 
@@ -121,58 +120,46 @@ async fn every_state(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     cookie.set_path("/");
     browser.driver().add_cookie(cookie).await?;
     sign_in(browser, stack).await?;
-    browser.goto(&stack.url("/members")).await?;
-    browser
-        .element(By::XPath("//caption[contains(., 'Member endpoints')]"))
-        .await?;
+    browser.goto(&stack.url("/organisations/nodes")).await?;
+    hydrated(browser).await?;
     let sidebar = browser.element(By::Id("sidebar")).await?;
     let entry = browser.element(By::LinkText("Integrity")).await?;
     hover(browser, &entry).await?;
     shot_of(browser, &sidebar, "hover-nav", theme).await?;
     focus(browser, &entry).await?;
     shot_of(browser, &sidebar, "focus-nav", theme).await?;
-    let row = browser.element(By::XPath("//table//tbody//tr")).await?;
+    let row = browser
+        .element(By::XPath("//main//table//tbody//tr"))
+        .await?;
     hover(browser, &row).await?;
-    let table = browser.element(By::Css(".fui-table-scroll")).await?;
+    let table = browser.element(By::Css("main .fui-table-scroll")).await?;
     shot_of(browser, &table, "hover-row", theme).await?;
-    let bar = browser.element(By::Css(".fui-topbar")).await?;
-    let toggle = browser.element(By::Css(".fui-theme-toggle button")).await?;
-    let shown = if toggle.is_displayed().await? {
-        toggle
-    } else {
-        browser.element(By::Id("theme-to-light")).await?
-    };
-    focus(browser, &shown).await?;
-    shot_of(browser, &bar, "focus-theme-toggle", theme).await?;
     browser
-        .element(By::XPath(
-            "//header//button[@aria-controls = 'operator-menu']",
-        ))
+        .element(By::Css(r#"header button[popovertarget="user-menu"]"#))
         .await?
         .click()
         .await?;
-    browser.element(By::Id("operator-menu")).await?;
+    browser.element(By::Css("#user-menu:popover-open")).await?;
     shot_of_view(browser, "operator-menu", theme).await?;
     browser.goto(&stack.url("/query")).await?;
     hydrated(browser).await?;
     let run = browser
-        .element(By::XPath("//button[normalize-space(.) = 'Run query']"))
-        .await?;
-    focus(browser, &run).await?;
-    let form = browser
         .element(By::XPath(
-            "//form[.//button[normalize-space(.) = 'Run query']]",
+            "//form[@id = 'query-form']//button[normalize-space(.) = 'Run']",
         ))
         .await?;
+    focus(browser, &run).await?;
+    let form = browser.element(By::Id("query-form")).await?;
     shot_of(browser, &form, "focus-run", theme).await?;
     layout(browser, 390, 900, theme).await?;
-    browser.goto(&stack.url("/members")).await?;
+    browser.goto(&stack.url("/organisations")).await?;
+    hydrated(browser).await?;
     browser
         .element(By::XPath("//button[@aria-label = 'Menu']"))
         .await?
         .click()
         .await?;
-    browser.element(By::Css("#sidebar:popover-open")).await?;
+    browser.element(By::Css("dialog#sidebar[open]")).await?;
     shot_of_view(browser, "drawer-open", theme).await?;
     long_name(browser, stack, theme).await
 }
@@ -186,7 +173,7 @@ const LONG_NAME: &str = "annemarie.van-der-berg-hoogstraten@ziekenhuis-noordwest
 async fn long_name(browser: &Browser, stack: &Stack, theme: &str) -> Result<(), Box<dyn Error>> {
     for (width, state) in [(390, "topbar-long-name-narrow"), (1440, "topbar-long-name")] {
         layout(browser, width, 900, theme).await?;
-        browser.goto(&stack.url("/members")).await?;
+        browser.goto(&stack.url("/organisations")).await?;
         let bar = browser.element(By::Css(".fui-topbar")).await?;
         browser
             .driver()

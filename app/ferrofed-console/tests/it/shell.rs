@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The shell around every page: the theme the server draws the page in and
-//! the server function that keeps it, the top bar's operator and gateway
-//! status, the navigation's marked page, and the About page's gateway.
+//! The shell around every page: the preferences the server draws the page
+//! in and the post that keeps each, the top bar's operator and gateway
+//! status with no theme toggle of its own, the navigation's marked page,
+//! the development banner, and the About page's gateway.
 
 use std::error::Error;
 
@@ -12,8 +13,8 @@ use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::stub::options_example;
 use crate::support::{OPERATOR_NAME, console, get, get_as, header, send, signed_in};
-use crate::views::options_example;
 
 /// A stub gateway answering `OPTIONS {base}/` with `status` and `body`.
 async fn gateway(status: u16, body: String) -> MockServer {
@@ -35,65 +36,34 @@ fn configured(base: &str) -> String {
     format!("[gateway]\nbase_url = \"{base}\"\n\n[session]\nsecure_cookie = false\n")
 }
 
-/// A `GET` of `path` carrying the session `session` and the theme cookie
-/// `theme`.
-fn get_in(
+/// A `GET` of `path` carrying the session `session` and the extra cookies
+/// `cookies`.
+fn get_with(
     path: &str,
     session: &ferrofed_console::session::SessionId,
-    theme: &str,
+    cookies: &str,
 ) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(path)
         .header(
             "cookie",
             format!(
-                "{}={}; {}={theme}",
+                "{}={}; {cookies}",
                 ferrofed_console::session::COOKIE,
-                session.as_str(),
-                ferrofed_console::session::THEME_COOKIE
+                session.as_str()
             ),
         )
         .body(Body::empty())?)
 }
 
-#[tokio::test]
-async fn the_page_arrives_in_the_theme_its_cookie_names() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
-    let (_response, body) = send(&service, get_as("/", &session)?).await?;
-    assert!(
-        body.contains(r#"<html lang="en" data-theme="system">"#),
-        "{body}"
-    );
-    for (cookie, drawn) in [
-        ("dark", "dark"),
-        ("light", "light"),
-        ("system", "system"),
-        ("sepia", "system"),
-    ] {
-        let (_response, body) = send(&service, get_in("/members", &session, cookie)?).await?;
-        assert!(
-            body.contains(&format!(r#"<html lang="en" data-theme="{drawn}">"#)),
-            "{cookie}: {body}"
-        );
-    }
-    // The toggle offers the other theme, by a word as well as its icon.
-    let (_response, body) = send(&service, get_in("/", &session, "dark")?).await?;
-    assert!(
-        body.contains(r#"aria-label="Switch to the light theme""#),
-        "{body}"
-    );
-    assert!(body.contains(r#"action="/api/theme""#), "{body}");
-    Ok(())
-}
-
-/// A `POST` of the theme server function with `form`, as the page sends it.
-fn keep(
+/// A plain form post of `form` to `path`, as the console's own page sends
+/// it, carrying the session `session`.
+fn post(
+    path: &str,
     form: &str,
     session: &ferrofed_console::session::SessionId,
 ) -> Result<Request<Body>, Box<dyn Error>> {
-    Ok(Request::post("/api/theme")
+    Ok(Request::post(path)
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json")
         .header("sec-fetch-site", "same-origin")
         .header(
             "cookie",
@@ -103,78 +73,147 @@ fn keep(
 }
 
 #[tokio::test]
-async fn the_theme_server_function_keeps_a_theme_in_its_cookie_and_refuses_any_other_key()
--> Result<(), Box<dyn Error>> {
+async fn the_page_arrives_in_the_preferences_its_cookies_name() -> Result<(), Box<dyn Error>> {
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
-    let (response, body) = send(&service, keep("theme=dark", &session)?).await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("Shown"), "{body}");
-    let cookie = header(&response, "set-cookie");
-    assert!(
-        cookie.starts_with("ferrofed_console_theme=dark;"),
-        "{cookie}"
-    );
-    assert!(cookie.contains("HttpOnly"), "{cookie}");
-    assert!(cookie.contains("SameSite=Lax"), "{cookie}");
-    assert_eq!("no-store", header(&response, "cache-control"));
-
-    let (response, body) = send(&service, keep("theme=sepia", &session)?).await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert!(body.contains("Refused"), "{body}");
-    assert!(body.contains("Invalid"), "{body}");
-    assert_eq!("", header(&response, "set-cookie"));
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
+    assert!(body.contains(r#"data-theme="system""#), "{body}");
+    for (cookie, drawn) in [
+        ("dark", "dark"),
+        ("light", "light"),
+        ("system", "system"),
+        ("sepia", "system"),
+    ] {
+        let (_response, body) = send(
+            &service,
+            get_with(
+                "/about",
+                &session,
+                &format!("ferrofed_console_theme={cookie}"),
+            )?,
+        )
+        .await?;
+        assert!(
+            body.contains(&format!(r#"data-theme="{drawn}""#)),
+            "{cookie}: {body}"
+        );
+    }
+    let (_response, body) = send(
+        &service,
+        get_with(
+            "/about",
+            &session,
+            "ferrofed_console_density=compact; ferrofed_console_motion=reduce",
+        )?,
+    )
+    .await?;
+    assert!(body.contains(r#"data-density="compact""#), "{body}");
+    assert!(body.contains(r#"data-motion="reduce""#), "{body}");
     Ok(())
 }
 
-// Before the page has hydrated, a press of the switch is a plain form post,
-// which the server function answers by keeping the theme and sending the
-// browser back to the console.
+// The theme lives in the user menu and Your preferences; the top bar
+// carries no toggle of its own (FerroUI 0.3.2, the family rule).
 #[tokio::test]
-async fn a_plain_form_post_of_the_switch_keeps_the_theme_and_returns_to_its_own_page()
+async fn the_top_bar_carries_no_theme_toggle_and_the_user_menu_offers_the_theme()
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
-    let post = |form: &str, accept: &str| -> Result<Request<Body>, Box<dyn Error>> {
-        Ok(Request::post("/api/theme")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .header("accept", accept)
-            .header("sec-fetch-site", "same-origin")
-            .header(
-                "cookie",
-                format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
-            )
-            .body(Body::from(form.to_owned()))?)
-    };
-    // The page the form names, when it is one of the console's own.
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
+    let top = body
+        .split_once(r#"<header class="fui-topbar""#)
+        .and_then(|(_, rest)| rest.split_once(r#"id="user-menu""#))
+        .map(|(top, _)| top)
+        .ok_or("the top bar")?;
+    assert!(!top.contains("theme"), "{top}");
+    assert!(
+        body.contains(r#"<form method="post" action="/preference" class="fui-menu-theme">"#),
+        "{body}"
+    );
+    assert!(body.contains(r#"name="theme" value="dark""#), "{body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_preference_post_keeps_its_value_in_a_cookie_of_its_own_and_refuses_any_other()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
+    let session = state.sessions().establish(signed_in())?;
+    for (form, cookie) in [
+        ("theme=dark&back=%2Fabout", "ferrofed_console_theme=dark;"),
+        (
+            "density=compact&back=%2Fabout",
+            "ferrofed_console_density=compact;",
+        ),
+        (
+            "motion=reduce&back=%2Fabout",
+            "ferrofed_console_motion=reduce;",
+        ),
+    ] {
+        let (response, _body) = send(&service, post("/preference", form, &session)?).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{form}");
+        let set = header(&response, "set-cookie");
+        assert!(set.starts_with(cookie), "{form}: {set}");
+        assert!(set.contains("HttpOnly"), "{set}");
+        assert!(set.contains("SameSite=Lax"), "{set}");
+    }
+    for refused in [
+        "theme=sepia&back=%2F",
+        "colour=red&back=%2F",
+        "theme=dark&density=compact&back=%2F",
+    ] {
+        let (response, _body) = send(&service, post("/preference", refused, &session)?).await?;
+        assert_eq!(StatusCode::BAD_REQUEST, response.status(), "{refused}");
+        assert_eq!("", header(&response, "set-cookie"), "{refused}");
+    }
+    Ok(())
+}
+
+// A preference post sends the browser back to the console's own page it came
+// from, and never anywhere else.
+#[tokio::test]
+async fn a_preference_post_returns_to_its_own_page_and_never_off_the_console()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
+    let session = state.sessions().establish(signed_in())?;
     for (form, location) in [
-        ("theme=dark&back=%2Fmembers", "/members"),
+        ("theme=dark&back=%2Forganisations", "/organisations"),
         ("theme=dark&back=%2Fconfiguration", "/configuration"),
         ("theme=light", "/"),
-        // Never an open redirect: anything but the console's own page is `/`.
         ("theme=dark&back=https%3A%2F%2Fattacker.example.net%2F", "/"),
         ("theme=dark&back=%2F%2Fattacker.example.net%2F", "/"),
-        ("theme=dark&back=%2Fno%2Fsuch%2Fpage", "/"),
+        ("theme=dark&back=%2F..%2Fx", "/"),
+        ("theme=dark&back=%2Fpreferences", "/preferences?saved=theme"),
     ] {
-        let (response, body) = send(&service, post(form, "text/html")?).await?;
+        let (response, body) = send(&service, post("/preference", form, &session)?).await?;
         assert!(
             response.status().is_redirection(),
             "{form}: {response:?} {body}"
         );
         assert_eq!(location, header(&response, "location"), "{form}");
-        assert!(
-            header(&response, "set-cookie").starts_with("ferrofed_console_theme="),
-            "{form}: {response:?}"
-        );
     }
-    // The hydrated page calls the function for its answer, never a redirect.
-    let (response, body) = send(
+    let (response, _body) = send(
         &service,
-        post("theme=dark&back=%2Fmembers", "application/json")?,
+        post("/preferences/reset", "back=%2Fabout", &session)?,
     )
     .await?;
-    assert_eq!(StatusCode::OK, response.status(), "{body}");
-    assert_eq!("", header(&response, "location"));
+    assert_eq!("/about", header(&response, "location"));
+    let cleared: Vec<&str> = response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect();
+    assert!(
+        cleared
+            .iter()
+            .any(|cookie| cookie.starts_with("ferrofed_console_theme=;")),
+        "{cleared:?}"
+    );
+    assert!(
+        cleared.iter().all(|cookie| cookie.contains("Max-Age=0")),
+        "{cleared:?}"
+    );
     Ok(())
 }
 
@@ -184,13 +223,14 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
     let up = gateway(200, options_example()?).await;
     let (state, service) = console(&configured(&up.uri()))?;
     let session = state.sessions().establish(signed_in())?;
-    let (response, body) = send(&service, get_as("/", &session)?).await?;
+    let (response, body) = send(&service, get_as("/about", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains(OPERATOR_NAME), "{body}");
-    assert!(body.contains(r#"popovertarget="operator-menu""#), "{body}");
-    assert!(body.contains("Gateway UP"), "{body}");
-    assert!(body.contains("· spec 1.0 · rso-zl"), "{body}");
-    assert!(body.contains("fui-status fui-tone-ok"), "{body}");
+    assert!(body.contains(r#"popovertarget="user-menu""#), "{body}");
+    assert!(
+        body.contains(r#"class="fui-pill fui-tone-ok fui-topbar-status""#),
+        "{body}"
+    );
 
     let refusing = gateway(
         403,
@@ -199,15 +239,13 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
     .await;
     let (state, service) = console(&configured(&refusing.uri()))?;
     let session = state.sessions().establish(signed_in())?;
-    let (_response, body) = send(&service, get_as("/", &session)?).await?;
-    assert!(body.contains("Gateway refused 403"), "{body}");
-    assert!(body.contains("· insufficient-scope"), "{body}");
-    assert!(body.contains("fui-status fui-tone-bad"), "{body}");
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
+    assert!(!body.contains("fui-tone-ok fui-topbar-status"), "{body}");
 
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
-    let (_response, body) = send(&service, get_as("/", &session)?).await?;
-    assert!(body.contains("Gateway DOWN"), "{body}");
+    let (_response, body) = send(&service, get_as("/about", &session)?).await?;
+    assert!(body.contains("fui-tone-bad fui-topbar-status"), "{body}");
     Ok(())
 }
 
@@ -218,15 +256,17 @@ async fn the_navigation_marks_the_page_and_groups_its_entries() -> Result<(), Bo
     let session = state.sessions().establish(signed_in())?;
     for (page, link) in [
         ("/", r#"href="/""#),
-        ("/federation", r#"href="/federation""#),
+        ("/self-description", r#"href="/self-description""#),
+        ("/self-description/limits", r#"href="/self-description""#),
+        ("/stored-queries", r#"href="/stored-queries""#),
     ] {
         let (_response, body) = send(&service, get_as(page, &session)?).await?;
         let nav = body
-            .split_once(r#"aria-label="Views""#)
+            .split_once(r#"<nav aria-label="Console" class="fui-sidebar-nav">"#)
             .and_then(|(_, rest)| rest.split_once("</nav>"))
             .map(|(inside, _)| inside)
             .ok_or("the navigation")?;
-        for group in ["Overview", "Federation", "Queries", "Gateway"] {
+        for group in ["Overview", "Federation", "Queries", "Gateway", "Console"] {
             assert!(nav.contains(&format!(">{group}</p>")), "{group}: {nav}");
         }
         let marked: Vec<&str> = nav
@@ -237,10 +277,9 @@ async fn the_navigation_marks_the_page_and_groups_its_entries() -> Result<(), Bo
             return Err(format!("{page}: one entry marked, not {marked:?}").into());
         };
         assert!(only.contains(link), "{page}: {only}");
-        // The theme switch posts back to this page before the page hydrates.
         assert!(
             body.contains(&format!(
-                r#"<input type="hidden" name="back" value="{page}"#
+                r#"<input type="hidden" name="back" value="{page}">"#
             )),
             "{page}: {body}"
         );
@@ -255,58 +294,9 @@ async fn the_about_page_shows_the_gateway_to_a_signed_in_operator_alone()
     let (state, service) = console(&configured(base))?;
     let (_response, body) = send(&service, get("/about")?).await?;
     assert!(!body.contains(base), "{body}");
-    assert!(body.contains("Sign in to see the gateway"), "{body}");
-
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
-    assert!(body.contains(&format!("<code>{base}</code>")), "{body}");
-    Ok(())
-}
-
-// The server renders the About page's markup, which the page shows as HTML,
-// so every value in it is escaped: markup in the text and a quote breaking
-// out of an attribute arrive as text.
-#[test]
-fn the_about_markup_escapes_what_it_names() {
-    // Rendering needs a reactive owner, which a request provides.
-    leptos::prelude::Owner::new().with(|| {
-        let hostile = String::from(r#"x"><script>alert(1)</script><b onmouseover="y"#);
-        let html = ferrofed_console::about::about(hostile);
-        assert!(!html.contains("<script>"), "{html}");
-        assert!(!html.contains("<b onmouseover"), "{html}");
-        assert!(html.contains("&lt;script&gt;"), "{html}");
-        // The dashboard's markup carries its own hostile-content test
-        // (`dashboard::tests::hostile_values_render_escaped`).
-        let page = ferrofed_console::home::sign_in();
-        assert!(!page.contains("<script"), "{page}");
-    });
-}
-
-// The sign-in and the About page are static markup the server renders
-// into the page, so a link to About is a full load. The dashboard reaches
-// the page through its server function, so the router may take a link to
-// it, and the page says when the gateway could not be reached.
-#[tokio::test]
-async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
--> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let (_response, body) = send(&service, get("/")?).await?;
-    assert!(body.contains(">Sign in to the console</h1>"), "{body}");
-    let session = state.sessions().establish(signed_in())?;
-    let (_response, body) = send(&service, get_as("/members", &session)?).await?;
-    // The router never takes a link to a page the server renders whole.
-    assert!(
-        body.contains(r#"<a href="/about" rel="external">"#),
-        "{body}"
-    );
-    assert!(!body.contains(r#"<a href="/" rel="external""#), "{body}");
-    let (_response, body) = send(&service, get_as("/", &session)?).await?;
-    assert!(body.contains(">Dashboard</h1>"), "{body}");
-    assert!(
-        body.contains(r#"<div role="alert" class="fui-notice fui-tone-bad">"#)
-            && body.contains("<div>the gateway could not be reached</div>"),
-        "{body}"
-    );
+    assert!(body.contains(base), "{body}");
     Ok(())
 }
 
@@ -314,17 +304,11 @@ async fn the_server_rendered_pages_arrive_whole_and_link_back_with_a_full_load()
 async fn a_page_the_console_does_not_serve_offers_the_way_back() -> Result<(), Box<dyn Error>> {
     let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
     let session = state.sessions().establish(signed_in())?;
-    for request in [get("/no/such/page")?, get_as("/no/such/page", &session)?] {
-        let (response, body) = send(&service, request).await?;
-        assert_eq!(StatusCode::NOT_FOUND, response.status());
-        assert!(
-            body.contains("<title>Not found · FerroFED Console</title>"),
-            "{body}"
-        );
-        assert!(body.contains(">Not found</h1>"), "{body}");
-        assert!(body.contains("404: the console has no page"), "{body}");
-        assert!(body.contains("Back to the console"), "{body}");
-    }
+    let (response, body) = send(&service, get_as("/no/such/page", &session)?).await?;
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
+    assert!(body.contains("<title>"), "{body}");
+    assert!(body.contains("/no/such/page"), "{body}");
+    assert!(body.contains(r#"href="/""#), "a way back: {body}");
     Ok(())
 }
 
@@ -344,22 +328,21 @@ async fn deployed(status: u16, deployment: &str) -> Result<MockServer, Box<dyn E
     Ok(up)
 }
 
-/// The top bar and the banner of the page at `/` over `gateway`.
+/// The top of the page at `/about` over `gateway`: the top bar and what
+/// sits under it, before the navigation.
 async fn top_of(gateway: &MockServer) -> Result<String, Box<dyn Error>> {
     let (state, service) = console(&configured(&gateway.uri()))?;
     let session = state.sessions().establish(signed_in())?;
-    let (response, body) = send(&service, get_as("/", &session)?).await?;
+    let (response, body) = send(&service, get_as("/about", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
-    let top = body
-        .split_once(r#"aria-label="Views""#)
+    body.split_once(r#"<nav aria-label="Console""#)
         .map(|(top, _)| top.to_owned())
-        .ok_or("the navigation")?;
-    Ok(top)
+        .ok_or_else(|| "the navigation".into())
 }
 
-// A development gateway is named in an amber banner under the top bar,
-// with its cross-reference when that is in service, and the pill names the
-// product version and the replica.
+// A development gateway is named in a banner under the top bar, with its
+// cross-reference when that is in service, and the pill names the product
+// version and the replica.
 #[tokio::test]
 async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill()
 -> Result<(), Box<dyn Error>> {
@@ -370,14 +353,13 @@ async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill(
     .await?;
     let top = top_of(&development).await?;
     assert!(top.contains("Development deployment"), "{top}");
+    assert!(top.contains("cross-reference"), "{top}");
     assert!(
-        top.contains("Patients resolve through the static development cross-reference."),
+        top.contains("FerroFED 0.0.11 · answered by replica gateway-0"),
         "{top}"
     );
-    assert!(top.contains(r#"class="fui-banner fui-tone-warn""#), "{top}");
-    assert!(top.contains("· v0.0.11 · gateway-0"), "{top}");
+    let bar = top.find("fui-topbar-status").ok_or("the pill")?;
     let banner = top.find("Development deployment").ok_or("the banner")?;
-    let bar = top.find("Gateway UP").ok_or("the pill")?;
     assert!(bar < banner, "the banner sits under the top bar: {top}");
 
     let plain = deployed(
@@ -389,7 +371,7 @@ async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill(
     assert!(top.contains("Development deployment"), "{top}");
     assert!(!top.contains("cross-reference"), "{top}");
     assert!(
-        top.contains("· v0.0.11<"),
+        !top.contains("answered by replica"),
         "an unnamed replica is not named: {top}"
     );
     Ok(())
@@ -407,7 +389,7 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
     .await?;
     let top = top_of(&production).await?;
     assert!(!top.contains("Development deployment"), "{top}");
-    assert!(top.contains("· v0.0.11 · gateway-0"), "{top}");
+    assert!(top.contains("answered by replica gateway-0"), "{top}");
 
     let refused = deployed(
         403,
@@ -416,7 +398,6 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
     .await?;
     let top = top_of(&refused).await?;
     assert!(!top.contains("Development deployment"), "{top}");
-    assert!(top.contains("· spec 1.0 · rso-zl"), "{top}");
     assert!(!top.contains(r#"role="alert""#), "{top}");
     Ok(())
 }

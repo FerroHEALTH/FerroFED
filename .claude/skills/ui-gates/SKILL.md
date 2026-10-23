@@ -32,9 +32,9 @@ and report on the first hard failure; run the cheap gates first.
 
 Stage 0 is a read of the diff, before any build: FerroUI leads the UI
 (`.claude/rules/leptos-ui.md`, its opening section). A new component that
-FerroUI has or should have, a stylesheet rule beyond the brand theme in
-`app/ferrofed-console/style/theme.css`, or any script is a FAIL whose fix is
-an issue filed in FerroHEALTH/FerroUI (label `component`).
+FerroUI has or should have, any stylesheet (the console serves FerroUI's
+stylesheet and theme as the crate ships them), or any script is a FAIL whose
+fix is an issue filed in FerroHEALTH/FerroUI (label `component`).
 
 ```bash
 # 0. FerroUI ownership: list what the change adds under style/ and any

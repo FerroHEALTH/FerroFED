@@ -6,23 +6,24 @@
 //! its refusal is shown, a confirmation step in a popover, a repeatable row
 //! and the button that adds one, and the table of what a revision changes.
 //!
-//! The page's script finds them by their marks alone: `data-add` on a
-//! button that adds a row from the `template` it names, `data-remove` on
-//! one that removes the row it names, `data-slot` on a form whose answer
-//! shows in that card, and `data-field-error` on a field's refusal line.
+//! An Add or a Remove button submits its form with `form[edit]` naming the
+//! row, and the page answers with the form drawn again from what was
+//! posted (`crate::configure::draft`), so the rows change with no
+//! WebAssembly. A refused field's line shows the refusal the page was
+//! drawn with.
 
 use ferrofed_registry::revision::{Difference, RevisionId};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
-use ferrohealth_ui::view::button::{Variant, label};
+use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, action_field, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
 use leptos::prelude::*;
-use leptos::server_fn::ServerFn as _;
 
-use crate::configure::act::Configure;
+use crate::configure::draft::{Draft, EDIT, Edit};
 use crate::configure::render::Loaded;
+use crate::configure::said::FieldNote;
 use crate::locale::{Msg, tr, tr_with};
 
 /// The book page that explains the configuration page.
@@ -65,10 +66,23 @@ pub(crate) fn hidden(name: &str, value: String) -> AnyView {
     view! { <input type="hidden" name=format!("form[{name}]") value=value /> }.into_any()
 }
 
-/// The line under the field `id` where its refusal shows, empty and hidden
-/// until the page marks it.
+/// The refusal of the field `id`, when the page answers one of it.
+fn refusal(id: &str) -> Option<String> {
+    use_context::<FieldNote>()
+        .filter(|note| note.id == id)
+        .map(|note| note.message)
+}
+
+/// The line under the field `id` where its refusal shows, hidden while the
+/// page answers none of it.
 pub(crate) fn error_line(id: &str) -> impl IntoView + use<> {
-    view! { <p id=error_id(id) class=ERROR data-field-error="" hidden></p> }
+    let said = refusal(id);
+    let hidden = said.is_none();
+    view! {
+        <p id=error_id(id) class=ERROR hidden=hidden>
+            {said}
+        </p>
+    }
 }
 
 /// What a text field shows and takes beside its value.
@@ -116,6 +130,7 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
             list=shown.list
             required=shown.required
             readonly=shown.readonly
+            aria-invalid=refusal(id).map(|_| "true")
             aria-describedby=described
         />
     };
@@ -145,12 +160,16 @@ pub(crate) fn trail((label, href): (String, &'static str), current: String) -> A
     .into_any()
 }
 
-/// The reason field every change ends with.
+/// The reason field every change ends with, holding the reason the
+/// operator posted when the page draws their form again.
 pub(crate) fn reason() -> AnyView {
+    let posted = use_context::<Draft>()
+        .map(|draft| draft.form.reason)
+        .unwrap_or_default();
     text(
         (crate::configure::plan::REASON, "form[reason]"),
         tr(Msg::Reason),
-        String::new(),
+        posted,
         Text {
             required: true,
             hint: Some(tr(Msg::HistoryRecordsRevision)),
@@ -160,65 +179,57 @@ pub(crate) fn reason() -> AnyView {
     .into_any()
 }
 
-/// A form posting to the configuration's server function, its answer shown
-/// in the card `slot` names (`pending` or `main`), holding `body`.
-pub(crate) fn form(slot: &'static str, class: &'static str, body: impl IntoView) -> impl IntoView {
+/// A form posting to the page it sits on, holding `body`, with `class`.
+///
+/// Its first submit button posts the form as it stands and is hidden from
+/// sight and from a reader, so Enter in a field saves rather than pressing
+/// the first Add or Remove (HTML, "implicit submission").
+pub(crate) fn form(class: &'static str, body: impl IntoView) -> impl IntoView {
     view! {
-        <form method="post" action=Configure::url() data-slot=slot class=class>
+        <form method="post" action=crate::pages::here() class=class>
+            <button type="submit" class="fui-sr-only" tabindex="-1" aria-hidden="true"></button>
             {body}
         </form>
     }
 }
 
-/// A confirmation step: the button `open` names opens the popover `id`,
-/// which asks `question`, holds `inside` (a reason, when the change takes
-/// one) and runs the change with its `submit` button or closes with Cancel;
-/// the browser moves the focus into it as it opens and back to the button
-/// as it closes (HTML, the `popover` attribute).
+/// A confirmation step (FerroUI R17 anchored): the button `label` opens the
+/// modal dialog `id`, which asks `question`, holds `inside` (a reason, when
+/// the change takes one) and runs the change with its `submit` button or
+/// closes with Cancel. The dialog sits inside the form it confirms, so its
+/// submit posts that form, with no WebAssembly.
 pub(crate) fn confirmed(
-    id: String,
-    (open, variant): (impl IntoView, Variant),
+    id: &'static str,
+    (glyph, words, variant): (Glyph, String, Variant),
     (question, submit): (String, String),
-    inside: impl IntoView,
-) -> impl IntoView {
-    let question_id = format!("{id}-question");
-    let labelled = question_id.clone();
-    let (opens, closes) = (id.clone(), id.clone());
+    inside: impl IntoView + 'static,
+) -> AnyView {
     let confirm = if variant == Variant::Danger {
         Variant::Destructive
     } else {
         Variant::Primary
     };
-    let class = if variant == Variant::Danger {
-        "fui-dialog fui-dialog-danger"
-    } else {
-        "fui-dialog"
-    };
-    view! {
-        <button type="button" class=variant.class() popovertarget=opens aria-haspopup="dialog">
-            {open}
-        </button>
-        <div id=id popover="auto" role="dialog" aria-labelledby=labelled class=class>
-            <h2 id=question_id class="fui-dialog-title">
-                {question}
-            </h2>
-            <div class="fui-form">{inside}</div>
-            <div class="fui-dialog-actions">
-                <button
-                    type="button"
-                    class=Variant::Secondary.class()
-                    popovertarget=closes
-                    popovertargetaction="hide"
-                >
-                    {label(Some(Glyph::X), tr(Msg::Cancel))}
-                </button>
-                <button type="submit" class=confirm.class() autofocus>
-                    {submit}
-                </button>
-            </div>
-            {hidden("confirm", String::from("yes"))}
+    let body = view! {
+        <div class="fui-form">{inside}</div>
+        <div class="fui-dialog-actions">
+            <button type="button" class=Variant::Secondary.class() command="close" commandfor=id>
+                {ferrohealth_ui::view::button::label(Some(Glyph::X), tr(Msg::Cancel))}
+            </button>
+            <button type="submit" class=confirm.class()>
+                {submit}
+            </button>
         </div>
+        {hidden("confirm", String::from("yes"))}
     }
+    .into_any();
+    ferrohealth_ui::view::popover::popover_form(ferrohealth_ui::view::popover::PopoverForm {
+        id,
+        variant,
+        glyph,
+        label: words.into(),
+        title: question.into(),
+        body,
+    })
 }
 
 /// The end of a form that saves a revision: its save button naming the
@@ -227,7 +238,7 @@ pub(crate) fn confirmed(
 pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
     let next = tr_with(Msg::SaveAs, &[("loaded", (loaded.next()).clone().into())]);
     view! {
-        <div class="fui-action-bar">
+        <div class="fui-actions">
             <button type="submit" class=Variant::Primary.class() aria-describedby="cfg-save-hint">
                 {icon(Glyph::SAVE, "16")}
                 {next}
@@ -243,22 +254,18 @@ pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> AnyView {
     .into_any()
 }
 
-/// The button that adds a row from the template `template` into the list
-/// `into`, labelled `label`, with the id `id`, and the line where a refusal
-/// of the list shows.
-pub(crate) fn add_button(
-    id: &str,
-    (template, into): (&str, &str),
-    (label, placeholder): (String, &'static str),
-) -> AnyView {
+// TODO(#1233): draw these rows as F7 rows once FerroUI's Repeat holds sub-cards.
+/// The button that adds a row by `edit`, labelled `label`, with the id
+/// `id`, and the line where a refusal of the list shows.
+pub(crate) fn add_button(id: &str, edit: &Edit, label: String) -> AnyView {
     let button = view! {
         <button
-            type="button"
+            type="submit"
             id=id.to_owned()
+            name=EDIT
+            value=edit.value()
+            formnovalidate=true
             class=Variant::Secondary.class()
-            data-add=template.to_owned()
-            data-into=into.to_owned()
-            data-placeholder=placeholder
             aria-describedby=error_id(id)
         >
             {icon(Glyph::PLUS, "16")}
@@ -268,13 +275,15 @@ pub(crate) fn add_button(
     action_field(button, error_line(id))
 }
 
-/// The button that removes the row `row`, named for what the row holds.
-pub(crate) fn remove_button(row: &str, named: String) -> AnyView {
+/// The button that removes a row by `edit`, named for what the row holds.
+pub(crate) fn remove_button(edit: &Edit, named: String) -> AnyView {
     view! {
         <button
-            type="button"
+            type="submit"
+            name=EDIT
+            value=edit.value()
+            formnovalidate=true
             class=Variant::Ghost.class()
-            data-remove=row.to_owned()
             aria-label=named
         >
             {icon(Glyph::TRASH, "16")}
@@ -282,12 +291,6 @@ pub(crate) fn remove_button(row: &str, named: String) -> AnyView {
         </button>
     }
     .into_any()
-}
-
-/// A template the page's script copies a row from, its key written
-/// `placeholder` until a copy replaces it.
-pub(crate) fn template(id: String, row: impl IntoView) -> impl IntoView {
-    view! { <template id=id>{row}</template> }
 }
 
 /// The value `value` of a setting in a diff, or "not set".
@@ -358,7 +361,7 @@ pub(crate) fn diff_table(
             }
         })
         .collect_view();
-    crate::views::table(
+    crate::pages::table(
         &tr_with(
             Msg::WhatRevisionChangesKey,
             &[("to", (to).to_string().into())],
