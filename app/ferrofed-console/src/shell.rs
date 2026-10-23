@@ -179,6 +179,7 @@ fn chrome(
         choices: Vec::new(),
         shortcuts: None,
         sign_out: Some(String::from(SIGN_OUT)),
+        links: Vec::new(),
     });
     let end = view! {
         {pill}
@@ -203,6 +204,7 @@ fn chrome(
             } else {
                 Msg::DevelopmentBody
             }),
+            None,
         )
     });
     let nav = sidebar(Sidebar {

@@ -22,8 +22,8 @@ use crate::configure::model::{ConfigForm, FhirEndpointInput, QueryEndpointInput}
 use crate::configure::plan::{removal_dialog, removal_reason};
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{
-    Text, confirmed, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,
-    trail,
+    Text, confirmed, error_line, form, head, hidden, reason, row_actions, row_add, row_remove,
+    save_bar, text, trail,
 };
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::Refusal;
@@ -116,17 +116,9 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
         );
     let actions = if editable {
         let removes = (member.member.is_some())
-            .then(|| removal(loaded, &node, (removal_dialog(&node), tr(Msg::Remove))));
-        view! {
-            <span class="fui-cluster">
-                <a href=href(&node) class=Variant::Ghost.class()>
-                    {tr(Msg::Edit)}
-                    <span class="fui-sr-only">{format!(" {node}")}</span>
-                </a>
-                {removes}
-            </span>
-        }
-        .into_any()
+            .then(|| removal(loaded, &node, (removal_dialog(&node), tr(Msg::Remove))))
+            .into_any();
+        row_actions(&removal_dialog(&node), &node, href(&node), removes)
     } else {
         view! {
             <a href=href(&node) class=Variant::Ghost.class()>
@@ -377,6 +369,10 @@ const CATEGORIES: [(&str, Msg); 6] = [
     ("Discharge-Reports", Msg::DischargeReports2),
 ];
 
+/// The key token of a profile's blank row, its own beside [`ROW`], since
+/// the profiles are a list nested in an endpoint's card (F7).
+const PROFILE: &str = "__profile__";
+
 /// The profile at `at` of the FHIR endpoint row `key`, holding `value`,
 /// a row of one field (F7).
 fn profile(key: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
@@ -404,9 +400,8 @@ fn profile(key: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
 }
 
 /// The profiles of the FHIR endpoint row `key`, a row of one field each,
-/// and the line where a refusal of the list shows. A row Add copies in
-/// place is offered only on a row the server drew, since a copied row's
-/// own list would keep the blank row's key.
+/// and the line where a refusal of the list shows. The list is nested in
+/// the endpoint's card, so its blank row is keyed by [`PROFILE`].
 fn profiles(key: &str, held: &[String]) -> AnyView {
     let rows = held
         .iter()
@@ -420,14 +415,12 @@ fn profiles(key: &str, held: &[String]) -> AnyView {
             )
         })
         .collect();
-    let blank = (key != ROW).then(|| {
-        profile(
-            key,
-            ROW,
-            String::new(),
-            &Edit::RemoveProfile(key.to_owned(), held.len()),
-        )
-    });
+    let blank = profile(
+        key,
+        PROFILE,
+        String::new(),
+        &Edit::RemoveProfile(key.to_owned(), held.len()),
+    );
     let list_id = format!("cfg-f-{key}-profiles");
     let refused = fhir_field(key, "add-profile");
     view! {
@@ -437,7 +430,8 @@ fn profiles(key: &str, held: &[String]) -> AnyView {
             fields: Fields::One,
             head: vec![tr(Msg::Profile)],
             rows,
-            blank,
+            token: PROFILE,
+            blank: Some(blank),
             add: Some(row_add(&Edit::AddProfile(key.to_owned()), tr(Msg::AddProfile))),
             empty: tr(Msg::NoProfileYet),
             form: None,
@@ -659,6 +653,7 @@ fn endpoint_groups(form: &ConfigForm) -> AnyView {
                 fields: Fields::Card,
                 head: Vec::new(),
                 rows: query_rows,
+                token: ROW,
                 blank: Some(query_blank),
                 add: Some(row_add(&Edit::AddQuery, tr(Msg::AddEndpoint))),
                 empty: tr(Msg::NoQueryEndpointYet),
@@ -675,6 +670,7 @@ fn endpoint_groups(form: &ConfigForm) -> AnyView {
                 fields: Fields::Card,
                 head: Vec::new(),
                 rows: fhir_rows,
+                token: ROW,
                 blank: Some(fhir_blank),
                 add: Some(row_add(&Edit::AddFhir, tr(Msg::AddFhirEndpoint))),
                 empty: tr(Msg::NoFhirEndpointYet),

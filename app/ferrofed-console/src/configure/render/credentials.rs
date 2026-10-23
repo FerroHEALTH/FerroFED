@@ -28,8 +28,8 @@ use crate::configure::plan::{removal_dialog, removal_reason};
 use crate::configure::render::Loaded;
 use crate::configure::render::members::{GROUP, owner, state};
 use crate::configure::render::parts::{
-    Text, confirmed, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,
-    trail,
+    Text, confirmed, error_line, form, head, hidden, reason, row_actions, row_add, row_remove,
+    save_bar, text, trail,
 };
 use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
@@ -155,16 +155,12 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             &section.resource,
             (removal_dialog(&choice(&section.resource)), tr(Msg::Remove)),
         );
-        view! {
-            <span class="fui-cluster">
-                <a href=href(&section.resource) class=Variant::Ghost.class()>
-                    {tr(Msg::Edit)}
-                    <span class="fui-sr-only">{format!(" {shown}")}</span>
-                </a>
-                {removes}
-            </span>
-        }
-        .into_any()
+        row_actions(
+            &removal_dialog(&choice(&section.resource)),
+            &shown,
+            href(&section.resource),
+            removes,
+        )
     });
     view! {
         <tr>
@@ -419,6 +415,7 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
             fields: Fields::One,
             head: vec![tr(Msg::Value)],
             rows,
+            token: ROW,
             blank: Some(blank),
             add: Some(row_add(&Edit::AddValue(row.to_owned()), tr(Msg::AddValue))),
             empty: tr(Msg::NoValueYet),

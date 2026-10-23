@@ -84,6 +84,7 @@ pub(crate) async fn listener() -> Server {
         ("GET", "/admin/config/revisions/1/diff/3", 200, DIFF_3),
         ("PUT", "/admin/config/members/node-c", 201, SAVED),
         ("PUT", "/admin/config/members/node-b", 201, SAVED),
+        ("POST", "/admin/config/members/node-b/remove", 201, SAVED),
         ("POST", "/admin/config/revisions/2/apply", 200, APPLIED),
     ] {
         Mock::given(method(verb))
@@ -370,9 +371,100 @@ async fn a_member_is_added_with_no_script() -> Result<(), Box<dyn Error>> {
     .await
 }
 
+/// Opens console member B's row menu from the keyboard: Edit takes the
+/// focus, Escape gives it back to the trigger, and Edit opens the form.
+async fn menu_opens_edit(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn Error>> {
+    let menu = r#"summary[aria-label="Actions for node-b"]"#;
+    let edit = "/configuration/members/node-b";
+    let trigger = browser.element(By::Css(menu)).await?;
+    browser
+        .driver()
+        .execute("arguments[0].focus();", vec![trigger.to_json()?])
+        .await?;
+    trigger.send_keys(Key::Enter).await?;
+    until("Edit takes the focus as the row menu opens", async || {
+        let active = browser.driver().active_element().await?;
+        Ok(active.attr("href").await?.as_deref() == Some(edit))
+    })
+    .await?;
+    browser
+        .driver()
+        .active_element()
+        .await?
+        .send_keys(Key::Escape)
+        .await?;
+    until(
+        "Escape gives the focus back to the menu's trigger",
+        async || {
+            let active = browser.driver().active_element().await?;
+            Ok(active.attr("aria-label").await?.as_deref() == Some("Actions for node-b"))
+        },
+    )
+    .await?;
+    browser
+        .driver()
+        .active_element()
+        .await?
+        .send_keys(Key::Enter)
+        .await?;
+    until("Edit takes the focus again", async || {
+        let active = browser.driver().active_element().await?;
+        Ok(active.attr("href").await?.as_deref() == Some(edit))
+    })
+    .await?;
+    browser
+        .driver()
+        .active_element()
+        .await?
+        .send_keys(Key::Enter)
+        .await?;
+    browser.element(By::Id("cfg-f-0-url")).await?;
+    browser.at(&stack.url(edit)).await?;
+    Ok(())
+}
+
+/// Removes console member B from its row, its removal confirmed in the
+/// dialog `dialog` with a reason, and checks the replica was asked once.
+async fn removed(
+    browser: &Browser,
+    stack: &Stack,
+    admin: &Server,
+    dialog: &str,
+) -> Result<(), Box<dyn Error>> {
+    hydrated(browser, stack, "/configuration/members").await?;
+    let opens = browser
+        .element(By::Css(format!(
+            r#"button[commandfor="{dialog}"][aria-haspopup="dialog"]"#
+        )))
+        .await?;
+    browser.press(&opens).await?;
+    browser
+        .element(By::Css(format!("dialog#{dialog}[open]")))
+        .await?;
+    fill(browser, "cfg-remove-node-b-reason", "node B leaves").await?;
+    browser
+        .element(By::Css(format!(
+            r#"dialog#{dialog}[open] button[type="submit"]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    browser
+        .text("strong", "Replica gateway-0 saved revision 3.")
+        .await?;
+    let removed = bodies(admin, "/admin/config/members/node-b/remove").await?;
+    let [removed] = removed.as_slice() else {
+        return Err(format!("one removal of member B, not {}", removed.len()).into());
+    };
+    assert!(removed.contains(r#""reason":"node B leaves""#), "{removed}");
+    Ok(())
+}
+
 // A console member's row offers its own confirmed removal, and the page
 // explains how the configuration works in a dialog of its own; both open
-// with the `show-modal` command and close with Escape or Cancel.
+// with the `show-modal` command and close with Escape or Cancel. The row's
+// menu opens from the keyboard and its Edit opens the member's form, and a
+// removal confirmed with its reason saves a revision without the member.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
 -> Result<(), Box<dyn Error>> {
@@ -442,8 +534,11 @@ async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
                 .is_empty(),
             "a cancelled removal asks no replica"
         );
+
+        menu_opens_edit(browser, &stack).await?;
+        removed(browser, &stack, &admin, dialog).await?;
         browser
-            .console_clean("a row's removal and the explanation")
+            .console_clean("a row's menu, its removal and the explanation")
             .await
     })
     .await

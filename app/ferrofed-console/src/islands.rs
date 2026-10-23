@@ -41,7 +41,7 @@ pub fn AqlEditor(
     let text = RwSignal::new(text);
     code_editor(
         Editor {
-            id: AQL,
+            id: AQL.into(),
             language: Language::Aql,
             text: text.into(),
             marks: Signal::stored(Vec::new()),

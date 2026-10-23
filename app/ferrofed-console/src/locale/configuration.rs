@@ -12,6 +12,8 @@ messages! {
     AbsolutePathGatewaySHost = "absolute-path-gateway-s-host",
     /// `Actions`
     Actions = "actions",
+    /// `Actions for { $named }`
+    ActionsFor = "actions-for",
     /// `Add a binding section`
     AddABindingSection = "add-a-binding-section",
     /// `Add a member`

@@ -22,6 +22,7 @@ use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
+use ferrohealth_ui::widget::action_menu::{Act, Action, Item, Menu, row_menu};
 use ferrohealth_ui::widget::repeat::{RepeatAdd, RowEnd};
 use leptos::prelude::*;
 
@@ -195,6 +196,28 @@ pub(crate) fn form(class: &'static str, body: impl IntoView) -> impl IntoView {
             {body}
         </form>
     }
+}
+
+/// The actions of a configuration table's row named `named`, whose
+/// removal confirms in the dialog `dialog`: its row menu (F13) with Edit
+/// to `edit`, and its confirmed Remove `removes`.
+pub(crate) fn row_actions(dialog: &str, named: &str, edit: String, removes: AnyView) -> AnyView {
+    let menu = row_menu(Menu::new(
+        format!("{}-menu", dialog.trim_end_matches("-dialog")),
+        tr_with(Msg::ActionsFor, &[("named", named.to_owned().into())]),
+        vec![Item::new(Action::new(
+            Some(Glyph::PENCIL),
+            tr(Msg::Edit),
+            Act::Link(edit),
+        ))],
+    ));
+    // TODO(#1245): Remove moves into the row menu once FerroUI's confirmation takes a Reason.
+    view! {
+        {removes}
+        " "
+        {menu}
+    }
+    .into_any()
 }
 
 /// A confirmation step (FerroUI R17 anchored): the button `label` opens the
