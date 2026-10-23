@@ -20,6 +20,7 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::dialog::{ConfirmForm, Confirmation, danger_form_dialog};
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
 use ferrohealth_ui::widget::action_menu::{Act, Action, Item, Menu, row_menu};
@@ -27,6 +28,7 @@ use ferrohealth_ui::widget::repeat::{RepeatAdd, RowEnd};
 use leptos::prelude::*;
 
 use crate::configure::draft::{Draft, EDIT, Edit};
+use crate::configure::plan::removal_reason;
 use crate::configure::render::Loaded;
 use crate::configure::said::FieldNote;
 use crate::locale::{Msg, tr, tr_with};
@@ -198,11 +200,37 @@ pub(crate) fn form(class: &'static str, body: impl IntoView) -> impl IntoView {
     }
 }
 
+/// What a configuration table row's Remove… asks and posts.
+pub(crate) struct Removal {
+    /// The question, such as "Remove member node-b?".
+    pub(crate) title: String,
+    /// The sentence that says what saving the removal does.
+    pub(crate) message: String,
+    /// The hidden fields naming what it removes, and its required Reason;
+    /// the dialog adds the field that says the step was confirmed.
+    pub(crate) fields: AnyView,
+}
+
+/// A configuration table row's actions: its row menu, for its actions
+/// cell, and its removal dialog, when it has one, for after the table.
+pub(crate) struct RowActions {
+    /// The row menu.
+    pub(crate) menu: AnyView,
+    /// The dialog its Remove… opens.
+    pub(crate) dialog: Option<AnyView>,
+}
+
 /// The actions of a configuration table's row named `named`, whose
-/// removal confirms in the dialog `dialog`: its row menu (F13) with Edit
-/// to `edit`, and its confirmed Remove `removes`.
-pub(crate) fn row_actions(dialog: &str, named: &str, edit: String, removes: AnyView) -> AnyView {
-    let menu = row_menu(Menu::new(
+/// removal confirms in the dialog `dialog`: its row menu (F13) with Edit to
+/// `edit` and, when the row can be removed, Remove… after a separator,
+/// opening that dialog (FerroUI `danger_form_dialog`) with its Reason.
+pub(crate) fn row_actions(
+    dialog: &str,
+    named: &str,
+    edit: String,
+    removal: Option<Removal>,
+) -> RowActions {
+    let menu = Menu::new(
         format!("{}-menu", dialog.trim_end_matches("-dialog")),
         tr_with(Msg::ActionsFor, &[("named", named.to_owned().into())]),
         vec![Item::new(Action::new(
@@ -210,14 +238,56 @@ pub(crate) fn row_actions(dialog: &str, named: &str, edit: String, removes: AnyV
             tr(Msg::Edit),
             Act::Link(edit),
         ))],
-    ));
-    // TODO(#1245): Remove moves into the row menu once FerroUI's confirmation takes a Reason.
-    view! {
-        {removes}
-        " "
-        {menu}
+    );
+    let Some(removal) = removal else {
+        return RowActions {
+            menu: row_menu(menu),
+            dialog: None,
+        };
+    };
+    let menu = menu.destructive(vec![Item::new(Action::new(
+        Some(Glyph::TRASH),
+        tr(Msg::Remove),
+        Act::Dialog(dialog.to_owned()),
+    ))]);
+    let confirm = view! {
+        <button type="submit" class=Variant::Destructive.class()>
+            {ferrohealth_ui::view::button::label(Some(Glyph::TRASH), tr(Msg::SaveTheRemoval))}
+        </button>
+    };
+    let asks = danger_form_dialog(
+        Confirmation {
+            id: dialog.to_owned().into(),
+            title: removal.title.into(),
+            message: removal.message.into(),
+        },
+        ConfirmForm {
+            action: crate::pages::here(),
+            fields: view! {
+                {removal.fields}
+                {hidden("confirm", String::from("yes"))}
+            }
+            .into_any(),
+        },
+        confirm,
+    );
+    RowActions {
+        menu: row_menu(menu),
+        dialog: Some(asks.into_any()),
     }
-    .into_any()
+}
+
+/// The required Reason of the removal of `named`, empty as it opens.
+pub(crate) fn removal_reason_field(named: &str) -> AnyView {
+    text(
+        (&removal_reason(named), "form[reason]"),
+        tr(Msg::Reason),
+        String::new(),
+        Text {
+            required: true,
+            ..Text::default()
+        },
+    )
 }
 
 /// A confirmation step (FerroUI R17 anchored): the button `label` opens the

@@ -19,11 +19,11 @@ use leptos::prelude::*;
 use crate::configure::draft::{self, Edit};
 use crate::configure::member::{ADD_FHIR, ADD_QUERY, fhir_field, field, query_field};
 use crate::configure::model::{ConfigForm, FhirEndpointInput, QueryEndpointInput};
-use crate::configure::plan::{removal_dialog, removal_reason};
+use crate::configure::plan::removal_dialog;
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{
-    Text, confirmed, error_line, form, head, hidden, reason, row_actions, row_add, row_remove,
-    save_bar, text, trail,
+    Removal, Text, confirmed, error_line, form, head, hidden, reason, removal_reason_field,
+    row_actions, row_add, row_remove, save_bar, text, trail,
 };
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::Refusal;
@@ -60,47 +60,58 @@ pub(super) fn state(state: Option<ConsoleState>) -> AnyView {
     pill(tone, &word).into_any()
 }
 
-/// The removal of the console member `node`, a confirmation step in the
-/// dialog `dialog` asking for the reason, opened by a button named
-/// `label`.
+/// The fields the removal of the console member `node` posts: what it
+/// removes and the reason it asks for.
+fn removal_fields(loaded: &Loaded<'_>, node: &str) -> AnyView {
+    view! {
+        {hidden("action", String::from("remove-member"))}
+        {hidden("base", loaded.base())}
+        {hidden("node", node.to_owned())}
+        {removal_reason_field(node)}
+    }
+    .into_any()
+}
+
+/// The removal of the console member `node` from its own page, a
+/// confirmation step in the dialog `dialog` asking for the reason, opened
+/// by a button named `label`.
 fn removal(loaded: &Loaded<'_>, node: &str, (dialog, label): (String, String)) -> AnyView {
-    let reason_id = removal_reason(node);
     form(
         "",
-        view! {
-            {hidden("action", String::from("remove-member"))}
-            {hidden("base", loaded.base())}
-            {hidden("node", node.to_owned())}
-            {confirmed(
-                dialog,
-                (Glyph::TRASH, label, Variant::Danger),
-                (
-                    tr_with(
-                        Msg::RemoveMemberSavedWithoutWhichYou,
-                        &[
-                            ("node", (node).to_string().into()),
-                            ("loaded", (loaded.next()).clone().into()),
-                        ],
-                    ),
-                    tr(Msg::SaveTheRemoval),
+        confirmed(
+            dialog,
+            (Glyph::TRASH, label, Variant::Danger),
+            (
+                tr_with(
+                    Msg::RemoveMemberSavedWithoutWhichYou,
+                    &[
+                        ("node", (node).to_string().into()),
+                        ("loaded", (loaded.next()).clone().into()),
+                    ],
                 ),
-                text(
-                    (&reason_id, "form[reason]"),
-                    tr(Msg::Reason),
-                    String::new(),
-                    Text {
-                        required: true,
-                        ..Text::default()
-                    },
-                ),
-            )}
-        },
+                tr(Msg::SaveTheRemoval),
+            ),
+            removal_fields(loaded, node),
+        ),
     )
     .into_any()
 }
 
-/// One member's row; a console member's ends in its confirmed Remove.
-fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
+/// What the row menu's Remove… of the console member `node` asks and posts.
+fn row_removal(loaded: &Loaded<'_>, node: &str) -> Removal {
+    Removal {
+        title: tr_with(Msg::RemoveMemberTitle, &[("node", node.to_owned().into())]),
+        message: tr_with(
+            Msg::RemovalSavedWithoutIt,
+            &[("loaded", loaded.next().clone().into())],
+        ),
+        fields: removal_fields(loaded, node),
+    }
+}
+
+/// One member's row and its removal dialog; a console member's row ends in
+/// its row menu, with Remove… when the console holds it.
+fn row(loaded: &Loaded<'_>, member: &MemberResource) -> (AnyView, Option<AnyView>) {
     let node = member.node.as_str().to_owned();
     let ids = member
         .endpoints
@@ -114,21 +125,20 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
             member.state,
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
-    let actions = if editable {
-        let removes = (member.member.is_some())
-            .then(|| removal(loaded, &node, (removal_dialog(&node), tr(Msg::Remove))))
-            .into_any();
-        row_actions(&removal_dialog(&node), &node, href(&node), removes)
+    let (actions, dialog) = if editable {
+        let removes = member.member.is_some().then(|| row_removal(loaded, &node));
+        let actions = row_actions(&removal_dialog(&node), &node, href(&node), removes);
+        (actions.menu, actions.dialog)
     } else {
-        view! {
+        let view = view! {
             <a href=href(&node) class=Variant::Ghost.class()>
                 {tr(Msg::View)}
                 <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
-        }
-        .into_any()
+        };
+        (view.into_any(), None)
     };
-    view! {
+    let row = view! {
         <tr>
             <th scope="row">
                 <code>{node.clone()}</code>
@@ -146,8 +156,8 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
                 {actions}
             </td>
         </tr>
-    }
-    .into_any()
+    };
+    (row.into_any(), dialog)
 }
 
 /// The columns of the Members tab.
@@ -166,6 +176,7 @@ fn member_columns() -> [Column; 7] {
 /// The Members tab: every member with its owner and state.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let members = &loaded.resources.members;
+    let mut dialogs = Vec::new();
     let rows = if members.is_empty() {
         view! {
             <tr>
@@ -178,10 +189,15 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     } else {
         members
             .iter()
-            .map(|member| row(loaded, member))
+            .map(|member| {
+                let (row, dialog) = row(loaded, member);
+                dialogs.extend(dialog);
+                row
+            })
             .collect_view()
             .into_any()
     };
+    // TODO(#1249): each dialog moves back beside its row menu once FerroUI resets its wrapping.
     view! {
         {head(
             ("members-title", tr(Msg::Members)),
@@ -194,6 +210,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             },
         )}
         {crate::pages::table(&tr(Msg::MembersAndTheirOwners), &member_columns(), rows)}
+        {dialogs}
     }
     .into_any()
 }

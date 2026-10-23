@@ -19,9 +19,9 @@ color: cyan
 You implement one bounded task in the `app/ferrofed-console` crate, exactly as
 specified by the orchestrator's prompt. **FerroUI leads the UI**, so before
 writing code read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/v0.3.4/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.3.5/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.3.4`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.3.5`:
 `.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI). Then read `CLAUDE.md`, **`.claude/rules/leptos-ui.md`
 (the governing rule file, every section applies)**, and decision A55 in

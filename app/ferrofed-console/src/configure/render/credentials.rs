@@ -24,12 +24,12 @@ use leptos::prelude::*;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::{ConfigForm, SettingInput};
-use crate::configure::plan::{removal_dialog, removal_reason};
+use crate::configure::plan::removal_dialog;
 use crate::configure::render::Loaded;
 use crate::configure::render::members::{GROUP, owner, state};
 use crate::configure::render::parts::{
-    Text, confirmed, error_line, form, head, hidden, reason, row_actions, row_add, row_remove,
-    save_bar, text, trail,
+    Removal, Text, confirmed, error_line, form, head, hidden, reason, removal_reason_field,
+    row_actions, row_add, row_remove, save_bar, text, trail,
 };
 use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
@@ -99,49 +99,47 @@ pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
     )
 }
 
+/// The fields the removal of `resource` posts: what it removes and the
+/// reason it asks for.
+fn removal_fields(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
+    let named = choice(resource);
+    view! {
+        {hidden("action", String::from("remove-section"))}
+        {hidden("base", loaded.base())}
+        {hidden("resource", named.clone())}
+        {removal_reason_field(&named)}
+    }
+    .into_any()
+}
+
 /// The removal of `resource`, a confirmation step in the dialog `dialog`
 /// asking for the reason, opened by a button named `label`.
 fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, String)) -> AnyView {
-    let named = choice(resource);
-    let reason_id = removal_reason(&named);
     let shown = resource.to_string();
     form(
         "",
-        view! {
-            {hidden("action", String::from("remove-section"))}
-            {hidden("base", loaded.base())}
-            {hidden("resource", named.clone())}
-            {confirmed(
-                dialog,
-                (Glyph::TRASH, label, Variant::Danger),
-                (
-                    tr_with(
-                        Msg::RemoveSavedWithoutWhichYouApply,
-                        &[
-                            ("shown", (shown).clone().into()),
-                            ("loaded", (loaded.next()).clone().into()),
-                        ],
-                    ),
-                    tr(Msg::SaveTheRemoval),
+        confirmed(
+            dialog,
+            (Glyph::TRASH, label, Variant::Danger),
+            (
+                tr_with(
+                    Msg::RemoveSavedWithoutWhichYouApply,
+                    &[
+                        ("shown", (shown).clone().into()),
+                        ("loaded", (loaded.next()).clone().into()),
+                    ],
                 ),
-                text(
-                    (&reason_id, "form[reason]"),
-                    tr(Msg::Reason),
-                    String::new(),
-                    Text {
-                        required: true,
-                        ..Text::default()
-                    },
-                ),
-            )}
-        },
+                tr(Msg::SaveTheRemoval),
+            ),
+            removal_fields(loaded, resource),
+        ),
     )
     .into_any()
 }
 
-/// One credential's or binding section's row; one the console holds ends
-/// in its confirmed Remove.
-fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
+/// One credential's or binding section's row and its removal dialog; one
+/// the console holds ends in its row menu, with Edit and Remove….
+fn row(loaded: &Loaded<'_>, section: &SectionResource) -> (AnyView, Option<AnyView>) {
     let shown = section.resource.to_string();
     let console = section.owner == Owner::Console;
     let editable = console
@@ -149,20 +147,26 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             section.state,
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
-    let actions = editable.then(|| {
-        let removes = removal(
-            loaded,
-            &section.resource,
-            (removal_dialog(&choice(&section.resource)), tr(Msg::Remove)),
-        );
-        row_actions(
-            &removal_dialog(&choice(&section.resource)),
-            &shown,
-            href(&section.resource),
-            removes,
-        )
-    });
-    view! {
+    let (actions, dialog) = editable
+        .then(|| {
+            let removes = Removal {
+                title: tr_with(Msg::RemoveSectionTitle, &[("shown", shown.clone().into())]),
+                message: tr_with(
+                    Msg::RemovalSavedWithoutIt,
+                    &[("loaded", loaded.next().clone().into())],
+                ),
+                fields: removal_fields(loaded, &section.resource),
+            };
+            let actions = row_actions(
+                &removal_dialog(&choice(&section.resource)),
+                &shown,
+                href(&section.resource),
+                Some(removes),
+            );
+            (actions.menu, actions.dialog)
+        })
+        .unzip();
+    let row = view! {
         <tr>
             <th scope="row">
                 <code>{shown.clone()}</code>
@@ -175,8 +179,8 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
                 {actions}
             </td>
         </tr>
-    }
-    .into_any()
+    };
+    (row.into_any(), dialog.flatten())
 }
 
 /// The binding sections none of the sections sets yet.
@@ -211,6 +215,7 @@ fn section_columns() -> [Column; 6] {
 /// The Credentials and bindings tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let sections = &loaded.resources.sections;
+    let mut dialogs = Vec::new();
     let rows = if sections.is_empty() {
         view! {
             <tr>
@@ -223,7 +228,11 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     } else {
         sections
             .iter()
-            .map(|section| row(loaded, section))
+            .map(|section| {
+                let (row, dialog) = row(loaded, section);
+                dialogs.extend(dialog);
+                row
+            })
             .collect_view()
             .into_any()
     };
@@ -234,6 +243,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             </a>
         }
     });
+    // TODO(#1249): each dialog moves back beside its row menu once FerroUI resets its wrapping.
     view! {
         {head(
             ("credentials-title", tr(Msg::CredentialsAndBindings)),
@@ -251,6 +261,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             &section_columns(),
             rows,
         )}
+        {dialogs}
     }
     .into_any()
 }

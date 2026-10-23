@@ -10,6 +10,52 @@ use std::error::Error;
 
 use crate::configure::{changes, listener, page, signed_in_console};
 
+/// Console member C's row offers Remove… as its row menu's last item, after
+/// a separator, opening a danger dialog whose form posts the removal of C
+/// with a required reason to the page at `path`, and no Remove button
+/// stands beside the menu.
+fn removal_is_in_the_row_menu(body: &str, path: &str) -> Result<(), Box<dyn Error>> {
+    assert!(
+        body.contains(
+            r#"<div role="separator" class="fui-menu-sep"></div><button type="button" role="menuitem" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
+        ),
+        "Remove… is the row menu's item after its separator, opening the row's dialog: {body}"
+    );
+    assert_eq!(
+        body.matches(r#"commandfor="cfg-remove-node-c-dialog""#)
+            .count(),
+        2,
+        "the menu's Remove… and the dialog's Cancel name the dialog, no button beside the menu: {body}"
+    );
+    let dialog = body
+        .split_once(r#"<dialog id="cfg-remove-node-c-dialog" closedby="any""#)
+        .and_then(|(_, after)| after.split_once("</dialog>"))
+        .map(|(inside, _)| inside)
+        .ok_or("the row's removal dialog")?;
+    assert!(
+        dialog.contains(&format!(
+            r#"class="fui-dialog fui-dialog-danger"><form method="post" action="{path}""#
+        )),
+        "the danger dialog holds the form it posts: {dialog}"
+    );
+    for field in [
+        r#"name="form[action]" value="remove-member""#,
+        r#"name="form[node]" value="node-c""#,
+        r#"id="cfg-remove-node-c-reason" name="form[reason]""#,
+        r#"name="form[confirm]" value="yes""#,
+    ] {
+        assert!(
+            dialog.contains(field),
+            "the dialog's form names the member, asks for the reason and says it was confirmed: {field} in {dialog}"
+        );
+    }
+    assert!(
+        dialog.contains(" required"),
+        "the reason is required: {dialog}"
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member()
 -> Result<(), Box<dyn Error>> {
@@ -36,6 +82,7 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
             body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
             "a console member's row offers its own confirmed removal: {body}"
         );
+        removal_is_in_the_row_menu(&body, path)?;
         assert!(
             !body.contains("cfg-remove-node-a-dialog"),
             "a member the file provides offers none: {body}"

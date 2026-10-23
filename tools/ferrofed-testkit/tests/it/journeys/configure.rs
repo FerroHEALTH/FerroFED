@@ -7,7 +7,8 @@
 //! the operator typed kept, the save answered with the preview of what the
 //! saved revision changes, the edit of a console member's FHIR endpoint,
 //! and the apply of the newest revision through its confirmation dialog,
-//! each without a console error, and a member added with no script.
+//! each without a console error, and a member added and removed with no
+//! script.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -346,8 +347,58 @@ async fn a_console_member_is_added_edited_and_applied() -> Result<(), Box<dyn Er
     .await
 }
 
+/// Removes console member B with no WebAssembly: its row menu opens as a
+/// disclosure, Remove… opens the dialog by its `show-modal` command, and
+/// the dialog's form posts the reason.
+async fn removed_with_no_script(
+    browser: &Browser,
+    stack: &Stack,
+    admin: &Server,
+) -> Result<(), Box<dyn Error>> {
+    let dialog = "cfg-remove-node-b-dialog";
+    browser.goto(&stack.url("/configuration/members")).await?;
+    browser
+        .element(By::Css(r#"summary[aria-label="Actions for node-b"]"#))
+        .await?
+        .click()
+        .await?;
+    browser
+        .element(By::Css(
+            r#"a[role="menuitem"][href="/configuration/members/node-b"]"#,
+        ))
+        .await?;
+    browser
+        .element(By::Css(format!(
+            r#"button[role="menuitem"][commandfor="{dialog}"]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    browser
+        .element(By::Css(format!("dialog#{dialog}[open]")))
+        .await?;
+    fill(browser, "cfg-remove-node-b-reason", "node B leaves").await?;
+    browser
+        .element(By::Css(format!(
+            r#"dialog#{dialog}[open] button[type="submit"]"#
+        )))
+        .await?
+        .click()
+        .await?;
+    browser
+        .text("strong", "Replica gateway-0 saved revision 3.")
+        .await?;
+    let removed = bodies(admin, "/admin/config/members/node-b/remove").await?;
+    let [removed] = removed.as_slice() else {
+        return Err(format!("one removal of member B, not {}", removed.len()).into());
+    };
+    assert!(removed.contains(r#""reason":"node B leaves""#), "{removed}");
+    Ok(())
+}
+
 // The configuration works with no WebAssembly: a row is added and a member
-// saved by plain posts of the form.
+// saved by plain posts of the form, and a member removed through its row
+// menu with its reason.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_member_is_added_with_no_script() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
@@ -365,6 +416,7 @@ async fn a_member_is_added_with_no_script() -> Result<(), Box<dyn Error>> {
             .titled(&format!("Configuration · {PRODUCT}"))
             .await?;
         add_member(browser, &admin, false).await?;
+        removed_with_no_script(browser, &stack, &admin).await?;
         browser.scripts(true).await?;
         Ok(())
     })
@@ -423,8 +475,59 @@ async fn menu_opens_edit(browser: &Browser, stack: &Stack) -> Result<(), Box<dyn
     Ok(())
 }
 
-/// Removes console member B from its row, its removal confirmed in the
-/// dialog `dialog` with a reason, and checks the replica was asked once.
+/// Opens console member B's removal from its row menu by keyboard: Edit
+/// takes the focus as the menu opens, the Down arrow moves it to Remove…,
+/// and Enter opens the dialog `dialog` with the focus in its Reason.
+async fn menu_opens_removal(browser: &Browser, dialog: &str) -> Result<(), Box<dyn Error>> {
+    let trigger = browser
+        .element(By::Css(r#"summary[aria-label="Actions for node-b"]"#))
+        .await?;
+    browser
+        .driver()
+        .execute("arguments[0].focus();", vec![trigger.to_json()?])
+        .await?;
+    trigger.send_keys(Key::Enter).await?;
+    until("Edit takes the focus as the row menu opens", async || {
+        let active = browser.driver().active_element().await?;
+        Ok(active.attr("href").await?.as_deref() == Some("/configuration/members/node-b"))
+    })
+    .await?;
+    browser
+        .driver()
+        .active_element()
+        .await?
+        .send_keys(Key::Down)
+        .await?;
+    until("the Down arrow moves the focus to Remove…", async || {
+        let active = browser.driver().active_element().await?;
+        Ok(active.attr("commandfor").await?.as_deref() == Some(dialog)
+            && active.attr("role").await?.as_deref() == Some("menuitem"))
+    })
+    .await?;
+    let item = browser.driver().active_element().await?;
+    assert_eq!(
+        item.text().await?.trim(),
+        "Remove\u{2026}",
+        "the menu's destructive item says a confirmation follows"
+    );
+    item.send_keys(Key::Enter).await?;
+    browser
+        .element(By::Css(format!("dialog#{dialog}[open]")))
+        .await?;
+    until(
+        "the Reason takes the focus as the dialog opens",
+        async || {
+            let active = browser.driver().active_element().await?;
+            Ok(active.attr("id").await?.as_deref() == Some("cfg-remove-node-b-reason"))
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+/// Removes console member B through its row menu by keyboard, its removal
+/// confirmed in the dialog `dialog` with a reason, and checks the replica
+/// was asked once, with that reason.
 async fn removed(
     browser: &Browser,
     stack: &Stack,
@@ -432,16 +535,27 @@ async fn removed(
     dialog: &str,
 ) -> Result<(), Box<dyn Error>> {
     hydrated(browser, stack, "/configuration/members").await?;
-    let opens = browser
-        .element(By::Css(format!(
-            r#"button[commandfor="{dialog}"][aria-haspopup="dialog"]"#
+    menu_opens_removal(browser, dialog).await?;
+    let openers = browser
+        .driver()
+        .find_all(By::Css(format!(
+            r#"[commandfor="{dialog}"]:not(dialog [commandfor])"#
         )))
         .await?;
-    browser.press(&opens).await?;
+    let [opener] = openers.as_slice() else {
+        return Err(format!("one opener of the removal, not {}", openers.len()).into());
+    };
+    assert_eq!(
+        opener.attr("role").await?.as_deref(),
+        Some("menuitem"),
+        "the menu's Remove… opens the removal and no Remove button stands beside the menu"
+    );
     browser
-        .element(By::Css(format!("dialog#{dialog}[open]")))
+        .driver()
+        .active_element()
+        .await?
+        .send_keys("node B leaves")
         .await?;
-    fill(browser, "cfg-remove-node-b-reason", "node B leaves").await?;
     browser
         .element(By::Css(format!(
             r#"dialog#{dialog}[open] button[type="submit"]"#
@@ -460,11 +574,12 @@ async fn removed(
     Ok(())
 }
 
-// A console member's row offers its own confirmed removal, and the page
+// A console member's row menu offers Remove… after Edit, and the page
 // explains how the configuration works in a dialog of its own; both open
 // with the `show-modal` command and close with Escape or Cancel. The row's
 // menu opens from the keyboard and its Edit opens the member's form, and a
-// removal confirmed with its reason saves a revision without the member.
+// removal chosen from the menu by keyboard and confirmed with its reason
+// saves a revision without the member.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
 -> Result<(), Box<dyn Error>> {
@@ -503,16 +618,7 @@ async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
         .await?;
 
         let dialog = "cfg-remove-node-b-dialog";
-        browser
-            .element(By::Css(format!(
-                r#"button[commandfor="{dialog}"][aria-haspopup="dialog"]"#
-            )))
-            .await?
-            .click()
-            .await?;
-        browser
-            .element(By::Css(format!("dialog#{dialog}[open]")))
-            .await?;
+        menu_opens_removal(browser, dialog).await?;
         browser
             .element(By::Css(format!(
                 r#"dialog#{dialog}[open] button[command="close"]"#

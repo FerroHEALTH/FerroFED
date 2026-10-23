@@ -504,6 +504,8 @@ messages! {
     ReasonLongerThan1000Characters = "reason-longer-than-1000-characters",
     /// `The registry document provides a member with the same identity, …`
     RegistryDocumentProvidesMemberSameIdentity = "registry-document-provides-member-same-identity",
+    /// `It is saved as … without it, which you apply separately.`
+    RemovalSavedWithoutIt = "removal-saved-without-it",
     /// `Remove`
     Remove = "remove",
     /// `Remove …`
@@ -514,8 +516,12 @@ messages! {
     Remove4 = "remove-4",
     /// `Remove member …? It is saved as … without it, which you apply …`
     RemoveMemberSavedWithoutWhichYou = "remove-member-saved-without-which-you",
+    /// `Remove member …?`
+    RemoveMemberTitle = "remove-member-title",
     /// `Remove …? It is saved as … without it, which you apply separately.`
     RemoveSavedWithoutWhichYouApply = "remove-saved-without-which-you-apply",
+    /// `Remove …?`
+    RemoveSectionTitle = "remove-section-title",
     /// `Remove this new secret`
     RemoveThisNewSecret = "remove-this-new-secret",
     /// `Remove this profile`
