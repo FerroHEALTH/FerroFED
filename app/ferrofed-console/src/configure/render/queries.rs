@@ -109,7 +109,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     view! {
         {header}
         {read_only}
-        {crate::views::table(&tr(Msg::StoredQueryVersionsName), &query_columns(), rows)}
+        {crate::pages::table(&tr(Msg::StoredQueryVersionsName), &query_columns(), rows)}
     }
     .into_any()
 }
@@ -117,6 +117,10 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
 /// The form that stores a new version, its confirmation saying that the
 /// version cannot be changed afterwards.
 pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
+    let posted = loaded
+        .drafted(&["store-query"])
+        .cloned()
+        .unwrap_or_default();
     let names = grouped(&loaded.resources.stored_queries)
         .into_iter()
         .map(|(name, _)| view! { <option value=name.to_owned()></option> })
@@ -129,7 +133,7 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
                 {text(
                     ("cfg-name", "form[name]"),
                     tr(Msg::QualifiedName),
-                    String::new(),
+                    posted.name.clone(),
                     Text {
                         required: true,
                         mono: true,
@@ -141,7 +145,7 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
                 {text(
                     ("cfg-version", "form[version]"),
                     tr(Msg::Version),
-                    String::new(),
+                    posted.version.clone(),
                     Text {
                         required: true,
                         mono: true,
@@ -165,13 +169,15 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
                 required
                 class=format!("{TEXTAREA} fui-mono")
                 aria-describedby="cfg-aql-error"
-            ></textarea>
+            >
+                {posted.aql.clone()}
+            </textarea>
             {error_line("cfg-aql")}
         </fieldset>
-        <div class="fui-action-bar">
+        <div class="fui-actions">
             {confirmed(
-                String::from("store-confirm"),
-                (tr(Msg::StoreTheVersion), Variant::Primary),
+                "store-confirm",
+                (Glyph::SAVE, tr(Msg::StoreTheVersion), Variant::Primary),
                 (tr(Msg::StoreVersionStoredVersionCannotChanged), tr(Msg::Store)),
                 (),
             )} <a href="/configuration/stored-queries" class=Variant::Secondary.class()>
@@ -189,7 +195,7 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> AnyView {
             (tr(Msg::GatewayStoresOnceEveryReplicaServes), "console-managed-resources"),
             (),
         )}
-        {form("main", "fui-stack", body)}
+        {form("fui-stack", body)}
     }
     .into_any()
 }

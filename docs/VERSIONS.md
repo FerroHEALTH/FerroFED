@@ -454,10 +454,10 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `leptos` | 0.8.21 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `leptos` | 0.8.22 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `leptos_router` | 0.8.17 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-console.yml` |
 | `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-console.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |

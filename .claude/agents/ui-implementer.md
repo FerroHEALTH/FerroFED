@@ -19,19 +19,21 @@ color: cyan
 You implement one bounded task in the `app/ferrofed-console` crate, exactly as
 specified by the orchestrator's prompt. **FerroUI leads the UI**, so before
 writing code read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/main/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.3.2/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.2.0`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.3.2`:
 `.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI). Then read `CLAUDE.md`, **`.claude/rules/leptos-ui.md`
 (the governing rule file, every section applies)**, and decision A55 in
 `docs/architecture.md` for the console's shape. Answer Leptos questions from
 the official book through `/leptos-lookup`, never from memory.
 
-**The console is rendered on the server and hydrated in the browser**, built
-by cargo-leptos, with its two halves chosen by compilation target: host
-dependencies under the `cfg(not(target_arch = "wasm32"))` table, browser ones
-under `cfg(target_arch = "wasm32")`, and no `ssr` or `hydrate` feature. If a
+**The console runs in islands mode**, built by cargo-leptos: the server
+renders every page whole and the browser hydrates only the islands, every
+page reads and every action posts with no WebAssembly, and the two halves are
+chosen by compilation target: host dependencies under the
+`cfg(not(target_arch = "wasm32"))` table, browser ones under
+`cfg(target_arch = "wasm32")`, and no `ssr` or `hydrate` feature. If a
 task seems to need that feature pair, stop and say so.
 
 Non-negotiables (violations are rejected at review):
@@ -57,19 +59,16 @@ Non-negotiables (violations are rejected at review):
   secret or PKCE verifier in a signal, prop, serialized resource, page or
   log. No patient identifier in a URL, the browser history or a log, proved by
   a test for every screen that takes one.
-- **Every `#[server]` function checks the session itself.** It is a public
-  HTTP endpoint.
+- **Every form posts to its own page, and its handler checks the session
+  itself.** A route's `POST` is a public endpoint; it acts only on a
+  same-origin request, and the page answers it drawn again with the outcome.
 - **Wire honesty.** Render a gateway refusal's status and stable error `code`,
   never an empty view; show an incomplete federated answer as incomplete
   (§11.4); carry errors as typed variants with the `StatusCode`.
-- **SSR and hydration correctness.** Identical view structure on both halves,
-  browser-only calls inside an `Effect`, valid HTML with an explicit
-  `<tbody>`, no resource created inside a `Suspend`, `rel="external"` on an
-  anchor to a BFF route, `<Title>` on every routed page.
-- **Reactivity discipline.** `Resource` with a server function for every
-  fetch, `<Transition>` for anything that refetches, `<For>` with stable
-  data-derived keys, no signal-writes-signal `Effect`s, `.read()`/`.with()`
-  for collections, fixed-size integers in anything serialized.
+- **Islands and rendering.** Every page renders `SsrMode::Async` and arrives
+  whole; every page reads and every action posts with no WebAssembly; an
+  island takes only the words and values it draws as props; valid HTML with
+  an explicit `<tbody>`; `<Title>` on every routed page.
 - **Accessibility is per slice.** WCAG 2.2 Level AA: keyboard operability, a
   visible focus state, real table headers, no colour-only meaning.
 - **Views are `.into_any()`-erased sections**, never one monolithic `view!`

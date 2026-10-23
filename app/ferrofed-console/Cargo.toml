@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-console"
-description = "The FerroFED Console, the operator console: a Leptos server-rendered web app and backend-for-frontend over the gateway's public surface"
+description = "The FerroFED Console, the operator console: a Leptos app rendered on the server in islands mode, and a backend-for-frontend over the gateway's public surface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,9 +13,9 @@ authors.workspace = true
 # The application is never published, whatever the workspace switch says.
 publish = false
 
-# One crate, two halves (the Leptos book, server-side rendering): the rlib
-# feeds the server binary and the cdylib is the WebAssembly bundle the
-# browser hydrates with. cargo-leptos builds the cdylib for wasm32 and the
+# One crate, two halves (the Leptos book, "Guide: Islands"): the rlib feeds
+# the server binary and the cdylib is the WebAssembly bundle whose islands
+# the browser hydrates. cargo-leptos builds the cdylib for wasm32 and the
 # binary for the host.
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -31,21 +31,17 @@ path = "src/main.rs"
 # apply only to a build for that target (the Cargo reference, resolver
 # version 2 and later). No specification governs this: our own design.
 [dependencies]
-leptos.workspace = true
+# Islands mode, the one rendering mode FerroUI 0.3 supports: the server
+# draws every page and the browser hydrates the islands alone (the Leptos
+# book, "Guide: Islands"). No specification governs this: our own design.
+leptos = { workspace = true, features = ["islands"] }
 leptos_meta.workspace = true
 leptos_router.workspace = true
-# The view models the server renders and the browser hydrates from, and
-# their error.
+# An island's props cross to the browser as JSON.
 serde.workspace = true
-thiserror.workspace = true
-# A secret the operator types into a form, zeroed when dropped on either
-# half.
-secrecy.workspace = true
-# The FerroHEALTH components every view is drawn with, their icons and their
-# stylesheet: the server renders them and the browser hydrates them.
+# The FerroHEALTH components every page is drawn with, their islands, their
+# icons and their stylesheet.
 ferrohealth-ui.workspace = true
-# The console's own string catalogs under locales/, in both halves.
-fluent-templates.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }
@@ -53,6 +49,12 @@ wasm-bindgen.workspace = true
 console_error_panic_hook.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+thiserror.workspace = true
+# A secret the operator types into a form, zeroed when dropped.
+secrecy.workspace = true
+# The console's own string catalogs under locales/, on the server alone:
+# every island takes its words as props.
+fluent-templates.workspace = true
 # The per-request script nonce of the Content-Security-Policy rides `nonce`.
 leptos = { workspace = true, features = ["ssr", "nonce"] }
 leptos_axum.workspace = true

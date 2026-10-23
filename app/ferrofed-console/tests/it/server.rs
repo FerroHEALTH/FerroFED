@@ -9,7 +9,7 @@ use std::error::Error;
 
 use http::StatusCode;
 
-use crate::support::{console, get, get_as, header, send, signed_in};
+use crate::support::{WITH_OIDC, console, get, get_as, header, send, signed_in};
 
 #[tokio::test]
 async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
@@ -22,7 +22,7 @@ async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console(WITH_OIDC)?;
     let (response, body) = send(&service, get("/")?).await?;
     assert_eq!(StatusCode::OK, response.status());
     assert!(
@@ -33,39 +33,46 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
         body.contains("<title>Sign in · FerroFED Console</title>"),
         "{body}"
     );
-    assert!(body.contains(">Sign in to the console</h1>"), "{body}");
+    assert!(body.contains(r#"href="/login""#), "{body}");
+    assert!(!body.contains("Sign-in is not set up"), "{body}");
+    Ok(())
+}
+
+// A console with no OpenID Provider says so on its sign-in and answers 503,
+// since no operator can sign in to it.
+#[tokio::test]
+async fn a_console_with_no_provider_says_sign_in_is_not_set_up() -> Result<(), Box<dyn Error>> {
+    let (_state, service) = console("")?;
+    let (response, body) = send(&service, get("/")?).await?;
+    assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
     assert!(
-        body.contains(r#"<a href="/login" rel="external""#),
+        body.contains("Sign-in is not set up on this console."),
         "{body}"
     );
+    assert!(body.contains("[oidc]"), "{body}");
     Ok(())
 }
 
 #[tokio::test]
 async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
-    for path in ["/", "/no/such/page", "/about"] {
+    let (state, service) = console(WITH_OIDC)?;
+    for path in ["/", "/about"] {
         let (_response, body) = send(&service, get(path)?).await?;
         assert!(!body.contains("<nav"), "{path}: {body}");
         assert!(!body.contains("Sign out"), "{path}: {body}");
-        assert!(!body.contains(r#"href="/members""#), "{path}: {body}");
+        assert!(!body.contains(r#"href="/organisations""#), "{path}: {body}");
     }
-    let (_response, body) = send(&service, get("/")?).await?;
-    assert!(
-        body.contains(r#"<a href="/login" rel="external""#),
-        "{body}"
-    );
 
     let session = state.sessions().establish(signed_in())?;
     for path in ["/", "/no/such/page", "/about"] {
         let (_response, body) = send(&service, get_as(path, &session)?).await?;
         assert!(
-            body.contains(r#"<nav id="sidebar" popover="auto" aria-label="Views""#),
+            body.contains(r#"<nav aria-label="Console" class="fui-sidebar-nav">"#),
             "{path}: {body}"
         );
         assert!(body.contains("Sign out"), "{path}: {body}");
-        assert!(body.contains(r#"href="/members""#), "{path}: {body}");
+        assert!(body.contains(r#"href="/organisations""#), "{path}: {body}");
     }
     let (response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(!body.contains(r#"href="/login""#), "{body}");
@@ -91,16 +98,15 @@ fn footer<'a>(path: &str, body: &'a str) -> Result<&'a str, String> {
 #[tokio::test]
 async fn every_page_links_the_about_page_which_names_the_manufacturer_in_full()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
+    let (state, service) = console(WITH_OIDC)?;
     let session = state.sessions().establish(signed_in())?;
     for (path, signed) in [
         ("/", false),
-        ("/no/such/page", false),
         ("/about", false),
         ("/", true),
         ("/no/such/page", true),
         ("/about", true),
-        ("/members", true),
+        ("/organisations", true),
     ] {
         let request = if signed {
             get_as(path, &session)?
@@ -113,7 +119,7 @@ async fn every_page_links_the_about_page_which_names_the_manufacturer_in_full()
             "FerroFED Console",
             env!("CARGO_PKG_VERSION"),
             "Cadasto B.V.",
-            r#"<a href="/about" rel="external">About</a>"#,
+            r#"<a href="/about">About</a>"#,
         ] {
             assert!(footer.contains(text), "{path} {signed}: {text}: {footer}");
         }
@@ -154,10 +160,17 @@ fn the_long_version_names_the_manufacturer() {
 
 #[tokio::test]
 async fn a_path_the_console_does_not_serve_answers_not_found() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
-    let (response, body) = send(&service, get("/no/such/page")?).await?;
+    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
+    let session = state.sessions().establish(signed_in())?;
+    let (response, body) = send(&service, get_as("/no/such/page", &session)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, response.status());
-    assert!(body.contains("Not found"), "{body}");
+    assert!(body.contains("/no/such/page"), "{body}");
+    let (response, _body) = send(&service, get("/no/such/page")?).await?;
+    assert_eq!(
+        StatusCode::SEE_OTHER,
+        response.status(),
+        "a visitor signs in first"
+    );
     Ok(())
 }
 
@@ -304,12 +317,72 @@ async fn the_page_loads_the_bundle_cargo_leptos_writes() -> Result<(), Box<dyn E
     for asset in [
         "/pkg/ferrofed-console.wasm",
         "/pkg/ferrofed-console.js",
-        "/pkg/ferrohealth-ui.css",
-        "/pkg/ferrofed-theme.css",
+        "/ferrohealth-ui.css",
+        "/ferrofed.css",
     ] {
         assert!(
             body.contains(&format!(r#"href="{asset}""#)),
             "{asset}: {body}"
+        );
+    }
+    Ok(())
+}
+
+// The console draws with FerroUI's stylesheet and its FerroFED theme exactly
+// as the crate ships them, so FerroUI's own contrast and theme checks hold
+// for every page the console serves; the console keeps no stylesheet of its
+// own.
+#[tokio::test]
+async fn the_stylesheets_are_ferroui_s_own() -> Result<(), Box<dyn Error>> {
+    let (_state, service) = console("")?;
+    for (path, shipped) in [
+        ("/ferrohealth-ui.css", ferrohealth_ui::style::STYLESHEET),
+        ("/ferrofed.css", ferrohealth_ui::style::Brand::Fed.theme()),
+    ] {
+        let (response, body) = send(&service, get(path)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{path}");
+        assert!(
+            header(&response, "content-type").starts_with("text/css"),
+            "{path}"
+        );
+        assert_eq!(shipped, body, "{path}");
+    }
+    assert!(
+        !std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/style")).exists(),
+        "the console keeps no stylesheet of its own"
+    );
+    Ok(())
+}
+
+// Every action is a plain form post to the page it sits on, so no server
+// function route answers, with a session or without.
+#[tokio::test]
+async fn no_server_function_route_answers() -> Result<(), Box<dyn Error>> {
+    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
+    let session = state.sessions().establish(signed_in())?;
+    for route in [
+        "/api/query",
+        "/api/configure",
+        "/api/clear-ehr-id",
+        "/api/theme",
+    ] {
+        let (response, _body) = send(&service, get(route)?).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{route}");
+        let (response, _body) = send(&service, get_as(route, &session)?).await?;
+        assert_eq!(StatusCode::NOT_FOUND, response.status(), "{route}");
+        let request = http::Request::post(route)
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("sec-fetch-site", "same-origin")
+            .header(
+                "cookie",
+                format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
+            )
+            .body(axum::body::Body::from("form%5Baction%5D=apply"))?;
+        let (response, _body) = send(&service, request).await?;
+        assert!(
+            response.status().is_client_error(),
+            "{route}: {}",
+            response.status()
         );
     }
     Ok(())

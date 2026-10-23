@@ -7,11 +7,11 @@
 //! confirm and its roll back (§13.1 onward credentials, commit-confirm).
 
 use ferrofed_registry::revision::{Current, Review, RevisionId, Signed};
+use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
-use ferrohealth_ui::view::surface::page_header;
 use ferrohealth_ui::view::time::{reading, timestamp};
 use leptos::prelude::*;
 
@@ -19,13 +19,24 @@ use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden,
 use crate::configure::render::{Loaded, ROLLBACK_REASON, author};
 use crate::locale::{Msg, tr, tr_with};
 
-/// The page's title and its one line, with `pills` at its end.
-pub(super) fn title(pills: impl IntoView) -> impl IntoView {
-    page_header(
-        tr(Msg::Configuration),
-        Some(tr(Msg::GatewaySSettingsRevisionsEachChange)),
-        pills,
-    )
+/// The page's title and its one line with the mode badge, and `pills` in
+/// the revision line under it (T3).
+pub(super) fn title(pills: impl IntoView + 'static) -> impl IntoView {
+    let badge = ferrohealth_ui::view::tag::Tag::new(tr(Msg::ModeManaged))
+        .glyph(Glyph::MONITOR)
+        .view();
+    view! {
+        {ferrohealth_ui::view::surface::page_heading(
+            ferrohealth_ui::view::surface::Header {
+                title: tr(Msg::Configuration).into(),
+                subtitle: Some(tr(Msg::GatewaySSettingsRevisionsEachChange).into()),
+                badge: Some(badge),
+                ..ferrohealth_ui::view::surface::Header::default()
+            },
+            ferrohealth_ui::view::action::ActionGroup::none(),
+        )}
+        {ferrohealth_ui::view::template::settings::revision_line(pills.into_any())}
+    }
 }
 
 /// The page header: the revision that runs and, when one is saved and not
@@ -69,15 +80,21 @@ pub(super) fn rollback(mark: &Current, slot: &'static str) -> AnyView {
         return ().into_any();
     };
     let running = mark.revision;
+    // NOTE: no specification governs this: our own design; the history and the
+    // pending card can both offer the roll back, so each keeps ids of its own.
+    let (dialog, reason_id) = if slot == "main" {
+        ("rollback-confirm", ROLLBACK_REASON)
+    } else {
+        ("rollback-confirm-pending", "cfg-rollback-reason-pending")
+    };
     form(
-        slot,
         "",
         view! {
             {hidden("action", String::from("rollback"))}
             {hidden("current", running.to_string())}
             {confirmed(
-                String::from("rollback-confirm"),
-                (tr(Msg::RollBack), Variant::Danger),
+                dialog,
+                (Glyph::ROTATE_CCW, tr(Msg::RollBack), Variant::Danger),
                 (
                     tr_with(
                         Msg::RollBackRevisionContentRevisionSaved,
@@ -89,7 +106,7 @@ pub(super) fn rollback(mark: &Current, slot: &'static str) -> AnyView {
                     tr(Msg::RollBack),
                 ),
                 text(
-                    (ROLLBACK_REASON, "form[reason]"),
+                    (reason_id, "form[reason]"),
                     tr(Msg::Reason),
                     String::new(),
                     Text {
@@ -143,14 +160,13 @@ fn awaiting(mark: &Current) -> AnyView {
         </p>
         <div class="fui-cluster">
             {form(
-                "pending",
                 "",
                 view! {
                     {hidden("action", String::from("confirm"))}
                     {hidden("revision", revision.to_string())}
                     {confirmed(
-                        String::from("confirm-confirm"),
-                        (tr(Msg::Confirm), Variant::Primary),
+                        "confirm-confirm",
+                        (Glyph::CHECK, tr(Msg::Confirm), Variant::Primary),
                         (
                             tr_with(
                                 Msg::ConfirmRevisionGatewayKeepsStopsCountdown,
@@ -210,14 +226,14 @@ fn review(review: &Review) -> AnyView {
     let approve = (!review.approval.is_empty() && !review.approved).then(|| {
         let revision = review.revision;
         form(
-            "pending",
             "",
             view! {
                 {hidden("action", String::from("approve"))}
                 {hidden("revision", revision.to_string())}
                 {confirmed(
-                    String::from("approve-confirm"),
+                    "approve-confirm",
                     (
+                        Glyph::CHECK,
                         tr_with(
                             Msg::ApproveRevision,
                             &[("revision", (revision).to_string().into())],
@@ -276,14 +292,14 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> AnyView {
         .filter(|review| review.revision == head)
         .map(review);
     let apply = form(
-        "pending",
         "",
         view! {
             {hidden("action", String::from("apply"))}
             {hidden("revision", head.to_string())}
             {confirmed(
-                String::from("apply-confirm"),
+                "apply-confirm",
                 (
+                    Glyph::PLAY,
                     tr_with(Msg::ApplyRevision, &[("head", (head).to_string().into())]),
                     Variant::Primary,
                 ),

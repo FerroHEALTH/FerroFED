@@ -10,77 +10,92 @@ use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
 use ferrohealth_ui::view::form::{Field, INPUT, SELECT, error_id};
 use leptos::prelude::*;
 
+use crate::configure::draft::Edit;
+use crate::configure::model::ConfigForm;
 use crate::configure::render::Loaded;
 use crate::configure::render::credentials::{addable, back, secret_row};
 use crate::configure::render::members::GROUP;
 use crate::configure::render::parts::{
-    Text, add_button, error_line, form, head, hidden, reason, remove_button, save_bar, template,
-    text,
+    Text, add_button, error_line, form, head, hidden, reason, remove_button, save_bar, text,
 };
 use crate::configure::settings;
 use crate::configure::settings::build::{secret_field, setting_field};
 
 use crate::locale::{Msg, tr, tr_with};
-use crate::views::model::Refusal;
+use crate::read::Refusal;
 
-/// A setting row `row` of a binding section: its key, fixed for one the
-/// section holds, and its value.
-fn binding_row(row: &str, held: Option<(&str, &toml::Value)>) -> AnyView {
+/// One setting row of a binding section as the form shows it.
+struct SettingRow {
+    /// The row's key on the page.
+    row: String,
+    /// The setting's key: fixed for one the section holds, typed for a new
+    /// one.
+    key: String,
+    /// Whether the section holds the key, which then cannot be changed.
+    held: bool,
+    /// The value.
+    value: String,
+}
+
+/// A setting row of a binding section: its key, fixed for one the section
+/// holds, and its value.
+fn binding_row(setting: &SettingRow) -> AnyView {
+    let row = setting.row.as_str();
     let name = |part: &str| format!("form[setting][{row}][{part}]");
-    let line = format!("cfg-s-{row}-row");
     let value_id = setting_field(row, "value");
-    let key = match held {
-        Some((key, _)) => view! {
-            <input type="hidden" name=name("key") value=key.to_owned() />
+    let key = if setting.held {
+        view! {
+            <input type="hidden" name=name("key") value=setting.key.clone() />
             <p class="fui-label">
-                <code>{key.to_owned()}</code>
+                <code>{setting.key.clone()}</code>
             </p>
         }
-        .into_any(),
-        None => text(
+        .into_any()
+    } else {
+        text(
             (&setting_field(row, "key"), &name("key")),
             tr(Msg::Key),
-            String::new(),
+            setting.key.clone(),
             Text {
                 mono: true,
                 hint: Some(tr(Msg::PartsJoinedDotsSuchOauth2Scope)),
                 ..Text::default()
             },
         )
-        .into_any(),
+        .into_any()
     };
-    let label = held.map_or_else(
-        || tr(Msg::Value),
-        |(key, _)| tr_with(Msg::ValueOf, &[("key", (key).to_string().into())]),
-    );
-    let value = held
-        .map(|(_, value)| match value {
-            toml::Value::String(text) => text.clone(),
-            other => other.to_string(),
-        })
-        .unwrap_or_default();
-    let named = held.map_or_else(|| tr(Msg::ThisNewSetting), |(key, _)| key.to_owned());
+    let (label, named) = if setting.held {
+        (
+            tr_with(Msg::ValueOf, &[("key", setting.key.clone().into())]),
+            setting.key.clone(),
+        )
+    } else {
+        (tr(Msg::Value), tr(Msg::ThisNewSetting))
+    };
     view! {
-        <div id=line.clone() class="fui-well fui-stack">
+        <div id=format!("cfg-s-{row}-row") class="fui-well fui-stack">
             <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
             {key}
             {text(
                 (&value_id, &name("value")),
                 label,
-                value,
+                setting.value.clone(),
                 Text {
                     mono: true,
                     ..Text::default()
                 },
             )}
-            {remove_button(&line, tr_with(Msg::Remove2, &[("named", (named).clone().into())]))}
+            {remove_button(
+                &Edit::RemoveSetting(row.to_owned()),
+                tr_with(Msg::Remove2, &[("named", named.into())]),
+            )}
         </div>
     }
     .into_any()
 }
 
-/// A new secret row of a binding section, its key typed.
-fn new_secret(row: &str) -> AnyView {
+/// A new secret row of a binding section, its key typed, `key` filled in.
+fn new_secret(row: &str, key: String) -> AnyView {
     let name = |part: &str| format!("form[secret][{row}][{part}]");
     let line = format!("cfg-x-{row}-row");
     view! {
@@ -89,7 +104,7 @@ fn new_secret(row: &str) -> AnyView {
             {text(
                 (&secret_field(row, "key"), &name("key")),
                 tr(Msg::SecretKey),
-                String::new(),
+                key,
                 Text {
                     mono: true,
                     hint: Some(tr(Msg::SuchOauth2ClientSecret)),
@@ -109,7 +124,7 @@ fn new_secret(row: &str) -> AnyView {
                 aria-describedby=format!("{}-error", secret_field(row, "value"))
             />
             {error_line(&secret_field(row, "value"))}
-            {remove_button(&line, tr(Msg::RemoveThisNewSecret))}
+            {remove_button(&Edit::RemoveSecret(row.to_owned()), tr(Msg::RemoveThisNewSecret))}
         </div>
     }
     .into_any()
@@ -117,14 +132,23 @@ fn new_secret(row: &str) -> AnyView {
 
 /// The binding section of the form: `held` as it stands, or a choice of
 /// those not set yet.
-fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>) -> AnyView {
+fn section_choice(
+    loaded: &Loaded<'_>,
+    held: Option<BindingSection>,
+    chosen: Option<&str>,
+) -> AnyView {
     if let Some(binding) = held {
         return hidden("section", binding.as_str().to_owned()).into_any();
     }
     let options = addable(loaded)
         .into_iter()
         .map(|binding| {
-            view! { <option value=binding.as_str()>{Resource::Binding(binding).to_string()}</option> }
+            let selected = chosen == Some(binding.as_str());
+            view! {
+                <option value=binding.as_str() selected=selected>
+                    {Resource::Binding(binding).to_string()}
+                </option>
+            }
         })
         .collect_view();
     let select = view! {
@@ -142,13 +166,43 @@ fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>) -> AnyView 
         .view(select)
 }
 
-/// The settings of a binding section, a row each for what `table` holds
-/// and a button that adds one; its lists are kept and named.
-fn settings_group(table: &toml::Table) -> AnyView {
-    let rows = settings::build::scalars(table)
+/// The setting rows of a binding section: what `table` holds, or the rows
+/// the operator posted.
+fn setting_rows(table: &toml::Table, posted: Option<&ConfigForm>) -> Vec<SettingRow> {
+    let scalars = settings::build::scalars(table);
+    match posted {
+        Some(form) => form
+            .settings
+            .iter()
+            .map(|setting| SettingRow {
+                row: setting.row.clone(),
+                key: setting.key.clone(),
+                held: scalars.iter().any(|(key, _)| key == &setting.key),
+                value: setting.value.clone(),
+            })
+            .collect(),
+        None => scalars
+            .into_iter()
+            .zip(0_u32..)
+            .map(|((key, value), row)| SettingRow {
+                row: format!("s{row}"),
+                key,
+                held: true,
+                value: match value {
+                    toml::Value::String(text) => text,
+                    other => other.to_string(),
+                },
+            })
+            .collect(),
+    }
+}
+
+/// The settings of a binding section, a row each, and a button that adds
+/// one; its lists are kept and named.
+fn settings_group(table: &toml::Table, posted: Option<&ConfigForm>) -> AnyView {
+    let rows = setting_rows(table, posted)
         .iter()
-        .zip(0_u32..)
-        .map(|((key, value), row)| binding_row(&format!("s{row}"), Some((key.as_str(), value))))
+        .map(binding_row)
         .collect_view();
     let kept: Vec<String> = table
         .iter()
@@ -169,20 +223,23 @@ fn settings_group(table: &toml::Table) -> AnyView {
             <div id="cfg-setting-rows" class="fui-stack">
                 {rows}
             </div>
-            {add_button(
-                "cfg-add-setting",
-                ("tpl-setting", "cfg-setting-rows"),
-                (tr(Msg::AddSetting), "__KEY__"),
-            )}
-            {template(String::from("tpl-setting"), binding_row("__KEY__", None))}
+            {add_button("cfg-add-setting", &Edit::AddSetting, tr(Msg::AddSetting))}
         </fieldset>
     }
     .into_any()
 }
 
-/// The secrets of a binding section: a choice for each of `slots`, and a
-/// button that adds a new one.
-fn secrets_group(slots: &[SecretSlot]) -> AnyView {
+/// The secrets of a binding section: a choice for each of `slots`, the new
+/// ones the operator posted, and a button that adds a new one.
+fn secrets_group(slots: &[SecretSlot], posted: Option<&ConfigForm>) -> AnyView {
+    let chosen = |key: &str| {
+        posted.and_then(|form| {
+            form.secrets
+                .iter()
+                .find(|secret| secret.key == key)
+                .map(|secret| secret.choice.clone())
+        })
+    };
     let secrets = slots
         .iter()
         .zip(0_u32..)
@@ -191,20 +248,25 @@ fn secrets_group(slots: &[SecretSlot]) -> AnyView {
                 &format!("x{row}"),
                 (&slot.key, slot.key.clone()),
                 Some(slot),
+                chosen(&slot.key).as_deref(),
             )
         })
         .collect_view();
+    let fresh = posted.map(|form| {
+        form.secrets
+            .iter()
+            .filter(|secret| !slots.iter().any(|slot| slot.key == secret.key))
+            .map(|secret| new_secret(&secret.row, secret.key.clone()))
+            .collect_view()
+    });
     view! {
         <fieldset class=GROUP>
             <legend>{tr(Msg::Secrets)}</legend>
             {secrets}
-            <div id="cfg-secret-rows" class="fui-stack"></div>
-            {add_button(
-                "cfg-add-secret",
-                ("tpl-secret", "cfg-secret-rows"),
-                (tr(Msg::AddSecret), "__KEY__"),
-            )}
-            {template(String::from("tpl-secret"), new_secret("__KEY__"))}
+            <div id="cfg-secret-rows" class="fui-stack">
+                {fresh}
+            </div>
+            {add_button("cfg-add-secret", &Edit::AddSecret, tr(Msg::AddSecret))}
         </fieldset>
     }
     .into_any()
@@ -246,7 +308,14 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
     let slots = held
         .map(|(_, held)| held.secrets.as_slice())
         .unwrap_or_default();
-    let chosen = section_choice(loaded, held.map(|(binding, _)| binding));
+    let posted = loaded
+        .drafted(&["save-binding"])
+        .filter(|form| section.is_none_or(|section| form.section == section));
+    let chosen = section_choice(
+        loaded,
+        held.map(|(binding, _)| binding),
+        posted.map(|form| form.section.as_str()),
+    );
     let title = held.map_or_else(
         || tr(Msg::AddABindingSection),
         |(binding, _)| {
@@ -263,8 +332,8 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
             <legend>{tr(Msg::Section)}</legend>
             {chosen}
         </fieldset>
-        {settings_group(&table)}
-        {secrets_group(slots)}
+        {settings_group(&table, posted)}
+        {secrets_group(slots, posted)}
         {reason()}
         {save_bar(loaded, "/configuration/credentials")}
     };
@@ -275,7 +344,18 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
             (tr(Msg::EachSettingOwnFieldNumberTrue), "credentials-and-binding-sections"),
             (),
         )}
-        {form("main", "fui-stack", body)}
+        {form("fui-stack", body)}
+        {held
+            .map(|(binding, _)| {
+                view! {
+                    <div class="fui-actions">
+                        {crate::configure::render::credentials::remove(
+                            loaded,
+                            &Resource::Binding(binding),
+                        )}
+                    </div>
+                }
+            })}
     }
     .into_any())
 }

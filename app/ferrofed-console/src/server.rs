@@ -16,7 +16,7 @@ use axum::Extension;
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use http::header::{
     CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS,
     X_FRAME_OPTIONS,
@@ -126,6 +126,25 @@ pub fn router(state: ConsoleState) -> axum::Router {
         .route(HEALTH, get(health))
         .route(crate::app::STYLESHEET, get(stylesheet))
         .route(crate::app::THEME, get(theme))
+        .route(crate::app::MARK_LIGHT, get(mark_light))
+        .route(crate::app::MARK_DARK, get(mark_dark))
+        .route(
+            crate::pages::about::OPTIONS_DOCUMENT,
+            get(crate::act::options_document),
+        )
+        .route(crate::prefs::PREFERENCE, post(crate::prefs::choose))
+        .route(crate::prefs::RESET, post(crate::prefs::reset))
+        .route(crate::prefs::SIDEBAR, post(crate::prefs::sidebar))
+        .route(crate::app::INTEGRITY, post(crate::act::clear::post))
+        .route(crate::app::QUERY, post(crate::act::query::post))
+        .route("/query/{tab}", post(crate::act::query::post))
+        .route("/stored-queries/{name}", post(crate::act::repair::post))
+        .route(crate::app::CONFIGURATION, post(crate::act::configure::post))
+        .route("/configuration/{tab}", post(crate::act::configure::post))
+        .route(
+            "/configuration/{tab}/{item}",
+            post(crate::act::configure::post),
+        )
         .route(
             crate::configure::export::EXPORT,
             get(crate::configure::export::export),
@@ -134,15 +153,15 @@ pub fn router(state: ConsoleState) -> axum::Router {
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
         .route(
             crate::oidc::logout::LOGOUT,
-            axum::routing::post(crate::oidc::logout::logout),
+            post(crate::oidc::logout::logout),
         )
         .leptos_routes_with_context(&options, routes, context.clone(), {
             let options = options.clone();
-            move || crate::app::shell(options.clone())
+            move || crate::app::document(options.clone())
         })
         .fallback(leptos_axum::file_and_error_handler_with_context(
             context,
-            crate::app::shell,
+            crate::app::document,
         ))
         .layer(axum::middleware::from_fn(require_session))
         .layer(axum::middleware::from_fn(
@@ -159,9 +178,9 @@ pub fn router(state: ConsoleState) -> axum::Router {
 /// configuration form's.
 pub const BODY_LIMIT: usize = 64 * 1024;
 
-/// The largest body the configuration form's server function takes: the
-/// largest TOML an import sends, each byte form-encoded as three, and the
-/// form's other fields.
+/// The largest body the configuration's import takes: the largest TOML an
+/// import sends, each byte form-encoded as three, and the form's other
+/// fields.
 pub const CONFIGURE_BODY_LIMIT: usize = 3 * crate::configure::import::IMPORT_LIMIT + BODY_LIMIT;
 
 /// Holds every request's body to [`BODY_LIMIT`], or the configuration
@@ -169,16 +188,15 @@ pub const CONFIGURE_BODY_LIMIT: usize = 3 * crate::configure::import::IMPORT_LIM
 /// over the limit is `413` (RFC 9110 §15.5.14), whether its
 /// `Content-Length` declares it or it is sent chunked and grows past it.
 ///
-/// A server function reads its body whole before it checks the session,
-/// so the limit holds for a caller with no session too. The body is read
+/// The limit holds before the session is checked, so it holds for a
+/// caller with no session too. The body is read
 /// here, up to the limit and within [`BODY_READ_TIMEOUT`], and handed on
 /// whole; a body that breaks off is `400`, and one still unread at the
 /// deadline is `408`. Axum's own default limit is raised to [`CONFIGURE_BODY_LIMIT`]
 /// beside it, so an import at its limit is read whole.
 async fn limit_body(request: Request, next: Next) -> Response {
     use http_body_util::BodyExt as _;
-    use leptos::server_fn::ServerFn as _;
-    let limit = if request.uri().path() == crate::configure::act::Configure::url() {
+    let limit = if request.uri().path() == crate::act::configure::IMPORT {
         CONFIGURE_BODY_LIMIT
     } else {
         BODY_LIMIT
@@ -212,8 +230,7 @@ pub const BODY_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// Sends a request for an operator view that carries no live signed-in
 /// session to sign-in, before anything is rendered or asked of the gateway.
 ///
-/// The server functions check the session themselves as well, because each
-/// is a public endpoint of its own.
+/// A form's handler checks the session again before it asks a replica.
 async fn require_session(
     Extension(state): Extension<ConsoleState>,
     request: Request,
@@ -226,8 +243,7 @@ async fn require_session(
         .path()
         .trim_end_matches('/')
         .to_ascii_lowercase();
-    let under = path.starts_with(crate::configure::UNDER);
-    if !under && !crate::views::needs_session(&path) {
+    if !crate::app::needs_session(&path) {
         return next.run(request).await;
     }
     let name = state.sessions().cookie_name(crate::session::COOKIE);
@@ -259,8 +275,8 @@ async fn require_session(
 /// The fetch metadata header that names where a request comes from.
 const SEC_FETCH_SITE: &str = "sec-fetch-site";
 
-/// Refuses every request that is not a safe method, a server function call
-/// and a sign-out among them, unless it comes from the console's own pages
+/// Refuses every request that is not a safe method, a form post and a
+/// sign-out among them, unless it comes from the console's own pages
 /// ([`same_origin`]), before anything reads the session or asks the gateway.
 ///
 /// The session cookie is `SameSite=Lax` as well, so a cross-site `POST`
@@ -306,9 +322,8 @@ async fn same_origin_only(
 /// browser sends a plain form post with `Origin: null` and no `Referer` (the
 /// Fetch standard, the request `Origin` header). The console's own forms,
 /// the sign-out among them, therefore pass by `Sec-Fetch-Site` alone; a
-/// browser without fetch metadata is refused, which fails closed. The
-/// `Origin` and `Referer` fallbacks serve a server function the page calls
-/// with `fetch`.
+/// browser without fetch metadata is refused unless its `Origin` or
+/// `Referer` names the console, which fails closed.
 #[must_use]
 pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {
     if let Some(site) = headers.get(SEC_FETCH_SITE) {
@@ -336,8 +351,11 @@ struct Health {
     status: &'static str,
 }
 
-/// The console's brand theme, which loads after the library's stylesheet.
-const BRAND_THEME: &str = include_str!("../style/theme.css");
+/// The FerroFED brand mark for a light ground.
+const MARK_LIGHT_SVG: &str = include_str!("../../../assets/brand/ferrofed-icon.svg");
+
+/// The FerroFED brand mark for a dark ground.
+const MARK_DARK_SVG: &str = include_str!("../../../assets/brand/ferrofed-icon-dark.svg");
 
 /// A stylesheet answer of `text`.
 fn css(text: &'static str) -> Response {
@@ -357,9 +375,29 @@ async fn stylesheet() -> Response {
     css(ferrohealth_ui::style::STYLESHEET)
 }
 
-/// Serves the console's brand theme.
+/// Serves FerroUI's FerroFED theme, the accents of "Azure & Iron" over the
+/// stylesheet's roles and the two preview accents Your preferences draws.
 async fn theme() -> Response {
-    css(BRAND_THEME)
+    css(ferrohealth_ui::style::Brand::Fed.theme())
+}
+
+/// An SVG answer of `text`.
+fn svg(text: &'static str) -> Response {
+    (
+        [(CONTENT_TYPE, HeaderValue::from_static("image/svg+xml"))],
+        text,
+    )
+        .into_response()
+}
+
+/// Serves the brand mark for a light ground.
+async fn mark_light() -> Response {
+    svg(MARK_LIGHT_SVG)
+}
+
+/// Serves the brand mark for a dark ground.
+async fn mark_dark() -> Response {
+    svg(MARK_DARK_SVG)
 }
 
 /// Serves `GET /health`: `200` while the process serves.
@@ -369,11 +407,12 @@ async fn health() -> Response {
 
 /// The media types of the site bundle: the WebAssembly, its JavaScript glue
 /// and the stylesheet.
-const BUNDLE_TYPES: [&str; 4] = [
+const BUNDLE_TYPES: [&str; 5] = [
     "application/wasm",
     "text/javascript",
     "application/javascript",
     "text/css",
+    "image/svg+xml",
 ];
 
 /// A test of a response, the shape the compression layer's predicate takes.
@@ -395,7 +434,7 @@ fn is_bundle(
 /// Compresses the site bundle with brotli or gzip, as the request's
 /// `Accept-Encoding` chooses, and marks it `Vary: Accept-Encoding`.
 ///
-/// Only the bundle is compressed. A document or a server function's answer
+/// Only the bundle is compressed. A document, a form's answer among them,
 /// carries what the operator entered beside data an attacker would want, so
 /// it is never compressed, which keeps a compression side channel shut
 /// (BREACH). The Leptos book (`deployment/binary_size`) has a site serve its
@@ -489,7 +528,7 @@ async fn content_security_policy(
 /// `leptos_axum` provides a nonce of its own before this runs, and the
 /// request parts it provides carry the one [`content_security_policy`]
 /// minted, which replaces it.
-fn provide_request_nonce() {
+pub fn provide_request_nonce() {
     let Some(parts) = leptos::context::use_context::<http::request::Parts>() else {
         return;
     };

@@ -16,7 +16,7 @@ use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 use ferrofed_testkit::mock::Server;
 
 use crate::configure::{
-    answered, answers, bodies, changes, configured, form_with, page, query_row, signed_in_console,
+    answers, bodies, changes, configured, form_with, page, query_row, refusal_of, signed_in_console,
 };
 
 /// The running revision 1, and revision 2 saved.
@@ -99,25 +99,21 @@ struct Fhir<'a> {
 
 /// The fields of FHIR endpoint row `row`.
 fn fhir_row(row: usize, fhir: &Fhir<'_>) -> Vec<(String, String)> {
-    let at = |part: &str| format!("fhir_endpoints][{row}][{part}");
+    let at = |part: &str| format!("fhir][{row}][{part}");
     let mut fields = vec![
-        (at("key"), row.to_string()),
+        (String::from("fhir_rows"), row.to_string()),
         (at("id"), fhir.id.to_owned()),
         (at("url"), fhir.url.to_owned()),
         (at("system"), fhir.system.to_owned()),
-        (at("in_service"), fhir.in_service.to_string()),
     ];
-    for (at_index, category) in fhir.categories.iter().enumerate() {
-        fields.push((
-            format!("fhir_endpoints][{row}][categories][{at_index}"),
-            (*category).to_owned(),
-        ));
+    if fhir.in_service {
+        fields.push((at("in_service"), String::from("on")));
     }
-    for (at_index, profile) in fhir.profiles.iter().enumerate() {
-        fields.push((
-            format!("fhir_endpoints][{row}][profiles][{at_index}"),
-            (*profile).to_owned(),
-        ));
+    for category in fhir.categories {
+        fields.push((at("categories"), (*category).to_owned()));
+    }
+    for profile in fhir.profiles {
+        fields.push((at("profiles"), (*profile).to_owned()));
     }
     fields
 }
@@ -125,7 +121,10 @@ fn fhir_row(row: usize, fhir: &Fhir<'_>) -> Vec<(String, String)> {
 /// The save of console member C `action` posts, with the FHIR endpoints
 /// `fhir`, and the marker that the form showed them when `shown`.
 fn posted(action: &str, fhir: &[Fhir<'_>], shown: bool) -> String {
-    let mut rows = query_row(0, ("node-c-pub", "https://cdr-c.example.org/openehr", true));
+    let mut rows = query_row(
+        "0",
+        ("node-c-pub", "https://cdr-c.example.org/openehr", true),
+    );
     for (row, endpoint) in fhir.iter().enumerate() {
         rows.extend(fhir_row(row, endpoint));
     }
@@ -198,8 +197,10 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
         added.contains(r#"name="form[action]" value="add-member""#),
         "{added}"
     );
-    assert!(added.contains(r#"<template id="tpl-fhir">"#), "{added}");
-    assert!(added.contains(r#"data-add="tpl-fhir""#), "{added}");
+    assert!(
+        added.contains(r#"name="form[edit]" value="add-fhir""#),
+        "Add FHIR endpoint posts the form: {added}"
+    );
     Ok(())
 }
 
@@ -349,9 +350,16 @@ async fn a_fhir_endpoint_that_does_not_read_asks_no_replica_and_is_refused_at_it
             id: "node-c-x",
             ..whole
         };
-        let answer = answered(&service, &session, save_c(&[first, fhir])).await?;
-        assert!(answer.html.contains(said), "{said}: {}", answer.html);
-        assert_eq!(Some(at), answer.field.as_ref().map(|note| note.id.as_str()));
+        let html = crate::configure::posted(
+            &service,
+            &session,
+            "/configuration/members/node-c",
+            save_c(&[first, fhir]),
+        )
+        .await?;
+        assert!(html.contains(said), "{said}: {html}");
+        let line = refusal_of(&html, at).ok_or_else(|| format!("{said} marks {at}: {html}"))?;
+        assert!(line.contains(said), "{line}");
     }
     assert_eq!(0, changes(&listener).await?);
     Ok(())
@@ -463,16 +471,16 @@ async fn kept_whole(listener: &Server) -> Result<(), Box<dyn Error>> {
 async fn the_add_form_refuses_a_node_id_the_gateway_holds() -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
     let (service, session) = signed_in_console(&listener)?;
-    let answer = answered(&service, &session, posted("add-member", &[], true)).await?;
-    assert!(
-        answer.html.contains("A member with this node_id exists"),
-        "{}",
-        answer.html
-    );
-    assert_eq!(
-        Some("cfg-node"),
-        answer.field.as_ref().map(|note| note.id.as_str())
-    );
+    let html = crate::configure::posted(
+        &service,
+        &session,
+        "/configuration/members/new",
+        posted("add-member", &[], true),
+    )
+    .await?;
+    assert!(html.contains("A member with this node_id exists"), "{html}");
+    let line = refusal_of(&html, "cfg-node").ok_or_else(|| format!("cfg-node: {html}"))?;
+    assert!(line.contains("A member with this node_id exists"), "{line}");
     assert_eq!(0, changes(&listener).await?);
     Ok(())
 }

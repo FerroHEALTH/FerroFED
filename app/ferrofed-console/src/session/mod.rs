@@ -46,9 +46,19 @@ pub const COOKIE: &str = "ferrofed_console_session";
 /// the `__Host-` prefix when the cookie is `Secure`.
 pub const SIGN_IN_COOKIE: &str = "ferrofed_console_sign_in";
 
-/// The name of the cookie that carries the operator's theme choice, under
-/// the `__Host-` prefix when the cookie is `Secure`.
-pub const THEME_COOKIE: &str = "ferrofed_console_theme";
+/// What the console puts before each of the operator's preference cookies.
+///
+/// Each is named after its preference (`ferrofed_console_theme`), under the
+/// `__Host-` prefix when the cookie is `Secure` (FerroUI family rule 9).
+pub const PREFERENCE_PREFIX: &str = "ferrofed_console_";
+
+/// The name of the cookie that keeps whether the navigation is folded to
+/// its rail.
+pub const SIDEBAR_COOKIE: &str = "ferrofed_console_sidebar";
+
+/// The name of the short-lived cookie that carries the outcome of the
+/// operator's last form post to the page it returns to, read once.
+pub const FLASH_COOKIE: &str = "ferrofed_console_flash";
 
 /// The cookie name prefix that binds a cookie to the host that set it.
 ///
@@ -667,9 +677,15 @@ mod tests {
             session.as_str()
         );
         let service = crate::server::router(state);
-        let paths = ["/", "/no/such/page"]
-            .into_iter()
-            .chain(crate::views::PATHS);
+        let paths = [
+            "/",
+            "/no/such/page",
+            "/organisations",
+            "/integrity",
+            "/stored-queries",
+            "/query",
+            "/self-description",
+        ];
         for path in paths {
             let request = http::Request::get(path)
                 .header("cookie", &cookie)
@@ -685,8 +701,10 @@ mod tests {
                 .await
                 .expect("the body");
             let body = String::from_utf8(body.to_vec()).expect("UTF-8");
-            assert!(body.contains(r#"role="alert""#), "{path}: {body}");
-            assert!(body.contains("session store"), "{path}: {body}");
+            assert!(
+                body.contains("The console cannot read its sessions"),
+                "{path}: {body}"
+            );
             assert!(!body.contains(r#"href="/login""#), "{path}: {body}");
             assert!(!body.contains("<nav"), "{path}: {body}");
             assert!(!body.contains("Sign out"), "{path}: {body}");

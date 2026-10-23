@@ -15,7 +15,8 @@ use ferrofed_registry::resource::SectionRequest;
 use ferrofed_testkit::mock::Server;
 
 use crate::configure::{
-    answered, answers, bodies, changes, configured, form, form_with, page, signed_in_console,
+    answers, bodies, changes, configured, form, form_with, page, posted, refusal_of,
+    signed_in_console,
 };
 
 /// A synthetic secret value no page, answer or log may hold.
@@ -111,14 +112,6 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
     );
     assert!(body.contains("Add binding section"), "{body}");
     assert!(
-        body.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
-        "{body}"
-    );
-    assert!(
-        !body.contains(r#"value="credentials:node-a-pub""#),
-        "{body}"
-    );
-    assert!(
         body.contains("Revision 2 awaits your confirmation"),
         "{body}"
     );
@@ -140,6 +133,10 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         "the held grant is chosen: {edit}"
     );
     assert!(edit.contains(r#"type="password""#), "{edit}");
+    assert!(
+        edit.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
+        "the removal sits on the credential's own page: {edit}"
+    );
     assert!(edit.contains("Read from a file"), "{edit}");
     no_password_filled(&edit);
     let added = page(&service, &session, "/configuration/credentials/new").await?;
@@ -167,14 +164,14 @@ async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
 /// with the secret rows `secrets`.
 fn save_credentials(secrets: &[(&str, &str, &str, &str)]) -> String {
     let mut fields: Vec<(String, String)> = vec![
-        (String::from("settings][0][row"), String::from("c0")),
-        (String::from("settings][0][key"), String::from("user")),
-        (String::from("settings][0][value"), String::from("u")),
+        (String::from("setting_rows"), String::from("c0")),
+        (String::from("setting][c0][key"), String::from("user")),
+        (String::from("setting][c0][value"), String::from("u")),
     ];
     for (row, (key, choice, value, file)) in secrets.iter().enumerate() {
-        let at = |part: &str| format!("secrets][{row}][{part}");
+        let at = |part: &str| format!("secret][x{row}][{part}");
         fields.extend([
-            (at("row"), format!("x{row}")),
+            (String::from("secret_rows"), format!("x{row}")),
             (at("key"), (*key).to_owned()),
             (at("choice"), (*choice).to_owned()),
             (at("value"), (*value).to_owned()),
@@ -212,9 +209,10 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
-    let html = configured(
+    let html = posted(
         &service,
         &session,
+        "/configuration/credentials/node-c-pub",
         save_credentials(&[
             ("password", "set", VALUE, ""),
             ("client_identity", "keep", "", ""),
@@ -294,7 +292,7 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
         (
             ("user", "set", VALUE, ""),
             "Name a secret this resource takes",
-            "cfg-x-x0-key",
+            "",
         ),
         (
             ("password", "guess", VALUE, ""),
@@ -302,10 +300,22 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
             "cfg-x-x0-choice",
         ),
     ] {
-        let answer = answered(&service, &session, save_credentials(&[secret])).await?;
-        assert!(answer.html.contains(said), "{said}: {}", answer.html);
-        assert!(!answer.html.contains(VALUE), "{}", answer.html);
-        assert_eq!(Some(at), answer.field.as_ref().map(|note| note.id.as_str()));
+        let html = posted(
+            &service,
+            &session,
+            "/configuration/credentials/node-c-pub",
+            save_credentials(&[secret]),
+        )
+        .await?;
+        assert!(html.contains(said), "{said}: {html}");
+        assert!(!html.contains(VALUE), "{html}");
+        // NOTE: no specification governs this: our own design; a secret the form does
+        // not draw has no field to mark, and the answer at the top names it.
+        if !at.is_empty() {
+            let line = refusal_of(&html, at).ok_or_else(|| format!("{said} marks {at}: {html}"))?;
+            assert!(line.contains(said), "{line}");
+        }
+        no_password_filled(&html);
     }
     for (fields, said, at) in [
         (
@@ -321,9 +331,16 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
     ] {
         let mut all = vec![("action", "save-credentials"), ("reason", "r")];
         all.extend(fields);
-        let answer = answered(&service, &session, form(&all)).await?;
-        assert!(answer.html.contains(said), "{said}: {}", answer.html);
-        assert_eq!(Some(at), answer.field.as_ref().map(|note| note.id.as_str()));
+        let html = posted(
+            &service,
+            &session,
+            "/configuration/credentials/new",
+            form(&all),
+        )
+        .await?;
+        assert!(html.contains(said), "{said}: {html}");
+        let line = refusal_of(&html, at).ok_or_else(|| format!("{said} marks {at}: {html}"))?;
+        assert!(line.contains(said), "{line}");
     }
     let html = configured(
         &service,

@@ -19,7 +19,7 @@ use crate::configure::member::Shown;
 use crate::configure::model::{ConfigForm, SettingInput};
 use crate::configure::settings::{self, Grant};
 use crate::locale::{Msg, tr, tr_with};
-use crate::views::model::Refusal;
+use crate::read::Refusal;
 
 /// The longest reason a revision records, in characters, as the
 /// gateway holds it.

@@ -30,8 +30,6 @@ mod configure_revisions;
 #[cfg(test)]
 mod configure_sections;
 #[cfg(test)]
-mod contrast;
-#[cfg(test)]
 mod describe;
 #[cfg(test)]
 mod exchange;
@@ -40,17 +38,15 @@ mod gateway;
 #[cfg(test)]
 mod overview;
 #[cfg(test)]
-mod query;
+mod pages;
 #[cfg(test)]
-mod query_safety;
+mod query;
 #[cfg(test)]
 mod refresh;
 #[cfg(test)]
 mod secrets;
 #[cfg(test)]
 mod server;
-#[cfg(test)]
-mod server_functions;
 #[cfg(test)]
 mod shell;
 #[cfg(test)]
@@ -59,6 +55,8 @@ mod sign_in;
 mod sign_out;
 #[cfg(test)]
 mod stored;
+#[cfg(test)]
+mod stub;
 #[cfg(test)]
 mod support;
 #[cfg(test)]

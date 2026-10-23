@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 # The stray literals each file may still hold while its strings move to
 # the catalogs; rewritten by scripts/checks/stray-literals.sh --update.
-1 app/ferrofed-console/src/admin/act.rs
+2 app/ferrofed-console/src/act/mod.rs
+1 app/ferrofed-console/src/act/repair.rs
 1 app/ferrofed-console/src/app.rs
 2 app/ferrofed-console/src/cli.rs
 9 app/ferrofed-console/src/command.rs
@@ -11,25 +12,21 @@
 2 app/ferrofed-console/src/config/mod.rs
 10 app/ferrofed-console/src/config/settings.rs
 5 app/ferrofed-console/src/configure/act.rs
-2 app/ferrofed-console/src/configure/browser.rs
 1 app/ferrofed-console/src/configure/export.rs
 1 app/ferrofed-console/src/configure/mod.rs
-4 app/ferrofed-console/src/configure/render/bindings.rs
-4 app/ferrofed-console/src/configure/render/credentials.rs
-12 app/ferrofed-console/src/configure/render/members.rs
+2 app/ferrofed-console/src/configure/render/credentials.rs
+6 app/ferrofed-console/src/configure/render/members.rs
 1 app/ferrofed-console/src/configure/render/parts.rs
 1 app/ferrofed-console/src/gateway/mod.rs
-1 app/ferrofed-console/src/home.rs
 1 app/ferrofed-console/src/oidc/exchange.rs
 3 app/ferrofed-console/src/oidc/logout.rs
 14 app/ferrofed-console/src/oidc/mod.rs
 1 app/ferrofed-console/src/oidc/refresh.rs
-42 app/ferrofed-console/src/query/answer.rs
-2 app/ferrofed-console/src/query/editor.rs
+1 app/ferrofed-console/src/pages/dashboard.rs
+1 app/ferrofed-console/src/pages/mod.rs
+1 app/ferrofed-console/src/pages/query.rs
+1 app/ferrofed-console/src/pages/stored.rs
+4 app/ferrofed-console/src/prefs.rs
+6 app/ferrofed-console/src/read/mod.rs
 7 app/ferrofed-console/src/server.rs
 1 app/ferrofed-console/src/session/mod.rs
-1 app/ferrofed-console/src/theme.rs
-1 app/ferrofed-console/src/views/integrity.rs
-11 app/ferrofed-console/src/views/load.rs
-1 app/ferrofed-console/src/views/members.rs
-1 app/ferrofed-console/src/views/model.rs

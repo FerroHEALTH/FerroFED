@@ -9,14 +9,14 @@ use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};
 use leptos::prelude::*;
 
-use crate::admin::act::server::{Acted, ReplicaAnswer};
-use crate::admin::answer::replica_said;
-use crate::admin::model::{ActionAnswer, FieldNote};
+use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::plan::Refused;
 use crate::configure::render::parts::diff_table;
 use crate::configure::render::{SavedLine, StoredLine, mark_said};
+use crate::configure::said::replica_said;
+use crate::configure::said::{ActionAnswer, FieldNote};
 use crate::locale::{Msg, tr, tr_with};
-use crate::views::model::Refusal;
+use crate::read::Refusal;
 
 /// The answer of a form `refused` kept from reaching any replica, marking
 /// the field it names.
@@ -34,7 +34,7 @@ pub fn refused(refused: &Refused) -> ActionAnswer {
         });
     ActionAnswer {
         changed: false,
-        html: crate::views::refusal(&refused.refusal).to_html(),
+        view: crate::pages::refused_view(&refused.refusal),
         field,
     }
 }
@@ -44,7 +44,7 @@ pub fn refused(refused: &Refused) -> ActionAnswer {
 pub fn saved(answer: &ReplicaAnswer<SavedLine>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, "save", saved_line).to_html(),
+        view: replica_said(answer, "save", saved_line).into_any(),
         field: None,
     }
 }
@@ -96,7 +96,7 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
 pub fn applied(answer: &ReplicaAnswer<Applied>, what: &str) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, what, applied_line).to_html(),
+        view: replica_said(answer, what, applied_line).into_any(),
         field: None,
     }
 }
@@ -140,7 +140,7 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
 pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, "store", stored_line).to_html(),
+        view: replica_said(answer, "store", stored_line).into_any(),
         field: None,
     }
 }
@@ -166,7 +166,7 @@ fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
 pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        html: replica_said(answer, "import", imported_line).to_html(),
+        view: replica_said(answer, "import", imported_line).into_any(),
         field: None,
     }
 }

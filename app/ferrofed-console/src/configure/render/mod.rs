@@ -13,8 +13,7 @@
 //!
 //! Leptos escapes every text and attribute value it renders, so a member's
 //! name, a revision's reason, a diff's value or a stored query's name
-//! arrives as text, never as markup. No data is placed as a child of a
-//! `textarea`: a field the page fills in carries its value as an attribute.
+//! arrives as text, never as markup, a `textarea`'s text among them.
 
 pub mod answers;
 mod bindings;
@@ -36,7 +35,7 @@ use leptos::prelude::*;
 use crate::config::settings::ReplicaSettings;
 use crate::configure::model::{ConfigView, Screen};
 use crate::locale::{Msg, tr, tr_with};
-use crate::views::model::Refusal;
+use crate::read::Refusal;
 
 /// What a replica reports of a saved revision, with the preview of what it
 /// changes against the running revision when the console could read it.
@@ -79,9 +78,20 @@ pub struct Loaded<'a> {
     /// The revision the history compares with the running one, and what
     /// differs.
     pub compared: Option<(RevisionId, &'a [Difference])>,
+    /// The form as the operator posted it, drawn again in place of what
+    /// the gateway holds.
+    pub draft: Option<&'a crate::configure::draft::Draft>,
 }
 
 impl Loaded<'_> {
+    /// The posted form whose action is one of `actions`, to draw again.
+    #[must_use]
+    pub fn drafted(&self, actions: &[&str]) -> Option<&crate::configure::model::ConfigForm> {
+        self.draft
+            .map(|draft| &draft.form)
+            .filter(|form| actions.contains(&form.action.as_str()))
+    }
+
     /// The running revision.
     #[must_use]
     pub fn running(&self) -> Option<RevisionId> {
@@ -258,11 +268,11 @@ impl Shown {
 pub fn unmanaged(replica: &ReplicaSettings) -> ConfigView {
     let said = tr_with(
         Msg::ReplicaServesNoConfigurationRevisionsConfiguration,
-        &[("name", (replica.name).clone().into())],
+        &[("name", replica.name.clone().into())],
     );
     ConfigView {
-        header: top::title(()).to_html(),
-        main: view! { <p role="status">{said}</p> }.to_html(),
+        header: Some(top::title(()).into_any()),
+        main: Some(view! { <p role="status">{said}</p> }.into_any()),
         ..ConfigView::default()
     }
 }
@@ -273,76 +283,39 @@ pub fn unmanaged(replica: &ReplicaSettings) -> ConfigView {
 /// Returns [`Refusal::Invalid`] for a member, a credential or a binding
 /// section the gateway does not hold.
 pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
-    let (lead, main) = match shown {
-        Shown::Members => (String::new(), members::tab(loaded).to_html()),
-        Shown::MemberNew => (String::new(), members::member_form(loaded, None).to_html()),
-        Shown::Member(node) => (String::new(), members::member(loaded, node)?.to_html()),
-        Shown::Credentials => (String::new(), credentials::tab(loaded).to_html()),
-        Shown::CredentialNew => (
-            String::new(),
-            credentials::credential_form(loaded, None)?.to_html(),
-        ),
+    let (lead, main): (Option<AnyView>, AnyView) = match shown {
+        Shown::Members => (None, members::tab(loaded).into_any()),
+        Shown::MemberNew => (None, members::member_form(loaded, None).into_any()),
+        Shown::Member(node) => (None, members::member(loaded, node)?.into_any()),
+        Shown::Credentials => (None, credentials::tab(loaded).into_any()),
+        Shown::CredentialNew => (None, credentials::credential_form(loaded, None)?.into_any()),
         Shown::Credential(endpoint) => (
-            String::new(),
-            credentials::credential_form(loaded, Some(endpoint))?.to_html(),
+            None,
+            credentials::credential_form(loaded, Some(endpoint))?.into_any(),
         ),
-        Shown::BindingNew => (
-            String::new(),
-            bindings::binding_form(loaded, None)?.to_html(),
-        ),
+        Shown::BindingNew => (None, bindings::binding_form(loaded, None)?.into_any()),
         Shown::Binding(section) => (
-            String::new(),
-            bindings::binding_form(loaded, Some(section))?.to_html(),
+            None,
+            bindings::binding_form(loaded, Some(section))?.into_any(),
         ),
-        Shown::Queries => (String::new(), queries::tab(loaded).to_html()),
-        Shown::QueryNew => (String::new(), queries::form_page(loaded).to_html()),
+        Shown::Queries => (None, queries::tab(loaded).into_any()),
+        Shown::QueryNew => (None, queries::form_page(loaded).into_any()),
         Shown::History(_) => (
-            exchange::compared(loaded).to_html(),
-            exchange::history(loaded).to_html(),
+            Some(exchange::compared(loaded).into_any()),
+            exchange::history(loaded).into_any(),
         ),
         Shown::Exchange => (
-            exchange::export(loaded).to_html(),
-            exchange::import(loaded).to_html(),
+            Some(exchange::export(loaded).into_any()),
+            exchange::import(loaded).into_any(),
         ),
     };
-    let tab = shown.tab();
     Ok(ConfigView {
-        header: top::header(loaded).to_html(),
-        pending: top::pending(loaded).to_html(),
-        tabs: tabs(tab).to_html(),
-        tab: tab.id().to_owned(),
+        header: Some(top::header(loaded).into_any()),
+        pending: Some(top::pending(loaded).into_any()),
+        tab: Some(shown.tab()),
         lead,
-        main,
+        main: Some(main),
     })
-}
-
-/// The tabs, the one at `current` selected, as the WAI-ARIA tabs pattern
-/// marks them: the arrow keys move between them and Enter opens one.
-fn tabs(current: Tab) -> impl IntoView {
-    let links = Tab::ALL
-        .into_iter()
-        .map(|tab| {
-            let selected = tab == current;
-            view! {
-                <a
-                    href=tab.href()
-                    id=tab.id()
-                    role="tab"
-                    class="fui-tab"
-                    aria-selected=if selected { "true" } else { "false" }
-                    aria-controls="config-panel"
-                    tabindex=if selected { "0" } else { "-1" }
-                >
-                    {tr(tab.label())}
-                </a>
-            }
-        })
-        .collect_view();
-    view! {
-        <div role="tablist" aria-label=tr(Msg::Configuration) class="fui-tabs" data-tabs="">
-            {links}
-        </div>
-    }
 }
 
 /// Who `author` is, in words.
