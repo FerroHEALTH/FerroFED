@@ -1107,6 +1107,38 @@ else
   note "no release-build.yml or release-image.yml yet, skipped the release tool pins"
 fi
 
+echo "== scanner pins (the image scans and the VEX gate <-> $matrix)"
+# env_pins KEY FILE...: every value KEY is set to in the files, deduplicated.
+env_pins() {
+  local key="$1" wf
+  shift
+  for wf in "$@"; do
+    [[ -f "$wf" ]] || continue
+    sed -nE "s|^[[:space:]]*$key:[[:space:]]*\"?v?([^\"[:space:]]+)\"?.*|\1|p" "$wf"
+  done | sort -u
+}
+for pair in "trivy|TRIVY_VERSION|.github/workflows/release.yml .github/workflows/scan-and-tag.yml .github/workflows/image-scan.yml" \
+  "yq|YQ_VERSION|.github/workflows/ci.yml"; do
+  tool="${pair%%|*}"
+  rest="${pair#*|}"
+  key="${rest%%|*}"
+  # shellcheck disable=SC2086 # the file list is space-separated on purpose
+  found="$(env_pins "$key" ${rest#*|})"
+  want="$(pin_of "$tool" "$matrix")"
+  want="${want#v}"
+  if [[ -z "$want" ]]; then
+    bad "$matrix has no '$tool' row"
+  elif [[ -z "$found" ]]; then
+    bad "no workflow sets $key"
+  elif [[ "$(line_count "$found")" != "1" ]]; then
+    bad "$tool: the workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
+  elif [[ "$found" != "$want" ]]; then
+    bad "$tool: the workflows pin $found, $matrix pins $want"
+  else
+    note "OK: $tool $found"
+  fi
+done
+
 echo "== docs toolchain (.github/actions/docs-toolchain <-> $matrix)"
 action=.github/actions/docs-toolchain/action.yml
 if [[ -f "$action" ]]; then

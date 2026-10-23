@@ -21,8 +21,8 @@ release). `workflow_dispatch` re-runs
 it for a tag that already exists and has to be dispatched at that tag.
 
 ```text
-plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish) ── milestone
-                               └─ build-console ───────────────┘
+plan ── github-release (draft) ── build-binaries ── build-image ──┬─ vulnerability-record ── scan-and-tag ── finalize-release (publish) ── milestone
+                               └─ build-console ─────────────────┘
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the
@@ -80,18 +80,31 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **build-binaries** calls `release-build.yml` once per target (two Linux
   architectures, glibc and musl). See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
-  the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
+  the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`
+  by digest, with no tag.
 - **build-console** calls `release-console.yml`, which builds the operator
   console's binaries and site bundle, packs them into a container and pushes
-  it to `ghcr.io/ferrohealth/ferrofed-console`. The console ships as an image
-  alone, so it attaches no asset to the draft.
+  it to `ghcr.io/ferrohealth/ferrofed-console` by digest, with no tag. The
+  console ships as an image alone, so it attaches no asset to the draft.
+- **vulnerability-record** scans both images on both platforms and the four
+  binary tarballs with Trivy, every severity and unfixed findings included,
+  and `scripts/checks/vex-coverage.sh` joins the findings with the OpenVEX
+  documents under `security/vex/` (Regulation (EU) 2024/2847 Annex I Part
+  I(2)(a)). A finding with no statement that judges it refuses the release.
+  The joined record, `ferrofed-vX.Y.Z-vulnerability-record.json`, and the raw
+  reports, `ferrofed-vX.Y.Z-trivy-reports.tar.gz`, are attached to the draft
+  (`security/vex/README.md`).
+- **scan-and-tag** calls `scan-and-tag.yml`, which scans each image digest
+  for HIGH and CRITICAL findings that have a fix (`trivy.yaml`) and only then
+  applies the tags `release-image.yml` and `release-console.yml` computed, so
+  an image the gate refuses is never referencable by a tag.
 - **finalize-release** checks that the draft carries every asset this version
   promises, eight per target, the three compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
-  the tag, and the EU declaration of conformity when `plan` found it
-  issued, and publishes only then, and only once both images are
-  pushed. A draft missing any of them fails the check and stays a draft, so a
+  the tag, the vulnerability record and its reports, and the EU
+  declaration of conformity when `plan` found it issued, and publishes only
+  then, and only once both images are scanned and tagged. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A release `plan` did not find the
   latest, such as a pre-release, is published
   with `--latest=false`, so it never becomes the repository's latest
@@ -135,9 +148,10 @@ names the called workflow as the signer, which a consumer can demand with
 - takes the two musl tarballs from this run's artifacts and verifies each
   against `release-build.yml`'s signer before extracting it;
 - builds the `linux/amd64` and `linux/arm64` index from `docker/Dockerfile` with
-  no cache and no QEMU, and pushes it by digest, tagged `<version>`, for a
-  release that is not a pre-release `<major>.<minor>`, and `latest` when
-  `plan` found the release the latest;
+  no cache and no QEMU, and pushes it by digest with no tag; scan-and-tag
+  tags it `<version>`, for a release that is not a pre-release
+  `<major>.<minor>`, and `latest` when `plan` found the release the latest,
+  once its scan passes;
 - labels and annotates it with `eu.ferrofed.information-sheet` and
   `eu.ferrofed.instructions-for-use`, the download URLs of the two documents
   the release attaches, so an image names the copies that describe it;
