@@ -105,6 +105,14 @@ async fn each_page_is_reached_by_the_navigation_and_drawn_whole() -> Result<(), 
         browser.titled(&titled("Topology")).await?;
         browser.text("span", "org-a").await?;
         hydrated(browser).await?;
+        browser
+            .element(By::Css(r#"button[commandfor="topology-rule"]"#))
+            .await?
+            .click()
+            .await?;
+        browser
+            .text("dialog[@open]//li", "dashed, marked !")
+            .await?;
         browser.console_clean("the topology").await
     })
     .await

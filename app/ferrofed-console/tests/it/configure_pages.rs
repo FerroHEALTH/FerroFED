@@ -24,7 +24,14 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
             body.contains(r#"href="/configuration/members/node-c""#),
             "{body}"
         );
-        assert!(body.contains("Edit<span"), "{body}");
+        assert!(
+            body.contains(r#"aria-label="Actions for node-c""#),
+            "a console member's row has its row menu: {body}"
+        );
+        assert!(
+            body.contains(r#"<a role="menuitem" href="/configuration/members/node-c""#),
+            "whose Edit opens the member's form: {body}"
+        );
         assert!(
             body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
             "a console member's row offers its own confirmed removal: {body}"
@@ -57,8 +64,12 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
         "each endpoint is an F7 sub-card: {edit}"
     );
     assert!(
-        edit.contains(r#"<template data-repeat="blank">"#),
+        edit.contains(r#"<template data-repeat="blank" data-token="__row__">"#),
         "Add copies a blank endpoint in place with WebAssembly: {edit}"
+    );
+    assert!(
+        edit.contains(r#"<template data-repeat="blank" data-token="__profile__">"#),
+        "a blank FHIR endpoint's own profiles add rows in place under a token of their own: {edit}"
     );
     assert!(
         edit.contains(r#"name="form[edit]" value="add-query""#),

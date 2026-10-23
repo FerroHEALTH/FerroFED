@@ -22,6 +22,18 @@ messages! {
     TopologyOrganisations = "topology-organisations",
     /// `and their nodes`
     TopologyOrganisationsLine = "topology-organisations-line",
+    /// `it answered with a 5xx, or slower than half the budget`
+    TopologyRuleDegraded = "topology-rule-degraded",
+    /// `no probe has run yet: a state, never a value`
+    TopologyRuleNotChecked = "topology-rule-not-checked",
+    /// `An organisation, a service group and the branch into each show the …`
+    TopologyRuleNote = "topology-rule-note",
+    /// `excluded, or its organisation excluded: asked nothing`
+    TopologyRuleOff = "topology-rule-off",
+    /// `no answer within the per-node budget`
+    TopologyRuleUnreachable = "topology-rule-unreachable",
+    /// `the last probe got a status below 500 within half the per-node budget`
+    TopologyRuleUp = "topology-rule-up",
     /// `Services`
     TopologyServices = "topology-services",
     /// `that the gateway asks`

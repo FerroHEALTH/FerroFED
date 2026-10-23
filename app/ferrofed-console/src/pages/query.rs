@@ -260,6 +260,7 @@ fn parameters(form: &QueryForm) -> AnyView {
             tr(Msg::QueryParameterValueLabel),
         ],
         rows,
+        token: ROW,
         blank: Some(parameter_row(ROW, &ParameterRow::default())),
         add: Some(RepeatAdd {
             label: tr(Msg::QueryParameterAdd),

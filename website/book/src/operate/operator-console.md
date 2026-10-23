@@ -123,7 +123,7 @@ service worker or a URL.
   | Page | What it shows | Read from |
   |---|---|---|
   | `/` | the dashboard: the organisations, the nodes reachable, the open incidents and the running configuration, the nodes that need attention, the topology in brief, the open incidents and the configuration at a glance | the pages below |
-  | `/topology` | the gateway, the services it asks and the organisations with their nodes, as a map or a list, filtered by state | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
+  | `/topology` | the gateway, the services it asks and the organisations with their nodes, as a map or a list, filtered by state, with How it is drawn saying what each edge's line and mark mean | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
   | `/organisations`, `/organisations/nodes` | every organisation with its nodes and worst state, and every node with its organisation, `system_id`, state and median latency | the same |
   | `/organisations/{org}`, `/organisations/{org}/{node}` | one organisation and its nodes; one node with its facts, its endpoints and, on its Routes tab, the creating systems the routing table sends to it | the same, and `GET {base}/operator/creating-systems` |
   | `/services` | every service the gateway asks, grouped, with its last observed state | `GET {base}/operator/dependencies` |
@@ -225,7 +225,8 @@ service worker or a URL.
   An apply, a roll back, a confirmation, an approval, a removal and a
   stored version each ask you to confirm in a dialog of their own, which the
   console checks again; a save is not applied and asks none. A console member's or
-  section's removal is offered on its row of the tab and on its own page.
+  section's row opens Edit from its row menu (⋯), and its removal is offered
+  beside that menu and on its own page.
   How configuration works opens an explanation of what stays in the file
   and what a revision holds. Every form is a plain post to its page: with
   no WebAssembly, Add and Remove of a row post the form and answer with it
@@ -380,7 +381,7 @@ A console route with no screenshot fails the testkit's
 
 ### Configuration page
 
-![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its Edit and Remove.](img/console/configuration-members.png)
+![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its Remove and its row menu.](img/console/configuration-members.png)
 
 [The Members tab of the configuration page in the dark theme](img/console/configuration-members-dark.png)
 

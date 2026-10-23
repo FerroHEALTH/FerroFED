@@ -3,6 +3,7 @@ a-new-revision = a new revision
 absolute-path-file-read-from = Absolute path of the file it is read from
 absolute-path-gateway-s-host = An absolute path on the gateway's host.
 actions = Actions
+actions-for = Actions for { $named }
 add-a-binding-section = Add a binding section
 add-a-member = Add a member
 add-binding-section = Add binding section

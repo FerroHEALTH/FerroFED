@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::view::action::ActionGroup;
-use ferrohealth_ui::view::flow::FlowState;
+use ferrohealth_ui::view::flow::{EdgeRule, FlowRule, FlowState, rule_button, rule_dialog};
 use ferrohealth_ui::view::surface::{Header, facts_row, page_heading};
 use ferrohealth_ui::view::topology::{
     ClusterLink, QuickLook, StatusCount, StatusMenu, Topology, TopologyCard, TopologyGroup,
@@ -38,6 +38,9 @@ const STATES: [FlowState; 5] = [
     FlowState::NotChecked,
     FlowState::Off,
 ];
+
+/// The id of the dialog that says how the edges are drawn.
+const RULE_DIALOG: &str = "topology-rule";
 
 /// How many organisations a map shows unfolded before the healthy ones
 /// start folded.
@@ -159,6 +162,7 @@ pub fn page() -> AnyView {
             Ok(federation) => view! {
                 {heading}
                 {map(&federation, &asked)}
+                {edge_rule()}
             }
             .into_any(),
         }
@@ -168,6 +172,26 @@ pub fn page() -> AnyView {
         <Suspense fallback=|| ()>{body}</Suspense>
     }
     .into_any()
+}
+
+/// "How the flow is drawn": each state's line and what it means on the
+/// map, in FerroUI's short dialog that the toolbar's button opens.
+fn edge_rule() -> AnyView {
+    let rule = |state, meaning| EdgeRule {
+        state,
+        meaning: tr(meaning),
+    };
+    rule_dialog(FlowRule {
+        id: RULE_DIALOG.into(),
+        rules: vec![
+            rule(FlowState::Up, Msg::TopologyRuleUp),
+            rule(FlowState::Degraded, Msg::TopologyRuleDegraded),
+            rule(FlowState::Unreachable, Msg::TopologyRuleUnreachable),
+            rule(FlowState::NotChecked, Msg::TopologyRuleNotChecked),
+            rule(FlowState::Off, Msg::TopologyRuleOff),
+        ],
+        note: tr(Msg::TopologyRuleNote),
+    })
 }
 
 /// A card of the map.
@@ -475,7 +499,7 @@ fn map(federation: &Federation, asked: &Asked) -> AnyView {
                 })
                 .collect(),
         },
-        tools: None,
+        tools: Some(rule_button(RULE_DIALOG.into())),
         updated: None,
         collapse_all: Some(ClusterLink {
             href: asked.href(|next| {
