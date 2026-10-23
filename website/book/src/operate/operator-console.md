@@ -225,8 +225,8 @@ service worker or a URL.
   An apply, a roll back, a confirmation, an approval, a removal and a
   stored version each ask you to confirm in a dialog of their own, which the
   console checks again; a save is not applied and asks none. A console member's or
-  section's row opens Edit from its row menu (⋯), and its removal is offered
-  beside that menu and on its own page.
+  section's row menu (⋯) holds Edit and Remove…, which asks in a dialog for
+  the reason the revision keeps; its own page offers the removal too.
   How configuration works opens an explanation of what stays in the file
   and what a revision holds. Every form is a plain post to its page: with
   no WebAssembly, Add and Remove of a row post the form and answer with it
@@ -381,7 +381,7 @@ A console route with no screenshot fails the testkit's
 
 ### Configuration page
 
-![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its Remove and its row menu.](img/console/configuration-members.png)
+![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its row menu.](img/console/configuration-members.png)
 
 [The Members tab of the configuration page in the dark theme](img/console/configuration-members-dark.png)
 

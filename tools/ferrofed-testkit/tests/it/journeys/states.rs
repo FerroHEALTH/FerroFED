@@ -5,8 +5,10 @@
 //! `FERROFED_SCREENSHOTS` gate for the visual review: the pointer on a
 //! navigation entry and on a table row, the keyboard focus on a navigation
 //! entry and a form's button, the operator's menu open with its theme
-//! choice, the drawer open on a phone, and the top bar with a long operator
-//! name on a phone and at 1440 pixels, each in the light and the dark theme.
+//! choice, the drawer open on a phone, the top bar with a long operator
+//! name on a phone and at 1440 pixels, and a configuration row's menu open
+//! and its removal asking for the reason, each in the light and the dark
+//! theme.
 //!
 //! The images go to the ignored `target/console-screenshots/states/`, as
 //! `<state>.png` and `<state>-dark.png`; the book shows the pages, not the
@@ -19,6 +21,7 @@ use serde_json::json;
 use thirtyfour::{By, Cookie, WebElement};
 
 use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::configure;
 use crate::journeys::provider::OPERATOR;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -189,6 +192,45 @@ async fn long_name(browser: &Browser, stack: &Stack, theme: &str) -> Result<(), 
     Ok(())
 }
 
+/// Captures console member B's row menu open on the Members tab, and the
+/// removal it opens asking for the reason, at 1440 and at 390 CSS pixels.
+async fn row_removal(browser: &Browser, stack: &Stack, theme: &str) -> Result<(), Box<dyn Error>> {
+    let dialog = "cfg-remove-node-b-dialog";
+    browser.driver().delete_all_cookies().await?;
+    browser.goto(&stack.url("/")).await?;
+    let mut cookie = Cookie::new("ferrofed_console_theme", theme);
+    cookie.set_path("/");
+    browser.driver().add_cookie(cookie).await?;
+    sign_in(browser, stack).await?;
+    for (width, suffix) in [(1440, ""), (390, "-narrow")] {
+        layout(browser, width, 900, theme).await?;
+        configure::hydrated(browser, stack, "/configuration/members").await?;
+        browser
+            .element(By::Css(r#"summary[aria-label="Actions for node-b"]"#))
+            .await?
+            .click()
+            .await?;
+        browser
+            .element(By::Css(format!(
+                r#"button[role="menuitem"][commandfor="{dialog}"]"#
+            )))
+            .await?;
+        shot_of_view(browser, &format!("row-menu{suffix}"), theme).await?;
+        browser
+            .element(By::Css(format!(
+                r#"button[role="menuitem"][commandfor="{dialog}"]"#
+            )))
+            .await?
+            .click()
+            .await?;
+        browser
+            .element(By::Css(format!("dialog#{dialog}[open]")))
+            .await?;
+        shot_of_view(browser, &format!("row-removal{suffix}"), theme).await?;
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn every_console_state_is_captured_in_light_and_dark() -> Result<(), Box<dyn Error>> {
     if !std::env::var(SCREENSHOTS_GATE).is_ok_and(|value| value == "1") {
@@ -198,6 +240,9 @@ async fn every_console_state_is_captured_in_light_and_dark() -> Result<(), Box<d
     for theme in ["light", "dark"] {
         let stack = Stack::start().await?;
         with_browser(async |browser| every_state(browser, &stack, theme).await).await?;
+        let admin = configure::listener().await;
+        let stack = Stack::start_with_admin(&admin.uri()).await?;
+        with_browser(async |browser| row_removal(browser, &stack, theme).await).await?;
     }
     Ok(())
 }
