@@ -4,9 +4,16 @@
 # The operator console
 
 The operator console is a web interface to a FerroFED federation, for the
-people who run it. It ships as its own binary, `ferrofed-viewer`, and its own
-image, `ghcr.io/ferrohealth/ferrofed-viewer`, beside the gateway. No
+people who run it. It ships as its own binary, `ferrofed-console`, and its own
+image, `ghcr.io/ferrohealth/ferrofed-console`, beside the gateway. No
 specification governs the console: it is FerroFED's own design.
+
+The console was named `ferrofed-viewer` before v0.0.12. To upgrade, pull
+`ghcr.io/ferrohealth/ferrofed-console` in place of
+`ghcr.io/ferrohealth/ferrofed-viewer`, rename every `FERROFED_VIEWER__`
+override to `FERROFED_CONSOLE__` and `FERROFED_VIEWER_CONFIG` to
+`FERROFED_CONSOLE_CONFIG`, and run the binary as `ferrofed-console`. The
+cookies are renamed with it, so every operator signs in once more.
 
 The console is one more client of the gateway. It reaches the gateway over
 HTTP, on the same public surface any other client uses, and it adds no
@@ -26,7 +33,7 @@ service worker or a URL.
   Gateway that marks the page you are on. On a narrow screen the navigation
   is a drawer the Menu button opens. The theme is light until you choose
   another; the console keeps your choice in a second `HttpOnly` cookie,
-  `ferrofed_viewer_theme`, which holds the word `light`, `dark` or `system`
+  `ferrofed_console_theme`, which holds the word `light`, `dark` or `system`
   and nothing else, for 400 days, and draws each page in it on the server.
   The footer of every page names the product, its version and Cadasto B.V.,
   and links the About page, which names the manufacturer in full with the
@@ -263,7 +270,7 @@ carries the amber development banner. To take them again, build the site
 bundle, start chromedriver, and run the capture behind its gate:
 
 ```sh
-scripts/release/viewer-site.sh --release
+scripts/release/console-site.sh --release
 FERROFED_SCREENSHOTS=1 FERROFED_WEBDRIVER=http://127.0.0.1:9515 \
   cargo nextest run -p ferrofed-testkit -E 'test(/screenshots::/)'
 ```
@@ -417,9 +424,9 @@ and its request log carries no body and no header value.
 
 ## Configuration
 
-The console reads a TOML file named by `--config` or `FERROFED_VIEWER_CONFIG`.
+The console reads a TOML file named by `--config` or `FERROFED_CONSOLE_CONFIG`.
 Every key can be set from the environment as
-`FERROFED_VIEWER__<SECTION>__<KEY>`, and the client secret can be read from a
+`FERROFED_CONSOLE__<SECTION>__<KEY>`, and the client secret can be read from a
 file through `client_secret_file`. A refused configuration names the key and
 the line, never a value, so no secret reaches a message or a log.
 
@@ -445,8 +452,8 @@ issuer = "https://idp.example.org/realms/ferrofed"
 authorization_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/auth"
 token_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/token"
 jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
-client_id = "ferrofed-viewer"
-client_secret_file = "/run/secrets/viewer-client-secret"
+client_id = "ferrofed-console"
+client_secret_file = "/run/secrets/console-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
 offline_access = false
@@ -479,7 +486,7 @@ default, adds the `offline_access` scope and `prompt=consent` to the
 sign-in; `scopes` must not list `offline_access` itself, and the refusal
 names `oidc.scopes`. The console refreshes the access token with whatever
 refresh token the provider issues, with or without it. `end_session_endpoint` is
-optional, and `post_logout_redirect_uri` needs it. `ferrofed-viewer config check`
+optional, and `post_logout_redirect_uri` needs it. `ferrofed-console config check`
 reads and checks a configuration without binding a socket.
 
 `[[admin.replicas]]` names the admin listener of each gateway replica the
@@ -489,7 +496,7 @@ the console shows and the operator picks the replica by (letters, digits,
 `http` or `https` root of that replica's admin listener. Without an entry
 the console offers no admin action, and its views are as before. The list
 can be set from the environment as one TOML value, for example
-`FERROFED_VIEWER__ADMIN__REPLICAS='[{ name = "gateway-0", admin_url = "https://ferrofed-0.internal:9464/" }]'`.
+`FERROFED_CONSOLE__ADMIN__REPLICAS='[{ name = "gateway-0", admin_url = "https://ferrofed-0.internal:9464/" }]'`.
 
 The console's server calls each admin listener directly, so it must reach
 it on an internal network that nothing outside the deployment can reach;

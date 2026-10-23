@@ -41,7 +41,7 @@ set -euo pipefail
 export LC_ALL=C
 
 readonly REPO=FerroHEALTH/FerroFED
-readonly IMAGES='ghcr.io/ferrohealth/ferrofed ghcr.io/ferrohealth/ferrofed-viewer'
+readonly IMAGES='ghcr.io/ferrohealth/ferrofed ghcr.io/ferrohealth/ferrofed-console'
 readonly REGISTER=docs/registers/non-conforming-versions.tsv
 readonly MARKER='<!-- withdrawn versions: rows above this line -->'
 readonly CONTACT=info@cadasto.com
@@ -166,7 +166,7 @@ https://github.com/$REPO/blob/main/$REGISTER: $SUMMARY
 Move every deployment of $VERSION to $REPLACEMENT or later.
 
 - The image tags \`$LINE\` and \`latest\` of \`ghcr.io/ferrohealth/ferrofed\` and
-  \`ghcr.io/ferrohealth/ferrofed-viewer\` point at $REPLACEMENT.
+  \`ghcr.io/ferrohealth/ferrofed-console\` point at $REPLACEMENT.
 - The \`$VERSION\` tag, its digest, the release and its attestations stay: a
   published release and its tag cannot be changed or deleted, so a
   deployment pinned to \`$VERSION\` or to its digest keeps running the
@@ -337,7 +337,7 @@ self_test() {
     if [[ -d "$case" ]]; then rm -r "$case"; fi
     mkdir -p "$case/repo/docs/registers" "$case/repo/changelog.d" \
       "$case/stub/releases" "$case/stub/advisories" \
-      "$case/stub/registry/ferrofed" "$case/stub/registry/ferrofed-viewer"
+      "$case/stub/registry/ferrofed" "$case/stub/registry/ferrofed-console"
     printf '# a comment\nid\tfound\tversions\trequirement\tsummary\tserious_incident\taction\tcorrected_in\tauthorities_told\tusers_told\tclosed\n%s\n%s\n' \
       "$good" "$other" > "$case/repo/$REGISTER"
     printf '# Security Policy\n\n## Withdrawn versions\n\n| Version | Withdrawn | Finding | Advisory |\n| --- | --- | --- | --- |\n%s\n' \
@@ -346,7 +346,7 @@ self_test() {
     : > "$case/stub/releases/v0.0.10"
     printf 'The original advisory.\n' > "$case/stub/advisories/GHSA-2345-6789-cfgh"
     local image
-    for image in ferrofed ferrofed-viewer; do
+    for image in ferrofed ferrofed-console; do
       printf 'sha256:aaa\n' > "$case/stub/registry/$image/0.0.9"
       printf 'sha256:bbb\n' > "$case/stub/registry/$image/0.0.10"
       printf 'sha256:aaa\n' > "$case/stub/registry/$image/0.0"
@@ -405,14 +405,14 @@ self_test() {
   check 'a dry run prints the authorities notice' grep -q 'Art 30(1)(i)) ---' "$work/out"
 
   fixture
-  printf 'sha256:ccc\n' > "$work/case/stub/registry/ferrofed-viewer/latest"
+  printf 'sha256:ccc\n' > "$work/case/stub/registry/ferrofed-console/latest"
   # shellcheck disable=SC2086 # $base is a word list on purpose.
   attempt 0 $base --apply
   local repo="$work/case/repo" registry="$work/case/stub/registry"
   check 'the line tag moves' grep -q bbb "$registry/ferrofed/0.0"
   check 'latest moves' grep -q bbb "$registry/ferrofed/latest"
-  check 'the viewer line tag moves' grep -q bbb "$registry/ferrofed-viewer/0.0"
-  check 'a latest pointing elsewhere stays' grep -q ccc "$registry/ferrofed-viewer/latest"
+  check 'the console line tag moves' grep -q bbb "$registry/ferrofed-console/0.0"
+  check 'a latest pointing elsewhere stays' grep -q ccc "$registry/ferrofed-console/latest"
   check 'the version tag stays' grep -q aaa "$registry/ferrofed/0.0.9"
   check 'the advisory page is written' test -f "$repo/docs/advisories/v0.0.9-withdrawn.md"
   check 'the page carries its licence header' grep -q 'SPDX-License-Identifier: BUSL-1.1' "$repo/docs/advisories/v0.0.9-withdrawn.md"

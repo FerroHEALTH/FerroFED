@@ -36,7 +36,7 @@
 # Usage:
 #   scripts/checks/stray-literals.sh [--update] [ROOT...]
 #
-# With no ROOT it reads app/ferrofed-viewer/src, the tree CI reads (#1151).
+# With no ROOT it reads app/ferrofed-console/src, the tree CI reads (#1151).
 #
 # The allow file is scripts/checks/stray-literals.allow and the baseline
 # scripts/checks/stray-literals.baseline, both optional.
@@ -54,7 +54,7 @@ if [ "${1:-}" = "--update" ]; then
   shift
 fi
 if [ "$#" -eq 0 ]; then
-  set -- app/ferrofed-viewer/src
+  set -- app/ferrofed-console/src
 fi
 for dir in "$@"; do
   if [ ! -d "$dir" ]; then

@@ -117,7 +117,7 @@ async fn every_state(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     layout(browser, 1440, 900, theme).await?;
     browser.driver().delete_all_cookies().await?;
     browser.goto(&stack.url("/")).await?;
-    let mut cookie = Cookie::new("ferrofed_viewer_theme", theme);
+    let mut cookie = Cookie::new("ferrofed_console_theme", theme);
     cookie.set_path("/");
     browser.driver().add_cookie(cookie).await?;
     sign_in(browser, stack).await?;

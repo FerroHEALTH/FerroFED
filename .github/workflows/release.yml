@@ -5,14 +5,14 @@
 # a `needs` edge:
 #
 #   plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish) ── milestone
-#                                  └─ build-viewer ───────────────┘
+#                                  └─ build-console ───────────────┘
 #
 # plan refuses a tag whose milestone (titled exactly as the tag) is missing or
 # still holds an open item, and milestone closes it once every leg succeeded
 # (scripts/release/milestone.sh).
 #
-# build-binaries, build-image and build-viewer are calls to the reusable
-# workflows release-build.yml, release-image.yml and release-viewer.yml, the
+# build-binaries, build-image and build-console are calls to the reusable
+# workflows release-build.yml, release-image.yml and release-console.yml, the
 # SLSA Build Level 3 lanes.
 #
 # The release is created as a DRAFT, the gateway compose files, the nginx
@@ -530,19 +530,19 @@ jobs:
       version: ${{ needs.plan.outputs.version }}
       latest: ${{ needs.plan.outputs.is-latest == 'true' }}
 
-  # ---- build-viewer: the operator console image ------------------------------
+  # ---- build-console: the operator console image ------------------------------
 
   # A call and nothing else, for the same Build L3 reason. The console ships
   # as an image alone, so it adds no asset to the draft.
-  build-viewer:
-    name: viewer image (linux/amd64, linux/arm64)
+  build-console:
+    name: console image (linux/amd64, linux/arm64)
     needs: [plan, github-release]
     permissions:
       contents: read # the attestations API, to verify the inputs
       packages: write # push the image and its attestations to GHCR
       id-token: write # Sigstore, for the provenance and SBOM attestations
       attestations: write # store them against this repository
-    uses: ./.github/workflows/release-viewer.yml
+    uses: ./.github/workflows/release-console.yml
     with:
       tag: ${{ needs.plan.outputs.tag }}
       version: ${{ needs.plan.outputs.version }}
@@ -554,7 +554,7 @@ jobs:
     name: github release (publish)
     # Every `needs` job has to succeed, the default, so a failed or skipped
     # leg leaves the release a draft.
-    needs: [plan, github-release, build-binaries, build-image, build-viewer]
+    needs: [plan, github-release, build-binaries, build-image, build-console]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -647,7 +647,7 @@ jobs:
   # `needs` edge can reach.
   milestone:
     name: close the milestone
-    needs: [plan, github-release, build-binaries, build-image, build-viewer, finalize-release]
+    needs: [plan, github-release, build-binaries, build-image, build-console, finalize-release]
     if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

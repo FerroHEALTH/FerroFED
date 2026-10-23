@@ -103,7 +103,7 @@ fn every_image_label_set_names_the_manufacturer() -> TestResult {
         ),
         format!(r#"eu.ferrofed.manufacturer="{line}""#),
     ];
-    for dockerfile in ["docker/Dockerfile", "docker/viewer/Dockerfile"] {
+    for dockerfile in ["docker/Dockerfile", "docker/console/Dockerfile"] {
         let text = std::fs::read_to_string(format!("{root}/{dockerfile}"))?;
         for label in &quoted {
             assert!(text.contains(label.as_str()), "{dockerfile}: {label}");
@@ -119,7 +119,7 @@ fn every_image_label_set_names_the_manufacturer() -> TestResult {
     ];
     for workflow in [
         ".github/workflows/release-image.yml",
-        ".github/workflows/release-viewer.yml",
+        ".github/workflows/release-console.yml",
     ] {
         let text = std::fs::read_to_string(format!("{root}/{workflow}"))?;
         for label in &bare {

@@ -116,7 +116,7 @@ const SERIALISATION: &str = "fhir-r4";
 const OPENEHR: &str = "openehr-";
 
 /// The operator console, a client of the gateway's public surface.
-const VIEWER: &str = "ferrofed-viewer";
+const CONSOLE: &str = "ferrofed-console";
 
 /// The parts of the gateway the operator console must not link: it reaches
 /// the gateway over HTTP as any other client does.
@@ -341,10 +341,10 @@ fn the_binding_crates_depend_on_nothing_in_ferrofed() -> Result<(), Box<dyn Erro
     reason = "a test asserts, and returns its setup errors"
 )]
 fn the_operator_console_reaches_the_gateway_over_http_alone() -> Result<(), Box<dyn Error>> {
-    let reached = closure(VIEWER)?;
+    let reached = closure(CONSOLE)?;
     assert!(
-        reached.contains(VIEWER),
-        "cargo tree for {VIEWER} did not list the crate itself, so its output was not read"
+        reached.contains(CONSOLE),
+        "cargo tree for {CONSOLE} did not list the crate itself, so its output was not read"
     );
     let breaches: Vec<&str> = GATEWAY
         .iter()

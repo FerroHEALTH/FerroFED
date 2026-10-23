@@ -73,7 +73,7 @@ The operator console's browser journeys (#608) follow the same model behind
 their own gate, `FERROFED_JOURNEYS=1`: they live in the testkit's
 `tests/it/journeys/`, each start a chromedriver of their own
 (`FERROFED_CHROMEDRIVER`, default `chromedriver` on `PATH`; #1052), or share
-the endpoint `FERROFED_WEBDRIVER` names, and need the site bundle `scripts/release/viewer-site.sh
+the endpoint `FERROFED_WEBDRIVER` names, and need the site bundle `scripts/release/console-site.sh
 --release` writes, and the `journeys (browser)` job runs them with
 `test(/^journeys::/)`; the placement guard refuses a journey anywhere else.
 

@@ -110,7 +110,7 @@ from the same signed tag `vX.Y.Z` on
   and `linux/arm64`, tagged with the version and, for a release that is not
   a pre-release, `<major>.<minor>` and `latest`
   ([The image](../operate/container.md#the-image)).
-- **The operator console image** `ghcr.io/ferrohealth/ferrofed-viewer`, for
+- **The operator console image** `ghcr.io/ferrohealth/ferrofed-console`, for
   the same two platforms ([The operator console](../operate/operator-console.md)).
   The console holds neither harmonised component.
 - **The files attached to the release:** the gateway compose file with its

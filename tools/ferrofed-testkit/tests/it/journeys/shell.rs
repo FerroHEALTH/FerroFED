@@ -331,7 +331,7 @@ async fn a_development_gateway_is_named_in_the_banner_on_every_page() -> Result<
             .text("div", "the static development cross-reference")
             .await?;
         browser
-            .text("span", &format!("· v{}", ferrofed_viewer::app::VERSION))
+            .text("span", &format!("· v{}", ferrofed_console::app::VERSION))
             .await?;
         browser.console_clean("the banner on the dashboard").await?;
 

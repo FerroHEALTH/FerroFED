@@ -85,7 +85,7 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-eehrxf" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-viewer" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-console" },
   # The operator console's components and stylesheet (#1146): the FerroHEALTH
   # console library, under the licence of the project's own code.
   { allow = ["BUSL-1.1"], crate = "ferrohealth-ui" },

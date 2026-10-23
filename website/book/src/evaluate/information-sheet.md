@@ -49,7 +49,7 @@ released on 2026-10-16. It ships as these forms:
   and `aarch64`;
 - the gateway binary `ferrofed`, for Linux on `x86_64` and `aarch64`, on
   glibc and on musl;
-- the operator console image `ghcr.io/ferrohealth/ferrofed-viewer`;
+- the operator console image `ghcr.io/ferrohealth/ferrofed-console`;
 - the source code, under the Business Source License 1.1
   ([Licensing](licensing.md)).
 

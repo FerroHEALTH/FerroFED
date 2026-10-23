@@ -14,7 +14,7 @@
 
 use std::error::Error;
 
-use ferrofed_viewer::app::PRODUCT;
+use ferrofed_console::app::PRODUCT;
 use thirtyfour::{By, Key, WebElement};
 
 use crate::journeys::browser::{Browser, until, with_browser};

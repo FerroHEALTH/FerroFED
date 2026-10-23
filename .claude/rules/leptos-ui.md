@@ -1,11 +1,11 @@
 ---
-paths: ["app/ferrofed-viewer/**"]
+paths: ["app/ferrofed-console/**"]
 ---
 
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# Leptos viewer rules (`app/ferrofed-viewer`, and any Leptos code)
+# Leptos console rules (`app/ferrofed-console`, and any Leptos code)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
 exactly in the root `[workspace.dependencies]` (today `=0.2.0`), and the
@@ -108,7 +108,7 @@ the orchestrator, never made in a slice.
   `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`, browser-only
   ones under `[target.'cfg(target_arch = "wasm32")'.dependencies]`, and code
   for one half only carries the matching `#[cfg(target_arch …)]`. Keep the
-  lib compiling for `wasm32-unknown-unknown` at all times: the CI `viewer`
+  lib compiling for `wasm32-unknown-unknown` at all times: the CI `console`
   job runs clippy on that target.
 - **Before the first `#[server]` function**, confirm through `/leptos-lookup`
   and a wasm32 clippy pass that the `#[server]` macro builds under the target
@@ -128,7 +128,7 @@ the orchestrator, never made in a slice.
   `[package.metadata.leptos]`; `[profile.release]` stays the server's. Avoid
   `regex` and generics-heavy code on browser paths (factor a concrete inner
   function). A new browser-side dependency is justified against the bundle
-  bytes it adds, measured from `scripts/release/viewer-site.sh --release`,
+  bytes it adds, measured from `scripts/release/console-site.sh --release`,
   and the bundle is held to the budget of §12.
 - **The bundle name is fixed at compile time.** Leptos names the WebAssembly
   file it loads from `LEPTOS_OUTPUT_NAME`, which the repository's
@@ -141,7 +141,7 @@ the orchestrator, never made in a slice.
   every screen into section functions bound to erased locals.
 - The workspace bar applies unchanged (`.claude/rules/reliability.md`,
   `.claude/rules/rust-style.md`): no `unsafe`, no `unwrap`/`expect` outside
-  tests, `thiserror` for the viewer's error enums, every public item
+  tests, `thiserror` for the console's error enums, every public item
   documented, suppressions as `#[expect(lint, reason = "…")]` scoped to the
   smallest item. The `#[component]` macro drops attributes such as
   `#[must_use]` from the function it writes, so a public component carries a
@@ -333,11 +333,11 @@ stylesheet's `scroll-padding-top` clears it for a focused control
   `tower::ServiceExt::oneshot` (`tests/it/server.rs`, `tests/it/sign_in.rs`),
   and the gateway client against a `wiremock` stub gateway
   (`tests/it/gateway.rs`), the specification's own examples as the bodies.
-- Gates for every viewer change (`/ui-gates`): `cargo fmt` and `leptosfmt`
-  clean; `cargo clippy -p ferrofed-viewer --all-targets -- -D warnings` on
-  the host and `cargo clippy -p ferrofed-viewer --lib --target
+- Gates for every console change (`/ui-gates`): `cargo fmt` and `leptosfmt`
+  clean; `cargo clippy -p ferrofed-console --all-targets -- -D warnings` on
+  the host and `cargo clippy -p ferrofed-console --lib --target
   wasm32-unknown-unknown -- -D warnings`; `cargo nextest run -p
-  ferrofed-viewer`; `scripts/release/viewer-site.sh --release` completing
+  ferrofed-console`; `scripts/release/console-site.sh --release` completing
   when the change touches the build surface.
 - **Browser journeys** drive the console in headless Chrome (#608): Rust only,
   `thirtyfour` over WebDriver through chromedriver, in the testkit's
@@ -356,8 +356,8 @@ stylesheet's `scroll-padding-top` clears it for a focused control
 ## 12. The bundle budget and the `wasm-release` profile
 
 The browser downloads the WebAssembly before the page hydrates, so its size
-is held to a budget in CI. After `scripts/release/viewer-site.sh --release`,
-the `viewer` job runs `scripts/checks/viewer-bundle.sh`, which writes the
+is held to a budget in CI. After `scripts/release/console-site.sh --release`,
+the `console` job runs `scripts/checks/console-bundle.sh`, which writes the
 WebAssembly and its JavaScript glue, raw, `gzip -9` and `brotli -q 11`, to the
 job summary, and fails when the brotli-compressed WebAssembly is over the
 budget below. The script reads the budget from this table, so the number
@@ -561,12 +561,12 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
 - **The bundle names no directory of the build host.** The panic locations
   rustc embeds as data name the source file of every crate, so an
   unremapped CI build ships `/home/runner/...` and the registry and
-  toolchain paths. `scripts/release/viewer-site.sh` remaps the cargo home,
+  toolchain paths. `scripts/release/console-site.sh` remaps the cargo home,
   the toolchain sysroot and the checkout to `/cargo`, `/rustc-sysroot` and
   `/ferrofed` for the WebAssembly build alone
   (`CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS` with
-  `--remap-path-prefix`; `trim-paths` is unstable), and the `viewer` job's
-  `scripts/checks/viewer-paths.sh` fails when a home, runner, registry or
+  `--remap-path-prefix`; `trim-paths` is unstable), and the `console` job's
+  `scripts/checks/console-paths.sh` fails when a home, runner, registry or
   toolchain path appears in the WebAssembly or its JavaScript glue. A
   `RUSTFLAGS` set in the environment overrides the target variable, and the
   check then fails.
@@ -591,7 +591,7 @@ The catalog rule is FerroUI's (its `.claude/rules/leptos-ui.md` §13): no
 string the console draws lives outside a catalog, and a language joins as a
 catalog file with no code change. What is particular here:
 
-- The console's catalog is `app/ferrofed-viewer/locales/<tag>/ferrofed-viewer.ftl`,
+- The console's catalog is `app/ferrofed-console/locales/<tag>/ferrofed-console.ftl`,
   embedded by `fluent_templates::static_loader!` in `crate::locale`, where
   each message is one `Msg`. A test holds every catalog directory to the
   full message set, and a throwaway catalog under `tests/locales/` shows the
@@ -602,7 +602,7 @@ catalog file with no code change. What is particular here:
   `SharedValue` and provides it with `ferrohealth_ui::i18n::provide_locale`,
   so the console's words and the library's switch together, and the document
   writes it as `<html lang>`.
-- `scripts/checks/stray-literals.sh app/ferrofed-viewer/src` runs in CI
+- `scripts/checks/stray-literals.sh app/ferrofed-console/src` runs in CI
   against `scripts/checks/stray-literals.baseline`: a file may hold no more
   stray literals than its count, and a change that moves strings into the
   catalog lowers the count with `--update`. Most of the remaining strings

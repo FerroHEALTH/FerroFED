@@ -5,7 +5,7 @@
 # brand favicon, not files of their own (no specification governs this: our
 # own design). mdBook reads a theme override from
 # website/book/theme/favicon.svg and favicon.png, and cargo-leptos copies
-# app/ferrofed-viewer/public/favicon.ico into the console's site root, so the
+# app/ferrofed-console/public/favicon.ico into the console's site root, so the
 # mark exists more than once and nothing but this check keeps the copies in
 # step: change the brand mark, forget a copy, and it serves the old favicon.
 #
@@ -22,7 +22,7 @@ cd "$(dirname "$0")/../.."
 readonly PAIRS="\
 website/book/theme/favicon.svg	assets/brand/favicon.svg
 website/book/theme/favicon.png	assets/brand/favicon-32.png
-app/ferrofed-viewer/public/favicon.ico	assets/brand/favicon.ico"
+app/ferrofed-console/public/favicon.ico	assets/brand/favicon.ico"
 
 fail=0
 while IFS=$'\t' read -r copy source; do

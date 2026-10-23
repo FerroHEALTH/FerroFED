@@ -2,13 +2,13 @@
 name: leptos-reviewer
 description: >
   Read-only reviewer that checks a diff or subsystem of the FerroFED operator
-  console (app/ferrofed-viewer) against .claude/rules/leptos-ui.md: the
+  console (app/ferrofed-console) against .claude/rules/leptos-ui.md: the
   no-JavaScript mandate, the gateway-client boundary, no token and no patient
   identifier in the browser, the target split, SSR and hydration
   correctness, reactivity and <For>-key discipline, router and form idioms,
   the security headers, bundle size, and the WCAG 2.2 AA bar. Returns ranked
   findings with rule and book citations. Use proactively before committing
-  any viewer subsystem.
+  any console subsystem.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, MultiEdit, NotebookEdit
 model: opus

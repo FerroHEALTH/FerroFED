@@ -73,7 +73,7 @@ ferrofed-eehrxf = { path = "app/ferrofed-eehrxf" }
 ferrofed-server = { path = "app/ferrofed-server" }
 # The operator console, a dev-dependency of the harness alone: the harness
 # drives it against a running gateway over stub nodes (#276).
-ferrofed-viewer = { path = "app/ferrofed-viewer" }
+ferrofed-console = { path = "app/ferrofed-console" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
@@ -260,10 +260,10 @@ pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # committed. Verified against crates.io on 2026-10-04.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
 # The operator console (#275; no specification governs it: our own design):
-# Leptos server-side rendering with hydration, the family's viewer stack. The
+# Leptos server-side rendering with hydration, the family's console stack. The
 # server half and the browser half take their features per target in
-# app/ferrofed-viewer, so a workspace --all-features build never enables both.
-# The wasm-bindgen CLI of the viewer build must equal the wasm-bindgen crate
+# app/ferrofed-console, so a workspace --all-features build never enables both.
+# The wasm-bindgen CLI of the console build must equal the wasm-bindgen crate
 # version, and scripts/checks/versions.sh holds the two to the pin matrix. The
 # session cookie is written and read with the cookie crate. Verified against
 # crates.io on 2026-10-05.
@@ -288,7 +288,7 @@ ferrohealth-ui = "=0.2.0"
 # to a new version deliberately. Verified against crates.io on 2026-10-20.
 ferrohealth-smart = { version = "=0.4.0", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
-# build time from app/ferrofed-viewer/locales/, the crate and version
+# build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.
 # Verified against crates.io on 2026-10-19.
 fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
@@ -414,7 +414,7 @@ panic = "unwind"
 overflow-checks = true
 debug = "line-tables-only"
 
-# The operator console's WebAssembly bundle (app/ferrofed-viewer), built by
+# The operator console's WebAssembly bundle (app/ferrofed-console), built by
 # cargo-leptos: optimized for size, since the browser downloads it (the Cargo
 # reference, profiles; no specification governs this: our own design). It
 # keeps the inherited overflow checks and drops the line tables, which

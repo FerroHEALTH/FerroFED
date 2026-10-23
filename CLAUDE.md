@@ -67,7 +67,7 @@ ES256 `[signing]` key beside ES384 (#513); the Nuts grant toward the NVI
 non-disclosure setting `[federation.consent] disclose` (#493) and a
 pre-filter that says it did not ask, with a closed `NotAsked` reason (#496,
 #568); PIXm asked by POST (#494); the verified caller as the user agent of
-each IHE audit record (#500); the operator console, `app/ferrofed-viewer`,
+each IHE audit record (#500); the operator console, `app/ferrofed-console`,
 with its own image (#275), the operator views over a read-only operator
 surface (#276, #583), sign-out (#584), the query console (#277) and the
 compressed bundle (#600), and its browser journeys in headless Chrome
@@ -320,7 +320,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   optional scrape token or mutual TLS, and the stored-query drift repair,
   admitted through the client authentication gate for the issuer's
   operator scope and recorded with the operator who ran it (#635, #767).
-- `app/ferrofed-viewer`: the operator console, the `ferrofed-viewer` binary
+- `app/ferrofed-console`: the operator console, the `ferrofed-console` binary
   and its own image (#275, decision A55); never published. A Leptos app
   rendered on the server and hydrated in the browser, built by cargo-leptos,
   its two halves chosen by compilation target, never by Cargo feature. A pure

@@ -1612,7 +1612,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-server",
- "ferrofed-viewer",
+ "ferrofed-console",
  "fhir-types",
  "flate2",
  "http",
@@ -1649,7 +1649,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrofed-viewer"
+name = "ferrofed-console"
 version = "0.0.11"
 dependencies = [
  "aws-lc-rs",
