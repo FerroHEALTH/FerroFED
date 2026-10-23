@@ -46,8 +46,9 @@ usage() {
 }
 
 valid_tag() {
-  [[ "$1" =~ $TAG_RE ]] || {
-    echo "::error::plan: '$1' is not a vX.Y.Z tag" >&2
+  local tag="$1"
+  [[ "$tag" =~ $TAG_RE ]] || {
+    echo "::error::plan: '$tag' is not a vX.Y.Z tag" >&2
     exit 2
   }
 }
@@ -66,10 +67,10 @@ order_prev() {
 }
 
 prev_tag() {
-  local prev
-  prev="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | order_prev "$1")"
+  local tag="$1" prev
+  prev="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | order_prev "$tag")"
   [[ -n "$prev" ]] || {
-    echo "::error::plan: no release tag below ${1%%-*}" >&2
+    echo "::error::plan: no release tag below ${tag%%-*}" >&2
     return 1
   }
   printf '%s\n' "$prev"
@@ -158,14 +159,15 @@ check_milestone() { bash scripts/release/milestone.sh check "$TAG"; }
 check_version() {
   local fail=0 cff matrix manifest compose
   agree() {
-    if [[ -z "$2" ]]; then
-      echo "::error::$1 declares no product version." >&2
+    local source="$1" declared_version="$2"
+    if [[ -z "$declared_version" ]]; then
+      echo "::error::$source declares no product version." >&2
       fail=1
-    elif [[ "$2" != "$VERSION" ]]; then
-      echo "::error::tag $TAG declares version $VERSION, but $1 says $2." >&2
+    elif [[ "$declared_version" != "$VERSION" ]]; then
+      echo "::error::tag $TAG declares version $VERSION, but $source says $declared_version." >&2
       fail=1
     else
-      echo "OK: $1 declares $VERSION"
+      echo "OK: $source declares $VERSION"
     fi
   }
   local file
@@ -317,10 +319,11 @@ checks() {
 }
 
 self_test() {
-  local fails=0 got
+  local fails=0 got refused="refused"
   expect() {
-    if [[ "$2" != "$3" ]]; then
-      echo "self-test: $1: got '$2', want '$3'" >&2
+    local name="$1" have="$2" want="$3"
+    if [[ "$have" != "$want" ]]; then
+      echo "self-test: $name: got '$have', want '$want'" >&2
       fails=$((fails + 1))
     fi
   }
@@ -338,11 +341,11 @@ self_test() {
   expect "no tag below" "$got" ""
   expect "a plain date" "$(support_end 2026-10-23)" "2031-10-23"
   expect "a leap day" "$(support_end 2028-02-29)" "2033-03-01"
-  expect "a leap day in a common year" "$(support_end 2027-02-29 || echo refused)" "refused"
+  expect "a leap day in a common year" "$(support_end 2027-02-29 || echo "$refused")" "$refused"
   expect "the last day of a month" "$(support_end 2026-12-31)" "2031-12-31"
-  expect "an empty date" "$(support_end "" || echo refused)" "refused"
-  expect "a month out of range" "$(support_end 2026-13-01 || echo refused)" "refused"
-  expect "a day out of range" "$(support_end 2026-04-31 || echo refused)" "refused"
+  expect "an empty date" "$(support_end "" || echo "$refused")" "$refused"
+  expect "a month out of range" "$(support_end 2026-13-01 || echo "$refused")" "$refused"
+  expect "a day out of range" "$(support_end 2026-04-31 || echo "$refused")" "$refused"
   if [[ "$fails" -gt 0 ]]; then
     echo "plan.sh self-test FAILED ($fails case(s))" >&2
     exit 1
@@ -353,30 +356,33 @@ self_test() {
 main() {
   case "${1:-}" in
   checks)
-    [[ "$#" -eq 2 || ("$#" -eq 4 && "$3" == "--notes" && -n "$4") ]] || usage
-    valid_tag "$2"
-    local notes_file="${4:-release-notes.md}"
+    local tag="${2:-}" flag="${3:-}" notes_file="${4:-}"
+    [[ "$#" -eq 2 || ("$#" -eq 4 && "$flag" == "--notes" && -n "$notes_file") ]] || usage
+    valid_tag "$tag"
+    notes_file="${notes_file:-release-notes.md}"
     [[ "$notes_file" == /* ]] || notes_file="$PWD/$notes_file"
     cd "$(dirname "$0")/../.."
-    checks "$2" "$notes_file"
+    checks "$tag" "$notes_file"
     ;;
   prev-tag)
+    local tag="${2:-}"
     [[ "$#" -eq 2 ]] || usage
-    valid_tag "$2"
-    prev_tag "$2"
+    valid_tag "$tag"
+    prev_tag "$tag"
     ;;
   notes)
+    local tag="${2:-}" out="${3:-}"
     [[ "$#" -eq 3 ]] || usage
-    valid_tag "$2"
-    local out="$3"
+    valid_tag "$tag"
     [[ "$out" == /* ]] || out="$PWD/$out"
     cd "$(dirname "$0")/../.."
-    notes "$2" "$out"
+    notes "$tag" "$out"
     ;;
   support-end)
+    local date="${2:-}"
     [[ "$#" -eq 2 ]] || usage
-    support_end "$2" || {
-      echo "::error::plan: '$2' is not a YYYY-MM-DD date" >&2
+    support_end "$date" || {
+      echo "::error::plan: '$date' is not a YYYY-MM-DD date" >&2
       exit 1
     }
     ;;
