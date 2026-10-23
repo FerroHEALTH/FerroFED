@@ -162,22 +162,7 @@ fn chrome(
         },
         answer,
     );
-    let pill = status_pill(match (&reads.deployment, &reads.described) {
-        (Err(_), Some(Ok((federation, spec)))) => StatusPill {
-            reach: Reach::Up,
-            words: tr(Msg::GatewayUp),
-            detail: Some(tr_with(
-                Msg::GatewayDetailSpec,
-                &[
-                    ("federation", federation.clone().into()),
-                    ("spec", spec.clone().into()),
-                ],
-            )),
-        },
-        (Err(_), Some(Err(stop))) => pill(&Err(stop.clone())),
-        (deployment, _) => pill(deployment),
-    })
-    .into_any();
+    let pill = status_pill(top_pill(reads)).into_any();
     let operator = crate::read::operator().unwrap_or_else(|| tr(Msg::Operator));
     let menu = user_menu(UserMenu {
         id: USER_MENU_ID,
@@ -248,6 +233,26 @@ fn chrome(
         dock: None,
         footer: footer(),
     })
+}
+
+/// The status pill of the gateway: its deployment's, or, when the
+/// deployment cannot be read, its self-description's.
+fn top_pill(reads: &Reads) -> StatusPill {
+    match (&reads.deployment, &reads.described) {
+        (Err(_), Some(Ok((federation, spec)))) => StatusPill {
+            reach: Reach::Up,
+            words: tr(Msg::GatewayUp),
+            detail: Some(tr_with(
+                Msg::GatewayDetailSpec,
+                &[
+                    ("federation", federation.clone().into()),
+                    ("spec", spec.clone().into()),
+                ],
+            )),
+        },
+        (Err(_), Some(Err(stop))) => pill(&Err(stop.clone())),
+        (deployment, _) => pill(deployment),
+    }
 }
 
 /// The status pill of the gateway the console reached, or of why it could

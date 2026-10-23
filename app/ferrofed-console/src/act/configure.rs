@@ -28,12 +28,13 @@ pub struct ConfigPost(pub ConfigForm);
 pub async fn post(
     Extension(state): Extension<ConsoleState>,
     headers: HeaderMap,
+    extensions: http::Extensions,
     uri: Uri,
     Form(fields): Form<Vec<(String, String)>>,
 ) -> Response {
     let posted = ConfigPost(ConfigForm::of(&fields));
-    render(&state, headers, uri, move || {
-        provide_context(posted.clone())
+    render(&state, (headers, extensions), uri, move || {
+        provide_context(posted.clone());
     })
     .await
 }

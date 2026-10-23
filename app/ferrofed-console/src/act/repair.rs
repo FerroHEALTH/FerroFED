@@ -76,12 +76,13 @@ pub async fn post(
     Extension(state): Extension<ConsoleState>,
     Path(name): Path<String>,
     headers: HeaderMap,
+    extensions: http::Extensions,
     uri: Uri,
     Form(fields): Form<Vec<(String, String)>>,
 ) -> Response {
     let outcome = repair(&state, &headers, &name, &fields).await;
-    render(&state, headers, uri, move || {
-        provide_context(outcome.clone())
+    render(&state, (headers, extensions), uri, move || {
+        provide_context(outcome.clone());
     })
     .await
 }

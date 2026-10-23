@@ -29,7 +29,9 @@ pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<
     browser.titled(&format!("Sign in · {PRODUCT}")).await?;
     browser.console_clean("the landing page").await?;
     signed_out_shell(browser).await?;
-    browser.follow("Sign in").await?;
+    browser
+        .follow("Sign in with your organisation's account")
+        .await?;
     until("the browser holds a session cookie", async || {
         Ok(browser.cookie(stack.cookie()).await?.is_some())
     })
@@ -38,7 +40,7 @@ pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<
     browser.titled(&format!("Dashboard · {PRODUCT}")).await?;
     browser
         .element(By::XPath(
-            "//nav[@aria-label = 'Views']//a[normalize-space(.) = 'Members']",
+            "//nav[@aria-label = 'Console']//a[normalize-space(.) = 'Organisations']",
         ))
         .await?;
     browser
@@ -50,7 +52,9 @@ pub(crate) async fn sign_in(browser: &Browser, stack: &Stack) -> Result<(), Box<
 /// Holds that the page a visitor reads draws the sign-in, and neither the
 /// navigation nor the sign-out.
 pub(crate) async fn signed_out_shell(browser: &Browser) -> Result<(), Box<dyn Error>> {
-    browser.element(By::LinkText("Sign in")).await?;
+    browser
+        .element(By::LinkText("Sign in with your organisation's account"))
+        .await?;
     if !browser.driver().find_all(By::Tag("nav")).await?.is_empty() {
         return Err("a visitor's page draws the navigation".into());
     }
@@ -93,8 +97,8 @@ async fn an_operator_signs_in_at_the_provider_and_the_browser_holds_no_token()
         assert_eq!(Some(true), cookie.http_only, "{cookie:?}");
         assert_eq!(Some(SameSite::Lax), cookie.same_site, "{cookie:?}");
 
-        browser.goto(&stack.url("/members")).await?;
-        browser.text("caption", "Member endpoints").await?;
+        browser.goto(&stack.url("/organisations/nodes")).await?;
+        browser.titled(&format!("All nodes · {PRODUCT}")).await?;
         let page = browser.driver().source().await?;
         let token = stack.provider().access_token();
         assert!(!page.contains(token), "the page holds the access token");

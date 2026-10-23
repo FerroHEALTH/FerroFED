@@ -246,13 +246,13 @@ pub fn stopped(error: &GatewayError, asked: Asked<'_>) -> Stop {
     if let Some((status, code)) = error.refusal() {
         match asked {
             Asked::View => {
-                tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view")
+                tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
             }
             Asked::Status => {
                 tracing::warn!(%status, code = code.as_deref(), "the gateway refused the status read");
             }
             Asked::Query => {
-                tracing::warn!(%status, code = code.as_deref(), "the gateway refused a query")
+                tracing::warn!(%status, code = code.as_deref(), "the gateway refused a query");
             }
             Asked::Action {
                 kind,
@@ -277,13 +277,13 @@ pub fn stopped(error: &GatewayError, asked: Asked<'_>) -> Stop {
     }
     match asked {
         Asked::View => {
-            tracing::error!(error = %error, "the gateway could not be reached for a view")
+            tracing::error!(error = %error, "the gateway could not be reached for a view");
         }
         Asked::Status => {
             tracing::error!(error = %error, "the gateway could not be reached for the status read");
         }
         Asked::Query => {
-            tracing::error!(error = %error, "the gateway could not be reached for a query")
+            tracing::error!(error = %error, "the gateway could not be reached for a query");
         }
         Asked::Action {
             kind,

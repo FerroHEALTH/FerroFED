@@ -147,6 +147,10 @@ fn dashboard(reads: Reads) -> AnyView {
                     view! {
                         {attention}
                         {topology}
+                    },
+                )}
+                {grid_start(
+                    view! {
                         {incidents}
                         {configuration}
                     },

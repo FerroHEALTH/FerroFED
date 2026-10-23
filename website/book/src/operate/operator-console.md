@@ -25,19 +25,27 @@ service worker or a URL.
 
 ## What is built
 
-- **A sign-in page and a shell.** A visitor reads a sign-in card. A
+- **A sign-in page and a shell, built on FerroUI.** The console draws every
+  page with `ferrohealth-ui`, the FerroHEALTH component library, and its
+  FerroFED theme. The server renders each page whole, and the browser
+  hydrates only the few interactive parts (islands), so every page reads and
+  every action posts with no WebAssembly. A visitor reads a sign-in card. A
   signed-in operator lands on a dashboard and reads every page in a shell: a
-  top bar with the gateway's status (`OPTIONS {base}/`), a light, dark and
-  system theme switch, and the operator's name, which opens a menu holding
-  Sign out; and a navigation grouped under Overview, Federation, Queries and
-  Gateway that marks the page you are on. On a narrow screen the navigation
-  is a drawer the Menu button opens. The theme is light until you choose
-  another; the console keeps your choice in a second `HttpOnly` cookie,
-  `ferrofed_console_theme`, which holds the word `light`, `dark` or `system`
-  and nothing else, for 400 days, and draws each page in it on the server.
-  The footer of every page names the product, its version and Cadasto B.V.,
-  and links the About page, which names the manufacturer in full with the
-  gateway the console reads.
+  top bar with the find field, the gateway's status (which names the
+  gateway's version and the replica that answered), and the operator's
+  name, which opens a menu holding Your preferences, the theme and Sign out;
+  and a navigation grouped under Overview, Federation, Queries, Gateway and
+  Console that marks the page you are on and folds to a rail. On a narrow
+  screen the navigation is a drawer the Menu button opens. Your preferences
+  (`/preferences`) has three tabs, Appearance, Language and region, and
+  Keyboard; each preference is kept in an `HttpOnly` cookie of its own
+  (`ferrofed_console_theme`, `ferrofed_console_density`,
+  `ferrofed_console_motion` and the others), holding one word and nothing
+  else, for a year, and the server draws each page in them. The footer of
+  every page names the product, its version and Cadasto B.V., and links the
+  About page, which names the manufacturer in full with the gateway the
+  console reads and holds the gateway's `OPTIONS` document, with its
+  download.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
   code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
@@ -85,19 +93,15 @@ service worker or a URL.
   Connect RP-Initiated Logout 1.0 §2); without one the browser goes back to
   `/`. A `GET /logout` is `405`.
 - **Requests from the console's own pages only.** Every request that is not
-  a `GET`, `HEAD` or `OPTIONS`, the sign-out and every server function the
-  views and the query console call, must come from the console's own pages:
-  a request the browser marks `Sec-Fetch-Site: same-origin`, or, without
-  fetch metadata, one whose `Origin`, or else whose `Referer`, has the
-  origin of `redirect_uri`. Any other, one that names no origin among them,
-  is `403` before the session is read or the gateway asked, so no other
-  site can sign an operator out or spend their sign-in on a query. The
-  session cookie is `SameSite=Lax` as well, and every server function is a
-  `POST`: a `GET` of one runs nothing. Because the console sends
-  `Referrer-Policy: no-referrer`, a browser posts the console's own forms
-  with `Origin: null` and no `Referer`, so those forms pass by
-  `Sec-Fetch-Site` alone; a browser that sends no fetch metadata cannot sign
-  out or run a query, which fails closed.
+  a `GET`, `HEAD` or `OPTIONS`, the sign-out and every form among them, must
+  come from the console's own pages: a request the browser marks
+  `Sec-Fetch-Site: same-origin`, or, without fetch metadata, one whose
+  `Origin`, or else whose `Referer`, has the origin of `redirect_uri`. Any
+  other, one that names no origin among them, is `403` before the session
+  is read or the gateway asked, so no other site can sign an operator out or
+  spend their sign-in on a query. The session cookie is `SameSite=Lax` as
+  well, and every action is a `POST` to the page it sits on: a `GET` runs
+  nothing.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
@@ -113,45 +117,38 @@ service worker or a URL.
   `/login` at the edge. Both pools live in the console's memory: a restart
   ends every session, and more than one replica needs a load balancer that
   keeps an operator on one replica.
-- **The operator views**, each rendered on the console's server from the
-  gateway's own surface, called with the signed-in operator's own access
-  token:
+- **The pages**, each rendered on the console's server from the gateway's
+  own surface, called with the signed-in operator's own access token:
 
-  | View | What it shows | Read from |
+  | Page | What it shows | Read from |
   |---|---|---|
-  | `/members` | every member endpoint, its organisation, membership standing, last observed health, node, `system_id`, product and median latency, and the state of every other dependency | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
-  | `/integrity` | the integrity incidents of each kind since the gateway started, the most recent ones, and the `creating_system_id` routing table, 100 rows a page | `GET {base}/operator/incidents` and `/operator/creating-systems` |
-  | `/stored-queries` | every stored-query version the gateway holds by namespace, 100 versions a page, a namespace the gateway takes no write under marked read-only as the gateway marks it | `GET {base}/operator/stored-queries` |
-  | `/stored-queries/{name}` | one stored query: its versions, newest first, and the AQL of the one shown, marked read-only as the gateway marks it | `GET {base}/operator/stored-queries/{name}` |
-  | `/federation` | the gateway's self-description | `OPTIONS {base}/` |
+  | `/` | the dashboard: the organisations, the nodes reachable, the open incidents and the running configuration, the nodes that need attention, the topology in brief, the open incidents and the configuration at a glance | the pages below |
+  | `/topology` | the gateway, the services it asks and the organisations with their nodes, as a map or a list, filtered by state | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
+  | `/organisations`, `/organisations/nodes` | every organisation with its nodes and worst state, and every node with its organisation, `system_id`, state and median latency | the same |
+  | `/organisations/{org}`, `/organisations/{org}/{node}` | one organisation and its nodes; one node with its facts, its endpoints and, on its Routes tab, the creating systems the routing table sends to it | the same, and `GET {base}/operator/creating-systems` |
+  | `/services` | every service the gateway asks, grouped, with its last observed state | `GET {base}/operator/dependencies` |
+  | `/integrity` | the open and the resolved integrity incidents and the count of each kind since the gateway started | `GET {base}/operator/incidents` |
+  | `/stored-queries`, `/stored-queries/{name}` | every stored query by namespace with its versions, a namespace the gateway takes no write under marked read-only; one stored query with the AQL of the version shown and, on its Versions tab, every version | `GET {base}/operator/stored-queries` and `/operator/stored-queries/{name}` |
+  | `/self-description` | what `OPTIONS {base}/` declares, on the tabs Federation (with the manufacturer it names), Capabilities, ITS-REST areas, Limits and Endpoints | `OPTIONS {base}/` |
+  | `/search` | the organisations, nodes and stored queries the find field names | the same |
 
-  A paged view names the rows it shows and how many there are, and links
-  the page before and after it by `?offset=`. A view without a signed-in
-  session sends the browser to `/login` before the gateway is asked
-  anything, whatever the case of its path or a trailing slash, and each
-  server function a view loads through checks the session itself. A view
-  the gateway refuses shows the gateway's status and its stable error code;
-  a `401` links back to sign-in. A view whose answer the console cannot read
-  says so with the status, and one the gateway cannot answer says so too; no
-  view is ever silently empty. The `/operator/` routes need a token
-  carrying the [operator scope](authentication.md#the-operator-surface) its
-  issuer names. No view shows a patient identifier, a token or clinical
-  data.
+  A page without a signed-in session sends the browser to `/login` before
+  the gateway is asked anything, whatever the case of its path or a
+  trailing slash. A page the gateway refuses shows the gateway's status and
+  its stable error code; a `401` links back to sign-in. A page whose answer
+  the console cannot read says so with the status, and one the gateway
+  cannot answer says so too; no page is ever silently empty. The
+  `/operator/` routes need a token carrying the
+  [operator scope](authentication.md#the-operator-surface) its issuer names.
+  No page shows a patient identifier, a token or clinical data.
 
-  `/members`, `/integrity` and `/stored-queries` each name the gateway
-  replica that answered them, as the gateway's
-  [operator surface](authentication.md#the-operator-surface) names it in
-  every report: "Answered by replica ferrofed-0." The health, the
-  incidents and the routing table are each replica's own, so read them as
-  that replica's view, never the federation's. `/integrity` reads two
-  reports, and when two replicas answered them it names each. A gateway
-  that names no replica is shown as one that did not. The console reads
-  the gateway through the one `base_url` it is configured with, so behind a
-  load balancer it shows the replica the balancer chose for each request
-  and cannot show every replica at once: it has no address of each replica's
-  client listener. To compare replicas, reload a view until each has
-  answered, or read `GET {base}/operator/incidents` at each replica's own
-  address.
+  The top bar's status names the gateway replica that answered, as the
+  gateway's [operator surface](authentication.md#the-operator-surface) names
+  it. The health, the incidents and the routing table are each replica's
+  own, so read them as that replica's view, never the federation's. The
+  console reads the gateway through the one `base_url` it is configured
+  with, so behind a load balancer it shows the replica the balancer chose
+  for each request.
 - **The query console, `/query`:** an AQL query, or a stored query by name
   and optional version, runs through the gateway's own query surface,
   `POST {base}/v1/query/aql` or `POST {base}/v1/query/{name}`, as the
@@ -171,34 +168,31 @@ service worker or a URL.
   refusal shows its status and stable error code, and a result set with no
   readable `meta.federation` is shown as unreadable, never as an answer.
 
-  Name a patient through a parameter, one `name=value` per line, never in
-  the AQL text; each value is sent as a string. The form posts its fields in
-  the request body to the console, which sends them to the gateway in the
-  request body, so nothing you enter reaches a URL or the browser history.
+  Name a patient through a parameter, a name and a value on a row of their
+  own, never in the AQL text; each value is sent as a string. The form posts
+  its fields in the request body to the console, which sends them to the
+  gateway in the request body and answers with the page, the answer under
+  the form, so nothing you enter reaches a URL or the browser history.
   The fields carry `autocomplete="off"`, and the console logs a refusal by
   its status and code alone, never the query or a parameter.
 - **The operator's admin actions**, where `[admin]` names at least one
-  gateway replica. `/integrity` offers the clear of a held `ehr_id` below
-  the recent incidents, which calls
-  `POST /admin/ehr-ids/{ehr_id}/clear` on the admin listener of the replica
-  you pick, or of every replica one after another, since each replica keeps
-  its own routing state. The form offers the `ehr_id`s the incidents name.
-  `/stored-queries` offers the stored-query drift repair below the held
-  versions, which calls
+  gateway replica. `/integrity` offers the clear of a held `ehr_id`, which
+  calls `POST /admin/ehr-ids/{ehr_id}/clear` on the admin listener of the
+  replica you pick, or of every replica one after another, since each
+  replica keeps its own routing state. The form offers the `ehr_id`s the
+  incidents name. A stored query's page offers the drift repair of the
+  version shown, which calls
   `POST /admin/stored-queries/{name}/{version}/distribute` with the members
   in `openEHR-federation-endpoint` (`*` for every active member) on the
   first replica configured, since the replicas share the stored-query store.
-  Each action is a card whose button opens a confirmation step, which the
-  console checks again on its server, and runs once the page has loaded.
-  Its answer shows at the top of the card, with the focus moved there, and
-  names
-  the replica it went to: what a clear found there (a collision and its
-  claimants, one owner, or nothing), or the status of a repair, whether
-  every member took the version, and each member's outcome. A replica that
-  refuses shows its status and stable error code, a `401` links back to
-  sign-in, and one the console cannot reach is named as such. The console
-  calls the admin listener with your own access token, which never reaches
-  the browser, so the gateway admits the action only for a token carrying
+  Each action is a form in a confirmation dialog, which the console checks
+  again on its server. Its answer shows at the top of the page and names the
+  replica it went to: what a clear found there, or whether every member took
+  the version and each member's outcome. A replica that refuses shows its
+  status and stable error code, a `401` links back to sign-in, and one the
+  console cannot reach is named as such. The console calls the admin
+  listener with your own access token, which never reaches the browser, so
+  the gateway admits the action only for a token carrying
   `auth.product_scope` and records you as the operator who ran it.
 - **`/configuration`**, where `[admin]` names at least one gateway replica
   whose configuration is managed (`config.ui = "managed"`). It reads the
@@ -229,11 +223,14 @@ service worker or a URL.
   shows who made it, who approved it, and Approve
   ([Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
   An apply, a roll back, a confirmation, an approval, a removal and a
-  stored version each ask you to confirm in a step of their own, which the
-  console checks again; a save is not applied and asks none. A form's answer
-  shows at the top of its card with the focus moved there, and a field the
-  console refuses is marked with what is wrong under it. Every form runs once
-  the page has loaded. A replica whose configuration is not managed answers
+  stored version each ask you to confirm in a dialog of their own, which the
+  console checks again; a save is not applied and asks none. A member's or a
+  section's removal sits on its own page. Every form is a plain post to its
+  page: Add and Remove of a row post the form and answer with it one row
+  longer or shorter, a form's answer shows at the top of the page, and a
+  form the console or a replica refuses is drawn again as you typed it, the
+  field the console refuses marked with what is wrong under it. A secret you
+  typed is never drawn again. A replica whose configuration is not managed answers
   `404`, and the page says so and offers no form
   ([Console-managed resources](configuration-revisions.md#console-managed-resources)).
 - **`GET /health`**, which answers `200` while the process serves, and the
@@ -243,9 +240,9 @@ Every answer carries a Content-Security-Policy whose script source is a nonce
 minted for that answer, `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`, and no page is
 stored by a cache. The site bundle under `/pkg/` is served brotli- or
-gzip-compressed, as the browser's `Accept-Encoding` chooses; pages and
-server function answers are never compressed, so no compression side
-channel reads what an operator entered.
+gzip-compressed, as the browser's `Accept-Encoding` chooses; pages are
+never compressed, so no compression side channel reads what an operator
+entered.
 
 The console serves plain HTTP and sends no `Strict-Transport-Security`
 header. Terminate TLS at a reverse proxy in front of it and set
@@ -254,12 +251,9 @@ header. Terminate TLS at a reverse proxy in front of it and set
 then reaches the console over HTTPS alone, so no one on the network path can
 turn the operator's sign-in into a plain HTTP request.
 
-The query console shows its answer on the page that asked, so it runs a
-query only once the console's WebAssembly bundle has loaded: until then the
-"Run the query" button is disabled, and a plain form post that reaches the
-console anyway is refused before the gateway is asked. The answer is
-rendered on the console's server, with every value a node sent escaped, and
-the page shows that HTML.
+The query console's answer is rendered on the console's server, with every
+value a node sent escaped, and it works the same with no WebAssembly: Run is
+a plain form post.
 
 ## The screens
 
@@ -267,11 +261,12 @@ Each screen is shown in the light theme, with a link to the same screen in
 the dark theme. The testkit takes them against a development gateway over
 two stub nodes, node A that answers and node B that fails, so every page
 carries the amber development banner. To take them again, build the site
-bundle, start chromedriver, and run the capture behind its gate:
+bundle, install the pinned browser with `scripts/release/journey-tools.sh
+target/journey-tools`, and run the capture behind its gate:
 
 ```sh
 scripts/release/console-site.sh --release
-FERROFED_SCREENSHOTS=1 FERROFED_WEBDRIVER=http://127.0.0.1:9515 \
+FERROFED_JOURNEYS=1 FERROFED_SCREENSHOTS=1 \
   cargo nextest run -p ferrofed-testkit -E 'test(/screenshots::/)'
 ```
 
@@ -280,136 +275,147 @@ A console route with no screenshot fails the testkit's
 
 ### Sign-in
 
-A visitor reads the sign-in card, whose button starts the sign-in at the
-OpenID Provider.
+![The sign-in card: the FerroFED Console mark, "Sign in", the button that signs in with your organisation's account, and the line that the console holds no clinical data.](img/console/sign-in.png)
 
-![The sign-in card: the FerroFED Console mark, "Sign in to the console", a Sign in button, and the line "The console holds no clinical data."](img/console/sign-in.png)
-
-[The sign-in in the dark theme](img/console/sign-in-dark.png)
+[The sign-in card in the dark theme](img/console/sign-in-dark.png)
 
 ### Dashboard
 
-A signed-in operator lands on the dashboard: the members active, the nodes
-up, the open incidents, the stored queries and the running revision, with
-each member's health and the recent incidents.
-
-![The dashboard: five tiles reading 2 of 2 members active, 0 of 2 nodes up and not yet observed, 1 open incident, 113 stored queries and running revision r1 with revision 2 pending, over a member health table where both endpoints are unknown, and a recent incidents card listing a resolved EhrIdCollision and an open LearnedCreatingSystemConflict, each with its time.](img/console/dashboard.png)
+![The dashboard: four counters for the organisations, the nodes reachable, the open incidents and the running revision, over the nodes that need attention, the topology in brief, the open incidents and the configuration at a glance.](img/console/dashboard.png)
 
 [The dashboard in the dark theme](img/console/dashboard-dark.png)
 
-### Members
+### Topology
 
-![The members page: the member endpoints node-a-pub and node-b-pub, each active, with its organisation, health, node and system_id, and the state of the gateway's other dependencies.](img/console/members.png)
+![The topology: the gateway, its services and the organisations with their nodes, each with its state, and the filter by state.](img/console/topology.png)
 
-[The members page in the dark theme](img/console/members-dark.png)
+[The topology in the dark theme](img/console/topology-dark.png)
 
-A member's page, `/members/{node}`, shows one node with its endpoints.
+### Organisations
 
-![The page of member node-a: its organisation, node, system_id and product, and the table of its endpoints, which holds node-a-pub.](img/console/member.png)
+![The organisations: each organisation with its nodes, endpoints and worst node state.](img/console/organisations.png)
 
-[The member's page in the dark theme](img/console/member-dark.png)
+[The organisations in the dark theme](img/console/organisations-dark.png)
 
-### Routing
+![Every node across the organisations, with its organisation, system_id, state and median latency.](img/console/nodes.png)
 
-![The routing page: a filter field over the creating_system_id routing table, whose rows name each creating_system_id, its source (member or registered), its node and its endpoint, 100 rows of 101 with a link to the next page.](img/console/routing.png)
+[Every node across the organisations, with its organisation, system_id, state and median latency in the dark theme](img/console/nodes-dark.png)
 
-[The routing page in the dark theme](img/console/routing-dark.png)
+![The page of organisation org-a: its nodes and their states.](img/console/organisation.png)
+
+[The page of organisation org-a in the dark theme](img/console/organisation-dark.png)
+
+![The page of node node-a: its facts and the state of each endpoint, with its Endpoints and Routes tabs.](img/console/node.png)
+
+[The page of node node-a in the dark theme](img/console/node-dark.png)
+
+![The Routes tab of node node-a: its own system_id and the 99 creating systems the routing table registers for it.](img/console/node-routes.png)
+
+[The Routes tab of node node-a in the dark theme](img/console/node-routes-dark.png)
+
+### Services
+
+![The services the gateway asks, grouped, with the state of each.](img/console/services.png)
+
+[The services the gateway asks, grouped, with the state of each in the dark theme](img/console/services-dark.png)
+
+![The page of the identity cross-reference service.](img/console/service.png)
+
+[The page of the identity cross-reference service in the dark theme](img/console/service-dark.png)
 
 ### Integrity
 
-![The integrity page: Open and Resolved tabs, the open tab listing a LearnedCreatingSystemConflict with its time and description, the count of each incident kind since the gateway started, a cleared collision with its time, ehr_id and the members that claimed it, and the form that clears a held ehr_id at one replica or every replica.](img/console/integrity.png)
+![The integrity page: the Open and Resolved tabs, the open incidents, the count of each kind since the gateway started, and the Clear an EHR id button.](img/console/integrity.png)
 
 [The integrity page in the dark theme](img/console/integrity-dark.png)
 
 ### Query console
 
-The editor takes AQL or a stored query, the parameters that name a patient,
-and the federation options the gateway declares.
-
-![The empty query console: the AQL tab beside the Stored query tab, an empty AQL field, a parameter row, offset and fetch fields, and the federation options with endpoint and organisation chips, the deduplication choice and the best-effort switch, above a Run query button.](img/console/query.png)
+![The empty query console: the AQL and Stored query tabs, the AQL editor, a parameter row, offset and fetch, and the federation options, above the Run button.](img/console/query.png)
 
 [The empty query console in the dark theme](img/console/query-dark.png)
 
-A run against node A alone comes back complete.
+![The Stored query tab of the query console: the name and the version of the stored query to run.](img/console/query-stored.png)
 
-![A complete answer: the results card reads 1 row, complete, 1 of 1 node answered, with node-a-pub active and node-b-pub excluded, the endpoint details table, and the row uid-at-a.](img/console/query-complete.png)
+[The Stored query tab of the query console in the dark theme](img/console/query-stored-dark.png)
 
-[The complete answer in the dark theme](img/console/query-complete-dark.png)
+![A complete answer: the fan-out reads Complete, node-a-pub answered and node-b-pub excluded, over the row node A sent and the raw answer.](img/console/query-complete.png)
 
-A best-effort run over both nodes, where node B fails, says in words that
-the answer is incomplete before its rows.
+[A complete answer in the dark theme](img/console/query-complete-dark.png)
 
-![An incomplete answer: the results card reads 1 row, partial, 1 of 2 nodes answered, and "Not every node in scope answered", with node-a-pub active and node-b-pub in node-error, the error node B answered, and the row node A sent.](img/console/query-partial.png)
+![An incomplete answer: the notice that node-b-pub did not answer, the fan-out with node-b-pub in node-error, and the row node A sent.](img/console/query-partial.png)
 
-[The incomplete answer in the dark theme](img/console/query-partial-dark.png)
+[An incomplete answer in the dark theme](img/console/query-partial-dark.png)
 
-A query the gateway refuses shows its status and its error code.
+![A refused query: the gateway's 400 and its code not-aql.](img/console/query-refused.png)
 
-![A refused query: the AQL "SELECT FROM" and, in the results card, the refused pill with "The gateway refused this view: 400 (not-aql)."](img/console/query-refused.png)
-
-[The refused query in the dark theme](img/console/query-refused-dark.png)
+[A refused query in the dark theme](img/console/query-refused-dark.png)
 
 ### Stored queries
 
-![The stored queries page: the read-only eu.ferrofed.eehrxf namespace with its 11 patient summary section queries, and the org.example namespace, each version a chip, above the pager and the form that sends a held version to the members again.](img/console/stored-queries.png)
+![The stored queries by namespace: the read-only eu.ferrofed.eehrxf namespace with its patient summary queries, and the org.example namespace, each query with its versions.](img/console/stored-queries.png)
 
-[The stored queries in the dark theme](img/console/stored-queries-dark.png)
+[The stored queries by namespace in the dark theme](img/console/stored-queries-dark.png)
 
-A query's detail, `/stored-queries/{name}`, shows its versions and its AQL.
+![The page of org.example::journey_001: the highlighted AQL of version 1.0.1, the Run in the query console button and the Send again repair.](img/console/stored-query.png)
 
-![The detail of org.example::journey_001: its highlighted AQL at version 1.0.1, the versions 1.0.1 and 1.0.0 with when each was stored, its details, and the Open in query console button.](img/console/stored-query.png)
+[The page of org.example in the dark theme](img/console/stored-query-dark.png)
 
-[The stored query's detail in the dark theme](img/console/stored-query-dark.png)
+![The Versions tab of org.example::journey_001: each version with when it was saved.](img/console/stored-query-versions.png)
+
+[The Versions tab of org.example in the dark theme](img/console/stored-query-versions-dark.png)
 
 ### Self-description
 
-![The self-description: cards for the federation, the capabilities, the budgets and paging, and the manufacturer, the ITS-REST areas the gateway serves, the declared endpoints, and the OPTIONS document behind a disclosure.](img/console/self-description.png)
+![The Federation tab of the self-description: the federation id, the specification, the key set, the manufacturer and the replica that answered.](img/console/self-description.png)
 
-[The self-description in the dark theme](img/console/self-description-dark.png)
+[The Federation tab of the self-description in the dark theme](img/console/self-description-dark.png)
+
+![The Limits tab of the self-description.](img/console/self-description-limits.png)
+
+[The Limits tab of the self-description in the dark theme](img/console/self-description-limits-dark.png)
 
 ### Configuration page
 
-Every tab sits under the header that names the running and the saved
-revision, and the card that shows what the saved revision changes. The
-[configuration revisions](configuration-revisions.md) page describes what
-each tab changes.
+![The Members tab of the configuration page: revision 1 running and revision 2 saved, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states.](img/console/configuration-members.png)
 
-![The Members tab of the configuration page: revision 1 running and revision 2 saved, the card showing that revision 2 changes federation.per_node_timeout_ms from 2000 to 2500 with its Apply revision 2 button, and the members table with node-a read-only from the file and node-b a console member saved and not applied.](img/console/configuration-members.png)
+[The Members tab of the configuration page in the dark theme](img/console/configuration-members-dark.png)
 
-[The Members tab in the dark theme](img/console/configuration-members-dark.png)
-
-![The Credentials and bindings tab: the console's credentials of node-a-pub, running, its password set and read from a file, with the buttons that add a binding section or credentials.](img/console/configuration-credentials.png)
+![The Credentials and bindings tab: the console's credentials of node-a-pub, running, with its password set and read from a file.](img/console/configuration-credentials.png)
 
 [The Credentials and bindings tab in the dark theme](img/console/configuration-credentials-dark.png)
 
-![The Stored queries tab: org.example::vital_signs at 1.0.0 and 1.1.0 and org.example::problem_list at 2.0.0, each owned by the store and immutable, with the Store a new version button.](img/console/configuration-stored-queries.png)
-
-[The Stored queries tab in the dark theme](img/console/configuration-stored-queries-dark.png)
-
-![The History tab: revision 2 by operator op-1, saved and not applied, with its reason, its TOML export and its comparison with the running revision, and revision 1 from the configuration file, running.](img/console/configuration-history.png)
+![The History tab: each revision with its author, its reason and its download as TOML.](img/console/configuration-history.png)
 
 [The History tab in the dark theme](img/console/configuration-history-dark.png)
 
-![The Import and export tab: the button that downloads the running configuration as TOML, and the form that imports TOML with a reason as a dry-run revision.](img/console/configuration-import-export.png)
-
-[The Import and export tab in the dark theme](img/console/configuration-import-export-dark.png)
-
-A console member is added on a page of its own,
-`/configuration/members/new`.
-
-![The member form: fields for the organisation, the node with its system_id and CDR product, one Query API endpoint row with its id, base URL and in-service box, the Add endpoint and Add FHIR endpoint buttons, a reason, and the Save as revision 3 button.](img/console/configuration-member-form.png)
+![The member form: the organisation, the node, one Query API endpoint row with the Add endpoint and Add FHIR endpoint buttons, a reason, and the Save as revision 3 button.](img/console/configuration-member-form.png)
 
 [The member form in the dark theme](img/console/configuration-member-form-dark.png)
 
+### Your preferences
+
+![The Appearance tab of Your preferences: the theme and the density as cards, and reduced motion.](img/console/preferences.png)
+
+[The Appearance tab of Your preferences in the dark theme](img/console/preferences-dark.png)
+
+![The Language and region tab of Your preferences.](img/console/preferences-language.png)
+
+[The Language and region tab of Your preferences in the dark theme](img/console/preferences-language-dark.png)
+
+### Find
+
+![The answer of the find field for "node": the organisations and nodes it names.](img/console/search.png)
+
+[The answer of the find field for "node" in the dark theme](img/console/search-dark.png)
+
 ### About and not found
 
-![The About page: the product with its version and purpose, the manufacturer Cadasto B.V. with its postal address, contact and website, and the base URL of the gateway the console reads.](img/console/about.png)
+![The About page: the versions of the console and the gateway, the manufacturer Cadasto B.V. with its postal address, contact and website, and the gateway's OPTIONS document with its download.](img/console/about.png)
 
 [The About page in the dark theme](img/console/about-dark.png)
 
-A path the console does not serve answers `404` with a page of its own.
-
-![The not-found page: "Not found", "404: the console has no page at this address.", and a Back to the console button.](img/console/not-found.png)
+![The not-found page: "Not found", the path the console has no page for, and the way back to the dashboard.](img/console/not-found.png)
 
 [The not-found page in the dark theme](img/console/not-found-dark.png)
 

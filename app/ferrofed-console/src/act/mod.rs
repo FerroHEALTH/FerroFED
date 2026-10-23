@@ -10,7 +10,7 @@
 //! form on the server, asks the gateway as the operator, and answers with
 //! the same page drawn again with the outcome on it ([`render`]): the
 //! answer never reaches a URL, the history or a log, and a refusal stays
-//! with the fields it is about (FerroUI `leptos-ui.md` §5, §15.7). Every
+//! with the fields it is about, as FerroUI asks. Every
 //! unsafe request passes the console's same-origin check before it reaches
 //! a handler (`crate::server::same_origin`). No specification governs the
 //! console's forms: our own design.
@@ -121,12 +121,14 @@ pub fn fields_named<'a>(fields: &'a [(String, String)], name: &str) -> Vec<&'a s
         .collect()
 }
 
-/// Answers a post to the page at `uri` with that page drawn again, as the
-/// request whose headers are `headers` reads it, with what `provide` puts
-/// in its context: the outcome of what the post asked for.
+/// Answers a post to the page at `uri` with that page drawn again.
+///
+/// The page reads the request as its `headers` and `extensions` hold it
+/// (its script nonce among them), with what `provide` puts in its context:
+/// the outcome of what the post asked for.
 pub async fn render(
     state: &ConsoleState,
-    headers: HeaderMap,
+    (headers, extensions): (HeaderMap, http::Extensions),
     uri: Uri,
     provide: impl Fn() + Clone + Send + Sync + 'static,
 ) -> Response {
@@ -146,6 +148,7 @@ pub async fn render(
     *request.method_mut() = Method::GET;
     *request.uri_mut() = uri;
     *request.headers_mut() = headers;
+    *request.extensions_mut() = extensions;
     let mut response = handler(request).await;
     if response.status() == StatusCode::NOT_FOUND {
         return response;

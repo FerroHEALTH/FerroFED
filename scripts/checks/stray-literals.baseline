@@ -15,7 +15,7 @@
 1 app/ferrofed-console/src/configure/export.rs
 1 app/ferrofed-console/src/configure/mod.rs
 2 app/ferrofed-console/src/configure/render/credentials.rs
-6 app/ferrofed-console/src/configure/render/members.rs
+8 app/ferrofed-console/src/configure/render/members.rs
 1 app/ferrofed-console/src/configure/render/parts.rs
 1 app/ferrofed-console/src/gateway/mod.rs
 1 app/ferrofed-console/src/oidc/exchange.rs

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The admin actions in the browser, against a stub admin listener: the
-//! clear of a held collision beside the integrity incidents and the drift
-//! repair beside the stored queries, each form disabled until the page has
-//! hydrated and each answered with what the replica did, without a console
+//! clear of a held collision on Integrity and the drift repair on a stored
+//! query's page, each a form in a confirmation dialog that posts to its
+//! page and is answered there with what the replica did, without a console
 //! error.
 #![allow(
     clippy::panic_in_result_fn,
@@ -15,23 +15,17 @@ use std::error::Error;
 
 use ferrofed_console::app::PRODUCT;
 use ferrofed_testkit::mock::Server;
-use thirtyfour::By;
+use thirtyfour::{By, Key};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, with_browser};
+use crate::journeys::browser::{Browser, hydrated, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
 
 /// A synthetic `ehr_id` two members claim.
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
-
-/// The heading of the collision clear's section.
-const CLEAR: &str = "Clear a held ehr_id";
-
-/// The heading of the drift repair's section.
-const REPAIR: &str = "Repair stored-query drift";
 
 /// The stored query the drift repair sends again, one the stack's gateway
 /// holds.
@@ -82,53 +76,41 @@ async fn listener() -> Server {
     listener
 }
 
-/// The submit of the form under the heading `heading`.
-fn submit(heading: &str) -> By {
-    By::XPath(format!(
-        "//section[h2 = '{heading}']//button[@type = 'submit']"
-    ))
-}
-
 /// Replaces the text of the field `id` with `text`.
 async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Error>> {
     let field = browser.element(By::Id(id)).await?;
-    field.clear().await?;
+    browser
+        .driver()
+        .execute("arguments[0].select();", vec![field.to_json()?])
+        .await?;
+    field.send_keys(Key::Backspace).await?;
     field.send_keys(text).await?;
     Ok(())
 }
 
-/// Opens the confirmation step `id` from its button and runs the action
-/// with its submit, under the heading `heading`.
-async fn confirmed(browser: &Browser, id: &str, heading: &str) -> Result<(), Box<dyn Error>> {
+/// Opens the confirmation dialog `id` from its button.
+async fn open(browser: &Browser, id: &str) -> Result<(), Box<dyn Error>> {
     let opens = browser
         .element(By::Css(format!(
-            r#"button[popovertarget="{id}"][aria-haspopup]"#
+            r#"button[commandfor="{id}"][aria-haspopup="dialog"]"#
         )))
         .await?;
     browser.press(&opens).await?;
     browser
-        .element(By::Css(format!("#{id}:popover-open")))
-        .await?;
-    browser
-        .press(&browser.element(submit(heading)).await?)
+        .element(By::Css(format!("dialog#{id}[open]")))
         .await?;
     Ok(())
 }
 
-/// Loads the view at `route`, titled `title`, and waits until the form
-/// under `heading` runs.
-async fn hydrated(
-    browser: &Browser,
-    stack: &Stack,
-    (route, title): (&str, &str),
-    heading: &str,
-) -> Result<(), Box<dyn Error>> {
-    browser.goto(&stack.url(route)).await?;
-    browser.titled(&format!("{title} · {PRODUCT}")).await?;
-    browser
-        .enabled(submit(heading))
-        .await
-        .map_err(|error| format!("the {title} page never hydrated: {error}").into())
+/// Runs the action of the open dialog `id` with its submit.
+async fn run(browser: &Browser, id: &str) -> Result<(), Box<dyn Error>> {
+    let submit = browser
+        .element(By::Css(format!(
+            r#"dialog#{id}[open] button[type="submit"]"#
+        )))
+        .await?;
+    submit.click().await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -142,43 +124,33 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
         sign_in(browser, &stack).await?;
 
         // The clear of a held collision at every replica, answered with
-        // what the replica held and forgot.
-        hydrated(browser, &stack, ("/integrity", "Integrity"), CLEAR).await?;
-        browser
-            .console_clean("the hydration of the integrity page")
-            .await?;
+        // what the replica held.
+        browser.goto(&stack.url("/integrity")).await?;
+        browser.titled(&format!("Integrity · {PRODUCT}")).await?;
+        hydrated(browser).await?;
+        browser.console_clean("the hydration of the integrity page").await?;
+        open(browser, "clear-dialog").await?;
         fill(browser, "clear-ehr-id", EHR_ID).await?;
-        confirmed(browser, "clear-confirm", CLEAR).await?;
-        browser
-            .text("strong", &format!("Replica gateway-0 cleared {EHR_ID}."))
-            .await?;
-        browser
-            .text("div", "It held a collision between node-a, node-b.")
-            .await?;
+        run(browser, "clear-dialog").await?;
+        browser.at(&stack.url("/integrity")).await?;
+        browser.text("li", "gateway-0 cleared it: it held it at node-a, node-b.").await?;
         browser.console_clean("a cleared collision").await?;
 
         // The drift repair of a version the gateway holds, answered with
         // each member's outcome and the answer's completeness.
-        hydrated(
-            browser,
-            &stack,
-            ("/stored-queries", "Stored queries"),
-            REPAIR,
-        )
-        .await?;
-        browser
-            .console_clean("the hydration of the stored-query page")
-            .await?;
-        fill(browser, "repair-name", NAME).await?;
+        browser.goto(&stack.url(&format!("/stored-queries/{NAME}?version=1.0.0"))).await?;
+        browser.titled(&format!("{NAME} · {PRODUCT}")).await?;
+        hydrated(browser).await?;
+        open(browser, "repair-drift").await?;
         fill(browser, "repair-version", "1.0.0").await?;
-        confirmed(browser, "repair-confirm", REPAIR).await?;
+        run(browser, "repair-drift").await?;
         browser
-            .text(
-                "p",
-                &format!("Replica gateway-0 sent {NAME} version 1.0.0 again: 200."),
-            )
+            .element(By::XPath(
+                "//main//*[contains(text(), 'Version 1.0.0 was sent again by gateway-0, and every endpoint took it.')]",
+            ))
             .await?;
-        browser.text("strong", "Complete.").await?;
+        browser.text("span", "Complete").await?;
+        browser.text("p", "Version 1.0.0 shown.").await?;
         browser.console_clean("a repaired drift").await
     })
     .await?;

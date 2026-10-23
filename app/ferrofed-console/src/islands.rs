@@ -4,7 +4,7 @@
 //! The console's own islands.
 //!
 //! Each is a widget of FerroUI that shares state with the console's code,
-//! as small as its behaviour (FerroUI `leptos-ui.md` §15.1); every other
+//! as small as its behaviour, as FerroUI asks; every other
 //! island the console draws is one of FerroUI's ready islands.
 #![expect(
     clippy::mem_forget,

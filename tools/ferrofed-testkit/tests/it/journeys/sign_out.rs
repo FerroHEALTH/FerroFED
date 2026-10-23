@@ -30,8 +30,10 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        browser.goto(&stack.url("/members")).await?;
-        browser.text("caption", "Member endpoints").await?;
+        browser.goto(&stack.url("/organisations")).await?;
+        browser
+            .titled(&format!("Organisations · {PRODUCT}"))
+            .await?;
         let session = browser
             .cookie(stack.cookie())
             .await?
@@ -41,7 +43,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
         // operator's name opens.
         browser
             .element(By::XPath(format!(
-                "//header//button[@popovertarget = 'operator-menu'][contains(., '{OPERATOR}')]"
+                "//header//button[@popovertarget = 'user-menu'][contains(., '{OPERATOR}')]"
             )))
             .await?
             .click()
@@ -77,7 +79,7 @@ async fn signing_out_ends_the_session_and_returns_through_the_provider()
         let answer = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()?
-            .get(stack.url("/members"))
+            .get(stack.url("/organisations"))
             .header("cookie", format!("{}={}", session.name, session.value))
             .send()
             .await?;

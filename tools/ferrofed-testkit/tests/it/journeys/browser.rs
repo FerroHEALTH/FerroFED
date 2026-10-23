@@ -317,17 +317,6 @@ impl Browser {
         }
     }
 
-    /// Waits for the element `by` names, then until it is enabled.
-    pub(crate) async fn enabled(&self, by: By) -> Result<(), Box<dyn Error>> {
-        self.element(by)
-            .await?
-            .wait_until()
-            .wait(WAIT, POLL)
-            .enabled()
-            .await?;
-        Ok(())
-    }
-
     /// Waits for an element of `tag` whose text holds `text`, and returns it.
     ///
     /// `text` must hold no apostrophe, since it is quoted in an `XPath`.
@@ -405,6 +394,19 @@ impl Browser {
             .await?;
         Ok(())
     }
+}
+
+/// Waits until the page's islands have hydrated: the operator's menu button,
+/// an island of every signed-in page, says whether its menu is open only
+/// once its island runs (FerroUI F13).
+pub(crate) async fn hydrated(browser: &Browser) -> Result<(), Box<dyn Error>> {
+    browser
+        .element(By::Css(
+            r#"button[popovertarget="user-menu"][aria-expanded]"#,
+        ))
+        .await
+        .map_err(|error| format!("the page never hydrated: {error}"))?;
+    Ok(())
 }
 
 /// Polls `check` every [`POLL`] until it holds, and fails naming `what` when

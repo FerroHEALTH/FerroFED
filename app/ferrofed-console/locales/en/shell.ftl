@@ -43,6 +43,6 @@ search-label = Find in the federation
 search-placeholder = Organisation, node or query
 search-submit = Find
 search-disabled = The gateway is unreachable, so there is nothing to find
-development-title = Development deployment:
+development-title = Development deployment
 development-body = this gateway runs the development profile and must not hold real patient data.
 development-body-crossref = this gateway runs the development profile and must not hold real patient data. Patients resolve through the static development cross-reference.

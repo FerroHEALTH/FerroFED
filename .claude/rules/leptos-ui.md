@@ -159,14 +159,18 @@ below. The script reads the budget from this table.
 |---|---|
 | WebAssembly, brotli-compressed | 512000 bytes |
 
-- The gating number is the brotli-compressed WebAssembly, the download
-  (the Leptos book, `deployment/binary_size`).
+- The gating number is the brotli-compressed WebAssembly of the entry, the
+  download every page makes (the Leptos book, `deployment/binary_size`).
+  The build splits (`cargo leptos build --split`): FerroUI's lazy islands
+  load from chunks of their own on a page that draws them, and without the
+  split their placeholder import stops every island from hydrating
+  (FerroHEALTH/FerroUI#331).
 - The budget was raised step by step from 220 KiB (the operator views of
   #276) to 500 KiB (`ferrohealth-ui` 0.1.7, #1162, 479645 bytes), each step
   recorded in the pull request that took it. The islands console on
-  `ferrohealth-ui` 0.3.2 (#1230) measured 442611 bytes (2026-10-23,
-  cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Rust 1.99.1): the islands
-  FerroUI's components carry and the AQL editor. A change that needs more
+  `ferrohealth-ui` 0.3.2 (#1230) measured 315488 bytes split, 442611
+  unsplit (2026-10-23, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Rust
+  1.99.1): the islands FerroUI's components carry and the AQL editor. A change that needs more
   raises the budget here in its own pull request, with the measured size
   and the reason.
 - The `wasm-release` profile (`opt-level = "z"`, `lto = true`,

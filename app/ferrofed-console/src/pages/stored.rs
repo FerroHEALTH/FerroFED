@@ -528,7 +528,7 @@ fn versions_table(name: &str, versions: &[Held]) -> AnyView {
 
 /// The drift repair's form in its dialog: the version and the members.
 fn repair_form(name: &str, version: &str) -> AnyView {
-    let action = href(name);
+    let action = format!("{}?version={}", href(name), encoded(version));
     let version_field = Field::new("repair-version", tr(Msg::ColumnVersion)).view(view! {
         <input
             type="text"

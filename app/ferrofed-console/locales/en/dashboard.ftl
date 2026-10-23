@@ -42,7 +42,16 @@ why-excluded = its membership is not active
 why-unreachable = the last request got no answer
 why-degraded = the last request failed
 topology-title = Topology
-topology-tally = { $organisations } organisations · { $nodes } nodes: { $reachable } reachable, { $degraded } degraded, { $unreachable } unreachable, { $excluded } excluded · { $services } services
+topology-tally = { $organisations ->
+    [one] { $organisations } organisation
+   *[other] { $organisations } organisations
+} · { $nodes ->
+    [one] { $nodes } node
+   *[other] { $nodes } nodes
+}: { $reachable } reachable, { $degraded } degraded, { $unreachable } unreachable, { $excluded } excluded · { $services ->
+    [one] { $services } service
+   *[other] { $services } services
+}
 incidents-open-title = Open incidents
 incidents-none-open = No incident is open.
 configuration-title = Configuration

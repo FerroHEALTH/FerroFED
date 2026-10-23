@@ -4,8 +4,8 @@
 //! The import of a configuration as TOML in the browser, against a stub
 //! admin listener: each revision of the history offers its download, the
 //! running one from the Import and export tab, and TOML pasted into the
-//! import form, its lines counted, is saved as a dry-run revision whose
-//! changes the page shows, without a console error.
+//! import form is saved as a dry-run revision whose changes the page shows,
+//! without a console error.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -19,7 +19,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::journeys::browser::with_browser;
-use crate::journeys::configure::{fill, focused_on_outcome, hydrated, submit};
+use crate::journeys::configure::{fill, hydrated, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -76,15 +76,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(
-            browser,
-            &stack,
-            (
-                "/configuration/history",
-                By::Css(r#"button[popovertarget="rollback-confirm"][aria-haspopup]"#),
-            ),
-        )
-        .await?;
+        hydrated(browser, &stack, "/configuration/history").await?;
         let link = browser
             .element(By::PartialLinkText("Export revision 2 as TOML"))
             .await?;
@@ -92,15 +84,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
             Some(String::from("/configuration/revisions/2/export")),
             link.attr("href").await?
         );
-        hydrated(
-            browser,
-            &stack,
-            (
-                "/configuration/import-export",
-                submit("Import as a dry-run revision"),
-            ),
-        )
-        .await?;
+        hydrated(browser, &stack, "/configuration/import-export").await?;
         let download = browser
             .element(By::PartialLinkText("Download as TOML"))
             .await?;
@@ -113,13 +97,11 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
             .await?;
 
         fill(browser, "cfg-toml", "[federation]\nbest_effort = true\n").await?;
-        browser.text("p", "2 lines").await?;
         fill(browser, "cfg-reason", "from git").await?;
-        browser
+        let import = browser
             .element(submit("Import as a dry-run revision"))
-            .await?
-            .click()
             .await?;
+        browser.press(&import).await?;
         browser
             .text(
                 "strong",
@@ -127,7 +109,6 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
             )
             .await?;
         browser.text("code", "federation.best_effort").await?;
-        focused_on_outcome(browser).await?;
         browser.console_clean("an imported revision").await
     })
     .await

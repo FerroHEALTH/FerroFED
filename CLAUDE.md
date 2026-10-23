@@ -321,25 +321,26 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   admitted through the client authentication gate for the issuer's
   operator scope and recorded with the operator who ran it (#635, #767).
 - `app/ferrofed-console`: the operator console, the `ferrofed-console` binary
-  and its own image (#275, decision A55); never published. A Leptos app
-  rendered on the server and hydrated in the browser, built by cargo-leptos,
-  its two halves chosen by compilation target, never by Cargo feature. A pure
-  HTTP client of the gateway (`gateway`, on `openehr-its` `rest-client`) that
-  links no part of it; the operator's OpenID Connect session is held on its
-  server (`session`, `oidc`), the code exchanged and the ID Token checked
-  before a session begins. The operator views (`views`, #276) read the
-  members, their health, the integrity incidents, the routing table, the
-  stored queries and the self-description, the last four through the
-  gateway's read-only operator surface (`{base}/operator/`, behind the
-  `[auth] product_scope`, #1174). The query console (`query`, #277) runs AQL and
-  the stored queries with every node's status and completeness shown, and
-  sign-out ends the server session and, when configured, the provider's
-  (`oidc`, #584). Its
-  discipline is
-  `.claude/rules/leptos-ui.md`. FerroUI (`ferrohealth-ui`, pinned exactly)
-  leads its UI: its components, design and component rules come from the
-  FerroUI repository at the tag of the pin, and a missing part is a FerroUI
-  issue, never a local copy.
+  and its own image (#275, decisions A55 and A104); never published. A
+  Leptos app in islands mode built on FerroUI (`ferrohealth-ui`, pinned
+  exactly): the server renders every page whole and the browser hydrates
+  only the islands, its two halves chosen by compilation target, never by
+  Cargo feature; every action is a plain form post to its own page
+  (`act`), so every page reads and every action posts with no WebAssembly.
+  A pure HTTP client of the gateway (`gateway`, on `openehr-its`
+  `rest-client`) that links no part of it; the operator's OpenID Connect
+  session is held on its server (`session`, `oidc`), the code exchanged and
+  the ID Token checked before a session begins. The pages (`pages`, read
+  through `read`) show the dashboard, the topology, the organisations and
+  their nodes, the services, the integrity incidents, the stored queries
+  and the self-description, through the gateway's read-only operator
+  surface (`{base}/operator/`, behind the `[auth] product_scope`, #1174),
+  the query console runs AQL and the stored queries with every node's
+  status and completeness shown (#277), and the configuration page changes
+  the gateway's configuration revisions (`configure`). Its discipline is
+  `.claude/rules/leptos-ui.md`. FerroUI leads its UI: its components,
+  design and component rules come from the FerroUI repository at the tag of
+  the pin, and a missing part is a FerroUI issue, never a local copy.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned

@@ -164,24 +164,21 @@ fn rendered(path: &str, page: &str) -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::test]
-async fn the_members_view_renders_from_the_running_gateway() -> Result<(), Box<dyn Error>> {
+async fn the_nodes_page_renders_from_the_running_gateway() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
-    let (status, page) = running.view("/members").await?;
+    let (status, page) = running.view("/organisations/nodes").await?;
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
-    rendered("/members", &page)?;
+    rendered("/organisations/nodes", &page)?;
     assert!(
-        page.contains(r#"<a href="/members/node-a">node-a-pub</a></th>"#),
+        page.contains(r#"href="/organisations/org-a/node-a""#),
         "{page}"
     );
-    assert!(
-        page.contains(r#"<td data-label="Organisation">org-a</td>"#),
-        "{page}"
-    );
+    assert!(page.contains("cdr-a.example.org"), "{page}");
     Ok(())
 }
 
 #[tokio::test]
-async fn the_integrity_view_renders_the_incidents_and_the_routing_table()
+async fn the_integrity_page_renders_the_incidents_and_a_node_its_routes()
 -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
     Incident::EhrIdCollision {
@@ -195,28 +192,20 @@ async fn the_integrity_view_renders_the_incidents_and_the_routing_table()
     rendered("/integrity", &page)?;
     assert!(page.contains("EhrIdCollision"), "{page}");
     assert!(page.contains(EHR_ID), "{page}");
-    assert!(
-        page.contains(r#"<span class="fui-pill fui-tone-bad">open</span>"#),
-        "{page}"
-    );
+    assert!(page.contains("1 open incident"), "{page}");
 
-    let (status, page) = running.view("/routing").await?;
+    let path = "/organisations/org-a/node-a/routes";
+    let (status, page) = running.view(path).await?;
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
-    rendered("/routing", &page)?;
-    assert!(
-        page.contains(r#"<th scope="row" class="fui-mono">legacy-a.example.org</th>"#),
-        "{page}"
-    );
-    assert!(
-        page.contains(r#"<span class="fui-badge fui-tone-neutral">registered</span>"#),
-        "{page}"
-    );
-    assert!(page.contains("Rows 1 to 2 of 2."), "{page}");
+    rendered(path, &page)?;
+    assert!(page.contains("<code>legacy-a.example.org</code>"), "{page}");
+    assert!(page.contains("Registered"), "{page}");
+    assert!(page.contains("<code>cdr-a.example.org</code>"), "{page}");
     Ok(())
 }
 
 #[tokio::test]
-async fn the_stored_query_view_renders_what_the_gateway_holds() -> Result<(), Box<dyn Error>> {
+async fn the_stored_query_page_renders_what_the_gateway_holds() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
     let (status, page) = running.view("/stored-queries").await?;
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
@@ -229,11 +218,11 @@ async fn the_stored_query_view_renders_what_the_gateway_holds() -> Result<(), Bo
 }
 
 #[tokio::test]
-async fn the_self_description_view_renders_the_gateways_options() -> Result<(), Box<dyn Error>> {
+async fn the_self_description_renders_the_gateways_options() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
-    let (status, page) = running.view("/federation").await?;
+    let (status, page) = running.view("/self-description").await?;
     assert_eq!(reqwest::StatusCode::OK, status, "{page}");
-    rendered("/federation", &page)?;
+    rendered("/self-description", &page)?;
     assert!(page.contains("example-federation"), "{page}");
     Ok(())
 }
@@ -245,25 +234,14 @@ async fn the_self_description_view_renders_the_gateways_options() -> Result<(), 
 async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
     for (path, content) in [
-        (
-            "/members",
-            r#"<a href="/members/node-a">node-a-pub</a></th>"#,
-        ),
-        (
-            "/members/node-a",
-            "<caption>Endpoints of this member</caption>",
-        ),
-        (
-            "/integrity",
-            "<caption>Incidents since the gateway started</caption>",
-        ),
-        (
-            "/routing",
-            "<caption>The creating_system_id routing table</caption>",
-        ),
+        ("/", "Nodes reachable"),
+        ("/organisations", r#"href="/organisations/org-a""#),
+        ("/organisations/org-a/node-a", "node-a-pub"),
+        ("/organisations/org-a/node-a/routes", "legacy-a.example.org"),
+        ("/integrity", "Counts since the start"),
         ("/stored-queries", "The gateway holds no stored query."),
-        ("/federation", "example-federation"),
-        ("/query", r#"<button type="submit" disabled class="#),
+        ("/self-description", "example-federation"),
+        ("/query", r#"id="query-form""#),
     ] {
         for round in 1..=10 {
             let (status, page) = running.view(path).await?;
@@ -282,22 +260,26 @@ async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(
     Ok(())
 }
 
-// A stored query's detail reads its name from the route for the page title,
-// which the server renders after the page itself; fetched again and again,
-// the page is whole with its title every time and the render never panics.
+// A stored query's page reads its name from the route; fetched again and
+// again for a name the gateway holds nothing under, it answers its 404 whole
+// every time and the render never panics.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stored_querys_detail_renders_with_its_title_every_time() -> Result<(), Box<dyn Error>> {
     let running = Running::start().await?;
     let path = "/stored-queries/org.example::compositions?version=1.0.0";
     for round in 1..=50 {
         let (status, page) = running.view(path).await?;
-        assert_eq!(reqwest::StatusCode::OK, status, "{path} #{round}: {page}");
-        assert!(
-            page.contains("<title>org.example::compositions · "),
+        assert_eq!(
+            reqwest::StatusCode::NOT_FOUND,
+            status,
             "{path} #{round}: {page}"
         );
         assert!(
-            page.contains("The gateway holds no stored query named org.example::compositions."),
+            page.contains("<title>Not found · "),
+            "{path} #{round}: {page}"
+        );
+        assert!(
+            page.contains("/stored-queries/org.example::compositions"),
             "{path} #{round}: {page}"
         );
         assert!(!page.contains("<template id="), "{path} #{round}: {page}");

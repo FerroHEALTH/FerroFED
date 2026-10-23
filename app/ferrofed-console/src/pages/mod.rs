@@ -8,7 +8,7 @@
 //! `SsrMode::Async`, so the server sends it whole. A read the gateway
 //! refused draws its status and stable code in words, and a fault of the
 //! console says what failed with the way to try again; neither draws an
-//! empty view (FerroUI `leptos-ui.md` §4).
+//! empty view, as FerroUI asks.
 
 pub mod about;
 pub mod configuration;

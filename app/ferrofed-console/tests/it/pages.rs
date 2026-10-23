@@ -174,3 +174,39 @@ async fn a_parameter_row_is_added_and_removed_by_a_plain_post() -> Result<(), Bo
     assert!(!body.contains(r#"id="parameter-name-1""#), "{body}");
     Ok(())
 }
+
+// A page a post answers carries the script nonce its policy names, as every
+// page does, so its hydration runs under the Content-Security-Policy.
+#[tokio::test]
+async fn a_page_a_post_answers_carries_the_nonce_its_policy_names() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(
+        &service,
+        crate::stub::post_as(
+            "/query",
+            &session,
+            &[("kind", "aql"), ("add-parameter", "1")],
+        )?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    let policy = header(&response, "content-security-policy");
+    let nonce = policy
+        .split_once("'nonce-")
+        .and_then(|(_, rest)| rest.split_once('\''))
+        .map(|(nonce, _)| nonce)
+        .ok_or("the policy names a nonce")?;
+    assert!(
+        body.contains(&format!(r#"<script type="module" nonce="{nonce}">"#)),
+        "{body}"
+    );
+    for script in body.split("<script").skip(1) {
+        let tag = script.split('>').next().unwrap_or_default();
+        assert!(
+            tag.contains(&format!(r#"nonce="{nonce}""#)),
+            "every script carries the nonce: {tag}"
+        );
+    }
+    Ok(())
+}

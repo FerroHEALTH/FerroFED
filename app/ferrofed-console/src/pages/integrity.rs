@@ -36,7 +36,7 @@ use crate::pages::{refused_view, relative, stopped};
 use crate::read::incidents::{Incident, Incidents};
 
 /// The id of the clear's dialog.
-const CLEAR_DIALOG: &str = "clear-ehr-id";
+const CLEAR_DIALOG: &str = "clear-dialog";
 
 /// How many incidents are open, `None` when the gateway did not answer.
 pub async fn open_count() -> Option<u32> {

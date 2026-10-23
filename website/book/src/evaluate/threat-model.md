@@ -129,9 +129,9 @@ observed state, is served only to an operator, at
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
 | S | a forged sign-in, a replayed ID Token | P8 | authorization code with PKCE and a `nonce`; the ID Token verified against the provider's key set, issuer, audience and expiry | [The operator console](../operate/operator-console.md); `app/ferrofed-console/tests/it/sign_in.rs` |
-| T | another site signs the operator out or spends the sign-in on a query | P8 | every unsafe request must be same-origin by fetch metadata, `Origin` or `Referer`; `SameSite=Lax`; server functions are `POST` only | `app/ferrofed-console/tests/it/sign_out.rs`, `query_safety.rs` |
-| I | a node's value runs as script in the console, or the page is framed | P4, P8 | every value is escaped on the server; a nonce CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer` | `app/ferrofed-console/tests/it/server.rs`, `query_safety.rs` |
-| I | the operator's token or an answer kept by the browser | P8, P9 | the token stays on the console's server; every page is `no-store`; pages are never compressed | `[session] secure_cookie`; `app/ferrofed-console/tests/it/query_safety.rs` |
+| T | another site signs the operator out or spends the sign-in on a query | P8 | every unsafe request must be same-origin by fetch metadata, `Origin` or `Referer`; `SameSite=Lax`; every action is a `POST` to its own page | `app/ferrofed-console/tests/it/sign_out.rs`, `query.rs`, `configure_refusals.rs` |
+| I | a node's value runs as script in the console, or the page is framed | P4, P8 | every value is escaped on the server; a nonce CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer` | `app/ferrofed-console/tests/it/server.rs`, `query.rs` |
+| I | the operator's token or an answer kept by the browser | P8, P9 | the token stays on the console's server; every page is `no-store`; pages are never compressed | `[session] secure_cookie`; `app/ferrofed-console/tests/it/query.rs` |
 | D | a flood of `GET /login` | P1 | pending sign-ins and sessions are separate, bounded pools | `max_sign_ins`, `max_sessions`; **carried by the deployment:** a rate limit for `/login` at the edge |
 
 The console sends no `Strict-Transport-Security`; set it at the proxy in
