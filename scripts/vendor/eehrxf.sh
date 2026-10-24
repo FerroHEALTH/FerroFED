@@ -15,7 +15,6 @@
 # codes the priority categories of Article 14(1), the HL7 Europe Imaging
 # Report and Hospital Discharge Report guides, and the MyHealth@EU Master
 # Value Sets Catalogue. One corpus per package, each under docs/specs/.
-#
 # Each package is the FHIR package registry's tarball, pinned by URL and
 # sha256 (scripts/vendor/lib/pinned.sh) and committed whole, so its sha256
 # stays the pin; each corpus row of docs/VERSIONS.md carries its pin-set
