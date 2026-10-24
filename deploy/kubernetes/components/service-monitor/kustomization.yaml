@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# A Prometheus Operator ServiceMonitor that scrapes each replica's admin
+# listener through the headless Service ferrofed-admin. It needs the
+# operator's CustomResourceDefinitions in the cluster.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - servicemonitor.yaml

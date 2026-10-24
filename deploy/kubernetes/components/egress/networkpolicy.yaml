@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Where the gateway pods may connect. With this policy in place every
+# destination not listed is refused, so list each one the configuration
+# names, or the gateway reports the member it cannot reach offline and a
+# service it cannot reach unavailable:
+#
+#   - every member endpoint of registry.toml;
+#   - the issuers of [auth] and [[trust.issuer]], for their metadata, key
+#     sets and introspection;
+#   - the Audit Record Repository of [audit.repository];
+#   - each identity service a binding names: [[pixm.manager]], [pdqm],
+#     [xcpd], [pmir], [registry.mcsd], [nl_gf.nvi], [nl_gf.mitz];
+#   - the token endpoint of each [credentials."<endpoint id>"] grant;
+#   - the OTLP collector of telemetry.otlp_endpoint and
+#     metrics.otlp_endpoint;
+#   - the stored-query or revision PostgreSQL, when one is configured;
+#   - the usage report's collector, report.ferropulse.eu on port 443,
+#     unless usage_report is off
+#     (https://ferrofed.eu/docs/operate/usage-report.html).
+#
+# A NetworkPolicy matches addresses, not names, so a destination behind a
+# changing address needs a CIDR wide enough to hold it, or a network plugin
+# that matches names. Each EDIT entry below is a placeholder from the
+# documentation range of RFC 5737.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ferrofed-egress
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Egress
+  egress:
+    # DNS, without which no name below resolves.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # EDIT: the member nodes of registry.toml.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.0/28
+      ports:
+        - port: 443
+          protocol: TCP
+    # EDIT: the issuers, the Audit Record Repository and the identity
+    # services.
+    - to:
+        - ipBlock:
+            cidr: 198.51.100.0/28
+      ports:
+        - port: 443
+          protocol: TCP

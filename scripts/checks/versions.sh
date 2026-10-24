@@ -52,7 +52,8 @@
 #                          compose.yaml gateway tag default, the gateway and
 #                          console images of the release asset
 #                          deploy/compose/compose.yaml and
-#                          the image tag of deploy/kubernetes/statefulset.yaml
+#                          the image tags of deploy/kubernetes/base/statefulset.yaml
+#                          and deploy/kubernetes/components/console/deployment.yaml
 #                          against the product version.
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
@@ -569,20 +570,21 @@ shipped() {
   return 0
 }
 
-# statefulset_tag FILE WANT: the one ferrofed image tag of the Kubernetes
-# manifest FILE is the product version WANT.
+# statefulset_tag FILE WANT [IMAGE]: the one IMAGE tag (ferrofed unless
+# named, or ferrofed-console) of the Kubernetes manifest FILE is the product
+# version WANT.
 statefulset_tag() {
-  local file="$1" want="$2" tags
+  local file="$1" want="$2" image="${3:-ferrofed}" tags
   shipped "$file" || return 0
-  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$file" | sort -u)"
+  tags="$(sed -nE "s|^[[:space:]]*image:[[:space:]]*ghcr\\.io/ferrohealth/${image}:([^@[:space:]]+)[[:space:]]*\$|\\1|p" "$file" | sort -u)"
   if [[ -z "$tags" ]]; then
-    bad "$file has no ghcr.io/ferrohealth/ferrofed image tag"
+    bad "$file has no ghcr.io/ferrohealth/$image image tag"
   elif [[ "$(line_count "$tags")" -gt 1 ]]; then
-    bad "$file names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
+    bad "$file names more than one $image tag: $(printf '%s' "$tags" | tr '\n' ' ')"
   elif [[ "$tags" != "$want" ]]; then
     bad "example manifest: $file runs $tags, $matrix pins the product version $want"
   else
-    note "OK: the $file gateway tag is the product version $tags"
+    note "OK: the $file $image tag is the product version $tags"
   fi
   return 0
 }
@@ -1049,10 +1051,16 @@ if [[ -f "$ci" ]]; then
     kubernetes-json-schema)
       sed -nE 's|.*yannh/kubernetes-json-schema/([0-9a-f]{40})/.*|\1|p' "$ci" | sort -u
       ;;
+    CRDs-catalog)
+      sed -nE 's|.*datreeio/CRDs-catalog/([0-9a-f]{40})/.*|\1|p' "$ci" | sort -u
+      ;;
+    kustomize)
+      sed -nE 's|^[[:space:]]*KUSTOMIZE_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      ;;
     *) ;;
     esac
   }
-  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee promtool validator_cli)
+  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema CRDs-catalog kustomize lychee promtool validator_cli)
   for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"
@@ -1606,7 +1614,8 @@ if shipped "$release_compose"; then
     note "OK: the $release_compose gateway and console tags are the product version $tags"
   fi
 fi
-statefulset_tag deploy/kubernetes/statefulset.yaml "$want_product"
+statefulset_tag deploy/kubernetes/base/statefulset.yaml "$want_product"
+statefulset_tag deploy/kubernetes/components/console/deployment.yaml "$want_product" ferrofed-console
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"
 if [[ -f LICENSE ]]; then

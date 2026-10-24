@@ -58,7 +58,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `actionlint` | the official image, pinned by tag and digest |
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
 | `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` and `docker/console/Dockerfile` |
-| `kubeconform` | the official image, pinned by tag and digest, in strict mode over the example manifests under `deploy/kubernetes/`, against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` |
+| `kubeconform` | the official image, pinned by tag and digest, in strict mode over the Kubernetes package under `deploy/kubernetes/` (its base and its example overlay, rendered by the pinned `kustomize` release binary, its SHA-256 checked before it runs), against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` and the ServiceMonitor and HTTPRoute schemas at a pinned commit of `datreeio/CRDs-catalog`; then `scripts/release/kubernetes-package.sh --self-test` |
 | `observability` | `scripts/checks/observability.sh --self-test` (a missing tool skips outside CI and fails in it), then `scripts/checks/observability.sh` over `deploy/observability/`, with `promtool` from the Prometheus release tarball, its SHA-256 checked before it runs |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh --self-test`, then `scripts/checks/file-length.sh`: the 1000-line cap on hand-written Rust and on the book's Markdown pages, with its ratchet allow-list |
@@ -223,11 +223,12 @@ needs the binary. Locally, with Docker running, pass a static Linux build of
 `ferrofed` for the host's architecture; without one the script runs the
 first three checks. The same job runs `scripts/checks/kubernetes-example.sh`
 with that binary: it reads `ferrofed.toml` and `registry.toml` out of the
-example ConfigMap under `deploy/kubernetes/`, checks that the StatefulSet
-mounts the ConfigMap and the `ferrofed-secrets` Secret where the
-configuration names them, that each replica keeps its audit spool on a volume
-claim of its own, and that the pod's grace period outlasts the drain delay
-plus the drain, and runs `ferrofed config check` over it with a
+ConfigMap of the Kubernetes package's base under `deploy/kubernetes/base/`,
+checks that the StatefulSet mounts the ConfigMap and the `ferrofed-secrets`
+Secret where the configuration names them, that each replica keeps its audit
+spool on a volume claim of its own, that the `preStop` sleep matches the
+drain delay, that the pod's grace period outlasts the sleep, the drain delay
+and the drain, and that the replicas spread over zones and nodes, and runs `ferrofed config check` over it with a
 synthetic file for each secret and a synthetic ES384 signing key, then
 without the `[signing]` table, which it must refuse. Locally, pass any
 `ferrofed` build for the host. It then runs

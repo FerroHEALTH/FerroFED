@@ -31,6 +31,10 @@ metadata:
     app.kubernetes.io/component: gateway
 spec:
   replicas: 2
+  # The headless Service of admin-service.yaml, which gives each replica's
+  # admin listener a name of its own, ferrofed-0.ferrofed-admin, for the
+  # operator console and the scraper.
+  serviceName: ferrofed-admin
   # No replica waits for another to start or stop.
   podManagementPolicy: Parallel
   selector:
@@ -61,11 +65,30 @@ spec:
     spec:
       # The gateway calls no Kubernetes API.
       automountServiceAccountToken: false
-      # Covers server.drain_delay_ms (5 s), server.shutdown_timeout_ms (30 s)
-      # and server.bindings_drain_timeout_ms (5 s) of configmap.yaml, with
-      # 5 s for the export flush, so the kubelet never kills a drain in
-      # progress. The grace period counts from the moment the pod is deleted.
-      terminationGracePeriodSeconds: 45
+      # Covers the preStop sleep (5 s) below, server.drain_delay_ms (5 s),
+      # server.shutdown_timeout_ms (30 s) and server.bindings_drain_timeout_ms
+      # (5 s) of configmap.yaml, with 5 s for the export flush, so the kubelet
+      # never kills a drain in progress. The grace period counts from the
+      # moment the pod is deleted.
+      terminationGracePeriodSeconds: 50
+      # The replicas spread over zones and nodes where the cluster has them,
+      # so losing one zone or one node leaves a replica serving. A cluster
+      # with one zone or one node still schedules both.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ferrofed
+              app.kubernetes.io/component: gateway
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ferrofed
+              app.kubernetes.io/component: gateway
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -122,6 +145,14 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 1
+          # Holds SIGTERM for as long as server.drain_delay_ms, while the
+          # endpoint controllers and the proxies in front stop sending this
+          # pod new requests; the gateway then turns readiness to 503 and
+          # drains (https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/).
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           # Ephemeral storage holds the container log alone: the audit spool
           # is on its volume claim.
           resources:

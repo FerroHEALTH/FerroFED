@@ -195,10 +195,15 @@ spool still holds.
 
 ## Kubernetes
 
-`deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
-the registry document and no secret, a StatefulSet, a Service, a
-PodDisruptionBudget and a NetworkPolicy that opens the metrics port to your
-Prometheus alone ([Metrics](metrics.md#dashboard-and-alert-rules)). CI validates every manifest with `kubeconform` in strict
+`deploy/kubernetes/` is a kustomize package, which every release attaches
+with its images pinned by digest ([The Kubernetes package](kubernetes.md)).
+Its base, `deploy/kubernetes/base/`, is a ConfigMap with the configuration
+and the registry document and no secret, a StatefulSet, a Service, the
+headless Service of the admin listeners, a PodDisruptionBudget and a
+NetworkPolicy that opens the gateway port to your reverse proxy and the
+metrics port to your Prometheus ([Metrics](metrics.md#dashboard-and-alert-rules));
+its components add the operator console, the routes, a ServiceMonitor and
+an egress policy. CI validates every manifest with `kubeconform` in strict
 mode, and runs `ferrofed config check` over the ConfigMap's configuration
 with synthetic secrets. The configuration trusts one example issuer in
 `[auth]` and reads the gateway's signing key from the `ferrofed-secrets`
@@ -214,8 +219,10 @@ own, and neither fits: two gateways must never drain one spool, and an
 finds again wherever it is scheduled
 ([StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)).
 The replicas share nothing else, so `podManagementPolicy: Parallel` starts
-and stops them together, and the StatefulSet names no governing Service,
-because no client addresses one replica. The StatefulSet:
+and stops them together. Its governing Service is the headless
+`ferrofed-admin`, which gives each replica's admin listener a name of its
+own for the console and the scraper; clients reach the replicas through the
+`ferrofed` Service alone. The StatefulSet:
 
 - probes startup and readiness on `GET /health/readiness` and liveness on
   `GET /health`;
@@ -247,11 +254,14 @@ because no client addresses one replica. The StatefulSet:
   a pod keeps accepting while it leaves the Service's endpoints, and
   `server.shutdown_timeout_ms` to the 30-second request timeout and
   `server.bindings_drain_timeout_ms` to 5 seconds;
-- gives the pod a `terminationGracePeriodSeconds` of 45, which outlasts the
-  delay, the drain and the bindings' drain with 5 seconds of room, so the
-  kubelet never kills a drain in progress. Keep the grace period above the
-  three if you change any of them
-  ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
+- holds `SIGTERM` with a `preStop` sleep of 5 seconds, matching the drain
+  delay, while the proxies in front stop sending the pod new requests;
+- gives the pod a `terminationGracePeriodSeconds` of 50, which outlasts the
+  sleep, the delay, the drain and the bindings' drain with 5 seconds of
+  room, so the kubelet never kills a drain in progress. Keep the grace
+  period above the four if you change any of them
+  ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request));
+- spreads its replicas over zones and nodes where the cluster has them.
 
 The PodDisruptionBudget keeps one of the two replicas serving through a
 voluntary disruption. Every secret is a key of the `ferrofed-secrets`
@@ -261,7 +271,7 @@ signing key, and any credential an endpoint needs.
 ```sh
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out signing-key.pem
 kubectl create secret generic ferrofed-secrets --from-file=signing-key.pem
-kubectl apply -f deploy/kubernetes/
+kubectl apply -k deploy/kubernetes/base
 ```
 
 The image lane publishes it as `ghcr.io/ferrohealth/ferrofed`, tagged with the
