@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Each replica is scraped on its own admin listener, with the scrape user's
+# HTTP Basic credentials from a Secret in this namespace, made with, for
+# example:
+#
+#   kubectl create secret generic ferrofed-scrape \
+#     --from-literal=username=prometheus \
+#     --from-file=password=metrics-scrape-password
+#
+# where metrics-scrape-password is the password whose hash configmap.yaml
+# names (https://ferrofed.eu/docs/operate/metrics.html). The base's
+# NetworkPolicy admits the Prometheus pods to the metrics port.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed
+      app.kubernetes.io/component: gateway-admin
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      basicAuth:
+        username:
+          name: ferrofed-scrape
+          key: username
+        password:
+          name: ferrofed-scrape
+          key: password

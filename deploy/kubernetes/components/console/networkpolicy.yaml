@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Who may reach the console pod: the reverse proxy in front of it alone. The
+# console signs every operator in through OpenID Connect before it shows a
+# page; this policy is defence in depth over that.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ferrofed-console
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed-console
+      app.kubernetes.io/component: console
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # EDIT: the namespace of your reverse proxy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: http
+          protocol: TCP

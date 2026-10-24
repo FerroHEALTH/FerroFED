@@ -29,6 +29,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use ehds_logging::balp::BalpSink;
@@ -103,11 +104,22 @@ pub trait Forwarding: Send + Sync + 'static {
 
     /// What the spool holds and how the deliveries went.
     fn status(&self) -> Status;
+
+    /// Stops delivering, closing the repository connection, and returns
+    /// once the delivery has ended.
+    fn stop(&self) -> Stopping<'_>;
 }
+
+/// The stop of one trail, which completes once its delivery has ended.
+pub type Stopping<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
 impl Forwarding for FeedAudit {
     fn start(&self) {
         FeedAudit::start(self);
+    }
+
+    fn stop(&self) -> Stopping<'_> {
+        Box::pin(FeedAudit::stop(self))
     }
 
     fn status(&self) -> Status {
@@ -138,11 +150,18 @@ trait Running: Send {
 
     /// The trail, to read back as the kind it was started as.
     fn as_any(&self) -> &dyn Any;
+
+    /// Stops its delivery ([`Forwarding::stop`]).
+    fn stop(&self) -> Stopping<'_>;
 }
 
 impl<S: Send + 'static, R: Forwarding> Running for Started<S, R> {
     fn status(&self) -> Status {
         self.recorder.status()
+    }
+
+    fn stop(&self) -> Stopping<'_> {
+        self.recorder.stop()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -274,6 +293,28 @@ where
         }),
     );
     Ok(recorder)
+}
+
+/// Stops every trail the process started, within `budget`, and forgets
+/// them, so a gateway started again in this process opens its spools anew.
+///
+/// Each forwarder finishes the message it is writing, closes its repository
+/// connection with a TLS `close_notify` and returns: a syslog connection
+/// dropped with the repository's session tickets unread is reset, and the
+/// frames written last are lost with it (RFC 5425 §4.4; ITI TF-2
+/// §3.20.4.1.1 has a sender keep a message until it is delivered). A message
+/// not yet written stays in its spool. Returns whether every trail stopped
+/// within `budget`. No specification governs when the gateway stops its
+/// trails: our own design, on its drain.
+pub async fn stop_trails(budget: std::time::Duration) -> bool {
+    let trails = std::mem::take(&mut *TRAILS.lock().unwrap_or_else(PoisonError::into_inner));
+    tokio::time::timeout(budget, async {
+        for trail in trails.values() {
+            trail.stop().await;
+        }
+    })
+    .await
+    .is_ok()
 }
 
 /// Why a trail could not be started.
@@ -470,4 +511,85 @@ fn gateway(settings: &Settings) -> url::Url {
             url::Url::parse(&format!("http://{}/", settings.server.listen))
                 .expect("a socket address should form an http URL")
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    use ihe_atna::atna::forwarder::{Forwarder, Status};
+    use ihe_atna::atna::repository::{Repository, Timeouts};
+    use ihe_atna::atna::spool::{Bounds, Spool};
+    use url::Url;
+
+    use super::{Forwarding, Stopping, TRAILS, started, stop_trails};
+
+    /// A trail that counts its stop, over a forwarder that is never run.
+    struct Counted {
+        forwarder: Arc<Forwarder>,
+        stopped: Arc<AtomicBool>,
+    }
+
+    impl Forwarding for Counted {
+        fn start(&self) {}
+
+        fn status(&self) -> Status {
+            self.forwarder.status()
+        }
+
+        fn stop(&self) -> Stopping<'_> {
+            Box::pin(async {
+                self.stopped.store(true, Ordering::SeqCst);
+            })
+        }
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_drain_stops_every_trail_and_forgets_it() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let repository = Repository::unencrypted_for_development(
+            &Url::parse("tcp://127.0.0.1:9")?,
+            Timeouts {
+                connect: Duration::from_secs(1),
+                send: Duration::from_secs(1),
+            },
+        )?;
+        let bounds = Bounds {
+            max_messages: 4,
+            max_bytes: 1 << 16,
+            write_timeout: Duration::from_secs(1),
+        };
+        let stopped = Arc::new(AtomicBool::new(false));
+        let key = String::from("memory:the-drain-stops-every-trail");
+        let _trail = started(key.clone(), &(), || {
+            Ok(Counted {
+                forwarder: Forwarder::new(
+                    Spool::in_memory(bounds),
+                    repository,
+                    Duration::from_secs(1),
+                ),
+                stopped: Arc::clone(&stopped),
+            })
+        })?;
+
+        assert!(
+            stop_trails(Duration::from_secs(5)).await,
+            "within the budget"
+        );
+        assert!(stopped.load(Ordering::SeqCst), "the trail was stopped");
+        assert!(
+            !TRAILS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains_key(&key),
+            "a gateway started again opens its spool anew"
+        );
+        Ok(())
+    }
 }

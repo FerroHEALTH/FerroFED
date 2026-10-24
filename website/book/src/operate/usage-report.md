@@ -40,13 +40,13 @@ The report needs a state directory, `[usage_report] state_dir`
 (`FERROFED__USAGE_REPORT__STATE_DIR`), where the gateway keeps the instance
 id. Without one, or with one it cannot write, the gateway sends nothing:
 without a stable id each restart would count as a new installation. The
-release's compose file and the Kubernetes example turn it on: each sets
+release's compose file, the quickstart's `compose.yaml` and the Kubernetes
+example turn it on: each sets
 `FERROFED__USAGE_REPORT__STATE_DIR=/var/lib/ferrofed/usage-report` on the
-writable volume at `/var/lib/ferrofed`, and the compose file also sets
+writable volume at `/var/lib/ferrofed`, and the two compose files also set
 `FERROFED__USAGE_REPORT__DEPLOYMENT=compose`. The container image sets no
-state directory, and the quickstart's gateway writes nothing, so a plain
-`docker run` and the quickstart send nothing until you mount a writable
-volume and point the key at it:
+state directory, so a plain `docker run` sends nothing until you mount a
+writable volume and point the key at it:
 
 ```shell
 docker run -v ferrofed-state:/var/lib/ferrofed \
@@ -214,9 +214,12 @@ or, in the configuration file:
 enabled = false
 ```
 
-The release's compose file forwards this variable from your shell, so
+The release's compose file and the quickstart's `compose.yaml` forward this
+variable from your shell or `.env`, so
 `FERROFED__USAGE_REPORT__ENABLED=false docker compose up` switches the report
-off there too. In a CI job the report is off by itself: when
+off there too. The quickstart's FerroEHR nodes report to FerroPULSE as well,
+each as a FerroEHR installation, and `FERROEHR__USAGE_REPORT__ENABLED=false`
+stops theirs. In a CI job the report is off by itself: when
 `GITHUB_ACTIONS` or `CI` is `true` or `1`, the gateway sends nothing, and
 `enabled = true` does not change that. A container does not inherit the
 runner's environment, so a test lane that starts the image passes

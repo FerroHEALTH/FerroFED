@@ -37,15 +37,18 @@ page: our own design.
   PMIR Registry (B1, B3).
 - [ ] **Restrict ingress.** Admit client traffic to the gateway port from
   the proxy alone, and the admin port from your scraper and your operators
-  alone. The Kubernetes example's NetworkPolicy admits the scraper alone to
-  the admin port (`deploy/kubernetes/networkpolicy.yaml`); it holds only
+  alone. The Kubernetes package's NetworkPolicy admits the reverse proxy
+  and the console to the gateway port, and the scraper and the console to
+  the admin port (`deploy/kubernetes/base/networkpolicy.yaml`); it holds only
   where the cluster's network plugin enforces NetworkPolicy (B5).
 - [ ] **Restrict egress.** The gateway connects only to the URLs in your
   configuration: the members and their token endpoints, the identity
   services, the issuers' key sets, the audit repository and the collector,
   and, while the usage report is on, `report.ferropulse.eu` on port 443
   ([The usage report](usage-report.md#network)). Allow those and nothing
-  else. The Kubernetes example leaves egress open (B2, B3, B7).
+  else. The Kubernetes package's base leaves egress open, and its `egress`
+  component closes it to DNS and the destinations you list
+  ([Network policies](kubernetes.md#network-policies)) (B2, B3, B7).
 
 ## TLS
 

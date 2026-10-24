@@ -1293,9 +1293,9 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d1877c643fa5f3b2acf5af2ebe95afac45f0331426b3ae3d2b29ccad23bfc14"
+checksum = "ec97a2abf528d44a665129d632b664775b5b0eaf5ccdf39aecd668684d791985"
 dependencies = [
  "async-trait",
  "ihe-atna",
@@ -2625,9 +2625,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3190fe9c0b3d3e131e1e39be8e741556c6915f39f1dab720f321e12e969ea21"
+checksum = "59a774a45545a2b1cced10d75810602969c66bd6dc843634d76931965084320b"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -2649,9 +2649,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.43"
+version = "0.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b4a312f1fdc59d9a8abd21ad1f43ef73381690067363cb5bfa11b49c896efe"
+checksum = "12f2722b6390aa033b3d7f33fa7c4d2e3470f2c844e385d9616a283ae7fd9939"
 dependencies = [
  "async-trait",
  "fhir-types",

@@ -445,8 +445,9 @@ part:
 - Each release attaches a CycloneDX SBOM of the source dependency graph and
   an SPDX SBOM of the shipped binary, with signed provenance (Annex I, Part
   II, points 1 and 7).
-- Vulnerabilities are reported privately, with an acknowledgement within
-  seven days (Annex I, Part II, points 5 and 6; Art 13(17)).
+- Vulnerabilities are reported privately, with an acknowledgement within 5
+  business days and an initial assessment within 10 (Annex I, Part II,
+  points 5 and 6; Art 13(17)).
 - The running system names the manufacturer, its postal address and its
   single point of contact (Art 13(16)).
 - A published release cannot be changed or deleted, so every update stays

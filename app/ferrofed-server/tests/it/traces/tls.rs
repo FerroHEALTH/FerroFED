@@ -186,17 +186,22 @@ async fn a_span_reaches_a_mutual_tls_collector_only_with_the_identity_and_the_ro
     let certificates = ListenerCertificates::generate()?;
     let collector = Collector::start_tls(&certificates)?;
     assert!(collector.endpoint().starts_with("https://"));
-    let roots = dir.path().join("collector-ca.pem");
-    std::fs::write(&roots, certificates.ca())?;
-    let roots_only = format!(
-        "trust_roots_file = {}\n",
-        toml::Value::String(roots.display().to_string())
+    // NOTE: the refusal is the client's own, of a server certificate no root it holds signed, so
+    // it is decided in the handshake; a TLS 1.3 server refuses a missing client certificate only
+    // after the client has finished its side, which makes that refusal a timing race (#1292).
+    let identity = dir.path().join("collector-client.pem");
+    std::fs::write(&identity, certificates.client_identity())?;
+    let identity_only = format!(
+        "client_identity_file = {}\n",
+        toml::Value::String(identity.display().to_string())
     );
     assert_eq!(
         0,
-        exported(&collector, &roots_only).await?,
-        "no client identity: refused"
+        exported(&collector, &identity_only).await?,
+        "a collector no trust root names: refused"
     );
+    // The collector admits only a client certificate its client CA signed, so a span that
+    // arrives proves the gateway presented its identity.
     let table = tls_table(dir.path(), &certificates)?;
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut received = exported(&collector, &table).await?;

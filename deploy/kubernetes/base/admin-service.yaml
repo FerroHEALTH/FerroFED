@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The headless Service of the admin listeners: statefulset.yaml names it as
+# its serviceName, so each replica's admin listener answers at a name of its
+# own, ferrofed-0.ferrofed-admin.<namespace>.svc and so on. The operator
+# console's configuration page addresses each replica there
+# (components/console), and the ServiceMonitor of components/service-monitor
+# scrapes each replica through it. It load-balances nothing: a replica's
+# admin listener serves that replica's metrics and reload alone.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ferrofed-admin
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway-admin
+spec:
+  clusterIP: None
+  # A replica is named here while it starts and drains, so its metrics and
+  # its reload stay reachable then too.
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: metrics
+      port: 9464
+      targetPort: metrics
+      protocol: TCP

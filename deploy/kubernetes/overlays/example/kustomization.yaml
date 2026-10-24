@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# An overlay over the base with every component, the shape a production
+# install takes; pick ingress or gateway-api (and console-ingress or
+# console-route) for your cluster. CI renders it and holds the output to the
+# Kubernetes schemas.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+components:
+  - ../../components/console
+  - ../../components/ingress
+  - ../../components/console-ingress
+  - ../../components/gateway-api
+  - ../../components/console-route
+  - ../../components/service-monitor
+  - ../../components/egress
