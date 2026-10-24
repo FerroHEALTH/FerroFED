@@ -233,8 +233,8 @@ fn serve_command(
         );
         let watch = revision::watch::start(revisions.as_ref(), &reloader, state, revision_poll);
         if let Some((address, access)) = admin {
-            let managed = revisions
-                .map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
+            let managed =
+                revisions.map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
             let app = admin::serving_router(
                 Arc::clone(state),
                 access,
@@ -269,12 +269,7 @@ fn serve_command(
         if let Some(watch) = watch {
             watch.stop(server.bindings_drain).await;
         }
-        if running.drain(server.bindings_drain).await == Drained::Abandoned {
-            tracing::warn!(
-                budget_ms = server.bindings_drain.as_millis(),
-                "the bindings did not stop within server.bindings_drain_timeout_ms; what they hold at a remote service may be left there"
-            );
-        }
+        drain_bindings(running, server.bindings_drain).await;
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         anyhow::Ok(())
@@ -283,6 +278,27 @@ fn serve_command(
         tracing::warn!(error = chain(&error), "the metrics could not be flushed");
     }
     outcome
+}
+
+/// Stops the bindings `running` started, then every audit trail, each within
+/// `budget`, logging the one that did not stop in time.
+///
+/// The trails stop last, so the records the bindings write as they stop are
+/// spooled before each forwarder closes its repository connection with a TLS
+/// `close_notify` (RFC 5425 §4.4).
+async fn drain_bindings(running: binding::process::Running, budget: std::time::Duration) {
+    if running.drain(budget).await == Drained::Abandoned {
+        tracing::warn!(
+            budget_ms = budget.as_millis(),
+            "the bindings did not stop within server.bindings_drain_timeout_ms; what they hold at a remote service may be left there"
+        );
+    }
+    if !crate::audit::stop_trails(budget).await {
+        tracing::warn!(
+            budget_ms = budget.as_millis(),
+            "the audit trails did not stop within server.bindings_drain_timeout_ms; the frames a forwarder wrote last may be lost to a reset"
+        );
+    }
 }
 
 /// Reads the TLS `files` of a listener, when it serves TLS.

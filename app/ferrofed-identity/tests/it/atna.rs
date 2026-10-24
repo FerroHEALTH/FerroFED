@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
 use ferrofed_identity::role::localizer::{Localization, Localizer as _, LocalizerError};
-use ferrofed_testkit::atna::AuditRepository;
+use ferrofed_testkit::atna::{AuditRepository, Ending};
 use ferrofed_testkit::xcpd::RespondingGateway;
 use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::message::AuditSource;
@@ -156,6 +156,38 @@ async fn each_discovery_reaches_the_repository_as_one_iti_20_message() -> TestRe
         "the identifier travels only base64-encoded inside the query"
     );
     assert_eq!(0, audit.status().depth.messages, "delivered, not held");
+    Ok(())
+}
+
+// NOTE: RFC 5425 §4.4: a transport sender closes with close_notify, so the frames it wrote
+// last are not lost to the reset of a socket dropped with the repository's tickets unread.
+#[tokio::test]
+async fn a_stopped_recorder_closes_its_connection_and_its_last_message_arrives() -> TestResult {
+    let repository = AuditRepository::start().await?;
+    let audit = Arc::new(recorder(&repository, Spool::in_memory(ROOMY))?);
+    let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&stub])?.audited(audit.clone());
+    for _ in 0..2 {
+        assert!(matches!(
+            localize(&localizer).await?,
+            Localization::Candidates(_)
+        ));
+    }
+    let status = async {
+        while audit.status().delivered < 2 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::time::timeout(timing::HANG, status).await?;
+
+    tokio::time::timeout(timing::HANG, audit.stop()).await?;
+    let endings = repository.wait_for_endings(1, timing::HANG).await;
+    assert_eq!(
+        vec![Ending::CloseNotify],
+        endings,
+        "the recorder ended its connection with a close_notify"
+    );
+    assert_eq!(2, repository.messages().len(), "the last message arrived");
     Ok(())
 }
 

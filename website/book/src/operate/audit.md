@@ -167,6 +167,16 @@ number and status and never its content, and the drain goes on; a spooled
 file that is no FHIR `AuditEvent` is quarantined the same way. A quarantined
 record stays counted under the spool's bounds until you remove it.
 
+On `SIGTERM`, once the bindings have stopped, the gateway stops every audit
+trail within `server.bindings_drain_timeout_ms`. Each forwarder finishes the
+record it is writing, ends an ITI-20 syslog connection with a TLS
+`close_notify` (RFC 5425 §4.4) and returns, so the frames it wrote last
+reach the repository; a socket dropped with the repository's session
+tickets unread would be reset and could lose them. A forwarder also closes a
+connection the repository ended before it opens a new one. A record not yet
+written stays in the spool for the next start. A trail that does not stop in
+time is logged.
+
 Only a record the gateway can neither deliver nor store is an audit
 failure: a full spool (`spool_max_events` or `spool_max_bytes`), one that
 cannot be written, or one that does not store the record in time
