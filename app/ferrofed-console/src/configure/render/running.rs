@@ -126,7 +126,12 @@ fn shown(key: &str, value: &toml::Value) -> AnyView {
         toml::Value::Array(items) if items.is_empty() => tr(Msg::SettingsNotSet).into_any(),
         toml::Value::Array(items) => items
             .iter()
-            .map(|item| view! { <span class="fui-tag">{tag(item)}</span> " " })
+            .map(|item| {
+                view! {
+                    <span class="fui-tag">{tag(item)}</span>
+                    " "
+                }
+            })
             .collect_view()
             .into_any(),
         toml::Value::Table(table) => {
@@ -195,12 +200,10 @@ fn value_cell(setting: &Setting, revision: Option<RevisionId>) -> AnyView {
                 </span>
             }
             .into_any(),
-            None => view! {
-                <span>
-                    {icon(Glyph::LOCK, "12")} {tr(Msg::SettingsSecretSetInline)}
-                </span>
+            None => {
+                view! { <span>{icon(Glyph::LOCK, "12")} {tr(Msg::SettingsSecretSetInline)}</span> }
+                    .into_any()
             }
-            .into_any(),
         },
         (Some(_), _) | (None, None) => tr(Msg::SettingsNotSet).into_any(),
         (None, Some(value)) => shown(&setting.key, value),
@@ -251,7 +254,10 @@ pub fn panel(running: &RunningConfig, section: Section) -> AnyView {
     let editable = running.of(section).any(|setting| setting.editable);
     let edit = editable.then(|| {
         view! {
-            <a href=edit_href(section) class=format!("{} fui-button-small", Variant::Secondary.class())>
+            <a
+                href=edit_href(section)
+                class=format!("{} fui-button-small", Variant::Secondary.class())
+            >
                 {icon(Glyph::PENCIL, "16")}
                 {tr(Msg::SettingsEdit)}
             </a>
@@ -275,10 +281,7 @@ pub fn tab(loaded: &Loaded<'_>, section: Section) -> AnyView {
 fn unreadable(loaded: &Loaded<'_>) -> AnyView {
     view! {
         <p role="status" class="fui-muted">
-            {tr_with(
-                Msg::SettingsUnreadable,
-                &[("replica", loaded.replica.name.clone().into())],
-            )}
+            {tr_with(Msg::SettingsUnreadable, &[("replica", loaded.replica.name.clone().into())])}
         </p>
     }
     .into_any()
@@ -319,11 +322,21 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> AnyView {
             let options = [("true", Msg::SettingsOn), ("false", Msg::SettingsOff)]
                 .into_iter()
                 .map(|(value, words)| {
-                    view! { <option value=value selected=current == value>{tr(words)}</option> }
+                    view! {
+                        <option value=value selected=current == value>
+                            {tr(words)}
+                        </option>
+                    }
                 })
                 .collect_view();
             view! {
-                <select id=id.clone() name=name class=SELECT aria-label=label aria-describedby=described>
+                <select
+                    id=id.clone()
+                    name=name
+                    class=SELECT
+                    aria-label=label
+                    aria-describedby=described
+                >
                     {options}
                 </select>
             }
@@ -339,12 +352,22 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> AnyView {
             });
             let options = words
                 .iter()
-                .map(
-                    |word| view! { <option value=*word selected=current == *word>{*word}</option> },
-                )
+                .map(|word| {
+                    view! {
+                        <option value=*word selected=current == *word>
+                            {*word}
+                        </option>
+                    }
+                })
                 .collect_view();
             view! {
-                <select id=id.clone() name=name class=SELECT aria-label=label aria-describedby=described>
+                <select
+                    id=id.clone()
+                    name=name
+                    class=SELECT
+                    aria-label=label
+                    aria-describedby=described
+                >
                     {unset}
                     {options}
                 </select>
