@@ -90,15 +90,9 @@ pub(super) fn serve_job(
             return ExitCode::FAILURE;
         }
     };
-    // NOTE: no specification governs this: our own design; the OTLP trace export
-    // is a tonic client, which is built inside the runtime it will run on.
-    let traces = match settings.telemetry.otlp_endpoint.as_ref().map(|endpoint| {
-        let _entered = runtime.enter();
-        telemetry::Traces::new(endpoint, settings.telemetry.trace_sample_ratio)
-    }) {
-        None => None,
-        Some(Ok(traces)) => Some(traces),
-        Some(Err(error)) => {
+    let traces = match traces(&settings, &runtime) {
+        Ok(traces) => traces,
+        Err(error) => {
             eprintln!("ferrofed: cannot start: {}", chain(&error));
             return ExitCode::from(EXIT_CONFIG);
         }
@@ -311,6 +305,33 @@ fn certificates(files: Option<&TlsFiles>) -> anyhow::Result<Option<Arc<Certifica
             Certificates::load(files.clone())
                 .map(Arc::new)
                 .map_err(anyhow::Error::new)
+        })
+        .transpose()
+}
+
+/// The trace export `settings` configure, built inside `runtime`, or `None`
+/// with no collector.
+///
+/// # Errors
+///
+/// Returns the [`telemetry::Error`] the exporter could not be built with.
+fn traces(
+    settings: &Settings,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<Option<telemetry::Traces>, telemetry::Error> {
+    // NOTE: no specification governs this: our own design; the OTLP trace export
+    // is a tonic client, which is built inside the runtime it will run on.
+    settings
+        .telemetry
+        .otlp_endpoint
+        .as_ref()
+        .map(|endpoint| {
+            let _entered = runtime.enter();
+            telemetry::Traces::new(
+                endpoint,
+                &settings.telemetry.otlp_tls,
+                settings.telemetry.trace_sample_ratio,
+            )
         })
         .transpose()
 }

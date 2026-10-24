@@ -5,7 +5,7 @@
 //!
 //! Binder tabs hold the two views: each organisation with its node count,
 //! its worst node and its endpoints, and every node across the
-//! organisations, worst first, with its median response. An excluded
+//! organisations, worst first, with its median and 95th percentile response. An excluded
 //! organisation or node is a muted row, and the row opens its page. Past
 //! ten rows the find field shows, and past one page the pager; the words
 //! and the page sit in the query, since they name no patient. New
@@ -377,6 +377,11 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> AnyView {
             role: Role::Quiet,
             ..Column::text("median", tr(Msg::ColumnMedian)).titled(tr(Msg::ColumnMedianTitle))
         },
+        Column {
+            numeric: true,
+            role: Role::Quiet,
+            ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
+        },
     ];
     let rows = nodes
         .iter()
@@ -393,7 +398,8 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> AnyView {
                         &columns[2],
                         view! { <code>{node.system_id.clone().unwrap_or_default()}</code> },
                     )} {cell(&columns[3], state(health.mark(), health.word(), None))}
-                    {cell(&columns[4], crate::pages::median(node.latency_ms_p50()))}
+                    {cell(&columns[4], crate::pages::latency(node.latency_ms_p50()))}
+                    {cell(&columns[5], crate::pages::latency(node.latency_ms_p95()))}
                 </tr>
             }
         })

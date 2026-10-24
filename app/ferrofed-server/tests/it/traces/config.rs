@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[telemetry] otlp_endpoint`: off by default, an `http://` collector only,
+//! `[telemetry] otlp_endpoint`: off by default, an `http://` or `https://`
+//! collector, the TLS of `[telemetry.otlp_tls]` only beside `https://`,
 //! a user name or password in it held to the transport policy of every other
 //! credential, and an export that builds inside the runtime and flushes.
 #![allow(
@@ -43,7 +44,7 @@ fn the_trace_export_is_off_by_default() -> TestResult {
 }
 
 #[test]
-fn the_trace_export_takes_an_http_collector_and_refuses_any_other() -> TestResult {
+fn the_trace_export_takes_an_http_collector_and_refuses_another_scheme() -> TestResult {
     let settings = resolved("[telemetry]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?;
     assert_eq!(
         Some("http://127.0.0.1:4317/"),
@@ -53,7 +54,7 @@ fn the_trace_export_takes_an_http_collector_and_refuses_any_other() -> TestResul
             .as_ref()
             .map(SecretUrl::expose)
     );
-    for refused in ["https://collector.example.org:4317", "not a url"] {
+    for refused in ["ftp://collector.example.org:4317", "not a url"] {
         let text = format!("[telemetry]\notlp_endpoint = \"{refused}\"\n");
         let error = Config::from_sources(Some(&text), &BTreeMap::new())?
             .resolve()
@@ -100,7 +101,11 @@ async fn the_export_builds_inside_the_runtime_and_flushes_on_shutdown() -> TestR
         .otlp_endpoint
         .as_ref()
         .ok_or("a collector is configured")?;
-    let traces = Traces::new(endpoint, settings.telemetry.trace_sample_ratio)?;
+    let traces = Traces::new(
+        endpoint,
+        &settings.telemetry.otlp_tls,
+        settings.telemetry.trace_sample_ratio,
+    )?;
     let _tracer = traces.tracer();
     tokio::task::spawn_blocking(move || traces.shutdown()).await??;
     Ok(())

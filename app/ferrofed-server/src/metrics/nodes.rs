@@ -40,6 +40,7 @@ use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
 use crate::facade::route::status::{answered, unanswered};
+use crate::metrics::latency::Latencies;
 use crate::metrics::{
     CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUEST_DURATION, DEMOGRAPHICS_REQUESTS,
     LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
@@ -198,6 +199,7 @@ fn overload(meter: &Meter) -> Counter<u64> {
 pub struct NodeRequests {
     endpoints: BTreeSet<EndpointId>,
     instruments: Option<Instruments>,
+    latencies: Arc<Latencies>,
 }
 
 impl NodeRequests {
@@ -208,7 +210,16 @@ impl NodeRequests {
         Self {
             endpoints: endpoints.into_iter().cloned().collect(),
             instruments: None,
+            latencies: Arc::default(),
         }
+    }
+
+    /// Records the latency of every request it times in `latencies` too,
+    /// whether or not it is metered.
+    #[must_use]
+    pub fn with_latencies(mut self, latencies: Arc<Latencies>) -> Self {
+        self.latencies = latencies;
+        self
     }
 
     /// Records through `instruments` from now on.
@@ -405,19 +416,21 @@ impl NodeRequests {
     }
 
     /// Counts one request to `endpoint` that ended as `status`, of `class`,
-    /// after `elapsed`; an endpoint outside the snapshot is not recorded.
+    /// after `elapsed`, and records its latency; an endpoint outside the
+    /// snapshot is not recorded.
     fn count(
         &self,
         endpoint: &EndpointId,
         (status, class): (EndpointStatus, Class),
         elapsed: Duration,
     ) {
-        let Some(instruments) = &self.instruments else {
-            return;
-        };
         // NOTE: §5.4.1, N33: a label value is a registry endpoint id or an enum
         // name, never request text, so no identifier reaches the surface.
         let Some(endpoint) = self.endpoints.get(endpoint) else {
+            return;
+        };
+        self.latencies.record(endpoint, elapsed);
+        let Some(instruments) = &self.instruments else {
             return;
         };
         instruments.usage.node(status);

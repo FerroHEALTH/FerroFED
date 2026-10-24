@@ -412,7 +412,7 @@ configuration, so the body says what the gateway does today:
 | `consent` | present with a consent pre-filter configured: its `prefilter` mode (`"nl-gf-mitz"` or `"development-static"`), `on_unavailable: "pass-to-node"`, and `disclose`: `true`, the default, where a member the pre-filter excludes is `consent-denied` (N27a), or `false` where it is reported `not-resolved` like a member that does not know the patient, for Regulation (EU) 2025/327 Art 8 ([Withholding consent exclusions](../operate/consent-exclusions.md)) |
 | `auth.jwks_uri` | the absolute URL of the JWK Set the gateway serves at `{base}/.well-known/jwks.json`, with the keys it signs the caller token and its client assertions with; every federating gateway has `[signing]`, so it is always declared (§13.1, N25, N30) |
 | `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, naming the template upload fan-out where it is offered, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
-| `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
+| `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, the node's `product` and `version` where the registry holds them, and `latency_ms_p50` and `latency_ms_p95`, the median and the 95th percentile of the last 100 requests the gateway sent that endpoint, in milliseconds, where it has sent any since it started ([The latency in the self-description](../operate/metrics.md#the-latency-in-the-self-description)) |
 | `manufacturer` | FerroFED's manufacturer, beside `federation` and `endpoints`: its `name`, `postal_address`, `email` (the single point of contact) and `website`, as Regulation (EU) 2025/327 Art 30(1)(g) asks of an EHR system; FerroFED's own member at the open top level of the schema |
 
 What is absent is absent on purpose:
@@ -422,7 +422,10 @@ What is absent is absent on purpose:
   (§7a.2, N33, N35).
 - No asynchronous queries. The schema has no member for them, and the gateway
   does not offer them (§11.7).
-- No latency. The gateway keeps no latency statistic per member.
+- No latency for an endpoint the gateway has not sent a request to since
+  it started: both statistics are left out rather than reported as zero.
+- `latency_ms_p95` is FerroFED's own member inside the open endpoint
+  object, named for its statistic as §7a.2 asks.
 - `paging.max_window` is FerroFED's own member inside the open `paging`
   object: the specification names no member for the bound of the `bounded`
   strategy.

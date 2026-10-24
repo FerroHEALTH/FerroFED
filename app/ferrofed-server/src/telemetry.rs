@@ -20,9 +20,12 @@
 //! own design.
 
 use ferrofed_registry::secret::SecretUrl;
+
+use crate::config::tls::TlsSettings;
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_otlp::WithExportConfig as _;
+use opentelemetry_otlp::tonic_types::transport::{Certificate, ClientTlsConfig, Identity};
+use opentelemetry_otlp::{WithExportConfig as _, WithTonicConfig as _};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{Sampler, SdkTracer, SdkTracerProvider};
 use serde::Deserialize;
@@ -187,6 +190,38 @@ pub fn sampler(ratio: SampleRatio) -> Sampler {
     Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(ratio.get())))
 }
 
+/// The TLS an OTLP exporter reaches `endpoint` with, or `None` for an
+/// `http://` collector: the platform's trust roots and the trust roots
+/// `tls` adds, and the client identity it names for mutual TLS.
+///
+/// The client identity is one PEM holding the chain and the key, which is
+/// handed as both: the certificate reader takes only the certificates and
+/// the key reader only the key. The listeners' aws-lc-rs provider becomes
+/// the process default unless one is installed already, since tonic builds
+/// its TLS client from that default.
+#[must_use]
+pub fn collector_tls(endpoint: &SecretUrl, tls: &TlsSettings) -> Option<ClientTlsConfig> {
+    if !endpoint.expose().starts_with("https://") {
+        return None;
+    }
+    // NOTE: tonic's client reads rustls's process-level provider, which is ambiguous while two
+    // crypto crates are linked; an earlier install wins, so the result is dropped.
+    let _installed: Result<(), std::sync::Arc<rustls::crypto::CryptoProvider>> =
+        crate::listener::certificates::provider()
+            .as_ref()
+            .clone()
+            .install_default();
+    let mut config = ClientTlsConfig::new().with_native_roots();
+    if let Some(roots) = &tls.trust_roots {
+        config = config.ca_certificate(Certificate::from_pem(roots));
+    }
+    if let Some(identity) = &tls.client_identity {
+        let pem = identity.expose();
+        config = config.identity(Identity::from_pem(pem, pem));
+    }
+    Some(config)
+}
+
 /// The trace export: one tracer provider that sends the gateway's spans to
 /// an OTLP collector in batches.
 pub struct Traces {
@@ -194,7 +229,8 @@ pub struct Traces {
 }
 
 impl Traces {
-    /// Returns the export to the OTLP collector at `endpoint`, over gRPC,
+    /// Returns the export to the OTLP collector at `endpoint`, over gRPC and,
+    /// for an `https://` collector, over TLS with `tls` ([`collector_tls`]),
     /// sampling as [`sampler`] does at `ratio`.
     ///
     /// The exporter speaks gRPC through `tonic`, so this runs inside the
@@ -202,10 +238,14 @@ impl Traces {
     ///
     /// # Errors
     /// Returns [`Error::Exporter`] when the exporter cannot be built.
-    pub fn new(endpoint: &SecretUrl, ratio: SampleRatio) -> Result<Self, Error> {
-        let exporter = opentelemetry_otlp::SpanExporter::builder()
+    pub fn new(endpoint: &SecretUrl, tls: &TlsSettings, ratio: SampleRatio) -> Result<Self, Error> {
+        let mut builder = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
-            .with_endpoint(endpoint.expose())
+            .with_endpoint(endpoint.expose());
+        if let Some(config) = collector_tls(endpoint, tls) {
+            builder = builder.with_tls_config(config);
+        }
+        let exporter = builder
             .build()
             .map_err(|source| Error::Exporter { source })?;
         let provider = SdkTracerProvider::builder()

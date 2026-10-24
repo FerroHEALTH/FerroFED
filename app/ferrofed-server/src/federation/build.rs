@@ -196,7 +196,8 @@ impl Federation {
         let seams = (resolver.is_some(), consent.is_some());
         let dependencies = dependencies(settings, &snapshot, seams, &localization)?
             .with_demographics(demographics.is_some());
-        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id))
+            .with_latencies(Arc::clone(&observed.latencies));
         let documents = documents(settings)?;
         let access = access_log(settings, &snapshot)?.map(Arc::new);
         let federation = Self {
@@ -251,7 +252,14 @@ impl Federation {
     ) -> Self {
         let dependencies =
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
-        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        let observed = Arc::new(Observed::new(
+            ResolutionBindings::new(std::time::Duration::from_millis(
+                crate::config::Federation::default().binding_ttl_ms,
+            )),
+            default_index_capacity(),
+        ));
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id))
+            .with_latencies(Arc::clone(&observed.latencies));
         let max_node_rows = NonZeroU32::new(crate::config::Federation::default().max_node_rows);
         let clients = match max_node_rows {
             Some(ceiling) => clients.with_row_ceiling(ceiling),
@@ -271,12 +279,7 @@ impl Federation {
                 crate::config::Federation::default().consent.disclose,
             ),
             consent_emergency: crate::config::Federation::default().consent.emergency,
-            observed: Arc::new(Observed::new(
-                ResolutionBindings::new(std::time::Duration::from_millis(
-                    crate::config::Federation::default().binding_ttl_ms,
-                )),
-                default_index_capacity(),
-            )),
+            observed,
             context,
             budget,
             best_effort: crate::config::Federation::default().best_effort,
