@@ -3,7 +3,7 @@
 <html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" lang="en">
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
-    <title>Home - MyHealth@Eu NCPeH API v9.1.0</title>
+    <title>Home - MyHealth@Eu NCPeH API v9.1.1-ci</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="author" content="http://hl7.org/fhir"/>
@@ -78,7 +78,7 @@
         <div id="ig-status">
           <p><span style="font-size:12pt;font-weight:bold">MyHealth@Eu NCPeH API</span>
             <br/>
-            <span style="display:inline-block;">9.1.0 - ci-build
+            <span style="display:inline-block;">9.1.1-ci - ci-build
 
 
 
@@ -137,8 +137,30 @@
   <li>
     <a href="content.html">Data</a>
   </li>
-  <li>
-    <a href="application.html">Application</a>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Application
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="application.html">Overview</a>
+      </li>
+      <li>
+        <a href="app-pat.html">Patient Identification</a>
+      </li>
+      <li>
+        <a href="app-doc.html">Document Retrieval</a>
+      </li>
+      <li>
+        <a href="app-doc-push.html">Document Provision</a>
+      </li>
+      <li>
+        <a href="app-study.html">Study Retrieval</a>
+      </li>
+      <li>
+        <a href="app-img.html">Images Retrieval</a>
+      </li>
+    </ul>
   </li>
   <li class="dropdown">
     <a data-toggle="dropdown" href="#" class="dropdown-toggle">Implementation
@@ -147,6 +169,9 @@
     <ul class="dropdown-menu">
       <li>
         <a href="technical.html">Overview</a>
+      </li>
+      <li>
+        <a href="actors.html">Actors</a>
       </li>
       <li>
         <a href="sequence-pat.html">Patient Search</a>
@@ -159,6 +184,9 @@
       </li>
       <li>
         <a href="sequence-doc-push.html">Document Provisioning</a>
+      </li>
+      <li>
+        <a href="sequence-img.html">Images Retrieval</a>
       </li>
     </ul>
   </li>
@@ -213,7 +241,7 @@ h5:before{color:silver;counter-increment:detail;content:var(--heading-prefix) ".
 h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) "." counter(more-detail)" ";}
 </style>
 <div class="col-12">
-  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.0) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
+  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.1-ci) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
   <h2>Home</h2>
   
 
@@ -228,7 +256,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
       <td colspan="4"><i>Official URL</i>: <span class="copy-text">http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api<button title="Click to copy URL" class="btn-copy" data-clipboard-text="http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api"/></span>
       </td>
       <td><i>Version</i>:
-      <span class="copy-text">9.1.0<button title="Click to copy versioned URL" class="btn-copy" data-clipboard-text="http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api|9.1.0"/></span>
+      <span class="copy-text">9.1.1-ci<button title="Click to copy versioned URL" class="btn-copy" data-clipboard-text="http://fhir.ehdsi.eu/ncp-api/ImplementationGuide/myhealth.eu.fhir.ncp-api|9.1.1-ci"/></span>
       </td>
     </tr>
 
@@ -244,7 +272,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
         
           Draft
           
-            as of 2026-05-05
+            as of 2026-09-08
           
         
       </td>
@@ -303,6 +331,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
   <li><strong>Laboratory Results Report</strong></li>
   <li><strong>Hospital Discharge Report</strong></li>
   <li><strong>Medical Imaging Studies</strong></li>
+  <li><strong>Vaccination History</strong></li>
 </ul>
 
 <p>The <strong>maturity of these services</strong>, as well as the <strong>technology used to implement them</strong>, varies depending on the <strong>priority category</strong> documented.</p>
@@ -326,9 +355,8 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
   <li>the retrieval of selected documents</li>
   <li>the provision of selected documents</li>
   <li>the search and retrieval of imaging study information</li>
+  <li>the retrieval of images</li>
 </ul>
-
-<p><strong>No liability can be however inferred from the use or misuse of this specification, or its consequences; for the services not released.</strong></p>
 
 <h3 id="how-to-read-this-guide">How to read this guide</h3>
 
@@ -339,7 +367,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 <div>
   <p> </p>
     <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="86px" preserveAspectRatio="none" style="width:452px;height:86px;background:#FFFFFF;" version="1.1" viewBox="0 0 452 86" width="452px" zoomAndPan="magnify"><title>Viewpoint</title><defs /><g><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="79.1602" x="179.5553" y="22.9951">Viewpoint</text><!--entity bus--><g class="entity" data-entity="bus" data-source-line="20" data-uid="ent0002" id="entity_bus"><a href="business.html" target="_top" title="business.html" xlink:actuate="onRequest" xlink:href="business.html" xlink:show="new" xlink:title="business.html" xlink:type="simple"><rect fill="#FFFFCC" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="81.7354" x="7" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="61.7354" x="17" y="67.292">Business</text></a></g><!--entity app--><g class="entity" data-entity="app" data-source-line="21" data-uid="ent0003" id="entity_app"><a href="application.html" target="_top" title="application.html" xlink:actuate="onRequest" xlink:href="application.html" xlink:show="new" xlink:title="application.html" xlink:type="simple"><rect fill="#C2F0FF" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="98.2236" x="123.76" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="78.2236" x="133.76" y="67.292">Application</text></a></g><!--entity data--><g class="entity" data-entity="data" data-source-line="22" data-uid="ent0004" id="entity_data"><a href="content.html" target="_top" title="content.html" xlink:actuate="onRequest" xlink:href="content.html" xlink:show="new" xlink:title="content.html" xlink:type="simple"><rect fill="#F1F1F1" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="53.4277" x="257.15" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="33.4277" x="267.15" y="67.292">Data</text></a></g><!--entity tech--><g class="entity" data-entity="tech" data-source-line="23" data-uid="ent0005" id="entity_tech"><a href="technical.html" target="_top" title="technical.html" xlink:actuate="onRequest" xlink:href="technical.html" xlink:show="new" xlink:title="technical.html" xlink:type="simple"><rect fill="#C9FFC9" height="36.2969" rx="12.5" ry="12.5" style="stroke:#181818;stroke-width:0.5;" width="100.8008" x="345.47" y="44.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="80.8008" x="355.47" y="67.292">Technology</text></a></g><!--link bus to app--><g class="link" data-entity-1="bus" data-entity-2="app" data-source-line="25" data-uid="lnk6" id="link_bus_app"><path d="M88.88,62.4469 C100.37,62.4469 105.85,62.4469 117.33,62.4469" fill="none" id="bus-to-app" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="123.33,62.4469,114.33,58.4469,118.33,62.4469,114.33,66.4469,123.33,62.4469" style="stroke:#181818;stroke-width:1;" /></g><!--link app to data--><g class="link" data-entity-1="app" data-entity-2="data" data-source-line="26" data-uid="lnk7" id="link_app_data"><path d="M222.3,62.4469 C233.84,62.4469 239.39,62.4469 250.93,62.4469" fill="none" id="app-to-data" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="256.93,62.4469,247.93,58.4469,251.93,62.4469,247.93,66.4469,256.93,62.4469" style="stroke:#181818;stroke-width:1;" /></g><!--link data to tech--><g class="link" data-entity-1="data" data-entity-2="tech" data-source-line="27" data-uid="lnk8" id="link_data_tech"><path d="M310.99,62.4469 C322.38,62.4469 327.76,62.4469 339.14,62.4469" fill="none" id="data-to-tech" style="stroke:#181818;stroke-width:1;" /><polygon fill="#181818" points="345.14,62.4469,336.14,58.4469,340.14,62.4469,336.14,66.4469,345.14,62.4469" style="stroke:#181818;stroke-width:1;" /></g></g></svg>
-    <p><caption>Fig. 1: Navigating this guide</caption></p>  
+    <p>Figure 2: Navigating this guide</p>  
   </div>
 
 <p>Where:</p>
@@ -349,6 +377,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
   <li>the <strong>Application (Computational) domain</strong>, describing how gateways interact in an implementation independent form, to fulfill the business requirements. It may include sequence diagrams.</li>
   <li>The <strong>Technology (Engineering) domain</strong>, describes the technology stack required to support the MyHealth@EU processes. This includes how HL7 FHIR, or other standards adopted, are used for implementing the documented services.</li>
 </ul>
+
 
 
 
@@ -368,7 +397,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 
       <div class="inner-wrapper">
         <p>
-          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.0 based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, May 5, 2026 10:44+0000">2026-05-05</span>
+          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.1-ci based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, Sep 8, 2026 14:33+0000">2026-09-08</span>
           <br/>
           <span style="color: var(--footer-highlight-text-color)">
             <div style="color: #333333" >
