@@ -50,11 +50,18 @@ read_by=$'#683 (the exchange-format proxies the interoperability\n  component of
 pin commit xtehr.eu.ehds.models-1.0.0.tgz "1.0.0 (FHIR 5.0.0, 2026-04-13)" \
   "$registry/xtehr.eu.ehds.models/1.0.0" \
   a4853e58a869468464847e2eafa50fb07349e6da1e99456a0d93aae27848e1f8 "$cc0" "$whole"
+pin commit xtehr.eu.ehds.models-0.3.0.tgz "0.3.0 (FHIR 5.0.0, 2026-02-06)" \
+  "$registry/xtehr.eu.ehds.models/0.3.0" \
+  f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b "$cc0" \
+  "$whole The version every MyHealth@EU guide of scripts/vendor/myhealth-eu.sh depends on."
 pinned_corpus eu-xtehr-models "Xt-EHR EHDS Logical Information Models" \
   "the Xt-EHR EHDS Logical Information Models xtehr.eu.ehds.models" \
   "The logical models of the Xt-EHR joint action for the priority categories
 of Regulation (EU) 2025/327 Article 14(1), canonical
-\`http://www.xt-ehr.eu/fhir/models\`, committed under CC0-1.0." "" "$read_by"
+\`http://www.xt-ehr.eu/fhir/models\`, at the release and at the version the
+MyHealth@EU guides depend on, committed under CC0-1.0. The continuous build
+of the source repository (https://xt-ehr.github.io/xt-ehr-common/) serves
+0.4.0 of 2026-02-26, older than the 1.0.0 release (read 2026-10-24)." "" "$read_by"
 
 pin commit hl7.fhir.eu.base-2.0.1.tgz "2.0.1 (FHIR 4.0.1, 2026-09-13)" \
   "$registry/hl7.fhir.eu.base/2.0.1" \
@@ -84,10 +91,15 @@ pinned_corpus eu-hl7-mpd "HL7 Europe Medication Prescription and Dispense" \
 pin commit hl7.fhir.eu.laboratory-2.0.0.tgz "2.0.0 (FHIR 4.0.1, 2026-05-05)" \
   "$registry/hl7.fhir.eu.laboratory/2.0.0" \
   097aa45c6efcdbc3f25ead8b7d448fee5011b5e7ecf264aa400c5e2c69c5c488 "$cc0" "$whole"
+pin commit hl7.fhir.eu.laboratory-2.1.0.tgz "2.1.0 (FHIR 4.0.1, 2026-10-16)" \
+  "$registry/hl7.fhir.eu.laboratory/2.1.0" \
+  87019c396f4cff934ec5230ce1f97d76b79b40591be08161e694ad661129379c "$cc0" \
+  "$whole The current release; the eehrxf component reads 2.0.0, the version MyHealth@EU Laboratory 9.1.1 derives from, until decision A62 re-pins it."
 pinned_corpus eu-hl7-laboratory "HL7 Europe Laboratory Report" \
   "the HL7 Europe Laboratory Report guide hl7.fhir.eu.laboratory" \
   "The European laboratory report guide, canonical
-\`http://hl7.eu/fhir/laboratory\`, committed under CC0-1.0." "" "$read_by"
+\`http://hl7.eu/fhir/laboratory\`, at its current release and at the
+version the eehrxf component reads, committed under CC0-1.0." "" "$read_by"
 
 pin commit hl7.fhir.eu.extensions.r4-1.3.0.tgz "1.3.0 (FHIR 4.0.1, 2026-03-27)" \
   "$registry/hl7.fhir.eu.extensions.r4/1.3.0" \
@@ -153,9 +165,14 @@ pin commit hl7.fhir.eu.hdr-0.1.0-ballot.tgz "0.1.0-ballot (FHIR 4.0.1, 2025-06-0
   "$registry/hl7.fhir.eu.hdr/0.1.0-ballot" \
   458b8ba0edcf22d75d455d6149c9264d486bb8ec052251a90afd8654410482ee "$cc0" \
   "$whole It carries no priority category code."
+pin commit hl7.fhir.eu.hdr-1.0.0.tgz "1.0.0 (FHIR 4.0.1, 2026-10-16)" \
+  "$registry/hl7.fhir.eu.hdr/1.0.0" \
+  eedf9af9f66b68cd66f7d6c678a36dfba86b0920df4ef15e8d2da900c4134879 "$cc0" \
+  "$whole The first release; MyHealth@EU Hospital Discharge Report 9.1.1 derives from 0.1.0-ballot."
 pinned_corpus eu-hl7-hdr "HL7 Europe Hospital Discharge Report" \
   "the HL7 Europe Hospital Discharge Report guide hl7.fhir.eu.hdr" \
-  "The European hospital discharge report guide in its ballot version,
+  "The European hospital discharge report guide at its first release and in
+the ballot version the access record's categories were read against,
 canonical \`http://hl7.eu/fhir/hdr\`, committed under CC0-1.0." "" "$read_by_categories"
 
 pin commit myhealth.eu.fhir.mvc-package-9.1.0.tgz "9.1.0 (FHIR 4.0.1, 2026-05-08)" \

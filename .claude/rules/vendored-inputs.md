@@ -122,8 +122,9 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     Regulation (EU) 2019/1020 and Regulation (EC) No 765/2008,
     each as published (official EU acts, reused under Commission Decision
     2011/833/EU), read by the market-placement research of #654.
-  - `docs/specs/ehdsi/`: the NCPeH API package and page (CC0-1.0); the
-    guide index and OpenNCP (evidence only) are cache only.
+  - `docs/specs/ehdsi/`: the NCPeH API package and three pages at the
+    current build, 9.1.1-ci (CC0-1.0); the guide index and OpenNCP
+    (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
     (General Introduction §9).
   - `docs/specs/ihe-iti-tf-vol2/`: the ITI TF Volume 2 page of Cross
@@ -148,12 +149,13 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - The exchange-format proxies of #683, each the FHIR package registry's
   tarball committed whole and pinned by URL and sha256 through
   `scripts/vendor/eehrxf.sh`:
-  - `docs/specs/eu-xtehr-models/`: `xtehr.eu.ehds.models` 1.0.0 (CC0-1.0).
+  - `docs/specs/eu-xtehr-models/`: `xtehr.eu.ehds.models` 1.0.0 and 0.3.0,
+    the version the MyHealth@EU guides depend on (CC0-1.0).
   - `docs/specs/eu-hl7-base/`: `hl7.fhir.eu.base` 2.0.1 (CC0-1.0).
   - `docs/specs/eu-hl7-eps/`: `hl7.fhir.eu.eps` 1.0.0-ballot (CC0-1.0).
   - `docs/specs/eu-hl7-mpd/`: `hl7.fhir.eu.mpd` 1.0.0 (CC0-1.0).
-  - `docs/specs/eu-hl7-laboratory/`: `hl7.fhir.eu.laboratory` 2.0.0
-    (CC0-1.0).
+  - `docs/specs/eu-hl7-laboratory/`: `hl7.fhir.eu.laboratory` 2.1.0 and
+    2.0.0, the version the eehrxf component reads (CC0-1.0).
   - `docs/specs/eu-hl7-extensions/`: `hl7.fhir.eu.extensions.r4` 1.3.1 and
     1.3.0, the versions the guides depend on (CC0-1.0).
   - `docs/specs/hl7-ips/`: `hl7.fhir.uv.ips` 2.0.0, the version the Patient
@@ -169,14 +171,41 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     writes, read here by the testkit (CC0-1.0).
   - `docs/specs/eu-hl7-imaging/`: `hl7.fhir.eu.imaging` 1.0.0-ballot
     (CC0-1.0).
-  - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 0.1.0-ballot (CC0-1.0).
+  - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 1.0.0 and 0.1.0-ballot
+    (CC0-1.0).
   - `docs/specs/ehdsi-mvc/`: `myhealth.eu.fhir.mvc-package` 9.1.0, the
     MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
-- `docs/specs/xt-ehr-deliverables/`: the Xt-EHR deliverables D6.1, D6.2 and
-  D5.2, the closest published text of the Art 15(1) exchange format while no
-  draft act is published, pinned by URL and sha256 in
-  `scripts/vendor/xt-ehr.sh` and kept in the cache only, since they state no
-  licence (#1265).
+- `docs/specs/xt-ehr-deliverables/`: every Xt-EHR deliverable and task
+  outcome the joint action publishes (D1.1 to D9.3, with the T5.2 and T5.3
+  outcomes), among them the closest published text of the Art 15(1)
+  exchange format while no draft act is published, pinned by URL and sha256
+  in `scripts/vendor/xt-ehr.sh` and kept in the cache only, since they state
+  no licence and the site reserves all rights (#1265, #1290).
+- `docs/specs/eu-xtehr-metadata/`: the Xt-EHR Metadata Foundation guide
+  `hl7.eu.fhir.xt-ehr.metadata` 0.1.0 behind D5.2, its continuous build
+  pinned by URL and sha256 in the same script (CC0-1.0, #1290).
+- The public MyHealth@EU and eHDSI material of #1290, each artefact pinned
+  by URL and sha256 in `scripts/vendor/myhealth-eu.sh` and read by the
+  testkit's `myhealth_eu` tests:
+  - `docs/specs/ehdsi-core/`: `myhealth.eu.fhir.core` 1.0.0 (CC0-1.0).
+  - `docs/specs/ehdsi-eps/`: `myhealth.eu.fhir.eps` 1.0.0-poc and its home
+    page (CC-BY-4.0).
+  - `docs/specs/ehdsi-epd/`: `myhealth.eu.fhir.epd` 1.0.0-poc and its home
+    page (CC-BY-4.0).
+  - `docs/specs/ehdsi-laboratory/`: `myhealth.eu.fhir.laboratory` 9.1.1
+    (CC0-1.0).
+  - `docs/specs/ehdsi-hdr/`: `myhealth.eu.fhir.hdr` 9.1.1, the build the
+    MyHealth@EU site serves (CC0-1.0).
+  - `docs/specs/ehdsi-imaging/`: `myhealth.eu.fhir.imaging` 9.1.1, the build
+    the MyHealth@EU site serves (CC0-1.0).
+  - `docs/specs/ehdsi-euvac/`: `myhealth.eu.fhir.euvac` 10.0.0-preview
+    (CC-BY-4.0).
+  - `docs/specs/ehdsi-cda-test-documents/`: the eHDSI CDA reference test
+    documents of `code.europa.eu/ehdsi/ehdsi-general-repository`, pinned by
+    commit, cache only (no licence statement).
+  - `docs/specs/ehdsi-openncp-tm/`: the OpenNCP Transformation Manager's
+    CDA Schematrons and eHDSI coded element list at tag `v10.1.0`, with the
+    repository's LICENSE and NOTICE (Apache-2.0).
 - `docs/specs/fhir-r4/`: the Extensibility, Defining Extensions,
   StructureDefinition, CodeSystem, NamingSystem, Using Codes in Resources
   (4.1), Search (3.1.1), RESTful API (3.1.0) and License and Legal Terms
