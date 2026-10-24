@@ -198,6 +198,12 @@ fhirconnect = "=0.1.173"
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
 # against crates.io on 2026-10-24.
 ferrobridge-term = "=0.1.131"
+# The FHIR R4 profile validator a document received in the exchange format is
+# held to in full: every invariant, binding and entry profile (#808), from
+# FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
+# against crates.io on 2026-10-24.
+ferrobridge-validator = "=0.1.131"
 openehr-mapping-core = "=0.1.124"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by

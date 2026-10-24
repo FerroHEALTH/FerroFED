@@ -6,11 +6,13 @@
 //! Annex II 2.2 and 2.3, Art 14(1)).
 //!
 //! A deployment declares, per priority category it receives, the member that
-//! stores the category's documents, the vendored HL7 Europe package whose
-//! profiles a document is checked against, and the FHIRconnect mapping that
-//! turns it into one openEHR composition ([`Source`]). [`Receivers::receive`]
-//! reads a document, names its category from its `Composition.type`, holds
-//! it to the category's profiles and maps it, the original kept in the
+//! stores the category's documents, the HL7 Europe package whose profiles a
+//! document is checked against with the packages of its dependency closure,
+//! and the FHIRconnect mapping that turns it into one openEHR composition
+//! ([`Source`]). [`Receivers::receive`] reads a document, names its category
+//! from its `Composition.type`, holds it to every constraint of the
+//! category's profiles and of the profiles its entries claim with
+//! FerroBRIDGE's validator, and maps it, the original kept in the
 //! composition's `FEEDER_AUDIT.original_content`. The result names the
 //! member and the patient identifiers the document carries, which the
 //! gateway resolves to that member's own `ehr_id` before anything is sent
@@ -19,19 +21,20 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use eehrxf::category::Category;
-use eehrxf::dataset::{DatasetError, ResourceProfile};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::receive::category::Uncategorised;
-use eehrxf::receive::conform::{CheckError, Finding, FindingKind, Unevaluated};
+use eehrxf::receive::conform::{Finding, FindingKind, Unevaluated};
 use eehrxf::receive::displays::DisplayError;
 use eehrxf::receive::openehr::{ReceiveMappingError, ReceivedComposition};
+use eehrxf::receive::validation::ValidationError;
 use eehrxf::receive::{ReceiveError, ReceivedDocument};
-use eehrxf::terminology::bindings::BindingError;
-use eehrxf::terminology::expansion::{ExpansionError, Expansions};
-use eehrxf::terminology::{Terminology, TerminologyError};
+use eehrxf::terminology::Terminology;
 use eehrxf::transformation::{Direction, Pin, Report, ReportError};
+use ferrobridge_term::client::Client;
+use ferrobridge_validator::set::{LoadError, PackageSet, ResolveError};
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::run::Settings;
@@ -46,9 +49,13 @@ pub struct Source {
     pub category: String,
     /// The node id of the member that stores the category's documents.
     pub member: String,
-    /// The vendored HL7 Europe package, as a `.tgz` archive, whose profiles
-    /// a document of the category is checked against.
+    /// The HL7 Europe package, as a `.tgz` archive, whose profiles a
+    /// document of the category is checked against.
     pub package: PathBuf,
+    /// Every package of `package`'s dependency closure, each a `.tgz`
+    /// archive or an unpacked directory, and any package of value sets its
+    /// profiles bind.
+    pub dependencies: Vec<PathBuf>,
     /// The OPT 1.4 operational template the composition is of, as text.
     pub opt: String,
     /// The model and context mapping files.
@@ -77,19 +84,18 @@ pub enum ReceiversError {
         /// The code as given.
         category: String,
     },
-    /// The package cannot be opened.
-    #[error("the package {} of the category {category} cannot be read", path.display())]
-    Package {
+    /// The packages cannot be read, or one names a dependency none of them
+    /// is.
+    #[error("the packages of the category {category} do not form a complete package set")]
+    Packages {
         /// The category's code.
         category: &'static str,
-        /// The package path.
-        path: PathBuf,
         /// Why.
         #[source]
-        source: std::io::Error,
+        source: Box<LoadError>,
     },
-    /// The package holds no usable profile under a URL the category names.
-    #[error("the package of the category {category} gives no profile {url}")]
+    /// The packages hold no usable profile under a URL the category names.
+    #[error("the packages of the category {category} give no profile {url}")]
     Profile {
         /// The category's code.
         category: &'static str,
@@ -97,16 +103,7 @@ pub enum ReceiversError {
         url: &'static str,
         /// Why.
         #[source]
-        source: DatasetError,
-    },
-    /// The package's value set expansions cannot be read.
-    #[error("the value set expansions of the category {category} cannot be read")]
-    Expansions {
-        /// The category's code.
-        category: &'static str,
-        /// Why.
-        #[source]
-        source: ExpansionError,
+        source: Box<ResolveError>,
     },
     /// The context mapping does not compile.
     #[error("the context mapping {context} of the category {category} does not compile")]
@@ -126,12 +123,10 @@ pub enum ReceiversError {
 struct Receiver {
     /// The member's node id.
     member: String,
-    /// The `Bundle` profile.
-    bundle: ResourceProfile,
-    /// The `Composition` profile.
-    composition: ResourceProfile,
-    /// The value set expansions the package carries.
-    expansions: Expansions,
+    /// The canonical URL of the category's `Bundle` profile.
+    bundle: &'static str,
+    /// The package and its dependency closure, which the validator reads.
+    packages: Arc<PackageSet>,
     /// The mapping into openEHR.
     mapping: Mapping,
     /// The file name of the package the profiles are read from.
@@ -149,15 +144,16 @@ pub struct Receivers {
 }
 
 impl Receivers {
-    /// Reads the profiles and compiles the mapping of every one of
+    /// Reads the packages and compiles the mapping of every one of
     /// `sources`.
     ///
     /// # Errors
     ///
     /// [`ReceiversError::Twice`] for a category declared twice,
     /// [`ReceiversError::Unreceived`] for one this build does not receive,
-    /// [`ReceiversError::Package`] and [`ReceiversError::Profile`] for a
-    /// package that gives no profile the category names, and
+    /// [`ReceiversError::Packages`] for packages that cannot be read or lack
+    /// a package a manifest names, [`ReceiversError::Profile`] for packages
+    /// that give no profile the category names, and
     /// [`ReceiversError::Compile`] for a mapping that does not compile.
     pub fn compile(sources: &[Source]) -> Result<Self, ReceiversError> {
         let mut by = BTreeMap::new();
@@ -171,33 +167,19 @@ impl Receivers {
             if by.contains_key(&kind) {
                 return Err(ReceiversError::Twice { category });
             }
-            let profile = |url: &'static str| {
-                let package = std::fs::File::open(&source.package).map_err(|error| {
-                    ReceiversError::Package {
+            let packages = packages(source).map_err(|error| ReceiversError::Packages {
+                category,
+                source: Box::new(error),
+            })?;
+            for url in [profiles.bundle, profiles.composition] {
+                packages
+                    .structure_definition(url)
+                    .map_err(|error| ReceiversError::Profile {
                         category,
-                        path: source.package.clone(),
-                        source: error,
-                    }
-                })?;
-                ResourceProfile::read(package, url).map_err(|error| ReceiversError::Profile {
-                    category,
-                    url,
-                    source: error,
-                })
-            };
-            let bundle = profile(profiles.bundle)?;
-            let composition = profile(profiles.composition)?;
-            let package =
-                std::fs::File::open(&source.package).map_err(|error| ReceiversError::Package {
-                    category,
-                    path: source.package.clone(),
-                    source: error,
-                })?;
-            let expansions =
-                Expansions::read(package).map_err(|error| ReceiversError::Expansions {
-                    category,
-                    source: error,
-                })?;
+                        url,
+                        source: Box::new(error),
+                    })?;
+            }
             let mapping = Mapping::compile(&source.opt, &source.files, &[source.context.as_str()])
                 .map_err(|error| ReceiversError::Compile {
                     category,
@@ -208,9 +190,8 @@ impl Receivers {
                 kind,
                 Receiver {
                     member: source.member.clone(),
-                    bundle,
-                    composition,
-                    expansions,
+                    bundle: profiles.bundle,
+                    packages,
                     mapping,
                     package: source
                         .package
@@ -256,14 +237,17 @@ impl Receivers {
     /// composition its category's member stores.
     ///
     /// The document is read under the R4 document rules, its category named
-    /// from its `Composition.type`, held to the category's profiles and to
-    /// their `required` bindings, the expansions its package carries and
-    /// `terminology`'s `$validate-code` deciding each, its codings given the
-    /// displays `terminology`'s `$lookup` answers where it carries none, and
+    /// from its `Composition.type`, and validated against the category's
+    /// `Bundle` profile by FerroBRIDGE's validator over the category's
+    /// packages: every constraint of the profiles and of the profiles its
+    /// entries claim or their slices name, invariants and bindings included,
+    /// a binding the packages cannot decide asked of `validating`'s
+    /// `ValueSet/$validate-code`. Its codings are given the displays
+    /// `terminology`'s `$lookup` answers where they carry none, and it is
     /// mapped by the category's mapping with `device` as the engine's own
     /// `Device` reference at the instant `now`. With no terminology server,
-    /// a binding no expansion decides is listed as not evaluated, and a
-    /// coding with no display is refused.
+    /// a binding the packages cannot decide is listed as not evaluated, and
+    /// a coding with no display is refused.
     ///
     /// # Errors
     ///
@@ -272,47 +256,24 @@ impl Receivers {
         &self,
         text: &str,
         (device, now): (&str, &str),
-        terminology: &Terminology,
+        (terminology, validating): (&Terminology, Option<&Client>),
     ) -> Result<Prepared, Unreceived> {
         let document = ReceivedDocument::read(text)?;
         let category = document.category()?;
         let receiver = self.by.get(&category).ok_or(Unreceived::NoMember {
             category: category.code(),
         })?;
-        let conformance = document
-            .check(&receiver.bundle, &receiver.composition)
-            .map_err(|error| match error {
-                CheckError::NonConformant { findings } => Unreceived::NonConformant { findings },
-                other => Unreceived::Check(other),
-            })?;
-        let bindings = document
-            .check_bindings(
-                &receiver.bundle,
-                &receiver.composition,
-                &receiver.expansions,
-            )
-            .map_err(Unreceived::Bindings)?
-            .complete(terminology)
+        let validated = document
+            .validate(&receiver.packages, receiver.bundle, validating)
             .await
-            .map_err(Unreceived::Terminology)?;
-        if !bindings.findings().is_empty() {
-            return Err(Unreceived::NonConformant {
-                findings: bindings
-                    .findings()
-                    .iter()
-                    .cloned()
-                    .map(Finding::from)
-                    .collect(),
-            });
-        }
-        let mut unevaluated = conformance.unevaluated().to_vec();
-        unevaluated.extend(
-            bindings
-                .unevaluated()
-                .iter()
-                .cloned()
-                .map(Unevaluated::from),
-        );
+            .map_err(|error| match error {
+                ValidationError::NonConformant { findings } => {
+                    Unreceived::NonConformant { findings }
+                }
+                other => Unreceived::Validation(other),
+            })?;
+        let unevaluated = validated.unevaluated().to_vec();
+        let cautions = validated.cautions().to_vec();
         let document = document
             .displayed(terminology)
             .await
@@ -344,10 +305,51 @@ impl Receivers {
             member: receiver.member.clone(),
             composition,
             unevaluated,
+            cautions,
             subject,
             transformation,
         })
     }
+}
+
+/// The package sets read so far, by the files they were read from.
+type Read = BTreeMap<Vec<(PathBuf, Option<(u64, std::time::SystemTime)>)>, Arc<PackageSet>>;
+
+/// Every package set this process read, so a reload or a second gateway
+/// over unchanged files reads them once (no specification governs this: our
+/// own design).
+static READ: LazyLock<Mutex<Read>> = LazyLock::new(|| Mutex::new(BTreeMap::new()));
+
+/// The package set of `source`'s package and dependencies: the one read
+/// before from the same files, of the same length and modification time,
+/// or a new read.
+fn packages(source: &Source) -> Result<Arc<PackageSet>, LoadError> {
+    let paths: Vec<&PathBuf> = std::iter::once(&source.package)
+        .chain(source.dependencies.iter())
+        .collect();
+    // NOTE: no specification governs this: our own design; a file whose metadata cannot be
+    // read is keyed without it, and the read that follows reports why it cannot be used.
+    let key: Vec<_> = paths
+        .iter()
+        .map(|path| {
+            let stamp = std::fs::metadata(path)
+                .and_then(|metadata| Ok((metadata.len(), metadata.modified()?)))
+                .ok();
+            ((*path).clone(), stamp)
+        })
+        .collect();
+    if let Some(read) = READ
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&key)
+    {
+        return Ok(Arc::clone(read));
+    }
+    let read = Arc::new(PackageSet::load(paths)?);
+    READ.lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(key, Arc::clone(&read));
+    Ok(read)
 }
 
 /// What `receiver`'s mapping did to `document`, of `category`, which it
@@ -411,8 +413,12 @@ pub struct Prepared {
     pub member: String,
     /// The composition, the original document kept in it.
     pub composition: ReceivedComposition,
-    /// Every constraint of the profiles the check could not evaluate.
+    /// Every constraint of the profiles the validator met and did not
+    /// evaluate.
     pub unevaluated: Vec<Unevaluated>,
+    /// Every issue of severity `warning` or `information` the validator
+    /// found.
+    pub cautions: Vec<Finding>,
     /// Every identifier of the document's patient that has a system and a
     /// value, in document order.
     pub subject: Vec<Identifier>,
@@ -436,9 +442,10 @@ pub struct Written<'a> {
 /// Returns the `OperationOutcome` of `prepared`, written as `written` says.
 ///
 /// The first issue names the member, the endpoint and the new version; each
-/// constraint of the profiles the check did not evaluate follows as a
-/// warning, and so does each loss the mapping declared, so nothing the
-/// receipt left unchecked or unmapped is passed silently.
+/// constraint of the profiles the validator did not evaluate follows as a
+/// warning, then each warning the validator found, and each loss the
+/// mapping declared, so nothing the receipt left unchecked or unmapped is
+/// passed silently.
 #[must_use]
 pub fn written(prepared: &Prepared, written: Written<'_>) -> OperationOutcome {
     let mut issue = vec![issue(
@@ -462,6 +469,17 @@ pub fn written(prepared: &Prepared, written: Written<'_>) -> OperationOutcome {
             Some(&unevaluated.element),
         )
     }));
+    issue.extend(prepared.cautions.iter().map(|caution| {
+        let (severity, code) = match &caution.kind {
+            FindingKind::Issue { severity, code, .. } => (*severity, *code),
+            _ => ("warning", "informational"),
+        };
+        self::issue(
+            (severity, code),
+            &format!("{} ({})", caution, caution.profile),
+            Some(&caution.location),
+        )
+    }));
     if let Some(declared) = prepared.composition.outcome() {
         issue.extend(declared.issue.iter().cloned());
     }
@@ -480,6 +498,7 @@ pub fn nonconformant(findings: &[Finding]) -> OperationOutcome {
             .iter()
             .map(|finding| {
                 let kind = match finding.kind {
+                    FindingKind::Issue { code, .. } => code,
                     FindingKind::TooFew { .. } => "required",
                     FindingKind::Pattern => "value",
                     FindingKind::Invariant { .. } => "invariant",
@@ -534,18 +553,13 @@ pub enum Unreceived {
         /// Every finding.
         findings: Vec<Finding>,
     },
-    /// The document could not be checked against its profiles.
-    #[error("the document could not be checked against its profiles")]
-    Check(#[source] CheckError),
+    /// The document could not be validated against its profiles, or a
+    /// `required` binding of them could not be checked.
+    #[error("the document could not be validated against its profiles")]
+    Validation(#[source] ValidationError),
     /// The mapping refused the document.
     #[error("the document could not be mapped into openEHR")]
     Mapping(#[source] ReceiveMappingError),
-    /// The document's `required` bindings could not be checked.
-    #[error("the document's required bindings could not be checked")]
-    Bindings(#[source] BindingError),
-    /// The terminology server gave no answer to a binding check.
-    #[error("the terminology server could not check a required binding")]
-    Terminology(#[source] TerminologyError),
     /// A coding of the document carries no display, and none could be
     /// looked up.
     #[error("a coding of the document has no display")]

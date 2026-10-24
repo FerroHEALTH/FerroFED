@@ -18,6 +18,7 @@
 
 mod crosswalk;
 mod query;
+mod receive;
 mod sheet;
 #[cfg(test)]
 mod summary;

@@ -372,12 +372,15 @@ category (Federation Tier §2.3, N23):
    is the one whose HL7 Europe document profile fixes a coding of its
    `Composition.type`: LOINC `60591-5` for a patient summary. A category no
    member receives is a `422` that names it.
-2. It is held to the category's `Bundle` and `Composition` profiles from the
-   package the deployment supplies, their `required` terminology bindings
-   included ([Terminology](#terminology)). A document that breaks them is a
-   `422` with one issue per finding, located by element path. A constraint
-   the check cannot evaluate is listed as a `warning` in the answer, never
-   passed silently.
+2. It is validated in full by FerroBRIDGE's validator against the
+   category's `Bundle` profile, over the package and the dependency closure
+   the deployment supplies: every constraint of that profile, of the
+   profile each entry's slice names and of each profile an entry claims,
+   invariants and terminology bindings included
+   ([Receiving a document](../evaluate/receiving-documents.md#the-check-against-the-profiles)).
+   A document with an error is a `422` with one issue per error, located by
+   its FHIRPath. A warning, and each constraint the validator cannot
+   evaluate, is listed as a `warning` in the answer, never passed silently.
 3. Every coding that carries no `display` is given one by the terminology
    server's `$lookup`, because the openEHR side needs the text of every
    coded term. With no terminology server configured, such a coding is a
@@ -570,21 +573,20 @@ them into its terminology server under its own licence with the EDQM.
 ### Required bindings
 
 A `required` binding means the concept "SHALL be from the specified value
-set" (FHIR R4). The receive check holds each `code`, `Coding` and
-`CodeableConcept` that a `required` binding of the category's `Bundle` or
-`Composition` profile covers to the expansion of its value set, read from the
-package the deployment supplies. A concept outside the expansion is a `422`
-finding. A `CodeableConcept` holds when one of its codings is in the
-expansion.
+set" (FHIR R4). The validator holds each coded value that a binding of the
+document's profiles covers to its value set, read from the packages the
+deployment supplies: the FHIR R4 core package and HL7 Terminology among
+them, so the value sets of FHIR itself are decided offline. A concept
+outside a `required` value set is a `422` finding, and one outside an
+`extensible` value set a `warning`. A `CodeableConcept` holds when one of
+its codings is in the value set.
 
-The vendored HL7 Europe Patient Summary package carries no value set
-expansion. Most value sets its `required` bindings name are those of FHIR R4
-itself and of the HL7 terminology, which no package FerroFED vendors carries,
-and the few the HL7 Europe and IPS packages define carry no expansion either.
-Without a terminology server, every such binding is therefore listed as a
-`warning` that names the value set as not evaluated. A binding inside a
-slice, or on an element of a type that carries no code, is listed the same
-way.
+A value set no package enumerates, such as one over SNOMED CT or LOINC, is
+asked of the terminology server's `ValueSet/$validate-code`. A server that
+refuses or does not answer the check of a `required` binding refuses the
+document with `502`, since the gateway cannot say it conforms. Without a
+terminology server, such a binding is listed as a `warning` that names the
+value set as not evaluated.
 
 ## Configuring the face
 
@@ -612,7 +614,30 @@ context = "example_allergy.context"          # the context mapping's metadata.na
 [[fhir.receive]]
 category = "Patient-Summaries"               # the Art 14(1) category, by its HL7 Europe code
 member = "node-a"                            # the node id of the member that stores it
-package = "/etc/ferrofed/hl7.fhir.eu.eps-1.0.0-ballot.tgz"
+package = "/etc/ferrofed/packages/hl7.fhir.eu.eps-1.0.0-ballot.tgz"
+dependencies = [                             # the package's dependency closure, each a .tgz or a directory
+  "/etc/ferrofed/packages/hl7.fhir.r4.core-4.0.1.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.base-2.0.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.base-2.0.1.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.extensions.r4-1.3.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.extensions.r4-1.3.1.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.ips-1.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.ips-2.0.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.ipa-1.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.smart-app-launch-2.0.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.extensions.r4-5.2.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.extensions.r4-5.3.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.xver-r5.r4-0.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-5.0.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-6.2.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-6.3.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-6.5.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.3.0.tgz",
+  "/etc/ferrofed/packages/fhir.dicom-2022.4.20221006.tgz",
+  "/etc/ferrofed/packages/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz",
+  "/etc/ferrofed/packages/myhealth.eu.fhir.mvc-package-9.1.0.tgz",
+]
 template = "/etc/ferrofed/mappings/received-summary.opt"
 files = [
   "/etc/ferrofed/mappings/received-summary.yml",
@@ -675,9 +700,18 @@ load refuses either without it.
   `advance-directives`, `observation-results` and `care-plans`.
 - Each `[[fhir.receive]]` declares one category, once. Its member must be
   a node of the registry and a resolver must be configured, or the start and
-  `ferrofed config check` are refused. The package is the vendored HL7
-  Europe package whose profiles the category's documents are held to, and
-  the mapping compiles when the configuration is read.
+  `ferrofed config check` are refused. The package is the HL7 Europe
+  package whose profiles the category's documents are held to, and
+  `dependencies` lists every package its manifest and its dependencies'
+  manifests name, at the exact versions they name, with the MyHealth@EU
+  value sets its profiles bind: the start and `ferrofed config check`
+  refuse a set that lacks one, naming it, and one that does not carry the
+  category's profiles. Each is the `.tgz` the FHIR package registry serves
+  (`https://packages.fhir.org/<name>/<version>`) or an unpacked directory;
+  the list above is the closure of `hl7.fhir.eu.eps` 1.0.0-ballot, which
+  `scripts/vendor/eehrxf.sh` and `scripts/vendor/fhir-packages.sh` fetch,
+  each pinned by sha256. The mapping compiles when the configuration is
+  read.
 - Each `[[fhir.serve]]` declares one category, once, with at least one
   member, each named once. Configuration load refuses any other category and
   a member of `Electronic-Dispensations` that is not also declared for

@@ -81,51 +81,46 @@ it sends anything (see below).
 
 ## The check against the profiles
 
-The document is then checked against the HL7 Europe profiles of its
-category, read from the vendored package: for a patient summary,
-`bundle-eu-eps` and `composition-eu-eps` of `hl7.fhir.eu.eps` 1.0.0-ballot.
-At every occurrence of every element the profile's snapshot lists, the check
-holds:
+The document is then validated against the HL7 Europe `Bundle` profile of
+its category, for a patient summary `bundle-eu-eps` of `hl7.fhir.eu.eps`
+1.0.0-ballot, by FerroBRIDGE's FHIR R4 profile validator,
+[`ferrobridge-validator`](https://docs.rs/ferrobridge-validator), pinned
+exactly in `docs/VERSIONS.md` (decision A106). It reads the package and every
+package of its dependency closure, which each `[[fhir.receive]]` names in
+`dependencies`, and holds the document, at every occurrence of every element
+in play, to what FHIR R4 has a validator check
+([validation](https://hl7.org/fhir/R4/validation.html),
+[profiling](https://hl7.org/fhir/R4/profiling.html)):
 
-- the cardinality, counted per occurrence of the parent element;
-- the value a `fixed[x]` or `pattern[x]` requires, for a `CodeableConcept`,
-  a `Coding` or a string-valued primitive;
-- the slices of a sliced element, told apart by `value`, `pattern`,
-  `exists` and `type` discriminators. Each slice is held to its own
-  cardinality, and a `closed` slicing refuses an occurrence no slice admits.
-  The five sections the EPS composition requires are slices of this kind.
-  An entry of a resource type no slice of the `Bundle` profile names is
-  refused, although the profile's slicing is open, so no entry passes
-  unread;
-- the invariants of one form: every entry of the listed types carries a
-  reference at one element, as the EPS `eps-bundle-subject-ref` and
-  `eps-bundle-patient-ref` require. Every other invariant is listed as not
-  evaluated.
+- the structure: unknown elements, the JSON shapes, the cardinality per
+  parent, the types a choice may take and the lexical form of every
+  primitive;
+- the values a `fixed[x]` or `pattern[x]` requires;
+- slicing, with all five discriminator kinds, `profile` and paths through
+  `resolve()` included, ordered slicing, and each slice's own constraints;
+- every invariant of the core definitions and of each profile, evaluated as
+  FHIRPath: the R4 `ait-1` of an `AllergyIntolerance`, the `cmp-1` and
+  `cmp-2` of a section, the `eps-bundle-subject-ref` of the EPS `Bundle`;
+- the terminology bindings, a `required` one as an error and an
+  `extensible` one as a warning, read from the value sets the packages carry;
+- the profile each entry's slice names, each profile a resource claims in
+  `meta.profile`, and the target profiles of every reference;
+- the content rules R4 gives a document
+  ([documents](https://hl7.org/fhir/R4/documents.html)).
 
-Every finding is reported with the profile, the element id and the place in
-the document, such as `Composition.section[2]`. None is dropped.
-
-The check says what it cannot evaluate, and lists it beside a passing
-result:
-
-- a `profile` discriminator, such as the one that tells the EPS `Bundle`
-  entries apart by the profile of their resource;
-- a discriminator path through `resolve()`, such as the one that tells a
-  section's entries apart by the type of the resource they reference;
-- the order of an ordered slicing;
-- a `fixed[x]` or `pattern[x]` form it does not read, by its key.
-
-A slice such a discriminator tells apart is still held to its lower bound
-over the occurrences the other discriminators admit. The `required`
-terminology bindings of the `Bundle` and `Composition` profiles are held to
-the value set expansions the package carries, and to the terminology
-server's `$validate-code` where none does; a binding neither decides is
-listed as not evaluated
-([Terminology](../integrate/patient-summary.md#terminology)). Other
-invariants, the other binding strengths and the profiles of the other
-entries are not checked yet
-([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The two
-example documents the EPS package publishes pass the check.
+An issue of severity `error` or `fatal` refuses the document with `422` and
+an `OperationOutcome` of every such issue, located by its FHIRPath, before
+any member is asked. Each warning the validator finds is returned in the
+outcome of the write. Every constraint it met and did not evaluate (an
+invariant whose expression calls a function it cannot answer, a value set no
+package carries, a reference outside the document) is listed there as a
+`warning` of type `not-supported`, never passed in silence. A `required`
+binding the packages cannot decide is asked of the terminology server's
+`ValueSet/$validate-code`; a server that refuses or does not answer refuses
+the document with `502`, and with no server configured the binding is listed
+as not evaluated
+([Terminology](../integrate/patient-summary.md#terminology)). No message
+quotes a value of the document.
 
 A coding that carries no display is given one by the terminology server's
 `$lookup` before the mapping runs, because `DV_CODED_TEXT.value` is
@@ -222,6 +217,7 @@ refuse ([Patient grants](../operate/authentication.md#patient-grants)).
 
 The [clinical safety risk file](clinical-safety.md) lists the receive path
 as I-10 (a document filed under the wrong member or patient), whose
-controls are built, and I-11 (a document stored with content lost), which
-stays open until the gateway validates a received document in full
-([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)).
+controls are built, and I-11 (a document stored with content lost), whose
+controls include the full validation above
+([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)) and which
+stays open until the clinical review.

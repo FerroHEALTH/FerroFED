@@ -1272,6 +1272,8 @@ name = "eehrxf"
 version = "0.0.28"
 dependencies = [
  "async-trait",
+ "ferrobridge-term",
+ "ferrobridge-validator",
  "fhir-types",
  "fhirconnect",
  "flate2",
@@ -1428,6 +1430,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrobridge-fhirpath"
+version = "0.1.127"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b96a71f6d29ca273dc98314b0f2748e86b64e1312cfb343fc1cacb7cb6e9e95"
+dependencies = [
+ "base64 0.23.1",
+ "chumsky",
+ "fhir-types",
+ "jiff",
+ "logos",
+ "quick-xml",
+ "regex",
+ "rust_decimal",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "ferrobridge-term"
 version = "0.1.131"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1443,6 +1464,24 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "ferrobridge-validator"
+version = "0.1.131"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d050595651aafef26e705025b671785abf9bf8c62ae1dfcb3e9828741c33f96"
+dependencies = [
+ "ferrobridge-fhirpath",
+ "ferrobridge-term",
+ "fhir-types",
+ "flate2",
+ "http",
+ "regex",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1494,6 +1533,7 @@ dependencies = [
  "async-trait",
  "eehrxf",
  "ferrobridge-term",
+ "ferrobridge-validator",
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
@@ -1607,6 +1647,7 @@ dependencies = [
  "clap",
  "eehrxf",
  "ehds-logging",
+ "ferrobridge-validator",
  "ferrofed-eehrxf",
  "ferrofed-engine",
  "ferrofed-identity",

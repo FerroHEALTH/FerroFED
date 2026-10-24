@@ -32,8 +32,8 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::PatientBinding;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::{eps, fhir_packages};
 use http::{Request, header};
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -74,9 +74,19 @@ pub(super) fn rows(rows: &[(&str, &str, &str, &str)]) -> String {
 
 /// The `[fhir]` tables of a face that receives patient summaries at
 /// `member`, resolving their patient in `namespaces`.
+#[expect(
+    clippy::expect_used,
+    reason = "a test helper the suites call for a configuration text; a package that cannot be fetched fails the test"
+)]
 pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string());
     let [model, context] = eps::mapping_files();
+    let dependencies = fhir_packages::dependencies()
+        .expect("the Patient Summary's package closure")
+        .iter()
+        .map(|dependency| path(dependency).to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     let namespaces = namespaces
         .iter()
         .map(|namespace| format!("\"{namespace}\""))
@@ -87,8 +97,8 @@ pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
         &format!("receive_namespaces = [{namespaces}]"),
         &format!(
             "\n[[fhir.receive]]\ncategory = \"Patient-Summaries\"\nmember = \"{member}\"\n\
-             package = {}\ntemplate = {}\nfiles = [{}, {}]\ncontext = \"{}\"\n\
-             language = \"en\"\nterritory = \"NL\"\n",
+             package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
+             files = [{}, {}]\ncontext = \"{}\"\nlanguage = \"en\"\nterritory = \"NL\"\n",
             path(&eps::package()),
             path(&eps::opt()),
             path(&model),
