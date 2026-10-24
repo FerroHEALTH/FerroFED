@@ -34,6 +34,7 @@ use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
 use ferrofed_eehrxf::serving::{Serving, ServingError};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
+use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
 use serde::Deserialize;
 
@@ -96,6 +97,10 @@ pub struct ReceiveEntry {
     /// The HL7 Europe package, a `.tgz`, whose profiles a document of the
     /// category is checked against.
     pub package: PathBuf,
+    /// Every package of `package`'s dependency closure, each a `.tgz` or an
+    /// unpacked directory, with any package of the value sets its profiles
+    /// bind: the validator refuses a set that lacks one a manifest names.
+    pub dependencies: Vec<PathBuf>,
     /// The OPT 1.4 operational template the composition is of.
     pub template: PathBuf,
     /// The model and context mapping files.
@@ -170,6 +175,9 @@ pub struct FhirSettings {
     /// The terminology server the receive path and the patient summary
     /// ask, or none (`[eehrxf.terminology]`).
     pub terminology: Terminology,
+    /// The same terminology server, as the client FerroBRIDGE's validator
+    /// asks the bindings of a received document it cannot decide, or none.
+    pub validating: Option<BridgeTerminology>,
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
     pub terminology_written: Option<crate::config::eehrxf::TerminologyServer>,
@@ -458,6 +466,7 @@ impl Fhir {
             serving: Arc::new(self.serving()?),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
+            validating: None,
             terminology_written: None,
             written: self.clone(),
         })
@@ -490,6 +499,7 @@ impl Fhir {
                 category: entry.category.clone(),
                 member: entry.member.clone(),
                 package: entry.package.clone(),
+                dependencies: entry.dependencies.clone(),
                 opt,
                 files: entry.files.clone(),
                 context: entry.context.clone(),

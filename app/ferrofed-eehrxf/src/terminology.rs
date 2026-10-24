@@ -44,6 +44,15 @@ pub struct BridgeTerminology {
     client: Client,
 }
 
+impl BridgeTerminology {
+    /// Returns the terminology client, which FerroBRIDGE's validator asks
+    /// the bindings of a received document it cannot decide.
+    #[must_use]
+    pub const fn client(&self) -> &Client {
+        &self.client
+    }
+}
+
 /// Why the client of a terminology server cannot be built.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

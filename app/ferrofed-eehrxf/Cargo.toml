@@ -47,6 +47,9 @@ async-trait.workspace = true
 # (#925), over the HTTP client the identity crate builds with its credential
 # and TLS material.
 ferrobridge-term.workspace = true
+# FerroBRIDGE's FHIR R4 profile validator: the package set a received
+# document is validated against (#808).
+ferrobridge-validator.workspace = true
 # A member's searchset read for what a prescription search passes through,
 # and the searchset written with each member's resource as its bytes.
 serde.workspace = true

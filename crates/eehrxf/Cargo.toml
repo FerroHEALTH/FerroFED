@@ -5,7 +5,7 @@ name = "eehrxf"
 description = "The European interoperability software component of an EHR system under Regulation (EU) 2025/327: the format-neutral dataset model of the priority categories read from the Xt-EHR EHDS logical models, and the European electronic health record exchange format in FHIR R4, mapped from openEHR by FHIRconnect"
 # The name is not reserved on crates.io yet, and it must be claimed before the
 # `publish` switch is turned on (no specification governs this: our own design).
-version = "0.0.28"
+version = "0.0.29"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -45,6 +45,8 @@ discharge = []
 # openEHR-free.
 fhir-r4 = [
   "dep:async-trait",
+  "dep:ferrobridge-term",
+  "dep:ferrobridge-validator",
   "dep:fhir-types",
   "dep:http",
   "fhir-types/r4",
@@ -68,6 +70,13 @@ openehr = [
 # reaches the server implements.
 async-trait = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
+# The question a pending binding check of the validator asks, answered
+# through the terminology seam.
+ferrobridge-term = { workspace = true, optional = true }
+# FerroBRIDGE's FHIR R4 profile validator, which holds a received document
+# to every constraint of its profiles and of the profiles its entries claim
+# (#808).
+ferrobridge-validator = { workspace = true, optional = true }
 # The status a terminology server answered with, carried by every refusal.
 http = { workspace = true, optional = true }
 fhirconnect = { workspace = true, optional = true }

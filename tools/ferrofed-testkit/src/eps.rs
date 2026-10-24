@@ -148,11 +148,14 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
 /// Returns a synthetic patient summary document in the exchange format.
 ///
 /// It carries the five sections the EPS `Composition` profile requires,
-/// every coding displayed with a synthetic text (the receive path refuses a
-/// coding with no display when no terminology server is configured), one
+/// each one with no entry stating its `emptyReason` (`ips-comp-1`), every
+/// coding displayed with a synthetic text (the receive path refuses a coding
+/// with no display when no terminology server is configured), one active
 /// allergy that claims the `allergyIntolerance-eu-core` profile the fixture
-/// mapping maps, recording `substance`, and the patient, identified by each
-/// `(system, value)` of `identifiers`.
+/// mapping maps, recording `substance` (`ait-1` asks its `clinicalStatus`),
+/// and the patient, with a synthetic name and birth date (`patient-eu-eps`
+/// requires both) and identified by each `(system, value)` of `identifiers`. FerroBRIDGE's
+/// validator holds it conformant to the HL7 Europe Patient Summary.
 ///
 /// Every reference is a relative `Type/id` under `example.org` full URLs,
 /// the spelling the FHIRconnect engine resolves.
@@ -169,11 +172,17 @@ pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> Strin
             "text": {
                 "status": "generated",
                 "div": format!("<div xmlns=\"http://www.w3.org/1999/xhtml\">{text}</div>")
-            }
+            },
+            "emptyReason": { "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/list-empty-reason",
+                "code": "unavailable",
+                "display": "Unavailable"
+            }] }
         })
     };
     let mut allergies = section("Allergies", "48765-2", substance);
     if let Some(allergies) = allergies.as_object_mut() {
+        allergies.remove("emptyReason");
         allergies.insert(
             String::from("entry"),
             serde_json::json!([{ "reference": "AllergyIntolerance/synthetic-allergy" }]),
@@ -212,7 +221,9 @@ pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> Strin
                 "resource": {
                     "resourceType": "Patient",
                     "id": "synthetic-patient",
-                    "identifier": identifier
+                    "identifier": identifier,
+                    "name": [{ "family": "Synthetic", "given": ["Example"] }],
+                    "birthDate": "1970-01-01"
                 }
             },
             {
@@ -221,6 +232,11 @@ pub fn received_document(identifiers: &[(&str, &str)], substance: &str) -> Strin
                     "resourceType": "AllergyIntolerance",
                     "id": "synthetic-allergy",
                     "meta": { "profile": ["http://hl7.eu/fhir/base/StructureDefinition/allergyIntolerance-eu-core"] },
+                    "clinicalStatus": { "coding": [{
+                        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+                        "code": "active",
+                        "display": "Active"
+                    }] },
                     "code": { "text": substance },
                     "patient": { "reference": "Patient/synthetic-patient" }
                 }

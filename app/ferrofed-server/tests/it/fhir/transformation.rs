@@ -225,20 +225,27 @@ async fn a_receipt_records_its_transformation_by_path_with_the_loss_it_declared(
         ["Composition.section.code=5", "Composition.type=1"],
         "every LOINC coding is in a preferred system"
     );
-    assert_eq!(detail(record, "ehds-untranscoded"), ["1"]);
+    assert_eq!(detail(record, "ehds-untranscoded"), ["6"]);
     assert_eq!(
         detail(record, "ehds-untranscoded-path"),
-        ["AllergyIntolerance.code=1"],
-        "Art 10(7): the substance arrives as text alone"
+        [
+            "AllergyIntolerance.clinicalStatus=1",
+            "AllergyIntolerance.code=1",
+            "Composition.section.emptyReason=4"
+        ],
+        "Art 10(7): the substance arrives as text alone, and the HL7 codes are in no preferred system"
     );
     assert_eq!(
         detail(record, "ehds-dropped"),
-        ["1"],
-        "the loss the mapping run declared"
+        ["2"],
+        "the losses the mapping run declared"
     );
     assert_eq!(
         detail(record, "ehds-dropped-path"),
-        ["AllergyIntolerance.patient=1"],
+        [
+            "AllergyIntolerance.clinicalStatus=1",
+            "AllergyIntolerance.patient=1"
+        ],
         "at the R4 element the loss's expression locates"
     );
     Ok(())
