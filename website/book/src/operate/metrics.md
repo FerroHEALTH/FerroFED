@@ -290,6 +290,25 @@ answer apart. Each outcome therefore covers these calls:
 | `offline` | a member the gateway sent a request to and could not reach |
 | `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](consent.md)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
 
+### The latency in the self-description
+
+`OPTIONS {base}/` reports two statistics for each member endpoint, whether
+or not `[metrics]` is on:
+
+- **`latency_ms_p50`:** the median time the endpoint took to answer.
+- **`latency_ms_p95`:** the 95th percentile, the slow tail a median hides.
+
+Both are computed over the same window: the last 100 requests the gateway
+sent that endpoint, every call in the table above counted, the ask-all
+probes included, and a `time-out` timed to its deadline. Each is the
+nearest-rank percentile, so it is a time a request took, in whole
+milliseconds. The window lives as long as the process and survives a
+registry reload; an endpoint sent no request since the gateway started has
+neither member. The operator console shows both side by side, and the
+`ferrofed_node_request_duration_seconds` histogram carries the same
+requests, so you can read a percentile over any range from Prometheus with
+`histogram_quantile(0.95, sum by (le, endpoint) (rate(ferrofed_node_request_duration_seconds_bucket[5m])))`.
+
 ## Dashboard and alert rules
 
 Every release attaches a Grafana dashboard, `ferrofed-dashboard.json`, and a

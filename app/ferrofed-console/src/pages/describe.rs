@@ -450,6 +450,11 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> AnyView {
             role: Role::Quiet,
             ..Column::text("median", tr(Msg::ColumnMedian)).titled(tr(Msg::ColumnMedianTitle))
         },
+        Column {
+            numeric: true,
+            role: Role::Quiet,
+            ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
+        },
     ];
     let rows = description
         .endpoints
@@ -462,7 +467,8 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> AnyView {
                     {cell(&columns[1], code(endpoint.organisation.clone()))}
                     {cell(&columns[2], code(endpoint.node_id.clone().unwrap_or_default()))}
                     {cell(&columns[3], Tag::new(endpoint.status.as_str().to_owned()).view())}
-                    {cell(&columns[4], crate::pages::median(endpoint.latency_ms_p50))}
+                    {cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50))}
+                    {cell(&columns[5], crate::pages::latency(crate::read::federation::p95(endpoint)))}
                 </tr>
             }
         })
