@@ -255,9 +255,11 @@ pinned by its REST URL and sha256 through `scripts/vendor/lib/pinned.sh` in
 `scripts/vendor/openehr-ckm.sh` and committed verbatim under CC BY-SA, the
 licence the openEHR Foundation gives the clinical models CKM hosts. Each
 archetype states its own version in its `licence` field: 4.0 International
-for `INSTRUCTION.medication_order.v3`, `ACTION.medication.v1` and
-`CLUSTER.medication_supply_amount.v0`, and 3.0 for
-`CLUSTER.medication_authorisation.v0` and `CLUSTER.medication_order_summary.v0`.
+for `openEHR-EHR-INSTRUCTION.medication_order.v3`,
+`openEHR-EHR-ACTION.medication.v1` and
+`openEHR-EHR-CLUSTER.medication_supply_amount.v0`, and 3.0 for
+`openEHR-EHR-CLUSTER.medication_authorisation.v0` and
+`openEHR-EHR-CLUSTER.medication_order_summary.v0`.
 
 | Item | Pin | Repeated in |
 |---|---|---|
