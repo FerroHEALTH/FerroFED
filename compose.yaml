@@ -112,8 +112,14 @@ services:
       # `auto` renders pretty output on a terminal and JSON otherwise.
       FERROFED__TELEMETRY__FORMAT: ${FERROFED_LOG_FORMAT:-auto}
       FERROFED__TELEMETRY__FILTER: ${FERROFED_LOG_FILTER:-info}
-      # A local stack is not an installation, so it sends no usage report.
-      FERROFED__USAGE_REPORT__ENABLED: "false"
+      # The installation report to FerroPULSE: on by default, and
+      # FERROFED__USAGE_REPORT__ENABLED=false in your shell or .env stops it.
+      # What it sends and when:
+      # https://ferrofed.eu/docs/operate/usage-report.html
+      FERROFED__USAGE_REPORT__ENABLED: ${FERROFED__USAGE_REPORT__ENABLED:-true}
+      FERROFED__USAGE_REPORT__DEPLOYMENT: compose
+      # The instance id lives here, on the one writable volume.
+      FERROFED__USAGE_REPORT__STATE_DIR: /var/lib/ferrofed/usage-report
       FERROFED_CONFIG: /etc/ferrofed/ferrofed.toml
     # The quickstart's configuration and registry document, read-only, so the
     # root filesystem stays read-only as well.
@@ -126,9 +132,12 @@ services:
       # The gateway's signing key, which scripts/quickstart/signing-key.sh
       # writes before the first `docker compose up` ([signing]).
       - ./docker/quickstart/signing:/etc/ferrofed/signing:ro
-    # The gateway writes nothing: no cache, no scratch file, and every secret is
-    # read once at boot. So the root filesystem is read-only with no tmpfs
-    # beside it.
+      # The one writable path: the usage report's instance id. The image owns
+      # /var/lib/ferrofed as the gateway's user, so a new volume does too.
+      - ferrofed-state:/var/lib/ferrofed
+    # Beside that volume the gateway writes nothing: no cache, no scratch
+    # file, and every secret is read once at boot. So the root filesystem is
+    # read-only with no tmpfs beside it.
     read_only: true
     cap_drop: [ALL]
     security_opt:
@@ -203,8 +212,11 @@ services:
       # the one docker/quickstart/registry.toml declares for node-a.
       FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      # A local stack is not an installation, so it sends no usage report.
-      FERROEHR__USAGE_REPORT__ENABLED: "false"
+      # FerroEHR's installation report to FerroPULSE: on by default, and
+      # FERROEHR__USAGE_REPORT__ENABLED=false in your shell or .env stops it.
+      # What it sends and when:
+      # https://ferroehr.eu/docs/latest/usage-report.html
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8080"
 
@@ -214,7 +226,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
       FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: "false"
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
 
@@ -224,7 +236,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
       FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: "false"
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
 
@@ -234,7 +246,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
       FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: "false"
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
 
@@ -266,4 +278,5 @@ configs:
       ferroehr = ["ADMIN", "USER"]
 
 volumes:
+  ferrofed-state:
   ferroehr-pgdata:
