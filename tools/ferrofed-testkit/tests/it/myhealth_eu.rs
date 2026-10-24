@@ -223,7 +223,7 @@ fn each_committed_package_is_the_package_and_licence_its_pin_names() -> TestResu
 
 #[test]
 fn the_myhealth_guides_derive_from_the_vendored_versions() -> TestResult {
-    // (package, dependency, the version the provenance and decision A62 cite)
+    // (package, dependency, the version its package manifest names)
     let cited = [
         (
             "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
@@ -279,7 +279,7 @@ fn the_myhealth_guides_derive_from_the_vendored_versions() -> TestResult {
 
 #[test]
 fn the_ncpeh_api_build_keeps_the_national_side_out_of_scope() -> TestResult {
-    // Decision A67 cites both sentences of the 9.1.1-ci build.
+    // The scope (home page) and the pre-requisites (Document Retrieval) of the 9.1.1-ci build.
     let home = text("ehdsi/ehdsi-ncp-api-index.html")?;
     assert!(home.contains(
         "It is out of scope of this guide to define the interfaces with the National Connector and/or between the National Connector and National Infrastructure."
@@ -294,7 +294,7 @@ fn the_ncpeh_api_build_keeps_the_national_side_out_of_scope() -> TestResult {
 
 #[test]
 fn the_patient_summary_and_prescription_services_run_on_cda() -> TestResult {
-    // Decisions A62 and A72 cite the scope of both proofs of concept.
+    // The scope section of each guide's home page.
     let proof =
         "This IG serves as a proof of concept for implementing the same service using HL7 FHIR.";
     let summary = text("ehdsi-eps/myhealth.eu.fhir.eps-index.html")?;
@@ -312,7 +312,7 @@ fn the_patient_summary_and_prescription_services_run_on_cda() -> TestResult {
 
 #[test]
 fn no_myhealth_prescription_element_carries_the_remaining_dispensations() -> TestResult {
-    // Decision A102 point 5: the authorised count is carried, the remaining one is not.
+    // The authorised count of repeats is an element; a remaining count is none.
     let definitions = members("ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz", |name| {
         name == "package/StructureDefinition-MedicationRequest-myhealtheu-epd.json"
             || name == "package/StructureDefinition-MyHealthEuPrescription.json"
