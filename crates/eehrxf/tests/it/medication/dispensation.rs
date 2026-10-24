@@ -73,7 +73,8 @@ fn a_written_dispense_conforms_to_mpd() -> Result<(), Box<dyn Error>> {
 // NOTE: FHIR R4 conformance-rules.html §2.1.0.6: an invariant "must evaluate to true" on
 // each occurrence, so one the check does not read is listed, on every element in play.
 #[test]
-fn the_invariants_of_every_element_in_play_are_listed_as_not_evaluated() -> Result<(), Box<dyn Error>> {
+fn the_invariants_of_every_element_in_play_are_listed_as_not_evaluated()
+-> Result<(), Box<dyn Error>> {
     let conformance = profiles()?.check_dispense(&dispense().to_json()?)?;
     let listed = |element: &str, key: &str| {
         conformance.unevaluated().iter().any(|unevaluated| {

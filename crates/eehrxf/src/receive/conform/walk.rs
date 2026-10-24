@@ -114,14 +114,22 @@ impl Walk {
             // true" on each occurrence, so one this check does not read is listed, never passed.
             if !every.is_empty() {
                 for invariant in element.invariants() {
-                    self.unread(snapshot, element, Unread::Invariant(invariant.key().to_owned()));
+                    self.unread(
+                        snapshot,
+                        element,
+                        Unread::Invariant(invariant.key().to_owned()),
+                    );
                 }
             }
             self.children(snapshot, id, &objects(&every));
             for (slice, members) in &sliced {
                 if let Some(element) = snapshot.by_id.get(slice).filter(|_| !members.is_empty()) {
                     for invariant in element.invariants() {
-                        self.unread(snapshot, element, Unread::Invariant(invariant.key().to_owned()));
+                        self.unread(
+                            snapshot,
+                            element,
+                            Unread::Invariant(invariant.key().to_owned()),
+                        );
                     }
                 }
                 self.children(snapshot, slice, members);

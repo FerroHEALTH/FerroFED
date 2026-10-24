@@ -53,10 +53,10 @@ use crate::receive::conform::CheckError;
 use crate::receive::conform::Conformance;
 use crate::receive::conform::Unevaluated;
 use crate::receive::conform::check_resource;
+use crate::receive::strict;
 use crate::terminology::bindings::BindingError;
 use crate::terminology::bindings::check_required;
 use crate::terminology::expansion::Expansions;
-use crate::receive::strict;
 
 /// The canonical URL of the HL7 Europe MPD `Medication` profile.
 pub const MPD_MEDICATION: &str = "http://hl7.eu/fhir/mpd/StructureDefinition/Medication-eu-mpd";
@@ -201,12 +201,12 @@ impl Mpd {
             .filter(|object| {
                 object.get("resourceType").and_then(Value::as_str) == Some("Medication")
             });
-        let checks = std::iter::once((profile, expected, resource)).chain(
-            contained.map(|medication| (&self.medication, "Medication", medication)),
-        );
+        let checks = std::iter::once((profile, expected, resource))
+            .chain(contained.map(|medication| (&self.medication, "Medication", medication)));
         for (profile, expected, resource) in checks {
-            let check = check_resource(profile, expected, resource)
-                .and_then(|conformance| Ok(conformance.join(bindings(profile, expected, resource)?)));
+            let check = check_resource(profile, expected, resource).and_then(|conformance| {
+                Ok(conformance.join(bindings(profile, expected, resource)?))
+            });
             match check {
                 Ok(conformance) => passed = passed.join(conformance),
                 Err(CheckError::NonConformant { findings: found }) => findings.extend(found),
@@ -230,13 +230,14 @@ fn bindings(
     expected: &'static str,
     resource: &Object,
 ) -> Result<Conformance, CheckError> {
-    let check = check_required(profile, resource, expected, &Expansions::default()).map_err(
-        |error| match error {
-            BindingError::Unreadable { location } | BindingError::Decode { location, .. } => {
-                CheckError::Unreadable { location }
+    let check =
+        check_required(profile, resource, expected, &Expansions::default()).map_err(|error| {
+            match error {
+                BindingError::Unreadable { location } | BindingError::Decode { location, .. } => {
+                    CheckError::Unreadable { location }
+                }
             }
-        },
-    )?;
+        })?;
     Ok(Conformance::listing(
         check.unevaluated().iter().cloned().map(Unevaluated::from),
     ))
