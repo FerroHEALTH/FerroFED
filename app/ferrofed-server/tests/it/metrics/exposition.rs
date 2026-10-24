@@ -180,7 +180,7 @@ fn two_listeners_on_port_zero_each_get_a_port_of_their_own() -> TestResult {
 }
 
 #[test]
-fn the_otlp_push_takes_an_http_collector_and_refuses_any_other() -> TestResult {
+fn the_otlp_push_takes_an_http_collector_and_refuses_another_scheme() -> TestResult {
     let settings = resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?;
     assert_eq!(
         Some("http://127.0.0.1:4317/"),
@@ -190,7 +190,7 @@ fn the_otlp_push_takes_an_http_collector_and_refuses_any_other() -> TestResult {
             .as_ref()
             .map(SecretUrl::expose)
     );
-    for refused in ["https://collector.example.org:4317", "not a url"] {
+    for refused in ["ftp://collector.example.org:4317", "not a url"] {
         let text = format!("[metrics]\notlp_endpoint = \"{refused}\"\n");
         let error = Config::from_sources(Some(&text), &BTreeMap::new())?
             .resolve()

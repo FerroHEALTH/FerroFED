@@ -12,6 +12,7 @@ mod hygiene;
 mod otlp;
 mod sampling;
 mod spans;
+mod tls;
 mod traceparent;
 
 use std::collections::BTreeSet;
