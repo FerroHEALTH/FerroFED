@@ -49,8 +49,9 @@
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
-#                          compose.yaml gateway tag default, the one image of
-#                          the release asset deploy/compose/compose.yaml and
+#                          compose.yaml gateway tag default, the gateway and
+#                          console images of the release asset
+#                          deploy/compose/compose.yaml and
 #                          the image tag of deploy/kubernetes/statefulset.yaml
 #                          against the product version.
 #  10. licence             LICENSE is the Business Source License 1.1 and no
@@ -1577,8 +1578,9 @@ if shipped compose.yaml; then
     note "OK: the compose.yaml gateway tag is the product version $tags"
   fi
 fi
-# The compose.yaml every release carries runs the gateway image alone, at the
-# version of the release, so its one tag default moves with the cut.
+# The compose.yaml every release carries runs the gateway image and, under
+# its console profile, the console image, both at the version of the
+# release, so their one tag default moves with the cut.
 release_compose=deploy/compose/compose.yaml
 if shipped "$release_compose"; then
   images="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
@@ -1587,10 +1589,13 @@ if shipped "$release_compose"; then
     [[ -n "$ref" ]] || continue
     case "$ref" in
     "ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-"*"}") ;;
-    *) bad "$release_compose runs $ref, which is not ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-<version>}" ;;
+    "ghcr.io/ferrohealth/ferrofed-console:\${FERROFED_VERSION:-"*"}") ;;
+    *) bad "$release_compose runs $ref, which is not ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-<version>} or ghcr.io/ferrohealth/ferrofed-console:\${FERROFED_VERSION:-<version>}" ;;
     esac
   done <<< "$images"
-  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
+  grep -qE '^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed-console:' "$release_compose" ||
+    bad "$release_compose runs no ghcr.io/ferrohealth/ferrofed-console image"
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed(-console)?:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\2|p' "$release_compose" | sort -u)"
   if [[ -z "$tags" ]]; then
     bad "$release_compose has no ghcr.io/ferrohealth/ferrofed image tag default"
   elif [[ "$(line_count "$tags")" -gt 1 ]]; then
@@ -1598,7 +1603,7 @@ if shipped "$release_compose"; then
   elif [[ "$tags" != "$want_product" ]]; then
     bad "release compose tag: $release_compose runs $tags, $matrix pins the product version $want_product"
   else
-    note "OK: the $release_compose gateway tag is the product version $tags"
+    note "OK: the $release_compose gateway and console tags are the product version $tags"
   fi
 fi
 statefulset_tag deploy/kubernetes/statefulset.yaml "$want_product"

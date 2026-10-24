@@ -216,11 +216,12 @@ slow one.
 2. **The version moves in every file the pin matrix names:** `CITATION.cff`,
    the product-version row of `docs/VERSIONS.md` and the root `Cargo.toml`
    `[workspace.package]` `version`. The gateway image tag moves with it in
-   the `compose.yaml` default, in the `FERROFED_VERSION` default on the
-   `image:` line of `deploy/compose/compose.yaml` (the release asset) and in
+   the `compose.yaml` default, in the `FERROFED_VERSION` default on both
+   `image:` lines of `deploy/compose/compose.yaml` (the release asset: the
+   gateway and the console) and in
    `deploy/kubernetes/statefulset.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
-   release asset's tag against the tag.
+   release asset's tags against the tag.
 3. **The changelog names the release.** Every change since the last release
    is a fragment under `changelog.d/` (`changelog.d/README.md`), and entries
    written before the fragments may still sit under `[Unreleased]`. Run
