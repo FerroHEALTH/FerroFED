@@ -124,7 +124,8 @@ impl Config {
         let terminology = self.resolve_terminology()?;
         let mut fhir = self.resolve_fhir(&base_path, public_url.as_ref())?;
         if let Some(fhir) = &mut fhir {
-            fhir.terminology = crate::config::eehrxf::terminology(terminology.as_ref())?;
+            (fhir.terminology, fhir.validating) =
+                crate::config::eehrxf::terminology(terminology.as_ref())?;
             fhir.terminology_written
                 .clone_from(&self.eehrxf.terminology);
         }

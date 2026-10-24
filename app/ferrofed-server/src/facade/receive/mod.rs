@@ -36,6 +36,7 @@ use ehds_logging::record::{
     Action, DataSubject, EhrAt, Insertion, PatientIdentifier, PatientLookup, WrittenVersion,
 };
 use ferrofed_eehrxf::receive::{self, Identifier, Prepared, Written};
+use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
@@ -79,7 +80,14 @@ pub(crate) async fn receive(
     // system the composition's FEEDER_AUDIT names as having transformed the document.
     let prepared = match fhir
         .receivers
-        .receive(text, (&fhir.absolute, &now), &fhir.terminology)
+        .receive(
+            text,
+            (&fhir.absolute, &now),
+            (
+                &fhir.terminology,
+                fhir.validating.as_ref().map(BridgeTerminology::client),
+            ),
+        )
         .await
     {
         Ok(prepared) => prepared,
