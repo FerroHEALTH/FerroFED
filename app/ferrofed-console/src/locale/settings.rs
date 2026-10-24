@@ -8,6 +8,10 @@ messages! {
     SettingArchetypeMap = "setting-archetype-map",
     /// `Archetype ids, each mapped to the categories of the data under it.`
     SettingArchetypeMapDesc = "setting-archetype-map-desc",
+    /// `Audience`
+    SettingAudience = "setting-audience",
+    /// `The audiences a caller's token must name for this gateway.`
+    SettingAudienceDesc = "setting-audience-desc",
     /// `Backend`
     SettingBackend = "setting-backend",
     /// `Where the stored queries are kept: redb, postgres or files.`
@@ -36,6 +40,14 @@ messages! {
     SettingFhirBase = "setting-fhir-base",
     /// `Where the exchange-format face is served, beside the openEHR API.`
     SettingFhirBaseDesc = "setting-fhir-base-desc",
+    /// `Introspection secret`
+    SettingIntrospectionSecret = "setting-introspection-secret",
+    /// `The secret the gateway authenticates to this issuer's introspection endpoint with, named by the file it is read from.`
+    SettingIntrospectionSecretDesc = "setting-introspection-secret-desc",
+    /// `Key set file`
+    SettingKeySetFile = "setting-key-set-file",
+    /// `The file this issuer's signing keys are read from, when they are not fetched.`
+    SettingKeySetFileDesc = "setting-key-set-file-desc",
     /// `Localizer budget`
     SettingLocalizerBudget = "setting-localizer-budget",
     /// `How long the localizer may take, in milliseconds, out of the overall timeout.`
@@ -44,6 +56,38 @@ messages! {
     SettingLocalizerFails = "setting-localizer-fails",
     /// `closed asks no node and says why; ask-all asks every node.`
     SettingLocalizerFailsDesc = "setting-localizer-fails-desc",
+    /// `Correlation header`
+    SettingNcpCorrelation = "setting-ncp-correlation",
+    /// `The request header the contact point's connector sends its correlation identifier in, recorded with the access.`
+    SettingNcpCorrelationDesc = "setting-ncp-correlation-desc",
+    /// `Added countries`
+    SettingNcpCountries = "setting-ncp-countries",
+    /// `The countries beside the 27 Member States a relayed country code may name.`
+    SettingNcpCountriesDesc = "setting-ncp-countries-desc",
+    /// `Country code claim`
+    SettingNcpCountryCode = "setting-ncp-country-code",
+    /// `The claim carrying the country that issued the professional's identification data (Implementing Regulation (EU) 2026/2099 Annex Table 1).`
+    SettingNcpCountryCodeDesc = "setting-ncp-country-code-desc",
+    /// `Family name claim`
+    SettingNcpFamilyName = "setting-ncp-family-name",
+    /// `The claim carrying the professional's family name (Annex Table 1). Set, it declares the issuer a national contact point.`
+    SettingNcpFamilyNameDesc = "setting-ncp-family-name-desc",
+    /// `Given name claim`
+    SettingNcpGivenName = "setting-ncp-given-name",
+    /// `The claim carrying the professional's given name (Annex Table 1).`
+    SettingNcpGivenNameDesc = "setting-ncp-given-name-desc",
+    /// `Professional's issuing authority claim`
+    SettingNcpProfessionalAuthority = "setting-ncp-professional-authority",
+    /// `The claim carrying the authority that issued the professional's identifier (Annex Table 1).`
+    SettingNcpProfessionalAuthorityDesc = "setting-ncp-professional-authority-desc",
+    /// `Provider address claim`
+    SettingNcpProviderAddress = "setting-ncp-provider-address",
+    /// `The claim carrying the healthcare provider's address (Annex Table 2).`
+    SettingNcpProviderAddressDesc = "setting-ncp-provider-address-desc",
+    /// `Provider's issuing authority claim`
+    SettingNcpProviderAuthority = "setting-ncp-provider-authority",
+    /// `The claim carrying the authority that issued the provider's identifier (Annex Table 2).`
+    SettingNcpProviderAuthorityDesc = "setting-ncp-provider-authority-desc",
     /// `Node selection`
     SettingNodeSelection = "setting-node-selection",
     /// `Which nodes a patient's query asks: localized, the nodes the localizer names, or ask-all, every node.`
@@ -64,6 +108,10 @@ messages! {
     SettingPerNodeTimeout = "setting-per-node-timeout",
     /// `How long one node may take, in milliseconds: no more than the overall timeout.`
     SettingPerNodeTimeoutDesc = "setting-per-node-timeout-desc",
+    /// `Operator scope`
+    SettingProductScope = "setting-product-scope",
+    /// `The scope a token needs for the operator surface and the admin actions.`
+    SettingProductScopeDesc = "setting-product-scope-desc",
     /// `Received categories`
     SettingReceived = "setting-received",
     /// `The categories of document the face accepts.`
@@ -92,6 +140,14 @@ messages! {
     SettingTemplateMap = "setting-template-map",
     /// `Template ids, each mapped to the categories of the data under it.`
     SettingTemplateMapDesc = "setting-template-map-desc",
+    /// `Token issuer`
+    SettingTokenIssuer = "setting-token-issuer",
+    /// `An issuer whose access tokens the gateway verifies.`
+    SettingTokenIssuerDesc = "setting-token-issuer-desc",
+    /// `Trusted issuer`
+    SettingTrustedIssuer = "setting-trusted-issuer",
+    /// `An issuer whose callers the gateway admits, with the policy below it.`
+    SettingTrustedIssuerDesc = "setting-trusted-issuer-desc",
     /// `A setting this console does not describe.`
     SettingUnknown = "setting-unknown",
     /// `Document URL lifetime`
@@ -112,6 +168,8 @@ messages! {
     SettingsFileSubtitle = "settings-file-subtitle",
     /// `How each access record is classified and kept.`
     SettingsIntroAccessLog = "settings-intro-access-log",
+    /// `Who may call: the issuers the gateway trusts, a national contact point among them. Only the configuration file sets these, so this tab is read-only.`
+    SettingsIntroAuthentication = "settings-intro-authentication",
     /// `What callers learn about consent.`
     SettingsIntroConsent = "settings-intro-consent",
     /// `A draft of this tab, based on revision { $base }. Saved, it is a revision you apply as any other.`
@@ -158,6 +216,8 @@ messages! {
     SettingsSourceRevision = "settings-source-revision",
     /// `Access log`
     SettingsTabAccessLog = "settings-tab-access-log",
+    /// `Authentication`
+    SettingsTabAuthentication = "settings-tab-authentication",
     /// `Consent`
     SettingsTabConsent = "settings-tab-consent",
     /// `Fan-out and paging`

@@ -136,6 +136,9 @@ pub enum Tab {
     AccessLog,
     /// The FHIR face.
     Fhir,
+    /// Who may call: the trusted issuers, a national contact point among
+    /// them, read-only.
+    Authentication,
     /// The members.
     Members,
     /// The onward credentials and binding sections.
@@ -150,13 +153,14 @@ pub enum Tab {
 
 impl Tab {
     /// Every tab, in the order the page shows them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Federation,
         Self::FanOut,
         Self::Consent,
         Self::Queries,
         Self::AccessLog,
         Self::Fhir,
+        Self::Authentication,
         Self::Members,
         Self::Credentials,
         Self::History,
@@ -165,13 +169,14 @@ impl Tab {
 
     /// The tabs of a configuration revisions do not manage: the settings,
     /// read-only.
-    pub const SETTINGS: [Self; 6] = [
+    pub const SETTINGS: [Self; 7] = [
         Self::Federation,
         Self::FanOut,
         Self::Consent,
         Self::Queries,
         Self::AccessLog,
         Self::Fhir,
+        Self::Authentication,
     ];
 
     /// The tab of the settings of `section`.
@@ -183,6 +188,7 @@ impl Tab {
             Section::Consent => Self::Consent,
             Section::StoredQueries => Self::Queries,
             Section::AccessLog => Self::AccessLog,
+            Section::Authentication => Self::Authentication,
             _ => Self::Fhir,
         }
     }
@@ -197,6 +203,7 @@ impl Tab {
             Self::Queries => Some(Section::StoredQueries),
             Self::AccessLog => Some(Section::AccessLog),
             Self::Fhir => Some(Section::Fhir),
+            Self::Authentication => Some(Section::Authentication),
             Self::Members | Self::Credentials | Self::History | Self::Exchange => None,
         }
     }
@@ -220,7 +227,8 @@ impl Tab {
             | Self::Consent
             | Self::Queries
             | Self::AccessLog
-            | Self::Fhir => "/configuration/stored-queries",
+            | Self::Fhir
+            | Self::Authentication => "/configuration/stored-queries",
             Self::History => "/configuration/history",
             Self::Exchange => "/configuration/import-export",
         }
@@ -238,7 +246,8 @@ impl Tab {
             | Self::Consent
             | Self::Queries
             | Self::AccessLog
-            | Self::Fhir => Msg::StoredQueries,
+            | Self::Fhir
+            | Self::Authentication => Msg::StoredQueries,
             Self::Members => Msg::Members,
             Self::Credentials => Msg::CredentialsAndBindings,
             Self::History => Msg::History,
@@ -255,6 +264,7 @@ impl Tab {
             Self::Consent => "tab-consent",
             Self::AccessLog => "tab-access-log",
             Self::Fhir => "tab-fhir",
+            Self::Authentication => "tab-authentication",
             Self::Members => "tab-members",
             Self::Credentials => "tab-credentials",
             Self::Queries => "tab-stored-queries",
