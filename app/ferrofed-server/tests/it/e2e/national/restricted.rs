@@ -3,8 +3,10 @@
 
 //! A member restricting the patient leaves no trace in any answer the
 //! national connector reads: the summary, the document list and the
-//! prescription search answer as they do where that member does not know the patient
-//! (Regulation (EU) 2025/327 Art 8, Art 11(5); §11.3).
+//! prescription search answer as they do where that member does not know the
+//! patient, and a read by id of the restricting member's prescription answers
+//! as an id the face never wrote, with that member asked nothing (Regulation
+//! (EU) 2025/327 Art 8, Art 11(5); §11.3).
 //!
 //! The restriction is the consent pre-filter's denial of node B (§14,
 //! Step 1). The IHE binding carries no pre-filter of its own, so this test
@@ -13,6 +15,8 @@
 
 use std::error::Error;
 
+use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrofed_server::fhir::locator::Locator;
 use ferrofed_testkit::containers;
 use ferrofed_testkit::national_connector::{Answer, NationalConnector};
 use http::StatusCode;
@@ -32,6 +36,9 @@ fn crossref(rows: &[(&str, uuid::Uuid)], denied: &[&str]) -> String {
     for member in denied {
         text.push_str(&denied_row(&namespace, &value, member));
     }
+    // NOTE: §14 Step 1: a read by id names no patient, so the pre-filter is asked about the
+    // patient the binding names behind the id's ehr_id, in these namespaces.
+    text.push_str(&namespaces_table(&namespace));
     text
 }
 
@@ -40,6 +47,12 @@ fn crossref_row(namespace: &str, value: &str, member: &str, ehr_id: uuid::Uuid) 
     format!(
         "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
     )
+}
+
+/// The `[access_log]` table naming `namespace` as the one the patient behind
+/// an `ehr_id` is named in.
+fn namespaces_table(namespace: &str) -> String {
+    format!("\n[access_log]\npatient_namespaces = [\"{namespace}\"]\n")
 }
 
 /// One `[[dev.consent_denied]]` row denying the patient at `member`.
@@ -153,12 +166,7 @@ async fn a_restricting_member_leaves_no_trace_in_any_answer() -> TestResult {
     );
     let read_unknown = answers(&unknown.connector).await?;
 
-    let labels = [
-        "summary",
-        "document list",
-        "prescription search",
-        "read at node B",
-    ];
+    let labels = ["summary", "document list", "prescription search"];
     for ((label, restricted), unknown) in labels.iter().zip(&read_restricted).zip(&read_unknown) {
         assert!(
             restricted.status.is_success() || restricted.status == StatusCode::NOT_FOUND,
@@ -179,6 +187,40 @@ async fn a_restricting_member_leaves_no_trace_in_any_answer() -> TestResult {
                 restricted.body
             );
         }
+    }
+
+    // NOTE: §14 Step 1, N27a: a read by id asks the pre-filter about the patient behind the id's
+    // ehr_id, so the restricting member answers as an id the face never wrote.
+    let at_b = Locator::new(
+        EndpointId::new("node-b-mpd")?,
+        EhrId::new(EHR_B.to_string())?,
+        "rx-b1",
+    )
+    .id()
+    .ok_or("the parts fit an id")?;
+    harness.clear_journals();
+    let denied = restricted.connector.prescription(&at_b).await?;
+    assert!(
+        harness.proxy_b.journal().is_empty() && harness.nodes.b.proxy.journal().is_empty(),
+        "a read by id asks the restricting member nothing"
+    );
+    let never_written = restricted
+        .connector
+        .prescription("not-an-id-the-face-wrote")
+        .await?;
+    assert_eq!(StatusCode::NOT_FOUND, denied.status, "{}", denied.body);
+    assert_eq!(
+        read_as(&never_written)?,
+        read_as(&denied)?,
+        "Art 8: a read at the restricting member answers as an unknown id"
+    );
+    let lower = denied.body.to_ascii_lowercase();
+    for trace in ["consent", "restrict", "denied", "withheld"] {
+        assert!(
+            !lower.contains(trace),
+            "the read shows {trace}: {}",
+            denied.body
+        );
     }
     Ok(())
 }
