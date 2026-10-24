@@ -39,6 +39,23 @@
 #   FERROFED_PORT       8080 by default
 #   FERROFED_CPUS       1 by default
 #   FERROFED_MEMORY     256M by default
+#   FERROFED_CONSOLE_PORT    3000 by default, the console's port
+#   FERROFED_CONSOLE_CPUS    0.5 by default
+#   FERROFED_CONSOLE_MEMORY  128M by default
+#
+# THE OPERATOR CONSOLE runs beside the gateway under the console profile:
+#
+#   docker compose --profile console up --wait
+#
+# then open http://127.0.0.1:3000. It reaches the gateway over the compose
+# network and binds the loopback interface like the gateway. Operators sign
+# in at your OpenID Provider: set the FERROFED_CONSOLE__OIDC__* variables in
+# your shell or .env, with the client secret in
+# ./secrets/console_oidc_client_secret. Its configuration page needs a
+# replica's admin listener ([metrics] listen in ferrofed.toml), named with
+# FERROFED_CONSOLE__ADMIN__REPLICAS. The book's operator console page has
+# the walk-through:
+# https://ferrofed.eu/docs/operate/operator-console.html#from-the-release-compose-file
 #
 # PORTS. The port binds the loopback interface by default. A published port is
 # DNAT'd ahead of the host firewall's own chains, so a port on 0.0.0.0 is
@@ -47,8 +64,8 @@
 # serve another machine, name the interface (FERROFED_BIND_HOST=10.0.0.7) or
 # put a reverse proxy in front.
 #
-# The image is the published one: nothing here builds it. Its tag is the
-# release this file shipped with, and scripts/checks/versions.sh keeps it
+# The images are the published ones: nothing here builds them. Their tag is
+# the release this file shipped with, and scripts/checks/versions.sh keeps it
 # equal to the workspace version.
 
 name: ferrofed-gateway
@@ -141,6 +158,72 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # The operator console, under the console profile (see the header).
+  console:
+    image: ghcr.io/ferrohealth/ferrofed-console:${FERROFED_VERSION:-0.0.12}
+    profiles: [console]
+    restart: unless-stopped
+    depends_on:
+      ferrofed:
+        condition: service_healthy
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_CONSOLE_PORT:-3000}:3000"
+    environment:
+      # The image sets the same value; repeated so `docker compose config`
+      # shows the address the container binds.
+      FERROFED_CONSOLE__SERVER__LISTEN: 0.0.0.0:3000
+      # The gateway, over the compose network.
+      FERROFED_CONSOLE__GATEWAY__BASE_URL: http://ferrofed:8080/
+      # Passed through only when set in your shell or .env: without an
+      # issuer the console offers no sign-in, while an empty one refuses to
+      # start.
+      FERROFED_CONSOLE__OIDC__ISSUER:
+      FERROFED_CONSOLE__OIDC__AUTHORIZATION_ENDPOINT:
+      FERROFED_CONSOLE__OIDC__TOKEN_ENDPOINT:
+      FERROFED_CONSOLE__OIDC__JWKS_URI:
+      FERROFED_CONSOLE__OIDC__CLIENT_ID:
+      FERROFED_CONSOLE__OIDC__CLIENT_SECRET_FILE:
+      FERROFED_CONSOLE__OIDC__REDIRECT_URI:
+      FERROFED_CONSOLE__OIDC__SCOPES:
+      FERROFED_CONSOLE__OIDC__OFFLINE_ACCESS:
+      FERROFED_CONSOLE__OIDC__END_SESSION_ENDPOINT:
+      FERROFED_CONSOLE__OIDC__POST_LOGOUT_REDIRECT_URI:
+      # A replica's admin listener for the configuration page, as an inline
+      # TOML array: [{name = "gateway-0", admin_url = "http://ferrofed:9464/"}].
+      FERROFED_CONSOLE__ADMIN__REPLICAS:
+      # true unless the console is served over plain HTTP on loopback.
+      FERROFED_CONSOLE__SESSION__SECURE_COOKIE:
+    secrets:
+      - console_oidc_client_secret
+    # The console keeps its sessions in memory and writes no file, so the
+    # root filesystem is read-only and no volume is mounted. The image runs
+    # as the numeric user 65532 and has no shell.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${FERROFED_CONSOLE_CPUS:-0.5}"
+          memory: ${FERROFED_CONSOLE_MEMORY:-128M}
+    # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
+    # visibly waits on it.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferrofed-console", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+secrets:
+  # The console's OIDC client secret at your OpenID Provider, read once at
+  # start through FERROFED_CONSOLE__OIDC__CLIENT_SECRET_FILE, which names
+  # /run/secrets/console_oidc_client_secret. A missing file stops
+  # `docker compose --profile console up`; the gateway alone never reads it.
+  console_oidc_client_secret:
+    file: ${FERROFED_CONSOLE_OIDC_CLIENT_SECRET_FILE:-./secrets/console_oidc_client_secret}
 
 # The audit spool's named volume (see the ferrofed service).
 volumes:

@@ -522,3 +522,43 @@ TLS cannot be reached from the console.
 The image sets `server.listen` to `0.0.0.0:3000` and `server.site_root` to
 the site bundle it carries, runs as the numeric user `65532`, and runs
 `healthcheck` as its `HEALTHCHECK`.
+
+## From the release compose file
+
+The `compose.yaml` every release carries runs the console beside the
+gateway under the `console` profile, from the published image at the
+release's version, with the gateway's hardening: a read-only root
+filesystem, every capability dropped, `no-new-privileges`, and CPU and
+memory limits. Its port binds the loopback interface, as the gateway's
+does.
+
+```sh
+# the client secret at your OpenID Provider, read as a file secret
+printf '%s' "$CLIENT_SECRET" > secrets/console_oidc_client_secret
+export FERROFED_CONSOLE__OIDC__ISSUER=https://idp.example.org/realms/ferrofed
+export FERROFED_CONSOLE__OIDC__AUTHORIZATION_ENDPOINT=https://idp.example.org/realms/ferrofed/protocol/openid-connect/auth
+export FERROFED_CONSOLE__OIDC__TOKEN_ENDPOINT=https://idp.example.org/realms/ferrofed/protocol/openid-connect/token
+export FERROFED_CONSOLE__OIDC__JWKS_URI=https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs
+export FERROFED_CONSOLE__OIDC__CLIENT_ID=ferrofed-console
+export FERROFED_CONSOLE__OIDC__CLIENT_SECRET_FILE=/run/secrets/console_oidc_client_secret
+export FERROFED_CONSOLE__OIDC__REDIRECT_URI=http://127.0.0.1:3000/auth/callback
+export FERROFED_CONSOLE__SESSION__SECURE_COOKIE=false
+docker compose --profile console up --wait
+```
+
+Then open `http://127.0.0.1:3000`. The console reaches the gateway over
+the compose network at `http://ferrofed:8080/`
+(`FERROFED_CONSOLE__GATEWAY__BASE_URL`). `secure_cookie = false` is
+admitted only because the redirect URI is plain HTTP on loopback; behind a
+TLS reverse proxy, drop it and name the proxy's URL as the redirect URI.
+Without the `FERROFED_CONSOLE__OIDC__*` variables the console starts and
+offers no sign-in. Every variable the service passes through is set only
+when your shell or `.env` sets it.
+
+The configuration page needs a replica's admin listener. Set the gateway's
+`[metrics] listen = "0.0.0.0:9464"` with `allow_remote = true` in
+`ferrofed.toml`, leave it unpublished, and name it to the console:
+`FERROFED_CONSOLE__ADMIN__REPLICAS='[{ name = "gateway-0", admin_url = "http://ferrofed:9464/" }]'`.
+`FERROFED_CONSOLE_PORT`, `FERROFED_CONSOLE_CPUS` and
+`FERROFED_CONSOLE_MEMORY` move the port and the limits, and
+`FERROFED_CONSOLE_OIDC_CLIENT_SECRET_FILE` another secret file.

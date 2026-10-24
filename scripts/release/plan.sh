@@ -154,8 +154,8 @@ check_milestone() { bash scripts/release/milestone.sh check "$TAG"; }
 
 # Every file that declares the product version agrees with the tag:
 # CITATION.cff, the product row of docs/VERSIONS.md, the root Cargo.toml
-# [workspace.package] version and the gateway image tag of the compose.yaml
-# release asset.
+# [workspace.package] version and the gateway and console image tags of the
+# compose.yaml release asset.
 check_version() {
   local fail=0 cff matrix manifest compose
   agree() {
@@ -198,8 +198,8 @@ check_version() {
     }
   ' Cargo.toml)"
   agree "the root Cargo.toml [workspace.package] version" "$manifest"
-  compose="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' deploy/compose/compose.yaml | sort -u | tr '\n' ' ' | sed 's/ $//')"
-  agree "the deploy/compose/compose.yaml gateway image tag" "$compose"
+  compose="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed(-console)?:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\2|p' deploy/compose/compose.yaml | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  agree "the deploy/compose/compose.yaml gateway and console image tags" "$compose"
   [[ "$fail" -eq 0 ]]
 }
 
