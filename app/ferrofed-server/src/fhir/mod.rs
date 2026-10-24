@@ -461,7 +461,7 @@ async fn summarised(
         }
     };
     match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Summary).await {
-        Ok(gathered) => document(federation, fhir, &gathered, (patient, header), logged),
+        Ok(gathered) => document(federation, fhir, &gathered, (patient, header), logged).await,
         Err(unsummarised) => refused(
             federation,
             (unsummarised, Scope::Summary),
@@ -543,7 +543,7 @@ fn unheaded_outcome(unheaded: Unheaded) -> Response {
 
 /// The document `gathered` makes about the patient the identity binding
 /// describes in `header`, answered with the access it records.
-fn document(
+async fn document(
     federation: &crate::federation::Federation,
     fhir: &FhirSettings,
     gathered: &gathered::Gathered,
@@ -571,8 +571,9 @@ fn document(
         &request,
         &author,
         (&gathered.origins, &gathered.sections, &elsewhere),
-        &fhir.mappings,
-    );
+        (&fhir.mappings, &fhir.terminology),
+    )
+    .await;
     let (mut response, delivered, transformations) = match assembled {
         Ok(assembled) => (
             fhir_json(StatusCode::OK, &assembled.bundle),

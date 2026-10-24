@@ -348,10 +348,15 @@ deployment in the EU must plan for are:
 - **A received document is not yet checked in full.** Its profiles'
   invariants, its bindings and each entry's own profile are not all
   evaluated, and the constraints the check cannot evaluate are listed
-  ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The
-  patient summary the gateway writes keeps a code in no preferred code
-  system as recorded and does not yet ask a terminology server to translate
-  it ([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
+  ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)).
+- **A code in no preferred code system is translated only through your
+  terminology server.** With `[eehrxf.terminology]` set, the patient summary
+  the gateway writes adds each `equivalent` or `equal` translation after the
+  original coding, and a translation the server refuses or does not answer
+  fails the summary. With no server configured, the summary keeps the code
+  as recorded, as the eHealth Network Guidelines on Patient Summary,
+  Release 3.4, Art 10(7) allow as an interim solution
+  ([The terminology server](../integrate/patient-summary.md#the-terminology-server)).
 - **Each replica holds its own resolution bindings.** Behind several
   replicas, a follow-up write that names no node is refused `400`
   `target-required` by a replica that did not resolve the patient. Send
