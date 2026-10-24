@@ -28,7 +28,7 @@ use crate::journeys::stack::Stack;
 const WIDTH: u32 = 320;
 
 /// The pages a signed-in operator reads.
-const PAGES: [&str; 29] = [
+const PAGES: [&str; 33] = [
     "/about",
     "/",
     "/topology",
@@ -50,6 +50,10 @@ const PAGES: [&str; 29] = [
     "/preferences",
     "/search?q=node",
     "/configuration",
+    "/configuration/federation/edit",
+    "/configuration/access-log",
+    "/configuration/stored-queries",
+    "/configuration/members",
     "/configuration/members/new",
     "/configuration/members/node-b",
     "/configuration/credentials",

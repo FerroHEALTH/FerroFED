@@ -48,6 +48,9 @@ pub struct ConfigView {
     pub lead: Option<leptos::prelude::AnyView>,
     /// The tab's main card.
     pub main: Option<leptos::prelude::AnyView>,
+    /// Whether configuration revisions are off, so only the settings tabs
+    /// show, read-only.
+    pub file_only: bool,
 }
 
 /// One Query API endpoint row of the member form.
@@ -98,6 +101,9 @@ pub struct SettingInput {
     pub value: String,
     /// The values of a list, each entered on its own.
     pub values: Vec<String>,
+    /// The value the form was drawn with, for a form that sends only what
+    /// the operator changed.
+    pub was: String,
 }
 
 /// What a form does with one secret of a resource.
@@ -243,6 +249,7 @@ impl ConfigForm {
                     key: one(&part("key")),
                     value: one(&part("value")),
                     values: all(&part("values")),
+                    was: one(&part("was")),
                     row,
                 }
             })

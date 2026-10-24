@@ -8,6 +8,7 @@
 //! the page and never what it holds. No specification governs this: our
 //! own design.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use ferrofed_registry::console::ConsoleMember;
@@ -159,6 +160,16 @@ pub enum Plan {
         /// The revision.
         revision: RevisionId,
     },
+    /// Save a revision with deployment-wide settings changed.
+    SaveSettings {
+        /// The revision the change is based on.
+        base: Option<RevisionId>,
+        /// Why.
+        reason: String,
+        /// Each changed setting by its dotted key, as the operator typed
+        /// it.
+        settings: BTreeMap<String, String>,
+    },
     /// Save `toml` as a dry-run revision.
     Import {
         /// The revision the import is based on.
@@ -207,6 +218,11 @@ impl fmt::Debug for Plan {
                 .debug_struct("Approve")
                 .field("revision", revision)
                 .finish(),
+            Self::SaveSettings { base, settings, .. } => f
+                .debug_struct("SaveSettings")
+                .field("base", base)
+                .field("settings", &settings.keys().collect::<Vec<_>>())
+                .finish_non_exhaustive(),
             Self::Import { base, .. } => f
                 .debug_struct("Import")
                 .field("base", base)
@@ -391,6 +407,11 @@ pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refused> {
         "approve" => Ok(Plan::Approve {
             revision: named(&form.revision, &tr(Msg::RevisionToApprove))?,
         }),
+        "save-settings" => Ok(Plan::SaveSettings {
+            base: revision(&form.base, &tr(Msg::BaseRevision))?,
+            reason: reason(form)?,
+            settings: changed_settings(form)?,
+        }),
         "import" => Ok(Plan::Import {
             base: revision(&form.base, &tr(Msg::BaseRevision))?,
             reason: reason(form)?,
@@ -400,6 +421,23 @@ pub fn plan(form: &mut ConfigForm) -> Result<Plan, Refused> {
             Msg::FormNamesNoActionPageOffers,
         )))),
     }
+}
+
+/// The settings `form` changes: each row whose value differs from the
+/// one it was drawn with, by its dotted key.
+fn changed_settings(form: &ConfigForm) -> Result<BTreeMap<String, String>, Refused> {
+    let changed: BTreeMap<String, String> = form
+        .settings
+        .iter()
+        .filter(|row| !row.key.trim().is_empty() && row.value.trim() != row.was.trim())
+        .map(|row| (row.key.trim().to_owned(), row.value.trim().to_owned()))
+        .collect();
+    if changed.is_empty() {
+        return Err(Refused::from(invalid(&tr(
+            Msg::ChangeASettingBeforeYouSave,
+        ))));
+    }
+    Ok(changed)
 }
 
 /// The save of `resource` the form gives, its settings read by

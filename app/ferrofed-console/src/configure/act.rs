@@ -14,6 +14,7 @@ use ferrofed_registry::console::ConsoleMember;
 use ferrofed_registry::operator::PageRequest;
 use ferrofed_registry::resource::{Resource, SecretChange, SectionRequest, SectionResource};
 use ferrofed_registry::revision::{Revision, RevisionId};
+use ferrofed_registry::running::SettingsRequest;
 
 use crate::config::settings::ReplicaSettings;
 use crate::configure::member::Shown;
@@ -63,8 +64,27 @@ pub async fn page(
         .ok_or_else(|| Stop::Refused(invalid(&tr(Msg::PathNamesNoPartConfigurationPage))))?;
     let standing = match gateway.config_standing(replica, token).await {
         Ok(standing) => standing,
-        Err(error) if unmanaged(&error) => return Ok(render::unmanaged(replica)),
+        Err(error) if unmanaged(&error) => {
+            return Ok(match gateway.config_running(replica, token).await {
+                Ok(running) => render::file_only(&running, shown.file_section()),
+                Err(error) => {
+                    unread(&error);
+                    render::unmanaged(replica)
+                }
+            });
+        }
         Err(error) => return Err(error.into()),
+    };
+    let settings = if shown.reads_running() {
+        match gateway.config_running(replica, token).await {
+            Ok(running) => Some(running),
+            Err(error) => {
+                unread(&error);
+                None
+            }
+        }
+    } else {
+        None
     };
     let resources = gateway.config_resources(replica, token).await?;
     let history = if shown.reads_history() {
@@ -113,8 +133,15 @@ pub async fn page(
             .as_ref()
             .map(|(other, changes)| (*other, changes.as_slice())),
         draft,
+        running: settings.as_ref(),
     };
     render::page(&loaded, &shown).map_err(Stop::Refused)
+}
+
+/// Logs once that the running configuration could not be read, as every
+/// failed read of the page is logged.
+fn unread(error: &GatewayError) {
+    let _stopped = crate::read::stopped(error, crate::read::Asked::View);
 }
 
 /// Whether `error` is the `404` (`configuration-unmanaged`) of an admin
@@ -193,6 +220,20 @@ pub async fn run(
                 .await;
             let saved = previewed(gateway, replica, token, saved).await;
             render::answers::saved(&acted((name, "section removal"), saved, |line| line))
+        }
+        Plan::SaveSettings {
+            base,
+            reason,
+            settings,
+        } => {
+            let request = SettingsRequest {
+                base,
+                reason,
+                settings,
+            };
+            let saved = gateway.save_settings(replica, token, &request).await;
+            let saved = previewed(gateway, replica, token, saved).await;
+            render::answers::saved(&acted((name, "settings-save"), saved, |line| line))
         }
         Plan::Confirm { revision } => {
             let confirmed = gateway.confirm_revision(replica, token, revision).await;

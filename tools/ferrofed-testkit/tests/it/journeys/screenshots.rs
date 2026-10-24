@@ -107,7 +107,7 @@ const SIGN_IN: Shot = Shot {
 };
 
 /// The pages a signed-in operator loads and reads as they are.
-const PAGES: [Shot; 26] = [
+const PAGES: [Shot; 29] = [
     Shot {
         image: "dashboard",
         route: "/",
@@ -211,10 +211,28 @@ const PAGES: [Shot; 26] = [
         ready: "//h1",
     },
     Shot {
-        image: "configuration-members",
+        image: "configuration-federation",
         route: "/configuration",
         url: "/configuration",
-        ready: "//a[@data-tab = 'tab-members']",
+        ready: "//a[@data-tab = 'tab-federation'][@aria-current = 'page']",
+    },
+    Shot {
+        image: "configuration-settings-edit",
+        route: "/configuration/:tab/:item",
+        url: "/configuration/federation/edit",
+        ready: "//button[@type = 'submit' and contains(., 'Save as revision')]",
+    },
+    Shot {
+        image: "configuration-stored-queries",
+        route: "/configuration/:tab",
+        url: "/configuration/stored-queries",
+        ready: "//a[@data-tab = 'tab-stored-queries'][@aria-current = 'page']",
+    },
+    Shot {
+        image: "configuration-members",
+        route: "/configuration/:tab",
+        url: "/configuration/members",
+        ready: "//a[@data-tab = 'tab-members'][@aria-current = 'page']",
     },
     Shot {
         image: "configuration-credentials",
@@ -417,6 +435,7 @@ async fn listener() -> Server {
         ("/admin/config/resources", RESOURCES),
         ("/admin/config/revisions", HISTORY),
         ("/admin/config/revisions/1/diff/2", DIFF_2),
+        ("/admin/config/running", crate::journeys::configure::RUNNING),
     ] {
         Mock::given(method("GET"))
             .and(path(route))

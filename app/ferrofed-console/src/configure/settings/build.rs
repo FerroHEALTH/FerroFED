@@ -422,6 +422,7 @@ mod tests {
             key: key.to_owned(),
             value: value.to_owned(),
             values: Vec::new(),
+            was: String::new(),
         }
     }
 
