@@ -509,6 +509,14 @@ name = "gateway-1"
 admin_url = "https://ferrofed-1.ferrofed-admin.internal:9464/"
 ```
 
+`[server] locale`, `en` by default, is the language a page renders in when
+neither the operator's language preference nor the browser's
+`Accept-Language` names one the console ships; English is the one it ships
+today, and a language joins as a catalog directory with no code change.
+`locale = "qps"` is the pseudo-locale, which draws every word accented and
+two fifths longer to show where a longer translation would not fit; it is
+for checking the layout, never offered to an operator.
+
 With `secure_cookie = true` the session and sign-in cookies carry the
 `__Host-` prefix, which binds each to the console's host (RFC 6265bis
 §4.1.3.2); with it off, for a loopback trial, they carry none.

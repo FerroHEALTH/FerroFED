@@ -13,13 +13,18 @@
 #      `title`, `placeholder`, `alt`, `data-label`, `aria-description`,
 #      `aria-roledescription`, `aria-valuetext`, `label`) holding a letter;
 #   2. a text node of a `view!`: a literal between two tags (`>"Close"<`)
-#      or alone on its line, holding a letter;
+#      holding a letter, or alone on its line holding words as rule 3
+#      reads them, since a lone `"url"` or `"no-store"` in an `if` is a
+#      token;
 #   3. any other literal holding words: an upper-case letter, or a space
 #      next to a letter, outside its `{}` placeables, and not a class list.
 #
 # A single lower-case word in code (`=> "fatal"`) reads as a key and is
 # passed over, so a word drawn that way is review's to catch. Lines that
-# speak to a developer are passed over: `expect(`, log macros,
+# speak to a developer or an operator's terminal are passed over: `expect(`,
+# a log macro or a `println!` or `eprintln!` with every line of its
+# arguments (a log line and the command line's output stay in English, so
+# a fleet's logs read and search alike),
 # `write!(f`, `f.write_str(`, `debug_struct(`, `.field(`, a lint's `reason`, assertions and
 # attributes. A literal the check reads wrong is allowed by a line of the
 # allow file, and a file the check does not cover is skipped there:
@@ -117,6 +122,7 @@ found="$(
     }
     FNR == 1 {
       off = 0
+      dev = 0
       for (i = 1; i <= nskip; i++) if (index(FILENAME, skip[i]) == 1) off = 1
       if ($0 ~ /@generated/) off = 1
     }
@@ -124,6 +130,16 @@ found="$(
     /^#\[cfg\(test\)\]/ { off = 1; next }
     /^[ \t]*\/\// { next }
     /^[ \t]*#!?\[/ { next }
+    dev {
+      depth += gsub(/\(/, "(") - gsub(/\)/, ")")
+      if (depth <= 0) dev = 0
+      next
+    }
+    /(trace|debug|info|warn|error)!\(|e?println!\(/ {
+      depth = gsub(/\(/, "(") - gsub(/\)/, ")")
+      if (depth > 0) dev = 1
+      next
+    }
     /reason = "|expect\(|logging::|warn!\(|error!\(|debug!\(|log!\(|write!\(f|write_str\(|debug_struct\(|\.field\(|assert|panic!\(|unreachable!\(|include_str!\(/ { next }
     {
       code = $0
@@ -160,7 +176,7 @@ found="$(
         } else if (pre ~ />[ \t]*$/ && after ~ /^[ \t]*</) {
           hit = lit ~ /[A-Za-z]/
         } else if (pre ~ /^[ \t]*$/ && after ~ /^[ \t]*$/) {
-          hit = lit ~ /[A-Za-z]/ && !classes(lit)
+          hit = wordy(lit) && !classes(lit)
         } else {
           hit = wordy(lit)
         }

@@ -27,6 +27,7 @@ mod configure_import;
 mod configure_settings;
 mod overview;
 mod provider;
+mod pseudo;
 mod query;
 mod reflow;
 mod screenshots;

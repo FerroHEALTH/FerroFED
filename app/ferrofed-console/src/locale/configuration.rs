@@ -186,6 +186,12 @@ messages! {
     CredentialsBindingSectionsTheirOwners = "credentials-binding-sections-their-owners",
     /// `DID`
     Did = "did",
+    /// `added`
+    DiffAdded = "diff-added",
+    /// `changed`
+    DiffChanged = "diff-changed",
+    /// `removed`
+    DiffRemoved = "diff-removed",
     /// `Directory, read-only`
     DirectoryReadOnly = "directory-read-only",
     /// `Discharge reports`

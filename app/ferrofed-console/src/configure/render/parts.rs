@@ -15,7 +15,7 @@
 
 use std::borrow::Cow;
 
-use ferrofed_registry::revision::{Difference, RevisionId};
+use ferrofed_registry::revision::{Change, Difference, RevisionId};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
@@ -419,13 +419,18 @@ pub(crate) fn diff_table(
     let rows = changes
         .iter()
         .map(|change| {
-            let what = change.change.as_str();
+            let what = tr(match change.change {
+                Change::Added => Msg::DiffAdded,
+                Change::Removed => Msg::DiffRemoved,
+                _ => Msg::DiffChanged,
+            });
+            let mark = badge(Tone::Neutral, &what).into_any();
             view! {
                 <tr>
                     <th scope="row">
                         <code>{change.key.clone()}</code>
                         " "
-                        {badge(Tone::Neutral, what)}
+                        {mark}
                     </th>
                     <td data-label=from_label
                         .clone()>{diff_value(change.from.as_ref(), "−", true)}</td>

@@ -16,6 +16,8 @@
 //! browser never sees a token. No specification of the federation governs
 //! sign-in to the console: our own design on RFC 6749 and RFC 7636.
 
+use crate::locale::Msg;
+use crate::server::plain;
 use axum::Extension;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Response};
@@ -76,21 +78,23 @@ pub fn authorization_request(oidc: &OidcSettings, pending: &PendingSignIn) -> Ur
 pub const OFFLINE_ACCESS: &str = "offline_access";
 
 /// Serves `GET /login`: begins a session and redirects to the provider.
-pub async fn login(Extension(state): Extension<ConsoleState>) -> Response {
+pub async fn login(Extension(state): Extension<ConsoleState>, headers: HeaderMap) -> Response {
     let Some(oidc) = state.settings().oidc.as_ref() else {
         return plain(
+            &state,
+            &headers,
             StatusCode::SERVICE_UNAVAILABLE,
-            "sign-in is not configured on this console",
+            Msg::AnswerSignInNotConfigured,
         );
     };
     let pending = match PendingSignIn::mint() {
         Ok(pending) => pending,
-        Err(error) => return refused(&error),
+        Err(error) => return refused(&state, &headers, &error),
     };
     let location = authorization_request(oidc, &pending);
     let id = match state.sessions().begin(pending) {
         Ok(id) => id,
-        Err(error) => return refused(&error),
+        Err(error) => return refused(&state, &headers, &error),
     };
     let cookie = state.sessions().sign_in_cookie(&id).to_string();
     let (Ok(location), Ok(cookie)) = (
@@ -99,8 +103,10 @@ pub async fn login(Extension(state): Extension<ConsoleState>) -> Response {
     ) else {
         tracing::error!("the sign-in redirect could not be written as headers");
         return plain(
+            &state,
+            &headers,
             StatusCode::INTERNAL_SERVER_ERROR,
-            "the sign-in redirect could not be written",
+            Msg::AnswerSignInRedirectUnwritten,
         );
     };
     let mut response = StatusCode::SEE_OTHER.into_response();
@@ -132,12 +138,22 @@ pub async fn callback(
     Query(query): Query<CallbackQuery>,
 ) -> Response {
     let Some(id) = cookie_named(&headers, &state.sessions().cookie_name(SIGN_IN_COOKIE)) else {
-        return plain(StatusCode::BAD_REQUEST, "no sign-in is pending");
+        return plain(
+            &state,
+            &headers,
+            StatusCode::BAD_REQUEST,
+            Msg::AnswerNoSignInPending,
+        );
     };
     let mut response = match state.sessions().take_pending(&id) {
         Ok(Some(pending)) => redirected(&state, &headers, &pending, &query).await,
-        Ok(None) => plain(StatusCode::BAD_REQUEST, "no sign-in is pending"),
-        Err(error) => return refused(&error),
+        Ok(None) => plain(
+            &state,
+            &headers,
+            StatusCode::BAD_REQUEST,
+            Msg::AnswerNoSignInPending,
+        ),
+        Err(error) => return refused(&state, &headers, &error),
     };
     // NOTE: no specification governs this: our own design; the sign-in is
     // spent either way, so the browser is told to drop its cookie.
@@ -165,23 +181,29 @@ async fn redirected(
         .is_some_and(|sent| pending.answers(sent))
     {
         return plain(
+            state,
+            headers,
             StatusCode::BAD_REQUEST,
-            "the sign-in state does not match this session",
+            Msg::AnswerStateMismatch,
         );
     }
     if query.error.is_some() {
         return plain(
+            state,
+            headers,
             StatusCode::UNAUTHORIZED,
-            "the OpenID Provider did not sign the operator in",
+            Msg::AnswerProviderRefused,
         );
     }
     let Some(code) = query.code.as_deref() else {
-        return plain(StatusCode::BAD_REQUEST, "the redirect carries no code");
+        return plain(state, headers, StatusCode::BAD_REQUEST, Msg::AnswerNoCode);
     };
     let Some(oidc) = state.settings().oidc.as_ref() else {
         return plain(
+            state,
+            headers,
             StatusCode::SERVICE_UNAVAILABLE,
-            "sign-in is not configured on this console",
+            Msg::AnswerSignInNotConfigured,
         );
     };
     let signed_in = match exchange::exchange(state.provider(), oidc, pending, code).await {
@@ -189,15 +211,19 @@ async fn redirected(
         Err(error) if error.refuses_the_operator() => {
             tracing::warn!(error = %error, "a sign-in's ID Token was refused");
             return plain(
+                state,
+                headers,
                 StatusCode::UNAUTHORIZED,
-                "the OpenID Provider's ID Token did not verify",
+                Msg::AnswerIdTokenUnverified,
             );
         }
         Err(error) => {
             tracing::error!(error = %error, "a sign-in could not be completed at the provider");
             return plain(
+                state,
+                headers,
                 StatusCode::BAD_GATEWAY,
-                "the sign-in could not be completed at the OpenID Provider",
+                Msg::AnswerExchangeFailed,
             );
         }
     };
@@ -208,18 +234,20 @@ async fn redirected(
         &state.sessions().cookie_name(crate::session::COOKIE),
     ) && let Err(error) = state.sessions().end(&replaced)
     {
-        return refused(&error);
+        return refused(state, headers, &error);
     }
     let id = match state.sessions().establish(signed_in) {
         Ok(id) => id,
-        Err(error) => return refused(&error),
+        Err(error) => return refused(state, headers, &error),
     };
     let Ok(cookie) = HeaderValue::from_str(&state.sessions().session_cookie(&id).to_string())
     else {
         tracing::error!("the session cookie could not be written as a header");
         return plain(
+            state,
+            headers,
             StatusCode::INTERNAL_SERVER_ERROR,
-            "the session could not be begun",
+            Msg::AnswerSessionNotBegun,
         );
     };
     let mut response = StatusCode::SEE_OTHER.into_response();
@@ -246,23 +274,22 @@ pub fn cookie_named(headers: &HeaderMap, name: &str) -> Option<SessionId> {
 }
 
 /// The answer to a session store that failed.
-fn refused(error: &SessionError) -> Response {
+fn refused(state: &ConsoleState, headers: &HeaderMap, error: &SessionError) -> Response {
     match error {
         SessionError::Full => plain(
+            state,
+            headers,
             StatusCode::SERVICE_UNAVAILABLE,
-            "the console holds as many sessions as it may; try again later",
+            Msg::AnswerSessionsFull,
         ),
         SessionError::Random | SessionError::Poisoned => {
             tracing::error!(%error, "a sign-in session could not be begun");
             plain(
+                state,
+                headers,
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "a sign-in session could not be begun",
+                Msg::AnswerSignInSessionNotBegun,
             )
         }
     }
-}
-
-/// A plain-text answer that no cache keeps.
-fn plain(status: StatusCode, text: &'static str) -> Response {
-    (status, [(CACHE_CONTROL, "no-store")], text).into_response()
 }

@@ -212,7 +212,20 @@ No string the console draws lives outside a catalog (FerroUI §13).
   the best language of `Accept-Language` the catalog holds, else
   `[server] locale`, provided with `ferrohealth_ui::i18n::provide_locale`
   and written as `<html lang>`. An island takes its words as props.
-- `scripts/checks/stray-literals.sh` runs in CI against
-  `scripts/checks/stray-literals.baseline`: a file may hold no more stray
-  literals than its count, and a change that moves strings into the catalog
-  lowers the count with `--update`.
+- A handler's plain-text answer is a catalog message too, in the
+  request's language (`server::plain`).
+- `scripts/checks/stray-literals.sh` runs in CI with an empty baseline:
+  every string a reader sees is in the catalog. It passes over the lines
+  that speak to a developer or the operator's terminal (a log macro, a
+  `println!` or `eprintln!` with every line of its arguments, the
+  configuration's refusals and the command line's help, which stay in
+  English as the log does), and each literal no reader sees as words is
+  allowed with its reason in `scripts/checks/stray-literals.allow`.
+- The pseudo-locale `qps` (`crate::locale::PSEUDO_TAG`) draws every word
+  of the console and of FerroUI accented and two fifths longer, as
+  FerroUI's gallery does. It ships no catalog directory and no request can
+  choose it; `[server] locale = "qps"` serves it to a browser that asks for
+  no shipped language. The `journeys::pseudo` journey holds every page to
+  fitting a window 1440 and 390 px wide in it, and with
+  `FERROFED_SCREENSHOTS=1` captures each under the ignored
+  `target/console-screenshots/pseudo`, to be read after a layout change.

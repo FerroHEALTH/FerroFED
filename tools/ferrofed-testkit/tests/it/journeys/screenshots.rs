@@ -523,7 +523,7 @@ async fn settled(browser: &Browser) -> Result<(), Box<dyn Error>> {
 
 /// The height of the page's content, in whole CSS pixels from [`HEIGHT`] to
 /// [`TALLEST`].
-async fn content_height(browser: &Browser) -> Result<u32, Box<dyn Error>> {
+pub(crate) async fn content_height(browser: &Browser) -> Result<u32, Box<dyn Error>> {
     let metrics = browser
         .driver()
         .cdp()
