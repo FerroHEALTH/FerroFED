@@ -141,7 +141,7 @@ format (Regulation (EU) 2025/327 Art 15(1)), and its Have your say page
 (initiative 17512) lists the draft act as upcoming, with no text. The
 closest published text is the Xt-EHR joint action's deliverables D6.1
 (Patient Summary) and D6.2 (electronic prescription and dispensation),
-which FerroFED reads as a draft (`scripts/vendor/eehrxf.sh`). Their
+which FerroFED reads as a draft (`scripts/vendor/xt-ehr.sh`). Their
 cross-border flow agrees with the list above: the contact point of the
 patient's country retrieves the summary from the national systems, the
 patient's identity is confirmed before the request, and transformation and

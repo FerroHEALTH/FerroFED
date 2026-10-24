@@ -151,6 +151,7 @@ se.sh	the country research evidence of #488, read as published when it was pinne
 no.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
 fi.sh	the country research evidence of #488, read as published when it was pinned; the script fails when an upstream byte moves
 fhir-r4.sh	FHIR R4 4.0.1 is the version every vendored HL7 Europe package declares, so a later FHIR release is a re-target and never a refresh; the script fails when an upstream byte moves
+xt-ehr.sh	the Xt-EHR joint action publishes no release feed for its deliverables; they stand in for the Article 15(1) act until it is adopted, the script fails when an upstream byte moves, and the adopted act is a re-pin under scripts/vendor/eu.sh
 openehr-ckm.sh	the openEHR Clinical Knowledge Manager publishes no release feed for a template; the script fails when an upstream byte moves, and a new asset version is a re-pin with its clinical safety review
 ferropulse.sh	FerroPULSE is the family's own receiver and publishes no release feed; the envelope v2 schema is pinned by commit and checksum, and a new envelope version is a code change in the reporter, never a refresh"
 

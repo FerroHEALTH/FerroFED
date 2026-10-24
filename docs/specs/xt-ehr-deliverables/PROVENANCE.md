@@ -3,7 +3,7 @@
 
 # Provenance: the Xt-EHR deliverables on the European electronic health record exchange format
 
-Vendored by `scripts/vendor/eehrxf.sh`, each artefact pinned by its
+Vendored by `scripts/vendor/xt-ehr.sh`, each artefact pinned by its
 URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
