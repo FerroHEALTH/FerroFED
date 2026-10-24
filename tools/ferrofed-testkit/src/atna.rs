@@ -11,8 +11,10 @@
 //! accepts each connection and closes it before the TLS handshake, so a
 //! sender cannot deliver and keeps its messages; while it is
 //! [stalled](AuditRepository::set_stalled), it accepts each connection and
-//! never answers, so only a sender's own timeouts free it. No specification
-//! governs the harness: our own design.
+//! never answers, so only a sender's own timeouts free it. It records how
+//! each connection ended ([`Ending`]), so a test can hold a sender to the
+//! TLS `close_notify` RFC 5425 §4.4 asks of it. No specification governs the
+//! harness: our own design.
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,12 +46,23 @@ pub enum AtnaHarnessError {
     Listen(#[from] std::io::Error),
 }
 
+/// How a sender ended a connection to the repository.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ending {
+    /// With a TLS `close_notify` between frames, as RFC 5425 §4.4 asks of a
+    /// transport sender.
+    CloseNotify,
+    /// Without one, or inside a frame: dropped, reset or failed.
+    Abrupt,
+}
+
 /// A running harness Audit Record Repository.
 #[derive(Debug)]
 pub struct AuditRepository {
     address: SocketAddr,
     trust_roots: String,
     messages: Arc<Mutex<Vec<String>>>,
+    endings: Arc<Mutex<Vec<Ending>>>,
     up: Arc<AtomicBool>,
     stalled: Arc<AtomicBool>,
     task: JoinHandle<()>,
@@ -68,12 +81,13 @@ impl AuditRepository {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
         let address = listener.local_addr()?;
         let messages = Arc::new(Mutex::new(Vec::new()));
+        let endings = Arc::new(Mutex::new(Vec::new()));
         let up = Arc::new(AtomicBool::new(true));
         let stalled = Arc::new(AtomicBool::new(false));
         let task = tokio::spawn(serve(
             listener,
             acceptor,
-            Arc::clone(&messages),
+            (Arc::clone(&messages), Arc::clone(&endings)),
             Arc::clone(&up),
             Arc::clone(&stalled),
         ));
@@ -81,6 +95,7 @@ impl AuditRepository {
             address,
             trust_roots,
             messages,
+            endings,
             up,
             stalled,
             task,
@@ -119,6 +134,29 @@ impl AuditRepository {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// How each connection that has ended so far ended, in the order they
+    /// ended.
+    #[must_use]
+    pub fn endings(&self) -> Vec<Ending> {
+        self.endings
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Waits up to `within` until `count` connections have ended, and
+    /// returns how every connection ended by then.
+    pub async fn wait_for_endings(&self, count: usize, within: Duration) -> Vec<Ending> {
+        let until = Instant::now() + within;
+        loop {
+            let endings = self.endings();
+            if endings.len() >= count || Instant::now() >= until {
+                return endings;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     /// Waits up to `within` until `count` messages have arrived, and returns
@@ -194,11 +232,15 @@ fn certificates() -> Result<(String, ServerConfig), AtnaHarnessError> {
     Ok((ca_certificate.pem(), config))
 }
 
+/// What the repository keeps: the messages it read, and how each
+/// connection ended.
+type Kept = (Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Ending>>>);
+
 /// Accepts connections until the task is aborted.
 async fn serve(
     listener: TcpListener,
     acceptor: TlsAcceptor,
-    messages: Arc<Mutex<Vec<String>>>,
+    (messages, endings): Kept,
     up: Arc<AtomicBool>,
     stalled: Arc<AtomicBool>,
 ) {
@@ -214,22 +256,40 @@ async fn serve(
         }
         let acceptor = acceptor.clone();
         let messages = Arc::clone(&messages);
+        let endings = Arc::clone(&endings);
         tokio::spawn(async move {
             if let Ok(tls) = acceptor.accept(stream).await {
-                read_frames(tls, &messages).await;
+                let ending = read_frames(tls, &messages).await;
+                endings
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(ending);
             }
         });
     }
 }
 
 /// Reads RFC 5425 §4.3 frames, `MSG-LEN SP SYSLOG-MSG`, until the
-/// connection ends or a frame is malformed.
-async fn read_frames(mut stream: impl AsyncRead + Unpin, messages: &Mutex<Vec<String>>) {
+/// connection ends or a frame is malformed, and returns how it ended.
+async fn read_frames(mut stream: impl AsyncRead + Unpin, messages: &Mutex<Vec<String>>) -> Ending {
     loop {
         let mut length = 0_usize;
+        // NOTE: tokio-rustls reads a close_notify as the end of the stream, and
+        // a stream that ends without one as an error.
+        let mut first = [0_u8; 1];
+        match stream.read(&mut first).await {
+            Ok(0) => return Ending::CloseNotify,
+            Ok(_) => {}
+            Err(_) => return Ending::Abrupt,
+        }
+        let mut next = first.first().copied();
         loop {
-            let Ok(byte) = stream.read_u8().await else {
-                return;
+            let byte = match next.take() {
+                Some(byte) => byte,
+                None => match stream.read_u8().await {
+                    Ok(byte) => byte,
+                    Err(_) => return Ending::Abrupt,
+                },
             };
             match byte {
                 b' ' => break,
@@ -238,12 +298,12 @@ async fn read_frames(mut stream: impl AsyncRead + Unpin, messages: &Mutex<Vec<St
                         .saturating_mul(10)
                         .saturating_add(usize::from(byte - b'0'));
                 }
-                _ => return,
+                _ => return Ending::Abrupt,
             }
         }
         let mut message = vec![0_u8; length];
         if stream.read_exact(&mut message).await.is_err() {
-            return;
+            return Ending::Abrupt;
         }
         messages
             .lock()
