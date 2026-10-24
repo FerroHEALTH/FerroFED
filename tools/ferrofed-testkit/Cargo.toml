@@ -44,7 +44,8 @@ pem.workspace = true
 # server, and the async trait the generated service is.
 async-trait.workspace = true
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
-tonic = { workspace = true, features = ["server", "router"] }
+# `tls-aws-lc` serves the collector over TLS with a client certificate (#644).
+tonic = { workspace = true, features = ["server", "router", "tls-aws-lc"] }
 # The harness audit repository (#418) generates its CA and server
 # certificate at run time, so no private key is ever committed, and serves
 # syslog over TLS with them.

@@ -124,7 +124,7 @@ service worker or a URL.
   |---|---|---|
   | `/` | the dashboard: the organisations, the nodes reachable, the open incidents and the running configuration, the nodes that need attention, the topology in brief, the open incidents and the configuration at a glance | the pages below |
   | `/topology` | the gateway, the services it asks and the organisations with their nodes, as a map or a list, filtered by state, with How it is drawn saying what each edge's line and mark mean | `OPTIONS {base}/` and `GET {base}/operator/dependencies` |
-  | `/organisations`, `/organisations/nodes` | every organisation with its nodes and worst state, and every node with its organisation, `system_id`, state and median latency | the same |
+  | `/organisations`, `/organisations/nodes` | every organisation with its nodes and worst state, and every node with its organisation, `system_id`, state and median and 95th percentile latency | the same |
   | `/organisations/{org}`, `/organisations/{org}/{node}` | one organisation and its nodes; one node with its facts, its endpoints and, on its Routes tab, the creating systems the routing table sends to it | the same, and `GET {base}/operator/creating-systems` |
   | `/services` | every service the gateway asks, grouped, with its last observed state | `GET {base}/operator/dependencies` |
   | `/integrity` | the open and the resolved integrity incidents and the count of each kind since the gateway started | `GET {base}/operator/incidents` |
@@ -301,9 +301,9 @@ A console route with no screenshot fails the testkit's
 
 [The organisations in the dark theme](img/console/organisations-dark.png)
 
-![Every node across the organisations, with its organisation, system_id, state and median latency.](img/console/nodes.png)
+![Every node across the organisations, with its organisation, system_id, state and median and 95th percentile latency.](img/console/nodes.png)
 
-[Every node across the organisations, with its organisation, system_id, state and median latency in the dark theme](img/console/nodes-dark.png)
+[Every node across the organisations, with its organisation, system_id, state and median and 95th percentile latency in the dark theme](img/console/nodes-dark.png)
 
 ![The page of organisation org-a: its nodes and their states.](img/console/organisation.png)
 

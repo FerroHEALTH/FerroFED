@@ -52,6 +52,7 @@ use crate::config::EmergencyConsent;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
+use crate::metrics::latency::{Latencies, Percentiles};
 use crate::metrics::nodes::{Instruments, NodeRequests};
 use crate::metrics::resolver::Metered;
 use crate::onward::NodeTransport;
@@ -152,6 +153,7 @@ struct Observed {
     bindings: ResolutionBindings,
     index: EhrIndex,
     learned: Mutex<LearnedMap>,
+    latencies: Arc<Latencies>,
 }
 
 impl Observed {
@@ -162,6 +164,7 @@ impl Observed {
             bindings,
             index: EhrIndex::new(widened(capacity)),
             learned: Mutex::new(LearnedMap::new()),
+            latencies: Arc::default(),
         }
     }
 }
@@ -499,6 +502,14 @@ impl Federation {
     #[must_use]
     pub fn requests(&self) -> &NodeRequests {
         &self.requests
+    }
+
+    /// The median and the 95th percentile of the recent requests sent to
+    /// `endpoint`, or `None` when none was sent since the process started
+    /// (§7a.2, N30).
+    #[must_use]
+    pub fn latency(&self, endpoint: &EndpointId) -> Option<Percentiles> {
+        self.observed.latencies.of(endpoint)
     }
 
     /// The federation's own identifier (§7a.2, N30).

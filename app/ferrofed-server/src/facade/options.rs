@@ -55,6 +55,7 @@ use crate::error::{self, Code};
 use crate::facade::{QUERY_AQL, route, stored, subject, write};
 use crate::federation::Federation;
 use crate::localization::LocalizationPolicy;
+use crate::metrics::latency::Percentiles;
 use crate::request_id;
 use crate::state::AppState;
 use crate::support;
@@ -74,6 +75,12 @@ pub const MAX_WINDOW: &str = "max_window";
 // NOTE: §11.5 forbids reading a share a node's default page may have cut as
 // complete, and the schema's `paging` object is open; the name is our own design.
 pub const MAX_NODE_ROWS: &str = "max_node_rows";
+
+/// The endpoint member that carries the 95th percentile latency over the
+/// requests `latency_ms_p50` is the median of, in milliseconds.
+// NOTE: §7a.2 has a gateway name the statistic in the field, and options-root.schema.json leaves
+// the endpoint object open (`additionalProperties: true`) for it.
+pub const LATENCY_MS_P95: &str = "latency_ms_p95";
 
 /// The `localization` member that names the configured localizer's binding.
 pub const LOCALIZATION_MODE: &str = "mode";
@@ -231,7 +238,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
     )?;
     Ok(OptionsRoot {
         federation: gateway,
-        endpoints: members(federation.snapshot())?,
+        endpoints: members(federation)?,
         extra,
     })
 }
@@ -564,19 +571,22 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
 }
 
 /// The member endpoints of `snapshot`, in endpoint-id order (§7a.2, N30).
-fn members(snapshot: &RegistrySnapshot) -> Result<Vec<MemberEndpoint>, DescribeError> {
+fn members(federation: &Federation) -> Result<Vec<MemberEndpoint>, DescribeError> {
+    let snapshot = federation.snapshot();
     snapshot
         .endpoints()
-        .map(|endpoint| member(snapshot, endpoint))
+        .map(|endpoint| member(snapshot, endpoint, federation.latency(endpoint.id())))
         .collect()
 }
 
 /// One member endpoint: its id, managing organisation (N20) and membership
-/// status, its node, and the node's `system_id`, product and version where
-/// the registry holds them.
+/// status, its node, the node's `system_id`, product and version where the
+/// registry holds them, and the `latency` of its recent requests where the
+/// gateway sent it any.
 fn member(
     snapshot: &RegistrySnapshot,
     endpoint: &Endpoint,
+    latency: Option<Percentiles>,
 ) -> Result<MemberEndpoint, DescribeError> {
     let node = snapshot
         .node(endpoint.node())
@@ -585,6 +595,10 @@ fn member(
         })?;
     // NOTE: §7a.2 leaves the membership vocabulary open; `active` is its
     // conventional value and `suspended` the registry's own.
+    let mut extra = Extra::new();
+    if let Some(latency) = latency {
+        extra.insert_serialized(LATENCY_MS_P95, &latency.p95)?;
+    }
     let status = match endpoint.status() {
         EndpointStatus::Active => "active",
         EndpointStatus::Suspended => "suspended",
@@ -597,9 +611,9 @@ fn member(
         system_id: Some(node.system_id().as_str().to_owned()),
         product: node.product().map(str::to_owned),
         version: node.version().map(str::to_owned),
-        latency_ms_p50: None,
+        latency_ms_p50: latency.map(|latency| latency.p50),
         url: None,
-        extra: Extra::new(),
+        extra,
     })
 }
 

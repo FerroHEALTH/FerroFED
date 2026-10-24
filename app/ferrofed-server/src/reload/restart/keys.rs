@@ -113,6 +113,9 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("telemetry.otlp_endpoint", |boot, fresh| {
         boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint
     }),
+    ("telemetry.otlp_tls", |boot, fresh| {
+        boot.telemetry.otlp_tls != fresh.telemetry.otlp_tls
+    }),
     ("telemetry.trace_sample_ratio", |boot, fresh| {
         boot.telemetry.trace_sample_ratio != fresh.telemetry.trace_sample_ratio
     }),
@@ -179,6 +182,9 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("metrics.otlp_endpoint", |boot, fresh| {
         boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
     }),
+    ("metrics.otlp_tls", |boot, fresh| {
+        boot.metrics.otlp_tls != fresh.metrics.otlp_tls
+    }),
     ("metrics.scrape_users", |boot, fresh| {
         boot.metrics.scrape_users != fresh.metrics.scrape_users
     }),
@@ -234,8 +240,12 @@ healthcheck_identity_file = "@DIR@/client.pem"
 [telemetry]
 format = "json"
 filter = "info"
-otlp_endpoint = "http://otel.example.org:4318"
+otlp_endpoint = "https://otel.example.org:4317"
 trace_sample_ratio = 0.5
+
+[telemetry.otlp_tls]
+client_identity_file = "@DIR@/collector-client.pem"
+trust_roots_file = "@DIR@/collector-ca.pem"
 
 [registry]
 document = "@DIR@/registry.toml"
@@ -354,7 +364,11 @@ path = "@DIR@/stored.redb"
 [metrics]
 listen = "127.0.0.1:9090"
 scrape_users = ["synthetic-scraper"]
-otlp_endpoint = "http://otel.example.org:4318"
+otlp_endpoint = "https://otel.example.org:4317"
+
+[metrics.otlp_tls]
+client_identity_file = "@DIR@/collector-client.pem"
+trust_roots_file = "@DIR@/collector-ca.pem"
 
 [metrics.tls]
 certificate_file = "@DIR@/listener.crt"
@@ -416,6 +430,13 @@ secrets_dir = "@DIR@/secrets"
     /// `tag`.
     fn files(dir: &Path, tag: &str, listener: &ListenerCertificates) -> TestResult {
         listener.write(dir)?;
+        // NOTE: the collector's TLS is compared by content, so each directory holds its own set.
+        let collector = ListenerCertificates::generate()?;
+        std::fs::write(
+            dir.join("collector-client.pem"),
+            collector.client_identity(),
+        )?;
+        std::fs::write(dir.join("collector-ca.pem"), collector.ca())?;
         std::fs::write(
             dir.join("signing.pem"),
             es384_pem().map_err(|_unavailable| "a key")?,
