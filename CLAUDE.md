@@ -362,8 +362,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `app/ferrofed-server/tests/it/e2e/` (#545). It also carries the harness
   services every binding is tested against: the PIX Manager, PDQm Supplier,
   XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
-  Repositories, NVI, Mitz, Nuts node and the OAuth 2.0 and FAPI 2.0
-  authorization servers, with a mutual-TLS front. Its test binary also holds
+  Repositories, NVI, Mitz, Nuts node, the OAuth 2.0 and FAPI 2.0
+  authorization servers and a national contact point's national connector
+  (`national_connector`, #735), with a mutual-TLS front. Its test binary also holds
   the operator console's browser journeys behind the `FERROFED_JOURNEYS` gate
   (#608): headless Chrome over WebDriver against a running gateway and console.
 - The root `Cargo.toml` carries the lint set, the release profile, the

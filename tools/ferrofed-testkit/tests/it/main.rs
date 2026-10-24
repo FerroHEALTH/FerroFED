@@ -20,6 +20,7 @@ mod e2e;
 mod journeys;
 mod keycloak_recipe;
 mod mcsd;
+mod national_connector;
 mod pdq;
 mod pix;
 mod pmir;
