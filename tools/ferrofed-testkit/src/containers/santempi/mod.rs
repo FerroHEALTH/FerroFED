@@ -124,6 +124,12 @@ pub enum SanteMpiError {
         /// The domain's system.
         system: String,
     },
+    /// SanteMPI's database could not be read.
+    #[error("{step} could not be read from SanteMPI's database")]
+    Unread {
+        /// The step of the setup.
+        step: &'static str,
+    },
     /// SanteMPI refused a setup request.
     #[error("{step} was refused with {status}: {body}")]
     Refused {
@@ -416,12 +422,9 @@ impl SanteMpi {
             ));
         }
         for (id, client) in &applications {
-            let record = format!("{}/ami/SecurityApplication/{id}", self.origin);
+            let held = format!("SELECT COUNT(*) FROM SEC_APP_TBL WHERE APP_ID = '{id}'");
             retried(|| async {
-                if self
-                    .holds(&record, &admin, "the SecurityApplication read")
-                    .await?
-                {
+                if self.holds(&held, "the SecurityApplication count").await? {
                     return Ok(());
                 }
                 let request = self
@@ -439,11 +442,8 @@ impl SanteMpi {
         retried(|| async {
             let mut missing = Vec::new();
             for (id, entry) in &authorities {
-                let record = format!("{}/hdsi/AssigningAuthority/{id}", self.origin);
-                if !self
-                    .holds(&record, &admin, "the AssigningAuthority read")
-                    .await?
-                {
+                let held = format!("SELECT COUNT(*) FROM ID_DMN_TBL WHERE DMN_ID = '{id}'");
+                if !self.holds(&held, "the identity domain count").await? {
                     missing.push(entry.as_str());
                 }
             }
@@ -468,26 +468,19 @@ impl SanteMpi {
         .await
     }
 
-    /// Whether SanteMPI holds the record at `url`, read as the
-    /// administrator holding `token`: `false` when it answers `404`, and the
-    /// refusal of any other failure, so a transient one is tried again.
-    async fn holds(
-        &self,
-        url: &str,
-        token: &str,
-        step: &'static str,
-    ) -> Result<bool, SanteMpiError> {
-        let request = self
-            .http
-            .get(url)
-            .header(AUTHORIZATION, format!("Bearer {token}"))
-            .header(ACCEPT, "application/xml");
-        match send(request, step).await {
-            Ok(_) => Ok(true),
-            Err(SanteMpiError::Refused { status, .. }) if status == StatusCode::NOT_FOUND => {
-                Ok(false)
-            }
-            Err(error) => Err(error),
+    /// Whether SanteMPI's database counts a record with `count`, a `SELECT
+    /// COUNT(*)` of it.
+    ///
+    /// The database is read, because SanteMPI answers an AMI read of a
+    /// security application it does not hold with a `500`
+    /// `NullReferenceException`, never a `404` (#1302).
+    // NOTE: santedb/santedb-data@11cc836 DbSecurityApplication and DbIdentityDomain: an
+    // application is a sec_app_tbl row keyed by app_id, an identity domain an id_dmn_tbl one.
+    async fn holds(&self, count: &str, step: &'static str) -> Result<bool, SanteMpiError> {
+        let counted = self.database_says(count).await;
+        match counted.as_deref().map(str::parse::<u64>) {
+            Some(Ok(rows)) => Ok(rows > 0),
+            Some(Err(_)) | None => Err(SanteMpiError::Unread { step }),
         }
     }
 }
