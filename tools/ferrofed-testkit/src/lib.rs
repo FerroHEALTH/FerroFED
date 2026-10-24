@@ -37,6 +37,10 @@
 //!   (#86);
 //! - [`mock`]: the wiremock server every suite stands its nodes up with,
 //!   dropped outside the test's runtime;
+//! - [`national_connector`]: the harness national connector, a test device
+//!   that plays a national contact point's connector on the FHIR face with
+//!   synthetic Implementing Regulation (EU) 2026/2099 Annex attributes
+//!   (#735);
 //! - [`nuts`]: the harness Nuts node, a test device that answers the
 //!   GF-Authentication access token request (Nuts RFC021) with a
 //!   `DPoP`-bound token for a valid Verifiable Presentation (#88);
@@ -86,6 +90,7 @@ pub mod listener;
 pub mod mcsd;
 pub mod mitz;
 pub mod mock;
+pub mod national_connector;
 pub mod node_profile;
 pub mod nuts;
 pub mod nvi;

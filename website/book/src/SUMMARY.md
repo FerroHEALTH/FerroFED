@@ -86,6 +86,7 @@
   - [Stored queries](integrate/stored-queries.md)
 - [The patient summary over FHIR](integrate/patient-summary.md)
 - [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
+- [A national contact point](integrate/national-contact-point.md)
 - [Errors and status codes](integrate/errors.md)
 
 # Contribute

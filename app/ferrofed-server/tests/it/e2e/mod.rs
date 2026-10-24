@@ -43,6 +43,12 @@
 //! applied to a pinned Keycloak, issues a user's and a service's token that
 //! each get a federated answer, in [`keycloak`].
 //!
+//! A national contact point's connector, the testkit's harness national
+//! connector, reads the summary, the document list and the prescriptions and
+//! posts a dispensation on the FHIR face, and a restricting member leaves no
+//! trace in its answers (Regulation (EU) 2025/327 Art 23, Art 8), in
+//! [`national`].
+//!
 //! With the `postgres` feature, the stored-query registry's PostgreSQL store
 //! runs its store suite, and two gateway instances sharing it race one new
 //! version with exactly one stored (§12.7, N44), in `stored_postgres`.
@@ -77,6 +83,7 @@ mod conformance_run;
 mod crossref;
 mod differential;
 mod keycloak;
+mod national;
 mod pixm;
 #[cfg(feature = "postgres")]
 mod revisions_postgres;
