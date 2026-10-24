@@ -33,6 +33,7 @@ use crate::reload::Reloader;
 use crate::request_id;
 use crate::revision::service::{RevisionError, Revisions, held_table};
 
+mod authentication;
 pub mod catalog;
 
 use catalog::{ENTRIES, Entry, Kind};
@@ -79,6 +80,11 @@ pub struct Layers {
     pub now: toml::Table,
     /// The `FERROFED__` overrides of the process, as a tree.
     pub environment: toml::Table,
+    /// The file's tree the process started with, which alone sets the
+    /// bootstrap core (`[auth]`, `[trust]`) a revision never holds.
+    pub file_boot: toml::Table,
+    /// The file's tree the replica runs now, as the last reload applied it.
+    pub file_now: toml::Table,
     /// The revision the replica runs, under `config.ui = "managed"`.
     pub revision: Option<RevisionId>,
     /// Whether the configuration is managed as revisions.
@@ -92,13 +98,17 @@ pub struct Layers {
 /// under `config.ui = "managed"`.
 pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
     let environment = environment(std::env::vars());
+    let file_boot = reloader.boot_tree().clone();
+    let file_now = reloader
+        .loaded_tree()
+        .unwrap_or_else(|| reloader.boot_tree().clone());
     let layers = match reloader.revisions() {
         None => Layers {
-            boot: reloader.boot_tree().clone(),
-            now: reloader
-                .loaded_tree()
-                .unwrap_or_else(|| reloader.boot_tree().clone()),
+            boot: file_boot.clone(),
+            now: file_now.clone(),
             environment,
+            file_boot,
+            file_now,
             revision: None,
             managed: false,
         },
@@ -108,6 +118,8 @@ pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
                 boot: table_of(revisions, reloader.boot_revision())?,
                 now: table_of(revisions, running)?,
                 environment,
+                file_boot,
+                file_now,
                 revision: running,
                 managed: true,
             }
@@ -149,7 +161,11 @@ pub fn of(layers: &Layers) -> RunningConfig {
             .as_str()
             .to_owned(),
         revision: layers.revision,
-        settings: ENTRIES.iter().map(|entry| setting(entry, layers)).collect(),
+        settings: ENTRIES
+            .iter()
+            .map(|entry| setting(entry, layers))
+            .chain(authentication::settings(layers))
+            .collect(),
     }
 }
 
@@ -213,7 +229,7 @@ fn source(layers: &Layers, key: &str, value: Option<&toml::Value>) -> Source {
 }
 
 /// The value at the dotted `key` of `tree`.
-fn at<'a>(tree: &'a toml::Table, key: &str) -> Option<&'a toml::Value> {
+pub(crate) fn at<'a>(tree: &'a toml::Table, key: &str) -> Option<&'a toml::Value> {
     let mut segments = key.split('.');
     let first = segments.next()?;
     segments.try_fold(tree.get(first)?, |value, segment| {

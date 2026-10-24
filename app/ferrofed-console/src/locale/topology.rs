@@ -6,11 +6,13 @@
 messages! {
     /// `Gateway`
     TopologyGateway = "topology-gateway",
+    /// `p50 … ms · p95 … ms`
+    TopologyLatency = "topology-latency",
     /// `The federation as a list`
     TopologyListLabel = "topology-list-label",
     /// `The federation as a map`
     TopologyMapLabel = "topology-map-label",
-    /// `median … ms`
+    /// `p50 … ms`
     TopologyMedian = "topology-median",
     /// `No map is shown while the gateway does not answer, so a stale one …`
     TopologyNoStale = "topology-no-stale",

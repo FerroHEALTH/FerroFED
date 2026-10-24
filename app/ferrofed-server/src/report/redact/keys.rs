@@ -146,6 +146,7 @@ pub const KNOWN_KEYS: &[&str] = &[
     "organisation",
     "organisation_type",
     "otlp_endpoint",
+    "otlp_tls",
     "overall_timeout_ms",
     "overload_retry_after_s",
     "password",

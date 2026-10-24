@@ -122,10 +122,11 @@ answers. `serve` and `config check` refuse:
   `scrape_users` nor `[metrics.tls] client_ca_file`;
 - a `scrape_users` entry that no `[[auth.basic.users]]` entry writes;
 - a `listen` address equal to `server.listen`;
-- an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
-  without TLS, so run the collector beside the gateway, on the same host or
-  in the same pod, and let it forward over TLS;
-- an `otlp_endpoint` with a user name or a password in it, outside
+- an `otlp_endpoint` that is neither an `http://` nor an `https://` URL.
+  Over `http://` the push speaks gRPC without TLS, so run that collector
+  beside the gateway, on the same host or in the same pod; over `https://`
+  it speaks gRPC over TLS ([A remote collector over TLS](#a-remote-collector-over-tls));
+- an `http://` `otlp_endpoint` with a user name or a password in it, outside
   `profile = "development"`, since that credential would travel in cleartext
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
 
@@ -137,6 +138,30 @@ more after the drain.
 
 `[metrics]` takes effect on a restart only: a [reload](registry.md#reloading-the-registry)
 that changes it logs the key as needing a restart, like `[server]`.
+
+### A remote collector over TLS
+
+An `https://` `otlp_endpoint` pushes the metrics over TLS to a collector anywhere,
+with no forwarder beside the gateway. The gateway trusts the platform's
+roots, and `[metrics.otlp_tls]` adds what a private collector needs:
+
+```toml
+[metrics]
+otlp_endpoint = "https://otel.example.org:4317"
+
+[metrics.otlp_tls]
+trust_roots_file = "/run/secrets/ferrofed/otel-ca.pem"              # PEM roots beside the platform's
+client_identity_file = "/run/secrets/ferrofed/otel-client.pem"      # chain and key, PEM, for mutual TLS
+```
+
+`client_identity` takes the same PEM inline. Every file is read once, at
+start, and checked: a client identity must hold a certificate and its
+private key, and the trust roots at least one certificate. `serve` and
+`config check` refuse a `[metrics.otlp_tls]` table beside an `http://`
+collector or none, since it would go unused. A user name or a password in an
+`https://` collector URL passes the transport rule. A changed file takes
+effect on a restart, and a [reload](registry.md#reloading-the-registry) logs
+`metrics.otlp_tls` as needing one.
 
 ### Reloading over the admin listener
 
@@ -289,6 +314,25 @@ answer apart. Each outcome therefore covers these calls:
 | `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
 | `offline` | a member the gateway sent a request to and could not reach |
 | `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](consent.md)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
+
+### The latency in the self-description
+
+`OPTIONS {base}/` reports two statistics for each member endpoint, whether
+or not `[metrics]` is on:
+
+- **`latency_ms_p50`:** the median time the endpoint took to answer.
+- **`latency_ms_p95`:** the 95th percentile, the slow tail a median hides.
+
+Both are computed over the same window: the last 100 requests the gateway
+sent that endpoint, every call in the table above counted, the ask-all
+probes included, and a `time-out` timed to its deadline. Each is the
+nearest-rank percentile, so it is a time a request took, in whole
+milliseconds. The window lives as long as the process and survives a
+registry reload; an endpoint sent no request since the gateway started has
+neither member. The operator console shows both side by side, and the
+`ferrofed_node_request_duration_seconds` histogram carries the same
+requests, so you can read a percentile over any range from Prometheus with
+`histogram_quantile(0.95, sum by (le, endpoint) (rate(ferrofed_node_request_duration_seconds_bucket[5m])))`.
 
 ## Dashboard and alert rules
 

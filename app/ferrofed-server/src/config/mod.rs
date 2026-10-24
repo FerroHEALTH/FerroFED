@@ -465,10 +465,14 @@ pub struct Telemetry {
     pub format: Format,
     /// The `tracing` filter directive of the console.
     pub filter: String,
-    /// The `http://` URL of an OTLP collector the gateway's spans are
-    /// exported to over gRPC. Unset, no span is exported and no node
-    /// request carries a `traceparent`.
+    /// The URL of an OTLP collector the gateway's spans are exported to over
+    /// gRPC: `http://` to a collector beside the gateway, or `https://` over
+    /// TLS. Unset, no span is exported and no node request carries a
+    /// `traceparent`.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS an `https://` collector is reached with
+    /// (`[telemetry.otlp_tls]`).
+    pub otlp_tls: tls::CollectorTls,
     /// The share of the gateway's traces that are sampled, from `0.0`, none,
     /// to `1.0`, every one; `1.0` unless set.
     pub trace_sample_ratio: f64,
@@ -480,6 +484,7 @@ impl Default for Telemetry {
             format: Format::Auto,
             filter: String::from(DEFAULT_FILTER),
             otlp_endpoint: None,
+            otlp_tls: tls::CollectorTls::default(),
             trace_sample_ratio: 1.0,
         }
     }

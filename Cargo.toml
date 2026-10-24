@@ -126,7 +126,9 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 opentelemetry = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs"] }
 opentelemetry_sdk = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "rt-tokio", "experimental_metrics_custom_reader"] }
 opentelemetry-prometheus = "0.33.0"
-opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "grpc-tonic"] }
+# `tls-aws-lc` and `tls-roots` carry an `https://` collector over rustls with
+# the platform's roots (#644).
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "grpc-tonic", "tls-aws-lc", "tls-roots"] }
 # Test-only: the OTLP trace service the testkit's in-process collector answers
 # (#437), from the opentelemetry group, and the gRPC server it runs on.
 # Verified against crates.io on 2026-10-04.

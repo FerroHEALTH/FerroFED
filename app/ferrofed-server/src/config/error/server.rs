@@ -103,12 +103,21 @@ pub enum ServerFault {
         /// The address both keys name.
         address: std::net::SocketAddr,
     },
-    /// `metrics.otlp_endpoint` or `telemetry.otlp_endpoint` is not an
-    /// `http://` URL.
+    /// `metrics.otlp_endpoint` or `telemetry.otlp_endpoint` is neither an
+    /// `http://` nor an `https://` URL.
     #[error(
-        "{key} must be an http:// URL: the OTLP exporters speak gRPC without TLS, to a collector beside the gateway"
+        "{key} must be an http:// URL, to a collector beside the gateway, or an https:// URL, over TLS"
     )]
     OtlpScheme {
+        /// The key of the collector URL.
+        key: String,
+    },
+    /// An `otlp_tls` table names TLS material for a collector that is not
+    /// reached over `https://`, or for no collector at all.
+    #[error("{table} names TLS material, which takes an https:// {key}")]
+    OtlpTlsCleartext {
+        /// The TLS table.
+        table: String,
         /// The key of the collector URL.
         key: String,
     },

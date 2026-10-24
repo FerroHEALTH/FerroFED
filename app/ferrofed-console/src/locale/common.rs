@@ -50,9 +50,9 @@ messages! {
     ColumnKey = "column-key",
     /// `Kind`
     ColumnKind = "column-kind",
-    /// `Median`
+    /// `p50`
     ColumnMedian = "column-median",
-    /// `The median response over recent requests, as the gateway's …`
+    /// `The median response time over the last 100 requests the …`
     ColumnMedianTitle = "column-median-title",
     /// `Membership`
     ColumnMembership = "column-membership",
@@ -66,6 +66,10 @@ messages! {
     ColumnOrganisation = "column-organisation",
     /// `Managed by`
     ColumnOwner = "column-owner",
+    /// `p95`
+    ColumnP95 = "column-p95",
+    /// `The 95th percentile response time over the last 100 requests …`
+    ColumnP95Title = "column-p95-title",
     /// `Query`
     ColumnQuery = "column-query",
     /// `Saved`

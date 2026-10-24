@@ -5,7 +5,7 @@
 //! Routes tabs.
 //!
 //! Overview holds the node's facts and its health; Endpoints each endpoint
-//! with its URL, its membership, its state and its median response; Routes
+//! with its URL, its membership, its state and its median and 95th percentile response; Routes
 //! the creating systems whose follow-ups go to the node, from the gateway's
 //! routing table (N21, §12.2), each with its ground: the node's own
 //! `system_id`, a registered route or a learned one. A tab the console has
@@ -28,7 +28,7 @@ use leptos::prelude::*;
 
 use crate::app::ORGANISATIONS;
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{median, owner_tag, stopped};
+use crate::pages::{latency, latency_fact, owner_tag, stopped};
 use crate::read::Stop;
 use crate::read::federation::{Health, Node, Organisation};
 use ferrohealth_ui::view::state::state;
@@ -222,7 +222,14 @@ fn overview(organisation: &Organisation, node: &Node) -> AnyView {
             tr(Msg::ColumnOrganisation),
             view! { <a href=organisation.href()>{organisation.shown().to_owned()}</a> }.into_any(),
         ),
-        (tr(Msg::ColumnMedian), median(node.latency_ms_p50())),
+        (
+            tr(Msg::ColumnMedian),
+            latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
+        ),
+        (
+            tr(Msg::ColumnP95),
+            latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
+        ),
         (
             tr(Msg::ColumnOwner),
             node.owner
@@ -273,6 +280,11 @@ fn endpoints(node: &Node) -> AnyView {
             role: Role::Quiet,
             ..Column::text("median", tr(Msg::ColumnMedian)).titled(tr(Msg::ColumnMedianTitle))
         },
+        Column {
+            numeric: true,
+            role: Role::Quiet,
+            ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
+        },
     ];
     let rows = node
         .endpoints
@@ -287,7 +299,8 @@ fn endpoints(node: &Node) -> AnyView {
                         view! { <code>{endpoint.url.clone().unwrap_or_default()}</code> },
                     )} {cell(&columns[2], Tag::new(endpoint.status.clone()).view())}
                     {cell(&columns[3], state(endpoint.health.mark(), endpoint.health.word(), None))}
-                    {cell(&columns[4], median(endpoint.latency_ms_p50))}
+                    {cell(&columns[4], latency(endpoint.latency_ms_p50))}
+                    {cell(&columns[5], latency(endpoint.latency_ms_p95))}
                 </tr>
             }
         })

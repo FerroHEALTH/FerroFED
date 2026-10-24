@@ -18,6 +18,9 @@ use std::path::{Path, PathBuf};
 
 use ferrofed_engine::onward::mtls::ThumbprintError;
 use ferrofed_registry::secret::Secret;
+use rustls::pki_types::pem::PemObject as _;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use serde::Deserialize;
 
 use crate::config::error::Error;
 use crate::config::secrets::secret;
@@ -106,4 +109,81 @@ pub(crate) fn resolve(
         client_identity,
         trust_roots,
     })
+}
+
+/// The TLS an OTLP collector is reached with (`[telemetry.otlp_tls]`,
+/// `[metrics.otlp_tls]`): the client identity the gateway presents, inline
+/// or from a file, and trust roots beside the platform's.
+///
+/// It takes effect only with an `https://` `otlp_endpoint`. No specification
+/// governs the keys: our own design, as the other tables name them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CollectorTls {
+    /// The gateway's client certificate chain and private key, PEM, for
+    /// mutual TLS with the collector.
+    pub client_identity: Option<Secret>,
+    /// A file holding `client_identity`, read at boot.
+    pub client_identity_file: Option<PathBuf>,
+    /// A PEM bundle of trust roots, beside the platform's, the collector is
+    /// trusted by.
+    pub trust_roots_file: Option<PathBuf>,
+}
+
+impl CollectorTls {
+    /// Whether the table names any TLS material.
+    #[must_use]
+    pub fn names_tls(&self) -> bool {
+        self.client_identity.is_some()
+            || self.client_identity_file.is_some()
+            || self.trust_roots_file.is_some()
+    }
+}
+
+/// Reads the collector TLS `table` at `key`, every file once, and checks
+/// that the client identity holds a certificate and a private key and that
+/// the trust roots hold a certificate.
+///
+/// # Errors
+///
+/// The errors of [`resolve`], and [`Error::Pem`] for material that is no
+/// PEM of the kind its key takes.
+pub(crate) fn resolve_collector(key: &str, table: &CollectorTls) -> Result<TlsSettings, Error> {
+    let tls = resolve(
+        key,
+        table.client_identity.as_ref(),
+        table.client_identity_file.as_deref(),
+        table.trust_roots_file.as_ref(),
+    )?;
+    if let Some(identity) = &tls.client_identity {
+        let pem = identity.expose().as_bytes();
+        if !holds_certificates(pem) || PrivateKeyDer::from_pem_slice(pem).is_err() {
+            return Err(Error::Pem {
+                key: format!("{key}.client_identity"),
+                holds: "a certificate chain and its private key",
+            });
+        }
+    }
+    if let Some(roots) = &tls.trust_roots
+        && !holds_certificates(roots.as_bytes())
+    {
+        return Err(Error::Pem {
+            key: format!("{key}.trust_roots_file"),
+            holds: "at least one certificate",
+        });
+    }
+    Ok(tls)
+}
+
+/// Whether `pem` holds at least one certificate and every certificate in it
+/// reads.
+fn holds_certificates(pem: &[u8]) -> bool {
+    let mut count = 0_usize;
+    for certificate in CertificateDer::pem_slice_iter(pem) {
+        if certificate.is_err() {
+            return false;
+        }
+        count = count.saturating_add(1);
+    }
+    count > 0
 }
