@@ -402,27 +402,27 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
             )),
             close,
             body: view! {
-                    {facts_row(
-                        vec![
-                            (
-                                tr(Msg::ColumnState),
-                                state(node.health().mark(), node.health().word(), None),
-                            ),
-                            (
-                tr(Msg::ColumnMedian),
-                latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
-            ),
-                            (
-                tr(Msg::ColumnP95),
-                latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
-            ),
-                        ],
-                    )}
-                    <ul class="fui-stack">{endpoints}</ul>
-                    <p>
-                        <a href=organisation.node_href(node)>{tr(Msg::TopologyOpenPage)}</a>
-                    </p>
-                }
+                {facts_row(
+                    vec![
+                        (
+                            tr(Msg::ColumnState),
+                            state(node.health().mark(), node.health().word(), None),
+                        ),
+                        (
+                            tr(Msg::ColumnMedian),
+                            latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
+                        ),
+                        (
+                            tr(Msg::ColumnP95),
+                            latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
+                        ),
+                    ],
+                )}
+                <ul class="fui-stack">{endpoints}</ul>
+                <p>
+                    <a href=organisation.node_href(node)>{tr(Msg::TopologyOpenPage)}</a>
+                </p>
+            }
             .into_any(),
         });
     }

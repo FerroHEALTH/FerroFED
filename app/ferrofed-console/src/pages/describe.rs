@@ -468,7 +468,10 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> AnyView {
                     {cell(&columns[2], code(endpoint.node_id.clone().unwrap_or_default()))}
                     {cell(&columns[3], Tag::new(endpoint.status.as_str().to_owned()).view())}
                     {cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50))}
-                    {cell(&columns[5], crate::pages::latency(crate::read::federation::p95(endpoint)))}
+                    {cell(
+                        &columns[5],
+                        crate::pages::latency(crate::read::federation::p95(endpoint)),
+                    )}
                 </tr>
             }
         })
