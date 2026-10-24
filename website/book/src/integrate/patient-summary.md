@@ -526,8 +526,8 @@ recorded, and a coding after it for each `TERM_MAPPING` whose `match` is
 coding, and its section's narrative carries it as one line, such as
 `AllergyIntolerance.code: broader term SNOMED-CT 762952008, from Hospital A.`
 ([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)). A code in no
-preferred system is kept as recorded (Art 10(7)); translating it through
-the configured terminology server is planned
+preferred system is translated through the configured terminology server,
+as below, and with none is kept as recorded (Art 10(7))
 ([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
 
 ### The terminology server
@@ -537,7 +537,13 @@ one, the component asks it for three operations:
 
 - `ConceptMap/$translate`, for a code in no preferred system. Only a match
   whose equivalence is `equivalent` or `equal` becomes a coding; a `wider`,
-  `narrower`, `inexact` or other match never does.
+  `narrower`, `inexact` or other match never does. In the patient summary,
+  each `CodeableConcept` of a mapped resource none of whose codings is in a
+  preferred system is asked once per coding and preferred system, and every
+  accepted match is added after the original coding, which stays as
+  recorded. A translation the server refuses or does not answer fails the
+  summary with `500`, and is never taken as no translation. A bare `Coding`
+  holds one code, so it is kept as recorded.
 - `CodeSystem/$lookup`, for the display of a received coding that carries
   none.
 - `ValueSet/$validate-code`, for a `required` binding whose value set no

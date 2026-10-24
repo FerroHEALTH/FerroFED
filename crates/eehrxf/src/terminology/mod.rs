@@ -30,7 +30,10 @@
 //! - [`Terminology`]: the optional FHIR terminology server, asked for
 //!   `$translate`, `$lookup` and `$validate-code`
 //!   (<https://hl7.org/fhir/R4/terminology-service.html>), which fails
-//!   closed when none is configured.
+//!   closed when none is configured;
+//! - [`translation`]: each concept of a mapped resource that is in no
+//!   preferred system, translated through that server, and left as
+//!   recorded under Art 10(7) when none is configured.
 //!
 //! The crate reaches no server itself: [`TerminologyServer`] is the seam the
 //! system that reaches one implements.
@@ -44,6 +47,7 @@ pub mod local;
 pub mod system;
 #[cfg(feature = "openehr")]
 pub mod transcode;
+pub mod translation;
 pub(crate) mod walk;
 #[cfg(feature = "openehr")]
 pub mod withheld;

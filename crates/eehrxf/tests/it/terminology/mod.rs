@@ -18,6 +18,7 @@ mod server;
 mod system;
 #[cfg(feature = "openehr")]
 mod transcode;
+mod translation;
 #[cfg(feature = "openehr")]
 mod version;
 #[cfg(feature = "openehr")]

@@ -23,6 +23,12 @@
 //!   broader, a narrower or an unknown relation, is written into the
 //!   section's narrative, naming the member it came from (eHN PS Art 10(3),
 //!   [`eehrxf::terminology::withheld`]);
+//! - with a terminology server configured, each code of a mapped resource
+//!   in no preferred system gains every `equivalent` or `equal`
+//!   translation into a preferred system after the original coding, and a
+//!   server that refuses or does not answer fails the document
+//!   ([`eehrxf::terminology::translation`]); with none, the code is
+//!   transferred as recorded (eHN PS Art 10(7));
 //! - a member's data are listed as mapped, beside every other member's,
 //!   never merged with them;
 //! - each section's narrative is generated and says that it is not
@@ -47,6 +53,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use eehrxf::category::Category;
 use eehrxf::document::{Document, DocumentError, EmptyReason};
 use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::terminology::Terminology;
+use eehrxf::terminology::ehn;
+use eehrxf::terminology::translation::{TranslationError, Translator};
 use eehrxf::terminology::withheld::Withheld;
 use eehrxf::transformation::{Direction, Pin, Report, ReportError};
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
@@ -244,6 +253,19 @@ pub enum AssemblyError {
         #[source]
         source: ReportError,
     },
+    /// The codes of a mapped resource could not be translated, because the
+    /// terminology server refused or did not answer, which fails the
+    /// document rather than leaving a code untranslated.
+    #[error(
+        "the codes mapped from a composition of the template {template} could not be translated"
+    )]
+    Translation {
+        /// The composition's template id.
+        template: String,
+        /// Why.
+        #[source]
+        source: TranslationError,
+    },
     /// The header names the patient by no family name, given name or text,
     /// which the HL7 Europe Patient Summary `Patient` requires (`ips-pat-1`).
     #[error("the patient header holds no name, which the EPS Patient requires (ips-pat-1)")]
@@ -253,6 +275,9 @@ pub enum AssemblyError {
 /// the `origins` answered, mapping each composition with `mappings`, as
 /// `author` writes it.
 ///
+/// Each code in no preferred system is translated through `terminology`
+/// when it names a server.
+///
 /// Every section names each member `elsewhere` lists as serving its own
 /// summary, whose data it leaves out.
 ///
@@ -260,13 +285,15 @@ pub enum AssemblyError {
 ///
 /// [`AssemblyError::Unnamed`] for a header with no name,
 /// [`AssemblyError::Mapping`] when a mapping refuses a composition, which
-/// fails the document rather than leaving the composition out, and the
-/// other [`AssemblyError`] variants for a document that cannot be written.
-pub fn assemble(
+/// fails the document rather than leaving the composition out,
+/// [`AssemblyError::Translation`] when the terminology server refuses or
+/// does not answer a translation, and the other [`AssemblyError`] variants
+/// for a document that cannot be written.
+pub async fn assemble(
     request: &Request,
     author: &Author,
     (origins, sections, elsewhere): (&[Origin], &[SectionAnswers], &[Elsewhere]),
-    mappings: &Mappings,
+    (mappings, terminology): (&Mappings, &Terminology),
 ) -> Result<Assembled, AssemblyError> {
     if !request.header.named() {
         return Err(AssemblyError::Unnamed);
@@ -295,8 +322,11 @@ pub fn assemble(
         unmapped: BTreeSet::new(),
         reports: BTreeMap::new(),
     };
+    let mut translator = Translator::new(terminology, &ehn::PATIENT_SUMMARY);
     for answers in sections {
-        let section = assembly.section(answers, (origins, elsewhere), mappings)?;
+        let section = assembly
+            .section(answers, (origins, elsewhere), (mappings, &mut translator))
+            .await?;
         assembly.document.with_section(section)?;
     }
     Ok(Assembled {
@@ -320,13 +350,14 @@ struct Assembly {
 }
 
 impl Assembly {
-    /// The section `answers` fill, its entries mapped with `mappings` and
-    /// added to the document, naming each member `elsewhere` lists.
-    fn section(
+    /// The section `answers` fill, its entries mapped with `mappings`,
+    /// translated by `translator` and added to the document, naming each
+    /// member `elsewhere` lists.
+    async fn section(
         &mut self,
         answers: &SectionAnswers,
         (origins, elsewhere): (&[Origin], &[Elsewhere]),
-        mappings: &Mappings,
+        (mappings, translator): (&Mappings, &mut Translator<'_>),
     ) -> Result<eehrxf::document::Section, AssemblyError> {
         let slot = slot_of(answers.section)?;
         let mut entries = Vec::new();
@@ -365,7 +396,8 @@ impl Assembly {
                 }
                 let member = self.member(*index, origin)?;
                 for mapping in runs {
-                    let (entry, lines) = self.run(mapping, composition, &member)?;
+                    let (entry, lines) =
+                        self.run(mapping, composition, &member, translator).await?;
                     entries.extend(entry);
                     withheld.extend(
                         lines
@@ -401,14 +433,16 @@ impl Assembly {
         Ok(section)
     }
 
-    /// Runs `mapping` over `composition` for the member at `member`, adds
-    /// what it mapped, and returns the `fullUrl` of the mapped resource and
-    /// the narrative line of each term mapping the run wrote as no coding.
-    fn run(
+    /// Runs `mapping` over `composition` for the member at `member`,
+    /// translates what it mapped with `translator`, adds it, and
+    /// returns the `fullUrl` of the mapped resource and the narrative line
+    /// of each term mapping the run wrote as no coding.
+    async fn run(
         &mut self,
         mapping: &Mapping,
         composition: &Held,
         member: &str,
+        translator: &mut Translator<'_>,
     ) -> Result<(Option<String>, Vec<String>), AssemblyError> {
         let context = CallContext::new()
             .with_patient(reference(&self.subject))
@@ -425,12 +459,25 @@ impl Assembly {
             .filter_map(Withheld::of)
             .map(|mapping| mapping.narrative())
             .collect();
-        let resources: Vec<Resource> = answer
+        let mapped: Vec<Resource> = answer
             .bundle()
             .entry
             .iter()
             .filter_map(|entry| entry.resource.clone())
             .collect();
+        let mut resources = Vec::with_capacity(mapped.len());
+        for resource in mapped {
+            resources.push(match resource {
+                Resource::Provenance(_) | Resource::OperationOutcome(_) => resource,
+                other => translator
+                    .translate(&other, preferred)
+                    .await
+                    .map_err(|source| AssemblyError::Translation {
+                        template: composition.template.clone(),
+                        source,
+                    })?,
+            });
+        }
         self.transformed(mapping, &composition.template, &resources)?;
         // NOTE: HL7 Europe Patient Summary 1.0.0-ballot `bundle-eu-eps` slices `Bundle.entry` by the
         // document's content and names no `OperationOutcome`; the run's losses go to its report.

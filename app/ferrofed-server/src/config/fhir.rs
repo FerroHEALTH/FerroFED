@@ -167,8 +167,8 @@ pub struct FhirSettings {
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
-    /// The terminology server the receive path asks, or none
-    /// (`[eehrxf.terminology]`).
+    /// The terminology server the receive path and the patient summary
+    /// ask, or none (`[eehrxf.terminology]`).
     pub terminology: Terminology,
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
