@@ -25,20 +25,13 @@ mod version;
 mod withheld;
 
 use async_trait::async_trait;
+use eehrxf::terminology::Candidate;
+use eehrxf::terminology::Match;
 use eehrxf::terminology::Operation;
 use eehrxf::terminology::TerminologyError;
 use eehrxf::terminology::TerminologyServer;
 use fhir_types::r4::coding::Coding;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupRequest;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupResponse;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateRequest;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponse;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponseMatch;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeRequest;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeResponse;
-use fhir_types::r4::primitives::Boolean;
 use fhir_types::r4::primitives::Code;
-use fhir_types::r4::primitives::String as FhirString;
 use fhir_types::r4::primitives::Uri;
 use http::StatusCode;
 
@@ -82,58 +75,38 @@ impl Scripted {
 impl TerminologyServer for Scripted {
     async fn translate(
         &self,
-        _request: ConceptMapTranslateRequest,
-    ) -> Result<ConceptMapTranslateResponse, TerminologyError> {
+        _system: &str,
+        _code: &str,
+        _target: &str,
+    ) -> Result<Vec<Match>, TerminologyError> {
         let Script::Translate(matches) = &self.0 else {
             return Err(self.refusal(Operation::Translate));
         };
-        Ok(ConceptMapTranslateResponse {
-            result: Boolean {
-                value: Some(!matches.is_empty()),
-                ..Boolean::default()
-            },
-            r#match: matches
-                .iter()
-                .map(
-                    |(equivalence, system, code)| ConceptMapTranslateResponseMatch {
-                        equivalence: Some(Code::from(*equivalence)),
-                        concept: Some(coding(system, code)),
-                        ..ConceptMapTranslateResponseMatch::default()
-                    },
-                )
-                .collect(),
-            ..ConceptMapTranslateResponse::default()
-        })
+        Ok(matches
+            .iter()
+            .map(|(equivalence, system, code)| Match {
+                equivalence: Some((*equivalence).to_owned()),
+                concept: Some(coding(system, code)),
+            })
+            .collect())
     }
 
-    async fn lookup(
-        &self,
-        _request: CodeSystemLookupRequest,
-    ) -> Result<CodeSystemLookupResponse, TerminologyError> {
+    async fn lookup(&self, _system: &str, _code: &str) -> Result<String, TerminologyError> {
         let Script::Display(display) = self.0 else {
             return Err(self.refusal(Operation::Lookup));
         };
-        Ok(CodeSystemLookupResponse {
-            name: FhirString::from("Synthetic"),
-            display: FhirString::from(display),
-            ..CodeSystemLookupResponse::default()
-        })
+        Ok(display.to_owned())
     }
 
     async fn validate_code(
         &self,
-        _request: ValueSetValidateCodeRequest,
-    ) -> Result<ValueSetValidateCodeResponse, TerminologyError> {
+        _value_set: &str,
+        _concept: &Candidate,
+    ) -> Result<bool, TerminologyError> {
         let Script::Valid(result) = self.0 else {
             return Err(self.refusal(Operation::ValidateCode));
         };
-        Ok(ValueSetValidateCodeResponse {
-            result: Boolean {
-                value: Some(result),
-                ..Boolean::default()
-            },
-            ..ValueSetValidateCodeResponse::default()
-        })
+        Ok(result)
     }
 }
 

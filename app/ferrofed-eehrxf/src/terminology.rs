@@ -2,212 +2,243 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The FHIR terminology server the interoperability component asks, over
-//! HTTP.
+//! HTTP, through FerroBRIDGE's terminology client.
 //!
-//! [`FhirTerminology`] answers the component's terminology seam
-//! ([`TerminologyServer`]) by posting each operation's `Parameters` to
-//! `{base}/ConceptMap/$translate`, `{base}/CodeSystem/$lookup` or
-//! `{base}/ValueSet/$validate-code`, the type-level invocation of FHIR R4
-//! (<https://hl7.org/fhir/R4/operations.html>), and reading the answer as
-//! that operation's `Parameters`. The request and the answer are the typed
-//! operation contracts of `fhir-types`. The HTTP client is the one every
-//! FHIR service of the gateway is reached with, with its credential and TLS
-//! material. A status other than `200 OK`, a time-out, a transport failure
-//! and an answer that does not read are each a [`TerminologyError`] naming
-//! the operation, so no failed call is taken as an answer.
+//! [`BridgeTerminology`] answers the component's terminology seam
+//! ([`TerminologyServer`]) with `ferrobridge_term::client::Client` in FHIR
+//! R4: `ConceptMap/$translate`, `CodeSystem/$lookup` and
+//! `ValueSet/$validate-code`, each posted as its `Parameters`
+//! (<https://hl7.org/fhir/R4/operations.html>). The HTTP client is the one
+//! every FHIR service of the gateway is reached with, with its credential
+//! and its TLS material, mutual TLS and private trust roots included. A
+//! refusal, a time-out, a transport failure and an answer that does not
+//! read are each a [`TerminologyError`] naming the operation, so no failed
+//! call is taken as an answer.
 
 use std::time::Duration;
 
 use async_trait::async_trait;
+use eehrxf::terminology::Candidate;
+use eehrxf::terminology::Match;
 use eehrxf::terminology::Operation;
 use eehrxf::terminology::TerminologyError;
 use eehrxf::terminology::TerminologyServer;
+use ferrobridge_term::client::Client;
+use ferrobridge_term::concept::Concept;
+use ferrobridge_term::config::{Config, RetryPolicy, WireVersion};
+use ferrobridge_term::error::Error as TermError;
+use ferrobridge_term::outcome::{
+    Coded, LookupOutcome, TranslateOutcome, Translation, ValidateOutcome, Validation,
+};
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::fhir::ClientError;
 use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::fhir::http_client;
-use fhir_types::codec::Json;
-use fhir_types::codec::Path;
-use fhir_types::codec::Value;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupRequest;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupResponse;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateRequest;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponse;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeRequest;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeResponse;
-use fhir_types::r4::parameters::Parameters;
-use http::StatusCode;
-use http::header::ACCEPT;
-use http::header::CONTENT_TYPE;
+use fhir_types::r4::coding::Coding;
+use fhir_types::r4::primitives::{Code, String as FhirString, Uri};
 use url::Url;
 
-/// The media type of FHIR JSON (<https://hl7.org/fhir/R4/json.html>).
-const FHIR_JSON: &str = "application/fhir+json";
-
-// TODO(#925): reach the server through FerroBRIDGE's ferrobridge-term once it is published.
 /// A FHIR R4 terminology server reached over HTTP.
 #[derive(Debug, Clone)]
-pub struct FhirTerminology {
-    base: Url,
-    client: reqwest::Client,
-    timeout: Duration,
+pub struct BridgeTerminology {
+    client: Client,
 }
 
 /// Why the client of a terminology server cannot be built.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum FhirTerminologyError {
+pub enum BridgeTerminologyError {
     /// The base is no absolute URL.
     #[error("the terminology server's base is no absolute URL")]
     Base(#[source] url::ParseError),
     /// The HTTP client cannot be built.
     #[error("the HTTP client of the terminology server cannot be built")]
-    Client(#[source] ClientError),
+    Http(#[source] ClientError),
+    /// The terminology client refuses the base.
+    #[error("the terminology client cannot be built")]
+    Client(#[source] Box<TermError>),
 }
 
-impl FhirTerminology {
+impl BridgeTerminology {
     /// Returns the client of the server at `base`, authenticated with
     /// `auth`, over the TLS material `tls`, each call bounded by `timeout`.
     ///
+    /// Each call is sent once: no specification governs a retry here, and
+    /// the face that asks fails closed on the first refusal (our own
+    /// design).
+    ///
     /// # Errors
     ///
-    /// [`FhirTerminologyError::Base`] for a base that does not parse, and
-    /// [`FhirTerminologyError::Client`] for a client that cannot be built.
+    /// [`BridgeTerminologyError::Base`] for a base that does not parse,
+    /// [`BridgeTerminologyError::Http`] for an HTTP client that cannot be
+    /// built, and [`BridgeTerminologyError::Client`] for a base that cannot
+    /// carry a path.
     pub fn new(
         base: &str,
         auth: &Authentication,
         tls: &Tls,
         timeout: Duration,
-    ) -> Result<Self, FhirTerminologyError> {
-        // NOTE: RFC 3986 §5.2.3: a base without a trailing slash drops its last segment
-        // on resolution, so the base is held as a directory.
-        let directory = if base.ends_with('/') {
-            base.to_owned()
-        } else {
-            format!("{base}/")
-        };
-        let base = Url::parse(&directory).map_err(FhirTerminologyError::Base)?;
-        let client = http_client(auth, tls).map_err(FhirTerminologyError::Client)?;
-        Ok(Self {
-            base,
-            client,
-            timeout,
-        })
-    }
-
-    /// Posts `parameters` to `operation` and reads the answer's
-    /// `Parameters`.
-    async fn post(
-        &self,
-        operation: Operation,
-        parameters: &Parameters,
-    ) -> Result<Parameters, TerminologyError> {
-        let answer = |source: Box<dyn std::error::Error + Send + Sync>| TerminologyError::Answer {
-            operation,
-            source,
-        };
-        let url =
-            self.base
-                .join(operation.path())
-                .map_err(|source| TerminologyError::Transport {
-                    operation,
-                    source: Box::new(source),
-                })?;
-        let body =
-            serde_json::to_vec(parameters).map_err(|source| TerminologyError::Transport {
-                operation,
-                source: Box::new(source),
-            })?;
-        let sent = self
-            .client
-            .post(url)
-            .header(CONTENT_TYPE, FHIR_JSON)
-            .header(ACCEPT, FHIR_JSON)
-            .timeout(self.timeout)
-            .body(body)
-            .send()
-            .await;
-        let response = sent.map_err(|source| failed(operation, source))?;
-        let status = response.status();
-        if status != StatusCode::OK {
-            return Err(TerminologyError::Status { operation, status });
-        }
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|source| failed(operation, source))?;
-        let Value::Object(object) =
-            serde_json::from_slice::<Value>(&bytes).map_err(|source| answer(Box::new(source)))?
-        else {
-            return Err(answer(Box::new(NotParameters)));
-        };
-        if object.get("resourceType").and_then(Value::as_str) != Some("Parameters") {
-            return Err(answer(Box::new(NotParameters)));
-        }
-        Parameters::from_json(&object, &mut Path::root("Parameters"))
-            .map_err(|source| answer(Box::new(source)))
+    ) -> Result<Self, BridgeTerminologyError> {
+        let base = Url::parse(base).map_err(BridgeTerminologyError::Base)?;
+        let http = http_client(auth, tls).map_err(BridgeTerminologyError::Http)?;
+        let config = Config::new(base, WireVersion::R4)
+            .with_timeout(timeout)
+            .with_retry(RetryPolicy {
+                max_attempts: 1,
+                ..RetryPolicy::default()
+            });
+        let client = Client::with_http(config, http)
+            .map_err(|error| BridgeTerminologyError::Client(Box::new(error)))?;
+        Ok(Self { client })
     }
 }
 
 #[async_trait]
-impl TerminologyServer for FhirTerminology {
+impl TerminologyServer for BridgeTerminology {
     async fn translate(
         &self,
-        request: ConceptMapTranslateRequest,
-    ) -> Result<ConceptMapTranslateResponse, TerminologyError> {
-        let operation = Operation::Translate;
-        let answer = self.post(operation, &request.into_parameters()).await?;
-        ConceptMapTranslateResponse::from_parameters(&answer).map_err(|source| {
-            TerminologyError::Answer {
-                operation,
-                source: Box::new(source),
-            }
-        })
+        system: &str,
+        code: &str,
+        target: &str,
+    ) -> Result<Vec<Match>, TerminologyError> {
+        let translation = Translation::new(system, code).with_target_system(target);
+        let outcome = self
+            .client
+            .translate(&translation)
+            .await
+            .map_err(|error| refusal(Operation::Translate, error))?;
+        match outcome {
+            TranslateOutcome::Translated { matches, .. } => Ok(matches
+                .into_iter()
+                .map(|found| Match {
+                    equivalence: found
+                        .equivalence
+                        .as_ref()
+                        .map(|equivalence| equivalence.as_str().to_owned()),
+                    concept: found.concept.as_ref().map(coding),
+                })
+                .collect()),
+            // NOTE: FHIR R4 `$translate`: a `result` of false states that no match
+            // exists, so it yields no coding.
+            TranslateOutcome::NoMatch { .. } => Ok(Vec::new()),
+            _ => Err(unknown(Operation::Translate)),
+        }
     }
 
-    async fn lookup(
-        &self,
-        request: CodeSystemLookupRequest,
-    ) -> Result<CodeSystemLookupResponse, TerminologyError> {
-        let operation = Operation::Lookup;
-        let answer = self.post(operation, &request.into_parameters()).await?;
-        CodeSystemLookupResponse::from_parameters(&answer).map_err(|source| {
-            TerminologyError::Answer {
-                operation,
-                source: Box::new(source),
-            }
-        })
+    async fn lookup(&self, system: &str, code: &str) -> Result<String, TerminologyError> {
+        let outcome = self
+            .client
+            .lookup(system, code, None)
+            .await
+            .map_err(|error| refusal(Operation::Lookup, error))?;
+        match outcome {
+            LookupOutcome::Found { display, .. } => Ok(display),
+            LookupOutcome::NotFound { .. } => Err(TerminologyError::NotFound {
+                operation: Operation::Lookup,
+            }),
+            _ => Err(unknown(Operation::Lookup)),
+        }
     }
 
     async fn validate_code(
         &self,
-        request: ValueSetValidateCodeRequest,
-    ) -> Result<ValueSetValidateCodeResponse, TerminologyError> {
-        let operation = Operation::ValidateCode;
-        let answer = self.post(operation, &request.into_parameters()).await?;
-        ValueSetValidateCodeResponse::from_parameters(&answer).map_err(|source| {
-            TerminologyError::Answer {
-                operation,
-                source: Box::new(source),
-            }
-        })
-    }
-}
-
-/// The refusal of a call that failed on the way: a time-out, or a
-/// transport failure.
-fn failed(operation: Operation, source: reqwest::Error) -> TerminologyError {
-    if source.is_timeout() {
-        TerminologyError::Timeout { operation }
-    } else {
-        TerminologyError::Transport {
-            operation,
-            source: Box::new(source),
+        value_set: &str,
+        concept: &Candidate,
+    ) -> Result<bool, TerminologyError> {
+        let coded = match concept {
+            Candidate::Code { code, context } => Coded::InContext {
+                context: context.clone(),
+                code: code.clone(),
+                display: None,
+            },
+            Candidate::Coding(coding) => Coded::Coding(concept_of(coding)),
+            Candidate::Concept(concept) => Coded::CodeableConcept {
+                coding: concept.coding.iter().map(concept_of).collect(),
+                text: concept.text.as_ref().and_then(|text| text.value.clone()),
+            },
+            _ => return Err(unknown(Operation::ValidateCode)),
+        };
+        let validation = Validation {
+            value_set_url: value_set.to_owned(),
+            value_set_version: None,
+            date: None,
+            coded,
+        };
+        let outcome = self
+            .client
+            .validate(&validation)
+            .await
+            .map_err(|error| refusal(Operation::ValidateCode, error))?;
+        match outcome {
+            ValidateOutcome::Valid { .. } => Ok(true),
+            ValidateOutcome::Invalid { .. } => Ok(false),
+            _ => Err(unknown(Operation::ValidateCode)),
         }
     }
 }
 
-/// An answer that is no `Parameters` resource.
+/// Returns the refusal of `operation` that `error` describes: the
+/// server's status for an answer it refused, a time-out, an answer that
+/// does not read, or a call that did not reach the server.
+fn refusal(operation: Operation, error: TermError) -> TerminologyError {
+    if matches!(error, TermError::Timeout { .. }) {
+        return TerminologyError::Timeout { operation };
+    }
+    if matches!(error, TermError::Body { .. }) {
+        return TerminologyError::Answer {
+            operation,
+            source: Box::new(error),
+        };
+    }
+    match error.upstream_status() {
+        Some(status) => TerminologyError::Status { operation, status },
+        None => TerminologyError::Transport {
+            operation,
+            source: Box::new(error),
+        },
+    }
+}
+
+/// Returns the FHIR R4 `Coding` of a concept the server answered.
+fn coding(concept: &Concept) -> Coding {
+    Coding {
+        system: concept.system.as_deref().map(Uri::from),
+        version: concept.version.as_deref().map(FhirString::from),
+        code: concept.code.as_deref().map(Code::from),
+        display: concept.display.as_deref().map(FhirString::from),
+        ..Coding::default()
+    }
+}
+
+/// Returns the concept a FHIR R4 `Coding` names.
+fn concept_of(coding: &Coding) -> Concept {
+    Concept {
+        system: coding
+            .system
+            .as_ref()
+            .and_then(|system| system.value.clone()),
+        version: coding
+            .version
+            .as_ref()
+            .and_then(|version| version.value.clone()),
+        code: coding.code.as_ref().and_then(|code| code.value.clone()),
+        display: coding
+            .display
+            .as_ref()
+            .and_then(|display| display.value.clone()),
+    }
+}
+
+/// Returns the refusal of `operation` for a form this client does not
+/// read: a candidate it cannot send, or an outcome it cannot take.
+fn unknown(operation: Operation) -> TerminologyError {
+    TerminologyError::Answer {
+        operation,
+        source: Box::new(UnknownForm),
+    }
+}
+
+/// A form this client does not read.
 #[derive(Debug, thiserror::Error)]
-#[error("the answer is no Parameters resource")]
-struct NotParameters;
+#[error("a form this terminology client does not read")]
+struct UnknownForm;

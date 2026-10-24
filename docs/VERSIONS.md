@@ -389,12 +389,15 @@ The European interoperability component (`crates/eehrxf`, feature `openehr`,
 `fhirconnect`, with the template index and the mapping-file loader of
 `openehr-mapping-core` (decision A61). Both are pinned exactly in the root
 `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, and both build
-on the `openehr-*` line above.
+on the `openehr-*` line above. The component's terminology server is asked
+through FerroBRIDGE's `ferrobridge-term` (#925), pinned exactly the same way,
+over the HTTP client the gateway builds with its credential and TLS material.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | `fhirconnect` | =0.1.173 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.124 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 

@@ -15,7 +15,7 @@ use eehrxf::terminology::Candidate;
 use eehrxf::terminology::Operation;
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::TerminologyError;
-use ferrofed_eehrxf::terminology::FhirTerminology;
+use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::fhir::Tls;
 use ferrofed_testkit::mock::Server;
@@ -40,7 +40,7 @@ const FHIR_JSON: &str = "application/fhir+json";
 /// The terminology answered by `server`, under `/fhir`, with basic
 /// credentials.
 fn terminology(server: &Server, timeout: Duration) -> Result<Terminology, Box<dyn Error>> {
-    let client = FhirTerminology::new(
+    let client = BridgeTerminology::new(
         &format!("{}/fhir", server.uri()),
         &Authentication::Basic {
             user: String::from("ferrofed"),
