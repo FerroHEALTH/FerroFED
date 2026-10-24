@@ -132,10 +132,11 @@ impl Config {
                 key: String::from("server.listen"),
                 source,
             })?;
-        let locale = Locale::parse(&self.server.locale).map_err(|source| Error::Locale {
-            key: String::from("server.locale"),
-            source,
-        })?;
+        let locale =
+            crate::locale::configured(&self.server.locale).map_err(|source| Error::Locale {
+                key: String::from("server.locale"),
+                source,
+            })?;
         let base = web_url("gateway.base_url", &self.gateway.base_url)?;
         let timeout =
             positive("gateway.timeout_ms", self.gateway.timeout_ms).map(Duration::from_millis)?;

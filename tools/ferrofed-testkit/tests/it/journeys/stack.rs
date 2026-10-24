@@ -105,18 +105,24 @@ pub(crate) struct Stack {
 impl Stack {
     /// Starts the nodes, the provider, the gateway and the console.
     pub(crate) async fn start() -> Result<Self, Box<dyn Error>> {
-        Self::start_with(None).await
+        Self::start_with(None, None).await
     }
 
     /// Starts the stack with the console configured with one replica,
     /// `gateway-0`, whose admin listener is at `admin`.
     pub(crate) async fn start_with_admin(admin: &str) -> Result<Self, Box<dyn Error>> {
-        Self::start_with(Some(admin)).await
+        Self::start_with(Some(admin), None).await
     }
 
-    /// Starts the stack, the console naming the admin listener `admin` when
-    /// one is given.
-    async fn start_with(admin: Option<&str>) -> Result<Self, Box<dyn Error>> {
+    /// Starts the stack as [`Stack::start_with_admin`] does, the console
+    /// rendering every page in the locale `locale` names.
+    pub(crate) async fn start_in(admin: &str, locale: &str) -> Result<Self, Box<dyn Error>> {
+        Self::start_with(Some(admin), Some(locale)).await
+    }
+
+    /// Starts the stack, the console naming the admin listener `admin` and
+    /// rendering in `locale` when each is given.
+    async fn start_with(admin: Option<&str>, locale: Option<&str>) -> Result<Self, Box<dyn Error>> {
         let site = site_root()?;
         let answering = node(200, &format!(
             r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{UID_AT_A}"]]}}"##
@@ -130,8 +136,9 @@ impl Stack {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let console = format!("http://{}", listener.local_addr()?);
         let site = toml::Value::String(site.display().to_string());
+        let locale = toml::Value::String(locale.unwrap_or("en").to_owned());
         let text = format!(
-            "[server]\nsite_root = {site}\n\n[gateway]\nbase_url = \"{gateway}/\"\n\n\
+            "[server]\nsite_root = {site}\nlocale = {locale}\n\n[gateway]\nbase_url = \"{gateway}/\"\n\n\
              [session]\nsecure_cookie = false\n\n{}",
             provider.console_configuration(&console)
         );

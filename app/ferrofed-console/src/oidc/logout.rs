@@ -12,6 +12,8 @@
 //! ([`crate::server::same_origin`]). No specification of the federation
 //! governs sign-out: our own design on RP-Initiated Logout 1.0.
 
+use crate::locale::Msg;
+use crate::server::plain;
 use axum::Extension;
 use axum::response::{IntoResponse, Response};
 use http::header::{CACHE_CONTROL, LOCATION, SET_COOKIE};
@@ -54,8 +56,10 @@ pub fn end_session_request(oidc: &OidcSettings, id_token: Option<&SecretString>)
 pub async fn logout(Extension(state): Extension<ConsoleState>, headers: HeaderMap) -> Response {
     let Some(oidc) = state.settings().oidc.as_ref() else {
         return plain(
+            &state,
+            &headers,
             StatusCode::SERVICE_UNAVAILABLE,
-            "sign-in is not configured on this console",
+            Msg::AnswerSignInNotConfigured,
         );
     };
     let sessions = state.sessions();
@@ -65,8 +69,10 @@ pub async fn logout(Extension(state): Extension<ConsoleState>, headers: HeaderMa
         Err(error) => {
             tracing::error!(%error, "a session could not be ended");
             return plain(
+                &state,
+                &headers,
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "the session could not be ended",
+                Msg::AnswerSessionNotEnded,
             );
         }
     };
@@ -79,8 +85,10 @@ pub async fn logout(Extension(state): Extension<ConsoleState>, headers: HeaderMa
     ) else {
         tracing::error!("the sign-out redirect could not be written as headers");
         return plain(
+            &state,
+            &headers,
             StatusCode::INTERNAL_SERVER_ERROR,
-            "the sign-out redirect could not be written",
+            Msg::AnswerSignOutRedirectUnwritten,
         );
     };
     let mut response = StatusCode::SEE_OTHER.into_response();
@@ -89,9 +97,4 @@ pub async fn logout(Extension(state): Extension<ConsoleState>, headers: HeaderMa
     headers.insert(SET_COOKIE, removal);
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
-}
-
-/// A plain-text answer that no cache keeps.
-fn plain(status: StatusCode, text: &'static str) -> Response {
-    (status, [(CACHE_CONTROL, "no-store")], text).into_response()
 }

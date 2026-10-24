@@ -25,11 +25,16 @@
 //! formatter, with the catalog's `number-group` and `number-decimal`. No
 //! specification governs the catalog layout or the choice: our own design.
 
-use ferrohealth_ui::i18n::{Arg, Locale, Message, locale};
-use fluent_templates::Loader;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+use ferrohealth_ui::i18n::{Arg, Locale, Message, UnknownLanguage, library_catalog, locale};
+use fluent_templates::fluent_bundle::FluentValue;
+use fluent_templates::{LanguageIdentifier, Loader};
 
 fluent_templates::static_loader! {
-    static CATALOG = {
+    static CONSOLE = {
         locales: "./locales",
         fallback_language: "en",
         // NOTE: Fluent's guide, "Bidirectionality": the isolation marks around a
@@ -41,10 +46,106 @@ fluent_templates::static_loader! {
     };
 }
 
-/// The console's catalogs, every language it ships.
+/// The tag of the pseudo-locale: a private-use language subtag (BCP 47,
+/// `qaa` to `qtz`), so no catalog can serve it.
+pub const PSEUDO_TAG: &str = "qps";
+
+/// The pseudo-locale's language.
+static PSEUDO: LazyLock<LanguageIdentifier> = LazyLock::new(|| fluent_templates::langid!("qps"));
+
+/// The console's catalog: its own words in every language it ships, and in
+/// the pseudo-locale the console's and FerroUI's English, stretched.
+#[derive(Debug, Clone, Copy)]
+pub struct Catalog;
+
+/// The one catalog the console looks its words up in.
+static CATALOG: Catalog = Catalog;
+
+impl Loader for Catalog {
+    fn lookup_complete(
+        &self,
+        lang: &LanguageIdentifier,
+        text_id: &str,
+        args: Option<&HashMap<Cow<'static, str>, FluentValue>>,
+    ) -> String {
+        self.try_lookup_complete(lang, text_id, args)
+            .unwrap_or_else(|| text_id.to_owned())
+    }
+
+    fn try_lookup_complete(
+        &self,
+        lang: &LanguageIdentifier,
+        text_id: &str,
+        args: Option<&HashMap<Cow<'static, str>, FluentValue>>,
+    ) -> Option<String> {
+        if *lang != *PSEUDO {
+            return CONSOLE.try_lookup_complete(lang, text_id, args);
+        }
+        let english = fluent_templates::langid!("en");
+        CONSOLE
+            .try_lookup_complete(&english, text_id, args)
+            .or_else(|| library_catalog().try_lookup_complete(&english, text_id, args))
+            .map(|english| stretch(&english))
+    }
+
+    fn locales(&self) -> Box<dyn Iterator<Item = &LanguageIdentifier> + '_> {
+        CONSOLE.locales()
+    }
+}
+
+/// The console's catalogs, every language it ships; the pseudo-locale is
+/// served beside them and never offered.
 #[must_use]
 pub fn catalog() -> &'static (dyn Loader + Send + Sync) {
-    &*CATALOG
+    &CATALOG
+}
+
+/// The locale `[server] locale` names: the pseudo-locale for its tag, over
+/// the console's catalog, else the language `tag` names.
+///
+/// # Errors
+/// Returns [`UnknownLanguage`] when `tag` is no language identifier.
+pub fn configured(tag: &str) -> Result<Locale, UnknownLanguage> {
+    let locale = Locale::parse(tag)?;
+    Ok(if tag == PSEUDO_TAG {
+        locale.with_catalog(&CATALOG)
+    } else {
+        locale
+    })
+}
+
+/// `english` accented letter by letter and padded by two fifths of its
+/// length (at least three), in brackets, so a cut end shows: the
+/// pseudo-locale's words, as FerroUI's gallery draws its own.
+#[must_use]
+pub fn stretch(english: &str) -> String {
+    let accented: String = english.chars().map(accent).collect();
+    let length = english.chars().count();
+    let pad = length.saturating_mul(2).div_ceil(5).max(3);
+    format!("[{accented} {}]", "~".repeat(pad))
+}
+
+/// The accented look-alike of `letter`, the letter itself when it has none.
+const fn accent(letter: char) -> char {
+    match letter {
+        'a' => '\u{e1}',
+        'c' => '\u{e7}',
+        'e' => '\u{e9}',
+        'i' => '\u{ed}',
+        'n' => '\u{f1}',
+        'o' => '\u{f6}',
+        'u' => '\u{fc}',
+        'y' => '\u{fd}',
+        'A' => '\u{c5}',
+        'C' => '\u{c7}',
+        'E' => '\u{c9}',
+        'I' => '\u{ce}',
+        'N' => '\u{d1}',
+        'O' => '\u{d6}',
+        'U' => '\u{dc}',
+        'Y' => '\u{dd}',
+        other => other,
+    }
 }
 
 /// A string the console draws, by its message in the catalog. Each message
@@ -85,6 +186,7 @@ macro_rules! messages {
 // The areas, one file each, kept in alphabetical order.
 mod about;
 mod act;
+mod answers;
 mod common;
 mod configuration;
 mod dashboard;
@@ -105,6 +207,7 @@ mod topology;
 const AREAS: &[&[Msg]] = &[
     about::ALL,
     act::ALL,
+    answers::ALL,
     common::ALL,
     configuration::ALL,
     dashboard::ALL,
@@ -146,49 +249,7 @@ pub fn tr_in(locale: &Locale, msg: Msg, args: &[(&'static str, Arg)]) -> String 
 /// draws, such as a listing's noun.
 #[must_use]
 pub const fn message(msg: Msg) -> Message {
-    Message::new(&CATALOG_REF, msg.id())
-}
-
-/// The catalog as the `'static` loader a [`Message`] holds.
-static CATALOG_REF: CatalogRef = CatalogRef;
-
-/// The console's catalog behind a unit type, so a [`Message`] can name it
-/// in a constant.
-#[derive(Debug, Clone, Copy)]
-struct CatalogRef;
-
-impl Loader for CatalogRef {
-    fn lookup_complete(
-        &self,
-        lang: &fluent_templates::LanguageIdentifier,
-        text_id: &str,
-        args: Option<
-            &std::collections::HashMap<
-                std::borrow::Cow<'static, str>,
-                fluent_templates::fluent_bundle::FluentValue,
-            >,
-        >,
-    ) -> String {
-        CATALOG.lookup_complete(lang, text_id, args)
-    }
-
-    fn try_lookup_complete(
-        &self,
-        lang: &fluent_templates::LanguageIdentifier,
-        text_id: &str,
-        args: Option<
-            &std::collections::HashMap<
-                std::borrow::Cow<'static, str>,
-                fluent_templates::fluent_bundle::FluentValue,
-            >,
-        >,
-    ) -> Option<String> {
-        CATALOG.try_lookup_complete(lang, text_id, args)
-    }
-
-    fn locales(&self) -> Box<dyn Iterator<Item = &fluent_templates::LanguageIdentifier> + '_> {
-        CATALOG.locales()
-    }
+    Message::new(&CATALOG, msg.id())
 }
 
 /// The locales the console offers in Your preferences, each named in its
@@ -290,6 +351,41 @@ mod tests {
             }
         }
         names
+    }
+
+    #[test]
+    fn the_pseudo_locale_stretches_every_word_and_is_never_offered() {
+        let args = placeables(&Path::new(env!("CARGO_MANIFEST_DIR")).join("locales/en"));
+        let pseudo: fluent_templates::LanguageIdentifier =
+            super::PSEUDO_TAG.parse().expect("the pseudo-locale's tag");
+        let english: fluent_templates::LanguageIdentifier = "en".parse().expect("English");
+        assert!(super::configured(super::PSEUDO_TAG).is_ok());
+        for msg in Msg::all() {
+            let plain = catalog()
+                .try_lookup_with_args(&english, msg.id(), &args)
+                .unwrap_or_default();
+            let stretched = catalog()
+                .try_lookup_with_args(&pseudo, msg.id(), &args)
+                .unwrap_or_default();
+            assert!(stretched.starts_with('['), "{}: {stretched}", msg.id());
+            assert!(
+                stretched.chars().count() > plain.chars().count(),
+                "{}: {stretched}",
+                msg.id()
+            );
+        }
+        assert_eq!("[\u{c7}\u{f6}\u{f1}f\u{ed}g ~~~]", super::stretch("Config"));
+        assert!(
+            catalog()
+                .locales()
+                .all(|language| *language != super::PSEUDO_TAG),
+            "the pseudo-locale is no language a request can choose"
+        );
+        assert!(
+            super::choices()
+                .iter()
+                .all(|locale| locale.tag() != super::PSEUDO_TAG)
+        );
     }
 
     #[test]

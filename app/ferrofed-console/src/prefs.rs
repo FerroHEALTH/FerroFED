@@ -19,6 +19,8 @@
 //! no user store and nothing in browser storage. No specification governs
 //! this: our own design.
 
+use crate::locale::Msg;
+use crate::server::plain;
 use axum::Extension;
 use axum::extract::Form;
 use axum::response::{IntoResponse, Redirect, Response};
@@ -143,6 +145,7 @@ pub fn preference_return(back: &str, name: &str) -> String {
 /// switch posts `off` before its `on`, and the last value wins.
 pub async fn choose(
     Extension(state): Extension<ConsoleState>,
+    headers: http::HeaderMap,
     Form(fields): Form<Vec<(String, String)>>,
 ) -> Response {
     let back = fields
@@ -155,17 +158,28 @@ pub async fn choose(
         .filter(|(name, _)| name != "back")
         .collect::<Vec<_>>();
     let Some((name, value)) = chosen.last() else {
-        return (StatusCode::BAD_REQUEST, "the post names no preference").into_response();
+        return plain(
+            &state,
+            &headers,
+            StatusCode::BAD_REQUEST,
+            Msg::AnswerNoPreference,
+        );
     };
     if chosen.iter().any(|(other, _)| other != name) {
-        return (StatusCode::BAD_REQUEST, "a post keeps one preference").into_response();
+        return plain(
+            &state,
+            &headers,
+            StatusCode::BAD_REQUEST,
+            Msg::AnswerOnePreference,
+        );
     }
     let Some(value) = preference_value(name, value) else {
-        return (
+        return plain(
+            &state,
+            &headers,
             StatusCode::BAD_REQUEST,
-            "the preference or its value is not one the console offers",
-        )
-            .into_response();
+            Msg::AnswerPreferenceUnknown,
+        );
     };
     let cookie = state.sessions().preference_cookie(name, &value).to_string();
     redirect_with(&preference_return(back, name), &[cookie])
@@ -204,10 +218,16 @@ pub struct SidebarChoice {
 /// browser back to the page it came from.
 pub async fn sidebar(
     Extension(state): Extension<ConsoleState>,
+    headers: http::HeaderMap,
     Form(choice): Form<SidebarChoice>,
 ) -> Response {
     if !matches!(choice.sidebar.as_str(), "rail" | "full") {
-        return (StatusCode::BAD_REQUEST, "the sidebar is not rail or full").into_response();
+        return plain(
+            &state,
+            &headers,
+            StatusCode::BAD_REQUEST,
+            Msg::AnswerSidebarUnknown,
+        );
     }
     let cookie = state.sessions().sidebar_cookie(&choice.sidebar).to_string();
     redirect_with(return_path(&choice.back), &[cookie])

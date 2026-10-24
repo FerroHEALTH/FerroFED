@@ -12,3 +12,19 @@ allow ^Cadasto B\.V\.$                      # the maker's legal name
 allow ^[a-z]+[A-Z][A-Za-z]*$                # a JSON member name (resourceType, valueString)
 allow ^[A-Z][a-z]+[A-Z][A-Za-z]+$           # a FHIR resource type name (OperationOutcome)
 allow ^data:image/svg\+xml,                 # the brand mark, an image
+
+skip app/ferrofed-console/src/config/  # the configuration's refusals, printed on the operator's terminal at start, before any request has a language
+skip app/ferrofed-console/src/cli.rs   # the command line's help, on the operator's terminal, in English as the log is
+
+allow ^[A-Z][A-Z0-9_]*$                    # an all-capitals token: an environment variable, a format or an algorithm (JSON, S256), never a sentence
+allow ^[A-Z][a-z]+(-[A-Z][a-z]+)+$          # an exchange-format category code (Patient-Summaries), which the catalog names beside it
+allow ^[a-z]+/[a-z0-9.+-]+(; charset=utf-8)?$   # a media type
+allow ^attachment; filename=                # a Content-Disposition value
+allow ^default-src                          # the Content-Security-Policy header
+allow ^__Host-$                             # the cookie name prefix of RFC 6265bis
+allow ^Basic \{\}$                          # the HTTP Basic scheme of RFC 7617
+allow ^value = \{raw\}$                     # the TOML an environment override is read through
+allow ^%Y-%m-%d %H:%M$                      # a strftime pattern
+allow ^(admin|configuration) action$        # the noun a log line names an operator's action by
+allow ^(member (add|save|removal)|section (save|removal)|drift repair)$   # the action a log line names
+allow ^result set$                          # the ITS-REST object a wire error names to a developer

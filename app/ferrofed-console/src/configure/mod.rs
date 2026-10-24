@@ -35,7 +35,7 @@ pub mod said;
 pub mod sections;
 pub mod settings;
 
-use crate::locale::{Msg, tr};
+use crate::locale::{Msg, tr, tr_with};
 
 /// The path of the configuration page.
 pub const CONFIGURATION: &str = "/configuration";
@@ -48,10 +48,12 @@ pub fn countdown(remaining: i64) -> String {
         return tr(Msg::TheDeadlineHasPassed);
     }
     let seconds = remaining.div_euclid(1000);
-    format!(
-        "{}:{:02} left",
-        seconds.div_euclid(60),
-        seconds.rem_euclid(60)
+    tr_with(
+        Msg::CountdownLeft,
+        &[
+            ("minutes", seconds.div_euclid(60).to_string().into()),
+            ("seconds", format!("{:02}", seconds.rem_euclid(60)).into()),
+        ],
     )
 }
 

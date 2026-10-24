@@ -32,6 +32,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::config::settings::Settings;
 use crate::gateway::{Gateway, GatewayError};
+use crate::locale::Msg;
 use crate::session::Sessions;
 
 /// The path of the console's own liveness route.
@@ -301,12 +302,26 @@ async fn same_origin_only(
         method = %request.method(),
         "a request that did not come from the console's own pages was refused"
     );
-    (
+    plain(
+        &state,
+        request.headers(),
         StatusCode::FORBIDDEN,
-        [(CACHE_CONTROL, "no-store")],
-        "the console takes this request only from its own pages",
+        Msg::AnswerOwnPagesOnly,
     )
-        .into_response()
+}
+
+/// A handler's plain-text answer `msg`, in the language of the request
+/// whose headers are `headers`, that no cache keeps.
+#[must_use]
+pub fn plain(
+    state: &ConsoleState,
+    headers: &http::HeaderMap,
+    status: StatusCode,
+    msg: Msg,
+) -> Response {
+    let locale = crate::locale::requested_from(state, headers);
+    let text = crate::locale::tr_in(&locale, msg, &[]);
+    (status, [(CACHE_CONTROL, "no-store")], text).into_response()
 }
 
 /// Whether `headers` show a request sent from a page of the console at

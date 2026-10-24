@@ -1,0 +1,20 @@
+# The plain-text answers of the console's handlers, and the countdown.
+answer-countdown-left = { $minutes }:{ $seconds } left
+answer-exchange-failed = the sign-in could not be completed at the OpenID Provider
+answer-id-token-unverified = the OpenID Provider's ID Token did not verify
+answer-no-code = the redirect carries no code
+answer-no-preference = the post names no preference
+answer-no-sign-in-pending = no sign-in is pending
+answer-one-preference = a post keeps one preference
+answer-own-pages-only = the console takes this request only from its own pages
+answer-preference-unknown = the preference or its value is not one the console offers
+answer-provider-refused = the OpenID Provider did not sign the operator in
+answer-session-not-begun = the session could not be begun
+answer-session-not-ended = the session could not be ended
+answer-sessions-full = the console holds as many sessions as it may; try again later
+answer-sidebar-unknown = the sidebar is not rail or full
+answer-sign-in-not-configured = sign-in is not configured on this console
+answer-sign-in-redirect-unwritten = the sign-in redirect could not be written
+answer-sign-in-session-not-begun = a sign-in session could not be begun
+answer-sign-out-redirect-unwritten = the sign-out redirect could not be written
+answer-state-mismatch = the sign-in state does not match this session
