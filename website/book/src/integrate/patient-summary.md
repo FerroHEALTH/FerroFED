@@ -318,8 +318,14 @@ naming the verified caller, the patient, every endpoint asked and the
 compositions the members answered with. A document list that asked a
 member's own endpoint writes one record too, naming every such endpoint
 and the `ehr_id` it was asked by, and the members whose document it
-carries; a list that asked no member, because none is in the `native`
-mode, sends nothing to a member and writes none. The record of a person's
+carries. A list that lists the gateway's summary tells you that members
+hold the patient's record, which is health data in itself (GDPR recital 35),
+so it writes one record even when it asked no member, because none is in the
+`native` mode: the record names the members the patient resolved at, each at
+the endpoint it is asked through and by its `ehr_id`, as origins that
+contributed nothing (`fhir/list.rs`:
+`a_list_that_asked_no_member_is_recorded_once_naming_where_the_patient_resolved`).
+A list of a patient no member holds lists nothing and writes no record. The record of a person's
 own summary names the person twice under Art 9: as the caller, the token's
 `sub` acting in person with the purpose it states, and as the data subject,
 by the identifier the service asked with and the `ehr_id` at each member.

@@ -615,7 +615,10 @@ pub(crate) fn accessed(
     let natives_delivered = scope == Scope::List && delivered.is_some();
     let delivered = delivered.unwrap_or(&none);
     let log = federation.access_log()?;
-    if gathered.sent.is_empty() && gathered.set_aside.is_empty() {
+    // NOTE: Annex II 3.2 logs "every access event"; a list that lists the gateway's summary
+    // discloses that members hold the patient's record, health data (Regulation (EU) 2016/679 recital 35).
+    let listed = scope == Scope::List && !gathered.resolved.is_empty();
+    if gathered.sent.is_empty() && gathered.set_aside.is_empty() && !listed {
         return None;
     }
     let evidence = |objects: Vec<RootObject>| {
@@ -656,6 +659,9 @@ pub(crate) fn accessed(
         &gathered.natives,
         natives_delivered,
     ));
+    if listed {
+        origins.extend(resolved_origins(federation.snapshot(), gathered));
+    }
     let (operation, query) = match scope {
         Scope::Summary => (OPERATION, format!("identifier={system}|{value}")),
         Scope::List => (LIST, format!("patient.identifier={system}|{value}")),
@@ -680,7 +686,11 @@ pub(crate) fn accessed(
         // names in its parameters.
         query: Some(SecretString::from(query)),
         stored_query: None,
-        subject: subject(federation.snapshot(), gathered, (system, value)),
+        subject: if listed {
+            listed_subject(federation.snapshot(), gathered, (system, value))
+        } else {
+            subject(federation.snapshot(), gathered, (system, value))
+        },
         evidence: evidence(objects),
         delivered: Some(delivered.len().saturating_add(documents)),
         origins,
@@ -692,6 +702,82 @@ pub(crate) fn accessed(
         inserted: None,
         transformations: Vec::new(),
     })
+}
+
+/// The members a list's patient resolved at that no request of the list left
+/// for, each at the endpoint it is asked through: the origins of the
+/// gateway's summary the list names, which none of them was asked for.
+fn resolved_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Asked> {
+    gathered
+        .resolved
+        .iter()
+        .filter(|(node, _)| {
+            !gathered
+                .sent
+                .iter()
+                .any(|sent| node_of(snapshot, sent).as_ref() == Some(node))
+        })
+        .filter_map(|(node, _)| {
+            let endpoint = snapshot.asked_through(node)?;
+            Some(Asked {
+                endpoint: endpoint.id().as_str().to_owned(),
+                node: Some(node.as_str().to_owned()),
+                system_id: snapshot
+                    .node(node)
+                    .map(|held| held.system_id().as_str().to_owned()),
+                status: EndpointStatus::Active.as_str().to_owned(),
+                rows: None,
+                version: None,
+                created_ehr: None,
+                contributed: false,
+                evidence: None,
+            })
+        })
+        .collect()
+}
+
+/// The member `endpoint` belongs to, a Query API endpoint or a member's own
+/// exchange-format endpoint.
+fn node_of(snapshot: &RegistrySnapshot, endpoint: &EndpointId) -> Option<NodeId> {
+    snapshot
+        .endpoint(endpoint)
+        .map(|held| held.node().clone())
+        .or_else(|| {
+            snapshot
+                .native_endpoint(endpoint)
+                .map(|native| native.node().clone())
+        })
+}
+
+/// Whose data a list reached: the patient `system`|`value` and the `ehr_id`
+/// it resolved to at each member, at the endpoint a request left for or, for
+/// a member the list asked nothing, the endpoint it is asked through.
+fn listed_subject(
+    snapshot: &RegistrySnapshot,
+    gathered: &Gathered,
+    patient: (&str, &str),
+) -> DataSubject {
+    let mut named = subject(snapshot, gathered, patient);
+    for (node, ehr_id) in &gathered.resolved {
+        let held = named.ehrs.iter().any(|ehr| {
+            ehr.ehr_id == ehr_id.as_str()
+                && EndpointId::new(ehr.endpoint.as_str())
+                    .ok()
+                    .and_then(|endpoint| node_of(snapshot, &endpoint))
+                    .is_some_and(|at| &at == node)
+        });
+        if held {
+            continue;
+        }
+        if let Some(endpoint) = snapshot.asked_through(node) {
+            named.ehrs.push(EhrAt {
+                endpoint: endpoint.id().as_str().to_owned(),
+                ehr_id: ehr_id.as_str().to_owned(),
+                patient: PatientLookup::RequestNamed,
+            });
+        }
+    }
+    named
 }
 
 /// Whose data `gathered` reached: the patient `system`|`value` and the

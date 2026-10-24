@@ -556,6 +556,54 @@ async fn a_list_is_recorded_once_naming_every_member_asked() -> TestResult {
     Ok(())
 }
 
+/// Annex II 3.2, "every access event": a list that names the gateway's
+/// summary tells the caller that members hold the patient's record, so it
+/// is recorded once, naming the patient's `ehr_id` at each member it resolved
+/// at, even where no member serves its own summary and none is asked.
+#[cfg(feature = "binding-ihe")]
+#[tokio::test]
+async fn a_list_that_asked_no_member_is_recorded_once_naming_where_the_patient_resolved()
+-> TestResult {
+    use crate::feed_audit::{SETTLE, audit_tables};
+    use ferrofed_testkit::atna_feed::FeedRepository;
+
+    let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
+    let pdq = supplier().await?;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let tables = audit_tables(&repository, "");
+    let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
+    let (app, _) = super::gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdq.base_url()),
+        &rows,
+        ("", &tables),
+    )?;
+    let (status, text) = call(app, list("")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    assert!(
+        bundle.get("entry").is_some(),
+        "the gateway's summary is listed: {bundle}"
+    );
+    let records: Vec<String> = repository
+        .wait_for(1, SETTLE)
+        .await
+        .into_iter()
+        .filter(|record| record.contains("ehds-categories"))
+        .collect();
+    assert_eq!(1, records.len(), "one access record: {records:#?}");
+    let record = records.first().ok_or("a record")?;
+    for named in ["node-a-pub", "node-b-pub", EHR_A, EHR_B] {
+        assert!(record.contains(named), "{named}: {record}");
+    }
+    assert!(
+        received(&a).await?.is_empty() && received(&b).await?.is_empty(),
+        "no section query was asked"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn the_capability_statement_declares_the_document_search() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
