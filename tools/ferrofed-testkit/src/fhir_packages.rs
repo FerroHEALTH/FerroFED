@@ -31,6 +31,10 @@ const PROVENANCE: &str = "docs/specs/fhir-packages/PROVENANCE.md";
 /// The cache directory the packages are fetched into.
 const CACHE: &str = ".vendor-cache/fhir-packages";
 
+/// How long a test process waits for another's fetch before it takes the
+/// lock over.
+const STALE: std::time::Duration = std::time::Duration::from_secs(600);
+
 /// The committed packages of the closure besides the Patient Summary
 /// itself: the versions its manifest and its dependencies' manifests name,
 /// and the MyHealth@EU value sets its profiles bind.
@@ -118,14 +122,56 @@ pub fn dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
     let root = Path::new(ROOT);
     let mut paths: Vec<PathBuf> = COMMITTED.iter().map(|path| root.join(path)).collect();
     let cache = root.join(CACHE);
-    for pinned in pins(&root.join(PROVENANCE))? {
-        let path = cache.join(&pinned.file);
-        if !path.is_file() {
-            fetch(&pinned, &cache, &path)?;
-        }
-        paths.push(path);
+    let pins = pins(&root.join(PROVENANCE))?;
+    if pins
+        .iter()
+        .any(|pinned| !cache.join(&pinned.file).is_file())
+    {
+        fetch_missing(&pins, &cache)?;
     }
+    paths.extend(pins.iter().map(|pinned| cache.join(&pinned.file)));
     Ok(paths)
+}
+
+/// Fetches every one of `pins` that `cache` lacks, one test process at a
+/// time: the others wait for the lock directory to go, so a run of many
+/// test processes downloads each package once.
+#[expect(
+    clippy::create_dir,
+    reason = "the lock is a directory whose creation fails when another process holds it, which create_dir_all would not report"
+)]
+fn fetch_missing(pins: &[Pinned], cache: &Path) -> Result<(), FhirPackagesError> {
+    let io = |path: &Path| {
+        let path = path.to_owned();
+        move |source| FhirPackagesError::Io { path, source }
+    };
+    std::fs::create_dir_all(cache).map_err(io(cache))?;
+    let lock = cache.join(".fetching");
+    let started = std::time::Instant::now();
+    loop {
+        match std::fs::create_dir(&lock) {
+            Ok(()) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                // NOTE: no specification governs this: our own design; a lock older than
+                // the longest fetch is left by a process that died, and is taken over.
+                if started.elapsed() > STALE {
+                    let _removed = std::fs::remove_dir(&lock);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+            Err(error) => return Err(io(&lock)(error)),
+        }
+    }
+    let fetched = pins.iter().try_for_each(|pinned| {
+        let path = cache.join(&pinned.file);
+        if path.is_file() {
+            Ok(())
+        } else {
+            fetch(pinned, cache, &path)
+        }
+    });
+    let _released = std::fs::remove_dir(&lock);
+    fetched
 }
 
 /// The cached packages `provenance` pins, in its order.
