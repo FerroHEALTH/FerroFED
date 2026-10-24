@@ -112,6 +112,8 @@ services:
       # `auto` renders pretty output on a terminal and JSON otherwise.
       FERROFED__TELEMETRY__FORMAT: ${FERROFED_LOG_FORMAT:-auto}
       FERROFED__TELEMETRY__FILTER: ${FERROFED_LOG_FILTER:-info}
+      # A local stack is not an installation, so it sends no usage report.
+      FERROFED__USAGE_REPORT__ENABLED: "false"
       FERROFED_CONFIG: /etc/ferrofed/ferrofed.toml
     # The quickstart's configuration and registry document, read-only, so the
     # root filesystem stays read-only as well.
