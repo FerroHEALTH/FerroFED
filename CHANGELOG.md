@@ -24,6 +24,334 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-10-24
+
+Security fixes until 2031-10-24, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- The release's compose file and the Kubernetes example now set
+  `FERROFED__USAGE_REPORT__STATE_DIR`, so a gateway started from them sends
+  the installation report to FerroPULSE. Set
+  `FERROFED__USAGE_REPORT__ENABLED=false` before you upgrade to keep it off
+  (#1122).
+- `[auth]` is now the `ferrohealth-smart` section every FerroHEALTH product
+  reads (#1174). Move each issuer's FerroFED policy (`backend_clients`,
+  `demographic_clients`, `client_tokens_act_for_professional`,
+  `professional_issuing_authority`, `[auth.issuer.patient]`,
+  `[auth.issuer.requester]`, `[auth.issuer.assurance]`,
+  `[auth.issuer.national_contact_point]` and an introspected issuer's
+  `introspection_endpoint`, `client_id` and `client_secret_file`) to a
+  `[[trust.issuer]]` entry naming the same `issuer`, and `auth.mode`,
+  `[auth.edge]` and `[auth.purpose_of_use]` to `trust.mode`, `[trust.edge]`
+  and `[trust.purpose_of_use]`. Drop `jwks_uri` from each issuer: the key
+  set is read from the issuer's RFC 8414 metadata, or from `jwks_file`.
+  Replace each issuer's `operator_scope` with the one `auth.product_scope`,
+  a string starting with `__` or a full URI you control. `auth.audience` is
+  a list, and the clock skew, key set and timeout keys are
+  `clock_skew_seconds`, `jwks_max_age_seconds`,
+  `jwks_refresh_interval_seconds` and `timeout_ms`.
+- Every static bearer token is gone (#1163). Replace `bearer_token` and
+  `bearer_token_file` in a `[credentials."<endpoint>"]` section or a
+  service's credentials with `user` and `password_file`, or with an `oauth`
+  table, the client credentials grant of `ferrohealth-smart`; Mitz, the NVI
+  and the terminology server take `user` and `password_file`. Replace
+  `[metrics] scrape_token_file` with `scrape_users`, naming users of
+  `[[auth.basic.users]]` whose Argon2id `password_hash_file` you write, and
+  give Prometheus `basic_auth`. Replace `[pmir] feed_token_file` with
+  `feed_users`, naming the Registry's own `[[auth.basic.users]]` user, and
+  give the Registry its password.
+- An `oauth2` section that asks for a plain client-credentials token, with
+  no token exchange, no `DPoP` key, no binding to or authentication by the
+  TLS client certificate and an assertion naming the token endpoint, is
+  refused: move it to an `oauth` table, whose `private_key_jwt` signs with
+  its own `private_key_file`.
+- A log filter that names `ihe_iti::atna` (the audit spool and forwarder)
+  names `ihe_atna::atna` instead; the events are the same.
+- The operator console is now `ferrofed-console` (#1219). Pull
+  `ghcr.io/ferrohealth/ferrofed-console` in place of
+  `ghcr.io/ferrohealth/ferrofed-viewer`, rename every
+  `FERROFED_VIEWER__<SECTION>__<KEY>` override to
+  `FERROFED_CONSOLE__<SECTION>__<KEY>` and `FERROFED_VIEWER_CONFIG` to
+  `FERROFED_CONSOLE_CONFIG`, and run the binary as `ferrofed-console`. The
+  session and theme cookies are renamed, so every operator signs in once
+  more after the upgrade.
+- If you edited the `ferroehr-config` block of the quickstart's
+  `compose.yaml`, FerroEHR 5.3.2 refuses the 4.3.9 Basic user keys at boot:
+  rename `username` to `user`, give each user its `scopes` (the quickstart
+  grants `user/composition-*.cruds`, `user/template-*.cruds`,
+  `user/aql-*.cruds` and `__ferroehr.platform`), and move each user's
+  `roles` to `[authz.rbac.basic_roles]` keyed by the user (#1226).
+- Bookmarks of the operator console's `/members`, `/routing` and `/federation` pages answer `404`: use `/organisations`, a node's Routes tab under `/organisations/{org}/{node}/routes`, and `/self-description` (#1230). Each preference is now a cookie of its own (`ferrofed_console_theme`, `ferrofed_console_density`, `ferrofed_console_motion` and the others); the theme cookie is `ferrofed_console_theme` in place of 0.0.11's `ferrofed_viewer_theme`, so each operator chooses the theme once more. A deployment that builds the site bundle itself runs `cargo leptos build --split`, as `scripts/release/console-site.sh` does.
+
+### Added
+
+- The gateway sends the FerroHEALTH installation report to FerroPULSE on its
+  envelope v2: one `start` report per process start and one `daily` report a
+  day, carrying a random instance id, the version, the deployment kind,
+  coarse host size, the member count as a range, the configured identity and
+  consent services, latency per route group and the node request counts, and
+  no patient data, AQL, path, node name or URL. It is on by default once
+  `[usage_report] state_dir` names a writable directory, which the release's
+  compose file and the Kubernetes example set; `enabled = false`
+  (`FERROFED__USAGE_REPORT__ENABLED=false`) stops it, a CI environment stops
+  it, and one boot line says which. The book's
+  [usage report page](https://ferrofed.eu/docs/operate/usage-report.html)
+  lists every field and carries the privacy notice (#1122).
+- Mitz takes the OAuth 2.0 client credentials grant of
+  `[nl_gf.mitz.credentials.oauth]` beside basic credentials. The gateway
+  obtains the token at the token endpoint, which must be `https` outside
+  `profile = "development"`, caches it while it is fresh, and sends it with
+  each closed authorization question as a bearer token; a question Mitz
+  answers `401` is asked once more with a fresh token. An `oauth2`, `nuts`
+  or `fapi2` grant is still refused at load (#1180).
+- The configuration page explains how it works in a dialog that How configuration works opens. The History tab filters its revisions by origin in an Origin menu that works with no WebAssembly, and each origin is a badge of its own colour. A secret's value field shows what you typed while you hold its eye, and stays masked otherwise (#1233).
+- OpenVEX statements for FerroFED under `security/vex/`: the Rust advisory
+  the dependency gate accepts (RUSTSEC-2024-0436, `paste`) with its
+  argument and dependency path, generated from `deny.toml`. Each release
+  attaches `ferrofed-vX.Y.Z-vulnerability-record.json`, every finding of a
+  full scan of both images and the binaries with the statement that judges
+  it, and is refused while a finding has none; each image is scanned before
+  it is tagged, and the published images are scanned every week with the
+  VEX applied (#1238).
+
+### Changed
+
+- `scripts/checks/changelog-guard.sh` and `crate-version-guard.sh` take
+  `origin/main` as the base when run with no refs, and `stray-literals.sh`
+  reads the console's sources when given no directory, so a local run of the
+  guards passes on a clean branch; `docs/ci-cd.md` names the guards that need
+  a built input first (#1151).
+- The book's dashboard and Integrity screenshots show an open incident, a
+  resolved one and a cleared collision, each with its time, so the visual
+  review covers the console's timestamp rows (#1154).
+- CI checks the operator console's `view!` formatting with leptosfmt 0.1.33,
+  the version the `ui-gates` skill runs, before rustfmt, and the console's
+  sources pass it (#1155).
+- Only the newest release is supported. `SECURITY.md`, the book and the
+  release notes say that every earlier release stops receiving fixes when a
+  new one is published, with no maintenance branches, no long-term-support
+  line and no backports, and that upgrading is free. Cadasto B.V. commits to
+  keep publishing security fixes for at least five years after each release
+  (Regulation (EU) 2024/2847 Art 13(8)) and ships them only in the newest
+  release (Art 13(10)); the end date each release states is the date until
+  which that commitment runs. The startup banner's `Support` line reads
+  `newest release only, fixes until YYYY-MM-DD`, the notice for a release
+  past its end date says to upgrade to the newest release, and the console
+  labels the date `Fixes until`. The `supported_until` member of
+  `OPTIONS {base}/` keeps its name and value.
+- Client authentication, the SMART on openEHR grants and the gateway's own
+  OAuth 2.0 client credentials run on `ferrohealth-smart` 0.3.1, the
+  resource-server crate every FerroHEALTH product shares (#1174). Every
+  token that does not verify is answered one `401` with
+  `error="invalid_token"` and no description (RFC 6750 §3.1, RFC 9068 §4),
+  and the security log names the failed check as `check`. Two
+  `Authorization` fields, or one that is no credential, are a `400`
+  `credential-malformed` with `error="invalid_request"`. A `403` names the
+  error code and no scope. An issuer's metadata and key set are read when
+  its first token arrives, so an issuer that cannot be reached is a `503`
+  `authentication-unavailable` then, never a refused start.
+- The metrics scrape and the PMIR feed authenticate HTTP Basic users of
+  `[[auth.basic.users]]`, named by `metrics.scrape_users` and
+  `pmir.feed_users`; one from another Basic user is answered `403`.
+- The audit trail and the access record come from the FerroHEALTH audit
+  library, FerroAUDIT: the ATNA ITI-20 sender, the BALP `AuditEvent` with
+  its FHIR Feed, and the European logging component are the published crates
+  `ihe-atna` and `ehds-logging` 0.1.0, pinned exactly, and their local copies
+  in `crates/ihe-iti` and `crates/ehds-logging` are gone. What the gateway
+  records, where it sends it and how it spools it are unchanged. The log
+  events of the spool and the forwarder now carry the targets
+  `ihe_atna::atna::spool` and `ihe_atna::atna::forwarder` in place of
+  `ihe_iti::atna::spool` and `ihe_iti::atna::forwarder`.
+- The `openehr-*` crates move to 0.0.90 with `fhirconnect` 0.1.173,
+  `openehr-mapping-core` 0.1.124 and `fhir-types` 0.1.127, the line
+  `ferrohealth-smart` 0.4.0 builds on, so the build holds one copy of
+  `openehr-sdt` and of every other family member (#1181).
+- `ferrohealth-smart` 0.4.0 (#1186). Every `[<section>.oauth]` table takes
+  the keys the crate adds: `client_auth = "tls_client_auth"` or
+  `"self_signed_tls_client_auth"` with `client_certificate_file` and
+  `client_key_file` for RFC 8705 §2 mutual TLS to the token endpoint,
+  `ca_file` for trust roots added to the platform's, and
+  `assertion_audience = "issuer"` (RFC 7523 §3). An issuer's metadata and
+  key set are still read on its first token, now by the crate; the
+  `key-set-unavailable` event is written once per failed read. The answers
+  do not change.
+- The `e2e-placement` guard now refuses a CI workflow that could skip the
+  container tests: a path filter on its triggers, a condition on the
+  `e2e (containers)` job beyond the workspace check, or a `conclusion` check
+  that does not wait for it. A change to the auth, credentials or
+  configuration code, an e2e fixture or the configuration reference always
+  runs the container tests (#1187).
+- The audit library and the identity crates move together: `ihe-atna` and
+  `ehds-logging` 0.2.1 from FerroAUDIT, `ihe-iti` 0.0.41 from FerroPIX on
+  that `ihe-atna`, and `nl-generic-functions` 0.0.26 from FerroPIX on
+  `ferrohealth-smart` 0.4.0, so the gateway carries one copy of it. What the
+  gateway records, where it sends it and how it spools it are unchanged; the
+  log targets of the spool and the forwarder stay `ihe_atna::atna::spool`
+  and `ihe_atna::atna::forwarder`, now a stable interface of `ihe-atna`. The
+  identity binding's FHIR Feed reaches an `http` base through `ihe-atna`'s
+  `FeedRepository::cleartext`, which names the operator's acceptance of clear
+  text (#1194).
+- The workspace builds with Rust 1.99.1 in place of 1.98.1, and the MSRV
+  stays at 1.98: the FerroHEALTH family builds with the latest stable
+  toolchain and declares the release before it as its MSRV.
+- The audit library moves to `ihe-atna` and `ehds-logging` 0.2.3, FerroAUDIT's
+  only supported release, with FerroPIX's `ihe-iti` 0.0.43 on it. Nothing the
+  gateway records changes: FerroFED declares its category map with exact
+  matching, so its map digest is unchanged (#1211).
+- Breaking: the operator console is renamed from `ferrofed-viewer` to
+  `ferrofed-console` (#1219): the crate and its binary
+  (`app/ferrofed-console`), the image (`ghcr.io/ferrohealth/ferrofed-console`
+  in place of `ghcr.io/ferrohealth/ferrofed-viewer`, which is not published
+  again), the release workflow and its attestation signer
+  (`.github/workflows/release-console.yml`), the Dockerfile
+  (`docker/console/Dockerfile`), the site and bundle scripts
+  (`scripts/release/console-site.sh`, `console-tools.sh`,
+  `scripts/checks/console-bundle.sh`, `console-paths.sh`), the CI job
+  (`console`), the configuration file variable (`FERROFED_CONSOLE_CONFIG`),
+  the environment prefix (`FERROFED_CONSOLE__`), the cookies
+  (`ferrofed_console_session`, `ferrofed_console_sign_in`,
+  `ferrofed_console_theme`, each with the `__Host-` prefix where secure) and
+  the catalog (`locales/en/ferrofed-console.ftl`).
+- The quickstart's four member CDRs and the test harness's FerroEHR nodes
+  move from FerroEHR 4.3.9 to 5.3.2, the release on the same corrected base,
+  with the node database image beside them (#1226). FerroEHR 5.1.0 changed
+  its Basic user keys and checks a Basic user's SMART on openEHR scopes on
+  every route, so the quickstart's FerroEHR configuration names its user with
+  `user`, grants it the three resource-family scopes and FerroEHR's product
+  scope, and moves its roles to `[authz.rbac.basic_roles]`; the restricted
+  harness node does the same for its two users.
+- The operator console is rebuilt on FerroUI 0.3.6 (`ferrohealth-ui`,
+  pinned exactly, with its `split` feature) in islands mode (#1230, #1233,
+  FerroHEALTH/FerroUI#161). The server draws every page whole from
+  FerroUI's components, stylesheet and FerroFED theme, and the browser
+  hydrates only FerroUI's interactive parts and the AQL editor, so every
+  page reads and every action works with no WebAssembly. Every action is a
+  plain form post to the page it sits on, answered by that page drawn again
+  with the outcome at its top; a form the console or a replica refuses is
+  drawn again as you typed it, the refused field marked. The pages follow
+  FerroUI's reviewed FerroFED design: a dashboard, the topology (with "How
+  it is drawn"), the organisations with their nodes (each node with its
+  endpoints and its routes), the services, the integrity incidents, the
+  stored queries with their versions, the query console, the
+  self-description on five tabs with the manufacturer the gateway
+  declares, the configuration, Your preferences and a find in the top bar.
+  The top bar names the replica that answered. Every state is FerroUI's
+  state mark (a shape and a word), and organisations and services carry
+  their own glyphs. On the configuration's Members and Credentials and
+  bindings tabs, each row's menu (⋯) holds Edit and Remove…, whose
+  confirmation asks for the reason the revision keeps; endpoints, settings
+  and new secrets are sub-cards whose rows Add and Remove change in place.
+  The site bundle is built with `cargo leptos build --split`.
+- The operator console is ready for more languages, English the one that
+  ships (#1162). Its words and FerroUI's come from Fluent catalogs, the
+  console's under `app/ferrofed-console/locales/en/`, so a language joins as
+  a catalog directory with no code change. The locale is chosen once per
+  request: the language the operator chose in Your preferences, else the
+  best language of `Accept-Language` the catalog holds, else the new
+  `[server] locale` (default `en`), and the page writes it as `<html lang>`.
+  `scripts/checks/stray-literals.sh` fails CI on a console string outside
+  the catalog beyond the per-file baseline (94 literals) the remaining
+  strings hold while they move.
+- The release notes end with a link to the CRA information and
+  instructions to the user, and the release lane refuses a cut whose
+  Security section names an entry without its GitHub security advisory
+  (`GHSA-`) or VEX statement, or sits beside other changes without
+  "Shipped with functional changes because:" and its reason (Regulation
+  (EU) 2024/2847 Annex I Part II(2), (4), (8)). `SECURITY.md` states that a
+  security fix ships alone or the release says why, how a fixed
+  vulnerability's advisory is published with its release, and the
+  `info@cadasto.com` route for a report without a GitHub account.
+  `scripts/release/preflight.sh <tag>` runs the release plan's checks
+  before the tag (#1237).
+- `ihe-iti` comes from crates.io at `=0.0.40`, published by
+  FerroHEALTH/FerroPIX, which owns the crate from here on; the local copy
+  under `crates/` is gone. Its features and its behaviour are the ones the
+  gateway already used: the PIXm, PDQm, mCSD, PMIR and XCPD clients, with
+  `balp` for the FHIR profiles' audit records and `atna` for the ITI-55
+  audit message, both written through `ihe-atna`.
+- `nl-generic-functions` comes from crates.io at `=0.0.25`, published by
+  FerroHEALTH/FerroPIX, which owns the crate from here on; the local copy
+  under `crates/` is gone. Its Nuts grant now holds the authorization
+  server's issuer to the RFC 8414 rule of `ferrohealth-smart`, so a plain
+  `http` issuer is accepted on a loopback host only. The NVI, Mitz, LRZa and
+  Nuts behaviour is otherwise unchanged.
+- The patient summary the FHIR face writes applies the exchange format's
+  term-mapping rule: an RM `TERM_MAPPING` whose `match` is broader, narrower
+  or unknown is written as no coding, and the section's narrative carries
+  it, naming the element, the relation, the target and the member it came
+  from (eHN PS Art 10(3)). An equivalent mapping stays a coding after the
+  original (#926).
+
+### Removed
+
+- The Tailwind CSS CLI pin and its download are gone: the operator console
+  draws with ferrohealth-ui's stylesheet, so `scripts/release/console-tools.sh`
+  installs wasm-opt alone and the site build needs no Tailwind (#1150).
+- Static bearer tokens, inbound and outbound: `bearer_token` and
+  `bearer_token_file` in every credentials section, `[metrics]
+  scrape_token` and `scrape_token_file`, and `[pmir] feed_token` and
+  `feed_token_file` (#1163). Machine-to-machine authentication is HTTP Basic
+  or the OAuth 2.0 client credentials grant.
+- The operator console's routes `/members`, `/members/{node}`, `/routing` and `/federation` are gone: the members are `/organisations` and `/organisations/{org}/{node}`, a node's routing table is its Routes tab, and the self-description is `/self-description` (#1230). The theme toggle is gone from the top bar; the theme is chosen in the operator's menu and in Your preferences. The console's server functions under `/api/` are gone, and with them its own stylesheet (`style/theme.css`) and scripts: it serves FerroUI's as the crate ships them.
+
+### Fixed
+
+- The configuration journeys read the focused element and the credential's
+  value field afresh while they wait, so a re-render after a save no longer
+  fails them with a stale element (#1149).
+- The endpoint details show a dash for a value the gateway did not report
+  (the latency and row count of an excluded node, an organisation, or the
+  error of a node that answered), where a stacked card on a phone showed a
+  label with nothing after it.
+- The configuration screen labels `node_id` and `system_id` as "Node id"
+  and "System id", with the configuration key as the field's hint (#1168).
+- The dashboard's card-header link is FerroUI's shared card action, so its
+  arrow keeps the space before it (#1169).
+- The book's screenshot of the console's Credentials and bindings tab, in
+  the light and the dark theme, is taken again and no longer shows the
+  removed `bearer_token` row, and the environment override example on the
+  configuration page sets a password file in place of the removed
+  `bearer_token_file` (#1179).
+- The interoperability component's reference property admits `#` from the
+  Patient entry, which FHIR R4 resolves to the holding resource itself, so
+  the test no longer fails when its generator draws that input; the case is
+  kept as a regression seed (#1195).
+- The trace hygiene tests name their synthetic patient with letters, so a
+  span's `busy_ns` or `idle_ns` can no longer spell the identifier and fail
+  the scan by chance (#1198).
+- A browser journey whose chromedriver loses its port to another process
+  starts another chromedriver, up to three times, so parallel journeys no
+  longer fail before they drive the browser (#1209).
+- The operator console's dashboard draws its cards two to a row, so the recent incidents table no longer overflows its card when an incident kind is long (#1207).
+
+### Security
+
+Shipped with functional changes because: the three fixes reached `main`
+between 2026-10-20 and 2026-10-23, and the owner cut this release from
+`main` on 2026-10-24 with no security-only patch of 0.0.11 before it; only
+the newest release is supported (SECURITY.md), so such a patch would be out
+of support the moment this release lands and give no one a release to stay
+on. Each fix is a dependency or base-image bump with no behaviour change of
+its own.
+
+- The TLS stack takes `rustls-webpki` 0.103.16 and `webpki-root-certs`
+  1.0.10, the releases that fix RUSTSEC-2026-0382 and RUSTSEC-2026-0383
+  (distrusted emSign intermediates; GHSA-w3hc-w475-673c).
+- The gateway and console images no longer trust the compromised eMudhra
+  (emSign) intermediates in the system trust store (Debian DSA-6572-1,
+  GHSA-w3hc-w475-673c, #1226). The distroless base
+  `gcr.io/distroless/static-debian13:nonroot` moves to index digest
+  `d620678`, which ships `ca-certificates` 20250419+deb13u1, in the `FROM`
+  of `docker/Dockerfile` and `docker/console/Dockerfile` and in the pin
+  row. `rustls-webpki` 0.103.16 and `webpki-root-certs` 1.0.10 were
+  already in the lock file.
+- `ctutils` moves from 0.4.2 to 0.4.4 (RUSTSEC-2026-0385,
+  GHSA-rv83-4vc9-vqxg): before 0.4.4 its constant-time mask generation and
+  `u128` comparisons could compile to a branch on a secret value. It
+  reaches the gateway through `digest` and the Argon2 password hashing of
+  `ferrohealth-smart` (#1232).
+
 ## [0.0.11] - 2026-10-16
 
 Supported until 2031-10-16, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)). A security fix ships as its own patch release on each supported line, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -5202,7 +5530,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...v0.0.9

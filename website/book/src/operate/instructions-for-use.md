@@ -286,6 +286,7 @@ event, and its frequency is the event's:
 | Watch the alerts | continuously, on the shipped alert rules | [Dashboard and alert rules](metrics.md#dashboard-and-alert-rules) |
 | Clear a quarantined audit record | when `ferrofed_audit_quarantined` rises, after reading why the repository refused it | [The audit spool](hardening.md#the-audit-spool) |
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
+| Rotate an HTTP Basic user's password | on your credential policy's schedule, and at once when it may have leaked: write the new Argon2id PHC string to the user's `password_hash_file` and give the Prometheus scraper or the PMIR Registry its new password | [`auth.basic.users`](authentication.md#configuration), [Who the admin listener serves](metrics.md#who-the-admin-listener-serves) |
 | Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
 | Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
 | Move to the newest release | when a new release is published, because an earlier release receives no fix; once the end date of your release in `SECURITY.md` has passed, the startup banner and `config check` say so as well | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
@@ -359,7 +360,7 @@ deployment in the EU must plan for are:
   ([Writes through a gateway with several replicas](../integrate/client-contract.md#writes-through-a-gateway-with-several-replicas)).
 - **The console changes only what the file leaves to it.** Under
   `config.ui = "managed"`, the bootstrap core (`profile`, `[server]`,
-  `[metrics]`, `[auth]`, `[config]` and `[dev]`) and client authentication
+  `[metrics]`, `[auth]`, `[trust]`, `[config]` and `[dev]`) and client authentication
   stay in the file, and a member, credential or binding section the file
   provides is read-only in the console. The console reads one replica at a
   time, and each replica keeps its own incidents and routing table

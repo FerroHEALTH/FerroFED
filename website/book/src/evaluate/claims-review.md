@@ -64,6 +64,7 @@ as a broken command, is fixed in the same change.
 | v0.0.10 | 2026-10-15 | see below | 17 to 30, below | the v0.0.10 version bump, except finding 16, which stands |
 | v0.0.11 | 2026-10-15 | this page and the clinical safety risk file | 31 and 32, below | [#962](https://github.com/FerroHEALTH/FerroFED/issues/962) |
 | v0.0.11 | 2026-10-16 | see below | 33 to 43, below | the v0.0.11 version bump, except finding 16, which stands |
+| v0.0.12 | 2026-10-24 | see below | 44 to 55, below | the v0.0.12 version bump |
 
 ### Findings of 2026-10-06
 
@@ -279,6 +280,82 @@ runs:
     versions of [#714](https://github.com/FerroHEALTH/FerroFED/issues/714). The entry now says so.
 
 Not fixed here: finding 16 stands.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-10-24
+
+The review at the v0.0.12 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the Upgrading page, the configuration revisions page
+and the assembled release notes. Every other page of the book,
+`SUPPORT.md`, `SECURITY.md` and the README of each crate was searched for
+"planned", "not yet", "v0.0.1", `ferrofed-viewer`, `FERROFED_VIEWER` and
+`bearer_token` next to an issue that is closed, a release that has shipped
+or a name the release removes.
+
+Against Art 28(a), a function or property FerroFED lacks:
+
+44. The Upgrading page says a key is never renamed or removed at once and
+    the old key is read for at least one release. v0.0.12 moves the issuer
+    policy of `[auth]` to `[trust]`, removes every static bearer token and
+    renames the console's `FERROFED_VIEWER__` overrides with no release that
+    reads the old keys ([#1174](https://github.com/FerroHEALTH/FerroFED/issues/1174), [#1163](https://github.com/FerroHEALTH/FerroFED/issues/1163), [#1219](https://github.com/FerroHEALTH/FerroFED/issues/1219)). The page now says so
+    under the rule, and the upgrade notes list each key.
+45. The landing page said v0.0.12 brings the national contact point's
+    connector. Its end-to-end test waits on a published FerroPIX image and
+    moved to v0.0.13 ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)). The page now names what v0.0.12
+    ships, and the claims page plans the connector for v0.0.13.
+
+Against Art 28(b), a limitation left out:
+
+46. The instructions for use and the configuration revisions page left
+    `[trust]` out of the bootstrap core that stays in the file under
+    `config.ui = "managed"`; the gateway holds it there beside `[auth]`. Both
+    pages now list it.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+47. `README.md` named v0.0.11 as current and planned the logging
+    component's log access interface ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)), which is closed: the records
+    are read at the Audit Record Repository with ITI-81. It now names
+    v0.0.12, what it adds, and plans the Art 36(1) re-check
+    ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
+48. The landing page named v0.0.11 as current. It now names v0.0.12 and
+    has a card for it.
+49. `llms.txt` named only the gateway image, called the gateway's outbound
+    authentication "a static credential", and planned the logging
+    component's review tools. It now names the console image, says HTTP
+    Basic, and says where the records are read.
+50. The claims page planned the national contact point's connector for
+    v0.0.12 and the log access interface of [#660](https://github.com/FerroHEALTH/FerroFED/issues/660) for v0.0.13; the regulatory
+    status page put the remaining EHDS issues in the v0.0.12 milestone,
+    planned the logging component's review, retention and export, which are
+    built, and listed [#526](https://github.com/FerroHEALTH/FerroFED/issues/526), which is closed. Each now says where the work
+    stands, and the claims page has a v0.0.12 section.
+51. The release notes described the console as each FerroUI step from
+    `ferrohealth-ui` 0.1.3 to 0.3.6 left it, so an entry described a
+    theme toggle in the top bar that a later entry removes and named paths
+    under `app/ferrofed-viewer/`. The console entries now describe the
+    console this release ships, on FerroUI 0.3.6.
+52. The release notes' upgrade note for the console said the theme cookie
+    keeps its name, which holds only from the first FerroUI 0.3 build on
+    `main`; from v0.0.11 it moves from `ferrofed_viewer_theme` to
+    `ferrofed_console_theme`, so each operator chooses the theme again. The
+    note now says so.
+53. The release notes' Removed entry for the Tailwind CSS pin named
+    `scripts/release/viewer-tools.sh`, which the rename made
+    `scripts/release/console-tools.sh`. The entry now names it.
+54. The cybersecurity risk assessment said `deny.toml` holds two
+    exceptions and that the console's site build runs a CSS tool. It holds
+    one, `paste`, whose OpenVEX statement gives the argument, and the site
+    build runs only its WebAssembly tools. Point (a) now says so, with the
+    release's full scans.
+55. The record held finding 16 as standing at the v0.0.10 and v0.0.11
+    reviews. The `openehr-federation` README lost the "follows in build
+    order" sentence in the v0.0.10 version bump (commit `ef7e3084`), so the
+    finding is closed there.
 
 No text suggested a use outside the intended purpose, (c).
 

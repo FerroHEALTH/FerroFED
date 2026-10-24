@@ -1,1 +1,0 @@
-- The operator console's dashboard draws its cards two to a row, so the recent incidents table no longer overflows its card when an incident kind is long (#1207).

@@ -543,11 +543,13 @@ Seven of the manufacturer's obligations have a first answer:
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
-issues are in the v0.0.12 and v0.0.13 milestones, before the Regulation
+issues are in the v0.0.13 milestone, before the Regulation
 applies on 26 March 2027:
 
-- [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the rest of
-  the European logging software component, its review, retention and export.
+- [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the European
+  logging software component, built, re-checked against the Art 36(1)
+  common specifications once they are adopted
+  ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
 - [#522](https://github.com/FerroHEALTH/FerroFED/issues/522): the rest of
   the European interoperability software component for the patient summary,
   built from federated openEHR data.
@@ -562,8 +564,6 @@ applies on 26 March 2027:
   the conformity work: the points the [Annex II checklist](annex-ii.md)
   leaves open, the EU declaration of conformity, which each release writes
   once the manufacturer issues it, the CE marking and the registration.
-- [#526](https://github.com/FerroHEALTH/FerroFED/issues/526): tracking and
-  vendoring the implementing acts the components depend on.
 
 No EU declaration of conformity has been drawn up and no FerroFED release
 carries the CE marking.

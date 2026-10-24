@@ -1429,7 +1429,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferrofed-console"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1644,7 +1644,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
