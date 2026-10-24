@@ -33,12 +33,14 @@ use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use uuid::Uuid;
 
 mod feed;
+mod transient;
 
 use super::images::{SANTEMPI, SANTEMPI_POSTGRES};
 use super::retry;
 use super::{HarnessError, POSTGRES_PORT, names, postgres_health_check};
 use crate::seed::{EhrDomain, PatientId};
 use feed::feed_message;
+use transient::retried;
 
 /// The port SanteMPI serves its REST interfaces on inside its container.
 const PORT: u16 = 8080;
@@ -283,14 +285,20 @@ impl SanteMpi {
         let bearer = self.token(&source(domain)).await?;
         let body = serde_json::to_vec(&feed_message(domain, patient, ehr_id))
             .map_err(|source| SanteMpiError::Json { step, source })?;
-        let request = self
-            .http
-            .post(format!("{}{FHIR_PATH}Bundle", self.origin))
-            .header(AUTHORIZATION, format!("Bearer {bearer}"))
-            .header(CONTENT_TYPE, "application/fhir+json")
-            .header(ACCEPT, "application/fhir+json")
-            .body(body);
-        send(request, step).await.map(drop)
+        // NOTE: no specification governs this: our own design; a feed SanteMPI met with its
+        // transient queue fault is sent again, and a second feed of one patient updates it.
+        retried(|| {
+            let request = self
+                .http
+                .post(format!("{}{FHIR_PATH}Bundle", self.origin))
+                .header(AUTHORIZATION, format!("Bearer {bearer}"))
+                .header(CONTENT_TYPE, "application/fhir+json")
+                .header(ACCEPT, "application/fhir+json")
+                .body(body.clone());
+            send(request, step)
+        })
+        .await
+        .map(drop)
     }
 
     /// Waits until SanteMPI has installed the OAuth 2.0 flow policies,
@@ -390,45 +398,97 @@ impl SanteMpi {
     ) -> Result<(), SanteMpiError> {
         let admin = self.token(&administrator()).await?;
         let mut applications = vec![(record_id(0, 0), consumer())];
-        let mut authorities = vec![authority(
+        let mut authorities = vec![(
             record_id(1, 0),
-            "FFD_PATIENT",
-            patient_namespace,
-            None,
-        )?];
+            authority(record_id(1, 0), "FFD_PATIENT", patient_namespace, None)?,
+        )];
         for (number, &domain) in (1_u16..).zip(members) {
             let application = record_id(0, number);
             applications.push((application, source(domain)));
-            authorities.push(authority(
+            authorities.push((
                 record_id(1, number),
-                &format!("FFD_EHR_{number}"),
-                &domain.system(),
-                Some(application),
-            )?);
+                authority(
+                    record_id(1, number),
+                    &format!("FFD_EHR_{number}"),
+                    &domain.system(),
+                    Some(application),
+                )?,
+            ));
         }
         for (id, client) in &applications {
+            let record = format!("{}/ami/SecurityApplication/{id}", self.origin);
+            retried(|| async {
+                if self
+                    .holds(&record, &admin, "the SecurityApplication read")
+                    .await?
+                {
+                    return Ok(());
+                }
+                let request = self
+                    .http
+                    .post(format!("{}/ami/SecurityApplication", self.origin))
+                    .header(AUTHORIZATION, format!("Bearer {admin}"))
+                    .header(CONTENT_TYPE, "application/xml")
+                    .body(application(*id, client));
+                send(request, "the SecurityApplication create")
+                    .await
+                    .map(drop)
+            })
+            .await?;
+        }
+        retried(|| async {
+            let mut missing = Vec::new();
+            for (id, entry) in &authorities {
+                let record = format!("{}/hdsi/AssigningAuthority/{id}", self.origin);
+                if !self
+                    .holds(&record, &admin, "the AssigningAuthority read")
+                    .await?
+                {
+                    missing.push(entry.as_str());
+                }
+            }
+            if missing.is_empty() {
+                return Ok(());
+            }
+            let bundle = format!(
+                "<Bundle xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
+                 xmlns=\"http://santedb.org/model\">{}</Bundle>",
+                missing.concat()
+            );
             let request = self
                 .http
-                .post(format!("{}/ami/SecurityApplication", self.origin))
+                .post(format!("{}/hdsi/Bundle", self.origin))
                 .header(AUTHORIZATION, format!("Bearer {admin}"))
                 .header(CONTENT_TYPE, "application/xml")
-                .body(application(*id, client));
-            send(request, "the SecurityApplication create").await?;
-        }
-        let bundle = format!(
-            "<Bundle xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
-             xmlns=\"http://santedb.org/model\">{}</Bundle>",
-            authorities.concat()
-        );
+                .body(bundle);
+            send(request, "the AssigningAuthority create")
+                .await
+                .map(drop)
+        })
+        .await
+    }
+
+    /// Whether SanteMPI holds the record at `url`, read as the
+    /// administrator holding `token`: `false` when it answers `404`, and the
+    /// refusal of any other failure, so a transient one is tried again.
+    async fn holds(
+        &self,
+        url: &str,
+        token: &str,
+        step: &'static str,
+    ) -> Result<bool, SanteMpiError> {
         let request = self
             .http
-            .post(format!("{}/hdsi/Bundle", self.origin))
-            .header(AUTHORIZATION, format!("Bearer {admin}"))
-            .header(CONTENT_TYPE, "application/xml")
-            .body(bundle);
-        send(request, "the AssigningAuthority create")
-            .await
-            .map(drop)
+            .get(url)
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header(ACCEPT, "application/xml");
+        match send(request, step).await {
+            Ok(_) => Ok(true),
+            Err(SanteMpiError::Refused { status, .. }) if status == StatusCode::NOT_FOUND => {
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
