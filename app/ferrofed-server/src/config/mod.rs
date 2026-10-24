@@ -27,7 +27,7 @@ pub mod error;
 pub mod fhir;
 pub mod grant;
 pub mod limits;
-mod load;
+pub(crate) mod load;
 pub mod oauth;
 pub mod public_url;
 pub mod registry;

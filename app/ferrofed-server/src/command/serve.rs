@@ -137,7 +137,7 @@ pub(super) fn serve_job(
     };
     drop(entered);
     let revisions = booted.map(started);
-    let code = match serve_command(&runtime, settings, &state, (config, revisions)) {
+    let code = match serve_command(&runtime, settings, &state, (config, revisions, tree)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -179,7 +179,7 @@ fn serve_command(
     runtime: &tokio::runtime::Runtime,
     settings: Settings,
     state: &Arc<AppState>,
-    (config, revisions): (Option<PathBuf>, Option<Arc<Revisions>>),
+    (config, revisions, tree): (Option<PathBuf>, Option<Arc<Revisions>>, &toml::Table),
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let revision_poll = settings.revision_poll;
@@ -226,6 +226,7 @@ fn serve_command(
         listener_certificates.extend(admin_tls.iter().cloned());
         let reloader = Arc::new(
             reload::Reloader::new(config, settings, Arc::clone(state))
+                .with_tree(tree.clone())
                 .with_certificates(listener_certificates)
                 .with_revisions(revisions.clone())
                 .with_trust(Arc::clone(&trust)),

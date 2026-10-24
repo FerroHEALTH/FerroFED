@@ -74,6 +74,8 @@
 //! manages whole, with their secrets as references.
 //! [`revision`] holds the gateway's configuration revisions as its admin
 //! listener writes them and the console reads them.
+//! [`running`] holds the running configuration the admin listener answers:
+//! each deployment-wide setting with its value, source and default.
 //!
 //! [`manufacturer`] names the manufacturer of FerroFED, the one source the
 //! gateway and the operator console both read it from.
@@ -95,5 +97,6 @@ pub mod operator;
 pub mod replica;
 pub mod resource;
 pub mod revision;
+pub mod running;
 pub mod secret;
 pub mod snapshot;

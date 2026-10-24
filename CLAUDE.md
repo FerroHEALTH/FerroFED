@@ -319,7 +319,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   OpenTelemetry metrics, exported as Prometheus and over OTLP, behind an
   optional scrape token or mutual TLS, and the stored-query drift repair,
   admitted through the client authentication gate for the issuer's
-  operator scope and recorded with the operator who ran it (#635, #767).
+  operator scope and recorded with the operator who ran it (#635, #767),
+  and the running configuration with its save of settings (`running`,
+  #1235).
 - `app/ferrofed-console`: the operator console, the `ferrofed-console` binary
   and its own image (#275, decisions A55 and A104); never published. A
   Leptos app in islands mode built on FerroUI (`ferrohealth-ui`, pinned
