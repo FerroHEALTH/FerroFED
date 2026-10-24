@@ -211,25 +211,17 @@ pub(crate) struct Removal {
     pub(crate) fields: AnyView,
 }
 
-/// A configuration table row's actions: its row menu, for its actions
-/// cell, and its removal dialog, when it has one, for after the table.
-pub(crate) struct RowActions {
-    /// The row menu.
-    pub(crate) menu: AnyView,
-    /// The dialog its Remove… opens.
-    pub(crate) dialog: Option<AnyView>,
-}
-
 /// The actions of a configuration table's row named `named`, whose
 /// removal confirms in the dialog `dialog`: its row menu (F13) with Edit to
 /// `edit` and, when the row can be removed, Remove… after a separator,
-/// opening that dialog (FerroUI `danger_form_dialog`) with its Reason.
+/// opening that dialog (FerroUI `danger_form_dialog`) with its Reason,
+/// drawn beside the menu in the row's actions cell.
 pub(crate) fn row_actions(
     dialog: &str,
     named: &str,
     edit: String,
     removal: Option<Removal>,
-) -> RowActions {
+) -> AnyView {
     let menu = Menu::new(
         format!("{}-menu", dialog.trim_end_matches("-dialog")),
         tr_with(Msg::ActionsFor, &[("named", named.to_owned().into())]),
@@ -240,10 +232,7 @@ pub(crate) fn row_actions(
         ))],
     );
     let Some(removal) = removal else {
-        return RowActions {
-            menu: row_menu(menu),
-            dialog: None,
-        };
+        return row_menu(menu);
     };
     let menu = menu.destructive(vec![Item::new(Action::new(
         Some(Glyph::TRASH),
@@ -271,10 +260,11 @@ pub(crate) fn row_actions(
         },
         confirm,
     );
-    RowActions {
-        menu: row_menu(menu),
-        dialog: Some(asks.into_any()),
+    view! {
+        {row_menu(menu)}
+        {asks}
     }
+    .into_any()
 }
 
 /// The required Reason of the removal of `named`, empty as it opens.

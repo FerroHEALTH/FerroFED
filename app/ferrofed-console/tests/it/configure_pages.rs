@@ -12,8 +12,8 @@ use crate::configure::{changes, listener, page, signed_in_console};
 
 /// Console member C's row offers Remove… as its row menu's last item, after
 /// a separator, opening a danger dialog whose form posts the removal of C
-/// with a required reason to the page at `path`, and no Remove button
-/// stands beside the menu.
+/// with a required reason to the page at `path`, drawn in the row's
+/// actions cell, and no Remove button stands beside the menu.
 fn removal_is_in_the_row_menu(body: &str, path: &str) -> Result<(), Box<dyn Error>> {
     assert!(
         body.contains(
@@ -26,6 +26,16 @@ fn removal_is_in_the_row_menu(body: &str, path: &str) -> Result<(), Box<dyn Erro
             .count(),
         2,
         "the menu's Remove… and the dialog's Cancel name the dialog, no button beside the menu: {body}"
+    );
+    let cell = body
+        .split_once("<code>node-c</code>")
+        .and_then(|(_, after)| after.split_once("</tr>"))
+        .and_then(|(row, _)| row.split_once(r#"data-label="Actions""#))
+        .map(|(_, cell)| cell)
+        .ok_or("console member C's actions cell")?;
+    assert!(
+        cell.contains(r#"<dialog id="cfg-remove-node-c-dialog""#),
+        "the removal dialog sits in C's actions cell, beside its row menu: {cell}"
     );
     let dialog = body
         .split_once(r#"<dialog id="cfg-remove-node-c-dialog" closedby="any""#)

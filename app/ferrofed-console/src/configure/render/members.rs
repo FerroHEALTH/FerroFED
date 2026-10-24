@@ -109,9 +109,9 @@ fn row_removal(loaded: &Loaded<'_>, node: &str) -> Removal {
     }
 }
 
-/// One member's row and its removal dialog; a console member's row ends in
-/// its row menu, with Remove… when the console holds it.
-fn row(loaded: &Loaded<'_>, member: &MemberResource) -> (AnyView, Option<AnyView>) {
+/// One member's row; a console member's row ends in its row menu, with
+/// Remove… and its dialog when the console holds it.
+fn row(loaded: &Loaded<'_>, member: &MemberResource) -> AnyView {
     let node = member.node.as_str().to_owned();
     let ids = member
         .endpoints
@@ -125,10 +125,9 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> (AnyView, Option<AnyView
             member.state,
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
-    let (actions, dialog) = if editable {
+    let actions = if editable {
         let removes = member.member.is_some().then(|| row_removal(loaded, &node));
-        let actions = row_actions(&removal_dialog(&node), &node, href(&node), removes);
-        (actions.menu, actions.dialog)
+        row_actions(&removal_dialog(&node), &node, href(&node), removes)
     } else {
         let view = view! {
             <a href=href(&node) class=Variant::Ghost.class()>
@@ -136,7 +135,7 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> (AnyView, Option<AnyView
                 <span class="fui-sr-only">{format!(" {node}")}</span>
             </a>
         };
-        (view.into_any(), None)
+        view.into_any()
     };
     let row = view! {
         <tr>
@@ -157,7 +156,7 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> (AnyView, Option<AnyView
             </td>
         </tr>
     };
-    (row.into_any(), dialog)
+    row.into_any()
 }
 
 /// The columns of the Members tab.
@@ -176,7 +175,6 @@ fn member_columns() -> [Column; 7] {
 /// The Members tab: every member with its owner and state.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let members = &loaded.resources.members;
-    let mut dialogs = Vec::new();
     let rows = if members.is_empty() {
         view! {
             <tr>
@@ -189,15 +187,10 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     } else {
         members
             .iter()
-            .map(|member| {
-                let (row, dialog) = row(loaded, member);
-                dialogs.extend(dialog);
-                row
-            })
+            .map(|member| row(loaded, member))
             .collect_view()
             .into_any()
     };
-    // TODO(#1249): each dialog moves back beside its row menu once FerroUI resets its wrapping.
     view! {
         {head(
             ("members-title", tr(Msg::Members)),
@@ -210,7 +203,6 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             },
         )}
         {crate::pages::table(&tr(Msg::MembersAndTheirOwners), &member_columns(), rows)}
-        {dialogs}
     }
     .into_any()
 }
