@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The gateway behind your ingress controller, over TLS. The controller must
+# pass X-Forwarded-For and the client's TLS stays at the controller: list
+# the controller's addresses in server.trusted_proxies so the access record
+# names the client's own address
+# (https://ferrofed.eu/docs/operate/production.html). The controller's
+# request body limit and timeout must be at least server.body_limit_bytes
+# and server.request_timeout_ms.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  # EDIT: your ingress class.
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        # EDIT: the gateway's public host.
+        - gateway.example.org
+      # EDIT: the Secret of type kubernetes.io/tls holding its certificate.
+      secretName: ferrofed-tls
+  rules:
+    - host: gateway.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ferrofed
+                port:
+                  name: http

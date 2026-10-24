@@ -98,11 +98,18 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   for HIGH and CRITICAL findings that have a fix (`trivy.yaml`) and only then
   applies the tags `release-image.yml` and `release-console.yml` computed, so
   an image the gate refuses is never referencable by a tag.
-- **finalize-release** checks that the draft carries every asset this version
+- **finalize-release** first attaches the Kubernetes package,
+  `ferrofed-vX.Y.Z-kubernetes.tar.gz` with its SHA-256 as
+  `ferrofed-vX.Y.Z-kubernetes.tar.gz.sha256sum`: the kustomize tree of
+  `deploy/kubernetes` with the gateway and console images pinned to the
+  digests the image jobs pushed, which `scripts/release/kubernetes-package.sh`
+  writes and refuses when a manifest's tag is not the release's version.
+  It then checks that the draft carries every asset this version
   promises, eight per target, the three compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
-  the tag, the vulnerability record and its reports, and the EU
+  the tag, the vulnerability record and its reports, the Kubernetes
+  package and its checksum, and the EU
   declaration of conformity when `plan` found it issued, and publishes only
   then, and only once both images are scanned and tagged. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A release `plan` did not find the
@@ -218,8 +225,9 @@ slow one.
    `[workspace.package]` `version`. The gateway image tag moves with it in
    the `compose.yaml` default, in the `FERROFED_VERSION` default on both
    `image:` lines of `deploy/compose/compose.yaml` (the release asset: the
-   gateway and the console) and in
-   `deploy/kubernetes/statefulset.yaml`. `scripts/checks/versions.sh` fails on
+   gateway and the console), in
+   `deploy/kubernetes/base/statefulset.yaml` and in
+   `deploy/kubernetes/components/console/deployment.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
    release asset's tags against the tag.
 3. **The changelog names the release.** Every change since the last release

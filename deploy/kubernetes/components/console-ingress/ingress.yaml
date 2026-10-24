@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The operator console behind your ingress controller, over TLS, at the
+# host its redirect_uri names.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ferrofed-console
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+spec:
+  # EDIT: your ingress class.
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        # EDIT: the console's public host.
+        - console.example.org
+      # EDIT: the Secret of type kubernetes.io/tls holding its certificate.
+      secretName: ferrofed-console-tls
+  rules:
+    - host: console.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ferrofed-console
+                port:
+                  name: http
