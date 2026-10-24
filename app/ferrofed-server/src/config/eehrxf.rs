@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use eehrxf::terminology::Terminology;
-use ferrofed_eehrxf::terminology::{FhirTerminology, FhirTerminologyError};
+use ferrofed_eehrxf::terminology::{BridgeTerminology, BridgeTerminologyError};
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
@@ -118,7 +118,7 @@ pub enum TerminologyFault {
     Tls(#[from] TlsRefused),
     /// The client cannot be built.
     #[error("the client of [eehrxf.terminology] cannot be built")]
-    Client(#[source] FhirTerminologyError),
+    Client(#[source] BridgeTerminologyError),
 }
 
 impl Config {
@@ -210,7 +210,7 @@ pub fn terminology(
         &format!("{KEY}.credentials"),
         settings.credentials.as_ref(),
     )?;
-    let client = FhirTerminology::new(settings.url.expose(), &auth, &tls, settings.timeout)
+    let client = BridgeTerminology::new(settings.url.expose(), &auth, &tls, settings.timeout)
         .map_err(TerminologyFault::Client)?;
     Ok(Terminology::server(Arc::new(client)))
 }

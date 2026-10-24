@@ -543,13 +543,14 @@ Seven of the manufacturer's obligations have a first answer:
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
-issues are in the v0.0.13 milestone, before the Regulation
+issues are in the v0.0.13 and v0.0.14 milestones, before the Regulation
 applies on 26 March 2027:
 
-- [#521](https://github.com/FerroHEALTH/FerroFED/issues/521): the European
-  logging software component, built, re-checked against the Art 36(1)
-  common specifications once they are adopted
-  ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
+- [#799](https://github.com/FerroHEALTH/FerroFED/issues/799): the European
+  logging software component is built
+  ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), and is
+  re-checked against the Art 36(1) common specifications once they are
+  adopted.
 - [#522](https://github.com/FerroHEALTH/FerroFED/issues/522): the rest of
   the European interoperability software component for the patient summary,
   built from federated openEHR data.

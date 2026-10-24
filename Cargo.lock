@@ -1269,7 +1269,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.0.27"
+version = "0.0.28"
 dependencies = [
  "async-trait",
  "fhir-types",
@@ -1428,6 +1428,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrobridge-term"
+version = "0.1.131"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e53be34e43afc93951217af4c705e4e5f4ea7e6e603bc52fd329d69c18bae8e"
+dependencies = [
+ "async-trait",
+ "backon",
+ "fhir-types",
+ "http",
+ "reqwest",
+ "secrecy",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "ferrofed-console"
 version = "0.0.12"
 dependencies = [
@@ -1475,6 +1493,7 @@ version = "0.0.1"
 dependencies = [
  "async-trait",
  "eehrxf",
+ "ferrobridge-term",
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
@@ -1483,7 +1502,6 @@ dependencies = [
  "http",
  "jiff",
  "openehr-query",
- "reqwest",
  "secrecy",
  "serde",
  "serde_json",

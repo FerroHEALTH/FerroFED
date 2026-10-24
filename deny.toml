@@ -106,6 +106,9 @@ exceptions = [
   # takes, behind eehrxf's openehr feature (#684, #730).
   { allow = ["BUSL-1.1"], crate = "fhirconnect" },
   { allow = ["BUSL-1.1"], crate = "openehr-mapping-core" },
+  # FerroBRIDGE's FHIR terminology client the component asks its terminology
+  # server through (#925).
+  { allow = ["BUSL-1.1"], crate = "ferrobridge-term" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
   # The share-alike terms cover that data, which FerroFED redistributes

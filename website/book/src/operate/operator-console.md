@@ -383,7 +383,10 @@ A console route with no screenshot fails the testkit's
 
 The page opens on the deployment-wide settings, one tab per section:
 Federation behaviour, Fan-out and paging, Consent, Stored queries, Access
-log and FHIR face. Each setting is a row with its value, where the value
+log, FHIR face and Authentication. Authentication is read-only, because only
+the configuration file sets it: the audience, the operator scope, the token
+issuers and each trusted issuer, with every claim name, the correlation
+header and the added countries of a national contact point it declares. Each setting is a row with its value, where the value
 comes from (the configuration file, an environment override, the running
 revision, or the default), its configuration key, and a Next start mark
 when a change takes effect only at the next start of each replica, with

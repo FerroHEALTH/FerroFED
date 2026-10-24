@@ -24,9 +24,31 @@ use crate::configure::render::Loaded;
 use crate::configure::render::parts::{error_line, form, hidden, reason, save_bar};
 use crate::locale::{Msg, tr, tr_with};
 
+/// `key` with each array position written `[]`, as the book's tables name
+/// a key of every `[[trust.issuer]]`.
+fn generic(key: &str) -> String {
+    let mut out = String::with_capacity(key.len());
+    let mut skipping = false;
+    for character in key.chars() {
+        match character {
+            '[' => {
+                skipping = true;
+                out.push('[');
+            }
+            ']' => {
+                skipping = false;
+                out.push(']');
+            }
+            _ if skipping => {}
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 /// The label and the one line of the setting `key`.
 fn words(key: &str) -> (Msg, Msg) {
-    match key {
+    match generic(key).as_str() {
         "federation.per_node_timeout_ms" => {
             (Msg::SettingPerNodeTimeout, Msg::SettingPerNodeTimeoutDesc)
         }
@@ -65,6 +87,44 @@ fn words(key: &str) -> (Msg, Msg) {
         "fhir.base" => (Msg::SettingFhirBase, Msg::SettingFhirBaseDesc),
         "fhir.document_url_lifetime_secs" => (Msg::SettingUrlLifetime, Msg::SettingUrlLifetimeDesc),
         "fhir.receive" => (Msg::SettingReceived, Msg::SettingReceivedDesc),
+        "auth.audience" => (Msg::SettingAudience, Msg::SettingAudienceDesc),
+        "auth.product_scope" => (Msg::SettingProductScope, Msg::SettingProductScopeDesc),
+        "auth.issuer" | "auth.issuer[].issuer" => {
+            (Msg::SettingTokenIssuer, Msg::SettingTokenIssuerDesc)
+        }
+        "auth.issuer[].jwks_file" => (Msg::SettingKeySetFile, Msg::SettingKeySetFileDesc),
+        "trust.issuer[].issuer" => (Msg::SettingTrustedIssuer, Msg::SettingTrustedIssuerDesc),
+        "trust.issuer[].client_secret" => (
+            Msg::SettingIntrospectionSecret,
+            Msg::SettingIntrospectionSecretDesc,
+        ),
+        "trust.issuer[].national_contact_point.family_name" => {
+            (Msg::SettingNcpFamilyName, Msg::SettingNcpFamilyNameDesc)
+        }
+        "trust.issuer[].national_contact_point.given_name" => {
+            (Msg::SettingNcpGivenName, Msg::SettingNcpGivenNameDesc)
+        }
+        "trust.issuer[].national_contact_point.country_code" => {
+            (Msg::SettingNcpCountryCode, Msg::SettingNcpCountryCodeDesc)
+        }
+        "trust.issuer[].national_contact_point.professional_issuing_authority" => (
+            Msg::SettingNcpProfessionalAuthority,
+            Msg::SettingNcpProfessionalAuthorityDesc,
+        ),
+        "trust.issuer[].national_contact_point.provider_issuing_authority" => (
+            Msg::SettingNcpProviderAuthority,
+            Msg::SettingNcpProviderAuthorityDesc,
+        ),
+        "trust.issuer[].national_contact_point.provider_address" => (
+            Msg::SettingNcpProviderAddress,
+            Msg::SettingNcpProviderAddressDesc,
+        ),
+        "trust.issuer[].national_contact_point.correlation_header" => {
+            (Msg::SettingNcpCorrelation, Msg::SettingNcpCorrelationDesc)
+        }
+        "trust.issuer[].national_contact_point.additional_countries" => {
+            (Msg::SettingNcpCountries, Msg::SettingNcpCountriesDesc)
+        }
         _ => (Msg::SettingUnknown, Msg::SettingUnknown),
     }
 }
@@ -78,6 +138,10 @@ pub const fn section_words(section: Section) -> (Msg, Msg) {
         Section::Consent => (Msg::SettingsTabConsent, Msg::SettingsIntroConsent),
         Section::StoredQueries => (Msg::StoredQueries, Msg::SettingsIntroStoredQueries),
         Section::AccessLog => (Msg::SettingsTabAccessLog, Msg::SettingsIntroAccessLog),
+        Section::Authentication => (
+            Msg::SettingsTabAuthentication,
+            Msg::SettingsIntroAuthentication,
+        ),
         _ => (Msg::SettingsTabFhir, Msg::SettingsIntroFhir),
     }
 }
@@ -91,6 +155,7 @@ pub const fn tab_href(section: Section) -> &'static str {
         Section::Consent => "/configuration/consent",
         Section::StoredQueries => "/configuration/stored-queries",
         Section::AccessLog => "/configuration/access-log",
+        Section::Authentication => "/configuration/authentication",
         _ => "/configuration/fhir",
     }
 }
