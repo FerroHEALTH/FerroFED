@@ -178,6 +178,16 @@ const GRANT_FLOWS: &str = "DELETE FROM SEC_APP_POL_ASSOC_TBL \
      FROM SEC_APP_TBL, SEC_POL_TBL WHERE APP_PUB_ID = 'fiddler' \
      AND OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%';";
 
+/// The key of every security application SanteMPI holds.
+// NOTE: santedb/santedb-data@11cc836 DbSecurityApplication: an application is a row of
+// sec_app_tbl, keyed by app_id.
+const APPLICATIONS: &str = "SELECT APP_ID FROM SEC_APP_TBL";
+
+/// The key of every identity domain SanteMPI holds.
+// NOTE: santedb/santedb-data@11cc836 DbIdentityDomain: a domain is a row of id_dmn_tbl,
+// keyed by dmn_id.
+const DOMAINS: &str = "SELECT DMN_ID FROM ID_DMN_TBL";
+
 /// The policies that admit an application to the client-credentials grant
 /// with no device credential, which the Manager denies an application they
 /// are not granted to.
@@ -422,9 +432,11 @@ impl SanteMpi {
             ));
         }
         for (id, client) in &applications {
-            let held = format!("SELECT COUNT(*) FROM SEC_APP_TBL WHERE APP_ID = '{id}'");
             retried(|| async {
-                if self.holds(&held, "the SecurityApplication count").await? {
+                if self
+                    .holds(APPLICATIONS, *id, "the SecurityApplication list")
+                    .await?
+                {
                     return Ok(());
                 }
                 let request = self
@@ -442,8 +454,7 @@ impl SanteMpi {
         retried(|| async {
             let mut missing = Vec::new();
             for (id, entry) in &authorities {
-                let held = format!("SELECT COUNT(*) FROM ID_DMN_TBL WHERE DMN_ID = '{id}'");
-                if !self.holds(&held, "the identity domain count").await? {
+                if !self.holds(DOMAINS, *id, "the identity domain list").await? {
                     missing.push(entry.as_str());
                 }
             }
@@ -468,20 +479,20 @@ impl SanteMpi {
         .await
     }
 
-    /// Whether SanteMPI's database counts a record with `count`, a `SELECT
-    /// COUNT(*)` of it.
+    /// Whether `id` is among the keys `list`, a constant query of one
+    /// table's keys, reads from SanteMPI's database; no value is spliced into
+    /// the query.
     ///
     /// The database is read, because SanteMPI answers an AMI read of a
     /// security application it does not hold with a `500`
     /// `NullReferenceException`, never a `404` (#1302).
-    // NOTE: santedb/santedb-data@11cc836 DbSecurityApplication and DbIdentityDomain: an
-    // application is a sec_app_tbl row keyed by app_id, an identity domain an id_dmn_tbl one.
-    async fn holds(&self, count: &str, step: &'static str) -> Result<bool, SanteMpiError> {
-        let counted = self.database_says(count).await;
-        match counted.as_deref().map(str::parse::<u64>) {
-            Some(Ok(rows)) => Ok(rows > 0),
-            Some(Err(_)) | None => Err(SanteMpiError::Unread { step }),
-        }
+    async fn holds(&self, list: &str, id: Uuid, step: &'static str) -> Result<bool, SanteMpiError> {
+        let listed = self
+            .database_says(list)
+            .await
+            .ok_or(SanteMpiError::Unread { step })?;
+        let id = id.to_string();
+        Ok(listed.lines().any(|line| line.trim() == id))
     }
 }
 
