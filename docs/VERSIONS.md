@@ -252,8 +252,12 @@ prescriptions and dispensations reads, with the authorisation, order summary
 and supply amount clusters the order's slots admit (#523). CKM publishes no git commit or
 release feed for a template or an archetype, so each artefact is
 pinned by its REST URL and sha256 through `scripts/vendor/lib/pinned.sh` in
-`scripts/vendor/openehr-ckm.sh` and committed verbatim (CC BY-SA, the licence
-the openEHR Foundation gives the clinical models CKM hosts).
+`scripts/vendor/openehr-ckm.sh` and committed verbatim under CC BY-SA, the
+licence the openEHR Foundation gives the clinical models CKM hosts. Each
+archetype states its own version in its `licence` field: 4.0 International
+for `INSTRUCTION.medication_order.v3`, `ACTION.medication.v1` and
+`CLUSTER.medication_supply_amount.v0`, and 3.0 for
+`CLUSTER.medication_authorisation.v0` and `CLUSTER.medication_order_summary.v0`.
 
 | Item | Pin | Repeated in |
 |---|---|---|
