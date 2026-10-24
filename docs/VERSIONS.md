@@ -226,6 +226,7 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 Europe Imaging Report | package `hl7.fhir.eu.imaging` 1.0.0-ballot, pin-set digest `aad98731a1f2597d6a7defa2c7f6ab7297781b677398383346c5592f913c9f4b`, tarball sha256 `bb6012bd7a019ac82f5e939dd6e892e6db6b15fd2931dcf7cc445c1ad92c3d70` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-imaging/PROVENANCE.md` |
 | HL7 Europe Hospital Discharge Report | package `hl7.fhir.eu.hdr` 1.0.0 and 0.1.0-ballot, pin-set digest `00575e0cccddc95fb3af7edf5c1d8fa33cc86dcc3bab87874eecebdda54bc168`, 1.0.0 tarball sha256 `eedf9af9f66b68cd66f7d6c678a36dfba86b0920df4ef15e8d2da900c4134879` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-hdr/PROVENANCE.md` |
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/eehrxf.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
+| FHIR package closure of the Patient Summary | the 15 registry tarballs the committed HL7 Europe manifests name and the repository does not commit (`hl7.fhir.r4.core` 4.0.1, `hl7.fhir.eu.base` 2.0.0, `hl7.fhir.uv.extensions.r4` 5.2.0 and 5.3.0, `hl7.fhir.uv.xver-r5.r4` 0.1.0, `hl7.terminology.r4` 5.0.0, 6.2.0, 6.3.0, 6.5.0, 7.1.0 and 7.3.0, `hl7.fhir.uv.ipa` 1.1.0, `hl7.fhir.uv.smart-app-launch` 2.0.0, `hl7.fhir.uv.ips` 1.1.0, `fhir.dicom` 2022.4.20221006), cache only for their size, which FerroBRIDGE's validator holds a received document to with the committed packages (#808); pin-set digest `4da6e21751ced98a8fb1879aafd6b2b37b975921338adffc4d6d3465088db485`, R4 core sha256 `ebd7731df7d36b5b7d39d5fb6c9d77b44bb7fe5742f1a2e87f164738c3289d44` | `scripts/vendor/fhir-packages.sh`, `docs/specs/fhir-packages/PROVENANCE.md`, `tools/ferrofed-testkit/src/fhir_packages.rs` |
 
 ### MyHealth@EU, eHDSI and Xt-EHR material (#1290)
 
@@ -421,13 +422,17 @@ The European interoperability component (`crates/eehrxf`, feature `openehr`,
 `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, and both build
 on the `openehr-*` line above. The component's terminology server is asked
 through FerroBRIDGE's `ferrobridge-term` (#925), pinned exactly the same way,
-over the HTTP client the gateway builds with its credential and TLS material.
+over the HTTP client the gateway builds with its credential and TLS material. A
+received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
+(#808), pinned exactly the same way, on the same `fhir-types` and
+`ferrobridge-term` lines.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | `fhirconnect` | =0.1.173 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.124 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | =0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 

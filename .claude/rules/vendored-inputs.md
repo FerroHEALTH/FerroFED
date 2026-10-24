@@ -175,6 +175,17 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     (CC0-1.0).
   - `docs/specs/ehdsi-mvc/`: `myhealth.eu.fhir.mvc-package` 9.1.0, the
     MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
+- `docs/specs/fhir-packages/`: the provenance alone of the 15 FHIR packages
+  the committed HL7 Europe manifests name and this repository does not
+  commit (the FHIR R4 core, HL7 Terminology, the HL7 extension packages,
+  HL7 Europe Base and Core 2.0.0, the R5 to R4 cross-version extensions,
+  IPA, SMART App Launch, IPS 1.1.0 and the DICOM code systems), pinned by
+  URL and sha256 in
+  `scripts/vendor/fhir-packages.sh` and fetched into the ignored
+  `.vendor-cache/fhir-packages/` for their size (58 MB), which FerroBRIDGE's
+  validator holds a received document to beside the committed packages
+  (#808); `ferrofed_testkit::fhir_packages` fetches a missing one from the
+  same pins.
 - `docs/specs/xt-ehr-deliverables/`: every Xt-EHR deliverable and task
   outcome the joint action publishes (D1.1 to D9.3, with the T5.2 and T5.3
   outcomes), among them the closest published text of the Art 15(1)

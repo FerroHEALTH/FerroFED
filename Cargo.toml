@@ -62,7 +62,7 @@ oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.
 # crates.io on 2026-10-24.
 ihe-atna = { version = "=0.2.6", default-features = false }
 ehds-logging = { version = "=0.2.6", default-features = false }
-eehrxf = { path = "crates/eehrxf", version = "0.0.28" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.29" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -201,6 +201,12 @@ fhirconnect = "=0.1.173"
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
 # against crates.io on 2026-10-24.
 ferrobridge-term = "=0.1.131"
+# The FHIR R4 profile validator a document received in the exchange format is
+# held to in full: every invariant, binding and entry profile (#808), from
+# FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
+# against crates.io on 2026-10-24.
+ferrobridge-validator = "=0.1.131"
 openehr-mapping-core = "=0.1.124"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by

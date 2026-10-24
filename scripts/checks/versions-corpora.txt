@@ -24,6 +24,7 @@ docs/specs/ihe-balp-pages|IHE BALP narrative pages
 docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
 docs/specs/xt-ehr-deliverables|Xt-EHR deliverables
 docs/specs/eu-xtehr-metadata|Xt-EHR Metadata Foundation
+docs/specs/fhir-packages|FHIR package closure of the Patient Summary
 docs/specs/eu-hl7-base|HL7 Europe Base and Core
 docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
 docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense

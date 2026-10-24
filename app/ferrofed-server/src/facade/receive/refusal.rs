@@ -8,6 +8,7 @@
 use axum::response::Response;
 use eehrxf::receive::displays::DisplayError;
 use eehrxf::receive::openehr::SubjectInsertionError;
+use eehrxf::receive::validation::ValidationError;
 use ehds_logging::record::WrittenVersion;
 use ferrofed_eehrxf::face;
 use ferrofed_eehrxf::receive::{self, Prepared, Unreceived};
@@ -200,7 +201,8 @@ pub(super) fn unprepared(unreceived: &Unreceived, logged: &str) -> Response {
         }
         // NOTE: no specification governs this: our own design; the terminology server is
         // the gateway's upstream, so its refusal or silence is a 502 naming its status.
-        Unreceived::Display(DisplayError::Lookup { .. }) | Unreceived::Terminology(_) => refused(
+        Unreceived::Display(DisplayError::Lookup { .. })
+        | Unreceived::Validation(ValidationError::Terminology { .. }) => refused(
             StatusCode::BAD_GATEWAY,
             "transient",
             &crate::chain(unreceived),
@@ -280,15 +282,16 @@ mod tests {
     use axum::body::Body;
     use axum::response::{IntoResponse, Response};
     use axum::routing::post;
-    use eehrxf::receive::conform::CheckError;
     use eehrxf::receive::openehr::ReceiveMappingError;
+    use eehrxf::receive::validation::ValidationError;
     use ehds_logging::record::{PatientIdentifier, WrittenVersion};
+    use ferrobridge_validator::validate::ValidateError;
     use ferrofed_eehrxf::receive::{Prepared, Unreceived};
     use ferrofed_engine::dispatch::cap::Capped;
     use ferrofed_engine::hygiene::Part;
     use ferrofed_engine::single_node::ehr::EhrCallError;
     use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
-    use ferrofed_testkit::eps;
+    use ferrofed_testkit::{eps, fhir_packages};
     use fhir_types::r4::operation_outcome::OperationOutcome;
     use http::{Method, Request, StatusCode};
     use openehr_federation::status::EndpointStatus;
@@ -344,6 +347,11 @@ managing_organisation = "org-a"
         let key = dir.join("signing-key.pem");
         std::fs::write(&key, ferrofed_testkit::oauth::es384_pem()?)?;
         let [model, context] = eps::mapping_files();
+        let dependencies = fhir_packages::dependencies()?
+            .iter()
+            .map(|dependency| path(dependency).to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         let text = format!(
             "profile = \"development\"\n\n[server]\npublic_url = \"https://gw.example.org\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
@@ -360,8 +368,8 @@ managing_organisation = "org-a"
              master = \"{NAMESPACE}\"\ntimeout_ms = 1000\n\n\
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
              [[fhir.receive]]\ncategory = \"Patient-Summaries\"\nmember = \"node-a\"\n\
-             package = {}\ntemplate = {}\nfiles = [{}, {}]\ncontext = \"{}\"\n\
-             language = \"en\"\nterritory = \"NL\"\n",
+             package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
+             files = [{}, {}]\ncontext = \"{}\"\nlanguage = \"en\"\nterritory = \"NL\"\n",
             path(&registry),
             path(&key),
             path(&eps::opt()),
@@ -387,7 +395,7 @@ managing_organisation = "org-a"
             .receive(
                 &document,
                 (&fhir.absolute, "2026-10-15T00:00:00Z"),
-                &fhir.terminology,
+                (&fhir.terminology, None),
             )
             .await?)
     }
@@ -583,11 +591,13 @@ managing_organisation = "org-a"
     {
         let dir = tempfile::tempdir()?;
         let state = state(dir.path())?;
-        let unchecked = CheckError::ProfileType {
-            url: String::from("https://example.org/fhir/StructureDefinition/misplaced"),
-            expected: "Composition",
+        let unchecked = ValidationError::Validator {
+            profile: String::from("https://example.org/fhir/StructureDefinition/misplaced"),
+            source: Box::new(ValidateError::NoSnapshot {
+                url: String::from("https://example.org/fhir/StructureDefinition/misplaced"),
+            }),
         };
-        let response = unprepared(&Unreceived::Check(unchecked), "outbound-1");
+        let response = unprepared(&Unreceived::Validation(unchecked), "outbound-1");
         assert!(nothing_sent(&response));
         let (status, code, diagnostics) = wire(&state, response).await?;
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status, "{diagnostics}");
