@@ -57,11 +57,12 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.52" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
 # and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
-# (ihe-atna), and the EHDS logging component (ehds-logging). Verified against
-# crates.io on 2026-10-20.
-ihe-atna = { version = "=0.2.3", default-features = false }
-ehds-logging = { version = "=0.2.3", default-features = false }
-eehrxf = { path = "crates/eehrxf", version = "0.0.28" }
+# (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
+# forwarder's syslog connection with close_notify (#1278). Verified against
+# crates.io on 2026-10-24.
+ihe-atna = { version = "=0.2.6", default-features = false }
+ehds-logging = { version = "=0.2.6", default-features = false }
+eehrxf = { path = "crates/eehrxf", version = "0.0.29" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -200,12 +201,18 @@ fhirconnect = "=0.1.173"
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
 # against crates.io on 2026-10-24.
 ferrobridge-term = "=0.1.131"
+# The FHIR R4 profile validator a document received in the exchange format is
+# held to in full: every invariant, binding and entry profile (#808), from
+# FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
+# against crates.io on 2026-10-24.
+ferrobridge-validator = "=0.1.131"
 openehr-mapping-core = "=0.1.124"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367 and pinned exactly, because its crate line
 # moves by patch.
-ihe-iti = "=0.0.43"
+ihe-iti = "=0.0.50"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and pinned exactly, because its
 # crate line moves by patch.

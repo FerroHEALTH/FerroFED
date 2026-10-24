@@ -368,12 +368,14 @@ on your scrape job's `up` as well, since a gateway that does not answer the
 scrape counts nothing. `scripts/checks/observability.sh` holds both files to
 the metrics the gateway exports, and runs `promtool check rules`.
 
-The Kubernetes example (`deploy/kubernetes/`) serves the admin listener on
+The Kubernetes package (`deploy/kubernetes/base/`) serves the admin listener on
 port `9464` of each pod, with the scrape user's password hash in the
 `metrics-scrape-hash` key of the `ferrofed-secrets` Secret, annotates the pods for a Prometheus
 that reads `prometheus.io/scrape`, and opens the port to the Prometheus pods
-of the `monitoring` namespace alone with a network policy. Give the
-Prometheus job the scrape user's password with `basic_auth.password_file`. The
+of the `monitoring` namespace and the console alone with a network policy.
+Give the Prometheus job the scrape user's password with
+`basic_auth.password_file`, or add the `service-monitor` component for the
+Prometheus Operator ([The Kubernetes package](kubernetes.md#the-components)). The
 gateway authenticates the scrape and every write action by itself, so the
 policy is defence in depth.
 

@@ -15,6 +15,8 @@
 //!   names, and the profiles a document of it is checked against;
 //! - [`conform`]: the document checked against the profiles of its category,
 //!   read from the vendored package;
+//! - [`validation`]: the document held to every constraint of its profiles
+//!   and of the profiles its entries claim, by FerroBRIDGE's validator;
 //! - `openehr` (feature `openehr`): the document mapped into one openEHR
 //!   composition by FHIRconnect, the original kept beside the mapped content.
 //!
@@ -41,6 +43,7 @@ pub mod openehr;
 pub mod reference;
 mod references;
 pub(crate) mod strict;
+pub mod validation;
 
 use fhir_types::codec::DecodeError;
 use fhir_types::codec::EncodeError;

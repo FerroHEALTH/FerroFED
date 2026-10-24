@@ -109,6 +109,10 @@ exceptions = [
   # FerroBRIDGE's FHIR terminology client the component asks its terminology
   # server through (#925).
   { allow = ["BUSL-1.1"], crate = "ferrobridge-term" },
+  # FerroBRIDGE's FHIR R4 profile validator a received document is validated
+  # in full by, and the FHIRPath evaluator it evaluates invariants with (#808).
+  { allow = ["BUSL-1.1"], crate = "ferrobridge-validator" },
+  { allow = ["BUSL-1.1"], crate = "ferrobridge-fhirpath" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
   # The share-alike terms cover that data, which FerroFED redistributes

@@ -114,9 +114,7 @@ Report privately, through either route:
   by email and say that more is available; a channel for the rest is agreed
   with you.
 
-Both routes reach the same people and the same procedure. You will get an
-acknowledgement within seven days. If that window passes with no response,
-public disclosure to protect other users is your call.
+Both routes reach the same people and the same procedure.
 
 A patient identifier reaching a node is a vulnerability in FerroFED: the
 gateway's central safety property is that no request it composes for a node
@@ -125,6 +123,31 @@ carries one. Report it here, privately.
 If you have evidence that someone is exploiting the vulnerability, say so in
 the report: an actively exploited vulnerability starts the 24-hour clock
 below.
+
+## Response times
+
+FerroFED is solo-maintained, so these are best effort rather than a
+contractual service-level agreement. They are the times every product of the
+Ferro family states: an acknowledgement within about 5 business days, and
+an initial assessment (is it valid, how severe) within about 10 business days
+of the report. A confirmed vulnerability is fixed in a patch release of the
+newest release, with the fix alone where it is technically feasible
+([`docs/release.md`](docs/release.md#cutting-a-security-patch-release)),
+published within the target for its severity, counted from the confirmed
+assessment:
+
+| Severity | Fixed release published within |
+|---|---|
+| Critical | 7 days |
+| High | 30 days |
+| Medium | 90 days |
+| Low | the next release |
+
+The family policy says how that release and its advisory reach you. If the
+acknowledgement does not come in time, the report has not reached us: try
+the other route, or open a public issue saying only that a private report
+awaits acknowledgement, with no details. If Cadasto B.V. misses these times,
+public disclosure to protect other users is your call.
 
 ## Security advisories
 

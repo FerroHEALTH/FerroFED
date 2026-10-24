@@ -37,6 +37,12 @@
 //! a [`Finding`] or an [`Unevaluated`] of this module. [`check_resource`]
 //! holds any one resource, such as an entry of a document, to a profile by
 //! the same rules.
+//!
+//! A received document is held to every constraint of its profiles and of
+//! the profiles its entries claim by FerroBRIDGE's validator
+//! ([`ReceivedDocument::validate`](crate::receive::ReceivedDocument::validate)),
+//! whose issues and unevaluated constraints convert into the same
+//! [`Finding`] and [`Unevaluated`].
 
 mod values;
 mod walk;
@@ -53,8 +59,6 @@ use crate::terminology::bindings::BindingFinding;
 use crate::terminology::bindings::BindingGap;
 use crate::terminology::bindings::UnevaluatedBinding;
 
-// TODO(#808): hold the document to the other invariants and the terminology
-// bindings of its profiles and to the profile each other entry claims.
 impl ReceivedDocument {
     /// Checks the document against `bundle`, a profile of `Bundle`, and its
     /// `Composition` against `composition`, a profile of `Composition`.
@@ -193,6 +197,13 @@ pub enum Unread {
     Order,
     /// An invariant of the profile, by its key.
     Invariant(String),
+    /// A constraint FerroBRIDGE's validator met and did not evaluate.
+    Constraint {
+        /// The constraint, in words, such as `the invariant ips-comp-1`.
+        constraint: String,
+        /// Why the validator did not evaluate it.
+        reason: String,
+    },
     /// A `required` binding, to the value set it names, and why it was not
     /// evaluated.
     Binding {
@@ -210,6 +221,7 @@ impl fmt::Display for Unread {
             Self::Discriminator { kind, path } => write!(f, "the {kind} discriminator at {path}"),
             Self::Order => f.write_str("the slice order"),
             Self::Invariant(key) => write!(f, "the invariant {key}"),
+            Self::Constraint { constraint, reason } => write!(f, "{constraint} ({reason})"),
             Self::Binding { value_set, gap } => {
                 let value_set = value_set.as_deref().unwrap_or("no value set");
                 match gap {
@@ -317,6 +329,16 @@ pub enum FindingKind {
         /// The canonical URL of the value set.
         value_set: String,
     },
+    /// An issue FerroBRIDGE's validator found.
+    Issue {
+        /// Its R4 `issue-severity` code.
+        severity: &'static str,
+        /// Its R4 `issue-type` code.
+        code: &'static str,
+        /// The validator's message, which names paths and the values a
+        /// profile expects, never a value of the document.
+        message: String,
+    },
 }
 
 impl fmt::Display for FindingKind {
@@ -336,6 +358,7 @@ impl fmt::Display for FindingKind {
                     "the concept is not in the required value set {value_set}"
                 )
             }
+            Self::Issue { message, .. } => f.write_str(message),
         }
     }
 }

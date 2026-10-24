@@ -195,15 +195,16 @@ impl Config {
 }
 
 /// Builds the terminology `settings` describe: none without a server, or
-/// the HTTP client of the server.
+/// the HTTP client of the server, as the component's seam and as the client
+/// the validator of a received document asks.
 ///
 /// # Errors
 /// The [`TerminologyFault`] that keeps the client from being built.
 pub fn terminology(
     settings: Option<&TerminologySettings>,
-) -> Result<Terminology, TerminologyFault> {
+) -> Result<(Terminology, Option<BridgeTerminology>), TerminologyFault> {
     let Some(settings) = settings else {
-        return Ok(Terminology::none());
+        return Ok((Terminology::none(), None));
     };
     let tls = crate::service::tls_of(KEY, &settings.tls)?;
     let auth = crate::service::authentication(
@@ -212,5 +213,5 @@ pub fn terminology(
     )?;
     let client = BridgeTerminology::new(settings.url.expose(), &auth, &tls, settings.timeout)
         .map_err(TerminologyFault::Client)?;
-    Ok(Terminology::server(Arc::new(client)))
+    Ok((Terminology::server(Arc::new(client.clone())), Some(client)))
 }

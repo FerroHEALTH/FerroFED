@@ -1,0 +1,105 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The operator console: one replica, since its sessions live in its memory.
+# It writes no file, so the root filesystem is read-only and no volume but
+# its configuration and its Secret is mounted. The probes ask GET /health,
+# which answers while the process serves. The image tag is the product
+# version, which scripts/checks/versions.sh holds equal to docs/VERSIONS.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ferrofed-console
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+spec:
+  replicas: 1
+  # A new pod starts before the old one stops; the operator signs in again.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed-console
+      app.kubernetes.io/component: console
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ferrofed-console
+        app.kubernetes.io/component: console
+    spec:
+      # The console calls no Kubernetes API.
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ferrofed-console
+          image: ghcr.io/ferrohealth/ferrofed-console:0.0.12
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: FERROFED_CONSOLE_CONFIG
+              value: /etc/ferrofed-console/console.toml
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ferrofed-console
+              readOnly: true
+            - name: secrets
+              mountPath: /run/secrets/ferrofed-console
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: ferrofed-console-config
+        - name: secrets
+          secret:
+            secretName: ferrofed-console-secrets
+            defaultMode: 0440

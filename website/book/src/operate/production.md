@@ -110,8 +110,8 @@ secrets at `/run/secrets/ferrofed/` and a durable volume at
   ([The gateway from a release](container.md#the-gateway-from-a-release)).
   The gateway's port is published on `127.0.0.1:8080`, where the reverse
   proxy of [step 8](#8-tls-and-the-public-address) reaches it.
-- **Kubernetes:** the StatefulSet example in `deploy/kubernetes/`
-  ([Kubernetes](container.md#kubernetes)). Run the reverse proxy as a
+- **Kubernetes:** the kustomize package each release attaches, built from
+  `deploy/kubernetes/` ([The Kubernetes package](kubernetes.md)). Run the reverse proxy as a
   container in the same pod, or put your ingress in front of the Service
   with TLS on the gateway's listener.
 

@@ -175,6 +175,25 @@ impl FeedAudit {
     pub fn status(&self) -> Status {
         self.forwarder.status()
     }
+
+    /// Stops delivering and waits for the delivery to end: the forwarder
+    /// finishes the message it is writing, closes its repository connection
+    /// with a TLS `close_notify` (RFC 5425 §4.4) and returns, so the frames
+    /// it wrote last are not lost to a reset. A message not yet written
+    /// stays in the spool. The gateway calls it once, on its drain.
+    pub async fn stop(&self) {
+        self.forwarder.stop();
+        let running = self
+            .running
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(task) = running
+            && let Err(error) = task.await
+        {
+            tracing::warn!(%error, "an audit delivery ended without returning");
+        }
+    }
 }
 
 #[async_trait]

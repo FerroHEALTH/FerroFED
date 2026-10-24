@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Who may reach the gateway pods. Client authentication decides who is
+# served on the gateway port, and the admin listener, the metrics port,
+# answers GET /metrics to a scrape that carries a scrape user's Basic
+# credentials and a write action to a caller whose token carries the product
+# scope. This policy is defence in depth over that, and holds only where the
+# cluster's network plugin enforces NetworkPolicy:
+#
+#   gateway port   the reverse proxy in front of the gateway (your ingress
+#                  controller or Gateway API implementation), and the
+#                  operator console of components/console;
+#   metrics port   the Prometheus pods of the monitoring namespace, and the
+#                  operator console, whose configuration page reaches each
+#                  replica's admin listener.
+#
+# Everything else is refused. A client inside the cluster that calls the
+# gateway directly needs a peer of its own under the gateway port. Egress
+# stays open here: components/egress narrows it to the destinations the
+# configuration names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed
+      app.kubernetes.io/component: gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # EDIT: the namespace of your reverse proxy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ferrofed-console
+      ports:
+        - port: http
+          protocol: TCP
+    - from:
+        # EDIT: the namespace and the labels of your Prometheus pods.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ferrofed-console
+      ports:
+        - port: metrics
+          protocol: TCP

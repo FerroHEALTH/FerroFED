@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The cluster-internal Service in front of the console, which
+# console-ingress or console-route publishes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ferrofed-console
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP

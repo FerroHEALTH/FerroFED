@@ -45,6 +45,7 @@
 - [A production deployment](operate/production.md)
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)
+  - [The Kubernetes package](operate/kubernetes.md)
 - [Upgrading](operate/upgrading.md)
   - [Rollback](operate/rollback.md)
 - [Decommissioning](operate/decommissioning.md)

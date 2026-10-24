@@ -170,6 +170,9 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# The error a package set that cannot validate a received document returns,
+# built by the refusal test (#808).
+ferrobridge-validator.workspace = true
 # The query an Audit Log Used record carries, base64, read back by the
 # ITI-81 search test (#818).
 ferrofed-testkit.workspace = true

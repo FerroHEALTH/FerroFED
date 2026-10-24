@@ -1269,9 +1269,11 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.0.28"
+version = "0.0.29"
 dependencies = [
  "async-trait",
+ "ferrobridge-term",
+ "ferrobridge-validator",
  "fhir-types",
  "fhirconnect",
  "flate2",
@@ -1291,9 +1293,9 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d1877c643fa5f3b2acf5af2ebe95afac45f0331426b3ae3d2b29ccad23bfc14"
+checksum = "ec97a2abf528d44a665129d632b664775b5b0eaf5ccdf39aecd668684d791985"
 dependencies = [
  "async-trait",
  "ihe-atna",
@@ -1428,6 +1430,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrobridge-fhirpath"
+version = "0.1.127"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b96a71f6d29ca273dc98314b0f2748e86b64e1312cfb343fc1cacb7cb6e9e95"
+dependencies = [
+ "base64 0.23.1",
+ "chumsky",
+ "fhir-types",
+ "jiff",
+ "logos",
+ "quick-xml",
+ "regex",
+ "rust_decimal",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "ferrobridge-term"
 version = "0.1.131"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1443,6 +1464,24 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "ferrobridge-validator"
+version = "0.1.131"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d050595651aafef26e705025b671785abf9bf8c62ae1dfcb3e9828741c33f96"
+dependencies = [
+ "ferrobridge-fhirpath",
+ "ferrobridge-term",
+ "fhir-types",
+ "flate2",
+ "http",
+ "regex",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1494,6 +1533,7 @@ dependencies = [
  "async-trait",
  "eehrxf",
  "ferrobridge-term",
+ "ferrobridge-validator",
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
@@ -1607,6 +1647,7 @@ dependencies = [
  "clap",
  "eehrxf",
  "ehds-logging",
+ "ferrobridge-validator",
  "ferrofed-eehrxf",
  "ferrofed-engine",
  "ferrofed-identity",
@@ -2584,9 +2625,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.2.3"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3190fe9c0b3d3e131e1e39be8e741556c6915f39f1dab720f321e12e969ea21"
+checksum = "59a774a45545a2b1cced10d75810602969c66bd6dc843634d76931965084320b"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -2608,9 +2649,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.43"
+version = "0.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b4a312f1fdc59d9a8abd21ad1f43ef73381690067363cb5bfa11b49c896efe"
+checksum = "12f2722b6390aa033b3d7f33fa7c4d2e3470f2c844e385d9616a283ae7fd9939"
 dependencies = [
  "async-trait",
  "fhir-types",
