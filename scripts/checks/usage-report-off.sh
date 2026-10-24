@@ -19,12 +19,8 @@
 # Any other job (`config check`, `healthcheck`, `--version`) sends no report
 # and is no launch. The gateway also stays silent when `GITHUB_ACTIONS` or
 # `CI` is set; this guard covers what that misses, a container that does not
-# inherit the runner's environment (#1122). The quickstart compose file at
-# the repository root is a launcher too, started by hand with `docker
-# compose up`: a service there that runs the gateway image carries the
-# switch in its `environment:` map (#1280). The release compose file under
-# `deploy/compose/` is an installation and reports by default, so it is no
-# launcher. No specification governs this: our own design.
+# inherit the runner's environment (#1122). No specification governs this:
+# our own design.
 #
 # Exempt: this file, which reads the commands as data.
 #
@@ -42,9 +38,6 @@ readonly SERVE='[[:space:]"'\'']serve(["'\''[:space:]]|$)'
 readonly COMPOSE_UP='docker[ -]compose([[:space:]].*)?[[:space:]]up([[:space:]]|$)'
 # The switch handed to a container on its own `docker run` command line.
 readonly RUN_SWITCH='(-e|--env)[[:space:]=]+["'\'']?FERROFED__USAGE_REPORT__ENABLED=false'
-# The quickstart compose file, and a service image that is the gateway's.
-readonly QUICKSTART='compose.yaml'
-readonly GATEWAY_IMAGE='^[[:space:]]*image:[[:space:]]*["'\'']?ghcr\.io/ferrohealth/ferrofed[:@]'
 # A Rust test that starts the binary as a server, and the switch it carries.
 readonly RUST_BINARY='CARGO_BIN_EXE_ferrofed"'
 readonly RUST_LAUNCH='"serve"'
@@ -109,18 +102,6 @@ findings() {
     carries_switch "$f" || printf '%s\n' "$f"
   done < <(candidates "$@")
   rust_findings "$@"
-  quickstart_findings "$@"
-}
-
-# Prints the quickstart compose file when a service in it runs the gateway
-# image and the file does not carry the switch.
-quickstart_findings() {
-  local files lines
-  files="$("$@")"
-  grep -qxF "$QUICKSTART" <<< "$files" || return 0
-  lines="$(logical_lines "$QUICKSTART")"
-  grep -qE "$GATEWAY_IMAGE" <<< "$lines" || return 0
-  grep -qE "$SWITCH" <<< "$lines" || printf '%s\n' "$QUICKSTART"
 }
 
 # Prints every tracked Rust source that starts the binary with `serve`
@@ -185,21 +166,6 @@ self_test() {
     app/server/tests/off.rs app/server/tests/job.rs app/server/tests/console.rs; do
     if grep -qxF "$name" <<< "$found"; then
       echo "self-test: $name was flagged" >&2
-      failures=1
-    fi
-  done
-  mkdir -p "$tmp/on" "$tmp/off" "$tmp/other"
-  printf 'services:\n  ferrofed:\n    image: ghcr.io/ferrohealth/ferrofed:0.0.1\n    environment:\n      FERROEHR__USAGE_REPORT__ENABLED: "false"\n' > "$tmp/on/$QUICKSTART"
-  printf 'services:\n  ferrofed:\n    image: ghcr.io/ferrohealth/ferrofed:0.0.1\n    environment:\n      FERROFED__USAGE_REPORT__ENABLED: "false"\n' > "$tmp/off/$QUICKSTART"
-  printf 'services:\n  node:\n    image: ghcr.io/ferrohealth/ferroehr:5.3.2\n' > "$tmp/other/$QUICKSTART"
-  found="$(cd "$tmp/on" && findings printf '%s\n' "$QUICKSTART")"
-  grep -qxF "$QUICKSTART" <<< "$found" || {
-    echo "self-test: a quickstart compose file without the switch was not caught" >&2
-    failures=1
-  }
-  for name in off other; do
-    if [[ -n "$(cd "$tmp/$name" && findings printf '%s\n' "$QUICKSTART")" ]]; then
-      echo "self-test: the $name quickstart compose file was flagged" >&2
       failures=1
     fi
   done

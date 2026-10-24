@@ -328,6 +328,12 @@ images before v0.0.7 do not carry, so with an older `FERROFED_VERSION` the
 gateway never turns healthy and `--wait` fails. No compose file builds the
 image; every one runs the published image.
 
+The gateway and the four FerroEHR nodes send their installation reports to
+FerroPULSE by default, the gateway's instance id kept on the
+`ferrofed-state` volume. `FERROFED__USAGE_REPORT__ENABLED=false` and
+`FERROEHR__USAGE_REPORT__ENABLED=false`, in your shell or `.env`, stop them
+([The usage report](usage-report.md)).
+
 | Service | What it is | On the host |
 |---|---|---|
 | `ferrofed` | the gateway | `127.0.0.1:8080` |
