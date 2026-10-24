@@ -44,7 +44,7 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.11 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.12 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
@@ -122,11 +122,23 @@ operator console, and every replica follows
 ([#575](https://github.com/FerroHEALTH/FerroFED/issues/575)). The book adds
 the Annex II checklist, the technical documentation, the cybersecurity risk
 assessment and the CRA information to the user.
+v0.0.12 rebuilds the operator console on FerroUI 0.3.6 as
+`ferrofed-console`, its own image `ghcr.io/ferrohealth/ferrofed-console`:
+every page is drawn on the server and every action works with no
+WebAssembly ([the operator console](https://ferrofed.eu/docs/operate/operator-console.html)).
+Client authentication runs on `ferrohealth-smart`, the resource-server
+crate the FerroHEALTH products share, static bearer tokens are gone, and
+the audit trail and the access record come from the published FerroAUDIT
+crates. Each release scans both images and the binaries and is refused
+while a finding has no OpenVEX statement that judges it. The upgrade notes
+say what an operator changes
+([upgrading](https://ferrofed.eu/docs/operate/upgrading.html)).
 Planned: the national contact point's connector
 ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), the logging
-component's log access interface and review tools
+component's re-check against the Art 36(1) common specifications once
+they are adopted
 ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521),
-[#660](https://github.com/FerroHEALTH/FerroFED/issues/660)), the rest of the
+[#799](https://github.com/FerroHEALTH/FerroFED/issues/799)), the rest of the
 European interoperability component, prescriptions from openEHR medication
 data among it
 ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522),

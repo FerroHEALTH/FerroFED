@@ -57,6 +57,7 @@ bootstrap core comes from the file alone and is never part of a revision:
 | `[server]` | the client listener: its address, TLS, base path and limits |
 | `[metrics]` | the admin listener and its scrape authentication |
 | `[auth]` | client authentication, the operator scope among it |
+| `[trust]` | each issuer's policy, the edge mode and the purposes of use client authentication holds a token to |
 | `[config]` | the revision store itself |
 | `[dev]` | the development cross-reference pairs patient identifiers with `ehr_id`s, which no store holds |
 

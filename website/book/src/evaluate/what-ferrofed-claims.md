@@ -389,18 +389,49 @@ Released on 2026-10-16.
 - The `openehr-*` crates at 0.0.87 with FHIRconnect 0.1.117 on the same
   release ([#714](https://github.com/FerroHEALTH/FerroFED/issues/714)).
 
+### v0.0.12: the console rebuilt on FerroUI, and every finding judged
+
+Released on 2026-10-24.
+
+- The operator console rebuilt on FerroUI 0.3.6 as `ferrofed-console`,
+  its own image `ghcr.io/ferrohealth/ferrofed-console`: every page drawn on
+  the server from FerroUI's components and every action a form post that
+  works with no WebAssembly, the pages of FerroUI's reviewed FerroFED
+  design, and every word from a catalog, English the one language that
+  ships
+  ([#1219](https://github.com/FerroHEALTH/FerroFED/issues/1219), [#1230](https://github.com/FerroHEALTH/FerroFED/issues/1230), [#1233](https://github.com/FerroHEALTH/FerroFED/issues/1233), [#1162](https://github.com/FerroHEALTH/FerroFED/issues/1162),
+  [The operator console](../operate/operator-console.md)).
+- Client authentication, the SMART on openEHR grants and the gateway's own
+  OAuth 2.0 clients on `ferrohealth-smart`, the resource-server crate the
+  FerroHEALTH products share, with every static bearer token removed: a
+  machine authenticates with HTTP Basic or the client credentials grant
+  ([#1174](https://github.com/FerroHEALTH/FerroFED/issues/1174), [#1163](https://github.com/FerroHEALTH/FerroFED/issues/1163), [#1186](https://github.com/FerroHEALTH/FerroFED/issues/1186),
+  [Client authentication](../operate/authentication.md)).
+- The audit trail and the access record from the published FerroAUDIT
+  crates, and the identity crates from FerroPIX, with what the gateway
+  records unchanged
+  ([#1177](https://github.com/FerroHEALTH/FerroFED/issues/1177), [#1211](https://github.com/FerroHEALTH/FerroFED/issues/1211), [#367](https://github.com/FerroHEALTH/FerroFED/issues/367)).
+- The patient summary's term-mapping rule: a mapping that is no
+  equivalence is written into the section's narrative and never as a coding
+  ([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)).
+- Each release scanned in full, its images and binaries at every severity,
+  and refused while a finding has no OpenVEX statement that judges it; each
+  image scanned before it is tagged, and the published images every week
+  ([#1238](https://github.com/FerroHEALTH/FerroFED/issues/1238)).
+- A Security section that names each fix's advisory and, beside other
+  changes, says why the fix did not ship alone
+  ([#1237](https://github.com/FerroHEALTH/FerroFED/issues/1237)).
+
 ## Planned
 
 Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.12: the national contact point's connector, serving MyHealth@EU's
-national infrastructure from federated openEHR data, with a harness
-connector and its end-to-end test ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)).
-
-v0.0.13: the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging component's log
-access interface against the Art 36(1) common specifications ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660),
+v0.0.13: the national contact point's connector, with a harness connector
+and its end-to-end test, which waits on a published FerroPIX image
+([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)); the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the logging
+component re-checked against the Art 36(1) common specifications ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799),
 [#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), the other priority categories of the interoperability component
 and prescriptions from openEHR medication data through a FHIRconnect
 mapping ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's

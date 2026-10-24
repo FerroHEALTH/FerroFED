@@ -68,6 +68,10 @@ configuration. These rules bound how.
   refuse it. Setting the old and the new key together is refused, so the
   two cannot disagree. The Upgrade notes name the rename in the release
   that deprecates the key and again in the release that refuses it.
+  v0.0.12 does not keep this rule: it moves the issuer policy of `[auth]`
+  to `[trust]`, removes every static bearer token and renames the
+  console's `FERROFED_VIEWER__` overrides to `FERROFED_CONSOLE__` with no
+  release that still reads the old keys. Its upgrade notes list each one.
 - **A new key is optional, or the Upgrade notes say otherwise.** A release
   that adds a key gives it a default that keeps the behaviour of the
   release before, unless the change is a security fix that cannot keep it.
@@ -92,6 +96,62 @@ to get the fix; upgrading is free
 ([`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)).
 
 ## Upgrade notes by release
+
+### To v0.0.12, from v0.0.11
+
+- The release's compose file and the Kubernetes example now set
+  `FERROFED__USAGE_REPORT__STATE_DIR`, so a gateway started from them sends
+  the installation report to FerroPULSE. Set
+  `FERROFED__USAGE_REPORT__ENABLED=false` before you upgrade to keep it off
+  (#1122).
+- `[auth]` is now the `ferrohealth-smart` section every FerroHEALTH product
+  reads (#1174). Move each issuer's FerroFED policy (`backend_clients`,
+  `demographic_clients`, `client_tokens_act_for_professional`,
+  `professional_issuing_authority`, `[auth.issuer.patient]`,
+  `[auth.issuer.requester]`, `[auth.issuer.assurance]`,
+  `[auth.issuer.national_contact_point]` and an introspected issuer's
+  `introspection_endpoint`, `client_id` and `client_secret_file`) to a
+  `[[trust.issuer]]` entry naming the same `issuer`, and `auth.mode`,
+  `[auth.edge]` and `[auth.purpose_of_use]` to `trust.mode`, `[trust.edge]`
+  and `[trust.purpose_of_use]`. Drop `jwks_uri` from each issuer: the key
+  set is read from the issuer's RFC 8414 metadata, or from `jwks_file`.
+  Replace each issuer's `operator_scope` with the one `auth.product_scope`,
+  a string starting with `__` or a full URI you control. `auth.audience` is
+  a list, and the clock skew, key set and timeout keys are
+  `clock_skew_seconds`, `jwks_max_age_seconds`,
+  `jwks_refresh_interval_seconds` and `timeout_ms`.
+- Every static bearer token is gone (#1163). Replace `bearer_token` and
+  `bearer_token_file` in a `[credentials."<endpoint>"]` section or a
+  service's credentials with `user` and `password_file`, or with an `oauth`
+  table, the client credentials grant of `ferrohealth-smart`; Mitz, the NVI
+  and the terminology server take `user` and `password_file`. Replace
+  `[metrics] scrape_token_file` with `scrape_users`, naming users of
+  `[[auth.basic.users]]` whose Argon2id `password_hash_file` you write, and
+  give Prometheus `basic_auth`. Replace `[pmir] feed_token_file` with
+  `feed_users`, naming the Registry's own `[[auth.basic.users]]` user, and
+  give the Registry its password.
+- An `oauth2` section that asks for a plain client-credentials token, with
+  no token exchange, no `DPoP` key, no binding to or authentication by the
+  TLS client certificate and an assertion naming the token endpoint, is
+  refused: move it to an `oauth` table, whose `private_key_jwt` signs with
+  its own `private_key_file`.
+- A log filter that names `ihe_iti::atna` (the audit spool and forwarder)
+  names `ihe_atna::atna` instead; the events are the same.
+- The operator console is now `ferrofed-console` (#1219). Pull
+  `ghcr.io/ferrohealth/ferrofed-console` in place of
+  `ghcr.io/ferrohealth/ferrofed-viewer`, rename every
+  `FERROFED_VIEWER__<SECTION>__<KEY>` override to
+  `FERROFED_CONSOLE__<SECTION>__<KEY>` and `FERROFED_VIEWER_CONFIG` to
+  `FERROFED_CONSOLE_CONFIG`, and run the binary as `ferrofed-console`. The
+  session and theme cookies are renamed, so every operator signs in once
+  more after the upgrade.
+- If you edited the `ferroehr-config` block of the quickstart's
+  `compose.yaml`, FerroEHR 5.3.2 refuses the 4.3.9 Basic user keys at boot:
+  rename `username` to `user`, give each user its `scopes` (the quickstart
+  grants `user/composition-*.cruds`, `user/template-*.cruds`,
+  `user/aql-*.cruds` and `__ferroehr.platform`), and move each user's
+  `roles` to `[authz.rbac.basic_roles]` keyed by the user (#1226).
+- Bookmarks of the operator console's `/members`, `/routing` and `/federation` pages answer `404`: use `/organisations`, a node's Routes tab under `/organisations/{org}/{node}/routes`, and `/self-description` (#1230). Each preference is now a cookie of its own (`ferrofed_console_theme`, `ferrofed_console_density`, `ferrofed_console_motion` and the others); the theme cookie is `ferrofed_console_theme` in place of 0.0.11's `ferrofed_viewer_theme`, so each operator chooses the theme once more. A deployment that builds the site bundle itself runs `cargo leptos build --split`, as `scripts/release/console-site.sh` does.
 
 ### To v0.0.11, from v0.0.10
 
