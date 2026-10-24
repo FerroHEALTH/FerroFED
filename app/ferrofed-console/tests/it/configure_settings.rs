@@ -232,3 +232,62 @@ async fn with_revisions_off_the_settings_tabs_show_alone_and_read_only()
     assert!(!fhir.contains(r#"value="save-settings""#), "{fhir}");
     Ok(())
 }
+
+/// The authentication settings of a gateway that trusts a national contact
+/// point: the file sets them, the introspection secret by its file alone.
+const AUTHENTICATION: &str = r#"{"ui":"managed","revision":1,"settings":[
+    {"key":"auth.audience","section":"authentication","value":["urn:example:gw"],"source":"file",
+     "restart":true,"editable":false},
+    {"key":"auth.product_scope","section":"authentication","value":"__ferrofed.operator",
+     "source":"file","restart":false,"editable":false},
+    {"key":"trust.issuer[0].issuer","section":"authentication","value":"https://ncp.example.org",
+     "source":"file","restart":false,"editable":false},
+    {"key":"trust.issuer[0].client_secret","section":"authentication","source":"file","restart":false,
+     "secret":{"set":true,"reference":"/run/secrets/synthetic-introspection"},"editable":false},
+    {"key":"trust.issuer[0].national_contact_point.family_name","section":"authentication",
+     "value":"ncp_family_name","source":"file","restart":false,"editable":false},
+    {"key":"trust.issuer[0].national_contact_point.correlation_header","section":"authentication",
+     "value":"ncp-correlation-id","source":"file","restart":false,"editable":false},
+    {"key":"trust.issuer[0].national_contact_point.additional_countries","section":"authentication",
+     "value":["XA"],"source":"file","restart":false,"editable":false}
+]}"#;
+
+/// Regulation (EU) 2025/327 Art 23: an operator sees the national contact
+/// point the file declares, every claim name with its key, the correlation
+/// header and the added countries, on a read-only tab, and its secret by
+/// the file it is read from alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_authentication_tab_shows_the_national_contact_point_read_only()
+-> Result<(), Box<dyn Error>> {
+    let listener = listener().await;
+    running(&listener, AUTHENTICATION).await;
+    let (service, session) = signed_in_console(&listener)?;
+    let overview = page(&service, &session, "/configuration").await?;
+    assert!(
+        overview.contains(r#"href="/configuration/authentication""#),
+        "{overview}"
+    );
+    let body = page(&service, &session, "/configuration/authentication").await?;
+    for shown in [
+        "Authentication",
+        "Trusted issuer",
+        "https://ncp.example.org",
+        "Family name claim",
+        "ncp_family_name",
+        "trust.issuer[0].national_contact_point.family_name",
+        "Correlation header",
+        "ncp-correlation-id",
+        "Added countries",
+        "XA",
+        "Introspection secret",
+        "/run/secrets/synthetic-introspection",
+        "from the configuration file",
+    ] {
+        assert!(body.contains(shown), "{shown}: {body}");
+    }
+    assert!(
+        !body.contains(r#"href="/configuration/authentication/edit""#),
+        "the file alone sets the tab, so it offers no Edit: {body}"
+    );
+    Ok(())
+}

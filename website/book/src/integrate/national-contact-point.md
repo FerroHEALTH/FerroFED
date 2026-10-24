@@ -68,7 +68,12 @@ correlation_header = "ncp-correlation-id"
 
 `ferrofed config check` reads the table, and `OPTIONS {base}/` declares the
 contact point under `federation.national_contact_point`, so the connector's
-operator can check what the gateway expects.
+operator can check what the gateway expects. You see the running values on
+the operator console's Configuration page, on its Authentication tab, and in
+the running configuration of the admin listener
+([The running configuration](../operate/configuration-revisions.md#the-running-configuration)):
+each claim name with its key, the correlation header and the added
+countries, and any secret by the file it is read from alone.
 
 ## What the connector calls
 

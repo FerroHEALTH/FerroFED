@@ -148,7 +148,7 @@ carries:
 | Member | What it says |
 |---|---|
 | `key` | the dotted key, such as `federation.per_node_timeout_ms` |
-| `section` | the tab it belongs to: `federation`, `fan-out`, `consent`, `stored-queries`, `access-log` or `fhir` |
+| `section` | the tab it belongs to: `federation`, `fan-out`, `consent`, `stored-queries`, `access-log`, `fhir` or `authentication` |
 | `value` | the value this replica runs with; absent for a secret, and for a setting nothing sets that has no default |
 | `source` | where the value comes from: `file`, `environment` (a `FERROFED__` override), `revision` (the revision this replica runs, under `managed`) or `default` |
 | `default` | the value the gateway takes when nothing sets it, when it has one |
@@ -156,6 +156,17 @@ carries:
 | `next` | for such a setting, the value the next start takes when it differs from the running one |
 | `secret` | for a secret, `set` and the file it is read from as `reference`; never its value |
 | `editable` | `true` when `PUT /admin/config/settings` may change it: under `managed`, a setting of one value that is no secret |
+
+The `authentication` section lists who may call, which only the file sets
+and no revision holds: `auth.audience` (a change waits for the next start),
+`auth.product_scope`, each `[[auth.issuer]]` by its `issuer` and
+`jwks_file`, and each `[[trust.issuer]]` by its `issuer`, its introspection
+`client_secret` as a secret named by its file, and, for an issuer declared a
+[national contact point](authentication.md#national-contact-points), every
+key of its `national_contact_point` table. An issuer is keyed by its
+position, such as `trust.issuer[0].national_contact_point.family_name`, as a
+reload names it. None of them is editable, and a Basic user's password hash
+is not listed.
 
 `PUT /admin/config/settings` takes `{"base": <newest>, "reason": "…",
 "settings": {"federation.per_node_timeout_ms": "3000"}}` and saves a

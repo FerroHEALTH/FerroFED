@@ -103,7 +103,7 @@ fn under_managed_a_value_comes_from_the_revision_and_a_scalar_is_editable() {
     let templates = document.setting("access_log.templates").expect("listed");
     assert!(!templates.editable, "a table is changed by an import");
     assert_eq!(Source::Revision, templates.source);
-    assert_eq!(6, Section::ALL.len());
+    assert_eq!(7, Section::ALL.len());
     for section in Section::ALL {
         assert!(document.of(section).count() > 0, "{section:?}");
     }

@@ -68,17 +68,21 @@ pub enum Section {
     AccessLog,
     /// The FHIR face of the European exchange format.
     Fhir,
+    /// Who may call: the trusted issuers, a national contact point among
+    /// them, read from the file alone.
+    Authentication,
 }
 
 impl Section {
     /// Every section, in the order a page shows them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Federation,
         Self::FanOut,
         Self::Consent,
         Self::StoredQueries,
         Self::AccessLog,
         Self::Fhir,
+        Self::Authentication,
     ];
 
     /// The section as the document and a route name it.
@@ -91,6 +95,7 @@ impl Section {
             Self::StoredQueries => "stored-queries",
             Self::AccessLog => "access-log",
             Self::Fhir => "fhir",
+            Self::Authentication => "authentication",
         }
     }
 
