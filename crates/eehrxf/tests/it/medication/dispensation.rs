@@ -17,6 +17,7 @@ use eehrxf::medication::WriteError;
 use eehrxf::medication::dispensation::Dispense;
 use eehrxf::medication::dispensation::RECORDED;
 use eehrxf::receive::conform::FindingKind;
+use eehrxf::receive::conform::Unread;
 use fhir_types::codec::Object;
 use fhir_types::codec::Value;
 use fhir_types::r4::identifier::Identifier;
@@ -66,6 +67,85 @@ fn edited(edit: impl Fn(&mut Object)) -> Result<String, Box<dyn Error>> {
 #[test]
 fn a_written_dispense_conforms_to_mpd() -> Result<(), Box<dyn Error>> {
     profiles()?.check_dispense(&dispense().to_json()?)?;
+    Ok(())
+}
+
+// NOTE: FHIR R4 conformance-rules.html §2.1.0.6: an invariant "must evaluate to true" on
+// each occurrence, so one the check does not read is listed, on every element in play.
+#[test]
+fn the_invariants_of_every_element_in_play_are_listed_as_not_evaluated()
+-> Result<(), Box<dyn Error>> {
+    let conformance = profiles()?.check_dispense(&dispense().to_json()?)?;
+    let listed = |element: &str, key: &str| {
+        conformance.unevaluated().iter().any(|unevaluated| {
+            unevaluated.element == element
+                && unevaluated.reason == Unread::Invariant(key.to_owned())
+        })
+    };
+    assert!(
+        listed("MedicationDispense.status", "ele-1"),
+        "an invariant of a present element below the root: {:#?}",
+        conformance.unevaluated()
+    );
+    assert!(
+        !listed("MedicationDispense.receiver", "ele-1"),
+        "an element the dispense does not carry has no occurrence to hold"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_dispense_that_breaks_an_invariant_is_answered_with_it_listed() -> Result<(), Box<dyn Error>> {
+    let text = edited(|dispense| {
+        dispense.insert(
+            String::from("whenPrepared"),
+            Value::String(String::from("2026-02-02T10:00:00Z")),
+        );
+    })?;
+    let conformance = profiles()?.check_dispense(&object(&text)?)?;
+    assert!(
+        conformance.unevaluated().iter().any(|unevaluated| {
+            unevaluated.element == "MedicationDispense"
+                && unevaluated.reason == Unread::Invariant(String::from("mdd-1"))
+        }),
+        "mdd-1, which the dispense breaks, is named as not evaluated, never passed: {:#?}",
+        conformance.unevaluated()
+    );
+    Ok(())
+}
+
+#[test]
+fn a_status_outside_its_required_value_set_is_answered_with_the_binding_listed()
+-> Result<(), Box<dyn Error>> {
+    let text = edited(|dispense| {
+        dispense.insert(
+            String::from("status"),
+            Value::String(String::from("synthetic-not-a-status")),
+        );
+    })?;
+    let conformance = profiles()?.check_dispense(&object(&text)?)?;
+    assert!(
+        conformance.unevaluated().iter().any(|unevaluated| {
+            unevaluated.element == "MedicationDispense.status"
+                && matches!(unevaluated.reason, Unread::Binding { .. })
+        }),
+        "the binding the status breaks is named as not evaluated, never passed: {:#?}",
+        conformance.unevaluated()
+    );
+    Ok(())
+}
+
+#[test]
+fn every_required_binding_is_listed_as_not_evaluated() -> Result<(), Box<dyn Error>> {
+    let conformance = profiles()?.check_dispense(&dispense().to_json()?)?;
+    assert!(
+        conformance.unevaluated().iter().any(|unevaluated| {
+            unevaluated.element == "MedicationDispense.status"
+                && matches!(unevaluated.reason, Unread::Binding { .. })
+        }),
+        "the required binding of the status, which no expansion decides: {:#?}",
+        conformance.unevaluated()
+    );
     Ok(())
 }
 

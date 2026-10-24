@@ -149,6 +149,15 @@ impl Conformance {
         &self.unevaluated
     }
 
+    /// Returns the conformance of a check that lists `unevaluated` and
+    /// found nothing.
+    #[cfg(any(feature = "prescription", feature = "dispensation"))]
+    pub(crate) fn listing(unevaluated: impl IntoIterator<Item = Unevaluated>) -> Self {
+        Self::default().join(Self {
+            unevaluated: unevaluated.into_iter().collect(),
+        })
+    }
+
     /// Returns the conformance of two checks that both passed: what either
     /// could not evaluate, ordered by profile and element, each once.
     #[cfg(any(feature = "prescription", feature = "dispensation"))]
@@ -366,6 +375,13 @@ pub enum CheckError {
         url: String,
         /// The resource type it was given for.
         expected: &'static str,
+    },
+    /// A coded element the R4 element table does not describe, or that does
+    /// not decode as its type, so its bindings cannot be read.
+    #[error("{location} is a coded element whose bindings cannot be read")]
+    Unreadable {
+        /// The element path.
+        location: String,
     },
     /// The document breaks a profile.
     #[error("the document breaks its profiles in {} places: {}", findings.len(), Listed(findings))]
