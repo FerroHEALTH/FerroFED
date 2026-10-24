@@ -137,11 +137,12 @@ Planned: the national contact point's connector
 ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), the logging
 component's re-check against the Art 36(1) common specifications once
 they are adopted
-([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)), the rest of the
+([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)), the patient
+summary's re-check against the Art 15(1) act once it is adopted
+([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)), the rest of the
 European interoperability component, prescriptions from openEHR medication
 data among it
-([#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
-[#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
+([#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
 [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the
 rest of the conformity file
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525)).
