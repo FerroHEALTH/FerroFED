@@ -179,14 +179,14 @@ const GRANT_FLOWS: &str = "DELETE FROM SEC_APP_POL_ASSOC_TBL \
      AND OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%';";
 
 /// The key of every security application SanteMPI holds.
-// NOTE: santedb/santedb-data@11cc836 DbSecurityApplication: an application is a row of
-// sec_app_tbl, keyed by app_id.
+// NOTE: santedb/santedb-server@a85732a (v2.5.10) santedb-ddl.sql: an application is a row
+// of SEC_APP_TBL, keyed by APP_ID.
 const APPLICATIONS: &str = "SELECT APP_ID FROM SEC_APP_TBL";
 
-/// The key of every identity domain SanteMPI holds.
-// NOTE: santedb/santedb-data@11cc836 DbIdentityDomain: a domain is a row of id_dmn_tbl,
-// keyed by dmn_id.
-const DOMAINS: &str = "SELECT DMN_ID FROM ID_DMN_TBL";
+/// The key of every identity domain (assigning authority) SanteMPI holds.
+// NOTE: santedb/santedb-server@a85732a (v2.5.10) santedb-ddl.sql: on the 2.5 line of the
+// pinned image an identity domain is a row of ASGN_AUT_TBL, keyed by AUT_ID.
+const DOMAINS: &str = "SELECT AUT_ID FROM ASGN_AUT_TBL";
 
 /// The policies that admit an application to the client-credentials grant
 /// with no device credential, which the Manager denies an application they
