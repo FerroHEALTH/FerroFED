@@ -8,32 +8,35 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `faa5eca9add80f772589e00c43bbe8251a25c54a5d3fb94bc078c7a1b89c1c9a`
-- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `653ef3161823f668756ad2b5783d29e2329926aeeac4734dee8dd9a841031598`
+- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 4 committed, 2 cache only, 0 needing
   manual retrieval
 - Files in this directory: 4 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `393add45ab4d5615f3bbae313b866ec899060c5971242bfdebfaa624caa3676d`
+  `PROVENANCE.md` excluded): `808411588cff969914f07faf38e9d94bb03d3ada980e0bd464b4dfdaf71526c9`
 - Read by: #488 (the country research into identity resolution,
-  localization, consent, addressing and authentication to nodes)
+  localization, consent, addressing and authentication to nodes) and
+  #1290 (the re-check of decisions A66 to A72), and the testkit
 
-The FHIR package of the NCPeH API implementation guide and three of its
-rendered pages (the home page, Patient Identification and Document
-Retrieval), all CC0-1.0; the index of the MyHealth@EU FHIR guides, kept in
-the cache only; and the OpenNCP v10.1.0 source, the reference NCPeH, pinned
-by tag and commit and kept in the cache as evidence only.
+The FHIR package of the NCPeH API implementation guide at its current
+build, 9.1.1-ci, and three of its rendered pages (the home page, Patient
+Identification and Document Retrieval), all CC0-1.0; the index of the
+MyHealth@EU FHIR guides, kept in the cache only; and the OpenNCP v10.1.0
+source, the reference NCPeH, pinned by tag and commit and kept in the cache
+as evidence only. scripts/checks/pin-freshness.sh reads the version the
+build URL serves.
 
 ## Artefacts
 
-### `myhealth.eu.fhir.ncp-api-9.1.0.tgz` (committed)
+### `myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz` (committed)
 
-- Source: <https://fhir.ehdsi.eu/ncp-api/package.tgz>
-- Version: 9.1.0 (ci-build, draft, 2026-05-05)
-- sha256: `a9284da494a0402758d912791cac8aa17270bfb27983e9e21e1be23b061817ad`
+- Source: <https://build-fhir.ehdsi.eu/ncp-api/package.tgz>
+- Version: 9.1.1-ci (ci-build, draft, 2026-09-08)
+- sha256: `acf655481026decd6395ffc2f66c5b0b7b3316a6aaed9520db0922d727ae8fef`
 - Licence: CC0-1.0: the license of the package manifest and of the ImplementationGuide resource
-- Note: Not on packages.fhir.org; the URL serves the current build (package.json says notForPublication: true), so a new build fails the pin loudly. Source: https://code.europa.eu/ehdsi/ehdsi-fhir-ig (ncp-api/).
+- Note: Not on packages.fhir.org; the URL serves the current build (package.json says notForPublication: true), so a new build fails the pin loudly. https://fhir.ehdsi.eu/ncp-api/package.tgz still serves 9.1.0 of 2026-05-05 (sha256 a9284da494a0402758d912791cac8aa17270bfb27983e9e21e1be23b061817ad, read 2026-10-24); 9.1.1-ci adds the study and image retrieval and the vaccination history. Source: https://code.europa.eu/ehdsi/hl7-fhir-ig/ncp-api.
 
 ### `fhir-ehdsi-index.html` (cache only, not redistributed)
 
@@ -43,31 +46,31 @@ by tag and commit and kept in the cache as evidence only.
 - Licence: No licence statement on the page
 - Not redistributed: the script fetches it into `.vendor-cache/ehdsi/`, which git
   ignores; this repository carries none of its content.
-- Note: The index of the MyHealth@EU FHIR implementation guides; a live page.
+- Note: The index of the MyHealth@EU FHIR implementation guides; a live page. Each guide it lists is vendored by scripts/vendor/myhealth-eu.sh or scripts/vendor/eehrxf.sh.
 
 ### `ehdsi-ncp-api-sequence-pat.html` (committed)
 
-- Source: <https://fhir.ehdsi.eu/ncp-api/sequence-pat.html>
-- Version: 9.1.0 build
-- sha256: `f7102d0bdaadf3a1b0e7dc98ace7879775e91f9c3282bbc9ccb014dac65cce00`
+- Source: <https://build-fhir.ehdsi.eu/ncp-api/sequence-pat.html>
+- Version: 9.1.1-ci build
+- sha256: `6b9a60172684bdf1c1aed8c047e796c0dc3274dc77e20d4006d00803c9d04077`
 - Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
 - Note: The rendered Patient Identification page of the current build; a new build fails the pin loudly.
 
 ### `ehdsi-ncp-api-index.html` (committed)
 
-- Source: <https://fhir.ehdsi.eu/ncp-api/index.html>
-- Version: 9.1.0 build
-- sha256: `c558e8a911d45d8fa3d95d61e609374785e5634ba41a556e543c668aa1e8a2bb`
+- Source: <https://build-fhir.ehdsi.eu/ncp-api/index.html>
+- Version: 9.1.1-ci build
+- sha256: `ebf58fcb97a7fdcf26281c4041a6dac39f6f8b843f307612d094c22ce0cbe47c`
 - Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
 - Note: The rendered home page of the current build, with the guide scope (NCPeH to NCPeH only); a new build fails the pin loudly.
 
 ### `ehdsi-ncp-api-sequence-doc.html` (committed)
 
-- Source: <https://fhir.ehdsi.eu/ncp-api/sequence-doc.html>
-- Version: 9.1.0 build
-- sha256: `fb3373e02407af2453742061a17a4e4b76bb35f8ee6848a6826595778b9b855c`
+- Source: <https://build-fhir.ehdsi.eu/ncp-api/sequence-doc.html>
+- Version: 9.1.1-ci build
+- sha256: `b0e9ccec9df5a9456c271431e2cefeb8423c201ef1587bf331b0cc22940bb4cd`
 - Licence: CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0
-- Note: The rendered Document Retrieval page of the current build; a new build fails the pin loudly.
+- Note: The rendered Document Retrieval page of the current build, with its implementation pre-requisites; a new build fails the pin loudly.
 
 ### `openncp-v10.1.0.tar.gz` (cache only, not redistributed)
 

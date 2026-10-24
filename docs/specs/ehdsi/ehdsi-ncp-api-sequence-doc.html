@@ -3,7 +3,7 @@
 <html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" lang="en">
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
-    <title>Document Retrieval - MyHealth@Eu NCPeH API v9.1.0</title>
+    <title>Document Retrieval - MyHealth@Eu NCPeH API v9.1.1-ci</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="author" content="http://hl7.org/fhir"/>
@@ -45,8 +45,8 @@
 	  <script src="assets/js/prism.js"></script>
     <script type="text/javascript" src="assets/js/mermaid.js"></script>
     <script type="text/javascript" src="assets/js/mermaid-init.js"></script>
-    <style type="text/css">h2{--heading-prefix:"8"}
-    h3,h4,h5,h6{--heading-prefix:"8"}</style>
+    <style type="text/css">h2{--heading-prefix:"14"}
+    h3,h4,h5,h6{--heading-prefix:"14"}</style>
     <div id="segment-header" class="segment">  <!-- segment-header -->
       <div class="container">  <!-- container -->
 
@@ -78,7 +78,7 @@
         <div id="ig-status">
           <p><span style="font-size:12pt;font-weight:bold">MyHealth@Eu NCPeH API</span>
             <br/>
-            <span style="display:inline-block;">9.1.0 - ci-build
+            <span style="display:inline-block;">9.1.1-ci - ci-build
 
 
 
@@ -137,8 +137,30 @@
   <li>
     <a href="content.html">Data</a>
   </li>
-  <li>
-    <a href="application.html">Application</a>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Application
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="application.html">Overview</a>
+      </li>
+      <li>
+        <a href="app-pat.html">Patient Identification</a>
+      </li>
+      <li>
+        <a href="app-doc.html">Document Retrieval</a>
+      </li>
+      <li>
+        <a href="app-doc-push.html">Document Provision</a>
+      </li>
+      <li>
+        <a href="app-study.html">Study Retrieval</a>
+      </li>
+      <li>
+        <a href="app-img.html">Images Retrieval</a>
+      </li>
+    </ul>
   </li>
   <li class="dropdown">
     <a data-toggle="dropdown" href="#" class="dropdown-toggle">Implementation
@@ -147,6 +169,9 @@
     <ul class="dropdown-menu">
       <li>
         <a href="technical.html">Overview</a>
+      </li>
+      <li>
+        <a href="actors.html">Actors</a>
       </li>
       <li>
         <a href="sequence-pat.html">Patient Search</a>
@@ -159,6 +184,9 @@
       </li>
       <li>
         <a href="sequence-doc-push.html">Document Provisioning</a>
+      </li>
+      <li>
+        <a href="sequence-img.html">Images Retrieval</a>
       </li>
     </ul>
   </li>
@@ -213,7 +241,7 @@ h5:before{color:silver;counter-increment:detail;content:var(--heading-prefix) ".
 h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) "." counter(more-detail)" ";}
 </style>
 <div class="col-12">
-  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.0) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
+  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.1-ci) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
   <h2>Document Retrieval</h2>
   
 
@@ -234,8 +262,9 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
   <li><a href="#business-view" id="markdown-toc-business-view">Business View</a></li>
   <li><a href="#application-view" id="markdown-toc-application-view">Application View</a></li>
   <li><a href="#implementation-pre-requisites" id="markdown-toc-implementation-pre-requisites">Implementation pre-requisites</a></li>
-  <li><a href="#implementation-alternatives" id="markdown-toc-implementation-alternatives">Implementation alternatives</a></li>
   <li><a href="#implementation" id="markdown-toc-implementation">Implementation</a></li>
+  <li><a href="#step-by-step-breakdown-document-retrieval" id="markdown-toc-step-by-step-breakdown-document-retrieval">Step-by-Step Breakdown: Document Retrieval</a></li>
+  <li><a href="#implementation-alternatives" id="markdown-toc-implementation-alternatives">Implementation alternatives</a></li>
 </ul>
 
 </div>
@@ -248,7 +277,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 
 <h3 id="application-view">Application View</h3>
 
-<p>The implementation-indipendent sequence diagrams associated to this task is described in the in the <a href="application.html#find-identity-by-traits">Application view page</a></p>
+<p>The implementation-indipendent sequence diagrams associated to this task is described in the in the <a href="app-doc.html">Application view page</a></p>
 
 <h3 id="implementation-pre-requisites">Implementation pre-requisites</h3>
 
@@ -256,50 +285,25 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 
 <p>This implies that any solution adopted for the NCPeH to NCPeH communications has to work properly indipendently by the fact that a HL7 FHIR server, or an XDS registry/repository or any other solution solution is locally adopted.</p>
 
-<h3 id="implementation-alternatives">Implementation alternatives</h3>
-
-<p>There are multiple alternatives, not mutually exclusive, for searching, retrieving, or fetching documents using the HL7 FHIR API.</p>
-
-<p>The selected mechanism may depend on the type of document and the usage context.</p>
-
-<p>For example, searching for documents via <strong>DocumentReference</strong> - the query type used in the IHE MHD profile - enables a standardized retrieval mechanism regardless of document format. This approach is <strong>suitable for simple search mechanisms</strong> and requires that a DocumentReference instance is generated for each created document.</p>
-
-<p>On the other hand, searching via <strong>DiagnosticReport</strong> allows for more advanced queries, but it is limited to imaging and diagnostic reports, as well as HL7 FHIR documents. Other mechanisms may apply in different contexts.</p>
-
-<p>In this first version, this will be realized by <strong>searching per DocumentReference</strong></p>
-
-<p>Some alternatives - described only for documentation purposes - are listed below:</p>
-<ol>
-  <li><a href="otherOptions.html">searching per Composition</a></li>
-  <li><a href="otherOptions.html">searching per Bundle</a></li>
-  <li><a href="otherOptions.html">searching per DiagnosticReport</a> (only for imaging and laboratory reports)</li>
-</ol>
-
 <h3 id="implementation">Implementation</h3>
 
-<p>Beside the advantages described above, the DocumentReference Search mechanism permits to realize with a common call both the <em>search and retrieve</em> and the <em>document fetch</em> envisioned by the <a href="application.html#document-retrieval">Document Retrieval</a> sequence.</p>
+<p>Documents are searched and retrieved via <strong>DocumentReference</strong> - the query type used in the IHE MHD profile - which enables a standardized retrieval mechanism regardless of document format. This approach is <strong>suitable for simple search mechanisms</strong> and requires that a DocumentReference instance is generated for each created document.</p>
 
-<div>
-<table border="1" style="width:100%; text-align:left;">
-    <tr>
-        <td>Note: When used for realizing the search and retrieve feature it complies with the IHE MHD profile.</td>
-    </tr>
-</table>
-</div>
+<p>In this first version, this will be realized by <strong>searching per DocumentReference</strong>; this mechanism permits to realize with a common call both the <em>search and retrieve</em> and the <em>document fetch</em> envisioned by the <a href="app-doc.html">Document Retrieval</a> sequence.</p>
 
 <p>In the following diagram is described how the requesting NCP realizes the search or the fetch of the document by using the DocumentReference.</p>
 
 <p>In summary:</p>
 <ul>
   <li>The Requesting NCP searches for a DocumentReference.</li>
-  <li>If content data exists, the document is fetched directly.</li>
+  <li>If content data exists, the document is fetched directly from the DocumentReference.</li>
   <li>If content data is missing, the system retrieves it via a HL7 FHIR Bundle or Binary resource.</li>
 </ul>
 
 <div>
 <p> </p>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="SEQUENCE" height="727px" preserveAspectRatio="none" style="width:794px;height:727px;background:#FFFFFF;" version="1.1" viewBox="0 0 794 727" width="794px" zoomAndPan="magnify"><defs /><g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="144.5313" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="110.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="113.3984" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="431.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="71.2656" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="588.8984" /></g><rect fill="none" height="59.2656" style="stroke:#000000;stroke-width:1.5;" width="288.8252" x="488.2075" y="125.5625" /><rect fill="none" height="405.0703" style="stroke:#000000;stroke-width:1.5;" width="721.04" x="10" y="270.0938" /><rect fill="none" height="274.8672" style="stroke:#000000;stroke-width:1.5;" width="701.04" x="20" y="393.2969" /><g><title>Requesting NCP</title><rect fill="#000000" fill-opacity="0.00000" height="655.8672" width="8" x="89.1436" y="36.2969" /><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="93" x2="93" y1="36.2969" y2="692.1641" /></g><g><title>Responding NCP</title><rect fill="#000000" fill-opacity="0.00000" height="655.8672" width="8" x="559.0259" y="36.2969" /><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="562.2075" x2="562.2075" y1="36.2969" y2="692.1641" /></g><g class="participant participant-head" data-participant="NCPA"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="126.2871" x="30" y="5" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="112.2871" x="37" y="24.9951">Requesting NCP</text></g><g class="participant participant-tail" data-participant="NCPA"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="126.2871" x="30" y="691.1641" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="112.2871" x="37" y="711.1592">Requesting NCP</text></g><g class="participant participant-head" data-participant="NCPB"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="129.6367" x="498.2075" y="5" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="115.6367" x="505.2075" y="24.9951">Responding NCP</text></g><g class="participant participant-tail" data-participant="NCPB"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="129.6367" x="498.2075" y="691.1641" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="115.6367" x="505.2075" y="711.1592">Responding NCP</text></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="144.5313" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="110.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="113.3984" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="431.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="71.2656" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="588.8984" /></g><rect fill="#EEEEEE" height="3" style="stroke:#EEEEEE;stroke-width:1;" width="787.0327" x="0" y="66.8633" /><line style="stroke:#000000;stroke-width:1;" x1="0" x2="787.0327" y1="66.8633" y2="66.8633" /><line style="stroke:#000000;stroke-width:1;" x1="0" x2="787.0327" y1="69.8633" y2="69.8633" /><rect fill="#EEEEEE" height="23.1328" style="stroke:#000000;stroke-width:2;" width="226.7227" x="280.155" y="56.2969" /><line style="stroke:#000000;stroke-width:1;" x1="282.155" x2="286.155" y1="67.8633" y2="67.8633" /><line style="stroke:#000000;stroke-width:1;" x1="282.155" x2="286.155" y1="69.8633" y2="69.8633" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="203.6709" x="290.6809" y="71.8638">DocumentReference Search</text><line style="stroke:#000000;stroke-width:1;" x1="498.8777" x2="502.8777" y1="67.8633" y2="67.8633" /><line style="stroke:#000000;stroke-width:1;" x1="498.8777" x2="502.8777" y1="69.8633" y2="69.8633" /><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,106.5625,556.0259,110.5625,546.0259,114.5625,550.0259,110.5625" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="110.5625" y2="110.5625" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="284.2861" x="100.1436" y="105.4966">eHDSI DocumentReference Search Request</text></g><path d="M488.2075,125.5625 L557.6587,125.5625 L557.6587,132.6953 L547.6587,142.6953 L488.2075,142.6953 L488.2075,125.5625" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="59.2656" style="stroke:#000000;stroke-width:1.5;" width="288.8252" x="488.2075" y="125.5625" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="24.4512" x="503.2075" y="138.6294">opt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="49.8652" x="572.6587" y="137.7729">[FETCH]</text><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="163.8281" y2="163.8281" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="163.8281" y2="176.8281" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="176.8281" y2="176.8281" /><polygon fill="#181818" points="579.0259,172.8281,569.0259,176.8281,579.0259,180.8281,575.0259,176.8281" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="180.0068" x="575.0259" y="158.7622">eHDSI Transform, Translate</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="212.9609" y2="212.9609" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="212.9609" y2="225.9609" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="225.9609" y2="225.9609" /><polygon fill="#181818" points="579.0259,221.9609,569.0259,225.9609,579.0259,229.9609,575.0259,225.9609" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="207.895">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,251.0938,94.1436,255.0938,104.1436,259.0938,100.1436,255.0938" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="255.0938" y2="255.0938" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="293.9155" x="110.1436" y="250.0278">eHDSI DocumentReference Search Response</text></g><path d="M10,270.0938 L79.4512,270.0938 L79.4512,277.2266 L69.4512,287.2266 L10,287.2266 L10,270.0938" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="405.0703" style="stroke:#000000;stroke-width:1.5;" width="721.04" x="10" y="270.0938" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="24.4512" x="25" y="283.1606">opt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="324.6396" x="94.4512" y="282.3042">[DocumentReference.content.data.exists() [FETCH]]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPA"><line style="stroke:#181818;stroke-width:1;" x1="93.1436" x2="135.1436" y1="308.3594" y2="308.3594" /><line style="stroke:#181818;stroke-width:1;" x1="135.1436" x2="135.1436" y1="308.3594" y2="321.3594" /><line style="stroke:#181818;stroke-width:1;" x1="94.1436" x2="135.1436" y1="321.3594" y2="321.3594" /><polygon fill="#181818" points="104.1436,317.3594,94.1436,321.3594,104.1436,325.3594,100.1436,321.3594" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="375.9526" x="100.1436" y="303.2935">Extract report from the DocumentReference.content.data</text></g><line style="stroke:#000000;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="10" x2="731.04" y1="330.3594" y2="330.3594" /><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="395.6294" x="15" y="340.5698">[DocumentReference.content.data.empty() [SEARCH AND GET]]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPA"><line style="stroke:#181818;stroke-width:1;" x1="93.1436" x2="135.1436" y1="365.2969" y2="365.2969" /><line style="stroke:#181818;stroke-width:1;" x1="135.1436" x2="135.1436" y1="365.2969" y2="378.2969" /><line style="stroke:#181818;stroke-width:1;" x1="94.1436" x2="135.1436" y1="378.2969" y2="378.2969" /><polygon fill="#181818" points="104.1436,374.2969,94.1436,378.2969,104.1436,382.2969,100.1436,378.2969" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="455.8823" x="100.1436" y="360.231">Read url (i.e. $server/Bundle/id) from DocumentReference.content.url</text></g><path d="M20,393.2969 L84.4429,393.2969 L84.4429,400.4297 L74.4429,410.4297 L20,410.4297 L20,393.2969" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="274.8672" style="stroke:#000000;stroke-width:1.5;" width="701.04" x="20" y="393.2969" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="19.4429" x="35" y="406.3638">alt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="425.6968" x="99.4429" y="405.5073">[DocumentReference.content.contentType = #application/fhir+json]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,427.5625,556.0259,431.5625,546.0259,435.5625,550.0259,431.5625" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="431.5625" y2="431.5625" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="210.3804" x="100.1436" y="426.4966">eHDSI Get Bundle by Id Request</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="460.6953" y2="460.6953" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="460.6953" y2="473.6953" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="473.6953" y2="473.6953" /><polygon fill="#181818" points="579.0259,469.6953,569.0259,473.6953,579.0259,477.6953,575.0259,473.6953" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="104.9395" x="575.0259" y="455.6294">eHDSI Translate</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="502.8281" y2="502.8281" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="502.8281" y2="515.8281" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="515.8281" y2="515.8281" /><polygon fill="#181818" points="579.0259,511.8281,569.0259,515.8281,579.0259,519.8281,575.0259,515.8281" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="497.7622">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,540.9609,94.1436,544.9609,104.1436,548.9609,100.1436,544.9609" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="544.9609" y2="544.9609" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="45.2588" x="110.1436" y="539.895">Bundle</text></g><line style="stroke:#000000;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="20" x2="721.04" y1="553.9609" y2="553.9609" /><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="430.7134" x="25" y="564.1714">[DocumentReference.content.contentType != #application/fhir+json]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,584.8984,556.0259,588.8984,546.0259,592.8984,550.0259,588.8984" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="588.8984" y2="588.8984" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="206.8955" x="100.1436" y="583.8325">eHDSI Get Binary by Id Request</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="618.0313" y2="618.0313" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="618.0313" y2="631.0313" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="631.0313" y2="631.0313" /><polygon fill="#181818" points="579.0259,627.0313,569.0259,631.0313,579.0259,635.0313,575.0259,631.0313" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="612.9653">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,656.1641,94.1436,660.1641,104.1436,664.1641,100.1436,660.1641" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="660.1641" y2="660.1641" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="41.7739" x="110.1436" y="655.0981">Binary</text></g></g></svg>
-<p>Figure 1 - Patient Identification</p>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="SEQUENCE" height="769px" preserveAspectRatio="none" style="width:794px;height:769px;background:#FFFFFF;" version="1.1" viewBox="0 0 794 769" width="794px" zoomAndPan="magnify"><defs /><g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="144.5313" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="110.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="113.3984" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="473.6953" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="71.2656" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="631.0313" /></g><rect fill="none" height="59.2656" style="stroke:#000000;stroke-width:1.5;" width="288.8252" x="488.2075" y="125.5625" /><rect fill="none" height="405.0703" style="stroke:#000000;stroke-width:1.5;" width="721.04" x="10" y="312.2266" /><rect fill="none" height="274.8672" style="stroke:#000000;stroke-width:1.5;" width="701.04" x="20" y="435.4297" /><g><title>Requesting NCP</title><rect fill="#000000" fill-opacity="0.00000" height="698" width="8" x="89.1436" y="36.2969" /><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="93" x2="93" y1="36.2969" y2="734.2969" /></g><g><title>Responding NCP</title><rect fill="#000000" fill-opacity="0.00000" height="698" width="8" x="559.0259" y="36.2969" /><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="562.2075" x2="562.2075" y1="36.2969" y2="734.2969" /></g><g class="participant participant-head" data-participant="NCPA"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="126.2871" x="30" y="5" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="112.2871" x="37" y="24.9951">Requesting NCP</text></g><g class="participant participant-tail" data-participant="NCPA"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="126.2871" x="30" y="733.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="112.2871" x="37" y="753.292">Requesting NCP</text></g><g class="participant participant-head" data-participant="NCPB"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="129.6367" x="498.2075" y="5" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="115.6367" x="505.2075" y="24.9951">Responding NCP</text></g><g class="participant participant-tail" data-participant="NCPB"><rect fill="#E2E2F0" height="30.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="129.6367" x="498.2075" y="733.2969" /><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="115.6367" x="505.2075" y="753.292">Responding NCP</text></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="144.5313" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="110.5625" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="113.3984" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="473.6953" /></g><g><title>Responding NCP</title><rect fill="#FFFFFF" height="71.2656" style="stroke:#181818;stroke-width:1;" width="10" x="558.0259" y="631.0313" /></g><rect fill="#EEEEEE" height="3" style="stroke:#EEEEEE;stroke-width:1;" width="787.0327" x="0" y="66.8633" /><line style="stroke:#000000;stroke-width:1;" x1="0" x2="787.0327" y1="66.8633" y2="66.8633" /><line style="stroke:#000000;stroke-width:1;" x1="0" x2="787.0327" y1="69.8633" y2="69.8633" /><rect fill="#EEEEEE" height="23.1328" style="stroke:#000000;stroke-width:2;" width="226.7227" x="280.155" y="56.2969" /><line style="stroke:#000000;stroke-width:1;" x1="282.155" x2="286.155" y1="67.8633" y2="67.8633" /><line style="stroke:#000000;stroke-width:1;" x1="282.155" x2="286.155" y1="69.8633" y2="69.8633" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="203.6709" x="290.6809" y="71.8638">DocumentReference Search</text><line style="stroke:#000000;stroke-width:1;" x1="498.8777" x2="502.8777" y1="67.8633" y2="67.8633" /><line style="stroke:#000000;stroke-width:1;" x1="498.8777" x2="502.8777" y1="69.8633" y2="69.8633" /><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,106.5625,556.0259,110.5625,546.0259,114.5625,550.0259,110.5625" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="110.5625" y2="110.5625" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="284.2861" x="100.1436" y="105.4966">eHDSI DocumentReference Search Request</text></g><path d="M488.2075,125.5625 L557.6587,125.5625 L557.6587,132.6953 L547.6587,142.6953 L488.2075,142.6953 L488.2075,125.5625" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="59.2656" style="stroke:#000000;stroke-width:1.5;" width="288.8252" x="488.2075" y="125.5625" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="24.4512" x="503.2075" y="138.6294">opt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="49.8652" x="572.6587" y="137.7729">[FETCH]</text><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="163.8281" y2="163.8281" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="163.8281" y2="176.8281" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="176.8281" y2="176.8281" /><polygon fill="#181818" points="579.0259,172.8281,569.0259,176.8281,579.0259,180.8281,575.0259,176.8281" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="180.0068" x="575.0259" y="158.7622">eHDSI Transform, Translate</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="212.9609" y2="212.9609" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="212.9609" y2="225.9609" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="225.9609" y2="225.9609" /><polygon fill="#181818" points="579.0259,221.9609,569.0259,225.9609,579.0259,229.9609,575.0259,225.9609" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="207.895">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,251.0938,94.1436,255.0938,104.1436,259.0938,100.1436,255.0938" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="255.0938" y2="255.0938" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="293.9155" x="110.1436" y="250.0278">eHDSI DocumentReference Search Response</text></g><g class="message" data-participant-1="NCPA" data-participant-2="NCPA"><line style="stroke:#181818;stroke-width:1;" x1="93.1436" x2="135.1436" y1="284.2266" y2="284.2266" /><line style="stroke:#181818;stroke-width:1;" x1="135.1436" x2="135.1436" y1="284.2266" y2="297.2266" /><line style="stroke:#181818;stroke-width:1;" x1="94.1436" x2="135.1436" y1="297.2266" y2="297.2266" /><polygon fill="#181818" points="104.1436,293.2266,94.1436,297.2266,104.1436,301.2266,100.1436,297.2266" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="127.8354" x="100.1436" y="279.1606">Document Selected</text></g><path d="M10,312.2266 L74.4429,312.2266 L74.4429,319.3594 L64.4429,329.3594 L10,329.3594 L10,312.2266" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="405.0703" style="stroke:#000000;stroke-width:1.5;" width="721.04" x="10" y="312.2266" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="19.4429" x="25" y="325.2935">alt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="324.6396" x="89.4429" y="324.437">[DocumentReference.content.data.exists() [FETCH]]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPA"><line style="stroke:#181818;stroke-width:1;" x1="93.1436" x2="135.1436" y1="350.4922" y2="350.4922" /><line style="stroke:#181818;stroke-width:1;" x1="135.1436" x2="135.1436" y1="350.4922" y2="363.4922" /><line style="stroke:#181818;stroke-width:1;" x1="94.1436" x2="135.1436" y1="363.4922" y2="363.4922" /><polygon fill="#181818" points="104.1436,359.4922,94.1436,363.4922,104.1436,367.4922,100.1436,363.4922" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="401.5527" x="100.1436" y="345.4263">Extract document from the DocumentReference.content.data</text></g><line style="stroke:#000000;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="10" x2="731.04" y1="372.4922" y2="372.4922" /><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="395.6294" x="15" y="382.7026">[DocumentReference.content.data.empty() [SEARCH AND GET]]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPA"><line style="stroke:#181818;stroke-width:1;" x1="93.1436" x2="135.1436" y1="407.4297" y2="407.4297" /><line style="stroke:#181818;stroke-width:1;" x1="135.1436" x2="135.1436" y1="407.4297" y2="420.4297" /><line style="stroke:#181818;stroke-width:1;" x1="94.1436" x2="135.1436" y1="420.4297" y2="420.4297" /><polygon fill="#181818" points="104.1436,416.4297,94.1436,420.4297,104.1436,424.4297,100.1436,420.4297" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="455.8823" x="100.1436" y="402.3638">Read url (i.e. $server/Bundle/id) from DocumentReference.content.url</text></g><path d="M20,435.4297 L84.4429,435.4297 L84.4429,442.5625 L74.4429,452.5625 L20,452.5625 L20,435.4297" fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;" /><rect fill="none" height="274.8672" style="stroke:#000000;stroke-width:1.5;" width="701.04" x="20" y="435.4297" /><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="19.4429" x="35" y="448.4966">alt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="309.5684" x="99.4429" y="447.6401">[DocumentReference.content.contentType is fhir]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,469.6953,556.0259,473.6953,546.0259,477.6953,550.0259,473.6953" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="473.6953" y2="473.6953" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="210.3804" x="100.1436" y="468.6294">eHDSI Get Bundle by Id Request</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="502.8281" y2="502.8281" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="502.8281" y2="515.8281" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="515.8281" y2="515.8281" /><polygon fill="#181818" points="579.0259,511.8281,569.0259,515.8281,579.0259,519.8281,575.0259,515.8281" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="104.9395" x="575.0259" y="497.7622">eHDSI Translate</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="544.9609" y2="544.9609" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="544.9609" y2="557.9609" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="557.9609" y2="557.9609" /><polygon fill="#181818" points="579.0259,553.9609,569.0259,557.9609,579.0259,561.9609,575.0259,557.9609" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="539.895">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,583.0938,94.1436,587.0938,104.1436,591.0938,100.1436,587.0938" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="587.0938" y2="587.0938" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="45.2588" x="110.1436" y="582.0278">Bundle</text></g><line style="stroke:#000000;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="20" x2="721.04" y1="596.0938" y2="596.0938" /><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="334.0444" x="25" y="606.3042">[DocumentReference.content.contentType is not fhir]</text><g class="message" data-participant-1="NCPA" data-participant-2="NCPB"><polygon fill="#0000FF" points="546.0259,627.0313,556.0259,631.0313,546.0259,635.0313,550.0259,631.0313" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;" x1="93.1436" x2="552.0259" y1="631.0313" y2="631.0313" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="206.8955" x="100.1436" y="625.9653">eHDSI Get Binary by Id Request</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPB"><line style="stroke:#181818;stroke-width:1;" x1="568.0259" x2="610.0259" y1="660.1641" y2="660.1641" /><line style="stroke:#181818;stroke-width:1;" x1="610.0259" x2="610.0259" y1="660.1641" y2="673.1641" /><line style="stroke:#181818;stroke-width:1;" x1="569.0259" x2="610.0259" y1="673.1641" y2="673.1641" /><polygon fill="#181818" points="579.0259,669.1641,569.0259,673.1641,579.0259,677.1641,575.0259,673.1641" style="stroke:#181818;stroke-width:1;" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="124.0142" x="575.0259" y="655.0981">Request processed</text></g><g class="message" data-participant-1="NCPB" data-participant-2="NCPA"><polygon fill="#0000FF" points="104.1436,698.2969,94.1436,702.2969,104.1436,706.2969,100.1436,702.2969" style="stroke:#0000FF;stroke-width:1;" /><line style="stroke:#0000FF;stroke-width:1;stroke-dasharray:2.0,2.0;" x1="98.1436" x2="562.0259" y1="702.2969" y2="702.2969" /><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="41.7739" x="110.1436" y="697.231">Binary</text></g></g></svg>
+<p>Figure 1 - Document Retrieval</p>
 <p> </p>
 </div>
 
@@ -307,134 +311,382 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 
 <h5 id="ehdsi-documentreference-search-request">eHDSI DocumentReference Search Request</h5>
 
-<p>The <strong>Requesting NCP</strong> initiates a search query for a <strong>DocumentReference</strong> using the FHIR API:</p>
+<p>The <strong>Requesting NCP</strong> initiates a search query for a <strong>DocumentReference</strong> using the FHIR API call:</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  GET $server/DocumentReference?&lt;searchParameters&gt;&lt;modifiers&gt;
 </code></pre></div></div>
 
 <p>The query includes <strong>search parameters</strong> and <strong>modifiers</strong> to refine the search criteria.</p>
 
-<h5 id="search-parameters">Search Parameters</h5>
+<h6 id="search-parameters">Search Parameters</h6>
 
-<h6 id="common">Common</h6>
+<div>
+<table style="width: 100%; border: 1px solid #000; text-align: left; border-collapse: collapse;">
+    <tr>
+        <td style="border: 1px solid #000; padding: 8px;">
+            <strong>Note:</strong> The conformance verbs, such as SHALL, used in the "Requesting NCP" and "Responding NCP" optionality columns indicate the actor's capability to support that parameter, not whether the parameter is actually used in a given search.
+        </td>
+    </tr>
+</table>
 
-<table>
+</div>
+
+<p><strong>Common</strong></p>
+
+<table border="1" style="width:100%; border-collapse: collapse;">
   <thead>
     <tr>
       <th>Parameter</th>
-      <th>Consumer</th>
-      <th>Provider</th>
       <th>searchParameter</th>
       <th>type</th>
+      <th>Requesting NCP</th>
+      <th>Responding NCP</th>
       <th>notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>Document type</td>
-      <td>SHALL</td>
-      <td>SHALL</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">type</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Document Class</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
     <tr>
       <td>Type of content / format</td>
-      <td>MAY</td>
-      <td>SHALL</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">contenttype</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
     </tr>
     <tr>
-      <td>Patient business identifier</td>
-      <td>SHALL</td>
-      <td>SHALL</td>
+      <td>Status</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">status</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td>current | superseded | entered-in-error</td>
+    </tr>
+    <tr>
+      <td rowspan="2">Patient business identifier</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">patient</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#reference">reference</a></td>
-      <td>It requires chained parameter  (patient.identifier) supported</td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>patient.identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>Chained parameter</td>
     </tr>
     <tr>
       <td>Date</td>
-      <td>SHALL</td>
-      <td>SHALL</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">date</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
-      <td> </td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
     <tr>
       <td>Creation Date</td>
-      <td>MAY</td>
-      <td>MAY</td>
       <td><a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
       <td>It specifies a search against the DocumentReference.content.attachment.creation</td>
     </tr>
   </tbody>
 </table>
 
-<h6 id="laboratory-report">Laboratory Report</h6>
+<p><strong>Hospital Discharge Report</strong></p>
 
-<table>
+<table border="1" style="width:100%; border-collapse: collapse;">
   <thead>
     <tr>
       <th>Parameter</th>
-      <th>Consumer</th>
-      <th>Provider</th>
       <th>searchParameter</th>
       <th>type</th>
+      <th>Requesting NCP</th>
+      <th>Responding NCP</th>
       <th>notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Study type</td>
-      <td>MAY</td>
+      <td>Document type</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">type</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
       <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Document Class</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
-      <td> </td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Type of content / format</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">contenttype</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Status</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">status</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td>current | superseded | entered-in-error</td>
+    </tr>
+    <tr>
+      <td rowspan="2">Patient business identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">patient</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#reference">reference</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>patient.identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>Chained parameter</td>
+    </tr>
+    <tr>
+      <td>Date</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">date</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Creation Date</td>
+      <td><a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>It specifies a search against the DocumentReference.content.attachment.creation</td>
+    </tr>
+    <tr>
+      <td>Study type</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>MAY</td>
+      <td>MAY</td>
+      <td></td>
     </tr>
   </tbody>
 </table>
 
-<h6 id="imaging-study-manifest-and-report">Imaging Study Manifest and Report</h6>
+<p><strong>Laboratory Report</strong></p>
 
-<table>
+<table border="1" style="width:100%; border-collapse: collapse;">
   <thead>
     <tr>
       <th>Parameter</th>
-      <th>Consumer</th>
-      <th>Provider</th>
       <th>searchParameter</th>
       <th>type</th>
+      <th>Requesting NCP</th>
+      <th>Responding NCP</th>
       <th>notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Modality</td>
-      <td>MAY</td>
+      <td>Document type</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">type</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
       <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Document Class</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Type of content / format</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">contenttype</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Status</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">status</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td>current | superseded | entered-in-error</td>
+    </tr>
+    <tr>
+      <td rowspan="2">Patient business identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">patient</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#reference">reference</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>patient.identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>Chained parameter</td>
+    </tr>
+    <tr>
+      <td>Date</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">date</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Creation Date</td>
+      <td><a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>It specifies a search against the DocumentReference.content.attachment.creation</td>
+    </tr>
+    <tr>
+      <td>Study type</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>MAY</td>
+      <td>MAY</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Imaging Study Manifest and Report</strong></p>
+
+<table border="1" style="width:100%; border-collapse: collapse;">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>searchParameter</th>
+      <th>type</th>
+      <th>Requesting NCP</th>
+      <th>Responding NCP</th>
+      <th>notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Document type</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">type</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Document Class</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">category</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Type of content / format</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">contenttype</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Status</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">status</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td>current | superseded | entered-in-error</td>
+    </tr>
+    <tr>
+      <td rowspan="2">Patient business identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">patient</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#reference">reference</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>patient.identifier</td>
+      <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>Chained parameter</td>
+    </tr>
+    <tr>
+      <td>Date</td>
+      <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">date</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Creation Date</td>
+      <td><a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a></td>
+      <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td>It specifies a search against the DocumentReference.content.attachment.creation</td>
+    </tr>
+    <tr>
+      <td>Modality</td>
       <td><a href="SearchParameter-DocumentReference-modality.html">modality</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#token">token</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
       <td>the type of imaging capture hardware (<a href="http://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_33.html">Value Set</a>)</td>
     </tr>
     <tr>
       <td>Study date</td>
-      <td>MAY</td>
-      <td>SHALL</td>
       <td><a href="https://hl7.org/fhir/R4/documentreference.html#search">period</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
       <td>The date and time the imaging study started</td>
     </tr>
     <tr>
       <td>Anatomical region</td>
-      <td>MAY</td>
-      <td>SHALL</td>
       <td><a href="SearchParameter-DocumentReference-bodysite.html">bodysite</a></td>
-      <td> </td>
-      <td> </td>
+      <td></td>
+      <td>SHOULD</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
   </tbody>
 </table>
@@ -442,7 +694,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 <p><strong>The provider shall support the combination of required search parameters</strong></p>
 
 <p>Please note that the <em>date</em> parameter refers to the date when the DocumentReference has been created. 
-A query against the effective document creation date may be optionally perfomed by using the SearchParameter <a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a>.</p>
+A query against the effective document creation date is perfomed by using the SearchParameter <a href="https://profiles.ihe.net/ITI/MHD/SearchParameter-DocumentReference-Creation.html">creation</a>.</p>
 
 <h5 id="ehdsi-documentreference-search-response">eHDSI DocumentReference Search Response</h5>
 
@@ -460,45 +712,9 @@ A query against the effective document creation date may be optionally perfomed 
 
 <p>In this case it is expected that the <a href="https://hl7.org/fhir/R4/datatypes-definitions.html#Attachment.url"><em>url</em></a> element contains the actual url to be used for retrieving this docuemnt from the HL7 FHIR API.</p>
 
-<h5 id="checking-documentreference-content-availability">Checking DocumentReference Content Availability</h5>
+<h5 id="search-http-error-response-codes">Search HTTP Error Response Codes</h5>
 
-<p>If <strong>DocumentReference.content.data.exists()</strong>, the document can be <strong>fetched directly</strong> from the <code class="language-plaintext highlighter-rouge">DocumentReference.content.data</code> field and the sequence ends.</p>
-
-<p>Otherwise,</p>
-
-<h5 id="retrieving-the-document-by-url">Retrieving the Document by URL</h5>
-
-<p>if <strong>DocumentReference.content.data is empty</strong>, the system must <strong>search and retrieve</strong> the document from the specified URL.</p>
-
-<p>Two options are here considered:</p>
-<ol>
-  <li>the content type is HL7 FHIR (it might be json, xml or RDF) (e.g. #application/fhir+json)</li>
-  <li>the content type is not HL7 FHIR (e.d. PDF, HL7 CDA)</li>
-</ol>
-
-<h5 id="ehdsi-get-bundle-by-id-request">eHDSI Get Bundle by Id Request</h5>
-
-<p>If the <strong>content type</strong> of the document is <code class="language-plaintext highlighter-rouge">application/fhir+json</code> or <code class="language-plaintext highlighter-rouge">application/fhir+xml</code> or <code class="language-plaintext highlighter-rouge">application/fhir+rdf</code>, the system retrieves it using a <strong>FHIR Bundle request</strong>:</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  GET $server/Bundle/id
-</code></pre></div></div>
-
-<p>The <strong>Requesting NCP</strong> sends a request to the <strong>Responding NCP</strong> for the <a href="https://hl7.org/fhir/R4/bundle.html">Bundle</a>.
-  The <strong>Responding NCP</strong> returns the <a href="https://hl7.org/fhir/R4/bundle.html">Bundle</a>, compliant with one of the porifles specified in the HL7 FHIR IG listed in the <em>Data</em> menu.</p>
-
-<h5 id="ehdsi-get-binary-by-id-request">eHDSI Get Binary by Id Request</h5>
-
-<p>Otherwise, if the <strong>content type is not HL7 FHIR</strong> (i.e., not <code class="language-plaintext highlighter-rouge">application/fhir+json</code>), the system retrieves it as a <strong>HL7 FHIR Binary resource</strong>:</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  GET $server/Binary/id
-</code></pre></div></div>
-
-<p>The <strong>Requesting NCP</strong> sends a request to fetch the document as a <a href="https://hl7.org/fhir/R4/binary.html">Binary</a> resource.
-  The <strong>Responding NCP</strong> returns the <a href="https://hl7.org/fhir/R4/binary.html">Binary</a>  content.</p>
-
-<h4 id="http-error-response-codes">HTTP Error Response Codes</h4>
-
-<table>
+<table border="1" style="width:100%; border-collapse: collapse;">
   <thead>
     <tr>
       <th>HTTP Response</th>
@@ -521,25 +737,152 @@ A query against the effective document creation date may be optionally perfomed 
   </tbody>
 </table>
 
-<h4 id="examples">Examples</h4>
+<h5 id="examples">Examples</h5>
 
-<p>All the lab reports of the Czech patient 456789123 created from 2023, Feb 20th.</p>
-
-<blockquote>
-  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?type=http://loinc.org|11502-2&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;date=ge2023-02-20</code></p>
-</blockquote>
-
-<p>All the lab reports of the Czech patient 456789123 of type PDF.</p>
-
-<blockquote>
-  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?type=http://loinc.org|11502-2&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;contenttype=application/pdf</code></p>
-</blockquote>
-
-<p>All the Microbiology lab reports of the Czech patient 456789123 of the 6 months (assuming that today is 2024-03-25)</p>
+<table>
+  <tbody>
+    <tr>
+      <td>All the lab reports of the Czech patient 456789123 created from 2023, Feb 20th, using category [**http://loinc.org</td>
+      <td>LP74123-8**](https://loinc.org/LP74123-8).</td>
+    </tr>
+  </tbody>
+</table>
 
 <blockquote>
-  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?type=http://loinc.org|11502-2&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;category=http://loinc.org|18725-2&amp;date=ge2023-09-25</code></p>
+  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?category=http://loinc.org|LP74123-8&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;date=ge2023-02-20</code></p>
 </blockquote>
+
+<table>
+  <tbody>
+    <tr>
+      <td>All the lab reports of the Czech patient 456789123 of type PDF, using category [**http://loinc.org</td>
+      <td>LP74123-8**](https://loinc.org/LP74123-8).</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?category=http://loinc.org|LP74123-8&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;contenttype=application/pdf</code></p>
+</blockquote>
+
+<table>
+  <tbody>
+    <tr>
+      <td>All the Microbiology lab reports of the Czech patient 456789123 of the 6 months (assuming that today is 2024-03-25), using category [**http://loinc.org</td>
+      <td>LP74123-8**](https://loinc.org/LP74123-8).</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p><code class="language-plaintext highlighter-rouge">GET $server/DocumentReference?category=http://loinc.org|LP74123-8&amp;patient.identifier=https://ncez.mzcr.cz/standards/fhir/sid/rid|456789123&amp;category=http://loinc.org|18725-2&amp;date=ge2023-09-25</code></p>
+</blockquote>
+
+<h3 id="step-by-step-breakdown-document-retrieval">Step-by-Step Breakdown: Document Retrieval</h3>
+
+<h5 id="checking-documentreference-content-availability">Checking DocumentReference Content Availability</h5>
+
+<p>If <strong>DocumentReference.content.data.exists()</strong>, the document can be <strong>fetched directly</strong> from the <code class="language-plaintext highlighter-rouge">DocumentReference.content.data</code> field and the sequence ends.</p>
+
+<p>Otherwise,</p>
+
+<h5 id="read-url">Read URL</h5>
+
+<p>if <strong>DocumentReference.content.data is empty</strong>, the system must <strong>search and retrieve</strong> the document from the specified URL.</p>
+
+<p>The URL shall be a valid FHIR API URL in the form:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$server/[Resource]/id
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">[Resource]</code> segment shall be either <code class="language-plaintext highlighter-rouge">Bundle</code> or <code class="language-plaintext highlighter-rouge">Binary</code>.</p>
+
+<p>The following rules apply:</p>
+
+<ol>
+  <li>If the resource is <code class="language-plaintext highlighter-rouge">Bundle</code>, the content type shall be <code class="language-plaintext highlighter-rouge">application/fhir+json</code> or <code class="language-plaintext highlighter-rouge">application/fhir+xml</code>.</li>
+  <li>If the content type is not <code class="language-plaintext highlighter-rouge">application/fhir+json</code> or <code class="language-plaintext highlighter-rouge">application/fhir+xml</code>, the resource shall be <code class="language-plaintext highlighter-rouge">Binary</code>.</li>
+</ol>
+
+<h5 id="ehdsi-get-bundle-by-id-request">eHDSI Get Bundle by Id Request</h5>
+
+<p>If the <strong>content type</strong> of the document is <code class="language-plaintext highlighter-rouge">application/fhir+json</code> or <code class="language-plaintext highlighter-rouge">application/fhir+xml</code>, the system retrieves it using a <strong>FHIR Bundle request</strong>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  GET $server/Bundle/id
+</code></pre></div></div>
+
+<p>The <strong>Requesting NCP</strong> sends a request to the <strong>Responding NCP</strong> for the <a href="https://hl7.org/fhir/R4/bundle.html">Bundle</a>.
+  The <strong>Responding NCP</strong> returns the <a href="https://hl7.org/fhir/R4/bundle.html">Bundle</a>, compliant with one of the profiles specified in the HL7 FHIR IG listed in the <em>Data</em> menu.</p>
+
+<h5 id="ehdsi-get-binary-by-id-request">eHDSI Get Binary by Id Request</h5>
+
+<p>Otherwise, if the <strong>content type</strong> is not <code class="language-plaintext highlighter-rouge">application/fhir+json</code> or <code class="language-plaintext highlighter-rouge">application/fhir+xml</code>, the system retrieves it as a <strong>HL7 FHIR Binary resource</strong>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  GET $server/Binary/id
+</code></pre></div></div>
+
+<p>The <strong>Requesting NCP</strong> sends a request to fetch the document as a <a href="https://hl7.org/fhir/R4/binary.html">Binary</a> resource.
+  The <strong>Responding NCP</strong> returns the <a href="https://hl7.org/fhir/R4/binary.html">Binary</a>  content.</p>
+
+<h5 id="document-retrieval-http-error-response-codes">Document Retrieval HTTP Error Response Codes</h5>
+
+<table border="1" style="width:100%; border-collapse: collapse;">
+  <thead>
+    <tr>
+      <th>HTTP Response</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>401 Unauthorized</td>
+      <td>authorization is required for the interaction that was attempted</td>
+    </tr>
+    <tr>
+      <td>404 Document Not Found</td>
+      <td>URI not known</td>
+    </tr>
+    <tr>
+      <td>410 Gone (or 404 when 410 is unacceptable due to security/privacy policy)</td>
+      <td>Document is Deprecated or not available</td>
+    </tr>
+    <tr>
+      <td>406 Not Acceptable</td>
+      <td>Document Responder unable to format document in content types listed the <code>Accept</code> field</td>
+    </tr>
+    <tr>
+      <td>403 Forbidden / Request Type Not Supported</td>
+      <td>HTTP request specified is otherwise not a legal value</td>
+    </tr>
+  </tbody>
+</table>
+
+<h5 id="examples-1">Examples</h5>
+
+<p>Retrieval of an HL7 FHIR document representation returned as a Bundle.</p>
+
+<blockquote>
+  <p><code class="language-plaintext highlighter-rouge">GET $server/Bundle/12345</code></p>
+</blockquote>
+
+<p>Retrieval of a non-FHIR document representation returned as a Binary resource.</p>
+
+<blockquote>
+  <p><code class="language-plaintext highlighter-rouge">GET $server/Binary/67890</code></p>
+</blockquote>
+
+<h3 id="implementation-alternatives">Implementation alternatives</h3>
+
+<p>There are multiple other alternatives, not mutually exclusive, for searching, retrieving, or fetching documents using the HL7 FHIR API. The selected mechanism may depend on the type of document and the usage context.</p>
+
+<p>Searching via <strong>DiagnosticReport</strong> allows for more advanced queries, but it is limited to imaging and diagnostic reports, as well as HL7 FHIR documents. Other mechanisms may apply in different contexts.</p>
+
+<p>Some alternatives - described only for documentation purposes - are listed below:</p>
+<ol>
+  <li><a href="otherOptions.html">searching per Composition</a></li>
+  <li><a href="otherOptions.html">searching per Bundle</a></li>
+  <li><a href="otherOptions.html">searching per DiagnosticReport</a> (only for imaging and laboratory reports)</li>
+</ol>
 
 
 
@@ -560,7 +903,7 @@ A query against the effective document creation date may be optionally perfomed 
 
       <div class="inner-wrapper">
         <p>
-          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.0 based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, May 5, 2026 10:44+0000">2026-05-05</span>
+          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.1-ci based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, Sep 8, 2026 14:33+0000">2026-09-08</span>
           <br/>
           <span style="color: var(--footer-highlight-text-color)">
             <div style="color: #333333" >

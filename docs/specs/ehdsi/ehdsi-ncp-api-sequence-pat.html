@@ -3,7 +3,7 @@
 <html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" lang="en">
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
-    <title>Patient Search - MyHealth@Eu NCPeH API v9.1.0</title>
+    <title>Patient Search - MyHealth@Eu NCPeH API v9.1.1-ci</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="author" content="http://hl7.org/fhir"/>
@@ -45,8 +45,8 @@
 	  <script src="assets/js/prism.js"></script>
     <script type="text/javascript" src="assets/js/mermaid.js"></script>
     <script type="text/javascript" src="assets/js/mermaid-init.js"></script>
-    <style type="text/css">h2{--heading-prefix:"7"}
-    h3,h4,h5,h6{--heading-prefix:"7"}</style>
+    <style type="text/css">h2{--heading-prefix:"13"}
+    h3,h4,h5,h6{--heading-prefix:"13"}</style>
     <div id="segment-header" class="segment">  <!-- segment-header -->
       <div class="container">  <!-- container -->
 
@@ -78,7 +78,7 @@
         <div id="ig-status">
           <p><span style="font-size:12pt;font-weight:bold">MyHealth@Eu NCPeH API</span>
             <br/>
-            <span style="display:inline-block;">9.1.0 - ci-build
+            <span style="display:inline-block;">9.1.1-ci - ci-build
 
 
 
@@ -137,8 +137,30 @@
   <li>
     <a href="content.html">Data</a>
   </li>
-  <li>
-    <a href="application.html">Application</a>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Application
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="application.html">Overview</a>
+      </li>
+      <li>
+        <a href="app-pat.html">Patient Identification</a>
+      </li>
+      <li>
+        <a href="app-doc.html">Document Retrieval</a>
+      </li>
+      <li>
+        <a href="app-doc-push.html">Document Provision</a>
+      </li>
+      <li>
+        <a href="app-study.html">Study Retrieval</a>
+      </li>
+      <li>
+        <a href="app-img.html">Images Retrieval</a>
+      </li>
+    </ul>
   </li>
   <li class="dropdown">
     <a data-toggle="dropdown" href="#" class="dropdown-toggle">Implementation
@@ -147,6 +169,9 @@
     <ul class="dropdown-menu">
       <li>
         <a href="technical.html">Overview</a>
+      </li>
+      <li>
+        <a href="actors.html">Actors</a>
       </li>
       <li>
         <a href="sequence-pat.html">Patient Search</a>
@@ -159,6 +184,9 @@
       </li>
       <li>
         <a href="sequence-doc-push.html">Document Provisioning</a>
+      </li>
+      <li>
+        <a href="sequence-img.html">Images Retrieval</a>
       </li>
     </ul>
   </li>
@@ -213,7 +241,7 @@ h5:before{color:silver;counter-increment:detail;content:var(--heading-prefix) ".
 h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) "." counter(more-detail)" ";}
 </style>
 <div class="col-12">
-  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.0) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
+  <!--ReleaseHeader--><p id="publish-box">MyHealth@Eu NCPeH API - Local Development build (v9.1.1-ci) built by the FHIR (HL7® FHIR® Standard) Build Tools. See the <a href='http://fhir.ehdsi.eu/ncp-api/history.html'>Directory of published versions</a></p><!--EndReleaseHeader-->
   <h2>Patient Search</h2>
   
 
@@ -244,7 +272,7 @@ h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefi
 
 <h3 id="application-view">Application View</h3>
 
-<p>The implementation-independent sequence diagrams associated to this task is described in the <a href="application.html#find-identity-by-traits">Application view page</a></p>
+<p>The implementation-independent sequence diagrams associated to this task is described in the <a href="app-pat.html">Application view page</a></p>
 
 <h3 id="implementation">Implementation</h3>
 
@@ -276,51 +304,67 @@ Details below.</p>
 
 <h6 id="search-parameters">Search parameters</h6>
 
-<table>
+<div>
+<table style="width: 100%; border: 1px solid #000; text-align: left; border-collapse: collapse;">
+    <tr>
+        <td style="border: 1px solid #000; padding: 8px;">
+            <strong>Note:</strong> The conformance verbs, such as SHALL, used in the "Requesting NCP" and "Responding NCP" optionality columns indicate the actor's capability to support that parameter, not whether the parameter is actually used in a given search.
+        </td>
+    </tr>
+</table>
+
+</div>
+
+<table border="1" style="width:100%; border-collapse: collapse;">
   <thead>
     <tr>
       <th>Parameter</th>
-      <th>Opt</th>
       <th>searchParameter</th>
       <th>type</th>
+      <th>Requesting NCP</th>
+      <th>Responding NCP</th>
       <th>notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>business identifier</td>
-      <td>SHOULD</td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#search">identifier</a></td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHALL</td>
+      <td></td>
     </tr>
     <tr>
       <td>name</td>
-      <td>MAY</td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#search">name</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#string">string</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
     <tr>
       <td>birth date</td>
-      <td>MAY</td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#search">birthdate</a></td>
       <td><a href="https://hl7.org/fhir/R4/search.html#date">date</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
     <tr>
       <td>gender</td>
-      <td>MAY</td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#search">gender</a></td>
       <td><a href="https://hl7.org/fhir/R4/patient.html#:~:text=identifier%20TU-,token,-A%20patient%20identifier">token</a></td>
-      <td> </td>
+      <td>SHALL</td>
+      <td>SHOULD</td>
+      <td></td>
     </tr>
   </tbody>
 </table>
 
 <p><strong>Search result parameters</strong></p>
 
-<p>Consumers are suggested to explicitly indicate the elements that are expected to be used for the Patient Identification and minimize the patient information exchanged, by using the <a href="https://hl7.org/fhir/R4/search.html#elements">_elements</a> Search result parameter.</p>
+<p>Requesting NCP are encouraged to explicitly indicate the elements expected to be used for Patient Identification and to minimize the patient information exchanged by using the <a href="https://hl7.org/fhir/R4/search.html#elements">_elements</a> search result parameter.</p>
 
 <h6 id="modifiers">Modifiers</h6>
 
@@ -338,33 +382,6 @@ Details below.</p>
 <p>The Bundle of type 'searchSet' should be created</p>
 
 <p><strong>The National Infrastructure returns Patient resources conformant with the <a href="StructureDefinition-Patient-minimal-myhealtheu.html">PatientMinimalMyHealthEu</a> profile.</strong></p>
-
-<table>
-  <thead>
-    <tr>
-      <th>Parameter</th>
-      <th>Opt</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>business identifier</td>
-      <td>SHALL</td>
-    </tr>
-    <tr>
-      <td>name</td>
-      <td>SHALL</td>
-    </tr>
-    <tr>
-      <td>birth date</td>
-      <td>SHALL</td>
-    </tr>
-    <tr>
-      <td>gender</td>
-      <td>SHALL</td>
-    </tr>
-  </tbody>
-</table>
 
 <h4 id="http-error-response-codes">HTTP Error Response Codes</h4>
 
@@ -436,7 +453,7 @@ Details below.</p>
 
       <div class="inner-wrapper">
         <p>
-          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.0 based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, May 5, 2026 10:44+0000">2026-05-05</span>
+          IG &#169; 2023+ <a style="color:var(--footer-hyperlink-text-color)" href="http://example.org/MyHealthEu">MyHealthEu</a>.  Package myhealth.eu.fhir.ncp-api#9.1.1-ci based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, Sep 8, 2026 14:33+0000">2026-09-08</span>
           <br/>
           <span style="color: var(--footer-highlight-text-color)">
             <div style="color: #333333" >

@@ -18,7 +18,10 @@
 # corpus pinned by a release tag (`Release-X.Y.Z`, `vX.Y.Z` or a bare
 # version) against the newest tag of that shape, a FHIR package or
 # implementation guide pinned by version against the versions its entry on
-# the FHIR package registry lists, a document at an unversioned URL against
+# the FHIR package registry lists, a FHIR package served only at a build URL
+# against the version the tarball served there names, a corpus on the
+# European Commission's GitLab against the head of its branch or its newest
+# tag, a document at an unversioned URL against
 # the sha256 of the bytes served there now, an RFC against the RFC Editor's
 # record of what obsoletes it, a dated W3C publication against the newest
 # version the W3C API lists, and the Chrome for Testing release against the
@@ -109,7 +112,12 @@ IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version t
 HL7 Europe EU Health Data API	hl7.fhir.eu.health-data-api	-
 HL7 Europe Imaging Report	hl7.fhir.eu.imaging	-
 HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-
-MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	-"
+MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	-
+MyHealth@EU Core	myhealth.eu.fhir.core	-
+MyHealth@EU Patient Summary	myhealth.eu.fhir.eps	-
+MyHealth@EU ePrescription and eDispensation	myhealth.eu.fhir.epd	-
+MyHealth@EU Laboratory Report	myhealth.eu.fhir.laboratory	-
+MyHealth@EU Vaccination	myhealth.eu.fhir.euvac	-"
 
 # One "matrix label<TAB>URL" record per line: a document IHE publishes at a
 # URL that names no revision, pinned by the sha256 of its bytes. Bytes that
@@ -117,6 +125,30 @@ MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	-"
 readonly WATCHED_DOCUMENTS="\
 IHE ITI-20 Record Audit Event	https://profiles.ihe.net/ITI/TF/Volume2/ITI-20.html
 IHE RESTful ATNA supplement	https://www.ihe.net/uploadedFiles/Documents/ITI/IHE_ITI_Suppl_RESTful-ATNA.pdf"
+
+# One "matrix label<TAB>package<TAB>URL" record per line: a FHIR package its
+# publisher serves only at a URL that names no version and serves the current
+# build, read against the version the package manifest of the tarball served
+# there now names. A rebuild of the same version is caught by the vendor
+# script, which fails when an upstream byte moves.
+readonly WATCHED_BUILDS="\
+MyHealth@EU NCPeH API and OpenNCP	myhealth.eu.fhir.ncp-api	https://build-fhir.ehdsi.eu/ncp-api/package.tgz
+MyHealth@EU Hospital Discharge Report	myhealth.eu.fhir.hdr	https://fhir.ehdsi.eu/hdr/package.tgz
+MyHealth@EU Medical Imaging Report	myhealth.eu.fhir.imaging	https://fhir.ehdsi.eu/imaging/package.tgz
+Xt-EHR Metadata Foundation	hl7.eu.fhir.xt-ehr.metadata	https://xt-ehr.github.io/xt-ehr-metadata/package.tgz"
+
+# The European Commission's GitLab, where the eHDSI repositories live. One
+# "matrix label<TAB>project path<TAB>branch" record per line: a corpus pinned
+# by commit, read against the head of the branch the pin follows.
+readonly GITLAB_API=https://code.europa.eu/api/v4/projects
+readonly WATCHED_GITLAB_COMMITS="\
+eHDSI CDA reference test documents	ehdsi/ehdsi-general-repository	main"
+
+# One "matrix label<TAB>project path<TAB>tag prefix<TAB>hold" record per line:
+# a corpus pinned by a release tag on that GitLab, read against the newest tag
+# of the same shape, as WATCHED_TAGS reads GitHub.
+readonly WATCHED_GITLAB_TAGS="\
+OpenNCP Transformation Manager resources	ehdsi/ehealth	v	-"
 
 # Every corpus row labelled `IETF RFC <number>` is read against the RFC
 # Editor's record of the RFC: an RFC is never revised in place, so it is
@@ -174,7 +206,8 @@ corpus_rows() {
 unwatched_rows() {
   local label script watched
   watched="$(printf '%s\n' "$WATCHED_COMMITS" "$WATCHED_TAGS" "$WATCHED_PACKAGES" \
-    "$WATCHED_DOCUMENTS" "$WATCHED_W3C" | cut -f1)"
+    "$WATCHED_DOCUMENTS" "$WATCHED_BUILDS" "$WATCHED_GITLAB_COMMITS" "$WATCHED_GITLAB_TAGS" \
+    "$WATCHED_W3C" | cut -f1)"
   while IFS=$'\t' read -r label script; do
     [[ -n "$label" ]] || continue
     grep -qxF -- "$label" <<< "$watched" && continue
@@ -197,6 +230,18 @@ matrix_cell_token() {
       n = split(value, word, " ")
       for (i = 1; i < n; i++) if (word[i] == key) { t = word[i + 1]; gsub(/[,.;:]+$/, "", t); print t; exit }
     }' "${3:-$MATRIX}"
+}
+
+# package_version: the version the package manifest of the FHIR package
+# tarball read on stdin names, or nothing when it names none.
+package_version() {
+  tar -xzOf - package/package.json 2> /dev/null | jq --raw-output '.version // empty' 2> /dev/null
+}
+
+# gitlab_project PATH: PATH as the one URL-encoded segment the GitLab API
+# takes for a project.
+gitlab_project() {
+  printf '%s' "${1//\//%2F}"
 }
 
 # matrix_first LABEL PATTERN [MATRIX]: the first match of the awk regular
@@ -465,6 +510,15 @@ self_test() {
   printf 'HTTP/2 200\r\ncontent-type: application/json\r\n\r\n' > "$work/headers"
   expect "" "$(next_page "$work/headers")" "the last page"
   rm "$work/headers"
+  mkdir -p "$work/package"
+  printf '{"name": "a.b", "version": "9.1.1-ci"}' > "$work/package/package.json"
+  tar -czf "$work/package.tgz" -C "$work" package/package.json
+  expect "9.1.1-ci" "$(package_version < "$work/package.tgz")" "the version of a package tarball"
+  printf 'not a tarball' > "$work/package.tgz"
+  expect "" "$(package_version < "$work/package.tgz")" "the version of bytes that are no package"
+  rm "$work/package/package.json" "$work/package.tgz"
+  rmdir "$work/package"
+  expect "ehdsi%2Fehealth" "$(gitlab_project ehdsi/ehealth)" "a GitLab project path"
   rmdir "$work"
   got="$(unwatched_rows "$MATRIX" | paste -sd ';' -)"
   expect "" "$got" "the corpus rows of $MATRIX with no reader and no recorded reason"
@@ -665,6 +719,96 @@ while IFS=$'\t' read -r label url; do
     stale=1
   fi
 done <<< "$WATCHED_DOCUMENTS"
+
+# The packages served at build URLs, each against the version served now.
+while IFS=$'\t' read -r label package url; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(matrix_package_version "$label" "$package")"
+  if [[ -z "$pinned" ]]; then
+    printf 'UNREADABLE %s: no version of %s in %s\n' "$label" "$package" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! served="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" "$url" \
+    | package_version)" || [[ -z "$served" ]]; then
+    printf 'UNREADABLE %s: could not read the version of the package %s serves\n' "$label" "$url"
+    unreadable=1
+    continue
+  fi
+  if [[ "$pinned" = "$served" ]]; then
+    printf 'current    %s %s %s (%s)\n' "$label" "$package" "$pinned" "$url"
+  else
+    printf 'STALE      %s: %s pinned %s, %s now serves %s\n' "$label" "$package" "$pinned" "$url" "$served"
+    stale=1
+  fi
+done <<< "$WATCHED_BUILDS"
+
+# The corpora pinned by commit on the Commission's GitLab, each against the
+# head of its branch.
+while IFS=$'\t' read -r label project branch; do
+  [[ -n "$label" ]] || continue
+
+  pinned="$(matrix_cell_token "$label" commit)"
+  if ! [[ "$pinned" =~ ^[0-9a-f]{40}$ ]]; then
+    printf 'UNREADABLE %s: no commit pin in %s\n' "$label" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! head="$(curl --fail --silent --show-error --user-agent "$REGISTRY_UA" \
+    "$GITLAB_API/$(gitlab_project "$project")/repository/branches/$branch" \
+    | jq --raw-output --exit-status '.commit.id' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the head of %s %s (%s)\n' "$label" "$project" "$branch" "$head"
+    unreadable=1
+    continue
+  fi
+  if [[ "$pinned" = "$head" ]]; then
+    printf 'current    %s %s (%s %s)\n' "$label" "$pinned" "$project" "$branch"
+  else
+    printf 'STALE      %s: pinned %s, newest commit on %s %s %s (https://code.europa.eu/%s/-/commit/%s)\n' \
+      "$label" "$pinned" "$project" "$branch" "$head" "$project" "$head"
+    stale=1
+  fi
+done <<< "$WATCHED_GITLAB_COMMITS"
+
+# The corpora pinned by a release tag on the Commission's GitLab, each
+# against the newest tag of its shape.
+while IFS=$'\t' read -r label project prefix hold; do
+  [[ -n "$label" ]] || continue
+  [[ "$prefix" != "-" ]] || prefix=""
+
+  pinned_tag="$(matrix_cell_token "$label" tag)"
+  pinned="${pinned_tag#"$prefix"}"
+  if [[ -z "$pinned_tag" ]] || ! [[ "$pinned" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+    printf 'UNREADABLE %s: no %sX.Y tag pin in %s\n' "$label" "$prefix" "$MATRIX"
+    unreadable=1
+    continue
+  fi
+
+  if ! tags="$(curl --fail --silent --show-error --user-agent "$REGISTRY_UA" \
+    "$GITLAB_API/$(gitlab_project "$project")/repository/tags?per_page=100&order_by=version" \
+    | jq --raw-output --exit-status '.[].name' 2>&1)"; then
+    printf 'UNREADABLE %s: could not read the tags of %s (%s)\n' "$label" "$project" "$tags"
+    unreadable=1
+    continue
+  fi
+  latest="$(sed -nE "s/^$prefix([0-9]+(\.[0-9]+)+)$/\1/p" <<< "$tags" | newest_version "$pinned")"
+  if [[ -z "$latest" ]]; then
+    printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$project" "$prefix"
+    unreadable=1
+  elif [[ "$pinned" = "$latest" ]]; then
+    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$project"
+  elif [[ "$hold" != "-" ]]; then
+    printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
+      "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
+  else
+    printf 'STALE      %s: pinned %s, newest release tag %s%s (https://code.europa.eu/%s/-/tags/%s%s)\n' \
+      "$label" "$pinned_tag" "$prefix" "$latest" "$project" "$prefix" "$latest"
+    stale=1
+  fi
+done <<< "$WATCHED_GITLAB_TAGS"
 
 # The RFCs, each against what the RFC Editor records as obsoleting it.
 while IFS=$'\t' read -r label _; do

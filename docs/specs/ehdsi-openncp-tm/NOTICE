@@ -1,0 +1,96 @@
+OpenNCP Reference Implementation
+Copyright 2017 European Commission - DG Health and Food Safety
+
+This product is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+===========================================================================
+This product includes software developed by third parties, as listed below.
+===========================================================================
+
+---------------------------------------------------------------------------
+SPMS - Serviços Partilhados do Ministério da Saúde (Portugal)
+---------------------------------------------------------------------------
+Copyright (C) 2012-2013 SPMS (Serviços Partilhados do Ministério da Saúde - Portugal)
+
+Files:
+  openncp-core/openncp-core-client/src/main/java/eu/europa/ec/sante/openncp/core/client/ihe/dts/FilterParamsDts.java
+  openncp-core/openncp-core-common/src/main/java/eu/europa/ec/sante/openncp/core/common/eadc/datamodel/Transaction.java
+  openncp-core/openncp-core-common/src/main/java/eu/europa/ec/sante/openncp/core/common/eadc/datamodel/TransactionInfo.java
+  openncp-core/openncp-core-common/src/main/java/eu/europa/ec/sante/openncp/core/common/eadc/datamodel/package-info.java
+
+---------------------------------------------------------------------------
+Smile CDR, Inc. — HAPI FHIR Spring Boot Autoconfigure
+---------------------------------------------------------------------------
+Copyright (C) 2014-2023 Smile CDR, Inc.
+Licensed under the Apache License, Version 2.0.
+
+Files:
+  openncp-core/openncp-core-common/src/main/java/eu/europa/ec/sante/openncp/core/common/fhir/config/FhirProperties.java
+
+---------------------------------------------------------------------------
+Rick Jelliffe and Academia Sinica Computing Center, Taiwan — ISO Schematron
+---------------------------------------------------------------------------
+Copyright (c) 2000-2010 Rick Jelliffe and Academia Sinica Computing Center, Taiwan
+Copyright (c) 2008 Rick Jelliffe
+
+These XSL stylesheets are provided "as-is" without express or implied warranty.
+Permission is granted to use, copy, modify, and distribute these stylesheets.
+
+Files:
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_abstract_expand.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_dsdl_include.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_schematron_message.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_schematron_message_xslt2.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_schematron_skeleton_for_saxon.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_schematron_skeleton_for_xslt1.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_svrl_for_xslt1.xsl
+  openncp-docker/openncp-configuration/TM_resources/xsl/iso_svrl_for_xslt2.xsl
+
+---------------------------------------------------------------------------
+Misys Open Source Solutions (MOSS) — OpenATNA
+---------------------------------------------------------------------------
+Copyright (c) 2009-2011 Misys Open Source Solutions (MOSS) and others
+Licensed under the Apache License, Version 2.0.
+
+Files:
+  openncp-docker/openncp-configuration/ATNA_resources/ArrConnections.xml
+  openncp-docker/openncp-configuration/ATNA_resources/IheActors.xml
+  openncp-docker/openncp-configuration/ATNA_resources/atnacodes.xml
+
+---------------------------------------------------------------------------
+University of Cardiff — OpenATNA
+---------------------------------------------------------------------------
+Copyright (c) 2009-2011 University of Cardiff and others
+Licensed under the Apache License, Version 2.0.
+
+Files:
+  openncp-docker/openncp-configuration/ATNA_resources/entities.xml
+
+---------------------------------------------------------------------------
+Will Provost — XML Pretty Printer
+---------------------------------------------------------------------------
+Copyright 2002-2003 by Will Provost.
+All rights reserved.
+
+Files:
+  openncp-common/src/main/java/eu/europa/ec/sante/openncp/common/util/PrettyPrinter.java
+
+---------------------------------------------------------------------------
+jerouris — Glassfish Keystore Test Manager
+---------------------------------------------------------------------------
+Copyright 2010 jerouris.
+Licensed under the Apache License, Version 2.0.
+
+Files:
+  openncp-core/openncp-core-common/src/test/java/eu/europa/ec/sante/openncp/core/common/security/key/impl/GlassfishTestKeyStoreManager.java
+
+---------------------------------------------------------------------------
+HL7 Europe — FHIR Structure Definitions
+---------------------------------------------------------------------------
+Used by permission of HL7 Europe.
+Copyright HL7 Europe. All rights reserved.
+
+Files:
+  openncp-core/openncp-core-common/src/main/resources/structuredefinitions/StructureDefinition-Patient-eu-lab.xml
+  openncp-core/openncp-core-common/src/main/resources/structuredefinitions/StructureDefinition-Composition-eu-lab.xml
