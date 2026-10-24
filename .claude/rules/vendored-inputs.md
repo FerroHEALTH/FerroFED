@@ -190,10 +190,14 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - `docs/specs/openehr-ckm-medication/`: the CKM archetypes
   `openEHR-EHR-INSTRUCTION.medication_order.v3` (CKM cid `1013.1.5946`,
   revision 3.2.1) and `openEHR-EHR-ACTION.medication.v1` (CKM cid
-  `1013.1.123`, revision 1.6.0), each in ADL 1.4, as archetype XML and as
-  CKM's record, pinned by CKM REST URL and sha256 (CC BY-SA 4.0, stated in
-  each archetype's licence field; `scripts/vendor/openehr-ckm.sh`), read by
-  the openEHR mapping of prescriptions and dispensations.
+  `1013.1.123`, revision 1.6.0), and the DRAFT clusters
+  `openEHR-EHR-CLUSTER.medication_authorisation.v0` (CKM cid `1013.1.2300`),
+  `openEHR-EHR-CLUSTER.medication_order_summary.v0` (CKM cid `1013.1.2306`)
+  and `openEHR-EHR-CLUSTER.medication_supply_amount.v0` (CKM cid
+  `1013.1.2453`), each in ADL 1.4, as archetype XML and as CKM's record,
+  pinned by CKM REST URL and sha256 (CC BY-SA 4.0 or 3.0, stated in each
+  archetype's licence field; `scripts/vendor/openehr-ckm.sh`), read by the
+  openEHR mapping of prescriptions and dispensations.
 - `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
   stated in each document), pinned by commit: the authorization server, the
   VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.

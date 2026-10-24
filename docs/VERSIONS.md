@@ -242,13 +242,14 @@ RESTful API pages.
 |---|---|---|
 | FHIR R4 core specification pages | `hl7.org/fhir/R4/` 4.0.1, pin-set digest `c16ba48646a27bf3fdb93cf44393879ac77841a2e900af03a46bbc1ebbd3aa64`, the Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition, CodeSystem, NamingSystem, Using Codes in Resources (4.1), Search (3.1.1), RESTful API (3.1.0) and License and Legal Terms (2.20) pages | `scripts/vendor/fhir-r4.sh`, `docs/specs/fhir-r4/PROVENANCE.md` |
 
-### openEHR clinical models (#776, #980)
+### openEHR clinical models (#776, #980, #1043)
 
 The openEHR International Patient Summary template of the openEHR
 international Clinical Knowledge Manager, whose sections name the archetypes
 the patient summary's stored section queries select compositions by, and the
 medication order and medication management archetypes an openEHR mapping of
-prescriptions and dispensations reads (#523). CKM publishes no git commit or
+prescriptions and dispensations reads, with the authorisation, order summary
+and supply amount clusters the order's slots admit (#523). CKM publishes no git commit or
 release feed for a template or an archetype, so each artefact is
 pinned by its REST URL and sha256 through `scripts/vendor/lib/pinned.sh` in
 `scripts/vendor/openehr-ckm.sh` and committed verbatim (CC BY-SA, the licence
@@ -257,7 +258,7 @@ the openEHR Foundation gives the clinical models CKM hosts).
 | Item | Pin | Repeated in |
 |---|---|---|
 | openEHR CKM International Patient Summary template | template `937fca6c-ec24-4c0f-8986-623843b6ebca`, CKM cid `1013.26.376` asset version 1 (DRAFT), pin-set digest `ac31d1254c60a728686eb84e9dd78084de8b05ea9082342c7ed5404b7843f736`, OET sha256 `e293bc003fc787e95318be0e18f32ae7ca8903ef8475ed7644b86258a59e5a34` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-ips/PROVENANCE.md` |
-| openEHR CKM medication archetypes | `openEHR-EHR-INSTRUCTION.medication_order.v3` CKM cid `1013.1.5946` revision 3.2.1 asset version 7 and `openEHR-EHR-ACTION.medication.v1` CKM cid `1013.1.123` revision 1.6.0 asset version 44 (both PUBLISHED), pin-set digest `2658e41b88734d4cf6bc30dd2a28e91de18a067804ba43049f98d4714ad28aca`, ADL sha256 `206c2a07fa1a7197ebc9ed7a29a418ecfc9cb6b63fa2aaf811e780ee69df9e9b` and `7e2484d4aec5ad8c5ceb5edb466a82b43b45396fbe3abaa4ee4a298b8e6437bc` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-medication/PROVENANCE.md` |
+| openEHR CKM medication archetypes | `openEHR-EHR-INSTRUCTION.medication_order.v3` CKM cid `1013.1.5946` revision 3.2.1 asset version 7 and `openEHR-EHR-ACTION.medication.v1` CKM cid `1013.1.123` revision 1.6.0 asset version 44 (both PUBLISHED), `openEHR-EHR-CLUSTER.medication_authorisation.v0` CKM cid `1013.1.2300` asset version 3, `openEHR-EHR-CLUSTER.medication_order_summary.v0` CKM cid `1013.1.2306` asset version 6 and `openEHR-EHR-CLUSTER.medication_supply_amount.v0` CKM cid `1013.1.2453` asset version 5 (all three DRAFT, revision 0.0.1-alpha), pin-set digest `d6435a63b0d59b1557a939c30080ea0c212c2e058480c74cead2b5855528a655`, ADL sha256 `206c2a07fa1a7197ebc9ed7a29a418ecfc9cb6b63fa2aaf811e780ee69df9e9b` and `7e2484d4aec5ad8c5ceb5edb466a82b43b45396fbe3abaa4ee4a298b8e6437bc` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-medication/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
