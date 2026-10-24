@@ -4,7 +4,8 @@
 //! The testkit's own suite: the proxy, the seed builder, the harness PIX
 //! Manager, the harness PDQm Supplier and the harness care services directory
 //! offline against stub nodes and the IHE clients, the operator console
-//! against a running gateway, the unreachable base, the container harness
+//! against a running gateway, the vendored MyHealth@EU, eHDSI and Xt-EHR
+//! material the architecture cites, the unreachable base, the container harness
 //! behind the `FERROFED_E2E` gate, and the operator console's browser
 //! journeys behind the `FERROFED_JOURNEYS` gate.
 #![cfg_attr(
@@ -20,6 +21,7 @@ mod e2e;
 mod journeys;
 mod keycloak_recipe;
 mod mcsd;
+mod myhealth_eu;
 mod national_connector;
 mod pdq;
 mod pix;

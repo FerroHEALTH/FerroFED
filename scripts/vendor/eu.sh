@@ -77,7 +77,7 @@ pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D08
 pin manual ehdsi-interoperability-specifications "not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks' \
   - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
-  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles live here.'
+  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15, and again on 2026-10-24). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles and the eHDSI CDA implementation guides live here.'
 pin manual myhealth-eu-requirements-catalogue "9.0.0 (2025-03-24), not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue' \
   - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
@@ -161,31 +161,31 @@ published, with no later amendment applied; the notes name the amendments
 the research reads." "" \
   $'#654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release) and\n  #844 (the delegated acts under the Cyber Resilience Act)'
 
-pin commit myhealth.eu.fhir.ncp-api-9.1.0.tgz "9.1.0 (ci-build, draft, 2026-05-05)" \
-  https://fhir.ehdsi.eu/ncp-api/package.tgz \
-  a9284da494a0402758d912791cac8aa17270bfb27983e9e21e1be23b061817ad \
+pin commit myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz "9.1.1-ci (ci-build, draft, 2026-09-08)" \
+  https://build-fhir.ehdsi.eu/ncp-api/package.tgz \
+  acf655481026decd6395ffc2f66c5b0b7b3316a6aaed9520db0922d727ae8fef \
   'CC0-1.0: the license of the package manifest and of the ImplementationGuide resource' \
-  'Not on packages.fhir.org; the URL serves the current build (package.json says notForPublication: true), so a new build fails the pin loudly. Source: https://code.europa.eu/ehdsi/ehdsi-fhir-ig (ncp-api/).'
+  'Not on packages.fhir.org; the URL serves the current build (package.json says notForPublication: true), so a new build fails the pin loudly. https://fhir.ehdsi.eu/ncp-api/package.tgz still serves 9.1.0 of 2026-05-05 (sha256 a9284da494a0402758d912791cac8aa17270bfb27983e9e21e1be23b061817ad, read 2026-10-24); 9.1.1-ci adds the study and image retrieval and the vaccination history. Source: https://code.europa.eu/ehdsi/hl7-fhir-ig/ncp-api.'
 pin cache fhir-ehdsi-index.html "as served on 2026-10-04" \
   https://fhir.ehdsi.eu/ \
   bc56387f605073238333db88a455d6db028d6bc36cba2625e83e1ae001cb2f0d \
   'No licence statement on the page' \
-  'The index of the MyHealth@EU FHIR implementation guides; a live page.'
-pin commit ehdsi-ncp-api-sequence-pat.html "9.1.0 build" \
-  https://fhir.ehdsi.eu/ncp-api/sequence-pat.html \
-  f7102d0bdaadf3a1b0e7dc98ace7879775e91f9c3282bbc9ccb014dac65cce00 \
+  'The index of the MyHealth@EU FHIR implementation guides; a live page. Each guide it lists is vendored by scripts/vendor/myhealth-eu.sh or scripts/vendor/eehrxf.sh.'
+pin commit ehdsi-ncp-api-sequence-pat.html "9.1.1-ci build" \
+  https://build-fhir.ehdsi.eu/ncp-api/sequence-pat.html \
+  6b9a60172684bdf1c1aed8c047e796c0dc3274dc77e20d4006d00803c9d04077 \
   'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
   'The rendered Patient Identification page of the current build; a new build fails the pin loudly.'
-pin commit ehdsi-ncp-api-index.html "9.1.0 build" \
-  https://fhir.ehdsi.eu/ncp-api/index.html \
-  c558e8a911d45d8fa3d95d61e609374785e5634ba41a556e543c668aa1e8a2bb \
+pin commit ehdsi-ncp-api-index.html "9.1.1-ci build" \
+  https://build-fhir.ehdsi.eu/ncp-api/index.html \
+  ebf58fcb97a7fdcf26281c4041a6dac39f6f8b843f307612d094c22ce0cbe47c \
   'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
   'The rendered home page of the current build, with the guide scope (NCPeH to NCPeH only); a new build fails the pin loudly.'
-pin commit ehdsi-ncp-api-sequence-doc.html "9.1.0 build" \
-  https://fhir.ehdsi.eu/ncp-api/sequence-doc.html \
-  fb3373e02407af2453742061a17a4e4b76bb35f8ee6848a6826595778b9b855c \
+pin commit ehdsi-ncp-api-sequence-doc.html "9.1.1-ci build" \
+  https://build-fhir.ehdsi.eu/ncp-api/sequence-doc.html \
+  b0e9ccec9df5a9456c271431e2cefeb8423c201ef1587bf331b0cc22940bb4cd \
   'CC0-1.0: a page of the implementation guide whose ImplementationGuide resource declares license CC0-1.0' \
-  'The rendered Document Retrieval page of the current build; a new build fails the pin loudly.'
+  'The rendered Document Retrieval page of the current build, with its implementation pre-requisites; a new build fails the pin loudly.'
 pin cache openncp-v10.1.0.tar.gz "tag v10.1.0, commit bac7cc3ef88fe5dee01287c2dfc01fc00d5c945f (2026-09-29)" \
   https://code.europa.eu/ehdsi/ehealth/-/archive/v10.1.0/ehealth-v10.1.0.tar.gz \
   945dcfc7da3f9aaaa4a0aa57be7ee919be0c3f33a1796fffcffcd24f04fae499 \
@@ -193,10 +193,13 @@ pin cache openncp-v10.1.0.tar.gz "tag v10.1.0, commit bac7cc3ef88fe5dee01287c2df
   'Evidence of the MyHealth@EU transport stack (XCPD, XCA, XDR, SAML assertions, SMP discovery), never an oracle and never a source of code, so it is kept out of the repository by decision.'
 pinned_corpus ehdsi "MyHealth@EU NCPeH API and OpenNCP" \
   "the MyHealth@EU NCPeH API implementation guide and OpenNCP" \
-  "The FHIR package of the NCPeH API implementation guide and three of its
-rendered pages (the home page, Patient Identification and Document
-Retrieval), all CC0-1.0; the index of the MyHealth@EU FHIR guides, kept in
-the cache only; and the OpenNCP v10.1.0 source, the reference NCPeH, pinned
-by tag and commit and kept in the cache as evidence only."
+  "The FHIR package of the NCPeH API implementation guide at its current
+build, 9.1.1-ci, and three of its rendered pages (the home page, Patient
+Identification and Document Retrieval), all CC0-1.0; the index of the
+MyHealth@EU FHIR guides, kept in the cache only; and the OpenNCP v10.1.0
+source, the reference NCPeH, pinned by tag and commit and kept in the cache
+as evidence only. scripts/checks/pin-freshness.sh reads the version the
+build URL serves." "" \
+  $'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes) and\n  #1290 (the re-check of decisions A66 to A72), and the testkit'
 
 say "done"

@@ -22,7 +22,8 @@ docs/specs/ihe-pmir-pages|IHE PMIR narrative pages
 docs/specs/ihe-mcsd-pages|IHE mCSD narrative pages
 docs/specs/ihe-balp-pages|IHE BALP narrative pages
 docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
-docs/specs/xt-ehr-deliverables|Xt-EHR exchange-format deliverables
+docs/specs/xt-ehr-deliverables|Xt-EHR deliverables
+docs/specs/eu-xtehr-metadata|Xt-EHR Metadata Foundation
 docs/specs/fhir-packages|FHIR package closure of the Patient Summary
 docs/specs/eu-hl7-base|HL7 Europe Base and Core
 docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
@@ -33,6 +34,15 @@ docs/specs/eu-hl7-health-data-api|HL7 Europe EU Health Data API
 docs/specs/eu-hl7-imaging|HL7 Europe Imaging Report
 docs/specs/eu-hl7-hdr|HL7 Europe Hospital Discharge Report
 docs/specs/ehdsi-mvc|MyHealth@EU Master Value Sets Catalogue
+docs/specs/ehdsi-core|MyHealth@EU Core
+docs/specs/ehdsi-eps|MyHealth@EU Patient Summary
+docs/specs/ehdsi-epd|MyHealth@EU ePrescription and eDispensation
+docs/specs/ehdsi-laboratory|MyHealth@EU Laboratory Report
+docs/specs/ehdsi-hdr|MyHealth@EU Hospital Discharge Report
+docs/specs/ehdsi-imaging|MyHealth@EU Medical Imaging Report
+docs/specs/ehdsi-euvac|MyHealth@EU Vaccination
+docs/specs/ehdsi-cda-test-documents|eHDSI CDA reference test documents
+docs/specs/ehdsi-openncp-tm|OpenNCP Transformation Manager resources
 docs/specs/fhir-r4|FHIR R4 core specification pages
 docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense

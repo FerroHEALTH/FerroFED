@@ -432,13 +432,16 @@ v0.0.13: the national contact point's connector, with a harness connector
 and its end-to-end test, which waits on a published FerroPIX image
 ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)); the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the other priority categories of the interoperability component
 and prescriptions from openEHR medication data through a FHIRconnect
-mapping ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522), [#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
+mapping ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
 conformity work ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)); and
 operations packaging ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#645](https://github.com/FerroHEALTH/FerroFED/issues/645)). The changelog fragments in
 [`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
 list what is merged on `main` for the next release.
 
-v0.0.14: the logging component, built, re-checked against the Art 36(1)
+v0.0.14: the patient summary, built, re-checked against the Art 15(1)
+implementing act once it is adopted
+([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)); the logging
+component, built, re-checked against the Art 36(1)
 common specifications once they are adopted
 ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
 

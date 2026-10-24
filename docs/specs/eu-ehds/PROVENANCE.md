@@ -113,7 +113,7 @@ Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
 - Needs manual retrieval: the source answers an automated client with a
   login or a bot challenge, so the script fetches nothing and this
   repository carries none of its content.
-- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles live here.
+- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15, and again on 2026-10-24). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles and the eHDSI CDA implementation guides live here.
 
 ### `myhealth-eu-requirements-catalogue` (needs manual retrieval)
 

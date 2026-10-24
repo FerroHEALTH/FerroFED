@@ -147,6 +147,11 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
         Err(CheckError::NonConformant { findings }) => {
             return Err(Unread::NonConformant { findings });
         }
+        Err(CheckError::Unreadable { .. }) => {
+            return Err(Unread::Text(
+                "a coded element does not decode against FHIR R4",
+            ));
+        }
         Err(other) => return Err(Unread::Check(other)),
     };
     Dispense::read(text).map_err(|error| match error {

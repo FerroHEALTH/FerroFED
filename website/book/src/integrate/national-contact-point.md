@@ -13,8 +13,8 @@ national connector. FerroFED is one of the national infrastructures a
 national connector can call: it serves the connector on the FHIR face, the
 same interface every other client of the European exchange format uses.
 
-The MyHealth@EU NCPeH API guide 9.1.0 specifies only the exchange between
-two contact points: "It is out of scope of this guide to define the
+The MyHealth@EU NCPeH API guide (9.1.0, and its current build 9.1.1-ci)
+specifies only the exchange between two contact points: "It is out of scope of this guide to define the
 interfaces with the National Connector and/or between the National
 Connector and National Infrastructure". Implementing Regulation (EU)
 2026/2083 Art 3(6) leaves "the operation of national infrastructures" with
@@ -118,12 +118,18 @@ stay with the contact point:
 
 - **Patient identification.** The contact point identifies the patient
   against its Member State's identity services and asks FerroFED by the
-  confirmed identifier. FerroFED answers no identification request and
-  searches no demographics.
+  confirmed identifier. FerroFED searches no demographics. The FHIR face
+  is to add a lookup by that identifier, `GET {fhir-base}/Patient?identifier=`,
+  which Xt-EHR D5.1 §3.4.6 asks of every producer EHR system (decision A66,
+  built on #1294).
 - **The eHDSI CDA.** FerroFED emits no eHDSI CDA pivot document and no
   national CDA. Regulation (EU) 2025/327 recital 26 allows different
   profiles at the level of EHR systems and of contact points, and the
   transformation to the contact point's profile is the contact point's.
+  MyHealth@EU runs its Patient Summary and ePrescription services on CDA,
+  and its FHIR guides for them are proofs of concept; the reference
+  contact point, OpenNCP, validates and transcodes the CDA in its own
+  Transformation Manager.
 - **Transcoding and translation.** Implementing Regulation (EU) 2026/2083
   Art 3(4) and (5) give the mapping and translation of codes to the Member
   State, with the Commission's central terminology service.
@@ -151,7 +157,18 @@ cross-border flow agrees with the list above: the contact point of the
 patient's country retrieves the summary from the national systems, the
 patient's identity is confirmed before the request, and transformation and
 translation happen at the contact point (D6.1 §8.2.1). D6.2 §6.2 says the
-existing CDA services move to FHIR over time.
+existing CDA services move to FHIR over time. D5.1 has the contact point
+query the producer EHR systems through the interoperability component as
+a consumer (§7.1.1), and asks each producer for a patient lookup, a
+document list and a summary retrieval (§3.4.6, §3.5.4, §6.6). FerroFED
+caches every published Xt-EHR deliverable.
+
+The decisions were also checked against the public MyHealth@EU material,
+vendored by `scripts/vendor/myhealth-eu.sh` and `scripts/vendor/eu.sh`:
+the MyHealth@EU FHIR guides (core, Patient Summary, ePrescription and
+eDispensation, laboratory, discharge and imaging reports, vaccination and
+the NCPeH API), the eHDSI CDA reference test documents, and the OpenNCP
+Transformation Manager's Schematrons and coded element list.
 
 The MyHealth@EU Requirements Catalogue, release 9.0.0 of 2025-03-24, is
 available only with authorisation from DG SANTE behind EU Login (D6.1 §5),
