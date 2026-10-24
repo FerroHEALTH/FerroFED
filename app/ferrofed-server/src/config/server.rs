@@ -21,6 +21,7 @@ use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 use crate::config::limits;
 use crate::config::public_url::PublicUrl;
+use crate::config::tls::CollectorTls;
 use crate::listener::certificates::{Certificates, TlsFiles};
 
 /// The HTTP surface.
@@ -212,9 +213,13 @@ pub struct Metrics {
     /// open. Outside the development profile a `listen` address that is not
     /// a loopback one needs a user here, or `[metrics.tls] client_ca_file`.
     pub scrape_users: Vec<String>,
-    /// The `http://` URL of an OTLP collector the metrics are pushed to over
-    /// gRPC. Unset, nothing is pushed.
+    /// The URL of an OTLP collector the metrics are pushed to over gRPC:
+    /// `http://` to a collector beside the gateway, or `https://` over TLS.
+    /// Unset, nothing is pushed.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS an `https://` collector is reached with
+    /// (`[metrics.otlp_tls]`).
+    pub otlp_tls: CollectorTls,
     /// The TLS the admin listener serves (`[metrics.tls]`); unset, it serves
     /// plain HTTP.
     pub tls: Option<ListenerTls>,

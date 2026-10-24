@@ -260,14 +260,16 @@ burst = 20                    # at once after a quiet spell; one more answers 42
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"   # what the console logs; never what is traced
-otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the spans are exported to; see Tracing
+otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the spans are exported to, http:// beside the gateway or https:// over TLS; see Tracing
+# [telemetry.otlp_tls] takes trust_roots_file and client_identity or client_identity_file for an https:// collector.
 trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0 to 1.0
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
 # scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless client_ca_file is set
-otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
+otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to, http:// or https://
+# [metrics.otlp_tls] takes the keys [telemetry.otlp_tls] takes.
 # [metrics.tls] takes certificate_file, key_file and client_ca_file, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
@@ -453,7 +455,7 @@ never a value. The rule covers:
 - the `url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN and, when
   one is configured, its credentials;
 - `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries a
-  user name or a password.
+  user name or a password; an `https://` collector meets the rule.
 
 ```text
 ferrofed: cannot start: the url of endpoint hospital-a in registry.document is not an https URL, and credentials.hospital-a would travel over it in cleartext: outside profile = "development" a credential or a patient identifier is sent only encrypted

@@ -5,6 +5,9 @@
 //! port, keeping every export request it receives for a test to read
 //! (<https://opentelemetry.io/docs/specs/otlp/>).
 //!
+//! [`Collector::start_tls`] serves it over TLS instead, requiring a client
+//! certificate, with the synthetic set of [`ListenerCertificates`].
+//!
 //! It runs on a thread and a runtime of its own, so a gateway exporting from
 //! its batch thread, a `serve` process, or a test runtime that has stopped
 //! still reaches it, and it answers every export as accepted. No
@@ -22,8 +25,10 @@ use opentelemetry_proto::tonic::collector::trace::v1::{
 };
 use opentelemetry_proto::tonic::trace::v1::Span;
 use tokio::sync::oneshot;
-use tonic::transport::Server;
 use tonic::transport::server::TcpIncoming;
+use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
+
+use crate::listener::ListenerCertificates;
 
 /// The export requests received so far, in the order they arrived.
 type Received = Arc<Mutex<Vec<ExportTraceServiceRequest>>>;
@@ -38,6 +43,9 @@ pub enum CollectorError {
     /// Its runtime could not be built.
     #[error("the collector's runtime could not be built")]
     Runtime(#[source] io::Error),
+    /// Its TLS configuration was refused.
+    #[error("the collector's TLS configuration was refused")]
+    Tls(#[source] tonic::transport::Error),
 }
 
 /// An OTLP/gRPC trace collector on a loopback port, stopped when dropped.
@@ -58,6 +66,36 @@ impl Collector {
     /// [`CollectorError::Runtime`] when the collector's runtime cannot be
     /// built.
     pub fn start() -> Result<Self, CollectorError> {
+        Self::serve(None)
+    }
+
+    /// Starts a collector over TLS on a free loopback port, presenting the
+    /// server certificate of `certificates` and admitting only a client that
+    /// presents a certificate its client CA signed; its endpoint is
+    /// `https://127.0.0.1:<port>`.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Collector::start`], and [`CollectorError::Tls`] when
+    /// the TLS configuration is refused.
+    pub fn start_tls(certificates: &ListenerCertificates) -> Result<Self, CollectorError> {
+        // NOTE: tonic's server reads rustls's process-level provider, ambiguous while two crypto
+        // crates are linked; an earlier install wins, so the result is dropped.
+        let _installed: Result<(), Arc<tokio_rustls::rustls::crypto::CryptoProvider>> =
+            tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let tls = ServerTlsConfig::new()
+            .identity(Identity::from_pem(certificates.chain(), certificates.key()))
+            .client_ca_root(Certificate::from_pem(certificates.client_ca()));
+        Self::serve(Some(tls))
+    }
+
+    /// Starts the collector, over `tls` when it is set.
+    fn serve(tls: Option<ServerTlsConfig>) -> Result<Self, CollectorError> {
+        let scheme = if tls.is_some() { "https" } else { "http" };
+        let mut builder = Server::builder();
+        if let Some(tls) = tls {
+            builder = builder.tls_config(tls).map_err(CollectorError::Tls)?;
+        }
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -75,24 +113,24 @@ impl Collector {
         let service = TraceServiceServer::new(Keeper(Arc::clone(&received)));
         let (stop, stopped) = oneshot::channel::<()>();
         let thread = std::thread::spawn(move || {
-            runtime.block_on(
-                Server::builder()
-                    .add_service(service)
-                    .serve_with_incoming_shutdown(TcpIncoming::from(listener), async move {
-                        // A dropped sender stops the collector as the sent signal does.
-                        let _stopped: Result<(), oneshot::error::RecvError> = stopped.await;
-                    }),
-            )
+            runtime.block_on(builder.add_service(service).serve_with_incoming_shutdown(
+                TcpIncoming::from(listener),
+                async move {
+                    // A dropped sender stops the collector as the sent signal does.
+                    let _stopped: Result<(), oneshot::error::RecvError> = stopped.await;
+                },
+            ))
         });
         Ok(Self {
-            endpoint: format!("http://{address}"),
+            endpoint: format!("{scheme}://{address}"),
             received,
             stop: Some(stop),
             thread: Some(thread),
         })
     }
 
-    /// The `http://` URL an OTLP exporter sends to.
+    /// The URL an OTLP exporter sends to: `http://`, or `https://` for a
+    /// collector [`Collector::start_tls`] started.
     #[must_use]
     pub fn endpoint(&self) -> &str {
         &self.endpoint

@@ -33,6 +33,7 @@ use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
 use crate::config::registry::RegistryFormat;
 use crate::config::stored_queries::Store;
+use crate::config::tls::TlsSettings;
 use crate::config::{EmergencyConsent, NodeSelection};
 use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
@@ -67,7 +68,7 @@ pub struct Settings {
     /// The TLS material each node and its authorization server are reached
     /// with, by endpoint id: the client certificate the gateway presents
     /// (RFC 8705) and the roots it trusts them by.
-    pub onward_tls: BTreeMap<EndpointId, crate::config::tls::TlsSettings>,
+    pub onward_tls: BTreeMap<EndpointId, TlsSettings>,
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
@@ -277,8 +278,10 @@ pub struct TelemetrySettings {
     /// The `tracing` filter directive, already known to parse.
     pub filter: String,
     /// The OTLP collector the spans are exported to, already known to be an
-    /// `http://` URL; `None` exports nothing.
+    /// `http://` or `https://` URL; `None` exports nothing.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS an `https://` collector is reached with, every file read.
+    pub otlp_tls: TlsSettings,
     /// The share of the gateway's traces that are sampled.
     pub trace_sample_ratio: SampleRatio,
 }
@@ -291,6 +294,8 @@ pub struct MetricsSettings {
     pub listen: Option<SocketAddr>,
     /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The TLS an `https://` collector is reached with, every file read.
+    pub otlp_tls: TlsSettings,
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<TlsFiles>,

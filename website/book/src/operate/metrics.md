@@ -122,10 +122,11 @@ answers. `serve` and `config check` refuse:
   `scrape_users` nor `[metrics.tls] client_ca_file`;
 - a `scrape_users` entry that no `[[auth.basic.users]]` entry writes;
 - a `listen` address equal to `server.listen`;
-- an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
-  without TLS, so run the collector beside the gateway, on the same host or
-  in the same pod, and let it forward over TLS;
-- an `otlp_endpoint` with a user name or a password in it, outside
+- an `otlp_endpoint` that is neither an `http://` nor an `https://` URL.
+  Over `http://` the push speaks gRPC without TLS, so run that collector
+  beside the gateway, on the same host or in the same pod; over `https://`
+  it speaks gRPC over TLS ([A remote collector over TLS](#a-remote-collector-over-tls));
+- an `http://` `otlp_endpoint` with a user name or a password in it, outside
   `profile = "development"`, since that credential would travel in cleartext
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
 
@@ -137,6 +138,30 @@ more after the drain.
 
 `[metrics]` takes effect on a restart only: a [reload](registry.md#reloading-the-registry)
 that changes it logs the key as needing a restart, like `[server]`.
+
+### A remote collector over TLS
+
+An `https://` `otlp_endpoint` pushes the metrics over TLS to a collector anywhere,
+with no forwarder beside the gateway. The gateway trusts the platform's
+roots, and `[metrics.otlp_tls]` adds what a private collector needs:
+
+```toml
+[metrics]
+otlp_endpoint = "https://otel.example.org:4317"
+
+[metrics.otlp_tls]
+trust_roots_file = "/run/secrets/ferrofed/otel-ca.pem"              # PEM roots beside the platform's
+client_identity_file = "/run/secrets/ferrofed/otel-client.pem"      # chain and key, PEM, for mutual TLS
+```
+
+`client_identity` takes the same PEM inline. Every file is read once, at
+start, and checked: a client identity must hold a certificate and its
+private key, and the trust roots at least one certificate. `serve` and
+`config check` refuse a `[metrics.otlp_tls]` table beside an `http://`
+collector or none, since it would go unused. A user name or a password in an
+`https://` collector URL passes the transport rule. A changed file takes
+effect on a restart, and a [reload](registry.md#reloading-the-registry) logs
+`metrics.otlp_tls` as needing one.
 
 ### Reloading over the admin listener
 

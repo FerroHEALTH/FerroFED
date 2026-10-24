@@ -47,7 +47,7 @@ use ferrofed_registry::incident::Kind;
 use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _, ObservableCounter};
-use opentelemetry_otlp::WithExportConfig as _;
+use opentelemetry_otlp::{WithExportConfig as _, WithTonicConfig as _};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
 use crate::config::settings::MetricsSettings;
@@ -240,7 +240,8 @@ pub struct Metrics {
 
 impl Metrics {
     /// Returns the metrics `settings` describe: the Prometheus reader always,
-    /// and the OTLP push when `settings.otlp_endpoint` is set.
+    /// and the OTLP push when `settings.otlp_endpoint` is set, over TLS for an
+    /// `https://` collector ([`crate::telemetry::collector_tls`]).
     ///
     /// The OTLP exporter speaks gRPC through `tonic`, so with a collector
     /// configured this runs inside a Tokio runtime context.
@@ -253,9 +254,14 @@ impl Metrics {
             .otlp_endpoint
             .as_ref()
             .map(|endpoint| {
-                opentelemetry_otlp::MetricExporter::builder()
+                let mut builder = opentelemetry_otlp::MetricExporter::builder()
                     .with_tonic()
-                    .with_endpoint(endpoint.expose())
+                    .with_endpoint(endpoint.expose());
+                if let Some(config) = crate::telemetry::collector_tls(endpoint, &settings.otlp_tls)
+                {
+                    builder = builder.with_tls_config(config);
+                }
+                builder
                     .with_temporality(Temporality::Cumulative)
                     .build()
                     .map(|exporter| PeriodicReader::builder(exporter).build())
