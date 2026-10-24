@@ -586,8 +586,9 @@ jobs:
           bash scripts/checks/e2e-placement.sh
 
   # The usage report guard (#1122): every shell script, workflow and Rust test
-  # that starts the gateway with serve switches the installation report off,
-  # so no CI run counts as an installation. Its self-test proves each launch
+  # that starts the gateway with serve, and the quickstart compose file (#1280),
+  # switches the installation report off, so no CI run or local stack counts
+  # as an installation. Its self-test proves each launch
   # form it catches and each one it leaves alone.
   usage-report-off:
     name: usage-report-off
