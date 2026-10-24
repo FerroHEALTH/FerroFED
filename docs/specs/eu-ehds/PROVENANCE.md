@@ -9,7 +9,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `b102b6e1db0ec479568a97aa8ca71e2c56403d19ca16f90a1b22c35a911230fb`
-- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 8 committed, 0 cache only, 2 needing
   manual retrieval
 - Files in this directory: 8 besides this one, each verbatim as the
@@ -118,10 +118,10 @@ Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
 ### `myhealth-eu-requirements-catalogue` (needs manual retrieval)
 
 - Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue>
-- Version: not retrieved
+- Version: 9.0.0 (2025-03-24), not retrieved
 - sha256: none, nothing is fetched
 - Licence: None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant
 - Needs manual retrieval: the source answers an automated client with a
   login or a bot challenge, so the script fetches nothing and this
   repository carries none of its content.
-- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up.
+- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up. Xt-EHR D6.1 section 5 names release 9.0.0 of 2025-03-24 and says it is available only with authorisation, requested from DG SANTE; the URL answered 302 to login.action again on 2026-10-24.

@@ -172,6 +172,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 0.1.0-ballot (CC0-1.0).
   - `docs/specs/ehdsi-mvc/`: `myhealth.eu.fhir.mvc-package` 9.1.0, the
     MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
+- `docs/specs/xt-ehr-deliverables/`: the Xt-EHR deliverables D6.1, D6.2 and
+  D5.2, the closest published text of the Art 15(1) exchange format while no
+  draft act is published, pinned by URL and sha256 in
+  `scripts/vendor/eehrxf.sh` and kept in the cache only, since they state no
+  licence (#1265).
 - `docs/specs/fhir-r4/`: the Extensibility, Defining Extensions,
   StructureDefinition, CodeSystem, NamingSystem, Using Codes in Resources
   (4.1), Search (3.1.1), RESTful API (3.1.0) and License and Legal Terms

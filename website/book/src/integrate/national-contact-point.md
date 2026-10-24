@@ -134,7 +134,23 @@ stay with the contact point:
   contact points joint controllers for the processing in MyHealth@EU
   (2026/2083 recital 19).
 
+## The sources these decisions were checked against
+
 The Commission has not adopted the implementing act on the exchange
-format (Regulation (EU) 2025/327 Art 15(1)), and the eHDSI requirements
-catalogue is not read here. When either changes what a national
-infrastructure must do, these decisions are checked again.
+format (Regulation (EU) 2025/327 Art 15(1)), and its Have your say page
+(initiative 17512) lists the draft act as upcoming, with no text. The
+closest published text is the Xt-EHR joint action's deliverables D6.1
+(Patient Summary) and D6.2 (electronic prescription and dispensation),
+which FerroFED reads as a draft (`scripts/vendor/eehrxf.sh`). Their
+cross-border flow agrees with the list above: the contact point of the
+patient's country retrieves the summary from the national systems, the
+patient's identity is confirmed before the request, and transformation and
+translation happen at the contact point (D6.1 §8.2.1). D6.2 §6.2 says the
+existing CDA services move to FHIR over time.
+
+The MyHealth@EU Requirements Catalogue, release 9.0.0 of 2025-03-24, is
+available only with authorisation from DG SANTE behind EU Login (D6.1 §5),
+and Commission Decision 2011/833/EU does not let a privileged-access document
+be copied here without a written grant. FerroFED records it for manual
+retrieval and has not read it. When the act is adopted, or the catalogue
+can be read, the decisions behind this page are checked again.

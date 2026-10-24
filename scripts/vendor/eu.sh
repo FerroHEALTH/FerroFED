@@ -78,10 +78,10 @@ pin manual ehdsi-interoperability-specifications "not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks' \
   - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
   'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles live here.'
-pin manual myhealth-eu-requirements-catalogue "not retrieved" \
+pin manual myhealth-eu-requirements-catalogue "9.0.0 (2025-03-24), not retrieved" \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue' \
   - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
-  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up.'
+  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up. Xt-EHR D6.1 section 5 names release 9.0.0 of 2025-03-24 and says it is available only with authorisation, requested from DG SANTE; the URL answered 302 to login.action again on 2026-10-24.'
 pinned_corpus eu-ehds "EU EHDS Regulation and eHealth Network guidelines" \
   "the European Health Data Space Regulation, its adopted implementing acts and eHealth Network guidelines" \
   "Regulation (EU) 2025/327 on the European Health Data Space (the research
