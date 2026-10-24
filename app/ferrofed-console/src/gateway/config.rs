@@ -17,6 +17,7 @@ use ferrofed_registry::console::{ConsoleMember, Resources};
 use ferrofed_registry::operator::{Page, PageRequest};
 use ferrofed_registry::resource::{Resource, SectionRequest};
 use ferrofed_registry::revision::{Applied, Current, Diff, Review, Revision, RevisionId, Standing};
+use ferrofed_registry::running::{RunningConfig, SettingsRequest};
 use http::{Method, StatusCode};
 use openehr_its::rest::client::{Request, path_segment};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -296,6 +297,38 @@ impl Gateway {
         request: &SectionRequest,
     ) -> Result<Revision, GatewayError> {
         let mut call = Request::new(Method::PUT, section_path(resource));
+        call.json_body(request, None)
+            .map_err(|source| GatewayError::Call { source })?;
+        self.admin(replica, token, call, StatusCode::CREATED).await
+    }
+
+    /// Reads the running configuration, `GET {admin}/admin/config/running`
+    /// on `replica`: each deployment-wide setting with its value, source
+    /// and default, its secrets by reference alone.
+    ///
+    /// # Errors
+    /// As [`Gateway::config_standing`].
+    pub async fn config_running(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+    ) -> Result<RunningConfig, GatewayError> {
+        let request = Request::new(Method::GET, String::from("/admin/config/running"));
+        self.admin(replica, token, request, StatusCode::OK).await
+    }
+
+    /// Saves a revision with the settings of `request` changed,
+    /// `PUT {admin}/admin/config/settings` on `replica`; it is not applied.
+    ///
+    /// # Errors
+    /// As [`Gateway::save_member`].
+    pub async fn save_settings(
+        &self,
+        replica: &ReplicaSettings,
+        token: &AccessToken,
+        request: &SettingsRequest,
+    ) -> Result<Revision, GatewayError> {
+        let mut call = Request::new(Method::PUT, String::from("/admin/config/settings"));
         call.json_body(request, None)
             .map_err(|source| GatewayError::Call { source })?;
         self.admin(replica, token, call, StatusCode::CREATED).await

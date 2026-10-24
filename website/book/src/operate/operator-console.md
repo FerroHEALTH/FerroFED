@@ -381,6 +381,36 @@ A console route with no screenshot fails the testkit's
 
 ### Configuration page
 
+The page opens on the deployment-wide settings, one tab per section:
+Federation behaviour, Fan-out and paging, Consent, Stored queries, Access
+log and FHIR face. Each setting is a row with its value, where the value
+comes from (the configuration file, an environment override, the running
+revision, or the default), its configuration key, and a Next start mark
+when a change takes effect only at the next start of each replica, with
+the value that start takes once a saved change waits for it. A secret is
+named by the file it is read from, never by its value. The rows come from
+the gateway's running configuration (`GET /admin/config/running`,
+[Configuration revisions](configuration-revisions.md#the-running-configuration)).
+
+Edit on a tab opens a form with a control for each setting of one value;
+saving it posts the settings you changed, and only those, as a revision,
+which you then apply as any revision. A list or a table, such as the
+category map, and a secret are changed by an import. With configuration
+revisions off (`config.ui = "off"`), the six settings tabs show alone and
+read-only.
+
+![The Federation behaviour tab: each setting with its value, where it comes from and its Next start mark, under the card of what the saved revision 2 changes, with the tab's Edit.](img/console/configuration-federation.png)
+
+[The Federation behaviour tab in the dark theme](img/console/configuration-federation-dark.png)
+
+![The edit of the Federation behaviour tab: a field or a choice for each setting, a reason, and the Save as revision 3 button.](img/console/configuration-settings-edit.png)
+
+[The edit of the Federation behaviour tab in the dark theme](img/console/configuration-settings-edit-dark.png)
+
+![The Stored queries tab: the store's backend and its connection, named by the file it is read from, above the stored versions.](img/console/configuration-stored-queries.png)
+
+[The Stored queries tab in the dark theme](img/console/configuration-stored-queries-dark.png)
+
 ![The Members tab of the configuration page: revision 1 running and revision 2 saved with How configuration works, what revision 2 changes with its Apply revision 2 button, and the members with their owners and states, the console member's row with its row menu.](img/console/configuration-members.png)
 
 [The Members tab of the configuration page in the dark theme](img/console/configuration-members-dark.png)

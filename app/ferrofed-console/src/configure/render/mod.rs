@@ -22,6 +22,7 @@ mod exchange;
 mod members;
 mod parts;
 mod queries;
+pub mod running;
 mod top;
 
 use ferrofed_registry::console::Resources;
@@ -29,6 +30,7 @@ use ferrofed_registry::operator::Page;
 use ferrofed_registry::revision::{
     Author, Current, Difference, Outcome, Revision, RevisionId, Standing,
 };
+use ferrofed_registry::running::{RunningConfig, Section};
 use ferrohealth_ui::view::time::reading;
 use leptos::prelude::*;
 
@@ -81,6 +83,9 @@ pub struct Loaded<'a> {
     /// The form as the operator posted it, drawn again in place of what
     /// the gateway holds.
     pub draft: Option<&'a crate::configure::draft::Draft>,
+    /// The replica's running configuration, for a settings tab; `None`
+    /// when it was not read or could not be.
+    pub running: Option<&'a RunningConfig>,
 }
 
 impl Loaded<'_> {
@@ -121,6 +126,16 @@ impl Loaded<'_> {
 /// One tab of the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
+    /// How a query fans out to the members.
+    Federation,
+    /// How a query is paged, and what is sent on.
+    FanOut,
+    /// What callers learn about consent.
+    Consent,
+    /// How each access record is classified and kept.
+    AccessLog,
+    /// The FHIR face.
+    Fhir,
     /// The members.
     Members,
     /// The onward credentials and binding sections.
@@ -135,21 +150,77 @@ pub enum Tab {
 
 impl Tab {
     /// Every tab, in the order the page shows them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 10] = [
+        Self::Federation,
+        Self::FanOut,
+        Self::Consent,
+        Self::Queries,
+        Self::AccessLog,
+        Self::Fhir,
         Self::Members,
         Self::Credentials,
-        Self::Queries,
         Self::History,
         Self::Exchange,
     ];
 
+    /// The tabs of a configuration revisions do not manage: the settings,
+    /// read-only.
+    pub const SETTINGS: [Self; 6] = [
+        Self::Federation,
+        Self::FanOut,
+        Self::Consent,
+        Self::Queries,
+        Self::AccessLog,
+        Self::Fhir,
+    ];
+
+    /// The tab of the settings of `section`.
+    #[must_use]
+    pub const fn of(section: Section) -> Self {
+        match section {
+            Section::Federation => Self::Federation,
+            Section::FanOut => Self::FanOut,
+            Section::Consent => Self::Consent,
+            Section::StoredQueries => Self::Queries,
+            Section::AccessLog => Self::AccessLog,
+            _ => Self::Fhir,
+        }
+    }
+
+    /// The section of the settings the tab shows, when it shows some.
+    #[must_use]
+    pub const fn section(self) -> Option<Section> {
+        match self {
+            Self::Federation => Some(Section::Federation),
+            Self::FanOut => Some(Section::FanOut),
+            Self::Consent => Some(Section::Consent),
+            Self::Queries => Some(Section::StoredQueries),
+            Self::AccessLog => Some(Section::AccessLog),
+            Self::Fhir => Some(Section::Fhir),
+            Self::Members | Self::Credentials | Self::History | Self::Exchange => None,
+        }
+    }
+
     /// The tab's path.
     #[must_use]
     pub const fn href(self) -> &'static str {
+        match self.section() {
+            Some(section) => running::tab_href(section),
+            None => self.other_href(),
+        }
+    }
+
+    /// The path of a tab that shows no settings.
+    const fn other_href(self) -> &'static str {
         match self {
             Self::Members => "/configuration/members",
             Self::Credentials => "/configuration/credentials",
-            Self::Queries => "/configuration/stored-queries",
+            Self::Federation
+            | Self::FanOut
+            | Self::Consent
+            | Self::Queries
+            | Self::AccessLog
+            | Self::Fhir => "/configuration/stored-queries",
             Self::History => "/configuration/history",
             Self::Exchange => "/configuration/import-export",
         }
@@ -158,10 +229,18 @@ impl Tab {
     /// What the tab says.
     #[must_use]
     pub const fn label(self) -> Msg {
+        if let Some(section) = self.section() {
+            return running::section_words(section).0;
+        }
         match self {
+            Self::Federation
+            | Self::FanOut
+            | Self::Consent
+            | Self::Queries
+            | Self::AccessLog
+            | Self::Fhir => Msg::StoredQueries,
             Self::Members => Msg::Members,
             Self::Credentials => Msg::CredentialsAndBindings,
-            Self::Queries => Msg::StoredQueries,
             Self::History => Msg::History,
             Self::Exchange => Msg::ImportAndExport,
         }
@@ -171,6 +250,11 @@ impl Tab {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Federation => "tab-federation",
+            Self::FanOut => "tab-fan-out",
+            Self::Consent => "tab-consent",
+            Self::AccessLog => "tab-access-log",
+            Self::Fhir => "tab-fhir",
             Self::Members => "tab-members",
             Self::Credentials => "tab-credentials",
             Self::Queries => "tab-stored-queries",
@@ -183,6 +267,10 @@ impl Tab {
 /// Which part of the page a path names, read from its [`Screen`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Shown {
+    /// The settings of a section, as they run.
+    Settings(Section),
+    /// The edit of the settings of a section.
+    SettingsEdit(Section),
     /// The members.
     Members,
     /// The form that adds a member.
@@ -215,7 +303,15 @@ impl Shown {
     pub fn of(screen: &Screen) -> Option<Self> {
         let item = screen.item.trim();
         Some(match (screen.tab.trim(), item) {
-            ("" | "members", "") => Self::Members,
+            ("", "") => Self::Settings(Section::Federation),
+            ("stored-queries", "edit") => Self::SettingsEdit(Section::StoredQueries),
+            (tab, "") if tab != "stored-queries" && Section::named(tab).is_some() => {
+                Self::Settings(Section::named(tab)?)
+            }
+            (tab, "edit") if Section::named(tab).is_some() => {
+                Self::SettingsEdit(Section::named(tab)?)
+            }
+            ("members", "") => Self::Members,
             ("members", "new") => Self::MemberNew,
             ("members", node) => Self::Member(node.to_owned()),
             ("credentials", "") => Self::Credentials,
@@ -235,6 +331,7 @@ impl Shown {
     #[must_use]
     pub const fn tab(&self) -> Tab {
         match self {
+            Self::Settings(section) | Self::SettingsEdit(section) => Tab::of(*section),
             Self::Members | Self::MemberNew | Self::Member(_) => Tab::Members,
             Self::Credentials
             | Self::CredentialNew
@@ -244,6 +341,25 @@ impl Shown {
             Self::Queries | Self::QueryNew => Tab::Queries,
             Self::History(_) => Tab::History,
             Self::Exchange => Tab::Exchange,
+        }
+    }
+
+    /// Whether the part shows settings of the running configuration.
+    #[must_use]
+    pub const fn reads_running(&self) -> bool {
+        matches!(
+            self,
+            Self::Settings(_) | Self::SettingsEdit(_) | Self::Queries
+        )
+    }
+
+    /// The section of settings a configuration revisions do not manage
+    /// shows for the part: its own, or the first.
+    #[must_use]
+    pub const fn file_section(&self) -> Section {
+        match self.tab().section() {
+            Some(section) => section,
+            None => Section::Federation,
         }
     }
 
@@ -260,6 +376,34 @@ impl Shown {
             Self::History(compared) => *compared,
             _ => None,
         }
+    }
+}
+
+/// The page of a gateway whose configuration is not managed: the settings
+/// of `section` as `running` holds them, read-only.
+#[must_use]
+pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
+    let line = view! {
+        <p class="fui-small fui-muted">
+            {ferrohealth_ui::icon::icon(ferrohealth_ui::icon::Glyph::LOCK, "12")} " "
+            {tr(Msg::SettingsFileLine)}
+        </p>
+    };
+    let header = ferrohealth_ui::view::surface::page_heading(
+        ferrohealth_ui::view::surface::Header {
+            title: tr(Msg::Configuration).into(),
+            subtitle: Some(tr(Msg::SettingsFileSubtitle).into()),
+            ..ferrohealth_ui::view::surface::Header::default()
+        },
+        ferrohealth_ui::view::action::ActionGroup::none(),
+    );
+    ConfigView {
+        header: Some(header.into_any()),
+        pending: Some(line.into_any()),
+        tab: Some(Tab::of(section)),
+        lead: None,
+        main: Some(running::panel(running, section)),
+        file_only: true,
     }
 }
 
@@ -284,6 +428,8 @@ pub fn unmanaged(replica: &ReplicaSettings) -> ConfigView {
 /// section the gateway does not hold.
 pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
     let (lead, main): (Option<AnyView>, AnyView) = match shown {
+        Shown::Settings(section) => (None, running::tab(loaded, *section)),
+        Shown::SettingsEdit(section) => (None, running::edit(loaded, *section)),
         Shown::Members => (None, members::tab(loaded).into_any()),
         Shown::MemberNew => (None, members::member_form(loaded, None).into_any()),
         Shown::Member(node) => (None, members::member(loaded, node)?.into_any()),
@@ -298,7 +444,10 @@ pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
             None,
             bindings::binding_form(loaded, Some(section))?.into_any(),
         ),
-        Shown::Queries => (None, queries::tab(loaded).into_any()),
+        Shown::Queries => (
+            Some(running::tab(loaded, Section::StoredQueries)),
+            queries::tab(loaded).into_any(),
+        ),
         Shown::QueryNew => (None, queries::form_page(loaded).into_any()),
         Shown::History(_) => (
             Some(exchange::compared(loaded).into_any()),
@@ -315,6 +464,7 @@ pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
         tab: Some(shown.tab()),
         lead,
         main: Some(main),
+        file_only: false,
     })
 }
 
@@ -357,7 +507,7 @@ pub(super) fn mark_said(mark: &Current) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Screen, Shown, Tab};
+    use super::{Screen, Section, Shown, Tab};
 
     /// The screen of `tab` and `item`.
     fn screen(tab: &str, item: &str) -> Screen {
@@ -371,7 +521,27 @@ mod tests {
     #[test]
     fn each_path_names_its_part_and_its_tab() {
         for (tab, item, shown, under) in [
-            ("", "", Shown::Members, Tab::Members),
+            (
+                "",
+                "",
+                Shown::Settings(Section::Federation),
+                Tab::Federation,
+            ),
+            ("fan-out", "", Shown::Settings(Section::FanOut), Tab::FanOut),
+            (
+                "access-log",
+                "edit",
+                Shown::SettingsEdit(Section::AccessLog),
+                Tab::AccessLog,
+            ),
+            (
+                "stored-queries",
+                "edit",
+                Shown::SettingsEdit(Section::StoredQueries),
+                Tab::Queries,
+            ),
+            ("stored-queries", "", Shown::Queries, Tab::Queries),
+            ("members", "", Shown::Members, Tab::Members),
             ("members", "new", Shown::MemberNew, Tab::Members),
             (
                 "members",
@@ -394,7 +564,12 @@ mod tests {
             assert_eq!(Some(&shown), read.as_ref(), "{tab}/{item}");
             assert_eq!(under, shown.tab());
         }
-        for (tab, item) in [("revisions", ""), ("history", "3"), ("bindings", "")] {
+        for (tab, item) in [
+            ("revisions", ""),
+            ("history", "3"),
+            ("bindings", ""),
+            ("fhir", "x"),
+        ] {
             assert_eq!(None, Shown::of(&screen(tab, item)), "{tab}/{item}");
         }
     }

@@ -51,6 +51,11 @@ pub(crate) const HISTORY: &str = r#"{"items":[
 pub(crate) const DIFF: &str = r#"{"from":1,"to":2,"changes":[
     {"key":"registry.members[0].node.id","change":"added","from":null,"to":"\"node-c\"<script>"}]}"#;
 
+/// The running configuration revision 1 sets: one setting of the first tab.
+pub(crate) const RUNNING_ONE: &str = r#"{"ui":"managed","revision":1,"settings":[
+    {"key":"federation.per_node_timeout_ms","section":"federation","value":5000,"source":"revision",
+     "default":10000,"restart":true,"editable":true}]}"#;
+
 /// Revision 2 as a save answers it.
 pub(crate) const SAVED: &str = r#"{"id":2,"base":1,"origin":"operator","restores":null,
     "author":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},
@@ -96,6 +101,13 @@ pub(crate) async fn listener() -> Server {
         ("GET", "/admin/config/revisions/1/diff/2"),
         200,
         DIFF,
+    )
+    .await;
+    answers(
+        &listener,
+        ("GET", "/admin/config/running"),
+        200,
+        RUNNING_ONE,
     )
     .await;
     listener

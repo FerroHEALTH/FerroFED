@@ -24,6 +24,7 @@ mod browser;
 mod configure;
 mod configure_credentials;
 mod configure_import;
+mod configure_settings;
 mod overview;
 mod provider;
 mod query;

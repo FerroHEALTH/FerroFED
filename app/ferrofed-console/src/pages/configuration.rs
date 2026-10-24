@@ -4,9 +4,12 @@
 //! The configuration page (T3), drawn from the first replica's admin
 //! listener.
 //!
-//! Its binder tabs are Members, Credentials and bindings, Stored queries,
+//! Its binder tabs are the settings of the running configuration
+//! (Federation behaviour, Fan-out and paging, Consent, Stored queries,
+//! Access log and FHIR face), then Members, Credentials and bindings,
 //! History, and Import and export, each its own route; a form's page sits
-//! under its tab. A post of one of its forms is run while the page is drawn
+//! under its tab. With configuration revisions off, the settings tabs show
+//! alone, read-only. A post of one of its forms is run while the page is drawn
 //! again, and its answer shows at the top. A console configured with no
 //! admin listener reads the gateway but offers no configuration, and says
 //! how to add one.
@@ -144,11 +147,13 @@ fn drawn(view: ConfigView, answer: Option<AnyView>) -> AnyView {
         tab,
         lead,
         main,
+        file_only,
     } = view;
+    let shown: &[Tab] = if file_only { &Tab::SETTINGS } else { &Tab::ALL };
     let section = match tab {
         Some(tab) => {
-            let tabs = Tab::ALL
-                .into_iter()
+            let tabs = shown
+                .iter()
                 .map(|each| BinderTab::new(each.id(), each.href(), tr(each.label())))
                 .collect();
             binder(

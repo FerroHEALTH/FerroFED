@@ -28,13 +28,13 @@ use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
 
 /// Revision 1 runs, applied by the file, and revision 2 is saved.
-const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"previous":null,
+pub(crate) const STANDING: &str = r#"{"ui":"managed","head":2,"current":{"revision":1,"previous":null,
     "outcome":"applied","needs_restart":[],"applied_by":{"kind":"file"},
     "applied_at":"2026-10-15T08:00:00Z"},"running":1,"in_step":true,"refused":null}"#;
 
 /// Member A the file provides, console member B with a FHIR endpoint, and
 /// a writable stored-query registry.
-const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
+pub(crate) const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
     {"node":"node-a","organisation":"org-a","system_id":"cdr-a.example.org","endpoints":["node-a-pub"],"owner":"file"},
     {"node":"node-b","organisation":"org-b","system_id":"cdr-b.example.org","endpoints":["node-b-pub","node-b-fhir"],
      "owner":"console","state":"pending",
@@ -45,7 +45,7 @@ const RESOURCES: &str = r#"{"running":1,"head":2,"members":[
     "stored_query_registry":"writable","stored_queries":[]}"#;
 
 /// The history of revisions 1 and 2.
-const HISTORY: &str = r#"{"items":[
+pub(crate) const HISTORY: &str = r#"{"items":[
     {"id":2,"base":1,"origin":"operator","restores":null,
      "author":{"kind":"operator","issuer":"https://idp.example.org","subject":"op-1"},
      "at":"2026-10-15T09:00:00Z","reason":"raise a budget","toml":""},
@@ -54,8 +54,12 @@ const HISTORY: &str = r#"{"items":[
     "offset":0,"total":2}"#;
 
 /// What revision 2 changes against revision 1.
-const DIFF_2: &str = r#"{"from":1,"to":2,"changes":[
+pub(crate) const DIFF_2: &str = r#"{"from":1,"to":2,"changes":[
     {"key":"federation.per_node_timeout_ms","change":"changed","from":"2000","to":"2500"}]}"#;
+
+/// The running configuration revision 1 sets, every setting the gateway
+/// lists.
+pub(crate) const RUNNING: &str = r#"{"ui":"managed","revision":1,"settings":[{"key":"federation.per_node_timeout_ms","section":"federation","source":"revision","restart":true,"editable":true,"value":2500,"default":10000},{"key":"federation.overall_timeout_ms","section":"federation","source":"revision","restart":true,"editable":true,"value":4000,"default":25000},{"key":"federation.node_selection","section":"federation","source":"revision","restart":true,"editable":true,"value":"localized"},{"key":"federation.best_effort","section":"federation","source":"default","restart":true,"editable":true,"value":true,"default":true},{"key":"federation.localization.on_failure","section":"federation","source":"revision","restart":false,"editable":true,"value":"closed","default":"closed"},{"key":"federation.localization.timeout_ms","section":"federation","source":"revision","restart":false,"editable":true,"value":1500,"default":5000},{"key":"federation.fan_out_stored_queries","section":"fan-out","source":"default","restart":true,"editable":true,"value":false,"default":false},{"key":"federation.fan_out_template_upload","section":"fan-out","source":"default","restart":true,"editable":true,"value":false,"default":false},{"key":"federation.offset_strategy","section":"fan-out","source":"default","restart":true,"editable":true,"value":"bounded","default":"bounded"},{"key":"federation.max_offset_window","section":"fan-out","source":"default","restart":true,"editable":true,"value":1000,"default":1000},{"key":"federation.max_node_rows","section":"fan-out","source":"default","restart":true,"editable":true,"value":9999,"default":9999},{"key":"federation.consent.disclose","section":"consent","source":"default","restart":false,"editable":true,"value":true,"default":true},{"key":"federation.consent.emergency","section":"consent","source":"default","restart":false,"editable":true,"value":"apply","default":"apply"},{"key":"stored_queries.backend","section":"stored-queries","source":"revision","restart":true,"editable":true,"value":"postgres"},{"key":"stored_queries.path","section":"stored-queries","source":"default","restart":true,"editable":true},{"key":"stored_queries.url","section":"stored-queries","source":"revision","restart":true,"editable":false,"secret":{"set":true,"reference":"/run/secrets/ferrofed/stored-queries-url"}},{"key":"access_log.retention.years","section":"access-log","source":"default","restart":false,"editable":true,"value":3,"default":3},{"key":"access_log.emergency_purpose","section":"access-log","source":"revision","restart":false,"editable":false,"value":[{"code":"ETREAT"}],"default":[]},{"key":"access_log.templates","section":"access-log","source":"revision","restart":false,"editable":false,"value":{"journey.lab.v1":{"categories":["Laboratory-Reports"]},"journey.ips.v1":{"categories":["Patient-Summaries"]}},"default":{}},{"key":"access_log.archetypes","section":"access-log","source":"default","restart":false,"editable":false,"value":{},"default":{}},{"key":"fhir.base","section":"fhir","source":"revision","restart":true,"editable":true,"value":"/fhir"},{"key":"fhir.document_url_lifetime_secs","section":"fhir","source":"default","restart":true,"editable":true,"value":300,"default":300},{"key":"fhir.receive","section":"fhir","source":"revision","restart":true,"editable":false,"value":[{"category":"Patient-Summaries"},{"category":"Laboratory-Reports"}],"default":[]}]}"#;
 
 /// What revision 3, the save, changes against revision 1.
 const DIFF_3: &str = r#"{"from":1,"to":3,"changes":[
@@ -83,6 +87,8 @@ pub(crate) async fn listener() -> Server {
         ("GET", "/admin/config/revisions", 200, HISTORY),
         ("GET", "/admin/config/revisions/1/diff/2", 200, DIFF_2),
         ("GET", "/admin/config/revisions/1/diff/3", 200, DIFF_3),
+        ("GET", "/admin/config/running", 200, RUNNING),
+        ("PUT", "/admin/config/settings", 201, SAVED),
         ("PUT", "/admin/config/members/node-c", 201, SAVED),
         ("PUT", "/admin/config/members/node-b", 201, SAVED),
         ("POST", "/admin/config/members/node-b/remove", 201, SAVED),

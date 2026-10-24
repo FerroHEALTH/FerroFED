@@ -30,6 +30,8 @@ mod configure_revisions;
 #[cfg(test)]
 mod configure_sections;
 #[cfg(test)]
+mod configure_settings;
+#[cfg(test)]
 mod describe;
 #[cfg(test)]
 mod exchange;

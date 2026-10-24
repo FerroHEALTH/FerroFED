@@ -95,6 +95,7 @@ mod integrity;
 mod prefs;
 mod query;
 mod search;
+mod settings;
 mod shell;
 mod sign_in;
 mod stored;
@@ -114,6 +115,7 @@ const AREAS: &[&[Msg]] = &[
     prefs::ALL,
     query::ALL,
     search::ALL,
+    settings::ALL,
     shell::ALL,
     sign_in::ALL,
     stored::ALL,
