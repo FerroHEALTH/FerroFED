@@ -12,7 +12,8 @@
 //! routing state at `POST` [`CLEAR_EHR_ID`], and the export of the routing
 //! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`], and the
 //! reload `SIGHUP` asks for at `POST` [`RELOAD`], for a container no
-//! signal reaches ([`serving_router`]). Under
+//! signal reaches ([`serving_router`]), with the running configuration
+//! at `GET` [`crate::running::RUNNING`] beside it, a read. Under
 //! `config.ui = "managed"` it also serves the configuration revisions under
 //! `/admin/config` ([`revision::routes`], [`managed_router`]), whose reads
 //! pass [`operator_read`]. Every other path is `404`. No route is on the
@@ -283,11 +284,13 @@ pub fn managed_router(
 }
 
 /// Returns the admin listener's application as [`managed_router`] does,
-/// with `POST` [`RELOAD`] beside it when `reloader` is set.
+/// with `POST` [`RELOAD`] and `GET` [`crate::running::RUNNING`] beside it
+/// when `reloader` is set.
 ///
 /// The reload is a write action: admitted for the operator scope and
-/// recorded with its operator ([`operator_only`]). Without `reloader` its
-/// path is `404`.
+/// recorded with its operator ([`operator_only`]); the running
+/// configuration is a read ([`operator_read`]). Without `reloader` both
+/// paths are `404`.
 pub fn serving_router(
     state: Arc<AppState>,
     access: Access,
@@ -308,6 +311,10 @@ pub fn serving_router(
         .with_state(state)
         .merge(metrics);
     if let Some(reloader) = reloader {
+        let running = crate::running::routes(Arc::clone(&reloader)).route_layer(
+            middleware::from_fn_with_state(Arc::clone(&access), operator_read),
+        );
+        app = app.merge(running);
         let reloading = Router::new()
             .route(RELOAD, post(reload::action::reload))
             .route_layer(middleware::from_fn_with_state(

@@ -82,6 +82,10 @@ pub enum ConsoleError {
     /// refused.
     #[error(transparent)]
     Section(#[from] SectionFault),
+    /// The revision sets a parent of a changed setting to a value that is
+    /// no table.
+    #[error("the revision sets a parent of {0} to a value that is no table")]
+    NotATable(String),
 }
 
 impl From<Refused> for ConsoleError {
@@ -102,6 +106,9 @@ impl<T: serde::Serialize> Answer for Result<T, ConsoleError> {
                 error::response(Code::ResourceUnknown, refusal.to_string(), request_id)
             }
             Err(ConsoleError::Section(fault)) => sections::refused(&fault, request_id),
+            Err(refusal @ ConsoleError::NotATable(_)) => {
+                error::response(Code::ConfigurationInvalid, refusal.to_string(), request_id)
+            }
         }
     }
 }

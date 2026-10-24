@@ -24,6 +24,7 @@ mod ownership;
 mod policy;
 mod replicas;
 mod secrets;
+mod settings;
 mod store;
 
 use std::error::Error;
@@ -204,12 +205,18 @@ impl Gateway {
         let revisions = booted.revisions;
         let reloader = Arc::new(
             Reloader::new(Some(config.clone()), settings, Arc::clone(&state))
+                .with_tree(tree)
                 .with_revisions(Some(Arc::clone(&revisions))),
         );
         let managed = Arc::new(Managed::new(Arc::clone(&revisions), Arc::clone(&reloader)));
         let access = Access::new(&support::auth(), Profile::Development, Vec::new());
-        let admin = admin::managed_router(Arc::clone(&state), access, Some(managed))
-            .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
+        let admin = admin::serving_router(
+            Arc::clone(&state),
+            access,
+            Some(managed),
+            Some(Arc::clone(&reloader)),
+        )
+        .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
         Ok(Self {
             dir,
             config,

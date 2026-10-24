@@ -66,6 +66,11 @@ use ferrofed_registry::revision::RevisionId;
 
 pub mod action;
 mod restart;
+mod trees;
+
+/// What a fresh read of the configuration gives: the settings, the revision
+/// it is under `config.ui = "managed"`, and the tree under `off`.
+type Fresh = (Settings, Option<FileRevision>, Option<toml::Table>);
 
 use restart::{effective, needs_restart};
 
@@ -95,6 +100,9 @@ pub struct Reloader {
     certificates: Vec<Arc<Certificates>>,
     revisions: Option<Arc<Revisions>>,
     trust: Option<Arc<Trust>>,
+    tree: toml::Table,
+    boot_revision: Option<RevisionId>,
+    loaded: Mutex<Option<toml::Table>>,
 }
 
 /// What an applied reload changed.
@@ -235,6 +243,9 @@ impl Reloader {
             certificates: Vec::new(),
             revisions: None,
             trust: None,
+            tree: toml::Table::new(),
+            boot_revision: None,
+            loaded: Mutex::new(None),
         }
     }
 
@@ -253,6 +264,9 @@ impl Reloader {
     /// ([`Revisions::file_loaded`]).
     #[must_use]
     pub fn with_revisions(mut self, revisions: Option<Arc<Revisions>>) -> Self {
+        self.boot_revision = revisions
+            .as_ref()
+            .and_then(|revisions| revisions.replica().running);
         self.revisions = revisions;
         self
     }
@@ -336,9 +350,11 @@ impl Reloader {
             .and_then(|staged| self.fresh().map(|fresh| (fresh, staged)));
         let mut applied = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
         let mut loaded = None;
+        let mut tree = None;
         let outcome = prepared
-            .and_then(|((fresh, file), staged)| {
+            .and_then(|((fresh, file, read), staged)| {
                 loaded = file;
+                tree = read;
                 self.apply_settings(fresh)
                     .map(|(outcome, effective)| (outcome, effective, staged))
             })
@@ -359,6 +375,9 @@ impl Reloader {
                 outcome
             });
         drop(applied);
+        if let (Ok(_), Some(tree)) = (&outcome, tree) {
+            *self.loaded.lock().unwrap_or_else(PoisonError::into_inner) = Some(tree);
+        }
         self.log(&outcome);
         if let (Some(file), Some(revisions)) = (loaded, &self.revisions) {
             match &outcome {
@@ -445,11 +464,11 @@ impl Reloader {
     /// `config.ui = "managed"` the revision the store marks current once
     /// the file's has been recorded, with the revision that is and whether
     /// the file's load recorded it.
-    fn fresh(&self) -> Result<(Settings, Option<FileRevision>), ReloadError> {
+    fn fresh(&self) -> Result<Fresh, ReloadError> {
         let Some(revisions) = &self.revisions else {
-            return Config::load(self.config.as_deref())
-                .and_then(|config| config.resolve())
-                .map(|settings| (settings, None))
+            return Config::load_with_tree(self.config.as_deref())
+                .and_then(|(config, tree)| config.resolve().map(|settings| (settings, tree)))
+                .map(|(settings, tree)| (settings, None, Some(tree)))
                 .map_err(ReloadError::Config);
         };
         let (config, tree) =
@@ -466,7 +485,7 @@ impl Reloader {
             file.refused(error.class(), &error.to_string());
             error
         })?;
-        Ok((settings, Some(file)))
+        Ok((settings, Some(file), None))
     }
 
     /// Swaps in the registry `fresh` describes, returning what changed and

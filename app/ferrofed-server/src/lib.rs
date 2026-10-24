@@ -95,6 +95,7 @@ pub mod report;
 pub mod request_id;
 pub mod request_log;
 pub mod revision;
+pub mod running;
 pub mod service;
 pub mod state;
 pub mod stored;

@@ -138,6 +138,36 @@ The other refusals are `400 body-invalid` for a body that does not read,
 whose parser message is never echoed, and `404 revision-unknown`
 ([Gateway codes](../integrate/errors.md#gateway-codes)).
 
+## The running configuration
+
+`GET /admin/config/running` answers the deployment-wide settings the
+console's configuration tabs show, under `off` as well as `managed`. It is a
+read, admitted for `auth.product_scope` like the other reads. Each setting
+carries:
+
+| Member | What it says |
+|---|---|
+| `key` | the dotted key, such as `federation.per_node_timeout_ms` |
+| `section` | the tab it belongs to: `federation`, `fan-out`, `consent`, `stored-queries`, `access-log` or `fhir` |
+| `value` | the value this replica runs with; absent for a secret, and for a setting nothing sets that has no default |
+| `source` | where the value comes from: `file`, `environment` (a `FERROFED__` override), `revision` (the revision this replica runs, under `managed`) or `default` |
+| `default` | the value the gateway takes when nothing sets it, when it has one |
+| `restart` | `true` when a change takes effect only at the next start of the replica |
+| `next` | for such a setting, the value the next start takes when it differs from the running one |
+| `secret` | for a secret, `set` and the file it is read from as `reference`; never its value |
+| `editable` | `true` when `PUT /admin/config/settings` may change it: under `managed`, a setting of one value that is no secret |
+
+`PUT /admin/config/settings` takes `{"base": <newest>, "reason": "…",
+"settings": {"federation.per_node_timeout_ms": "3000"}}` and saves a
+revision on `base` with each setting changed, `201` with the revision. Each
+value is read as an environment override is: TOML syntax, such as `3000` or
+`true`, or the string it is. The revision is checked as `config check`
+checks the file (`422 configuration-invalid` with its errors) and then
+applied as any revision. A key that is not an editable setting is refused
+`400 body-invalid`, naming the key and never the value. A list or a table,
+such as `access_log.templates`, is changed by an
+[import](#export-and-import).
+
 ## Console-managed resources
 
 Each member of the federation, with its organisation and its endpoints, and

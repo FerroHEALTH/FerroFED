@@ -139,7 +139,7 @@ impl Config {
 }
 
 /// Applies one environment override onto `table`.
-fn apply_override(table: &mut toml::Table, name: &str, raw: &str) -> Result<(), Error> {
+pub(crate) fn apply_override(table: &mut toml::Table, name: &str, raw: &str) -> Result<(), Error> {
     let Some(path) = name.strip_prefix(ENV_PREFIX) else {
         return Ok(());
     };
@@ -174,7 +174,7 @@ fn apply_override(table: &mut toml::Table, name: &str, raw: &str) -> Result<(), 
 ///
 /// An environment variable carries text, so a number, a boolean and an array
 /// are spelled in TOML syntax and everything else is the string itself.
-fn env_value(raw: &str) -> toml::Value {
+pub(crate) fn env_value(raw: &str) -> toml::Value {
     // NOTE: no specification governs this: our own design. A parse failure IS
     // the answer here, because text that is not TOML syntax is a plain string.
     let parsed = toml::from_str::<toml::Table>(&format!("value = {raw}"))

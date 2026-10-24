@@ -26,6 +26,7 @@
 //! | `PUT` [`MEMBER`] | `201` with the revision saved with the console member in place |
 //! | `POST` [`MEMBER_REMOVE`] | `201` with the revision saved without the console member |
 //! | `PUT` [`STORED_QUERY`] | `201` with the stored-query version stored (§12.7, N44) |
+//! | `PUT` [`settings::SETTINGS`] | `201` with the revision saved with each setting the body names changed ([`settings`]) |
 //! | `PUT` [`sections::CREDENTIALS`], [`sections::BINDING`] | `201` with the revision saved with the credential or binding section in place ([`sections`]) |
 //! | `POST` [`sections::CREDENTIALS_REMOVE`], [`sections::BINDING_REMOVE`] | `201` with the revision saved without it |
 //!
@@ -100,6 +101,7 @@ pub const STORED_QUERY: &str = "/admin/config/stored-queries/{qualified_query_na
 pub mod console;
 pub mod exchange;
 pub mod sections;
+pub mod settings;
 
 /// The revisions and the reload path they are applied through.
 #[derive(Debug)]
@@ -146,6 +148,7 @@ pub fn writes(managed: Arc<Managed>) -> Router {
             sections::CREDENTIALS_REMOVE,
             post(sections::remove_credentials),
         )
+        .route(settings::SETTINGS, put(settings::save_settings))
         .route(sections::BINDING, put(sections::save_binding))
         .route(sections::BINDING_REMOVE, post(sections::remove_binding))
         .route(STORED_QUERY, put(console::store_query))
