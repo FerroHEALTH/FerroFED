@@ -17,9 +17,19 @@
 //! equivalent to a simple read"; §5.4.1, N33), so an id pairing one
 //! patient's `ehr_id` with another's prescription finds nothing (N26).
 //!
+//! Where a consent pre-filter is configured, the patient behind the `ehr_id`
+//! is named through the identity binding, in the namespaces `[access_log]
+//! patient_namespaces` names, and the pre-filter is asked about the member
+//! before anything is sent, as a search asks it (§14 Step 1, N27a): a member
+//! it denies is never asked and the read answers as an id with no owner
+//! (Regulation (EU) 2025/327 Art 8, Art 11(5)); a denial set aside for an
+//! emergency purpose is asked and named in the access record. A patient the
+//! binding cannot name gives the pre-filter nothing to decide, so the member
+//! stays the gate (N26, N27), as when the pre-filter gives no signal.
+//!
 //! An id the face did not write, one naming no member that serves
-//! prescriptions, and a member that holds no such prescription for the
-//! `ehr_id` all have no owner, and answer alike. Asking the member by a
+//! prescriptions, a member the pre-filter denies, and a member that holds no
+//! such prescription for the `ehr_id` all have no owner, and answer alike. Asking the member by a
 //! search, and the answers of a member that answers two, are our own design:
 //! no specification governs them.
 
@@ -35,7 +45,8 @@ use ferrofed_eehrxf::prescriptions::page::Kept;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_identity::role::resolver::Identification;
+use ferrofed_registry::id::{EndpointId, NodeId};
 use http::HeaderMap;
 
 use crate::access::{Accessed, Asked};
@@ -43,7 +54,7 @@ use crate::facade::answer::Failure;
 use crate::facade::native::Chosen;
 use crate::facade::prescriptions::{self, Held, Unread};
 use crate::facade::request::Arrived;
-use crate::facade::{confined, owner};
+use crate::facade::{confined, consent, owner};
 use crate::federation::Federation;
 use crate::fhir::locator::{Locator, Unlocated};
 
@@ -85,6 +96,9 @@ pub(crate) struct Read {
     pub(crate) locator: Locator,
     /// What it answered.
     pub(crate) held: Held,
+    /// The member when the pre-filter denied it and the denial was set
+    /// aside for an emergency purpose, which the access record names.
+    pub(crate) set_aside: BTreeSet<NodeId>,
 }
 
 impl Read {
@@ -217,14 +231,76 @@ pub(crate) async fn read(
         native: native.id().clone(),
         ehr_id: ehr_id.clone(),
     };
+    let consented = consented(federation, arrived, &chosen).await;
+    if consented.denied.contains(&chosen.node) {
+        tracing::info!(
+            endpoint = %chosen.native,
+            request_id = logged,
+            "the consent pre-filter denies the member a prescription id names, so it is not asked"
+        );
+        return Err(Unfound::NoOwner(None));
+    }
     let held = asked(federation, arrived, (&chosen, readable, locator.resource())).await?;
     let read = Read {
         readable,
         chosen,
         locator,
         held,
+        set_aside: consented.set_aside,
     };
     settled(federation, read)
+}
+
+/// What the consent pre-filter decides about the member `chosen` names for
+/// each patient the identity binding names behind its `ehr_id`, within the
+/// per-node budget of the request `arrived`.
+async fn consented(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    chosen: &Chosen,
+) -> consent::Prefiltered {
+    let mut decided = consent::Prefiltered::default();
+    if federation.consent_prefilter().is_none() {
+        return decided;
+    }
+    let (Some(resolver), Some(log)) = (federation.resolver(), federation.access_log()) else {
+        return decided;
+    };
+    let namespaces = log.patient_namespaces();
+    if namespaces.is_empty() {
+        return decided;
+    }
+    let deadline = Instant::now()
+        .checked_add(federation.budget().per_node())
+        .unwrap_or_else(Instant::now);
+    let named = resolver
+        .identify(
+            &chosen.node,
+            &chosen.ehr_id,
+            namespaces,
+            arrived.on_behalf,
+            deadline,
+        )
+        .await;
+    let Identification::Named(patients) = named else {
+        // NOTE: N26, N27, N27a: a patient the binding cannot name gives the pre-filter nothing
+        // to decide, so the member stays the gate, as when the pre-filter gives no signal.
+        return decided;
+    };
+    let candidates = [chosen.node.clone()];
+    let set_aside = federation.sets_aside_consent_for(arrived.conveyance);
+    for patient in &patients {
+        let asked = consent::prefilter(
+            federation,
+            (patient, arrived.requester),
+            &candidates,
+            (deadline, set_aside),
+        )
+        .await;
+        decided.denied.extend(asked.denied);
+        decided.set_aside.extend(asked.set_aside);
+    }
+    decided
 }
 
 /// The read `read` settles to, from what its member answered.
@@ -349,7 +425,11 @@ fn recorded(federation: &Federation, read: &Read, contributed: bool) -> Option<A
             contributed,
             evidence: contributed.then(evidence),
         }],
-        consent_set_aside: BTreeSet::new(),
+        consent_set_aside: read
+            .set_aside
+            .iter()
+            .map(|member| member.as_str().to_owned())
+            .collect(),
         inserted: None,
         transformations: Vec::new(),
     })

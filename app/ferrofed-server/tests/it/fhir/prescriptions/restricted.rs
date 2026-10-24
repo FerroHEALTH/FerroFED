@@ -14,7 +14,9 @@ use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use serde_json::Value;
 
-use super::{Members, RX_A, RX_B, SERVED, built, own, own_endpoint, page, search, searchset};
+use super::{
+    Members, RX_A, RX_B, SERVED, built, face_id, own, own_endpoint, page, search, searchset,
+};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL};
 use crate::fhir::{FHIR, TestResult};
 use crate::support::{call, claims, issuer};
@@ -66,6 +68,83 @@ async fn an_unknown_patient_and_a_restricted_one_answer_alike_and_nothing_is_sen
     assert!(bundle.get("entry").is_none(), "{bundle}");
     assert!(members.unasked(), "no member is asked");
     assert!(members.no_query().await?);
+    Ok(())
+}
+
+/// The `[access_log]` table naming the namespace the patient behind an
+/// `ehr_id` is named in, which the read asks the pre-filter about.
+fn patient_namespaces() -> String {
+    format!("\n[access_log]\npatient_namespaces = [\"{NAMESPACE}\"]\n")
+}
+
+/// `GET {fhir-base}/MedicationRequest/{id}`.
+fn read(id: &str) -> Result<Request<Body>, http::Error> {
+    Request::get(format!("{FHIR}/MedicationRequest/{id}")).body(Body::empty())
+}
+
+/// §14 Step 1, N27a; Regulation (EU) 2025/327 Art 8, Art 11(5): a read by
+/// the id of a prescription at a member the pre-filter denies for the
+/// patient behind its `ehr_id` answers as an id with no owner, and the
+/// member is asked nothing, as the search leaves that member out.
+#[tokio::test]
+async fn a_read_at_a_member_the_prefilter_denies_answers_as_an_unknown_id_and_asks_nothing()
+-> TestResult {
+    let members = Members::start(
+        page(searchset("https://cdr-a.example.org", &[RX_A], None)),
+        page(searchset("https://cdr-b.example.org", &[RX_B], None)),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let tables = format!("{}{}", denied_at_a(), patient_namespaces());
+    let restricted = members.gateway(
+        dir.path(),
+        &[("node-a", EHR_A), ("node-b", EHR_B)],
+        ("", &tables),
+    )?;
+    let denied = face_id("node-a-mpd", EHR_A, "rx-a1")?;
+    let (denied_status, denied_text) = call(restricted.clone(), read(&denied)?).await?;
+    let (unknown_status, unknown_text) =
+        call(restricted, read("not-an-id-the-face-wrote")?).await?;
+    assert_eq!(StatusCode::NOT_FOUND, denied_status, "{denied_text}");
+    assert_eq!(
+        (
+            unknown_status,
+            serde_json::from_str::<Value>(&unknown_text)?
+        ),
+        (denied_status, serde_json::from_str::<Value>(&denied_text)?),
+        "Art 8: a denied member's prescription reads as an id with no owner"
+    );
+    for trace in ["consent", "restrict", "denied"] {
+        assert!(
+            !denied_text.to_ascii_lowercase().contains(trace),
+            "{denied_text}"
+        );
+    }
+    assert!(members.unasked(), "the denied member is asked nothing");
+    Ok(())
+}
+
+/// The same read where the pre-filter denies another member reaches the
+/// member the id names.
+#[tokio::test]
+async fn a_read_at_a_member_the_prefilter_admits_is_answered() -> TestResult {
+    let members = Members::start(
+        page(searchset("https://cdr-a.example.org", &[RX_A], None)),
+        page(searchset("https://cdr-b.example.org", &[RX_B], None)),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let tables = format!("{}{}", denied_at_a(), patient_namespaces());
+    let app = members.gateway(
+        dir.path(),
+        &[("node-a", EHR_A), ("node-b", EHR_B)],
+        ("", &tables),
+    )?;
+    let admitted = face_id("node-b-mpd", EHR_B, "rx-b1")?;
+    let (status, text) = call(app, read(&admitted)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(!members.proxy_b.journal().is_empty(), "node B is asked");
+    assert!(members.proxy_a.journal().is_empty(), "node A is not");
     Ok(())
 }
 

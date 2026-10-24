@@ -213,6 +213,21 @@ prescriptions alone: an id naming another patient's `ehr_id` is refused
 `403` and nothing is sent
 (`a_caller_confined_to_one_patient_reads_that_patients_prescription_alone`).
 
+Where a consent pre-filter is configured, the read is held to it as the
+search is. The read names no patient, so the gateway asks the identity
+binding for the patient behind the id's `ehr_id`, in the namespaces
+`[access_log] patient_namespaces` names, and asks the pre-filter about the
+member before anything is sent. A member it denies is asked nothing, and the
+read answers as an id the face never wrote, with no trace of the
+restriction (Regulation (EU) 2025/327 Art 8, Art 11(5);
+`fhir/prescriptions/restricted.rs`:
+`a_read_at_a_member_the_prefilter_denies_answers_as_an_unknown_id_and_asks_nothing`).
+A denial set aside for an emergency purpose is asked and named in the access
+record. When the binding cannot name the patient, or no namespace is
+configured, the pre-filter has nothing to decide and the member stays the
+gate, as when the pre-filter gives no signal. The same holds for a
+dispensation read and a version read.
+
 The answer is the member's `MedicationRequest` as it sent it, with its `id`
 the one you read, as FHIR R4 asks of a read
 (`a_prescription_the_search_lists_is_read_at_its_member_as_sent`). The

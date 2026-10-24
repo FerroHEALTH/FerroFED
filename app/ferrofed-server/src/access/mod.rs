@@ -123,6 +123,13 @@ impl AccessLog {
         self
     }
 
+    /// The namespaces the patient behind an `ehr_id` is named in, when a
+    /// request named none.
+    #[must_use]
+    pub fn patient_namespaces(&self) -> &[IdentifierNamespace] {
+        &self.patient_namespaces
+    }
+
     /// This log, the record of a query over many patients' data naming at
     /// most `max` `ehr_id`s from its delivered rows, and stating the query's
     /// scope above it (Regulation (EU) 2025/327 Art 9(1)).
