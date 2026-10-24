@@ -119,6 +119,16 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         body.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
         "{body}"
     );
+    let cell = body
+        .split("<tr>")
+        .filter_map(|row| row.split_once(r#"data-label="Actions""#))
+        .map(|(_, cell)| cell)
+        .find(|cell| cell.contains("cfg-remove-credentials-node-c-pub-menu"))
+        .ok_or("console section node-c-pub's actions cell")?;
+    assert!(
+        cell.contains(r#"<dialog id="cfg-remove-credentials-node-c-pub-dialog""#),
+        "the removal dialog sits in the section's actions cell, beside its row menu: {cell}"
+    );
     assert!(
         !body.contains("cfg-remove-credentials-node-a-pub-dialog"),
         "a section the file provides offers none: {body}"

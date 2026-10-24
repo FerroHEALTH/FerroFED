@@ -1,0 +1,1 @@
+- The operator console moves to FerroUI 0.3.6. Each Members and Credentials and bindings row draws its removal confirmation in its actions cell, beside the row menu, and on a phone the confirmation's sentence wraps inside the dialog.

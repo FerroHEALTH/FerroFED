@@ -137,9 +137,9 @@ fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, S
     .into_any()
 }
 
-/// One credential's or binding section's row and its removal dialog; one
-/// the console holds ends in its row menu, with Edit and Remove….
-fn row(loaded: &Loaded<'_>, section: &SectionResource) -> (AnyView, Option<AnyView>) {
+/// One credential's or binding section's row; one the console holds ends
+/// in its row menu, with Edit, and Remove… with its dialog.
+fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
     let shown = section.resource.to_string();
     let console = section.owner == Owner::Console;
     let editable = console
@@ -147,25 +147,22 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> (AnyView, Option<AnyVi
             section.state,
             Some(ConsoleState::Running | ConsoleState::Pending)
         );
-    let (actions, dialog) = editable
-        .then(|| {
-            let removes = Removal {
-                title: tr_with(Msg::RemoveSectionTitle, &[("shown", shown.clone().into())]),
-                message: tr_with(
-                    Msg::RemovalSavedWithoutIt,
-                    &[("loaded", loaded.next().clone().into())],
-                ),
-                fields: removal_fields(loaded, &section.resource),
-            };
-            let actions = row_actions(
-                &removal_dialog(&choice(&section.resource)),
-                &shown,
-                href(&section.resource),
-                Some(removes),
-            );
-            (actions.menu, actions.dialog)
-        })
-        .unzip();
+    let actions = editable.then(|| {
+        let removes = Removal {
+            title: tr_with(Msg::RemoveSectionTitle, &[("shown", shown.clone().into())]),
+            message: tr_with(
+                Msg::RemovalSavedWithoutIt,
+                &[("loaded", loaded.next().clone().into())],
+            ),
+            fields: removal_fields(loaded, &section.resource),
+        };
+        row_actions(
+            &removal_dialog(&choice(&section.resource)),
+            &shown,
+            href(&section.resource),
+            Some(removes),
+        )
+    });
     let row = view! {
         <tr>
             <th scope="row">
@@ -180,7 +177,7 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> (AnyView, Option<AnyVi
             </td>
         </tr>
     };
-    (row.into_any(), dialog.flatten())
+    row.into_any()
 }
 
 /// The binding sections none of the sections sets yet.
@@ -215,7 +212,6 @@ fn section_columns() -> [Column; 6] {
 /// The Credentials and bindings tab.
 pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     let sections = &loaded.resources.sections;
-    let mut dialogs = Vec::new();
     let rows = if sections.is_empty() {
         view! {
             <tr>
@@ -228,11 +224,7 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
     } else {
         sections
             .iter()
-            .map(|section| {
-                let (row, dialog) = row(loaded, section);
-                dialogs.extend(dialog);
-                row
-            })
+            .map(|section| row(loaded, section))
             .collect_view()
             .into_any()
     };
@@ -243,7 +235,6 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             </a>
         }
     });
-    // TODO(#1249): each dialog moves back beside its row menu once FerroUI resets its wrapping.
     view! {
         {head(
             ("credentials-title", tr(Msg::CredentialsAndBindings)),
@@ -261,7 +252,6 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
             &section_columns(),
             rows,
         )}
-        {dialogs}
     }
     .into_any()
 }
