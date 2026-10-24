@@ -41,13 +41,12 @@ jiff.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.
 openehr-query.workspace = true
-# The terminology server seam the HTTP client implements.
+# The terminology server seam the terminology client implements.
 async-trait.workspace = true
-# The status a terminology server answers with, and the headers of a call.
-http.workspace = true
-# The HTTP client a terminology server is asked through, built by the identity
-# crate with its credential and TLS material.
-reqwest.workspace = true
+# FerroBRIDGE's FHIR terminology client, which the seam is answered with
+# (#925), over the HTTP client the identity crate builds with its credential
+# and TLS material.
+ferrobridge-term.workspace = true
 # A member's searchset read for what a prescription search passes through,
 # and the searchset written with each member's resource as its bytes.
 serde.workspace = true
@@ -66,6 +65,8 @@ serde_json.workspace = true
 # The runtime the terminology client is driven on, and the stub server it asks.
 secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
+# The status a terminology refusal carries, matched in the tests.
+http.workspace = true
 wiremock.workspace = true
 
 [lints]

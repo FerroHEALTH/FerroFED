@@ -58,14 +58,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupRequest;
-use fhir_types::r4::operations::code_system_lookup::CodeSystemLookupResponse;
-use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateRequest;
 use fhir_types::r4::operations::concept_map_translate::ConceptMapTranslateResponse;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeRequest;
-use fhir_types::r4::operations::value_set_validate_code::ValueSetValidateCodeResponse;
-use fhir_types::r4::primitives::Code;
-use fhir_types::r4::primitives::Uri;
 use http::StatusCode;
 
 /// The `ConceptMapEquivalence` codes a translation is taken for: the two
@@ -75,45 +68,62 @@ use http::StatusCode;
 // and a FHIR coding asserts that, so a wider, narrower or inexact match is never one.
 pub const ACCEPTED_EQUIVALENCES: [&str; 2] = ["equivalent", "equal"];
 
+/// One match of a `$translate` answer: its `equivalence` and its `concept`,
+/// each as the server sent it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Match {
+    /// The `ConceptMapEquivalence` code, when the server sent one.
+    pub equivalence: Option<String>,
+    /// The target concept, when the server sent one.
+    pub concept: Option<Coding>,
+}
+
 /// A FHIR terminology server, as the system that reaches it implements it.
 ///
-/// Each call takes the operation's typed `Parameters` and answers the
-/// server's typed `Parameters`; a refusal, a time-out or an answer that
-/// does not read is a [`TerminologyError`], never an empty answer.
+/// Each call asks one operation exactly what the component needs of it; a
+/// refusal, a time-out or an answer that does not read is a
+/// [`TerminologyError`], never an empty answer.
 #[async_trait]
 pub trait TerminologyServer: fmt::Debug + Send + Sync {
-    /// Asks `ConceptMap/$translate`
-    /// (<https://hl7.org/fhir/R4/conceptmap-operation-translate.html>).
+    /// Asks `ConceptMap/$translate` what the code `code` of the system
+    /// `system` maps to in the system `target`
+    /// (<https://hl7.org/fhir/R4/conceptmap-operation-translate.html>),
+    /// answering every match of a `true` result with its equivalence, and
+    /// none for a `false` one.
     ///
     /// # Errors
     ///
     /// A [`TerminologyError`] for a call that gives no answer.
     async fn translate(
         &self,
-        request: ConceptMapTranslateRequest,
-    ) -> Result<ConceptMapTranslateResponse, TerminologyError>;
+        system: &str,
+        code: &str,
+        target: &str,
+    ) -> Result<Vec<Match>, TerminologyError>;
 
-    /// Asks `CodeSystem/$lookup`
+    /// Asks `CodeSystem/$lookup` for the display of the code `code` of the
+    /// system `system`, whose `display` is `1..1`
     /// (<https://hl7.org/fhir/R4/codesystem-operation-lookup.html>).
     ///
     /// # Errors
     ///
-    /// A [`TerminologyError`] for a call that gives no answer.
-    async fn lookup(
-        &self,
-        request: CodeSystemLookupRequest,
-    ) -> Result<CodeSystemLookupResponse, TerminologyError>;
+    /// A [`TerminologyError`] for a call that gives no answer, and
+    /// [`TerminologyError::NotFound`] for a code the server does not know.
+    async fn lookup(&self, system: &str, code: &str) -> Result<String, TerminologyError>;
 
-    /// Asks `ValueSet/$validate-code`
+    /// Asks `ValueSet/$validate-code` whether `concept` is in the value set
+    /// `value_set`, answering its `result`
     /// (<https://hl7.org/fhir/R4/valueset-operation-validate-code.html>).
     ///
     /// # Errors
     ///
-    /// A [`TerminologyError`] for a call that gives no answer.
+    /// A [`TerminologyError`] for a call that gives no answer, an answer
+    /// with no `result` value included.
     async fn validate_code(
         &self,
-        request: ValueSetValidateCodeRequest,
-    ) -> Result<ValueSetValidateCodeResponse, TerminologyError>;
+        value_set: &str,
+        concept: &Candidate,
+    ) -> Result<bool, TerminologyError>;
 }
 
 /// A terminology operation, named in every refusal.
@@ -180,6 +190,13 @@ pub enum TerminologyError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    /// The server does not know the code or its code system, which it
+    /// states as a refusal of the operation.
+    #[error("the terminology server does not know the code asked of {operation}")]
+    NotFound {
+        /// The operation.
+        operation: Operation,
+    },
     /// The answer does not read as the operation's `Parameters`.
     #[error("the terminology server's answer to {operation} does not read as its Parameters")]
     Answer {
@@ -244,15 +261,17 @@ impl Terminology {
         target: &str,
     ) -> Result<Vec<Coding>, TerminologyError> {
         let server = self.ask(Operation::Translate)?;
-        let response = server
-            .translate(ConceptMapTranslateRequest {
-                system: Some(Uri::from(system)),
-                code: Some(Code::from(code)),
-                targetsystem: Some(Uri::from(target)),
-                ..ConceptMapTranslateRequest::default()
+        let matches = server.translate(system, code, target).await?;
+        Ok(matches
+            .into_iter()
+            .filter(|found| {
+                found
+                    .equivalence
+                    .as_deref()
+                    .is_some_and(|code| ACCEPTED_EQUIVALENCES.contains(&code))
             })
-            .await?;
-        Ok(accepted(&response))
+            .filter_map(|found| found.concept)
+            .collect())
     }
 
     /// Looks up the preferred display of the code `code` of the system
@@ -265,16 +284,8 @@ impl Terminology {
     /// [`TerminologyError::Answer`] for an answer with an empty display.
     pub async fn display(&self, system: &str, code: &str) -> Result<String, TerminologyError> {
         let server = self.ask(Operation::Lookup)?;
-        let response = server
-            .lookup(CodeSystemLookupRequest {
-                system: Some(Uri::from(system)),
-                code: Some(Code::from(code)),
-                ..CodeSystemLookupRequest::default()
-            })
-            .await?;
-        response
-            .display
-            .value
+        let display = server.lookup(system, code).await?;
+        Some(display)
             .filter(|display| !display.is_empty())
             .ok_or_else(|| TerminologyError::Answer {
                 operation: Operation::Lookup,
@@ -296,28 +307,7 @@ impl Terminology {
         concept: &Candidate,
     ) -> Result<bool, TerminologyError> {
         let server = self.ask(Operation::ValidateCode)?;
-        let mut request = ValueSetValidateCodeRequest {
-            url: Some(Uri::from(value_set)),
-            ..ValueSetValidateCodeRequest::default()
-        };
-        match concept {
-            Candidate::Code { code, context } => {
-                request.code = Some(Code::from(code.as_str()));
-                request.context = Some(Uri::from(context.as_str()));
-            }
-            Candidate::Coding(coding) => request.coding = Some(coding.as_ref().clone()),
-            Candidate::Concept(concept) => {
-                request.codeable_concept = Some(concept.as_ref().clone());
-            }
-        }
-        let response = server.validate_code(request).await?;
-        response
-            .result
-            .value
-            .ok_or_else(|| TerminologyError::Answer {
-                operation: Operation::ValidateCode,
-                source: Box::new(NoResult),
-            })
+        server.validate_code(value_set, concept).await
     }
 }
 
@@ -364,8 +354,3 @@ pub fn accepted(response: &ConceptMapTranslateResponse) -> Vec<Coding> {
 #[derive(Debug, thiserror::Error)]
 #[error("the answer carries no display")]
 struct EmptyDisplay;
-
-/// A `$validate-code` answer whose result carries no value.
-#[derive(Debug, thiserror::Error)]
-#[error("the answer's result carries no value")]
-struct NoResult;

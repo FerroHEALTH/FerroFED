@@ -790,7 +790,7 @@ fn allergy_codes(bundle: &serde_json::Value) -> Vec<(String, String)> {
 fn stub_terminology(
     server: &ferrofed_testkit::mock::Server,
 ) -> Result<Terminology, Box<dyn Error>> {
-    let client = ferrofed_eehrxf::terminology::FhirTerminology::new(
+    let client = ferrofed_eehrxf::terminology::BridgeTerminology::new(
         &format!("{}/fhir", server.uri()),
         &ferrofed_identity::fhir::Authentication::None,
         &ferrofed_identity::fhir::Tls::default(),
