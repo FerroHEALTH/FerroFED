@@ -128,10 +128,10 @@ below.
 
 FerroFED is solo-maintained, so these are best effort rather than a
 contractual service-level agreement. They are the times every product of the
-Ferro family states: an acknowledgement within 5 business days, and an
-initial assessment (is it valid, how severe) within 10 business days of the
-report. A confirmed vulnerability is fixed in a patch release of the newest
-release, with the fix alone where it is technically feasible
+Ferro family states: an acknowledgement within about 5 business days, and
+an initial assessment (is it valid, how severe) within about 10 business days
+of the report. A confirmed vulnerability is fixed in a patch release of the
+newest release, with the fix alone where it is technically feasible
 ([`docs/release.md`](docs/release.md#cutting-a-security-patch-release)),
 published within the target for its severity, counted from the confirmed
 assessment:
