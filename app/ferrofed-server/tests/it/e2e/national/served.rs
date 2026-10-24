@@ -34,8 +34,8 @@ use crate::e2e::{EHR_A, EHR_B, PATIENT, assert_no_patient_identifier_on_the_wire
 use crate::feed_audit::SETTLE;
 use crate::support::conveyed::conveyed_claims;
 
-/// How many of the connector's requests reach a member.
-const REQUESTS: usize = 4;
+/// How many requests the connector sends the gateway.
+const REQUESTS: usize = 5;
 
 /// The resources of the entries of the `Bundle` `bundle` of the type
 /// `kind`.
@@ -131,6 +131,7 @@ fn told_the_relayed_caller(journal: &[Capture], at: &str) -> TestResult {
 /// The connector's answers the access records are joined to.
 struct Answers {
     summary: Answer,
+    documents: Answer,
     prescriptions: Answer,
     read: Answer,
     dispensed: Answer,
@@ -221,6 +222,7 @@ async fn drive(
     );
     Ok(Answers {
         summary,
+        documents,
         prescriptions,
         read,
         dispensed,
@@ -321,10 +323,9 @@ async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
             *by_correlation.entry(correlation).or_default() += 1;
         }
     }
-    // NOTE: Annex II 3.2: a list that reached no member read no health data at a member and
-    // writes no record; no member here serves its own summary, so the list reaches none.
     let expected: BTreeMap<String, usize> = [
         &read.summary,
+        &read.documents,
         &read.prescriptions,
         &read.read,
         &read.dispensed,
@@ -332,10 +333,7 @@ async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
     .iter()
     .map(|answer| (answer.correlation.clone(), 1))
     .collect();
-    assert_eq!(
-        expected, by_correlation,
-        "one access record per request that reached a member"
-    );
+    assert_eq!(expected, by_correlation, "one access record per request");
     Ok(())
 }
 
