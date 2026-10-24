@@ -174,7 +174,7 @@ examples keep 5 seconds of room:
 
 | Example | `drain_delay_ms` | `shutdown_timeout_ms` | `bindings_drain_timeout_ms` | Arithmetic | Grace period |
 |---|---|---|---|---|---|
-| `deploy/kubernetes/` | 5000 | 30000 | 5000 | 5 + 30 + 5 + 5 | `terminationGracePeriodSeconds: 45` |
+| `deploy/kubernetes/base/` | 5000 | 30000 | 5000 | 5 (`preStop` sleep) + 5 + 30 + 5 + 5 | `terminationGracePeriodSeconds: 50` |
 | `deploy/compose/` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
 | the quickstart `compose.yaml` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |
 

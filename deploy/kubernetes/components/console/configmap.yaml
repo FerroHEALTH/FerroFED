@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The console's configuration, mounted read-only at /etc/ferrofed-console by
+# deployment.yaml. It holds no secret: the OpenID Connect client secret is
+# the client-secret key of the ferrofed-console-secrets Secret, mounted at
+# /run/secrets/ferrofed-console. Make it with, for example:
+#
+#   kubectl create secret generic ferrofed-console-secrets \
+#     --from-file=client-secret=./console-client-secret
+#
+# The console keeps its sessions in memory, so it runs as one replica.
+# https://ferrofed.eu/docs/operate/operator-console.html
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ferrofed-console-config
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+data:
+  console.toml: |
+    [server]
+    listen = "0.0.0.0:3000"
+
+    # The gateway, over its Service.
+    [gateway]
+    base_url = "http://ferrofed:8080/"
+    timeout_ms = 30000
+
+    [session]
+    # Served behind an HTTPS proxy, so the session cookie is Secure.
+    secure_cookie = true
+
+    # EDIT: your OpenID Provider and the console's client there; the
+    # operator's token must carry the gateway's auth.product_scope.
+    [oidc]
+    issuer = "https://idp.example.org"
+    authorization_endpoint = "https://idp.example.org/authorize"
+    token_endpoint = "https://idp.example.org/token"
+    jwks_uri = "https://idp.example.org/jwks"
+    client_id = "ferrofed-console"
+    client_secret_file = "/run/secrets/ferrofed-console/client-secret"
+    # EDIT: the console's public address.
+    redirect_uri = "https://console.example.org/auth/callback"
+    scopes = ["openid"]
+
+    # Each replica's admin listener, by the name the headless Service
+    # ferrofed-admin gives it; add one entry per replica.
+    [[admin.replicas]]
+    name = "ferrofed-0"
+    admin_url = "http://ferrofed-0.ferrofed-admin:9464/"
+
+    [[admin.replicas]]
+    name = "ferrofed-1"
+    admin_url = "http://ferrofed-1.ferrofed-admin:9464/"

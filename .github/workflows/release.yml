@@ -563,6 +563,31 @@ jobs:
     permissions:
       contents: write # publish the release
     steps:
+      # The tag's tree, for the Kubernetes package below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # The kustomize package of deploy/kubernetes with the gateway and
+      # console images pinned to the digests this release pushed and
+      # scan-and-tag tagged, and its SHA-256 in sha256sum form
+      # (scripts/release/kubernetes-package.sh). It is attached here, where
+      # both digests are known, before the asset check below.
+      - name: Attach the Kubernetes package pinned by digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          GATEWAY_DIGEST: ${{ needs.build-image.outputs.digest }}
+          CONSOLE_DIGEST: ${{ needs.build-console.outputs.digest }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/kubernetes-package.sh "$TAG" "$GATEWAY_DIGEST" "$CONSOLE_DIGEST" kubernetes
+          gh release upload "$TAG" \
+            "kubernetes/ferrofed-${TAG}-kubernetes.tar.gz" \
+            "kubernetes/ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: The draft carries every asset this version promises
         env:
           GH_TOKEN: ${{ github.token }}
@@ -596,7 +621,8 @@ jobs:
           # compose file, the two example files it mounts, the nginx reverse
           # proxy configuration with its SHA-256, the conformance seed data
           # with its SHA-256, the dashboard and alert rules, and the
-          # information sheet and instructions for use of this tag, and the
+          # information sheet and instructions for use of this tag, the
+          # Kubernetes package pinned by digest with its SHA-256, and the
           # EU declaration of conformity when plan found it issued.
           declaration=""
           case "$DECLARATION" in
@@ -616,6 +642,8 @@ jobs:
             "ferrofed-${TAG}-instructions-for-use.md" \
             "ferrofed-${TAG}-vulnerability-record.json" \
             "ferrofed-${TAG}-trivy-reports.tar.gz" \
+            "ferrofed-${TAG}-kubernetes.tar.gz" \
+            "ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
             ${declaration:+"$declaration"}; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done

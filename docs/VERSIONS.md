@@ -440,8 +440,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.2.3 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.2.3 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.2.6 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.2.6 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -732,9 +732,13 @@ pinned to an exact version so a CI result matches the local one. `zizmor` and
 `shellcheck` are fetched by `taiki-e/install-action`, which verifies the
 upstream release checksum; `actionlint`, `hadolint` and `kubeconform` run from
 their official container images, pinned by tag and by digest. `kubeconform`
-validates the example manifests under `deploy/kubernetes/` against the schemas
-of one Kubernetes release, read from `yannh/kubernetes-json-schema` at a pinned
-commit, so neither a new schema nor a new release moves the result. `lychee`,
+validates the Kubernetes package under `deploy/kubernetes/`, its base and its
+example overlay as `kustomize` renders them, against the schemas of one
+Kubernetes release, read from `yannh/kubernetes-json-schema` at a pinned
+commit, and the ServiceMonitor and HTTPRoute schemas from
+`datreeio/CRDs-catalog` at a pinned commit, so neither a new schema nor a new
+release moves the result. `kustomize` is its upstream release binary, fetched
+by version and checked against the SHA-256 its release publishes. `lychee`,
 the offline link checker of the `site-links` job, is its upstream release
 binary, fetched by version and checked against the SHA-256 its release
 publishes, which the job carries beside the version. `promtool`, which the
@@ -757,6 +761,8 @@ versions the vendored manifests name.
 | `kubeconform` | 0.8.0 | `.github/workflows/ci.yml` |
 | `kubeconform schema version` | 1.34.0 | `.github/workflows/ci.yml` |
 | `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
+| `CRDs-catalog` | `fd90051867733c60d32d16450556e9cd18459aef` | `.github/workflows/ci.yml` |
+| `kustomize` | 5.8.3 | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
 | `promtool` | 3.15.0 | `.github/workflows/ci.yml` |
 | `validator_cli` | 6.10.4 | `.github/workflows/ci.yml` |

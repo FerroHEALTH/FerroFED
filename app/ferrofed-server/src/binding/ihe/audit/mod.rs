@@ -20,7 +20,7 @@ use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::{Repository, TlsSettings};
 use ihe_atna::atna::spool::Content;
 
-use crate::audit::{AuditTrailError, Forwarding, observed, spool, started};
+use crate::audit::{AuditTrailError, Forwarding, Stopping, observed, spool, started};
 use crate::binding::ihe::audit::repository::AuditRepositorySettings;
 use crate::binding::seam::Indicator;
 use ferrofed_registry::health::Indication;
@@ -32,6 +32,10 @@ impl Forwarding for RepositoryAudit {
 
     fn status(&self) -> Status {
         RepositoryAudit::status(self)
+    }
+
+    fn stop(&self) -> Stopping<'_> {
+        Box::pin(RepositoryAudit::stop(self))
     }
 }
 

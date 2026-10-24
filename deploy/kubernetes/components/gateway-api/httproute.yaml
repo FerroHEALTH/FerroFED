@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The gateway behind a Gateway API Gateway whose HTTPS listener terminates
+# TLS (https://gateway-api.sigs.k8s.io/api-types/httproute/). As with an
+# Ingress, list the proxy's addresses in server.trusted_proxies.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  parentRefs:
+    # EDIT: your Gateway, its namespace and its HTTPS listener.
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    # EDIT: the gateway's public host.
+    - gateway.example.org
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: ferrofed
+          port: 8080

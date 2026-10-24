@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The kustomize base of the gateway: the StatefulSet over the configuration
+# of configmap.yaml and the ferrofed-secrets Secret, its Service, the
+# headless Service of its admin listeners, its PodDisruptionBudget and its
+# NetworkPolicy. Install it with `kubectl apply -k deploy/kubernetes/base`, or
+# build an overlay that names it under `resources` and adds the components
+# under deploy/kubernetes/components/:
+#
+#   console          the operator console, its Service and NetworkPolicy
+#   ingress          an Ingress in front of the gateway
+#   console-ingress  an Ingress in front of the console
+#   gateway-api      an HTTPRoute in front of the gateway
+#   console-route    an HTTPRoute in front of the console
+#   service-monitor  a Prometheus Operator ServiceMonitor over each replica
+#   egress           an egress NetworkPolicy to the destinations you name
+#
+# deploy/kubernetes/overlays/example uses each of them. The ConfigMap keeps its name, so a
+# changed configuration reaches the running pods without a restart: see the
+# book's Kubernetes page, which reloads it over each admin listener. Each
+# release attaches this tree with every image pinned by digest
+# (scripts/release/kubernetes-package.sh). No specification governs the
+# packaging: our own design.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - statefulset.yaml
+  - service.yaml
+  - admin-service.yaml
+  - poddisruptionbudget.yaml
+  - networkpolicy.yaml

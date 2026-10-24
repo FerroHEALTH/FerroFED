@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The operator console behind a Gateway API Gateway whose HTTPS listener
+# terminates TLS, at the host its redirect_uri names.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ferrofed-console
+  labels:
+    app.kubernetes.io/name: ferrofed-console
+    app.kubernetes.io/component: console
+spec:
+  parentRefs:
+    # EDIT: your Gateway, its namespace and its HTTPS listener.
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    # EDIT: the console's public host.
+    - console.example.org
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: ferrofed-console
+          port: 3000
