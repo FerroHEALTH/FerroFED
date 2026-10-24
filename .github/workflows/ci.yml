@@ -77,7 +77,7 @@ jobs:
           persist-credentials: false
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
-          tool: zizmor@1.30.1
+          tool: zizmor@1.31.1
       - name: Audit .github
         # GH_TOKEN enables the online audits. impostor-commit verifies that a
         # pinned commit really belongs to the repository named in front of it,
@@ -266,8 +266,8 @@ jobs:
         # promtool from the Prometheus release tarball, checked against the
         # SHA-256 its release publishes before it runs.
         env:
-          PROMETHEUS_VERSION: 3.15.0
-          PROMETHEUS_SHA256: 2a542df32eac02ee17b9d844fb2aa1de00dafa5476579ba8a3ba862e9d572ea0
+          PROMETHEUS_VERSION: 3.15.1
+          PROMETHEUS_SHA256: 6a726885328ad9efebbf36e876ce2fb6225468a71fd1e7ce3ba666d5f4d97a84
         run: |
           set -euo pipefail
           tarball="prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
@@ -1141,8 +1141,8 @@ jobs:
         run: bash scripts/checks/fhir-validator.sh --self-test
       - name: Every document passes the HL7 FHIR Validator
         env:
-          FHIR_VALIDATOR_VERSION: 6.10.4
-          FHIR_VALIDATOR_SHA256: 1106b9d58f9e363e47bea7c4fc065841e5fc91fe9d062775c3bfdd212bd653cc
+          FHIR_VALIDATOR_VERSION: 7.0.3
+          FHIR_VALIDATOR_SHA256: 57aa43fb40cec5de41def81c927725fd85908eeb71509b7f9313e04d9b8ec79b
         run: |
           set -euo pipefail
           status=0
@@ -1433,7 +1433,7 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
         with:
-          chrome-version: 155.0.8059.79
+          chrome-version: 156.0.8078.47
           install-chromedriver: true
       - run: bash scripts/release/console-site.sh --release
       # Each journey starts the pinned chromedriver on a port of its own and
