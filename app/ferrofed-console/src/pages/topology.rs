@@ -26,7 +26,7 @@ use leptos::prelude::*;
 
 use crate::app::{SELF_DESCRIPTION, TOPOLOGY};
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{median, stopped};
+use crate::pages::{latency_fact, stopped};
 use crate::read::federation::{Federation, Health, Node, Organisation, ServiceGroup};
 use ferrohealth_ui::view::state::state;
 
@@ -249,9 +249,14 @@ fn node_card(organisation: &Organisation, node: &Node, asked: &Asked) -> Topolog
     let health = node.health();
     TopologyCard {
         mono: true,
-        measure: node
-            .latency_ms_p50()
-            .map(|ms| tr_with(Msg::TopologyMedian, &[("count", ms.into())])),
+        measure: match (node.latency_ms_p50(), node.latency_ms_p95()) {
+            (Some(p50), Some(p95)) => Some(tr_with(
+                Msg::TopologyLatency,
+                &[("p50", p50.into()), ("p95", p95.into())],
+            )),
+            (Some(p50), None) => Some(tr_with(Msg::TopologyMedian, &[("count", p50.into())])),
+            (None, _) => None,
+        },
         edge_label: health.is_problem().then(|| health.word()),
         ..card(
             node.id.clone(),
@@ -397,20 +402,27 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
             )),
             close,
             body: view! {
-                {facts_row(
-                    vec![
-                        (
-                            tr(Msg::ColumnState),
-                            state(node.health().mark(), node.health().word(), None),
-                        ),
-                        (tr(Msg::ColumnMedian), median(node.latency_ms_p50())),
-                    ],
-                )}
-                <ul class="fui-stack">{endpoints}</ul>
-                <p>
-                    <a href=organisation.node_href(node)>{tr(Msg::TopologyOpenPage)}</a>
-                </p>
-            }
+                    {facts_row(
+                        vec![
+                            (
+                                tr(Msg::ColumnState),
+                                state(node.health().mark(), node.health().word(), None),
+                            ),
+                            (
+                tr(Msg::ColumnMedian),
+                latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
+            ),
+                            (
+                tr(Msg::ColumnP95),
+                latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
+            ),
+                        ],
+                    )}
+                    <ul class="fui-stack">{endpoints}</ul>
+                    <p>
+                        <a href=organisation.node_href(node)>{tr(Msg::TopologyOpenPage)}</a>
+                    </p>
+                }
             .into_any(),
         });
     }

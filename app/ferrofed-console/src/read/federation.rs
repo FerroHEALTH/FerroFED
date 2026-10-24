@@ -21,7 +21,7 @@ use ferrofed_registry::health::{DependencyReport, Indication, Observed};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::flow::FlowState;
 use ferrohealth_ui::view::state::Mark;
-use openehr_federation::options::OptionsRoot;
+use openehr_federation::options::{MemberEndpoint, OptionsRoot};
 
 use crate::locale::{Msg, tr};
 use crate::read::{Stop, signed_in};
@@ -137,6 +137,8 @@ pub struct Endpoint {
     pub health: Health,
     /// The median latency over recent requests, in milliseconds.
     pub latency_ms_p50: Option<u64>,
+    /// The 95th percentile latency over the same requests, in milliseconds.
+    pub latency_ms_p95: Option<u64>,
 }
 
 /// One node and its endpoints.
@@ -167,10 +169,22 @@ impl Node {
     /// The lowest median latency of its endpoints, in milliseconds.
     #[must_use]
     pub fn latency_ms_p50(&self) -> Option<u64> {
+        self.fastest().and_then(|endpoint| endpoint.latency_ms_p50)
+    }
+
+    /// The 95th percentile latency of the endpoint with the lowest median,
+    /// in milliseconds, so it pairs with [`Node::latency_ms_p50`].
+    #[must_use]
+    pub fn latency_ms_p95(&self) -> Option<u64> {
+        self.fastest().and_then(|endpoint| endpoint.latency_ms_p95)
+    }
+
+    /// The endpoint with the lowest median latency, the first of a tie.
+    fn fastest(&self) -> Option<&Endpoint> {
         self.endpoints
             .iter()
-            .filter_map(|endpoint| endpoint.latency_ms_p50)
-            .min()
+            .filter(|endpoint| endpoint.latency_ms_p50.is_some())
+            .min_by_key(|endpoint| endpoint.latency_ms_p50)
     }
 
     /// Whether it has an id its page is linked by.
@@ -362,6 +376,23 @@ pub struct Known {
     pub owners: BTreeMap<String, Owner>,
 }
 
+/// The endpoint member in which the gateway names the 95th percentile
+/// latency beside `latency_ms_p50`.
+// NOTE: §7a.2 has a gateway name the statistic in the field; the gateway writes it in the open
+// endpoint object of options-root.schema.json.
+const LATENCY_MS_P95: &str = "latency_ms_p95";
+
+/// The 95th percentile latency `endpoint` carries, or `None` where it names
+/// none or names one that is no whole number of milliseconds.
+pub(crate) fn p95(endpoint: &MemberEndpoint) -> Option<u64> {
+    // NOTE: an unreadable statistic is shown as not measured; it is advisory and the page
+    // never guesses one.
+    endpoint
+        .extra
+        .get(LATENCY_MS_P95)
+        .and_then(|raw| serde_json::from_str(raw.get()).ok())
+}
+
 /// The federation the console draws.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Federation {
@@ -411,6 +442,7 @@ impl Federation {
                 status: endpoint.status.as_str().to_owned(),
                 health,
                 latency_ms_p50: endpoint.latency_ms_p50,
+                latency_ms_p95: p95(endpoint),
             });
         }
         let mut organisations: Vec<Organisation> = organisations
@@ -537,8 +569,46 @@ pub async fn read() -> Result<Federation, Stop> {
 
 #[cfg(test)]
 mod tests {
-    use super::Health;
+    use super::{Endpoint, Health, Node};
     use ferrofed_registry::health::Observed;
+
+    fn endpoint(id: &str, latency: Option<(u64, u64)>) -> Endpoint {
+        Endpoint {
+            id: id.to_owned(),
+            url: None,
+            status: "active".to_owned(),
+            health: Health::Reachable,
+            latency_ms_p50: latency.map(|(p50, _)| p50),
+            latency_ms_p95: latency.map(|(_, p95)| p95),
+        }
+    }
+
+    #[test]
+    fn a_node_shows_the_pair_of_its_endpoint_with_the_lowest_median() {
+        let node = Node {
+            id: "node-a".to_owned(),
+            system_id: None,
+            product: None,
+            endpoints: vec![
+                endpoint("slow", Some((90, 120))),
+                endpoint("unasked", None),
+                endpoint("fast", Some((20, 3000))),
+            ],
+            owner: None,
+        };
+        assert_eq!(
+            (Some(20), Some(3000)),
+            (node.latency_ms_p50(), node.latency_ms_p95())
+        );
+        let unasked = Node {
+            endpoints: vec![endpoint("unasked", None)],
+            ..node
+        };
+        assert_eq!(
+            (None, None),
+            (unasked.latency_ms_p50(), unasked.latency_ms_p95())
+        );
+    }
 
     #[test]
     fn the_worst_state_wins_and_an_excluded_part_counts_least() {

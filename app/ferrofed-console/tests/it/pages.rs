@@ -210,3 +210,39 @@ async fn a_page_a_post_answers_carries_the_nonce_its_policy_names() -> Result<()
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn the_node_and_endpoint_lists_show_the_median_and_the_95th_percentile()
+-> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let options = crate::stub::options_example()?.replace(
+        "\"latency_ms_p50\": 120",
+        "\"latency_ms_p50\": 120, \"latency_ms_p95\": 480",
+    );
+    assert!(
+        options.contains("480"),
+        "the §7a.2 example names a p50 of 120"
+    );
+    wiremock::Mock::given(wiremock::matchers::method("OPTIONS"))
+        .and(wiremock::matchers::path("/"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_raw(options.into_bytes(), "application/json"),
+        )
+        .with_priority(1)
+        .mount(&gateway)
+        .await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    for path in ["/organisations/nodes", "/self-description/endpoints"] {
+        let (response, body) = send(&service, get_as(path, &session)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{path}: {body}");
+        for words in [">p50<", ">p95<", "120 ms", "480 ms", "last 100 requests"] {
+            assert!(body.contains(words), "{path} shows {words}: {body}");
+        }
+        assert!(
+            body.contains("Not measured yet"),
+            "{path}: an endpoint with no p95 shows a dash"
+        );
+    }
+    Ok(())
+}

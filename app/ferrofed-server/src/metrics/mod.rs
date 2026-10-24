@@ -32,6 +32,7 @@
 
 pub mod dispensations;
 pub mod inbound;
+pub mod latency;
 pub mod nodes;
 pub mod resolver;
 pub mod security;

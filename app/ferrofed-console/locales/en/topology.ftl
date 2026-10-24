@@ -13,7 +13,8 @@ topology-org-line = { $count ->
     [one] { $count } node
    *[other] { $count } nodes
 } · { $state }
-topology-median = median { $count } ms
+topology-median = p50 { $count } ms
+topology-latency = p50 { $p50 } ms · p95 { $p95 } ms
 topology-open-page = Open its page
 topology-rule-up = the last probe got a status below 500 within half the per-node budget
 topology-rule-degraded = it answered with a 5xx, or slower than half the budget

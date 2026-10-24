@@ -252,9 +252,9 @@ pub fn author(author: &ferrofed_registry::revision::Author) -> String {
     }
 }
 
-/// A median latency in milliseconds, or a muted dash when none is measured.
+/// A latency in milliseconds, or a muted dash when none is measured.
 #[must_use]
-pub fn median(ms: Option<u64>) -> AnyView {
+pub fn latency(ms: Option<u64>) -> AnyView {
     match ms {
         Some(ms) => tr_with(Msg::Milliseconds, &[("count", ms.into())]).into_any(),
         None => view! {
@@ -264,6 +264,13 @@ pub fn median(ms: Option<u64>) -> AnyView {
         }
         .into_any(),
     }
+}
+
+/// A latency fact: [`latency`] with `title` naming the statistic and its
+/// window, shown on hover and read by assistive technology.
+#[must_use]
+pub fn latency_fact(ms: Option<u64>, title: String) -> AnyView {
+    view! { <span title=title>{latency(ms)}</span> }.into_any()
 }
 
 /// What owns a member entry, as a provenance tag (F4) where the console

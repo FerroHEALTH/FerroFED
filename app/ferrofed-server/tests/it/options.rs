@@ -19,7 +19,9 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::{MANUFACTURER, MAX_NODE_ROWS, MAX_WINDOW, SUPPORTED_UNTIL};
+use ferrofed_server::facade::options::{
+    LATENCY_MS_P95, MANUFACTURER, MAX_NODE_ROWS, MAX_WINDOW, SUPPORTED_UNTIL,
+};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
@@ -27,7 +29,10 @@ use http::{Request, StatusCode, header};
 use openehr_federation::headers;
 use openehr_federation::options::{DefinitionBehaviour, OptionsRoot, SpecVersion};
 
-use crate::facade::{PATIENT, crossref, schema, settings_with_room};
+use crate::facade::{
+    EHR_A, PATIENT, crossref, dev_gateway, node_answering, patient_query, post, schema,
+    settings_with_room,
+};
 use crate::support::{call, error_body, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -464,9 +469,50 @@ async fn the_member_endpoints_follow_the_registry() -> TestResult {
         "the registry's standing"
     );
     for endpoint in &body.endpoints {
-        assert_eq!(None, endpoint.latency_ms_p50, "no latency is tracked");
-        assert!(endpoint.extra.is_empty());
+        assert_eq!(None, endpoint.latency_ms_p50, "no request was sent yet");
+        assert!(
+            endpoint.extra.is_empty(),
+            "no latency_ms_p95 before a request"
+        );
     }
+    Ok(())
+}
+
+// conformance: CP-23
+#[tokio::test]
+async fn an_endpoint_sent_requests_reports_its_median_and_95th_percentile() -> TestResult {
+    let (a, b) = (node_answering("a::1").await, node_answering("b::1").await);
+    let dir = tempfile::tempdir()?;
+    let app = dev_gateway(dir.path(), &a.uri(), &b.uri(), &[("node-a", EHR_A)])?;
+    for _ in 0..3 {
+        let (status, text) =
+            call(app.clone(), post(crate::facade::body(&patient_query())?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+    }
+    let (status, text) = call(app, options("/")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    schema::validate_options(&text)?;
+    let body: OptionsRoot = serde_json::from_str(&text)?;
+    let [asked, unasked] = body.endpoints.as_slice() else {
+        return Err("two member endpoints".into());
+    };
+    assert_eq!("node-a-pub", asked.id.as_str());
+    let tail = |endpoint: &openehr_federation::options::MemberEndpoint| {
+        endpoint
+            .extra
+            .get(LATENCY_MS_P95)
+            .map(|raw| serde_json::from_str::<u64>(raw.get()))
+            .transpose()
+    };
+    let (Some(p50), Some(p95)) = (asked.latency_ms_p50, tail(asked)?) else {
+        return Err(format!("§7a.2: an asked endpoint reports both statistics: {text}").into());
+    };
+    assert!(p50 <= p95, "the median never exceeds the 95th percentile");
+    assert_eq!(
+        (None, None),
+        (unasked.latency_ms_p50, tail(unasked)?),
+        "an endpoint never sent a request has no measurement"
+    );
     Ok(())
 }
 
