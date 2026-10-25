@@ -1560,7 +1560,7 @@ dependencies = [
  "base64 0.23.1",
  "ferrofed-registry",
  "ferrofed-testkit",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.6.0",
  "http",
  "jiff",
  "jsonschema",
@@ -1573,7 +1573,7 @@ dependencies = [
  "openehr-its",
  "openehr-query",
  "openehr-rm",
- "openehr-sdt",
+ "openehr-sdt 0.0.90",
  "opentelemetry",
  "opentelemetry_sdk",
  "pem 3.0.6",
@@ -1653,7 +1653,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.6.0",
  "fhir-types",
  "governor",
  "http",
@@ -1757,12 +1757,33 @@ checksum = "7ffe8ec80408ba7026bae4480d6e4ea13380e056f4d6a0704c1698e5ef40b14d"
 dependencies = [
  "argon2",
  "aws-lc-rs",
+ "base64 0.23.1",
+ "http",
+ "jiff",
+ "jsonwebtoken",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "ferrohealth-smart"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb2825bac4f7555da8a6e047f1454bc21b200ede6d6b0a3482363723e264928c"
+dependencies = [
+ "argon2",
+ "aws-lc-rs",
  "axum",
  "base64 0.23.1",
  "http",
  "jiff",
  "jsonwebtoken",
- "openehr-sdt",
+ "openehr-sdt 0.0.98",
  "reqwest",
  "secrecy",
  "serde",
@@ -1825,7 +1846,7 @@ dependencies = [
  "openehr-its",
  "openehr-mapping-core",
  "openehr-rm",
- "openehr-sdt",
+ "openehr-sdt 0.0.90",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -3407,7 +3428,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adeeecedceef2b6a084ae0fadf82ca267fc80e5dc4eaa70aa032482fd2f169ec"
 dependencies = [
  "base64 0.23.1",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.4.0",
  "fhir-types",
  "http",
  "jiff",
@@ -3705,7 +3726,7 @@ dependencies = [
  "openehr-base",
  "openehr-its",
  "openehr-rm",
- "openehr-sdt",
+ "openehr-sdt 0.0.90",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -3760,6 +3781,12 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "openehr-sdt"
+version = "0.0.98"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ea94a36d6f84491e59c51df4b6d0c4c06b524728e98abb93fcfd29c45e014f7"
 
 [[package]]
 name = "openehr-term"
