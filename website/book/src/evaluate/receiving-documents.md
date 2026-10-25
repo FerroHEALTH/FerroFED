@@ -219,5 +219,6 @@ The [clinical safety risk file](clinical-safety.md) lists the receive path
 as I-10 (a document filed under the wrong member or patient), whose
 controls are built, and I-11 (a document stored with content lost), whose
 controls include the full validation above
-([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)) and which
-stays open until the clinical review.
+([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The safety
+review of 2026-10-25 closed both at S4, P1
+([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)).

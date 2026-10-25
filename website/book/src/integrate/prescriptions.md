@@ -143,9 +143,11 @@ about the patient a request carries; no patient identifier a client sent
 reaches a member (§5.4.1, N33).
 
 Concurrent dispensations of one prescription at two pharmacies are the
-member's to serialise, and so is the duplicate rule. Both stay open in
-hazard I-12 of the
-[clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
+member's to serialise, and so is the duplicate rule. Hazard I-12 of the
+[clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component)
+stays open until the gateway refuses a dispensation it already wrote, by
+the dispensation's business identifier
+([#1346](https://github.com/FerroHEALTH/FerroFED/issues/1346)).
 
 ## Searching a patient's prescriptions
 
