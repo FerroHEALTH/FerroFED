@@ -168,6 +168,11 @@ fn unread_answer(unread: &Unread) -> Response {
             response.extensions_mut().insert(crate::access::NoAccess);
             response
         }
+        Unread::NoIdentifier => refusal(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "required",
+            &unread.to_string(),
+        ),
         Unread::ReferenceOnly => refusal(
             StatusCode::UNPROCESSABLE_ENTITY,
             "business-rule",

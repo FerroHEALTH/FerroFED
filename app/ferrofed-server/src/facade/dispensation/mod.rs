@@ -16,9 +16,11 @@
 //! a member. Every such member must answer, since a silent one could be the
 //! owner. The dispensation is then created at the owner's own endpoint, once
 //! ([`ferrofed_engine::single_node::native_create`]), its body as the client
-//! sent it (§5.4 scope note, N22). The member decides whether its state still
-//! admits the dispensation; the gateway holds no lock and never sends a
-//! write again.
+//! sent it (§5.4 scope note, N22). Before that, the owner is asked for the
+//! patient's dispensations of the received one's business identifier, and a
+//! dispensation it already holds is refused `409` with nothing written
+//! ([`duplicate`]). The member decides whether its state still admits the
+//! dispensation; the gateway holds no lock and never sends a write again.
 //!
 //! An `openEHR-federation-endpoint` header is a check only: one that names an
 //! endpoint of another member than the owner refuses the dispensation. The
@@ -27,6 +29,7 @@
 //! owner of the object it names (§12.4, N23 name an explicitly chosen node).
 
 mod answer;
+mod duplicate;
 mod lookup;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -236,6 +239,35 @@ async fn owned(
     if !confined::admits(arrived.conveyance, &writing.via, &writing.ehr_id) {
         Outcome::Failed.record();
         return confined::refused("dispensation", arrived.request_id, &logged);
+    }
+    let Some((per_node, until)) = duplicate::budgeted(federation, arrived) else {
+        return crate::error::fixed(Code::Internal, arrived.request_id);
+    };
+    let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
+        .with_request_id(arrived.outbound)
+        .with_withheld(Arc::clone(&withheld));
+    let (system, value) = (&received.identifier.0, &received.identifier.1);
+    match duplicate::check(federation, &writing, (system, value), (&options, until)).await {
+        duplicate::Checked::New => {}
+        duplicate::Checked::Held(existing) => {
+            Outcome::Failed.record();
+            let named = existing.map_or_else(
+                || String::from("under the same identifier"),
+                |id| format!("as MedicationDispense/{id}"),
+            );
+            return refused_after(
+                federation,
+                lookup,
+                (StatusCode::CONFLICT, "duplicate"),
+                &format!(
+                    "the owner already holds this dispensation {named}, so nothing was written; a dispensation sent again after a time-out is refused, never written twice"
+                ),
+            );
+        }
+        duplicate::Checked::Untold(status, code, diagnostics) => {
+            Outcome::Failed.record();
+            return refused_after(federation, lookup, (status, code), &diagnostics);
+        }
     }
     let created = write(federation, arrived, (&writing, body), withheld).await;
     answer::written(

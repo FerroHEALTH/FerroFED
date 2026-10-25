@@ -135,8 +135,11 @@ async fn the_location_a_receipt_answered_reads_back_the_dispensation_it_located(
         "FHIR R4 http.html §3.1.0.3: the vid read"
     );
     let journal = members.proxy_a.journal();
+    // The receipt's duplicate check reads the patient's dispensations first;
+    // the version read is the last request for a dispensation.
     let read = journal
         .iter()
+        .rev()
         .find(|capture| capture.method == "GET" && capture.path == "/fhir/MedicationDispense")
         .ok_or("the dispensation is asked of node A")?;
     let pairs: Vec<(String, String)> =

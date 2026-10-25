@@ -143,11 +143,11 @@ about the patient a request carries; no patient identifier a client sent
 reaches a member (§5.4.1, N33).
 
 Concurrent dispensations of one prescription at two pharmacies are the
-member's to serialise, and so is the duplicate rule. Hazard I-12 of the
-[clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component)
-stays open until the gateway refuses a dispensation it already wrote, by
-the dispensation's business identifier
-([#1346](https://github.com/FerroHEALTH/FerroFED/issues/1346)).
+member's to serialise. The gateway refuses a dispensation the owner already
+holds under the same business identifier, so a dispensation sent again is
+never written twice ([Receiving a dispensation](#receiving-a-dispensation),
+hazard I-12 of the
+[clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component)).
 
 ## Searching a patient's prescriptions
 
@@ -261,7 +261,11 @@ names the patient by an identifier, either a logical reference or a
 contained `Patient` that `subject` references by `#id`, and each identifier
 whose system is in `receive_namespaces` is resolved. Every one of them must
 name the same `ehr_id` at every member, or the dispensation is refused
-`422`.
+`422`. The dispensation must carry its own business identifier, an
+`identifier` with a `system` and a `value`, or it is refused `422`
+`required`, naming `MedicationDispense.identifier`
+(`a_dispensation_with_no_business_identifier_is_refused_naming_the_element`):
+it is how the gateway tells a dispensation sent again from a new one.
 
 Each `authorizingPrescription` names a prescription by its business
 identifier, and may carry the face's reference `MedicationRequest/{id}`
@@ -280,7 +284,19 @@ by the member's own `ehr_id` alone, and finds the named prescriptions in the
 answers itself. The prescription identifier never reaches a member. Every
 member asked must answer, because a silent one could be the owner
 (`a_member_silent_at_the_lookup_refuses_the_dispensation`). The dispensation
-is then created at the owner's own endpoint with
+is first checked against the owner's dispensations: the gateway asks the
+owner's own endpoint for the patient's dispensations, by its own `ehr_id`
+alone, and looks for one with the received dispensation's business
+identifier itself, so the identifier never reaches the member in a query. A
+dispensation the owner already holds is refused `409` `duplicate`, naming
+the one already written, and nothing is written; this is how a dispensation
+you send again after a time-out is never written twice
+(`a_dispensation_the_owner_already_holds_is_refused_as_a_duplicate_with_nothing_written`,
+`another_dispensation_of_the_patient_is_no_duplicate_and_is_written`). An
+owner that does not answer that read refuses the dispensation, because a
+duplicate cannot be ruled out
+(`an_owner_that_does_not_answer_the_duplicate_check_writes_nothing`). The
+dispensation is then created at the owner's own endpoint with
 `POST {own}/MedicationDispense`, once, its body exactly as you sent it
 (`a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unchanged`).
 The member decides whether its prescription still admits the dispensation.
@@ -389,13 +405,14 @@ and another method on any of these paths is refused `403`
 | receipt | `404` `not-found` | No member holds the patient, none may say so, or no member holds the prescription. Every case gets the same text. |
 | read | `409` `conflict` | Two members claim the `ehr_id` the id names, which also raises the integrity incident; the id's endpoint part matches two endpoints; or the member answered more than one resource for one id, with no incident. Nothing is passed on. |
 | receipt | `409` `conflict` | Two members hold the prescription, which also raises the `PrescriptionIdentifierCollision` integrity incident; one member holds it twice, with no incident; or the owner refused the dispensation, named with its status. |
+| receipt | `409` `duplicate` | The owner already holds a dispensation with the received one's business identifier, named by its locator id. Nothing was written. |
 | receipt | `415` | Another media type than `application/fhir+json`. |
-| receipt | `422` | The dispensation breaks its profiles; the patient's identifiers disagree; the prescriptions are held by different members; a prescription is named by the face's reference alone; a reference and an identifier name different prescriptions; a reference is not to the face; or the owner is not declared for `Electronic-Dispensations`. |
+| receipt | `422` | The dispensation breaks its profiles; it carries no business identifier with a system and a value (`required`); the patient's identifiers disagree; the prescriptions are held by different members; a prescription is named by the face's reference alone; a reference and an identifier name different prescriptions; a reference is not to the face; or the owner is not declared for `Electronic-Dispensations`. |
 | search, read | `424` | A member answered with an error, with no `searchset`, or with another resource than the one asked for; or the patient could not be resolved at a member. |
 | receipt | `500` | The dispensation profiles this build carries could not be read; or the request to the owner would have carried a patient identifier outside its body, so it was not sent (§5.4.1, N33). |
 | receipt | `502` | The owner answered the dispensation with a `5xx` status or a `401`, failed in another way, or could not be reached. For an owner that could not be reached, whether it wrote the dispensation is unknown. |
 | every route | `503` `access-unrecorded` | The access record has no place, so the answer is withheld ([Failing closed](../operate/access-log.md#failing-closed)). A receipt reserves its record's place first, so a receipt refused this way reached no member. |
-| receipt | `503` | A member that could hold the prescription answered the lookup with no usable `searchset`, or the patient could not be resolved at it; or the dispensation could not be sent before the deadline. Nothing was written. |
+| receipt | `503` | A member that could hold the prescription answered the lookup with no usable `searchset`, or the patient could not be resolved at it; the owner answered the duplicate check with an error; or the dispensation could not be sent before the deadline. Nothing was written. |
 | search, read | `504` | A member is offline or did not answer in time. |
 | receipt | `504` | A member did not answer the lookup in time, and nothing was written; or the owner did not answer the dispensation in time, and whether it wrote it is unknown. |
 
