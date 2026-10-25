@@ -36,6 +36,8 @@ differ, `LICENSE` wins.
 - **Third-party material.** Vendored specifications and third-party material
   keep their upstream terms, recorded in a `PROVENANCE.md` beside each
   vendored tree.
+- **The brand assets.** The logos and icons under `assets/brand/` are part of
+  the Licensed Work.
 
 Technical questions go to the maintainer named in
 [`MAINTAINERS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md).
