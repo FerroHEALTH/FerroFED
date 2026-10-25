@@ -6,6 +6,11 @@
 
 **The openEHR federation gateway: one query, answered from every organisation that holds the patient's record.**
 
+[Documentation](https://ferrofed.eu/docs/) ·
+[Quick start](#quick-start) ·
+[What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html) ·
+[Licensing](https://ferrohealth.eu/docs/licensing.html)
+
 **Project**<br>
 [![Release](https://img.shields.io/github/v/release/FerroHEALTH/FerroFED?sort=semver&logo=github&label=release)](https://github.com/FerroHEALTH/FerroFED/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroFED/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI)](https://github.com/FerroHEALTH/FerroFED/actions/workflows/ci.yml)
@@ -32,11 +37,6 @@
 <!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
 [![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
-
-[Documentation](https://ferrofed.eu/docs/) ·
-[Quick start](#quick-start) ·
-[What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html) ·
-[Licensing](https://ferrohealth.eu/docs/licensing.html)
 
 </div>
 
