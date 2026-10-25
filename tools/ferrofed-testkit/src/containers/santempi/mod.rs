@@ -33,12 +33,14 @@ use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use uuid::Uuid;
 
 mod feed;
+mod transient;
 
 use super::images::{SANTEMPI, SANTEMPI_POSTGRES};
 use super::retry;
 use super::{HarnessError, POSTGRES_PORT, names, postgres_health_check};
 use crate::seed::{EhrDomain, PatientId};
 use feed::feed_message;
+use transient::retried;
 
 /// The port SanteMPI serves its REST interfaces on inside its container.
 const PORT: u16 = 8080;
@@ -122,6 +124,12 @@ pub enum SanteMpiError {
         /// The domain's system.
         system: String,
     },
+    /// SanteMPI's database could not be read.
+    #[error("{step} could not be read from SanteMPI's database")]
+    Unread {
+        /// The step of the setup.
+        step: &'static str,
+    },
     /// SanteMPI refused a setup request.
     #[error("{step} was refused with {status}: {body}")]
     Refused {
@@ -169,6 +177,16 @@ const GRANT_FLOWS: &str = "DELETE FROM SEC_APP_POL_ASSOC_TBL \
      INSERT INTO SEC_APP_POL_ASSOC_TBL (APP_ID, POL_ID, POL_ACT) SELECT APP_ID, POL_ID, 2 \
      FROM SEC_APP_TBL, SEC_POL_TBL WHERE APP_PUB_ID = 'fiddler' \
      AND OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%';";
+
+/// The key of every security application SanteMPI holds.
+// NOTE: santedb/santedb-server@a85732a (v2.5.10) santedb-ddl.sql: an application is a row
+// of SEC_APP_TBL, keyed by APP_ID.
+const APPLICATIONS: &str = "SELECT APP_ID FROM SEC_APP_TBL";
+
+/// The key of every identity domain (assigning authority) SanteMPI holds.
+// NOTE: santedb/santedb-server@a85732a (v2.5.10) santedb-ddl.sql: on the 2.5 line of the
+// pinned image an identity domain is a row of ASGN_AUT_TBL, keyed by AUT_ID.
+const DOMAINS: &str = "SELECT AUT_ID FROM ASGN_AUT_TBL";
 
 /// The policies that admit an application to the client-credentials grant
 /// with no device credential, which the Manager denies an application they
@@ -283,14 +301,20 @@ impl SanteMpi {
         let bearer = self.token(&source(domain)).await?;
         let body = serde_json::to_vec(&feed_message(domain, patient, ehr_id))
             .map_err(|source| SanteMpiError::Json { step, source })?;
-        let request = self
-            .http
-            .post(format!("{}{FHIR_PATH}Bundle", self.origin))
-            .header(AUTHORIZATION, format!("Bearer {bearer}"))
-            .header(CONTENT_TYPE, "application/fhir+json")
-            .header(ACCEPT, "application/fhir+json")
-            .body(body);
-        send(request, step).await.map(drop)
+        // NOTE: no specification governs this: our own design; a feed SanteMPI met with its
+        // transient queue fault is sent again, and a second feed of one patient updates it.
+        retried(|| {
+            let request = self
+                .http
+                .post(format!("{}{FHIR_PATH}Bundle", self.origin))
+                .header(AUTHORIZATION, format!("Bearer {bearer}"))
+                .header(CONTENT_TYPE, "application/fhir+json")
+                .header(ACCEPT, "application/fhir+json")
+                .body(body.clone());
+            send(request, step)
+        })
+        .await
+        .map(drop)
     }
 
     /// Waits until SanteMPI has installed the OAuth 2.0 flow policies,
@@ -390,45 +414,85 @@ impl SanteMpi {
     ) -> Result<(), SanteMpiError> {
         let admin = self.token(&administrator()).await?;
         let mut applications = vec![(record_id(0, 0), consumer())];
-        let mut authorities = vec![authority(
+        let mut authorities = vec![(
             record_id(1, 0),
-            "FFD_PATIENT",
-            patient_namespace,
-            None,
-        )?];
+            authority(record_id(1, 0), "FFD_PATIENT", patient_namespace, None)?,
+        )];
         for (number, &domain) in (1_u16..).zip(members) {
             let application = record_id(0, number);
             applications.push((application, source(domain)));
-            authorities.push(authority(
+            authorities.push((
                 record_id(1, number),
-                &format!("FFD_EHR_{number}"),
-                &domain.system(),
-                Some(application),
-            )?);
+                authority(
+                    record_id(1, number),
+                    &format!("FFD_EHR_{number}"),
+                    &domain.system(),
+                    Some(application),
+                )?,
+            ));
         }
         for (id, client) in &applications {
+            retried(|| async {
+                if self
+                    .holds(APPLICATIONS, *id, "the SecurityApplication list")
+                    .await?
+                {
+                    return Ok(());
+                }
+                let request = self
+                    .http
+                    .post(format!("{}/ami/SecurityApplication", self.origin))
+                    .header(AUTHORIZATION, format!("Bearer {admin}"))
+                    .header(CONTENT_TYPE, "application/xml")
+                    .body(application(*id, client));
+                send(request, "the SecurityApplication create")
+                    .await
+                    .map(drop)
+            })
+            .await?;
+        }
+        retried(|| async {
+            let mut missing = Vec::new();
+            for (id, entry) in &authorities {
+                if !self.holds(DOMAINS, *id, "the identity domain list").await? {
+                    missing.push(entry.as_str());
+                }
+            }
+            if missing.is_empty() {
+                return Ok(());
+            }
+            let bundle = format!(
+                "<Bundle xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
+                 xmlns=\"http://santedb.org/model\">{}</Bundle>",
+                missing.concat()
+            );
             let request = self
                 .http
-                .post(format!("{}/ami/SecurityApplication", self.origin))
+                .post(format!("{}/hdsi/Bundle", self.origin))
                 .header(AUTHORIZATION, format!("Bearer {admin}"))
                 .header(CONTENT_TYPE, "application/xml")
-                .body(application(*id, client));
-            send(request, "the SecurityApplication create").await?;
-        }
-        let bundle = format!(
-            "<Bundle xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
-             xmlns=\"http://santedb.org/model\">{}</Bundle>",
-            authorities.concat()
-        );
-        let request = self
-            .http
-            .post(format!("{}/hdsi/Bundle", self.origin))
-            .header(AUTHORIZATION, format!("Bearer {admin}"))
-            .header(CONTENT_TYPE, "application/xml")
-            .body(bundle);
-        send(request, "the AssigningAuthority create")
+                .body(bundle);
+            send(request, "the AssigningAuthority create")
+                .await
+                .map(drop)
+        })
+        .await
+    }
+
+    /// Whether `id` is among the keys `list`, a constant query of one
+    /// table's keys, reads from SanteMPI's database; no value is spliced into
+    /// the query.
+    ///
+    /// The database is read, because SanteMPI answers an AMI read of a
+    /// security application it does not hold with a `500`
+    /// `NullReferenceException`, never a `404` (#1302).
+    async fn holds(&self, list: &str, id: Uuid, step: &'static str) -> Result<bool, SanteMpiError> {
+        let listed = self
+            .database_says(list)
             .await
-            .map(drop)
+            .ok_or(SanteMpiError::Unread { step })?;
+        let id = id.to_string();
+        Ok(listed.lines().any(|line| line.trim() == id))
     }
 }
 
