@@ -189,6 +189,11 @@ xt-ehr.sh	the Xt-EHR joint action publishes no release feed for its deliverables
 openehr-ckm.sh	the openEHR Clinical Knowledge Manager publishes no release feed for a template; the script fails when an upstream byte moves, and a new asset version is a re-pin with its clinical safety review
 ferropulse.sh	FerroPULSE is the family's own receiver and publishes no release feed; the envelope v2 schema is pinned by commit and checksum, and a new envelope version is a code change in the reporter, never a refresh"
 
+# current LABEL PIN SOURCE: the line of a pin that is its upstream's newest.
+current() {
+  printf 'current    %s %s (%s)\n' "$1" "$2" "$3"
+}
+
 # corpus_rows [MATRIX]: one "label<TAB>script" record per row of MATRIX whose
 # third cell names a scripts/vendor/ script, which is what makes it a corpus
 # row.
@@ -592,7 +597,7 @@ while IFS=$'\t' read -r label repo; do
   latest="${latest#v}"
 
   if [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned" "$repo"
+    current "$label" "$pinned" "$repo"
   else
     printf 'STALE      %s: pinned %s, newest upstream release %s (https://github.com/%s/releases/tag/%s)\n' \
       "$label" "$pinned" "$latest" "$repo" "$tag"
@@ -650,7 +655,7 @@ while IFS=$'\t' read -r label repo prefix hold; do
     printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$repo" "$prefix"
     unreadable=1
   elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$repo"
+    current "$label" "$pinned_tag" "$repo"
   elif [[ "$hold" != "-" ]]; then
     printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
       "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
@@ -800,7 +805,7 @@ while IFS=$'\t' read -r label project prefix hold; do
     printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$project" "$prefix"
     unreadable=1
   elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$project"
+    current "$label" "$pinned_tag" "$project"
   elif [[ "$hold" != "-" ]]; then
     printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
       "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
@@ -877,7 +882,7 @@ elif ! latest="$(curl --fail --silent --show-error --user-agent ferrofed-pin-che
   printf 'UNREADABLE %s: could not read the newest stable release from %s (%s)\n' "$CHROME_LABEL" "$CHROME_FEED" "$latest"
   unreadable=1
 elif [[ "$pinned" = "$latest" ]]; then
-  printf 'current    %s %s (%s)\n' "$CHROME_LABEL" "$pinned" "$CHROME_FEED"
+  current "$CHROME_LABEL" "$pinned" "$CHROME_FEED"
 else
   printf 'STALE      %s: pinned %s, newest stable release %s (%s)\n' \
     "$CHROME_LABEL" "$pinned" "$latest" "$CHROME_FEED"

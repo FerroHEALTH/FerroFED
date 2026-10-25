@@ -83,130 +83,45 @@ fn string<'a>(value: &'a Value, key: &str) -> &'a str {
     value.get(key).and_then(Value::as_str).unwrap_or_default()
 }
 
-/// One committed package: its path under `docs/specs/`, the name, version and
-/// licence its pin records, and the FHIR version it declares.
-struct Pinned {
-    path: &'static str,
-    name: &'static str,
-    version: &'static str,
-    licence: &'static str,
-    fhir: &'static str,
-}
-
-/// The packages #1290 vendors or re-pins.
-const PINNED: &[Pinned] = &[
-    Pinned {
-        path: "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
-        name: "myhealth.eu.fhir.ncp-api",
-        version: "9.1.1-ci",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
-        name: "myhealth.eu.fhir.core",
-        version: "1.0.0",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz",
-        name: "myhealth.eu.fhir.eps",
-        version: "1.0.0-poc",
-        licence: "CC-BY-4.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz",
-        name: "myhealth.eu.fhir.epd",
-        version: "1.0.0-poc",
-        licence: "CC-BY-4.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
-        name: "myhealth.eu.fhir.laboratory",
-        version: "9.1.1",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
-        name: "myhealth.eu.fhir.hdr",
-        version: "9.1.1",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz",
-        name: "myhealth.eu.fhir.imaging",
-        version: "9.1.1",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz",
-        name: "myhealth.eu.fhir.euvac",
-        version: "10.0.0-preview",
-        licence: "CC-BY-4.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "eu-xtehr-models/xtehr.eu.ehds.models-0.3.0.tgz",
-        name: "xtehr.eu.ehds.models",
-        version: "0.3.0",
-        licence: "CC0-1.0",
-        fhir: "5.0.0",
-    },
-    Pinned {
-        path: "eu-xtehr-metadata/hl7.eu.fhir.xt-ehr.metadata-0.1.0.tgz",
-        name: "hl7.eu.fhir.xt-ehr.metadata",
-        version: "0.1.0",
-        licence: "CC0-1.0",
-        fhir: "5.0.0",
-    },
-    Pinned {
-        path: "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz",
-        name: "hl7.fhir.eu.laboratory",
-        version: "2.1.0",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz",
-        name: "hl7.fhir.eu.hdr",
-        version: "1.0.0",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-alpha.tgz",
-        name: "hl7.fhir.eu.imaging",
-        version: "1.0.0-alpha",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "eu-hl7-extensions/hl7.fhir.eu.extensions-0.1.0.tgz",
-        name: "hl7.fhir.eu.extensions",
-        version: "0.1.0",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz",
-        name: "hl7.fhir.uv.ips",
-        version: "2.0.1",
-        licence: "CC0-1.0",
-        fhir: "4.0.1",
-    },
-    Pinned {
-        path: "ihe-mhd/ihe.iti.mhd-4.2.2.tgz",
-        name: "ihe.iti.mhd",
-        version: "4.2.2",
-        licence: "CC-BY-4.0",
-        fhir: "4.0.1",
-    },
+/// The packages #1290 vendors or re-pins, and those #1306 vendors for their
+/// dependency closure, grouped by the licence their pin records and the FHIR
+/// version they declare. Each file is named `<name>-<version>.tgz` after
+/// the package its pin names.
+const PINNED: &[(&str, &str, &[&str])] = &[
+    (
+        "CC0-1.0",
+        "4.0.1",
+        &[
+            "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
+            "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+            "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
+            "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
+            "ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz",
+            "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz",
+            "eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz",
+            "eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-alpha.tgz",
+            "eu-hl7-extensions/hl7.fhir.eu.extensions-0.1.0.tgz",
+            "hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz",
+        ],
+    ),
+    (
+        "CC-BY-4.0",
+        "4.0.1",
+        &[
+            "ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz",
+            "ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz",
+            "ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz",
+            "ihe-mhd/ihe.iti.mhd-4.2.2.tgz",
+        ],
+    ),
+    (
+        "CC0-1.0",
+        "5.0.0",
+        &[
+            "eu-xtehr-models/xtehr.eu.ehds.models-0.3.0.tgz",
+            "eu-xtehr-metadata/hl7.eu.fhir.xt-ehr.metadata-0.1.0.tgz",
+        ],
+    ),
 ];
 
 /// The packages whose manifests must name only packages the repository
@@ -307,39 +222,32 @@ fn every_package_the_myhealth_guides_name_is_vendored() -> TestResult {
 
 #[test]
 fn each_committed_package_is_the_package_and_licence_its_pin_names() -> TestResult {
-    for pinned in PINNED {
-        let package = manifest(pinned.path)?;
-        assert_eq!(string(&package, "name"), pinned.name, "{}", pinned.path);
-        assert_eq!(
-            string(&package, "version"),
-            pinned.version,
-            "{}",
-            pinned.path
+    let pinned = PINNED
+        .iter()
+        .flat_map(|&(licence, fhir, paths)| paths.iter().map(move |&path| (path, licence, fhir)));
+    for (path, licence, fhir) in pinned {
+        let file = path.rsplit('/').next().unwrap_or(path);
+        let package = manifest(path)?;
+        let named = format!(
+            "{}-{}.tgz",
+            string(&package, "name"),
+            string(&package, "version")
         );
-        assert_eq!(
-            string(&package, "license"),
-            pinned.licence,
-            "{}",
-            pinned.path
-        );
-        let fhir: Vec<&str> = package
+        assert_eq!(named, file, "the package its pin names: {path}");
+        assert_eq!(string(&package, "license"), licence, "{path}");
+        let declared: Vec<&str> = package
             .get("fhirVersions")
             .and_then(Value::as_array)
             .map(|versions| versions.iter().filter_map(Value::as_str).collect())
             .unwrap_or_default();
-        assert_eq!(fhir, [pinned.fhir], "{}", pinned.path);
+        assert_eq!(declared, [fhir], "{path}");
 
-        let guides = members(pinned.path, |name| {
+        let guides = members(path, |name| {
             name.starts_with("package/ImplementationGuide-") && is_json(name)
         })?;
-        assert_eq!(
-            guides.len(),
-            1,
-            "{} carries one ImplementationGuide",
-            pinned.path
-        );
+        assert_eq!(guides.len(), 1, "{path} carries one ImplementationGuide");
         for guide in guides.values() {
-            assert_eq!(string(guide, "license"), pinned.licence, "{}", pinned.path);
+            assert_eq!(string(guide, "license"), licence, "{path}");
         }
     }
     Ok(())
