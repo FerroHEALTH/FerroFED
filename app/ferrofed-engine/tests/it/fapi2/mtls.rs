@@ -22,6 +22,7 @@ use ferrofed_engine::onward::grant::fapi2::metadata::DiscoveryError;
 use ferrofed_engine::onward::grant::fapi2::{
     Fapi2Credentials, Fapi2Error, Fapi2Grant, Fapi2GrantError, Fapi2Security,
 };
+use ferrofed_engine::onward::issuer::{AliasHost, EndpointError, Issuer};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint, SystemClock};
 use ferrofed_registry::id::EndpointId;
@@ -29,7 +30,6 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth::{self, Verdict};
 use ferrofed_testkit::tls::MutualTls;
-use oauth_server_metadata::{AliasHost, EndpointError, Issuer};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;

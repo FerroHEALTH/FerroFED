@@ -11,8 +11,7 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
-implement, never `ferrofed-*` (`openehr-federation`,
-`oauth-server-metadata`, and the two harmonised
+implement, never `ferrofed-*` (`openehr-federation`, and the two harmonised
 software components of Regulation (EU) 2025/327, `ehds-logging` and
 `eehrxf`; `.claude/memory/published-crate-naming.md`), one crate per
 specification with a feature per layer or profile; FerroFED's own glue and
@@ -57,10 +56,7 @@ an owner decision recorded per crate when the switch flips, never assumed.
   before the crate has content (`openehr-federation`, `ihe-iti` and
   `nl-generic-functions`, published on 2026-10-01), and the crate's line in
   the workspace starts at 0.0.1, above the placeholder. `eehrxf` (#684)
-  and `ehds-logging` (#623) were claimed the same way on 2026-10-06. The
-  name `oauth-server-metadata` (#551) is not reserved on crates.io yet: the
-  owner decided not to claim it while publishing is off, and it must be
-  claimed before the `publish` switch is turned on.
+  and `ehds-logging` (#623) were claimed the same way on 2026-10-06.
 
 ## The bump rule
 
@@ -128,8 +124,7 @@ reaches the registry.
 Five of the six names exist on crates.io (the 0.0.0 placeholders of
 2026-10-01, and those of `eehrxf` and `ehds-logging` of 2026-10-06), so
 every later version of those can go through Trusted Publishing with no first
-upload by a personal token. `oauth-server-metadata` needs its placeholder
-claimed the same way before the switch flips. Two steps, done once:
+upload by a personal token. Two steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and
    a deployment policy that admits `main` and `v*` tags.

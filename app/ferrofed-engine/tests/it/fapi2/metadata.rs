@@ -18,10 +18,10 @@ use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::metadata::{DiscoveryError, RESPONSE_LIMIT};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Error, Fapi2Grant, Fapi2GrantError};
+use ferrofed_engine::onward::issuer::{EndpointError, Issuer};
 use ferrofed_engine::onward::keys::SigningKey;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth;
-use oauth_server_metadata::{EndpointError, Issuer};
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
 use secrecy::SecretString;
 

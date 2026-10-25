@@ -24,7 +24,7 @@
 - [Published crate naming](published-crate-naming.md): a publishable crate
   carries its specification's name, never ferrofed-*; one crate per
   specification with a feature per layer or profile; FED glue under app/;
-  names claimed with 0.0.0 placeholders (`oauth-server-metadata` not yet);
+  names claimed with 0.0.0 placeholders;
   owner 2026-10-01
 - [Family naming allowed](family-naming-allowed.md): public documents may name
   FerroHEALTH and the siblings, unlike FerroBRIDGE; owner 2026-10-01

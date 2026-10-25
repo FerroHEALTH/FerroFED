@@ -118,7 +118,7 @@ fn grant(
     prover: &Arc<Prover>,
 ) -> Result<Fapi2Grant, Box<dyn Error>> {
     Ok(Fapi2Grant::new(
-        oauth_server_metadata::Issuer::parse(&server.issuer())?,
+        ferrofed_engine::onward::issuer::Issuer::parse(&server.issuer())?,
         CLIENT_ID,
         (key, Arc::clone(prover)),
         (

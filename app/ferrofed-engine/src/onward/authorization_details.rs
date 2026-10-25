@@ -86,7 +86,7 @@ impl AuthorizationDetails {
     /// array, and [`AuthorizationDetailsError::Untyped`] for an object
     /// without a `type`.
     pub fn parse(text: &str) -> Result<Self, AuthorizationDetailsError> {
-        oauth_server_metadata::repeats_no_name(text.as_bytes())
+        ferrohealth_smart::metadata::repeats_no_name(text.as_bytes())
             .map_err(AuthorizationDetailsError::Json)?;
         let types = types_of(text)?;
         let text = serde_json::from_str::<Box<RawValue>>(text.trim())

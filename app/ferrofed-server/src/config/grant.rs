@@ -40,11 +40,11 @@ use ferrofed_engine::onward::authorization_details::{
 };
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
+use ferrofed_engine::onward::issuer::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
 use ferrofed_registry::secret::{Secret, SecretUrl};
-use oauth_server_metadata::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
 use serde::Deserialize;
 
 use crate::config::error::Error;

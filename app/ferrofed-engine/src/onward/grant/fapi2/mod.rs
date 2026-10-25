@@ -51,11 +51,11 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::onward::issuer::{AliasHost, Issuer};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
-use oauth_server_metadata::{AliasHost, Issuer};
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
 

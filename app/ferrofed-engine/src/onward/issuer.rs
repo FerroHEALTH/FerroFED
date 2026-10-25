@@ -1,56 +1,33 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! OAuth 2.0 Authorization Server Metadata (RFC 8414), as a client reads it.
-//!
-//! A client that discovers its authorization server from the issuer
-//! identifier holds the metadata to it before sending it anything, as the
-//! OAuth 2.0 issuer audience, the FAPI 2.0 Security Profile and the Nuts
-//! profile of Annex B §B.4 all do:
+//! The authorization server an onward grant is sent to, held to OAuth 2.0
+//! Authorization Server Metadata (RFC 8414) and the mutual-TLS endpoint
+//! aliases of RFC 8705 §5.
 //!
 //! - an [`Issuer`] is an `http` or `https` URL without userinfo, query or
 //!   fragment (RFC 8414 §2), written in the canonical form the URL parser
 //!   gives it, so the text compared and the URL fetched have one meaning;
 //! - its metadata is read from [`Issuer::metadata_url`], the well-known
-//!   suffix inserted between its host and its path (RFC 8414 §3.1);
+//!   suffix inserted between its host and its path (RFC 8414 §3.1), as
+//!   `ferrohealth_smart::metadata::locations` builds it;
 //! - the metadata's `issuer` must be identical to it (RFC 8414 §3.3),
 //!   [`Issuer::is_identical_to`];
-//! - every endpoint the client sends to must be on the issuer's origin,
+//! - every endpoint the gateway sends to must be on the issuer's origin,
 //!   without userinfo or a fragment, [`Issuer::endpoint`];
-//! - a mutual-TLS endpoint alias (RFC 8705 §5) may also be on an `https`
-//!   host the client names beforehand, an [`AliasHost`],
-//!   [`Issuer::mtls_alias`];
-//! - an answer whose objects repeat a name at any depth is refused before it
-//!   is read, [`repeats_no_name`].
+//! - a mutual-TLS endpoint alias may also be on an `https` host the
+//!   deployment names beforehand, an [`AliasHost`], [`Issuer::mtls_alias`].
 //!
-//! Which members a profile reads beyond these, and what it requires of them,
-//! is the profile's own: the crate reads no member but through the caller.
-//! The crate depends on no application.
-//!
-//! ```
-//! use oauth_server_metadata::{EndpointError, Issuer};
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let issuer = Issuer::parse("https://as.example.org/tenant")?;
-//! let metadata = "https://as.example.org/.well-known/oauth-authorization-server/tenant";
-//! assert_eq!(metadata, issuer.metadata_url().as_str());
-//! assert!(issuer.is_identical_to("https://as.example.org/tenant"));
-//! let elsewhere = issuer.endpoint("https://elsewhere.example.org/token");
-//! assert_eq!(Err(EndpointError::OtherOrigin), elsewhere);
-//! # Ok(())
-//! # }
-//! ```
-#![doc(test(attr(deny(warnings))))]
+//! An answer whose objects repeat a name is refused before it is read with
+//! `ferrohealth_smart::metadata::repeats_no_name`. The issuer here admits
+//! `http` on any host for a test or development setup, which the
+//! configuration decides on, so it is not `ferrohealth-smart`'s issuer,
+//! which admits `http` on a loopback host only.
 
-use std::collections::BTreeSet;
 use std::fmt;
 
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use ferrohealth_smart::metadata;
 use url::Url;
-
-/// The well-known URI suffix of authorization server metadata (RFC 8414
-/// §3, §7.3).
-pub const WELL_KNOWN: &str = "/.well-known/oauth-authorization-server";
 
 /// An authorization server's issuer identifier (RFC 8414 §2).
 ///
@@ -190,10 +167,8 @@ impl Issuer {
     /// removed (RFC 8414 §3.1).
     #[must_use]
     pub fn metadata_url(&self) -> Url {
-        let mut url = self.url.clone();
-        let path = self.url.path().trim_end_matches('/');
-        url.set_path(&format!("{WELL_KNOWN}{path}"));
-        url
+        let [oauth, _openid] = metadata::locations(&self.url);
+        oauth
     }
 
     /// Whether `named`, the `issuer` a metadata document states, is this
@@ -271,85 +246,10 @@ fn canonical(text: &str, url: &Url) -> bool {
     text == url.as_str() || (url.path() == "/" && url.as_str().strip_suffix('/') == Some(text))
 }
 
-/// Proves that no object of the JSON text `body` repeats a name, at any
-/// depth.
-///
-/// RFC 8259 §4 leaves the meaning of an object with a repeated name to each
-/// parser, so two readers of one answer can take different values from it:
-/// an endpoint the client checks and one it sends to. An answer that repeats
-/// a name is refused instead (no specification governs this: our own
-/// design).
-///
-/// # Errors
-///
-/// Returns the reader's error for text that is no JSON, and a data error at
-/// the repeated name for one that repeats a name.
-pub fn repeats_no_name(body: &[u8]) -> Result<(), serde_json::Error> {
-    serde_json::from_slice::<Unique>(body).map(|Unique| ())
-}
-
-/// A JSON value read only to prove that no object in it repeats a name.
-struct Unique;
-
-impl<'de> Deserialize<'de> for Unique {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(UniqueVisitor)
-    }
-}
-
-struct UniqueVisitor;
-
-impl<'de> Visitor<'de> for UniqueVisitor {
-    type Value = Unique;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a JSON value whose objects repeat no name")
-    }
-
-    fn visit_bool<E: de::Error>(self, _value: bool) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_i64<E: de::Error>(self, _value: i64) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_u64<E: de::Error>(self, _value: u64) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_f64<E: de::Error>(self, _value: f64) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_str<E: de::Error>(self, _value: &str) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_unit<E: de::Error>(self) -> Result<Unique, E> {
-        Ok(Unique)
-    }
-
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Unique, A::Error> {
-        while seq.next_element::<Unique>()?.is_some() {}
-        Ok(Unique)
-    }
-
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Unique, A::Error> {
-        let mut names = BTreeSet::new();
-        while let Some(name) = map.next_key::<String>()? {
-            if !names.insert(name) {
-                return Err(de::Error::custom("an object repeats a name"));
-            }
-            map.next_value::<Unique>()?;
-        }
-        Ok(Unique)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferrohealth_smart::metadata::repeats_no_name;
 
     const ISSUER: &str = "https://as.example.org/oauth2/hospital";
 

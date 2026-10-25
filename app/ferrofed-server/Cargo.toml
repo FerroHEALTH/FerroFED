@@ -100,7 +100,6 @@ ihe-atna = { workspace = true, features = ["atna", "balp"] }
 nl-generic-functions = { workspace = true, optional = true, features = ["nuts-auth", "nvi"] }
 # The RFC 8414 issuer checks of an OAuth 2.0 or FAPI 2.0 grant's issuer
 # audience (#551).
-oauth-server-metadata.workspace = true
 # The version uid a follow-up read names, read for its creating_system_id
 # (§12.3, #64).
 openehr-base.workspace = true

@@ -271,10 +271,11 @@ Released on 2026-10-05. It carries §16 and §17.
   [#584](https://github.com/FerroHEALTH/FerroFED/issues/584),
   [#608](https://github.com/FerroHEALTH/FerroFED/issues/608)).
 - Each regional binding one module behind one feature, `binding-ihe` and
-  `binding-nl`, wired through one `Binding` trait, and RFC 8414 in a crate
-  of its own, `oauth-server-metadata`
+  `binding-nl`, wired through one `Binding` trait, with the RFC 8414
+  checks from the family's `ferrohealth-smart`
   ([#489](https://github.com/FerroHEALTH/FerroFED/issues/489),
-  [#551](https://github.com/FerroHEALTH/FerroFED/issues/551)).
+  [#551](https://github.com/FerroHEALTH/FerroFED/issues/551),
+  [#1342](https://github.com/FerroHEALTH/FerroFED/issues/1342)).
 - Mutual TLS to a node with RFC 8705 client authentication and
   certificate-bound tokens, with a token endpoint alias accepted on a host
   the operator names

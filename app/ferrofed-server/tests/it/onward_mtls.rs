@@ -21,6 +21,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::onward::ClientAuthentication;
+use ferrofed_engine::onward::issuer::AliasHost;
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
@@ -34,7 +35,6 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
-use oauth_server_metadata::AliasHost;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 

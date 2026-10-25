@@ -49,8 +49,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::onward::issuer::Issuer;
 use ferrofed_registry::secret::SecretUrl;
-use oauth_server_metadata::Issuer;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
 use secrecy::SecretString;
 use url::Url;
@@ -62,6 +62,7 @@ use crate::onward::mtls::{Thumbprint, TlsClientAuth};
 pub mod authorization_details;
 pub mod dpop;
 pub mod grant;
+pub mod issuer;
 pub mod keys;
 pub mod mtls;
 pub mod token;
