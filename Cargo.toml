@@ -30,8 +30,9 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family, moved together by the dependency sweep and checked
 # against docs/VERSIONS.md by scripts/checks/versions.sh. The pin is 0.0.90,
-# the line fhirconnect and ferrohealth-smart require exactly, so the lock holds
-# one copy (#1181); 0.0.89 and 0.0.90 add only openehr-sdt's party building
+# the line fhirconnect requires exactly (#1181); ferrohealth-smart 0.6.0
+# requires openehr-sdt 0.0.98, so the lock holds that crate twice until
+# fhirconnect moves (#1342); 0.0.89 and 0.0.90 add only openehr-sdt's party building
 # (FerroEHR #3810, #3832). 0.0.87 bounds the bytes the
 # ITS-REST client reads of one answer (FerroEHR #3600), unquotes a quoted GET
 # query parameter (FerroEHR #3781) and renders a column path with its AQL
@@ -300,8 +301,10 @@ ferrohealth-ui = { version = "=0.3.6", features = ["split"] }
 # users of [[auth.basic.users]], the refusal statuses and challenges, and the
 # client credentials grant of the plain onward and service credentials. It
 # checks tokens and never issues them. Pinned exactly, so every product moves
-# to a new version deliberately. Verified against crates.io on 2026-10-20.
-ferrohealth-smart = { version = "=0.4.0", default-features = false, features = ["fetch", "axum", "openehr"] }
+# to a new version deliberately. 0.6.0 adds the RFC 8414 issuer and origin
+# rules and token introspection (#1342). Verified against crates.io on
+# 2026-10-25.
+ferrohealth-smart = { version = "=0.6.0", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

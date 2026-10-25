@@ -392,9 +392,11 @@ AQL variable, which `columns[].path` now carries (#877).
 0.0.89, published on 2026-10-19, and 0.0.90, published on 2026-10-20, change
 nothing the gateway reads: they add the PARTY builder, the caller's
 `rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
-#3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect` and
-`ferrohealth-smart` require exactly 0.0.90, since a 0.0.x caret requirement
-admits one version.
+#3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect`
+requires exactly 0.0.90, since a 0.0.x caret requirement admits one version.
+`ferrohealth-smart` 0.6.0 requires `openehr-sdt` 0.0.98 behind its `openehr`
+feature, so the lock holds `openehr-sdt` at both versions until `fhirconnect`
+moves (#1342).
 
 ## FHIR model crate (crates.io)
 
