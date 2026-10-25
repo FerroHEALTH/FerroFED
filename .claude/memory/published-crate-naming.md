@@ -1,6 +1,6 @@
 ---
 name: published-crate-naming
-description: "Owner 2026-10-01: a crate that may be published carries the name of the specification it implements, never ferrofed-*; one crate per specification with a feature per layer or profile; FerroFED's own glue lives under app/; the first three names were claimed with 0.0.0 placeholders, oauth-server-metadata not yet"
+description: "Owner 2026-10-01: a crate that may be published carries the name of the specification it implements, never ferrofed-*; one crate per specification with a feature per layer or profile; FerroFED's own glue lives under app/; the first three names were claimed with 0.0.0 placeholders, oauth-server-metadata not yet and retired by #1342 as a copy of shared work"
 metadata:
   type: feedback
 ---
@@ -29,7 +29,9 @@ on anything called FerroFED.
   crates.io, and
   `oauth-server-metadata` (OAuth 2.0 Authorization Server Metadata, RFC 8414,
   split out of `nl-generic-functions` by #551 so the core and every binding
-  read it without depending on a national crate).
+  read it without depending on a national crate). It is a hand-written copy
+  of OAuth 2.0 work the shared `ferrohealth-smart` covers
+  ([[family-architecture]]), so #1342 retires it.
 - One crate per specification, with a feature per layer or profile
   (`openehr-federation`: `aql`, `merge`; `ihe-iti`: `pixm`, `pdqm`, `mcsd`,
   `pmir`, `xcpd`, with `atna` and `balp` turning on their audit records; `nl-generic-functions`: `nvi`, `mitz`,

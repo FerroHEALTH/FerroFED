@@ -1,6 +1,6 @@
 ---
 name: sibling-projects
-description: "FerroEHR (../FerroEHR, the reference CDR and publisher of the openehr-* crates), FerroTERM (../FerroTERM) and FerroBRIDGE (../FerroBRIDGE, the working-discipline template) are read-only prior art from FerroFED; a sibling change is made in that sibling's checkout on its own branch, and a tracker issue there may be filed when the owner asks"
+description: "The other FerroHEALTH products are servers FerroFED reaches only over their protocols: FerroEHR (../FerroEHR, the reference CDR and publisher of the openehr-* crates), FerroPIX (patient identity and the IHE profiles), FerroBRIDGE (../FerroBRIDGE, FHIR and OMOP, and the working-discipline template) and FerroTERM (../FerroTERM); all are read-only prior art, a sibling change is made in that sibling's checkout, and a tracker issue there may be filed when the owner asks"
 metadata:
   type: project
 ---
@@ -8,9 +8,9 @@ metadata:
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-FerroFED is one of the FerroHEALTH family (the family repository is
-`../FerroHEALTH`; its README lists the products and what calls what). The
-siblings checked out beside it on the owner's machine:
+FerroFED is one of the five FerroHEALTH products; [[family-architecture]]
+holds the table of what each one is and how the others reach it. The
+siblings:
 
 - **FerroEHR** at `../FerroEHR`: the openEHR CDR. It is the **reference
   node** for FerroFED, reached over ITS-REST like any other CDR, and it
@@ -18,11 +18,21 @@ siblings checked out beside it on the owner's machine:
   `openehr-its` for the ITS-REST client, `openehr-rm`, `openehr-base` and the
   rest, one lockstep line at the pin in `docs/VERSIONS.md`). The crates are
   dependencies by version from crates.io, never by path.
+- **FerroPIX**: the master patient index and the IHE profiles. Patient
+  identity is its lane: FerroFED reaches it as a client over IHE PIXm, PDQm
+  and PMIR, through the `ihe-iti` and `nl-generic-functions` crates FerroPIX
+  owns and publishes (#367), and never grows an index of its own. An
+  identity capability FerroFED needs that FerroPIX lacks is filed and built
+  there.
 - **FerroBRIDGE** at `../FerroBRIDGE` and **FerroTERM** at `../FerroTERM`:
-  the openEHR-to-FHIR-and-OMOP bridge and the FHIR terminology server. On
-  2026-10-01 the owner pointed at both as "the perfect way" to set up Claude
-  and GitHub; this repository's `.claude/`, `.github/` and `scripts/` were
-  carried from FerroBRIDGE, the newer of the two, and adapted.
+  the openEHR-to-FHIR-and-OMOP bridge and the FHIR terminology server. FHIR
+  is FerroBRIDGE's lane, so the openEHR and FHIR exchange format (`eehrxf`)
+  belongs there and moves there in one step (#813, A76). On 2026-10-01 the
+  owner pointed at both as "the perfect way" to set up Claude and GitHub;
+  this repository's `.claude/`, `.github/` and `scripts/` were carried from
+  FerroBRIDGE, the newer of the two, and adapted.
+- The shared-crate repositories (FerroAUTH, FerroAUDIT, FerroUI) carry the
+  cross-cutting work FerroFED consumes as exact pins.
 
 **How to apply:**
 
@@ -41,7 +51,8 @@ siblings checked out beside it on the owner's machine:
   [[openehr-crates-are-the-model]]): the request, such as a public reader on
   `openehr-query` for the AQL rewrite, goes in with its labels, and is
   recorded on the FerroFED issue that depends on it. Issues only; the code
-  stays theirs.
+  stays theirs. A gap in a shared crate is likewise built and released in
+  its owning repository, never copied here.
 - No sibling is an oracle. A running FerroEHR is evidence in a test; the
   specification is the authority (`.claude/rules/spec-adherence.md`).
 - Never copy code between repositories: each is its own Licensed Work, and a
