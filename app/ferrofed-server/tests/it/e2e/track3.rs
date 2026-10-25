@@ -38,7 +38,7 @@ fn undirected() -> String {
 }
 
 /// Asserts a `200` and returns the answer.
-fn answered(reply: &Reply) -> Result<Federated, Box<dyn std::error::Error>> {
+pub(crate) fn answered(reply: &Reply) -> Result<Federated, Box<dyn std::error::Error>> {
     assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
     reply.federated()
 }

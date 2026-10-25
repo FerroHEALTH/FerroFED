@@ -111,6 +111,13 @@ impl FerroPix {
         format!("{}{FHIR_PATH}", self.origin)
     }
 
+    /// Returns the SOAP endpoint of the XCPD Responding Gateway, when
+    /// FerroPIX was started with one.
+    #[must_use]
+    pub fn xcpd_endpoint(&self) -> String {
+        format!("{}/xcpd", self.origin)
+    }
+
     /// Returns the origin FerroPIX is reachable at from the host.
     #[must_use]
     pub fn origin(&self) -> &str {
@@ -130,11 +137,53 @@ impl FerroPix {
     }
 }
 
+/// FerroPIX's XCPD Responding Gateway (ITI TF-2 §3.55), which answers
+/// ITI-55 at `POST {base}/xcpd`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Xcpd {
+    /// The gateway's `homeCommunityId`, in dotted form.
+    pub home_community: String,
+    /// The OID of the gateway's device.
+    pub device: String,
+    /// The `urn:oid:` systems of the domains whose identifiers an answer
+    /// carries.
+    pub domains: Vec<String>,
+    /// The `homeCommunityId`s, in dotted form, of the initiating
+    /// communities the gateway answers.
+    pub initiating: Vec<String>,
+}
+
+impl Xcpd {
+    /// The `[xcpd]` table of FerroPIX's configuration.
+    fn table(&self) -> String {
+        let quoted = |values: &[String], prefix: &str| {
+            values
+                .iter()
+                .map(|value| format!("\"{prefix}{value}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        format!(
+            "\n[xcpd]\nenabled = true\nhome_community_id = \"urn:oid:{}\"\ndevice = \"{}\"\n\
+             domains = [{}]\ninitiating_communities = [{}]\n",
+            self.home_community,
+            self.device,
+            quoted(&self.domains, ""),
+            quoted(&self.initiating, "urn:oid:")
+        )
+    }
+}
+
 /// Returns FerroPIX's configuration: the development profile, its database
 /// at `database_host`, the two Basic users, an authoritative domain per
 /// system of `authoritative` and a local one per system of `local`, each fed
-/// by [`SOURCE`].
-fn config(database_host: &str, authoritative: &[String], local: &[String]) -> String {
+/// by [`SOURCE`], and the Responding Gateway `xcpd` when one is given.
+fn config(
+    database_host: &str,
+    authoritative: &[String],
+    local: &[String],
+    xcpd: Option<&Xcpd>,
+) -> String {
     let mut text = format!(
         "profile = \"development\"\n\n\
          [server]\nlisten = \"0.0.0.0:{PORT}\"\npublic_base_url = \"http://ferropix.example.org\"\n\n\
@@ -163,6 +212,9 @@ fn config(database_host: &str, authoritative: &[String], local: &[String]) -> St
             SOURCE.user
         );
     }
+    if let Some(xcpd) = xcpd {
+        text.push_str(&xcpd.table());
+    }
     text
 }
 
@@ -176,6 +228,30 @@ fn config(database_host: &str, authoritative: &[String], local: &[String]) -> St
 pub async fn ferropix(
     authoritative: &[String],
     local: &[String],
+) -> Result<FerroPix, HarnessError> {
+    start(authoritative, local, None).await
+}
+
+/// Starts FerroPIX as [`ferropix`] does, its XCPD Responding Gateway `xcpd`
+/// switched on.
+///
+/// # Errors
+///
+/// The errors of [`ferropix`].
+pub async fn ferropix_responding(
+    authoritative: &[String],
+    local: &[String],
+    xcpd: &Xcpd,
+) -> Result<FerroPix, HarnessError> {
+    start(authoritative, local, Some(xcpd)).await
+}
+
+/// Starts FerroPIX with the domains `authoritative` and `local` and the
+/// Responding Gateway `xcpd` when one is given.
+async fn start(
+    authoritative: &[String],
+    local: &[String],
+    xcpd: Option<&Xcpd>,
 ) -> Result<FerroPix, HarnessError> {
     let (network, host) = names("ferropix");
     let database = retry::start(|| {
@@ -197,7 +273,7 @@ pub async fn ferropix(
         source,
     })?;
     let image = FERROPIX.repository;
-    let configuration = config(&host, authoritative, local);
+    let configuration = config(&host, authoritative, local, xcpd);
     let server = retry::start(|| {
         FERROPIX
             .image()
@@ -237,6 +313,7 @@ mod tests {
             "db",
             &["urn:oid:2.999.1".to_owned()],
             &["urn:oid:2.999.2.1".to_owned()],
+            None,
         );
         assert!(text.starts_with("profile = \"development\""));
         assert_eq!(2, text.matches("[[domain]]").count());
