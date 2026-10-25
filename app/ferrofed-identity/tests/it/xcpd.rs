@@ -118,7 +118,7 @@ async fn the_communities_a_broadcast_names_are_the_candidates() -> TestResult {
         other => return Err(format!("a candidate set (N4): {other:?}").into()),
     }
     for stub in [&first, &second] {
-        let requests = stub.requests().await;
+        let requests = stub.requests().await?;
         assert_eq!(1, requests.len(), "every gateway is asked once");
         assert!(
             requests[0].contains(PATIENT_VALUE),
@@ -210,7 +210,7 @@ async fn the_assertion_source_rides_on_every_request() -> TestResult {
         &registry(),
     )?;
     let _answer = localize(&localizer).await?;
-    let requests = stub.requests().await;
+    let requests = stub.requests().await?;
     assert!(requests[0].contains(
         r#"<saml2:Assertion xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion" ID="_s"/>"#
     ));

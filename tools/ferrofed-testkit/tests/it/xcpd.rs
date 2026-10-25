@@ -81,6 +81,6 @@ async fn each_answer_reads_as_its_case() -> TestResult {
         ask(&stub, "SYNTH-SILENT").await?,
         Err(XcpdError::Timeout)
     ));
-    assert_eq!(5, stub.requests().await.len(), "every request is recorded");
+    assert_eq!(5, stub.requests().await?.len(), "every request is recorded");
     Ok(())
 }

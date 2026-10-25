@@ -103,7 +103,7 @@ async fn iti_90_records_in_the_log_name_no_query_parameter() -> TestResult {
     let _gateway = Gateway::boot_from(&format!("{}{LOG}", config(&harness.base(), 5_000)))?;
     let log = logs.text();
     assert_eq!(2, records(&log, "ITI-90").len(), "{log}");
-    for asked in harness.requests().await {
+    for asked in harness.requests().await? {
         let Some((_, query)) = asked.split_once('?') else {
             continue;
         };

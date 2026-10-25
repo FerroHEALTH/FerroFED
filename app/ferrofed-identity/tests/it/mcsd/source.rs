@@ -139,7 +139,7 @@ async fn a_refresh_asks_from_a_minute_before_the_directorys_clock() -> TestResul
         matches!(refreshed, Refreshed::Unchanged(_)),
         "{refreshed:?}"
     );
-    let requests = harness.requests().await;
+    let requests = harness.requests().await?;
     assert!(
         requests
             .iter()

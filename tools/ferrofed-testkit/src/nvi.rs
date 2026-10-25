@@ -156,23 +156,29 @@ impl LocalizationService {
     }
 
     /// The query string of every search the device received, in order.
-    pub async fn searches(&self) -> Vec<String> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn searches(&self) -> Result<Vec<String>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| request.url.query().unwrap_or_default().to_owned())
-            .collect()
+            .collect())
     }
 
     /// The value of the `header` of every search the device received, in
     /// order, empty for a search without it.
-    pub async fn headers(&self, header: &str) -> Vec<String> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn headers(&self, header: &str) -> Result<Vec<String>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| {
                 request
@@ -182,7 +188,7 @@ impl LocalizationService {
                     .unwrap_or_default()
                     .to_owned()
             })
-            .collect()
+            .collect())
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {

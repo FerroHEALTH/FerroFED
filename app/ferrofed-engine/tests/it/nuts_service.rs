@@ -104,7 +104,7 @@ async fn the_search_carries_the_dpop_bound_nuts_token() -> TestResult {
     assert_eq!(1, setup.authority.issued());
     let [authorization] = nvi
         .headers("authorization")
-        .await
+        .await?
         .try_into()
         .map_err(|all| format!("one search: {all:?}"))?;
     let token = authorization
@@ -112,7 +112,7 @@ async fn the_search_carries_the_dpop_bound_nuts_token() -> TestResult {
         .ok_or("the DPoP scheme")?;
     let [proof] = nvi
         .headers(dpop::HEADER)
-        .await
+        .await?
         .try_into()
         .map_err(|_all| "one proof")?;
     let verified = dpop::verify(
@@ -143,7 +143,7 @@ async fn the_pseudonym_reaches_neither_the_authorization_server_nor_a_proof() ->
             );
         }
     }
-    for proof in nvi.headers(dpop::HEADER).await {
+    for proof in nvi.headers(dpop::HEADER).await? {
         let claims = String::from_utf8(ferrofed_testkit::nuts::payload(&proof)?)?;
         assert!(!claims.contains(PSEUDONYM), "a proof names the pseudonym");
     }
@@ -188,7 +188,7 @@ async fn a_refused_grant_sends_the_service_nothing() -> TestResult {
     };
     assert!(matches!(error, NviError::Unauthenticated(_)), "{error:?}");
     assert!(
-        nvi.searches().await.is_empty(),
+        nvi.searches().await?.is_empty(),
         "the service was sent nothing"
     );
     let mut rendered = format!("{error} {error:?}");
@@ -251,11 +251,11 @@ async fn a_nonce_the_service_demands_is_answered_once() -> TestResult {
     client.localize(&patient()?, PROMPT).await?;
     assert_eq!(
         2,
-        nvi.searches().await.len(),
+        nvi.searches().await?.len(),
         "the challenge and the resend"
     );
     client.localize(&patient()?, PROMPT).await?;
-    assert_eq!(3, nvi.searches().await.len(), "the nonce is kept");
+    assert_eq!(3, nvi.searches().await?.len(), "the nonce is kept");
     assert_eq!(
         1,
         setup.authority.issued(),

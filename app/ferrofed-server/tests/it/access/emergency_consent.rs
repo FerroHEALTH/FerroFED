@@ -213,7 +213,7 @@ async fn under_mitz_the_question_is_still_asked_and_the_denial_set_aside() -> Te
         node_b,
     } = asked(PASS_TO_NODE, &identity, &claims).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert!(!mitz.questions().await.is_empty(), "Mitz is still asked");
+    assert!(!mitz.questions().await?.is_empty(), "Mitz is still asked");
     assert_eq!(1, received(&node_b).await?.len(), "N27: node B decides");
     assert_eq!(details(&record, MARK, SET_ASIDE), ["node-b"], "{record}");
     Ok(())

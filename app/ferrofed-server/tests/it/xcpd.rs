@@ -198,7 +198,7 @@ async fn the_communities_xcpd_discovers_select_the_members_asked() -> TestResult
     );
     assert_eq!([1, 1, 0], asked_counts(&servers).await?);
     for stub in [&holding, &empty] {
-        let requests = stub.requests().await;
+        let requests = stub.requests().await?;
         assert_eq!(
             1,
             requests.len(),
@@ -613,7 +613,7 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
     let request = crate::auth::bearing(post(body(&other)?)?, &token)?;
     let (status, _, refused) = crate::auth::sent(&app, request).await?;
     let audited_for_other = audit_events(&logs.text());
-    let requests_for_other = holding.requests().await.len();
+    let requests_for_other = holding.requests().await?.len();
     let members_for_other = asked_counts(&servers).await?;
     let request = crate::auth::bearing(post(body(&patient_query())?)?, &token)?;
     let (own, _, answered) = crate::auth::sent(&app, request).await?;
@@ -628,7 +628,7 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
     assert_eq!(StatusCode::OK, own, "{answered}");
     assert_eq!(
         1,
-        holding.requests().await.len(),
+        holding.requests().await?.len(),
         "the own patient is localized"
     );
     assert_eq!(1, audit_events(&logs.text()), "and audited once");

@@ -149,7 +149,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
         received(&node_a).await?.is_empty() && received(&node_b).await?.is_empty(),
         "no member is asked"
     );
-    assert_eq!(1, holding.requests().await.len(), "the discovery was made");
+    assert_eq!(1, holding.requests().await?.len(), "the discovery was made");
     for node in [&node_a, &node_b] {
         assert!(!wire(node).await?.contains(PATIENT), "N33");
     }

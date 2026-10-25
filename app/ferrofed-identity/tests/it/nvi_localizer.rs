@@ -113,7 +113,7 @@ async fn a_namespace_the_configuration_lists_stands_for_the_pseudonym() -> TestR
     )
     .await?;
     assert_eq!(candidates(&localization)?, ["node-a"]);
-    let searches = service.searches().await;
+    let searches = service.searches().await?;
     assert_eq!(searches.len(), 1);
     Ok(())
 }
@@ -190,7 +190,7 @@ async fn a_patient_named_by_anything_but_the_pseudonym_is_never_sent() -> TestRe
     };
     let text = format!("{error} {error:?}");
     assert!(!text.contains("12345"), "{text}");
-    assert!(service.searches().await.is_empty(), "nothing was asked");
+    assert!(service.searches().await?.is_empty(), "nothing was asked");
     Ok(())
 }
 

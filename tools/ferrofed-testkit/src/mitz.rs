@@ -134,14 +134,17 @@ impl Mitz {
     }
 
     /// The body of every question the device received, in order.
-    pub async fn questions(&self) -> Vec<String> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn questions(&self) -> Result<Vec<String>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| String::from_utf8_lossy(&request.body).into_owned())
-            .collect()
+            .collect())
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
