@@ -73,7 +73,6 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "openehr-federation" },
   { allow = ["BUSL-1.1"], crate = "ihe-iti" },
   { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
-  { allow = ["BUSL-1.1"], crate = "oauth-server-metadata" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
   { allow = ["BUSL-1.1"], crate = "ihe-atna" },
   { allow = ["BUSL-1.1"], crate = "eehrxf" },

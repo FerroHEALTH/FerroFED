@@ -56,8 +56,8 @@ attaches (#546, #573), with the matrix closed and the conformance statement
 written (#89, #95). It also carries the
 regional binding refactor: one `Binding` trait with the `binding-ihe` and
 `binding-nl` features of the server, `ihe` and `nl` of the identity crate and
-`nl` of the engine, and RFC 8414 in its own crate, `oauth-server-metadata`
-(#489, #551); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
+`nl` of the engine, and RFC 8414 in its own crate (#489, #551), retired onto
+`ferrohealth-smart` 0.6.0 (#1342); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
 the engine's onward grants under `onward::grant` beside `single_node`
 (#587, #588); mutual TLS to a node with RFC 8705 client authentication and
 certificate-bound tokens (#492, #560); DPoP proofs read from `openehr-its`
@@ -253,9 +253,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   profile, publishable only through the workspace `publish` switch (#106):
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
-  `merge`), `oauth-server-metadata` (RFC 8414,
-  the issuer and the checks a client holds authorization server metadata to,
-  with no feature; #551), and the interoperability component of Regulation
+  `merge`), and the interoperability component of Regulation
   (EU) 2025/327 (decision A58), `eehrxf` (the interoperability
   component: the format-neutral dataset model read from the Xt-EHR logical
   models package, one feature per Art 14(1) category, `fhir-r4`, the FHIR

@@ -15,13 +15,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
+use ferrofed_engine::onward::issuer::Issuer;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::{AssertionAudience, Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
 use jsonwebtoken::Algorithm;
-use oauth_server_metadata::Issuer;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;
 

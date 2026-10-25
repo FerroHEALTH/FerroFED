@@ -16,8 +16,9 @@ products".
 **Decided:** the layout separates the specification crates under `crates/`
 (`openehr-federation` with the hand-written wire types behind the two
 published JSON Schemas, no FerroFED generator by decision A33;
-`oauth-server-metadata`, split out by #551, is a hand-written copy of what
-the shared `ferrohealth-smart` covers and is retired by #1342; `ihe-iti` and
+`oauth-server-metadata`, split out by #551, was retired by #1342 onto the
+shared `ferrohealth-smart`, the issuer and alias-host rules kept in the
+engine's `onward::issuer`; `ihe-iti` and
 `nl-generic-functions` moved to FerroHEALTH/FerroPIX by #367 and are pinned
 from crates.io) from
 FerroFED's own glue under `app/`; the crate map is `docs/architecture.md`

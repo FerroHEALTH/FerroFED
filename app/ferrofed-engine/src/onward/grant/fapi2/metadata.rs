@@ -44,9 +44,9 @@
 
 use std::time::Duration;
 
+use crate::onward::issuer::EndpointError;
 use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
-use oauth_server_metadata::EndpointError;
 use openehr_its::rest::client::{RequestTimeout, Transport, TransportError};
 use serde::Deserialize;
 use url::Url;
@@ -221,7 +221,7 @@ pub(crate) async fn discover<T: Transport>(
 
 /// Reads `body`, the metadata of `grant`'s issuer, as [`discover`] holds it.
 fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
-    oauth_server_metadata::repeats_no_name(body).map_err(DiscoveryError::Body)?;
+    ferrohealth_smart::metadata::repeats_no_name(body).map_err(DiscoveryError::Body)?;
     let raw: Raw = serde_json::from_slice(body).map_err(DiscoveryError::Body)?;
     let issuer = grant.issuer();
     if !raw

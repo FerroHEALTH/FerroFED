@@ -1333,7 +1333,7 @@ jobs:
       - run: >-
           cargo hack clippy --locked --each-feature --all-targets
           --package openehr-federation
-          --package oauth-server-metadata --package eehrxf
+          --package eehrxf
           --package ferrofed-identity --package ferrofed-engine
           --package ferrofed-server
           -- -D warnings

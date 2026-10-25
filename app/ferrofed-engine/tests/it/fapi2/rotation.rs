@@ -100,7 +100,7 @@ async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -
     let key = client_key()?;
     let server = server(&key).await;
     let by_certificate = Fapi2Grant::secured(
-        oauth_server_metadata::Issuer::parse(&server.issuer())?,
+        ferrofed_engine::onward::issuer::Issuer::parse(&server.issuer())?,
         super::CLIENT_ID,
         Fapi2Security {
             client_auth: ClientAuthentication::Tls(TlsClientAuth::SelfSigned),

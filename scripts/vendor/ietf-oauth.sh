@@ -15,8 +15,8 @@
 # The GF-Authentication pages of the Netherlands Generic Functions IG cite
 # RFC 6749, 7523, 7662 and 9449; Nuts RFC021 builds on RFC 7521, 7519 and
 # 8414; the BgZ/eOverdracht track of Annex B §B.4a names RFC 9126 (through
-# FAPI 2.0) and RFC 9396. The crate crates/oauth-server-metadata (#551) reads
-# RFC 8414, and the Nuts grant of nl-generic-functions feature
+# FAPI 2.0) and RFC 9396. The engine's onward::issuer reads RFC 8414 (#551,
+# #1342), and the Nuts grant of nl-generic-functions feature
 # `nuts-auth` (#88) and the FAPI 2.0 grant of app/ferrofed-engine (#497) hold
 # their authorization server metadata to it. The Nuts grant reads RFC 9449,
 # and the onward grants of app/ferrofed-engine read RFC 8705 (#492). The

@@ -24,7 +24,6 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/ihe-iti/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/nl-generic-functions/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/crates/oauth-server-metadata/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

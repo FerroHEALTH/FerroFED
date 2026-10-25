@@ -41,9 +41,6 @@ ferrohealth-smart.workspace = true
 # (#539), under nl. Neither feature compiles a FHIR model, so the engine
 # builds none (#730).
 nl-generic-functions = { workspace = true, optional = true, features = ["authorizer", "nuts-auth"] }
-# The authorization server metadata checks (RFC 8414) the OAuth 2.0 issuer
-# audience and the FAPI 2.0 grant hold their server to (#497, #551).
-oauth-server-metadata.workspace = true
 # The typed `ehr_id` a node query is scoped to (#45).
 openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["merge"] }

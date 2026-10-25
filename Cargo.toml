@@ -55,7 +55,6 @@ openehr-sdt = { version = "0.0.90", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.52" }
-oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
 # and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a

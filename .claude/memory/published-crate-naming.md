@@ -1,6 +1,6 @@
 ---
 name: published-crate-naming
-description: "Owner 2026-10-01: a crate that may be published carries the name of the specification it implements, never ferrofed-*; one crate per specification with a feature per layer or profile; FerroFED's own glue lives under app/; the first three names were claimed with 0.0.0 placeholders, oauth-server-metadata not yet and retired by #1342 as a copy of shared work"
+description: "Owner 2026-10-01: a crate that may be published carries the name of the specification it implements, never ferrofed-*; one crate per specification with a feature per layer or profile; FerroFED's own glue lives under app/; the first three names were claimed with 0.0.0 placeholders; oauth-server-metadata was retired by #1342 as a copy of shared work"
 metadata:
   type: feedback
 ---
@@ -26,16 +26,13 @@ on anything called FerroFED.
   with AQL), `ihe-iti` (the IHE IT Infrastructure profiles) and
   `nl-generic-functions` (the Dutch Generic Functions), both owned and
   published by FerroHEALTH/FerroPIX since #367 and pinned here from
-  crates.io, and
-  `oauth-server-metadata` (OAuth 2.0 Authorization Server Metadata, RFC 8414,
-  split out of `nl-generic-functions` by #551 so the core and every binding
-  read it without depending on a national crate). It is a hand-written copy
-  of OAuth 2.0 work the shared `ferrohealth-smart` covers
-  ([[family-architecture]]), so #1342 retires it.
+  crates.io. `oauth-server-metadata` (RFC 8414, split out by #551) was
+  retired by #1342: the shared `ferrohealth-smart` carries that OAuth 2.0
+  work ([[family-architecture]]).
 - One crate per specification, with a feature per layer or profile
   (`openehr-federation`: `aql`, `merge`; `ihe-iti`: `pixm`, `pdqm`, `mcsd`,
   `pmir`, `xcpd`, with `atna` and `balp` turning on their audit records; `nl-generic-functions`: `nvi`, `mitz`,
-  `lrza`, `nuts-auth`; `oauth-server-metadata` has none), so a caller
+  `lrza`, `nuts-auth`), so a caller
   compiles only what it uses. A new crate is the exception, for a new
   specification.
 - A published crate depends on nothing in FerroFED. It may depend on another
@@ -45,8 +42,7 @@ on anything called FerroFED.
 - Before a name is used, it is claimed on crates.io with a 0.0.0 placeholder
   that holds the name and contains no API (the first three above, published
   from outside the workspace on 2026-10-01), and the crate's line in the
-  workspace starts at 0.0.1. `oauth-server-metadata` was not yet claimed when
-  read on 2026-10-05. Publishing stays behind the workspace switch
+  workspace starts at 0.0.1. Publishing stays behind the workspace switch
   ([[crate-split]]).
 - The layout landed with #106; `docs/architecture.md` §11 and decision A34 are
   the design of record.
