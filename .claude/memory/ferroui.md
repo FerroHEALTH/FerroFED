@@ -35,5 +35,6 @@ submodule or a path dependency (owner, 2026-10-18).
   states; each image is read, every defect (overflow, bad wrapping,
   misalignment, dead space, contrast) is fixed and recaptured, and the
   orchestrator reviews the screenshots before a merge or tag.
-- **Theme switch:** FerroEHR's moon and sun icon button in the top bar, the
-  choice kept in the server cookie written as `data-theme`.
+- **Theme choice:** in the preferences (Appearance, as preview cards) and the
+  user menu, read and written through `ferrohealth_ui::theme`, kept in a
+  cookie and written on `<html>` as `data-theme`, with no top-bar toggle.
