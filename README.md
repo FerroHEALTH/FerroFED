@@ -2,9 +2,16 @@
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 <div align="center">
 
-<img src="assets/brand/ferrofed-lockup-auto.svg" alt="FerroFED" height="64">
+<img src="assets/brand/ferrofed-lockup-auto.svg" alt="FerroFED" width="290">
 
 **The openEHR federation gateway: one query, answered from every organisation that holds the patient's record.**
+
+[Documentation](https://ferrofed.eu/docs/) ·
+[Quick start](#quick-start) ·
+[What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html) ·
+[Licensing](https://ferrohealth.eu/docs/licensing.html)
+
+</div>
 
 **Project**<br>
 [![Release](https://img.shields.io/github/v/release/FerroHEALTH/FerroFED?sort=semver&logo=github&label=release)](https://github.com/FerroHEALTH/FerroFED/releases/latest)
@@ -32,13 +39,6 @@
 <!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
 [![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
-
-[Documentation](https://ferrofed.eu/docs/) ·
-[Quick start](#quick-start) ·
-[What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html) ·
-[Licensing](https://ferrohealth.eu/docs/licensing.html)
-
-</div>
 
 ## What FerroFED does
 
