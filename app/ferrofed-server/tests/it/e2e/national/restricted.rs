@@ -249,9 +249,14 @@ async fn a_patient_every_member_restricts_is_looked_up_as_one_no_member_holds() 
             ),
         )
         .await?;
-    let unknown = harness
-        .gateway(unknown_dir.path(), &crossref(&[], &[]))
-        .await?;
+    // NOTE: no specification governs this: our own design; the cross-reference knows another
+    // synthetic patient alone, so it is configured and holds the test patient nowhere.
+    let elsewhere = format!(
+        "{}{}",
+        crossref(&[], &[]),
+        crossref_row(&PATIENT.namespace(), "SYNTHETIC-OTHER-3", "node-a", EHR_A)
+    );
+    let unknown = harness.gateway(unknown_dir.path(), &elsewhere).await?;
     let held = national(&PATIENT.namespace(), &PATIENT.value());
     let patient = patient_id(&held);
 
