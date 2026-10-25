@@ -102,6 +102,7 @@ mod track6;
 mod track7;
 mod track9;
 mod track9_surface;
+mod xcpd;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

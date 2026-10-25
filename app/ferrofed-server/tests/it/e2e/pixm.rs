@@ -8,7 +8,7 @@
 use std::error::Error;
 
 use ferrofed_testkit::containers;
-use ferrofed_testkit::containers::ferropix::{self, CONSUMER, FerroPix, SOURCE};
+use ferrofed_testkit::containers::ferropix::{self, CONSUMER, FerroPix, SOURCE, Xcpd};
 use ferrofed_testkit::proxy::CapturingProxy;
 use ferrofed_testkit::seed::{self, CrossReferenceSeed, DemoComposition, EhrDomain, PatientId};
 use http::StatusCode;
@@ -48,6 +48,11 @@ impl Pix {
         self.manager.origin()
     }
 
+    /// Returns the SOAP endpoint of FerroPIX's XCPD Responding Gateway.
+    pub(crate) fn xcpd_endpoint(&self) -> String {
+        self.manager.xcpd_endpoint()
+    }
+
     /// Returns how many ITI-83 calls reached FerroPIX through the proxy.
     pub(crate) fn queries(&self) -> usize {
         self.proxy
@@ -62,6 +67,15 @@ impl Pix {
 /// `ehrs`, plus an unrelated patient so both domains are known.
 pub(crate) async fn nodes_and_pix(
     ehrs: Vec<(EhrDomain, Uuid)>,
+) -> Result<(containers::TwoNodes, Pix), Box<dyn Error>> {
+    nodes_and_responding_pix(ehrs, None).await
+}
+
+/// The two nodes and FerroPIX of [`nodes_and_pix`], FerroPIX's XCPD
+/// Responding Gateway `xcpd` switched on when one is given.
+pub(crate) async fn nodes_and_responding_pix(
+    ehrs: Vec<(EhrDomain, Uuid)>,
+    xcpd: Option<&Xcpd>,
 ) -> Result<(containers::TwoNodes, Pix), Box<dyn Error>> {
     let nodes = containers::two_nodes().await?;
     seed::seed(
@@ -80,7 +94,11 @@ pub(crate) async fn nodes_and_pix(
     if OTHER.namespace() != PATIENT.namespace() {
         namespaces.push(OTHER.namespace());
     }
-    let manager = ferropix::ferropix(&namespaces, &[DOMAIN_A.system(), DOMAIN_B.system()]).await?;
+    let locals = [DOMAIN_A.system(), DOMAIN_B.system()];
+    let manager = match xcpd {
+        Some(xcpd) => ferropix::ferropix_responding(&namespaces, &locals, xcpd).await?,
+        None => ferropix::ferropix(&namespaces, &locals).await?,
+    };
     let fed = [
         CrossReferenceSeed {
             patient: PATIENT,
