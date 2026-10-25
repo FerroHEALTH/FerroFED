@@ -53,8 +53,9 @@ Security fixes until 2031-10-25, 5 years from this release (Regulation (EU) 2024
 
 - The three medication clusters of the openEHR international Clinical
   Knowledge Manager that the medication order's slots admit,
-  `CLUSTER.medication_authorisation`, `CLUSTER.medication_order_summary` and
-  `CLUSTER.medication_supply_amount` (all DRAFT v0), vendored under CC BY-SA
+  `openEHR-EHR-CLUSTER.medication_authorisation.v0`,
+  `openEHR-EHR-CLUSTER.medication_order_summary.v0` and
+  `openEHR-EHR-CLUSTER.medication_supply_amount.v0` (all DRAFT), vendored under CC BY-SA
   by `scripts/vendor/openehr-ckm.sh` for the openEHR mapping of
   prescriptions (#1043).
 - The console is ready for more languages: every string it draws, its
