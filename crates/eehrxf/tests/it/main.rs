@@ -17,6 +17,9 @@ mod crosswalk;
 #[cfg(test)]
 mod dataset;
 #[cfg(test)]
+#[cfg(feature = "discharge")]
+mod discharge;
+#[cfg(test)]
 #[cfg(all(feature = "openehr", feature = "patient-summary"))]
 mod document;
 #[cfg(test)]

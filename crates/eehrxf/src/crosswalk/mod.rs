@@ -14,6 +14,8 @@
 //! packages they name, so a re-pinned package that moves an element, a slice
 //! or an obligation fails the check.
 
+#[cfg(feature = "discharge")]
+pub mod discharge;
 #[cfg(feature = "dispensation")]
 pub mod dispensation;
 #[cfg(feature = "patient-summary")]
@@ -36,6 +38,10 @@ use crate::dataset::ResourceProfile;
 /// FHIR Obligation Codes, `SHOULD:able-to-populate`
 /// (<https://hl7.org/fhir/extensions/CodeSystem-obligation.html>).
 pub const SHOULD_POPULATE: &str = "SHOULD:able-to-populate";
+
+/// The canonical URL of the FHIR R4 `Resource` definition, the target of a
+/// reference that admits a resource of any type.
+pub const ANY_RESOURCE: &str = "http://hl7.org/fhir/StructureDefinition/Resource";
 
 /// What the obligations profile asks of a producer for one element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -149,7 +155,8 @@ impl Crosswalk<'_> {
     /// every row names an element of the model, once, with the producer
     /// obligation the obligations profile puts on it, eHealth Network ids of
     /// its catalogue, and an element of the profile whose types admit every
-    /// context profile the row lists; every element a producer
+    /// context profile the row lists (a reference to [`ANY_RESOURCE`] admits
+    /// any); every element a producer
     /// `SHALL:able-to-populate` has a row; every required slice of the
     /// sliced element is named by a row; and every gap names a row that
     /// carries its eHealth Network id.
@@ -245,10 +252,12 @@ impl Crosswalk<'_> {
             // NOTE: FHIR R4 References, canonical (<https://hl7.org/fhir/R4/references.html#canonical>):
             // a canonical may carry a `|version` suffix, so a target is compared without it.
             let admitted = element.target_profiles().iter().any(|target| {
-                target
+                let target = target
                     .split_once('|')
-                    .map_or(target.as_str(), |(url, _)| url)
-                    == *context
+                    .map_or(target.as_str(), |(url, _)| url);
+                // NOTE: FHIR R4 ElementDefinition.type.targetProfile (<https://hl7.org/fhir/R4/elementdefinition-definitions.html#ElementDefinition.type.targetProfile>):
+                // a reference that targets `Resource` admits a resource of any type.
+                target == *context || target == ANY_RESOURCE
             });
             if !admitted {
                 defects.push(Defect::Context {

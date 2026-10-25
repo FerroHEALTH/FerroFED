@@ -25,10 +25,13 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   FHIRconnect context may map to in order to feed each. `Crosswalk::check`
   holds the rows to the packages they name. The patient summary
   (`crosswalk::patient_summary`, feature `patient-summary`), the electronic
-  prescription (`crosswalk::prescription`, feature `prescription`) and the
+  prescription (`crosswalk::prescription`, feature `prescription`), the
   electronic dispensation (`crosswalk::dispensation`, feature
-  `dispensation`) carry one, the last two against the HL7 Europe MPD 1.0.0
-  `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles.
+  `dispensation`) and the discharge report (`crosswalk::discharge`, feature
+  `discharge`) carry one, the two medication ones against the HL7 Europe MPD
+  1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles
+  and the discharge report against the HL7 Europe Hospital Discharge Report
+  1.0.0 `composition-eu-hdr` profile.
 - `fhir-r4`: the FHIR R4 serialisation of the exchange format. It compiles
   the R4 resources and no openEHR crate.
 - `mapping` (feature `openehr`, which turns on `fhir-r4`): FHIRconnect 1.0.0
