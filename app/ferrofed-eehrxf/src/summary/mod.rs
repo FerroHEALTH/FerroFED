@@ -635,12 +635,26 @@ fn covered_elsewhere(elsewhere: &[Elsewhere]) -> Vec<String> {
 /// which the EPS `Patient` requires, then carries a `data-absent-reason` of
 /// `unknown` (eHN PS Art 10(5)).
 fn patient(request: &Request) -> Patient {
-    let header = &request.header;
+    header_patient(
+        &request.patient_id,
+        (&request.system, &request.value),
+        &request.header,
+    )
+}
+
+/// Returns the `Patient` with the id `id` that the identity binding's
+/// `header` describes, named by the identifier `system`|`value` it was asked
+/// by, each element as the binding gives it.
+///
+/// An element the binding does not hold is left out, and the birth date
+/// then carries a `data-absent-reason` of `unknown` (eHN PS Art 10(5)).
+#[must_use]
+pub fn header_patient(id: &str, (system, value): (&str, &str), header: &PatientHeader) -> Patient {
     Patient {
-        id: Some(request.patient_id.clone()),
+        id: Some(id.to_owned()),
         identifier: vec![Identifier {
-            system: Some(request.system.as_str().into()),
-            value: Some(request.value.as_str().into()),
+            system: Some(system.into()),
+            value: Some(value.into()),
             ..Identifier::default()
         }],
         name: header.names.iter().map(human_name).collect(),

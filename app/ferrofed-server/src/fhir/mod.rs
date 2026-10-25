@@ -11,7 +11,8 @@
 //! document in the exchange format, at the `Bundle` end-point FHIR R4
 //! documents §3.3.4 names (Annex II 2.2 and 2.3), and
 //! `GET {fhir-base}/DocumentReference` lists the summaries that exist for a
-//! patient ([`ferrofed_eehrxf::list`]). `MedicationRequest` and
+//! patient ([`ferrofed_eehrxf::list`]), and `GET {fhir-base}/Patient` looks a
+//! patient up by identifier ([`ferrofed_eehrxf::lookup`]). `MedicationRequest` and
 //! `MedicationDispense` answer a category no member is declared for as not
 //! served ([`medication`]). Every other path under the base is a
 //! `404`. A summary runs the gateway's own section queries over
@@ -68,6 +69,7 @@ mod binary;
 pub mod errors;
 mod list;
 pub mod locator;
+mod lookup;
 pub mod medication;
 
 /// The path of the summary operation under `{fhir-base}`.
@@ -83,6 +85,10 @@ pub const BUNDLE: &str = "/Bundle";
 /// The path of the document list under `{fhir-base}`, the
 /// `DocumentReference` search-type interaction.
 pub const DOCUMENTS: &str = "/DocumentReference";
+
+/// The path of the patient lookup under `{fhir-base}`, the `Patient`
+/// search-type interaction.
+pub const PATIENTS: &str = "/Patient";
 
 /// The product name the document's author `Device` and the capability
 /// statement carry.
@@ -100,9 +106,10 @@ static UNSERVED: LazyLock<String> = LazyLock::new(|| {
 
 /// Every path of the face with its handlers, the one list the router is
 /// built from and the `404` of any other path names.
-fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 11] {
+fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 12] {
     [
         (METADATA, get(metadata)),
+        (PATIENTS, get(lookup::patients)),
         (SUMMARY, get(summary_get).post(summary_post)),
         (BUNDLE, post(bundle_post)),
         (DOCUMENTS, get(list::documents)),
@@ -143,6 +150,8 @@ pub fn routes() -> Router<Arc<AppState>> {
 pub enum FacePath {
     /// `{fhir-base}/metadata`, exactly.
     Metadata,
+    /// `{fhir-base}/Patient`, exactly.
+    Patients,
     /// `{fhir-base}/Patient/$summary`, exactly.
     Summary,
     /// `{fhir-base}/Bundle`, exactly.
@@ -180,6 +189,8 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
     }
     Some(if path == fhir.base.join(METADATA) {
         FacePath::Metadata
+    } else if path == fhir.base.join(PATIENTS) {
+        FacePath::Patients
     } else if path == fhir.base.join(SUMMARY) {
         FacePath::Summary
     } else if path == fhir.base.join(BUNDLE) {
@@ -209,7 +220,8 @@ fn is_binary(fhir: &FhirSettings, path: &str) -> bool {
 
 /// Returns what a request of `method` to `face` requires at the gate.
 ///
-/// The capability statement takes a verified caller, a `GET` or `POST` of a
+/// The capability statement takes a verified caller, a `GET` of the patient
+/// lookup the `composition-` read of every template, a `GET` or `POST` of a
 /// summary, a `GET` of the document list or of a listed document the `aql-` search of every
 /// section query, a `POST` of a document
 /// the `composition-` create of every template, a prescription or
@@ -235,6 +247,13 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
             permission: Permission::Search,
             resource: Resource::Sections,
         },
+        // NOTE: SMART on openEHR master08 §Resource Scopes; the lookup finds whether members hold
+        // the patient's EHRs, as `GET /ehr?subject_id=` does, so it takes what that read takes.
+        FacePath::Patients if *method == Method::GET => Requirement::Scope {
+            family: ResourceFamily::Composition,
+            permission: Permission::Read,
+            resource: Resource::Unnamed,
+        },
         // NOTE: SMART on openEHR master08 §Resource Scopes; a received document is written as
         // a composition whose template the body decides, so only a create of every one covers it.
         FacePath::Bundle if *method == Method::POST => Requirement::Scope {
@@ -243,6 +262,7 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
             resource: Resource::Unnamed,
         },
         FacePath::Metadata
+        | FacePath::Patients
         | FacePath::Summary
         | FacePath::Bundle
         | FacePath::Documents
@@ -432,28 +452,14 @@ async fn summarised(
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
-    let header = async {
-        let named = named(patient).map_err(Headless::Unheaded)?;
-        // NOTE: Regulation (EU) 2025/327 Art 3(1), Federation Tier §5.2: a grant confined to one
-        // patient is held to it before the demographics supplier is asked about anyone.
-        let conveyed = (arrived.conveyance, arrived.on_behalf);
-        let ids = (request_id, logged.as_str());
-        if let Some(refused) =
-            crate::facade::other_patient(federation, conveyed, (&named, started), ids).await
-        {
-            return Err(Headless::Refused(refused));
-        }
-        // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any
-        // member is asked, so no member is reached for a summary that could name no patient.
-        headed(federation, (&named, arrived.on_behalf), started)
-            .await
-            .map_err(Headless::Unheaded)
-    };
-    let header = match header.await {
+    // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any
+    // member is asked, so no member is reached for a summary that could name no patient.
+    let header = header_of(federation, &arrived, patient, (request_id, logged.as_str())).await;
+    let header = match header {
         Ok(header) => header,
         Err(headless) => {
             let mut response = match headless {
-                Headless::Refused(refused) => refused,
+                Headless::Refused(refused) => *refused,
                 Headless::Unheaded(unheaded) => unheaded_outcome(unheaded),
             };
             response.extensions_mut().insert(NoAccess);
@@ -471,11 +477,40 @@ async fn summarised(
     }
 }
 
-/// Why a summary request gets no header, so nothing is sent to a member.
+/// The header the identity binding holds of the patient `system`|`value`
+/// for a request that `arrived`, asked once the caller's grant is held to the
+/// patient, or the [`Headless`] that says why there is none.
+async fn header_of(
+    federation: &crate::federation::Federation,
+    arrived: &crate::facade::request::Arrived<'_>,
+    patient: (&str, &str),
+    (request_id, logged): (&str, &str),
+) -> Result<PatientHeader, Headless> {
+    let named = named(patient).map_err(Headless::Unheaded)?;
+    // NOTE: Regulation (EU) 2025/327 Art 3(1), Federation Tier §5.2: a grant confined to one
+    // patient is held to it before the demographics supplier is asked about anyone.
+    let conveyed = (arrived.conveyance, arrived.on_behalf);
+    let started = arrived.started;
+    if let Some(refused) = crate::facade::other_patient(
+        federation,
+        conveyed,
+        (&named, started),
+        (request_id, logged),
+    )
+    .await
+    {
+        return Err(Headless::Refused(Box::new(refused)));
+    }
+    headed(federation, (&named, arrived.on_behalf), started)
+        .await
+        .map_err(Headless::Unheaded)
+}
+
+/// Why a request gets no header, so nothing is sent to a member.
 enum Headless {
     /// The caller is confined to another patient, or its patient could not
     /// be checked: the answer.
-    Refused(Response),
+    Refused(Box<Response>),
     /// The identity binding gives no header.
     Unheaded(Unheaded),
 }
@@ -525,7 +560,7 @@ fn unheaded_outcome(unheaded: Unheaded) -> Response {
             "multiple-matches",
             &format!("no summary header can be written: {reason}"),
         ),
-        Unheaded::Unnamed => outcome(
+        Unheaded::Unnamed(_) => outcome(
             StatusCode::UNPROCESSABLE_ENTITY,
             "required",
             "the demographics binding holds no name for this patient, which the HL7 Europe Patient Summary Patient requires (ips-pat-1)",
@@ -630,6 +665,7 @@ fn refused(
     let what = match scope {
         Scope::Summary => "summary",
         Scope::List => "list",
+        Scope::Lookup => "lookup",
     };
     match unsummarised {
         Unsummarised::Failure(failure) => failure.respond(request_id, outbound),
@@ -720,7 +756,7 @@ mod tests {
     fn the_404_names_every_path_the_router_serves() {
         assert_eq!(
             UNSERVED.as_str(),
-            "the FHIR face serves metadata, Patient/$summary, Bundle, DocumentReference, \
+            "the FHIR face serves metadata, Patient, Patient/$summary, Bundle, DocumentReference, \
              Binary/{token}, MedicationRequest, MedicationRequest/{id}, \
              MedicationRequest/{id}/_history/{vid}, MedicationDispense, MedicationDispense/{id}, \
              MedicationDispense/{id}/_history/{vid} alone"

@@ -12,11 +12,11 @@
 //! `urn:oid:2.999` example arc, and calls the face the way a national
 //! connector reaches a Member State's national infrastructure: it confirms
 //! the patient's national identifier at the harness PDQm Supplier over ITI-78
-//! (IHE PDQm 3.2.0 §2:3.78), then asks `Patient/$summary`, the document
-//! list, the prescription list and read, and posts a dispensation, each with
-//! a correlation identifier of its own. The `NCPeH` API IG 9.1.0 puts the
-//! interface with the national connector out of scope, so no specification
-//! governs the device: our own design.
+//! (IHE PDQm 3.2.0 §2:3.78), then looks the patient up, asks
+//! `Patient/$summary`, the document list, the prescription list and read,
+//! and posts a dispensation, each with a correlation identifier of its own.
+//! The `NCPeH` API IG 9.1.1-ci puts the interface with the national connector
+//! out of scope, so no specification governs the device: our own design.
 //!
 //! The Annex attributes IHE IUA defines a claim for travel in its `ihe_iua`
 //! extension (ITI TF-2 3.71.4.2.2.1.1); each other one travels in the string
@@ -367,6 +367,18 @@ impl NationalConnector {
             .filter(|entry| entry.resource.active != Some(false))
             .count();
         Ok(active == 1)
+    }
+
+    /// Looks `patient` up with `GET {fhir-base}/Patient?identifier=`, the
+    /// patient lookup Xt-EHR D5.1 §3.4.6 `api-consumer-patient` has a
+    /// consumer use before it asks for data.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConnectorError::Token`] or [`ConnectorError::Send`].
+    pub async fn lookup(&self, patient: NationalId<'_>) -> Result<Answer, ConnectorError> {
+        self.get(&format!("/Patient?identifier={}", patient.token()))
+            .await
     }
 
     /// Asks `GET {fhir-base}/Patient/$summary` for `patient`.
