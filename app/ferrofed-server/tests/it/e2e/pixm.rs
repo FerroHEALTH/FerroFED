@@ -76,11 +76,11 @@ pub(crate) async fn nodes_and_pix(
     .await?;
     nodes.a.proxy.clear_journal();
     nodes.b.proxy.clear_journal();
-    let mut domains = vec![PATIENT.namespace(), DOMAIN_A.system(), DOMAIN_B.system()];
+    let mut namespaces = vec![PATIENT.namespace()];
     if OTHER.namespace() != PATIENT.namespace() {
-        domains.push(OTHER.namespace());
+        namespaces.push(OTHER.namespace());
     }
-    let manager = ferropix::ferropix(&domains).await?;
+    let manager = ferropix::ferropix(&namespaces, &[DOMAIN_A.system(), DOMAIN_B.system()]).await?;
     let fed = [
         CrossReferenceSeed {
             patient: PATIENT,
@@ -101,13 +101,16 @@ pub(crate) async fn nodes_and_pix(
         },
     ];
     for cross_reference in &fed {
-        let status = seed::feed_as(
+        let statuses = seed::feed_records_as(
             &manager.fhir_base(),
-            Some((SOURCE.user, SOURCE.password)),
+            (SOURCE.user, SOURCE.password),
             cross_reference,
         )
         .await?;
-        assert_eq!(StatusCode::CREATED, status, "ITI-104 creates the Patient");
+        assert!(
+            statuses.iter().all(|status| *status == StatusCode::CREATED),
+            "ITI-104 creates each member's record: {statuses:?}"
+        );
     }
     let proxy = CapturingProxy::start(manager.origin()).await?;
     Ok((nodes, Pix { manager, proxy }))

@@ -367,18 +367,24 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
         return Ok(());
     }
     let harness = Box::pin(Harness::start()).await?;
-    let pix =
-        ferropix::ferropix(&[PATIENT.namespace(), DOMAIN_A.system(), DOMAIN_B.system()]).await?;
-    let status = seed::feed_as(
+    let pix = ferropix::ferropix(
+        &[PATIENT.namespace()],
+        &[DOMAIN_A.system(), DOMAIN_B.system()],
+    )
+    .await?;
+    let statuses = seed::feed_records_as(
         &pix.fhir_base(),
-        Some((SOURCE.user, SOURCE.password)),
+        (SOURCE.user, SOURCE.password),
         &CrossReferenceSeed {
             patient: PATIENT,
             ehrs: vec![(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)],
         },
     )
     .await?;
-    assert_eq!(StatusCode::CREATED, status, "ITI-104 creates the Patient");
+    assert!(
+        statuses.iter().all(|status| *status == StatusCode::CREATED),
+        "ITI-104 creates each member's record: {statuses:?}"
+    );
     harness.clear_journals();
     let dir = tempfile::tempdir()?;
     let gateway = harness

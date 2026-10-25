@@ -6,13 +6,15 @@
 //!
 //! [`ferropix`] starts the pinned [`FERROPIX`] image on its pinned
 //! PostgreSQL, [`FERROPIX_POSTGRES`], under FerroPIX's development profile:
-//! one identifier domain per system the caller names, two Basic users, the
-//! Patient Identity Source every domain is fed by ([`SOURCE`]) and the PIXm
-//! Consumer the gateway asks as ([`CONSUMER`]), and no usage report. A test
-//! feeds it over ITI-104 with
-//! [`seed::feed_as`](crate::seed::feed_as) and points the gateway's
-//! `[[pixm.manager]]` at [`FerroPix::fhir_base`] with the consumer's
-//! credentials. The database role is the restricted one FerroPIX requires:
+//! the patient namespaces as `authoritative` domains and each member's
+//! `ehr_id` domain as a `local` one, two Basic users, the Patient Identity
+//! Source every domain is fed by ([`SOURCE`]) and the PIXm Consumer the
+//! gateway asks as ([`CONSUMER`]), and no usage report. FerroPIX links two
+//! records only through an identifier in an authoritative domain, so a test
+//! feeds one record per member over ITI-104, each carrying the patient's
+//! identifier, with [`seed::feed_records_as`](crate::seed::feed_records_as),
+//! and points the gateway's `[[pixm.manager]]` at [`FerroPix::fhir_base`]
+//! with the consumer's credentials. The database role is the restricted one FerroPIX requires:
 //! `CREATE` on its database and nothing else.
 //!
 //! Every value is synthetic, inside the `urn:oid:2.999` example arc, and
@@ -129,9 +131,10 @@ impl FerroPix {
 }
 
 /// Returns FerroPIX's configuration: the development profile, its database
-/// at `database_host`, the two Basic users, and one local domain per system
-/// of `domains`, each fed by [`SOURCE`].
-fn config(database_host: &str, domains: &[String]) -> String {
+/// at `database_host`, the two Basic users, an authoritative domain per
+/// system of `authoritative` and a local one per system of `local`, each fed
+/// by [`SOURCE`].
+fn config(database_host: &str, authoritative: &[String], local: &[String]) -> String {
     let mut text = format!(
         "profile = \"development\"\n\n\
          [server]\nlisten = \"0.0.0.0:{PORT}\"\npublic_base_url = \"http://ferropix.example.org\"\n\n\
@@ -148,25 +151,32 @@ fn config(database_host: &str, domains: &[String]) -> String {
             user.user, user.phc, user.scope
         );
     }
-    for (index, system) in domains.iter().enumerate() {
+    let kinds = authoritative
+        .iter()
+        .map(|system| (system, "authoritative"))
+        .chain(local.iter().map(|system| (system, "local")));
+    for (index, (system, kind)) in kinds.enumerate() {
         let _written: std::fmt::Result = write!(
             text,
             "\n[[domain]]\nsystem = \"{system}\"\nname = \"Harness domain {index}\"\n\
-             kind = \"local\"\nsource_client_id = \"{}\"\n",
+             kind = \"{kind}\"\nsource_client_id = \"{}\"\n",
             SOURCE.user
         );
     }
     text
 }
 
-/// Starts FerroPIX with one identifier domain per system of `domains`, and
-/// waits until it reports ready.
+/// Starts FerroPIX with the patient namespaces `authoritative` and the
+/// member `ehr_id` domains `local`, and waits until it reports ready.
 ///
 /// # Errors
 ///
 /// Returns [`HarnessError::Container`] when Docker refuses a container and
 /// [`HarnessError::NotReady`] when FerroPIX does not become ready in time.
-pub async fn ferropix(domains: &[String]) -> Result<FerroPix, HarnessError> {
+pub async fn ferropix(
+    authoritative: &[String],
+    local: &[String],
+) -> Result<FerroPix, HarnessError> {
     let (network, host) = names("ferropix");
     let database = retry::start(|| {
         FERROPIX_POSTGRES
@@ -187,7 +197,7 @@ pub async fn ferropix(domains: &[String]) -> Result<FerroPix, HarnessError> {
         source,
     })?;
     let image = FERROPIX.repository;
-    let configuration = config(&host, domains);
+    let configuration = config(&host, authoritative, local);
     let server = retry::start(|| {
         FERROPIX
             .image()
@@ -225,7 +235,8 @@ mod tests {
     fn the_configuration_names_every_domain_fed_by_the_source() {
         let text = config(
             "db",
-            &["urn:oid:2.999.1".to_owned(), "urn:oid:2.999.2.1".to_owned()],
+            &["urn:oid:2.999.1".to_owned()],
+            &["urn:oid:2.999.2.1".to_owned()],
         );
         assert!(text.starts_with("profile = \"development\""));
         assert_eq!(2, text.matches("[[domain]]").count());
@@ -234,6 +245,8 @@ mod tests {
             text.matches(&format!("source_client_id = \"{}\"", SOURCE.user))
                 .count()
         );
+        assert_eq!(1, text.matches("kind = \"authoritative\"").count());
+        assert_eq!(1, text.matches("kind = \"local\"").count());
         assert!(text.contains(&format!("user = \"{}\"", CONSUMER.user)));
         assert!(text.contains("@db:5432/ferropix"));
         assert!(
