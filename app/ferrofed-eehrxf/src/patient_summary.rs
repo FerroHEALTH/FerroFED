@@ -161,6 +161,12 @@ const ABSENCE: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.abse
 /// medication statement and the immunisation statement.
 const MEDICATION: Archetype = archetype!("ACTION", "openEHR-EHR-ACTION.medication.v1");
 
+/// The medication order, in which a CDR commonly keeps the current
+/// medication list (openEHR international CKM, cid 1013.1.5946, vendored
+/// under `docs/specs/openehr-ckm-medication/`).
+const MEDICATION_ORDER: Archetype =
+    archetype!("INSTRUCTION", "openEHR-EHR-INSTRUCTION.medication_order.v3");
+
 /// The problem or diagnosis evaluation.
 const PROBLEM: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.problem_diagnosis.v1");
 
@@ -249,8 +255,25 @@ impl Section {
         }
     }
 
+    /// Returns the archetypes this section selects by beyond those its
+    /// template sections name, each a published CKM archetype.
+    ///
+    /// The medication summary also selects the medication order: a patient
+    /// whose medicines a CDR records only as orders would otherwise get an
+    /// empty medication summary, the harm of hazard I-03 of the clinical
+    /// safety risk file, which the safety review of 2026-10-25 found
+    /// (no specification governs the selection: our own design).
+    #[must_use]
+    pub const fn beyond_template(self) -> &'static [Archetype] {
+        match self {
+            Self::MedicationSummary => &[MEDICATION_ORDER],
+            _ => &[],
+        }
+    }
+
     /// Returns the archetypes a composition of this section contains, at
-    /// least one of them, in the template's order.
+    /// least one of them, in the template's order, then those of
+    /// [`Section::beyond_template`].
     #[must_use]
     pub const fn archetypes(self) -> &'static [Archetype] {
         match self {
@@ -263,7 +286,7 @@ impl Section {
                 ABSENCE,
             ],
             Self::Problems => &[PROBLEM, EXCLUSION, ABSENCE],
-            Self::MedicationSummary => &[MEDICATION, EXCLUSION, ABSENCE],
+            Self::MedicationSummary => &[MEDICATION, EXCLUSION, ABSENCE, MEDICATION_ORDER],
             Self::MedicalDevicesAndImplants => &[archetype!(
                 "EVALUATION",
                 "openEHR-EHR-EVALUATION.device_summary.v0"

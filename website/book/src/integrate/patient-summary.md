@@ -176,8 +176,21 @@ every entry is named under the absolute URL of `{fhir-base}`.
 - The five sections the EPS composition requires are always present:
   problems, allergies and intolerances, medication summary, procedures, and
   medical devices. The other six sections the section queries feed follow.
+- The medical alert and the functional status, which no openEHR content is
+  named to feed, are always present too, each with the empty reason
+  `unavailable` and a narrative saying the gateway does not supply it, so no
+  reader takes their absence for "none".
 - Every section has a generated narrative that says it is not exhaustive,
-  names every member that gave no answer, and counts what no mapping covers.
+  names every member that gave no answer, counts what no mapping covers, and
+  names, by path and member, every element a mapping could not carry into
+  the section.
+- When two members record a medicine with the same code, strength and
+  route, the medication summary lists both entries and its narrative marks
+  them as a probable duplicate, naming both members; nothing is merged.
+- A composition goes to every section whose query selects it, and each
+  mapping places it by its own explicit criterion: a medication use is a
+  medicine or a vaccination by what its mapping reads, never by inference.
+  The medication summary also takes the medication orders a member records.
 - A section with no entry carries the empty reason `nilknown` only when
   every member answered and none holds content for it, and `unavailable`
   otherwise.

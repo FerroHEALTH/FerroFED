@@ -80,7 +80,8 @@ fn the_vendored_template_reads_as_fourteen_sections() -> TestResult {
 }
 
 #[test]
-fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name() -> TestResult {
+fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name_and_its_additions()
+-> TestResult {
     let template = template_sections()?;
     for section in Section::ALL {
         let mut named = BTreeSet::new();
@@ -90,6 +91,12 @@ fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name(
                 .ok_or_else(|| format!("{section:?}: the template has no section {name}"))?;
             named.extend(entries.iter().cloned());
         }
+        named.extend(
+            section
+                .beyond_template()
+                .iter()
+                .map(|archetype| archetype.id.to_owned()),
+        );
         let selected: BTreeSet<String> = section
             .archetypes()
             .iter()
@@ -134,4 +141,26 @@ fn every_template_section_with_entries_feeds_a_query_or_is_a_gap() -> TestResult
         "only the functional status gap (eHN A.2.3.4) is left for the clinical safety review"
     );
     Ok(())
+}
+
+#[test]
+fn each_archetype_beyond_the_template_is_a_vendored_ckm_archetype() {
+    let vendored = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/openehr-ckm-medication");
+    for section in Section::ALL {
+        for Archetype { id, .. } in section.beyond_template() {
+            assert!(
+                vendored.join(format!("{id}.adl")).is_file(),
+                "{section:?}: {id} is no vendored CKM archetype"
+            );
+        }
+    }
+    assert_eq!(
+        Section::MedicationSummary
+            .beyond_template()
+            .iter()
+            .map(|archetype| archetype.id)
+            .collect::<Vec<_>>(),
+        ["openEHR-EHR-INSTRUCTION.medication_order.v3"]
+    );
 }

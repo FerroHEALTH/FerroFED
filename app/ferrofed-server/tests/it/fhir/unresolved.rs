@@ -11,6 +11,7 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_eehrxf::summary::NOT_SUPPLIED;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
@@ -229,6 +230,10 @@ async fn names_each_under_partial(route: Route) -> TestResult {
                 .pointer("/text/div")
                 .and_then(Value::as_str)
                 .ok_or("a narrative")?;
+            if div.contains(NOT_SUPPLIED) {
+                // No member is asked for a gap, whose narrative says the gateway does not supply it.
+                continue;
+            }
             assert!(
                 div.contains("org-a (not-resolved), org-b (not-resolved)"),
                 "{div}"
@@ -368,6 +373,10 @@ async fn under_partial_a_summary_names_the_member_it_could_not_resolve_in_every_
             .pointer("/text/div")
             .and_then(Value::as_str)
             .ok_or("a narrative")?;
+        if div.contains(NOT_SUPPLIED) {
+            // No member is asked for a gap, whose narrative says the gateway does not supply it.
+            continue;
+        }
         assert!(
             div.contains("No answer from: org-b (not-resolved)"),
             "{div}"

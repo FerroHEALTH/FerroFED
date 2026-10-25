@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# The context that compiles the synthetic vaccination model mapping against the
+# synthetic ferrofed.eehrxf.medication.v1 template, to the profile the
+# patient summary crosswalk admits for its section. Every value is synthetic.
+grammar: FHIRConnect/v1.0.0
+type: context
+metadata:
+  name: ferrofed_eu_immunisation.context
+  version: 1.0.0
+spec:
+  system: FHIR
+  version: R4
+context:
+  profile:
+    url: "http://hl7.eu/fhir/base/StructureDefinition/immunization-eu-core"
+  template:
+    id: "ferrofed.eehrxf.medication.v1"
+  archetypes:
+    - "ferrofed_immunisation"
+  start: "ferrofed_immunisation"
