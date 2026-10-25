@@ -16,7 +16,7 @@
 //! read through the gateway at a URL it signs.
 
 use fhir_types::r4::attachment::Attachment;
-use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntrySearch};
+use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::document_reference::{DocumentReference, DocumentReferenceContent};
@@ -393,33 +393,11 @@ pub fn searchset(
     matches: Vec<(String, DocumentReference)>,
     outcomes: Vec<(String, OperationOutcome)>,
 ) -> Bundle {
-    let total = u32::try_from(matches.len()).ok();
-    let mode = |mode: &str| {
-        Some(BundleEntrySearch {
-            mode: Some(mode.into()),
-            ..BundleEntrySearch::default()
-        })
-    };
-    let found = matches.into_iter().map(|(url, reference)| BundleEntry {
-        full_url: Some(url.into()),
-        resource: Some(Resource::DocumentReference(Box::new(reference))),
-        search: mode("match"),
-        ..BundleEntry::default()
-    });
-    // NOTE: FHIR R4 Bundle `search.mode`; an `outcome` entry informs about the processing
-    // of the search, here each member the list misses.
-    let missed = outcomes.into_iter().map(|(url, outcome)| BundleEntry {
-        full_url: Some(url.into()),
-        resource: Some(Resource::OperationOutcome(Box::new(outcome))),
-        search: mode("outcome"),
-        ..BundleEntry::default()
-    });
-    Bundle {
-        r#type: "searchset".into(),
-        total: total.map(Into::into),
-        entry: found.chain(missed).collect(),
-        ..Bundle::default()
-    }
+    let matches = matches
+        .into_iter()
+        .map(|(url, reference)| (url, Resource::DocumentReference(Box::new(reference))))
+        .collect();
+    crate::face::searchset(matches, outcomes)
 }
 
 #[cfg(test)]

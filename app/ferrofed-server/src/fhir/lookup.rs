@@ -30,7 +30,9 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::header::PatientHeader;
 use http::{StatusCode, Uri};
 
-use super::{Headless, admission, attach, fhir_json, header_of, outcome, refused};
+use super::{
+    Headless, admission, attach, fhir_json, header_of, outcome, refused, unheaded_outcome,
+};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::facade::demographics::Unheaded;
@@ -128,29 +130,9 @@ fn unfound(headless: Headless) -> Response {
         // NOTE: Federation Tier §11.3; a patient the binding does not know answers as one no
         // member holds, the empty searchset.
         Headless::Unheaded(Unheaded::NoMatch) => return empty(),
-        Headless::Unheaded(Unheaded::NoBinding) => outcome(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "not-supported",
-            "the demographics binding is not asked about identifiers of this system, so no patient can be looked up",
-        ),
-        Headless::Unheaded(Unheaded::Ambiguous(reason)) => outcome(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "multiple-matches",
-            &format!("no one patient can be named: {reason}"),
-        ),
-        Headless::Unheaded(Unheaded::Unnamed(_)) => outcome(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "exception",
-            "the patient could not be looked up",
-        ),
-        Headless::Unheaded(Unheaded::Unavailable { failure, timed_out }) => {
-            let (status, code) = if timed_out {
-                (StatusCode::GATEWAY_TIMEOUT, "timeout")
-            } else {
-                (StatusCode::BAD_GATEWAY, "exception")
-            };
-            outcome(status, code, &format!("no patient: {failure}"))
-        }
+        // The lookup answers a patient with no name before it gets here, so the summary's
+        // refusal of one is never the lookup's answer.
+        Headless::Unheaded(unheaded) => unheaded_outcome(unheaded, "Patient"),
     };
     response.extensions_mut().insert(NoAccess);
     response

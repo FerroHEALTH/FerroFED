@@ -21,6 +21,7 @@
 use std::fmt;
 
 use eehrxf::category::Category;
+use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntrySearch};
 use fhir_types::r4::capability_statement::{
     CapabilityStatement, CapabilityStatementRest, CapabilityStatementRestResource,
     CapabilityStatementRestResourceInteraction, CapabilityStatementRestResourceOperation,
@@ -28,6 +29,7 @@ use fhir_types::r4::capability_statement::{
 };
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::parameters::{Parameters, ParametersParameterValue};
+use fhir_types::r4::resource::Resource;
 
 use crate::receive::Receivers;
 use crate::serving::Serving;
@@ -346,6 +348,43 @@ fn documents() -> CapabilityStatementRestResource {
             ),
         ],
         ..CapabilityStatementRestResource::default()
+    }
+}
+
+/// Returns the `searchset` of the `matches`, each under its full URL, and
+/// the `outcomes` that say what the search misses, its `total` the number of
+/// matches.
+#[must_use]
+pub fn searchset(
+    matches: Vec<(String, Resource)>,
+    outcomes: Vec<(String, OperationOutcome)>,
+) -> Bundle {
+    let total = u32::try_from(matches.len()).ok();
+    let mode = |mode: &str| {
+        Some(BundleEntrySearch {
+            mode: Some(mode.into()),
+            ..BundleEntrySearch::default()
+        })
+    };
+    let found = matches.into_iter().map(|(url, resource)| BundleEntry {
+        full_url: Some(url.into()),
+        resource: Some(resource),
+        search: mode("match"),
+        ..BundleEntry::default()
+    });
+    // NOTE: FHIR R4 Bundle `search.mode`; an `outcome` entry informs about the processing
+    // of the search, here each member the search misses.
+    let missed = outcomes.into_iter().map(|(url, outcome)| BundleEntry {
+        full_url: Some(url.into()),
+        resource: Some(Resource::OperationOutcome(Box::new(outcome))),
+        search: mode("outcome"),
+        ..BundleEntry::default()
+    });
+    Bundle {
+        r#type: "searchset".into(),
+        total: total.map(Into::into),
+        entry: found.chain(missed).collect(),
+        ..Bundle::default()
     }
 }
 

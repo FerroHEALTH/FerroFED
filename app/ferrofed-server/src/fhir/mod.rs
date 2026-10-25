@@ -460,7 +460,7 @@ async fn summarised(
         Err(headless) => {
             let mut response = match headless {
                 Headless::Refused(refused) => *refused,
-                Headless::Unheaded(unheaded) => unheaded_outcome(unheaded),
+                Headless::Unheaded(unheaded) => unheaded_outcome(unheaded, "summary header"),
             };
             response.extensions_mut().insert(NoAccess);
             return response;
@@ -539,14 +539,16 @@ async fn headed(
     demographics::header(federation, (patient, on_behalf), deadline).await
 }
 
-/// The `OperationOutcome` of a summary request whose header `unheaded` says
-/// why the identity binding gives none.
-fn unheaded_outcome(unheaded: Unheaded) -> Response {
+/// The `OperationOutcome` of a request for `what` whose header `unheaded`
+/// says why the identity binding gives none.
+fn unheaded_outcome(unheaded: Unheaded, what: &str) -> Response {
     match unheaded {
         Unheaded::NoBinding => outcome(
             StatusCode::UNPROCESSABLE_ENTITY,
             "not-supported",
-            "the demographics binding is not asked about identifiers of this system, so no summary header can be written",
+            &format!(
+                "the demographics binding is not asked about identifiers of this system, so no {what} can be written"
+            ),
         ),
         // NOTE: Federation Tier §11.3; a patient the binding does not know answers as one
         // no member holds, so the outcome names neither.
@@ -558,7 +560,7 @@ fn unheaded_outcome(unheaded: Unheaded) -> Response {
         Unheaded::Ambiguous(reason) => outcome(
             StatusCode::UNPROCESSABLE_ENTITY,
             "multiple-matches",
-            &format!("no summary header can be written: {reason}"),
+            &format!("no {what} can be written: {reason}"),
         ),
         Unheaded::Unnamed(_) => outcome(
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -571,7 +573,7 @@ fn unheaded_outcome(unheaded: Unheaded) -> Response {
             } else {
                 (StatusCode::BAD_GATEWAY, "exception")
             };
-            outcome(status, code, &format!("no summary header: {failure}"))
+            outcome(status, code, &format!("no {what}: {failure}"))
         }
     }
 }
