@@ -20,9 +20,9 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.12
+## Status: building v0.0.14
 
-v0.0.11 is released (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+v0.0.13 is released (2026-10-25), v0.0.12 (2026-10-24), v0.0.11 (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
 membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
@@ -120,16 +120,21 @@ economic-operator register (#941, #671, #940, #787). And the fixes: an
 unresolved member named on the FHIR face (#1104, #1107), reloads that say
 what waits for a restart (#1017, #955), refusals that quote no credential
 (#1021), and the console's request bounds and contrast (#1022, #1112).
-v0.0.12, being built, carries what moved from v0.0.11: the national
-contact point face (#524) with its harness connector and end-to-end test
-(#735), the installation report to FerroPULSE (#1122), and the
-terminology rules applied to the summary the FHIR face writes, now that
-fhirconnect's term-mapping lens passes every match through (#926). v0.0.13 plans
-the rest: EHDS conformity (#525), the log access interface (#660, #521),
-a received document validated in full and handed to one chosen member
-(#665, #808), the further categories (#522, #666 to #668), operations
-packaging (#638, #644, #645), and the FHIRconnect mapping of openEHR
-medication data, blocked upstream (#1043, #523). Each crate gets the rest of
+v0.0.12 rebuilt the operator console on FerroUI as `ferrofed-console`
+(#1219, #1230), moved client authentication onto `ferrohealth-smart`
+(#1174) and the audit crates onto FerroAUDIT (#1177), sent the installation
+report to FerroPULSE (#1122), and applied the term-mapping rule to the
+summary (#926). v0.0.13 serves a national contact point's national
+connector on the FHIR face with its end-to-end test (#524, #735), looks a
+patient up by identifier (#1294), validates a received document in full
+with `ferrobridge-validator` (#808), translates a summary code through the
+terminology server on `ferrobridge-term` (#1213, #925), and ships the
+Kubernetes package and OTLP over TLS (#638, #644). v0.0.14, being built,
+carries the rest of EHDS readiness (#519): the FHIRconnect mapping of
+openEHR medication data (#1043, #523), the further categories (#666 to
+#668), the conformity work (#525, #940, #1144), the re-checks against the
+implementing acts once adopted (#1289, #1267, #799) and the European
+digital testing environment (#675). Each crate gets the rest of
 its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
