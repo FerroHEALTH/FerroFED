@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The configuration of the quickstart's FerroPIX, the patient index the
+# gateway resolves every patient through (compose.yaml, the `ferropix`
+# service): FerroPIX's development profile, with two Basic users holding
+# development passwords, NOT for anything real. Every key is listed in
+# FerroPIX's book, https://ferropix.eu/docs/operate/configuration.html.
+
+profile = "development"
+
+[server]
+listen = "0.0.0.0:8080"
+public_base_url = "http://ferropix:8080"
+
+[db]
+url = "postgresql://ferropix:ferropix_example@ferropix-postgres:5432/ferropix"
+data_key_file = "/run/secrets/ferropix-data-key"
+
+# The seed job feeds every domain as its one Patient Identity Source, and
+# the gateway asks as the PIXm Consumer. Each password_hash is the Argon2id
+# PHC string of the password docker/quickstart/ferropix/seed.sh and
+# docker/quickstart/ferrofed.toml send.
+[[auth.basic.users]]
+user = "quickstart-source"
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9mZWQtc291cmNlLXNhbHQ$tBcj4hfLaGRGVGF9bFKn7yKB4lcUjmOTvyMeZ55pdKk"
+scopes = ["system/Patient.cud"]
+
+[[auth.basic.users]]
+user = "ferrofed"
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9mZWQtY29uc3VtZXItc2FsdA$51aYstBVyvm/RYL2TNzU400Fwfl3M0V5vjybCi4FcVM"
+scopes = ["system/Patient.rs"]
+
+# The patient's namespace is authoritative, so FerroPIX links each member's
+# record of one patient through it; each member's ehr_ids are a local domain.
+[[domain]]
+system = "urn:oid:2.999.1.1"
+name = "Quickstart patients"
+kind = "authoritative"
+source_client_id = "quickstart-source"
+
+[[domain]]
+system = "urn:oid:2.999.2.1"
+name = "Node A ehr_ids"
+kind = "local"
+source_client_id = "quickstart-source"
+
+[[domain]]
+system = "urn:oid:2.999.2.2"
+name = "Node B ehr_ids"
+kind = "local"
+source_client_id = "quickstart-source"
+
+[[domain]]
+system = "urn:oid:2.999.2.3"
+name = "Node C ehr_ids"
+kind = "local"
+source_client_id = "quickstart-source"
+
+[[domain]]
+system = "urn:oid:2.999.2.4"
+name = "Node D ehr_ids"
+kind = "local"
+source_client_id = "quickstart-source"
+
+[usage_report]
+deployment = "compose"
+state_dir = "/var/lib/ferropix"
+
+[dev]
+loopback = false

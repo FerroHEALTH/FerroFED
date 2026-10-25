@@ -5,14 +5,17 @@
 # four nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
 # user: development credentials, NOT for anything real.
 #
-# A development profile: the static cross-reference below resolves four
-# synthetic patients to their EHRs, and it is no identity binding (no
-# specification governs it: our own design). scripts/quickstart/seed.sh reads
-# the same rows and creates each EHR over ITS-REST, so the two never disagree.
+# A development profile: the gateway resolves each patient through the
+# quickstart's FerroPIX, the patient index compose.yaml runs beside it, as a
+# PIXm Consumer (ITI-83). FerroFED keeps no patient index of its own.
+# docker/quickstart/patients.tsv names the synthetic patients; the compose
+# `ferropix-seed` service feeds them to FerroPIX and scripts/quickstart/seed.sh
+# creates their EHRs at the nodes, so the two never disagree.
 #
-# The nodes are reached over plain http inside the Docker network, which only
-# the development profile allows for a credential: the gateway starts and
-# names each credential that travels unencrypted in its banner and its log.
+# The nodes and FerroPIX are reached over plain http inside the Docker
+# network, which only the development profile allows for a credential: the
+# gateway starts and names each credential that travels unencrypted in its
+# banner and its log.
 
 profile = "development"
 
@@ -80,53 +83,19 @@ password = "ferroehr"
 user = "ferroehr"
 password = "ferroehr"
 
-# The synthetic patients, every identifier inside the example arc
-# urn:oid:2.999 that ITU-T X.660 reserves for examples. Each EHR's first group
-# names its node and its last group its patient.
-#
-# ffd-test-0001 has an EHR at all four nodes.
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-a"
-ehr_id = "aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+# The patient index: FerroPIX's PIXm Manager on the compose network. Each
+# member's ehr_ids are one identifier domain there, as
+# docker/quickstart/patients.tsv names it, and the gateway asks as FerroPIX's
+# PIXm Consumer, a development credential, NOT for anything real.
+[[pixm.manager]]
+url = "http://ferropix:8080/fhir/"
 
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-b"
-ehr_id = "bbbbbbbb-bbbb-4bbb-8bbb-000000000001"
+[pixm.manager.members]
+"node-a" = "urn:oid:2.999.2.1"
+"node-b" = "urn:oid:2.999.2.2"
+"node-c" = "urn:oid:2.999.2.3"
+"node-d" = "urn:oid:2.999.2.4"
 
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-c"
-ehr_id = "cccccccc-cccc-4ccc-8ccc-000000000001"
-
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-d"
-ehr_id = "dddddddd-dddd-4ddd-8ddd-000000000001"
-
-# ffd-test-0002 has an EHR at node B and node D.
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0002"
-member = "node-b"
-ehr_id = "bbbbbbbb-bbbb-4bbb-8bbb-000000000002"
-
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0002"
-member = "node-d"
-ehr_id = "dddddddd-dddd-4ddd-8ddd-000000000002"
-
-# ffd-test-0003 has an EHR at node C alone.
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0003"
-member = "node-c"
-ehr_id = "cccccccc-cccc-4ccc-8ccc-000000000003"
-
-# ffd-test-0004 has an EHR at no node, so it has no row.
+[pixm.manager.credentials]
+user = "ferrofed"
+password = "ferrofed-consumer-example"

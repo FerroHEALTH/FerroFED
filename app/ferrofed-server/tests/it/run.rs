@@ -191,8 +191,8 @@ fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
 }
 
 /// The compose quickstart's configuration and registry document pass `config
-/// check` together, so its four members, their credentials and the static
-/// cross-reference rows the seed script reads agree with one another. The
+/// check` together, so its four members, their credentials and the PIX
+/// Manager every member is resolved through agree with one another. The
 /// suite's key stands in for the one `scripts/quickstart/signing-key.sh`
 /// writes before the first `docker compose up`.
 #[test]
