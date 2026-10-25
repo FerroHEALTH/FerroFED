@@ -27,11 +27,14 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   (`crosswalk::patient_summary`, feature `patient-summary`), the electronic
   prescription (`crosswalk::prescription`, feature `prescription`), the
   electronic dispensation (`crosswalk::dispensation`, feature
-  `dispensation`) and the discharge report (`crosswalk::discharge`, feature
+  `dispensation`), the laboratory report (`crosswalk::laboratory`, feature
+  `laboratory`) and the discharge report (`crosswalk::discharge`, feature
   `discharge`) carry one, the two medication ones against the HL7 Europe MPD
-  1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles
-  and the discharge report against the HL7 Europe Hospital Discharge Report
-  1.0.0 `composition-eu-hdr` profile.
+  1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles,
+  the laboratory report against the HL7 Europe Laboratory Report 2.0.0
+  `Composition-eu-lab` with its `DiagnosticReport-eu-lab` companion
+  (`Crosswalk::check_with`), and the discharge report against the HL7
+  Europe Hospital Discharge Report 1.0.0 `composition-eu-hdr` profile.
 - `fhir-r4`: the FHIR R4 serialisation of the exchange format. It compiles
   the R4 resources and no openEHR crate.
 - `mapping` (feature `openehr`, which turns on `fhir-r4`): FHIRconnect 1.0.0

@@ -28,6 +28,7 @@ pub static DISPENSATION: Crosswalk<'static> = Crosswalk {
         obligations: "http://www.xt-ehr.eu/fhir/models/StructureDefinition/EHDSMedicationDispenseObligations",
     },
     profile: MPD_MEDICATION_DISPENSE,
+    companions: &[],
     sliced: "MedicationDispense.extension",
     ehn: EHN,
     rows: ROWS,

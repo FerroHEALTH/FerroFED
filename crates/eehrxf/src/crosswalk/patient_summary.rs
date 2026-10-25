@@ -30,6 +30,7 @@ pub static PATIENT_SUMMARY: Crosswalk<'static> = Crosswalk {
         obligations: "http://www.xt-ehr.eu/fhir/models/StructureDefinition/EHDSPatientSummaryObligations",
     },
     profile: EPS_COMPOSITION,
+    companions: &[],
     sliced: "Composition.section",
     ehn: EHN,
     rows: ROWS,

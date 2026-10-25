@@ -693,6 +693,25 @@ and its presented form in the attachments section. Building the discharge
 report from member data, its section queries and the FHIR face are planned
 ([#667](https://github.com/FerroHEALTH/FerroFED/issues/667)).
 
+### The laboratory report crosswalk
+
+Test results (Art 14(1)(e)) are crosswalked the same way, under `eehrxf`'s
+`laboratory` feature: the eHealth Network *Guideline on Laboratory Results*
+(Release 1.1, §4), the Xt-EHR `EHDSLaboratoryReport` logical model and the
+HL7 Europe Laboratory Report profiles (`hl7.fhir.eu.laboratory` 2.0.0). A
+laboratory report keeps its header in the composition and its body in the
+`DiagnosticReport` the composition names, so the crosswalk names elements of
+both and is checked against both: the orders and their supporting
+information sit in the `ServiceRequest` the report is based on, the
+specimens in `specimen`, and the results in `result`, each an
+`Observation-resultslab-eu-lab`. The same test holds it to the packages as
+it does the discharge report's. Building the laboratory report from member
+data and the FHIR face are planned
+([#666](https://github.com/FerroHEALTH/FerroFED/issues/666)), and the
+mapping of laboratory results waits on FerroBRIDGE's FHIRconnect contexts
+for the Laboratory Report profiles
+([FerroHEALTH/FerroBRIDGE#116](https://github.com/FerroHEALTH/FerroBRIDGE/issues/116)).
+
 ## Not legal advice
 
 This page is the manufacturer's reading of the EHDS Regulation and the CRA,

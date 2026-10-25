@@ -29,6 +29,7 @@ pub static PRESCRIPTION: Crosswalk<'static> = Crosswalk {
         obligations: "http://www.xt-ehr.eu/fhir/models/StructureDefinition/EHDSMedicationPrescriptionObligations",
     },
     profile: MPD_MEDICATION_REQUEST,
+    companions: &[],
     sliced: "MedicationRequest.extension",
     ehn: EHN,
     rows: ROWS,
