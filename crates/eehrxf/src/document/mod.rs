@@ -1,19 +1,23 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The patient summary document in the HL7 Europe Patient Summary form
-//! (features `patient-summary` and `fhir-r4`).
+//! The documents of the priority categories in their HL7 Europe forms
+//! (feature `fhir-r4` with `patient-summary`, `laboratory` or `discharge`).
 //!
 //! A FHIR document is a `Bundle` of type `document` whose first entry is a
 //! `Composition` and whose other entries are every resource the composition
 //! references (<https://hl7.org/fhir/R4/documents.html>). A [`Document`]
-//! collects the parts, names each entry by a `fullUrl` of the form `{base}/{type}/{id}` under the
-//! base it is given, and writes the `Bundle` the HL7 Europe Patient Summary
-//! `bundle-eu-eps` profile, 1.0.0-ballot, constrains, with the
-//! `composition-eu-eps` composition. The sections are the profile's section
-//! slices ([`SLOTS`]), each with its LOINC code, its title, a generated
-//! narrative, its entries and, when it has none, an empty reason. What feeds
-//! each section is the caller's: this module decides no clinical content.
+//! collects the parts, names each entry by a `fullUrl` of the form
+//! `{base}/{type}/{id}` under the base it is given, and writes the `Bundle`
+//! of its [`Form`]: the profiles of one category's document, its
+//! `Composition.type`, its sections, each with its LOINC code, its title, a
+//! generated narrative, its entries and, when it has none, an empty reason,
+//! and the report a form carries beside its composition. The patient summary
+//! is written to HL7 Europe Patient Summary 1.0.0-ballot
+//! ([`PATIENT_SUMMARY_FORM`]), the laboratory report to HL7 Europe
+//! Laboratory Report 2.0.0 (`laboratory`) and the discharge report to HL7
+//! Europe Hospital Discharge Report 1.0.0 (`discharge`). What feeds each
+//! section is the caller's: this module decides no clinical content.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -23,6 +27,9 @@ use fhir_types::r4::bundle::{Bundle, BundleEntry};
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::composition::{Composition, CompositionSection};
+use fhir_types::r4::diagnostic_report::DiagnosticReport;
+use fhir_types::r4::encounter::Encounter;
+use fhir_types::r4::extension::{Extension, ExtensionValue};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::meta::Meta;
 use fhir_types::r4::narrative::Narrative;
@@ -30,10 +37,17 @@ use fhir_types::r4::patient::Patient;
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 
+#[cfg(feature = "discharge")]
+pub mod discharge;
+#[cfg(feature = "laboratory")]
+pub mod laboratory;
+
 /// The canonical URL of the HL7 Europe Patient Summary `Bundle` profile.
+#[cfg(feature = "patient-summary")]
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
 
 /// The canonical URL of the HL7 Europe Patient Summary `Patient` profile.
+#[cfg(feature = "patient-summary")]
 pub const EPS_PATIENT: &str = "http://hl7.eu/fhir/eps/StructureDefinition/patient-eu-eps";
 
 /// The LOINC code system, which codes the document type and every section.
@@ -41,6 +55,7 @@ pub const LOINC: &str = "http://loinc.org";
 
 /// The LOINC code the `composition-eu-eps` profile fixes as
 /// `Composition.type`, a patient summary document.
+#[cfg(feature = "patient-summary")]
 pub const PATIENT_SUMMARY: &str = "60591-5";
 
 /// The code system of a section's empty reason, FHIR R4 `list-empty-reason`
@@ -62,45 +77,114 @@ pub struct Slot {
     pub title: &'static str,
 }
 
-/// Builds the slot of the slice `$slice`.
-macro_rules! slot {
-    ($slice:literal, $code:literal, $title:literal) => {
-        Slot {
-            slice: $slice,
-            code: $code,
-            title: $title,
-        }
-    };
+impl Slot {
+    /// Creates the slot of the slice `slice`, coded `code`, titled `title`.
+    #[must_use]
+    pub const fn new(slice: &'static str, code: &'static str, title: &'static str) -> Self {
+        Self { slice, code, title }
+    }
 }
 
 /// Every section slice of the `composition-eu-eps` profile, in the profile's
 /// order.
+#[cfg(feature = "patient-summary")]
 pub const SLOTS: [Slot; 17] = [
-    slot!("sectionProblems", "11450-4", "Problems"),
-    slot!("sectionAllergies", "48765-2", "Allergies and Intolerances"),
-    slot!("sectionMedications", "10160-0", "Medication Summary"),
-    slot!("sectionImmunizations", "11369-6", "Immunizations"),
-    slot!("sectionResults", "30954-2", "Results"),
-    slot!("sectionProceduresHx", "47519-4", "History of Procedures"),
-    slot!("sectionMedicalDevices", "46264-8", "Medical Devices"),
-    slot!("sectionAdvanceDirectives", "42348-3", "Advance Directives"),
-    slot!("sectionAlert", "104605-1", "Alerts"),
-    slot!("sectionFunctionalStatus", "47420-5", "Functional Status"),
-    slot!("sectionPregnancyHx", "10162-6", "History of Pregnancy"),
-    slot!("sectionPatientStory", "81338-6", "Patient Story"),
-    slot!("sectionPlanOfCare", "18776-5", "Plan of Care"),
-    slot!("sectionSocialHistory", "29762-2", "Social History"),
-    slot!("sectionVitalSigns", "8716-3", "Vital Signs"),
-    slot!("sectionTravelHx", "10182-4", "Travel History"),
-    slot!("sectionPatientHx", "11329-0", "Patient History"),
+    Slot::new("sectionProblems", "11450-4", "Problems"),
+    Slot::new("sectionAllergies", "48765-2", "Allergies and Intolerances"),
+    Slot::new("sectionMedications", "10160-0", "Medication Summary"),
+    Slot::new("sectionImmunizations", "11369-6", "Immunizations"),
+    Slot::new("sectionResults", "30954-2", "Results"),
+    Slot::new("sectionProceduresHx", "47519-4", "History of Procedures"),
+    Slot::new("sectionMedicalDevices", "46264-8", "Medical Devices"),
+    Slot::new("sectionAdvanceDirectives", "42348-3", "Advance Directives"),
+    Slot::new("sectionAlert", "104605-1", "Alerts"),
+    Slot::new("sectionFunctionalStatus", "47420-5", "Functional Status"),
+    Slot::new("sectionPregnancyHx", "10162-6", "History of Pregnancy"),
+    Slot::new("sectionPatientStory", "81338-6", "Patient Story"),
+    Slot::new("sectionPlanOfCare", "18776-5", "Plan of Care"),
+    Slot::new("sectionSocialHistory", "29762-2", "Social History"),
+    Slot::new("sectionVitalSigns", "8716-3", "Vital Signs"),
+    Slot::new("sectionTravelHx", "10182-4", "Travel History"),
+    Slot::new("sectionPatientHx", "11329-0", "Patient History"),
 ];
 
-/// Returns the slot of the section slice `slice`, or `None` for a name the
-/// profile does not slice.
+/// Returns the slot of the patient summary's section slice `slice`, or
+/// `None` for a name the profile does not slice.
+#[cfg(feature = "patient-summary")]
 #[must_use]
 pub fn slot(slice: &str) -> Option<&'static Slot> {
     SLOTS.iter().find(|slot| slot.slice == slice)
 }
+
+/// A code of a code system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Code {
+    /// The code system.
+    pub system: &'static str,
+    /// The code.
+    pub code: &'static str,
+}
+
+/// The report a form's `Bundle` holds beside its composition, each naming
+/// the other by an extension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Companion {
+    /// The canonical URL of the report's `DiagnosticReport` profile, which
+    /// the report claims.
+    pub profile: &'static str,
+    /// The URL of the `Composition` extension that names the report.
+    pub link: &'static str,
+    /// The URL of the `DiagnosticReport` extension that names the
+    /// composition.
+    pub back: &'static str,
+}
+
+/// The form of one category's document: its HL7 Europe profiles, its
+/// document type and its sections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Form {
+    /// The canonical URL of the `Bundle` profile the document claims.
+    pub bundle: &'static str,
+    /// The canonical URL of the `Composition` profile the bundle's
+    /// composition slice names.
+    pub composition: &'static str,
+    /// The canonical URL of the `Patient` profile the subject claims.
+    pub patient: &'static str,
+    /// The `Composition.type` the document writes.
+    pub kind: Code,
+    /// The sections a document of the form may hold, in the order the
+    /// form lists them.
+    pub slots: &'static [Slot],
+    /// The report the `Bundle` holds beside the composition, when the form
+    /// has one.
+    pub report: Option<Companion>,
+    /// The canonical URL of the `Encounter` profile, when the form requires
+    /// the encounter the document is about.
+    pub encounter: Option<&'static str>,
+    /// Whether the form requires `Bundle.language`.
+    pub language: bool,
+}
+
+/// The patient summary in the HL7 Europe Patient Summary 1.0.0-ballot form.
+#[cfg(feature = "patient-summary")]
+pub const PATIENT_SUMMARY_FORM: Form = Form {
+    bundle: EPS_BUNDLE,
+    composition: "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps",
+    patient: EPS_PATIENT,
+    kind: Code {
+        system: LOINC,
+        code: PATIENT_SUMMARY,
+    },
+    slots: &SLOTS,
+    report: None,
+    encounter: None,
+    language: false,
+};
+
+/// The canonical URL of the HL7 Europe base `Patient` profile, the subject
+/// of the laboratory and discharge reports.
+#[cfg(any(feature = "laboratory", feature = "discharge"))]
+pub const EU_CORE_PATIENT: &str = "http://hl7.eu/fhir/base/StructureDefinition/patient-eu-core";
 
 /// Why a section has no entry (FHIR R4 `list-empty-reason`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -203,11 +287,31 @@ pub enum DocumentError {
         /// The section slice.
         slice: &'static str,
     },
+    /// A section is none of the form's.
+    #[error("the section {slice} is not a section of the document's form")]
+    Foreign {
+        /// The section slice.
+        slice: &'static str,
+    },
+    /// The form requires a part the document was not given.
+    #[error("the document's form requires its {part}, which was not given")]
+    Missing {
+        /// The part: `encounter` or `language`.
+        part: &'static str,
+    },
+    /// The form holds a report beside its composition and none was given,
+    /// or it holds none and one was.
+    #[error("the document's form and its report disagree: the form {expected} one")]
+    Report {
+        /// What the form expects: `requires` or `holds no`.
+        expected: &'static str,
+    },
 }
 
-/// The patient summary document as it is assembled.
+/// A document as it is assembled.
 #[derive(Debug, Clone)]
 pub struct Document {
+    form: &'static Form,
     base: String,
     identifier: String,
     timestamp: String,
@@ -216,15 +320,34 @@ pub struct Document {
     authors: Vec<String>,
     entries: Vec<(String, Resource)>,
     sections: Vec<Section>,
+    report: Option<DiagnosticReport>,
+    encounter: Option<String>,
+    language: Option<String>,
 }
 
 impl Document {
-    /// Creates the document named `identifier`, a URN, written at
+    /// Creates the patient summary named `identifier`, a URN, written at
+    /// `timestamp`, a FHIR `instant`, titled `title`, its entries named under
+    /// the absolute FHIR base `base`.
+    #[cfg(feature = "patient-summary")]
+    #[must_use]
+    pub fn new(base: &str, identifier: String, timestamp: String, title: String) -> Self {
+        Self::of(&PATIENT_SUMMARY_FORM, base, identifier, timestamp, title)
+    }
+
+    /// Creates the document of `form` named `identifier`, a URN, written at
     /// `timestamp`, a FHIR `instant`, titled `title`, its entries named under
     /// the absolute FHIR base `base`.
     #[must_use]
-    pub fn new(base: &str, identifier: String, timestamp: String, title: String) -> Self {
+    pub fn of(
+        form: &'static Form,
+        base: &str,
+        identifier: String,
+        timestamp: String,
+        title: String,
+    ) -> Self {
         Self {
+            form,
             base: base.trim_end_matches('/').to_owned(),
             identifier,
             timestamp,
@@ -233,7 +356,16 @@ impl Document {
             authors: Vec::new(),
             entries: Vec::new(),
             sections: Vec::new(),
+            report: None,
+            encounter: None,
+            language: None,
         }
+    }
+
+    /// Returns the document's form.
+    #[must_use]
+    pub const fn form(&self) -> &'static Form {
+        self.form
     }
 
     /// Returns the `fullUrl` of the resource `resource_type`/`id`
@@ -244,7 +376,7 @@ impl Document {
     }
 
     /// Adds `patient`, under its `id`, as the document's subject, claiming
-    /// the `patient-eu-eps` profile, and returns the relative reference
+    /// the form's `Patient` profile, and returns the relative reference
     /// `Patient/{id}` every reference to the patient is written with.
     ///
     /// The document's `Composition.subject` is written with that reference,
@@ -258,7 +390,7 @@ impl Document {
     /// [`DocumentError::Codec`] when it cannot be encoded.
     pub fn with_patient(&mut self, mut patient: Patient) -> Result<String, DocumentError> {
         let meta = patient.meta.get_or_insert_with(Meta::default);
-        meta.profile.push(EPS_PATIENT.into());
+        meta.profile.push(self.form.patient.into());
         self.add(&[Resource::Patient(Box::new(patient))])?;
         let id = match self.entries.last() {
             Some((_, Resource::Patient(added))) => added.id.clone(),
@@ -296,8 +428,15 @@ impl Document {
     ///
     /// # Errors
     ///
-    /// [`DocumentError::Repeated`] for a slice the document already holds.
+    /// [`DocumentError::Foreign`] for a section that is none of the form's,
+    /// and [`DocumentError::Repeated`] for a slice the document already
+    /// holds.
     pub fn with_section(&mut self, section: Section) -> Result<(), DocumentError> {
+        if !self.form.slots.contains(section.slot) {
+            return Err(DocumentError::Foreign {
+                slice: section.slot.slice,
+            });
+        }
         if self
             .sections
             .iter()
@@ -308,6 +447,62 @@ impl Document {
             });
         }
         self.sections.push(section);
+        Ok(())
+    }
+
+    /// Adds `encounter`, under its `id`, as the encounter the document is
+    /// about, claiming the form's `Encounter` profile when it names one, and
+    /// returns the relative reference `Encounter/{id}` the composition, and
+    /// a report, name it with (`dr-comp-enc` holds the two equal).
+    ///
+    /// # Errors
+    ///
+    /// [`DocumentError::NoId`] for an encounter with no `id`, and
+    /// [`DocumentError::Codec`] when it cannot be encoded.
+    pub fn with_encounter(&mut self, mut encounter: Encounter) -> Result<String, DocumentError> {
+        if let Some(profile) = self.form.encounter {
+            let meta = encounter.meta.get_or_insert_with(Meta::default);
+            meta.profile.push(profile.into());
+        }
+        self.add(&[Resource::Encounter(Box::new(encounter))])?;
+        let id = match self.entries.last() {
+            Some((_, Resource::Encounter(added))) => added.id.clone(),
+            _ => None,
+        }
+        .ok_or_else(|| DocumentError::NoId {
+            resource: String::from("Encounter"),
+        })?;
+        let reference = format!("Encounter/{id}");
+        self.encounter = Some(reference.clone());
+        Ok(reference)
+    }
+
+    /// Sets `language`, a BCP 47 tag, as the document's `Bundle.language`.
+    pub fn with_language(&mut self, language: String) {
+        self.language = Some(language);
+    }
+
+    /// Sets `report` as the report the form holds beside the composition.
+    ///
+    /// The document writes it as the `Bundle`'s second entry, claiming the
+    /// form's report profile, with the document's identifier, its
+    /// `Composition.type` among the report's codings, the document's subject,
+    /// and an extension naming the composition, and the composition names it
+    /// in turn: the `Bundle-eu-lab` invariants `dr-comp-identifier`,
+    /// `dr-comp-type` and `dr-comp-subj` hold the two to one another. A
+    /// category the report carries is written on the composition too
+    /// (`dr-comp-category`).
+    ///
+    /// # Errors
+    ///
+    /// [`DocumentError::Report`] when the form holds no report.
+    pub fn with_report(&mut self, report: DiagnosticReport) -> Result<(), DocumentError> {
+        if self.form.report.is_none() {
+            return Err(DocumentError::Report {
+                expected: "holds no",
+            });
+        }
+        self.report = Some(report);
         Ok(())
     }
 
@@ -368,15 +563,18 @@ impl Document {
     /// Writes the document `Bundle`: the composition first, then every
     /// resource in the order it was added.
     ///
-    /// The composition is `final`, of the LOINC type [`PATIENT_SUMMARY`],
-    /// about the patient, by every author, with each section in the order
-    /// it was added. A section with no entry carries its empty reason.
+    /// The composition is `final`, of the form's type, about the patient,
+    /// by every author, with each section in the order it was added. A
+    /// section with no entry carries its empty reason. The report of a form
+    /// that holds one follows the composition ([`Document::with_report`]).
     ///
     /// # Errors
     ///
     /// [`DocumentError::Dangling`] when a section names a `fullUrl` the
-    /// document does not hold, or no patient was added.
-    pub fn into_bundle(self) -> Result<Bundle, DocumentError> {
+    /// document does not hold, or no patient was added, and
+    /// [`DocumentError::Report`] when the form holds a report and none was
+    /// given.
+    pub fn into_bundle(mut self) -> Result<Bundle, DocumentError> {
         let held: BTreeSet<&str> = self.entries.iter().map(|(url, _)| url.as_str()).collect();
         let mut sections = Vec::with_capacity(self.sections.len());
         for section in &self.sections {
@@ -396,14 +594,22 @@ impl Document {
             .patient
             .clone()
             .ok_or(DocumentError::Dangling { slice: "subject" })?;
-        let composition = Composition {
-            id: Some(
-                self.identifier
-                    .rsplit(':')
-                    .next()
-                    .unwrap_or("composition")
-                    .to_owned(),
-            ),
+        let id = self
+            .identifier
+            .rsplit(':')
+            .next()
+            .unwrap_or("composition")
+            .to_owned();
+        let composition_url = self.full_url("Composition", &id);
+        if self.form.encounter.is_some() && self.encounter.is_none() {
+            return Err(DocumentError::Missing { part: "encounter" });
+        }
+        if self.form.language && self.language.is_none() {
+            return Err(DocumentError::Missing { part: "language" });
+        }
+        let report = self.report_written(&subject, &composition_url)?;
+        let mut composition = Composition {
+            id: Some(id),
             identifier: Some(Identifier {
                 system: Some(URN_SYSTEM.into()),
                 value: Some(self.identifier.as_str().into()),
@@ -411,10 +617,11 @@ impl Document {
             }),
             status: "final".into(),
             r#type: CodeableConcept {
-                coding: vec![loinc(PATIENT_SUMMARY)],
+                coding: vec![coding(self.form.kind)],
                 ..CodeableConcept::default()
             },
             subject: Some(reference(&subject)),
+            encounter: self.encounter.as_deref().map(reference),
             date: self.timestamp.as_str().into(),
             author: self
                 .authors
@@ -425,15 +632,24 @@ impl Document {
             section: sections,
             ..Composition::default()
         };
-        let composition_url = self.full_url(
-            "Composition",
-            composition.id.as_deref().unwrap_or("composition"),
-        );
+        if let (Some(companion), Some((report_url, report))) = (self.form.report, &report) {
+            composition.extension.push(Extension {
+                url: companion.link.into(),
+                value: Some(ExtensionValue::Reference(Box::new(reference(report_url)))),
+                ..Extension::default()
+            });
+            composition.category.clone_from(&report.category);
+        }
         let mut entry = vec![BundleEntry {
             full_url: Some(composition_url.into()),
             resource: Some(Resource::Composition(Box::new(composition))),
             ..BundleEntry::default()
         }];
+        entry.extend(report.map(|(full_url, report)| BundleEntry {
+            full_url: Some(full_url.into()),
+            resource: Some(Resource::DiagnosticReport(Box::new(report))),
+            ..BundleEntry::default()
+        }));
         entry.extend(
             self.entries
                 .into_iter()
@@ -445,7 +661,7 @@ impl Document {
         );
         Ok(Bundle {
             meta: Some(Meta {
-                profile: vec![EPS_BUNDLE.into()],
+                profile: vec![self.form.bundle.into()],
                 ..Meta::default()
             }),
             identifier: Some(Identifier {
@@ -453,11 +669,83 @@ impl Document {
                 value: Some(self.identifier.into()),
                 ..Identifier::default()
             }),
+            language: self.language.map(Into::into),
             r#type: "document".into(),
             timestamp: Some(self.timestamp.into()),
             entry,
             ..Bundle::default()
         })
+    }
+}
+
+impl Document {
+    /// The report entry of a form that holds one, about `subject` and
+    /// naming the composition at `composition_url`.
+    fn report_written(
+        &mut self,
+        subject: &str,
+        composition_url: &str,
+    ) -> Result<Option<(String, DiagnosticReport)>, DocumentError> {
+        match (self.form.report, self.report.take()) {
+            (Some(companion), Some(report)) => Ok(Some(self.report_entry(
+                companion,
+                report,
+                subject,
+                composition_url,
+            ))),
+            (None, None) => Ok(None),
+            (Some(_), None) => Err(DocumentError::Report {
+                expected: "requires",
+            }),
+            (None, Some(_)) => Err(DocumentError::Report {
+                expected: "holds no",
+            }),
+        }
+    }
+
+    /// The `fullUrl` and the content of the report entry: `report` with the
+    /// profile of `companion`, the document's identifier, its type among the
+    /// codings, `subject`, and the extension naming the composition at
+    /// `composition_url`.
+    fn report_entry(
+        &self,
+        companion: Companion,
+        mut report: DiagnosticReport,
+        subject: &str,
+        composition_url: &str,
+    ) -> (String, DiagnosticReport) {
+        let id = report.id.clone().unwrap_or_else(|| String::from("report"));
+        report.id = Some(id.clone());
+        report
+            .meta
+            .get_or_insert_with(Meta::default)
+            .profile
+            .push(companion.profile.into());
+        let identifier = Identifier {
+            system: Some(URN_SYSTEM.into()),
+            value: Some(self.identifier.as_str().into()),
+            ..Identifier::default()
+        };
+        if !report.identifier.contains(&identifier) {
+            report.identifier.push(identifier);
+        }
+        let kind = coding(self.form.kind);
+        if !report.code.coding.contains(&kind) {
+            report.code.coding.push(kind);
+        }
+        report.subject = Some(reference(subject));
+        report.encounter = self.encounter.as_deref().map(reference);
+        report
+            .extension
+            .retain(|extension| extension.url != companion.back);
+        report.extension.push(Extension {
+            url: companion.back.into(),
+            value: Some(ExtensionValue::Reference(Box::new(reference(
+                composition_url,
+            )))),
+            ..Extension::default()
+        });
+        (self.full_url("DiagnosticReport", &id), report)
     }
 }
 
@@ -523,10 +811,18 @@ fn escaped(text: &str) -> String {
 }
 
 /// The LOINC coding of `code`.
-fn loinc(code: &str) -> Coding {
+fn loinc(code: &'static str) -> Coding {
+    coding(Code {
+        system: LOINC,
+        code,
+    })
+}
+
+/// The coding of `code`.
+fn coding(code: Code) -> Coding {
     Coding {
-        system: Some(LOINC.into()),
-        code: Some(code.into()),
+        system: Some(code.system.into()),
+        code: Some(code.code.into()),
         ..Coding::default()
     }
 }
