@@ -79,10 +79,11 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
     digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
 };
 
-/// FerroPIX, the FerroHEALTH master patient index, whose PIXm Manager
-/// answers ITI-83 and takes the ITI-104 feed and whose XCPD Responding
-/// Gateway answers ITI-55: the identity service the end-to-end lane resolves
-/// and localizes patients through.
+/// FerroPIX, the FerroHEALTH master patient index.
+///
+/// Its PIXm Manager answers ITI-83 and takes the ITI-104 feed, and its XCPD
+/// Responding Gateway answers ITI-55: the identity service the end-to-end
+/// lane resolves and localizes patients through.
 pub const FERROPIX: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferropix",
     tag: "0.0.5",
