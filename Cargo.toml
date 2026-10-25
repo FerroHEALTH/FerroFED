@@ -63,7 +63,7 @@ oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.
 # crates.io on 2026-10-24.
 ihe-atna = { version = "=0.2.6", default-features = false }
 ehds-logging = { version = "=0.2.6", default-features = false }
-eehrxf = { path = "crates/eehrxf", version = "0.0.34" }
+eehrxf = { path = "crates/eehrxf", version = "0.0.35" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }

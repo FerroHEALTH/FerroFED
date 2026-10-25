@@ -56,6 +56,7 @@
 
 pub mod duplicates;
 pub mod mappings;
+pub mod repeated;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -249,6 +250,15 @@ pub enum AssemblyError {
         #[source]
         source: MappingError,
     },
+    /// A composition a member answered with is no JSON.
+    #[error("a composition of the template {template} is no JSON")]
+    Composition {
+        /// The composition's template id.
+        template: String,
+        /// Why.
+        #[source]
+        source: serde_json::Error,
+    },
     /// The document could not be written.
     #[error(transparent)]
     Document(#[from] DocumentError),
@@ -388,6 +398,22 @@ fn dropped_line(dropped: &Tally) -> Option<String> {
 /// probable-duplicate key of its medication entry.
 type Run = (Option<String>, Vec<String>, Option<duplicates::Key>);
 
+/// What running one mapping over one composition came to.
+enum Outcome {
+    /// The context's condition does not hold over the composition.
+    NotApplicable,
+    /// The composition holds the context's start archetype `count` times,
+    /// which one resource cannot carry apart, so the context was not run.
+    Repeated {
+        /// The start archetype.
+        archetype: String,
+        /// How many entries of it the composition holds.
+        count: usize,
+    },
+    /// The context ran.
+    Ran(Run),
+}
+
 /// Whether `refused` is the engine's answer that the context's own condition
 /// does not hold over the composition (FHIRconnect 1.0.0
 /// `basics/preprocessor.adoc`), which leaves the composition to the section's
@@ -481,10 +507,19 @@ impl Assembly {
                 let member = self.member(*index, origin)?;
                 let mut applied = false;
                 for mapping in runs {
-                    let Some((entry, lines, key)) =
-                        self.run(mapping, composition, &member, translator).await?
-                    else {
-                        continue;
+                    let (entry, lines, key) = match self
+                        .run(mapping, composition, &member, translator)
+                        .await?
+                    {
+                        Outcome::Ran(ran) => ran,
+                        Outcome::NotApplicable => continue,
+                        Outcome::Repeated { archetype, count } => {
+                            withheld.push(format!(
+                                    "A record from {} holds {count} entries of {archetype}, which the mapping cannot carry apart, so this section leaves the record out.",
+                                    origin.organisation.shown()
+                                ));
+                            continue;
+                        }
                     };
                     applied = true;
                     entries.extend(entry);
@@ -544,7 +579,19 @@ impl Assembly {
         composition: &Held,
         member: &str,
         translator: &mut Translator<'_>,
-    ) -> Result<Option<Run>, AssemblyError> {
+    ) -> Result<Outcome, AssemblyError> {
+        if let Some(archetype) = mapping.start_archetype(&composition.template) {
+            let count =
+                repeated::occurrences(&composition.composition, &archetype).map_err(|source| {
+                    AssemblyError::Composition {
+                        template: composition.template.clone(),
+                        source,
+                    }
+                })?;
+            if count > 1 {
+                return Ok(Outcome::Repeated { archetype, count });
+            }
+        }
         let context = CallContext::new()
             .with_patient(reference(&self.subject))
             .with_who(reference(&self.device))
@@ -555,7 +602,7 @@ impl Assembly {
             context,
         ) {
             Ok(ran) => ran,
-            Err(refused) if not_applicable(&refused) => return Ok(None),
+            Err(refused) if not_applicable(&refused) => return Ok(Outcome::NotApplicable),
             Err(source) => {
                 return Err(AssemblyError::Mapping {
                     template: composition.template.clone(),
@@ -597,7 +644,7 @@ impl Assembly {
             .filter(|resource| !matches!(resource, Resource::OperationOutcome(_)))
             .collect();
         let key = duplicates::Key::of(&entries);
-        Ok(Some((
+        Ok(Outcome::Ran((
             self.document.add(&entries)?.into_iter().next(),
             withheld,
             key,

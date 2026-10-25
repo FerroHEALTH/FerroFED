@@ -226,8 +226,8 @@ fn a_vaccination_and_a_medicine_each_land_in_their_own_section_by_the_vaccine_co
 }
 
 #[test]
-fn a_composition_holding_two_medicines_names_what_it_could_not_carry() -> Result<(), Box<dyn Error>>
-{
+fn a_composition_holding_two_medicines_is_left_out_and_named_never_mixed()
+-> Result<(), Box<dyn Error>> {
     let two = medication_held(
         "7c4e1d20-0000-4000-8000-0000000013a8::cdr-a.example.org::1",
         &[
@@ -243,13 +243,57 @@ fn a_composition_holding_two_medicines_names_what_it_could_not_carry() -> Result
         &medications()?,
     )?;
     let bundle = serde_json::to_value(&assembled.bundle)?;
+    assert!(
+        listed(&bundle, "10160-0").is_empty(),
+        "no entry mixes the two medicines"
+    );
     let medications = section(&bundle, "10160-0").ok_or("the medication summary")?;
     let div = medications["text"]["div"].as_str().ok_or("a narrative")?;
     assert!(
-        div.contains("could not be carried into this section (MedicationStatement.medication)"),
-        "a dropped medicine is named in the document, never silent: {div}"
+        div.contains("A record from Synthetic org-a holds 2 entries of openEHR-EHR-EVALUATION."),
+        "the record left out is named in the document, never silent: {div}"
     );
-    assert!(div.contains("from Synthetic org-a."), "{div}");
+    assert!(div.contains("leaves the record out"), "{div}");
+    assert_eq!(
+        medications["emptyReason"]["coding"][0]["code"], "unavailable",
+        "the section does not claim the patient takes no medicine"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_composition_holding_a_vaccine_and_a_medicine_is_named_in_both_sections_never_mixed()
+-> Result<(), Box<dyn Error>> {
+    let both = medication_held(
+        "7c4e1d20-0000-4000-8000-0000000013a9::cdr-a.example.org::1",
+        &[
+            medicine(eps::VACCINE, "20035000"),
+            medicine("C09AA05", "20053000"),
+        ],
+        &[],
+    );
+    let assembled = document_mapped(
+        &medication_answers(&[both], &[]),
+        header(),
+        &[],
+        &medications()?,
+    )?;
+    let bundle = serde_json::to_value(&assembled.bundle)?;
+    for code in ["10160-0", "11369-6"] {
+        assert!(
+            listed(&bundle, code).is_empty(),
+            "no entry in {code} mixes the two"
+        );
+        let div = section(&bundle, code)
+            .and_then(|found| found["text"]["div"].as_str())
+            .ok_or("a narrative")?;
+        assert!(
+            div.contains(
+                "A record from Synthetic org-a holds 2 entries of openEHR-EHR-EVALUATION."
+            ),
+            "the record left out is named in {code}: {div}"
+        );
+    }
     Ok(())
 }
 
