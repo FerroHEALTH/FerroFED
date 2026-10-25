@@ -110,30 +110,30 @@ impl Walk {
                 }
                 every.extend(found);
             }
-            // NOTE: FHIR R4 conformance-rules.html §2.1.0.6: an invariant "must evaluate to
-            // true" on each occurrence, so one this check does not read is listed, never passed.
             if !every.is_empty() {
-                for invariant in element.invariants() {
-                    self.unread(
-                        snapshot,
-                        element,
-                        Unread::Invariant(invariant.key().to_owned()),
-                    );
-                }
+                self.in_play(snapshot, element);
             }
             self.children(snapshot, id, &objects(&every));
             for (slice, members) in &sliced {
                 if let Some(element) = snapshot.by_id.get(slice).filter(|_| !members.is_empty()) {
-                    for invariant in element.invariants() {
-                        self.unread(
-                            snapshot,
-                            element,
-                            Unread::Invariant(invariant.key().to_owned()),
-                        );
-                    }
+                    self.in_play(snapshot, element);
                 }
                 self.children(snapshot, slice, members);
             }
+        }
+    }
+
+    /// Lists every invariant of `element`, which the resource carries, as
+    /// not evaluated.
+    // NOTE: FHIR R4 conformance-rules.html §2.1.0.6: an invariant "must evaluate to true" on
+    // each occurrence, so one this check does not read is listed, never passed.
+    fn in_play(&mut self, snapshot: &Snapshot<'_>, element: &Element) {
+        for invariant in element.invariants() {
+            self.unread(
+                snapshot,
+                element,
+                Unread::Invariant(invariant.key().to_owned()),
+            );
         }
     }
 
