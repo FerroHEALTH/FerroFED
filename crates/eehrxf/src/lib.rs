@@ -72,7 +72,14 @@
 pub mod category;
 pub mod crosswalk;
 pub mod dataset;
-#[cfg(all(feature = "patient-summary", feature = "fhir-r4"))]
+#[cfg(all(
+    feature = "fhir-r4",
+    any(
+        feature = "patient-summary",
+        feature = "laboratory",
+        feature = "discharge"
+    )
+))]
 pub mod document;
 #[cfg(feature = "openehr")]
 pub mod mapping;

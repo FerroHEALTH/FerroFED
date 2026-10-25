@@ -20,11 +20,17 @@ mod dataset;
 #[cfg(feature = "discharge")]
 mod discharge;
 #[cfg(test)]
+#[cfg(all(feature = "discharge", feature = "fhir-r4"))]
+mod discharge_document;
+#[cfg(test)]
 #[cfg(all(feature = "openehr", feature = "patient-summary"))]
 mod document;
 #[cfg(test)]
 #[cfg(feature = "imaging")]
 mod imaging;
+#[cfg(test)]
+#[cfg(all(feature = "laboratory", feature = "fhir-r4"))]
+mod lab_document;
 #[cfg(test)]
 #[cfg(feature = "laboratory")]
 mod laboratory;
