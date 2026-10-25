@@ -8,7 +8,7 @@
 //! node's Routes tab. The find takes routing ids and names alone and never a
 //! patient identifier, so its words sit in the query (`GET /search?q=`) as any
 //! filter's do. As you type, the panel under the field asks [`ANSWER`], the
-//! server function [`search_answer`], which answers the FerroUI search
+//! server function [`find_answer`], which answers the FerroUI search
 //! answer as JSON; the find page lists every match in the page.
 
 use ferrohealth_ui::i18n::Arg;
