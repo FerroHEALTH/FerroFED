@@ -107,8 +107,9 @@ HL7 Europe Patient Summary	hl7.fhir.eu.eps	-
 HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
 HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
 HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
-HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
+HL7 International Patient Summary	hl7.fhir.uv.ips	the versions the pinned HL7 Europe guides depend on
 IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version the pinned HL7 Europe guides depend on
+IHE MHD FHIR package	ihe.iti.mhd	the version the pinned MyHealth@EU NCPeH API depends on
 HL7 Europe EU Health Data API	hl7.fhir.eu.health-data-api	-
 HL7 Europe Imaging Report	hl7.fhir.eu.imaging	-
 HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-
@@ -187,6 +188,11 @@ fhir-r4.sh	FHIR R4 4.0.1 is the version every vendored HL7 Europe package declar
 xt-ehr.sh	the Xt-EHR joint action publishes no release feed for its deliverables; they stand in for the Article 15(1) act until it is adopted, the script fails when an upstream byte moves, and the adopted act is a re-pin under scripts/vendor/eu.sh
 openehr-ckm.sh	the openEHR Clinical Knowledge Manager publishes no release feed for a template; the script fails when an upstream byte moves, and a new asset version is a re-pin with its clinical safety review
 ferropulse.sh	FerroPULSE is the family's own receiver and publishes no release feed; the envelope v2 schema is pinned by commit and checksum, and a new envelope version is a code change in the reporter, never a refresh"
+
+# current LABEL PIN SOURCE: the line of a pin that is its upstream's newest.
+current() {
+  printf 'current    %s %s (%s)\n' "$1" "$2" "$3"
+}
 
 # corpus_rows [MATRIX]: one "label<TAB>script" record per row of MATRIX whose
 # third cell names a scripts/vendor/ script, which is what makes it a corpus
@@ -591,7 +597,7 @@ while IFS=$'\t' read -r label repo; do
   latest="${latest#v}"
 
   if [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned" "$repo"
+    current "$label" "$pinned" "$repo"
   else
     printf 'STALE      %s: pinned %s, newest upstream release %s (https://github.com/%s/releases/tag/%s)\n' \
       "$label" "$pinned" "$latest" "$repo" "$tag"
@@ -649,7 +655,7 @@ while IFS=$'\t' read -r label repo prefix hold; do
     printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$repo" "$prefix"
     unreadable=1
   elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$repo"
+    current "$label" "$pinned_tag" "$repo"
   elif [[ "$hold" != "-" ]]; then
     printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
       "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
@@ -799,7 +805,7 @@ while IFS=$'\t' read -r label project prefix hold; do
     printf 'UNREADABLE %s: %s has no %sX.Y tag\n' "$label" "$project" "$prefix"
     unreadable=1
   elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s (%s)\n' "$label" "$pinned_tag" "$project"
+    current "$label" "$pinned_tag" "$project"
   elif [[ "$hold" != "-" ]]; then
     printf 'held       %s: pinned %s, newest release tag %s%s, held at %s\n' \
       "$label" "$pinned_tag" "$prefix" "$latest" "$hold"
@@ -876,7 +882,7 @@ elif ! latest="$(curl --fail --silent --show-error --user-agent ferrofed-pin-che
   printf 'UNREADABLE %s: could not read the newest stable release from %s (%s)\n' "$CHROME_LABEL" "$CHROME_FEED" "$latest"
   unreadable=1
 elif [[ "$pinned" = "$latest" ]]; then
-  printf 'current    %s %s (%s)\n' "$CHROME_LABEL" "$pinned" "$CHROME_FEED"
+  current "$CHROME_LABEL" "$pinned" "$CHROME_FEED"
 else
   printf 'STALE      %s: pinned %s, newest stable release %s (%s)\n' \
     "$CHROME_LABEL" "$pinned" "$latest" "$CHROME_FEED"

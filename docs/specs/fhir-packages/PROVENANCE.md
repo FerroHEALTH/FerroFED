@@ -46,7 +46,7 @@ in the cache only for their size (58 MB).
 - Licence: CC0-1.0: the license of the package manifest
 - Not redistributed: the script fetches it into `.vendor-cache/fhir-packages/`, which git
   ignores; this repository carries none of its content.
-- Note: The registry tarball as served, kept in the cache for its size. The version hl7.fhir.eu.eps 1.0.0-ballot depends on; scripts/vendor/eehrxf.sh commits 2.0.1.
+- Note: The registry tarball as served, kept in the cache for its size. The version hl7.fhir.eu.eps 1.0.0-ballot and every MyHealth@EU guide of scripts/vendor/myhealth-eu.sh depend on; scripts/vendor/eehrxf.sh commits 2.0.1.
 
 ### `hl7.fhir.uv.extensions.r4-5.2.0.tgz` (cache only, not redistributed)
 

@@ -157,9 +157,12 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/eu-hl7-laboratory/`: `hl7.fhir.eu.laboratory` 2.1.0 and
     2.0.0, the version the eehrxf component reads (CC0-1.0).
   - `docs/specs/eu-hl7-extensions/`: `hl7.fhir.eu.extensions.r4` 1.3.1 and
-    1.3.0, the versions the guides depend on (CC0-1.0).
+    1.3.0, the versions the guides depend on, and `hl7.fhir.eu.extensions`
+    0.1.0, the package name before `.r4`, which MyHealth@EU Hospital
+    Discharge Report 9.1.1 depends on (CC0-1.0, #1306).
   - `docs/specs/hl7-ips/`: `hl7.fhir.uv.ips` 2.0.0, the version the Patient
-    Summary depends on (CC0-1.0).
+    Summary depends on, and 2.0.1, the version Laboratory Report 2.1.0 and
+    Hospital Discharge Report 1.0.0 depend on (CC0-1.0).
   - `docs/specs/ihe-pharm-mpd/`: `ihe.pharm.mpd.r4` 1.0.0-comment-2, the
     version the HL7 Europe Base and Core, Patient Summary and Medication
     Prescription and Dispense guides depend on (CC-BY-SA-4.0).
@@ -169,12 +172,17 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     1.0.0-ballot, whose `EEHRxFDocumentPriorityCategoryCS` codes the Art
     14(1) categories the `ehds-logging` crate (FerroHEALTH/FerroAUDIT)
     writes, read here by the testkit (CC0-1.0).
-  - `docs/specs/eu-hl7-imaging/`: `hl7.fhir.eu.imaging` 1.0.0-ballot
-    (CC0-1.0).
+  - `docs/specs/eu-hl7-imaging/`: `hl7.fhir.eu.imaging` 1.0.0-ballot, and
+    the 1.0.0-alpha preview MyHealth@EU Medical Imaging Report 9.1.1 depends
+    on, which HL7 Europe serves at `https://hl7.eu/fhir/imaging/xtehr/` and
+    the registry does not list (CC0-1.0, #1306).
   - `docs/specs/eu-hl7-hdr/`: `hl7.fhir.eu.hdr` 1.0.0 and 0.1.0-ballot
     (CC0-1.0).
   - `docs/specs/ehdsi-mvc/`: `myhealth.eu.fhir.mvc-package` 9.1.0, the
     MyHealth@EU Master Value Sets Catalogue (CC0-1.0).
+- `docs/specs/ihe-mhd/`: the IHE MHD 4.2.2 FHIR package `ihe.iti.mhd`, the
+  version the MyHealth@EU NCPeH API depends on, committed whole and pinned
+  by URL and sha256 through `scripts/vendor/eehrxf.sh` (CC-BY-4.0, #1306).
 - `docs/specs/fhir-packages/`: the provenance alone of the 15 FHIR packages
   the committed HL7 Europe manifests name and this repository does not
   commit (the FHIR R4 core, HL7 Terminology, the HL7 extension packages,
@@ -186,6 +194,14 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   validator holds a received document to beside the committed packages
   (#808); `ferrofed_testkit::fhir_packages` fetches a missing one from the
   same pins.
+- `docs/specs/fhir-packages-myhealth-eu/`: the provenance alone of the three
+  FHIR packages the manifests of the MyHealth@EU guides, of Laboratory
+  Report 2.1.0 and of Hospital Discharge Report 1.0.0 name beside the
+  Patient Summary's closure (HL7 Terminology 7.2.0 and 7.4.0 and the R5 to
+  R4 cross-version extensions 0.0.1-snapshot-2), pinned in the same script
+  and fetched into `.vendor-cache/fhir-packages-myhealth-eu/` for their size
+  (19 MB). The testkit's `myhealth_eu` tests fail when a package one of
+  those manifests names is in neither corpus nor committed (#1306).
 - `docs/specs/xt-ehr-deliverables/`: every Xt-EHR deliverable and task
   outcome the joint action publishes (D1.1 to D9.3, with the T5.2 and T5.3
   outcomes), among them the closest published text of the Art 15(1)

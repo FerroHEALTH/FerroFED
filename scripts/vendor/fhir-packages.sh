@@ -17,7 +17,9 @@
 # the git-ignored cache and never committed; PROVENANCE.md under
 # docs/specs/fhir-packages/ records them, and the testkit
 # (ferrofed_testkit::fhir_packages) fetches a missing one from the same
-# pin. scripts/checks/pin-freshness.sh lists this script as unwatched: each
+# pin. A second corpus, docs/specs/fhir-packages-myhealth-eu/, pins the
+# packages the MyHealth@EU guides and the HL7 Europe re-pins name beside
+# that closure (#1306). scripts/checks/pin-freshness.sh lists this script as unwatched: each
 # pin is the version a vendored manifest names, so a newer release never
 # applies.
 #
@@ -51,7 +53,7 @@ pin cache hl7.fhir.r4.core-4.0.1.tgz "4.0.1" "$registry/hl7.fhir.r4.core/4.0.1" 
   "$cached Every package of the closure depends on it."
 pin cache hl7.fhir.eu.base-2.0.0.tgz "2.0.0 (FHIR 4.0.1)" "$registry/hl7.fhir.eu.base/2.0.0" \
   b2858677ae11245bbc768ced2e205c5354ebf71ae8d7a7a0f2915c3eb6124999 "$cc0" \
-  "$cached The version hl7.fhir.eu.eps 1.0.0-ballot depends on; scripts/vendor/eehrxf.sh commits 2.0.1."
+  "$cached The version hl7.fhir.eu.eps 1.0.0-ballot and every MyHealth@EU guide of scripts/vendor/myhealth-eu.sh depend on; scripts/vendor/eehrxf.sh commits 2.0.1."
 pin cache hl7.fhir.uv.extensions.r4-5.2.0.tgz "5.2.0 (FHIR 4.0.1)" "$registry/hl7.fhir.uv.extensions.r4/5.2.0" \
   b406e75575f05676559d0759770c5939d023ee72fb2ef38e0b3259328487720a "$cc0" "$cached"
 pin cache hl7.fhir.uv.extensions.r4-5.3.0.tgz "5.3.0 (FHIR 4.0.1)" "$registry/hl7.fhir.uv.extensions.r4/5.3.0" \
@@ -89,5 +91,29 @@ and this repository does not commit, each the tarball of
 declares CC0-1.0 in its manifest except SMART App Launch, which declares
 CC-BY-4.0, and the DICOM code systems, which declare \`free\`; they are kept
 in the cache only for their size (58 MB)." "" "$read_by"
+
+# The packages the manifests of the MyHealth@EU guides and of the HL7 Europe
+# re-pins name that neither corpus above nor a committed one holds (#1306).
+# A corpus of their own, so the Patient Summary's set stays the closure the
+# receive tests validate against.
+read_by_myhealth=$'#1306 (the dependency closure of the MyHealth@EU guides of\n  #1290), and the testkit\x27s myhealth_eu tests'
+pin cache hl7.terminology.r4-7.2.0.tgz "7.2.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/7.2.0" \
+  f8c33fd30f8daf78f7496540a841e3fd20585279c0e785fb97394e44d6f24fee "$cc0" \
+  "$cached The version the MyHealth@EU Patient Summary, ePrescription and eDispensation and Vaccination guides depend on."
+pin cache hl7.terminology.r4-7.4.0.tgz "7.4.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/7.4.0" \
+  1dc558c204f5ee1f2b96ab9a8cd83d0811475b08a4e06a7c2bcea55d1ab116ed "$cc0" \
+  "$cached The version hl7.fhir.eu.laboratory 2.1.0 and hl7.fhir.eu.hdr 1.0.0 depend on."
+pin cache hl7.fhir.uv.xver-r5.r4-0.0.1-snapshot-2.tgz "0.0.1-snapshot-2 (FHIR 4.0.1)" \
+  "$registry/hl7.fhir.uv.xver-r5.r4/0.0.1-snapshot-2" \
+  e28ec496b04c9fa681b4c4971afb4fefc56f4dc45f2680c2935b589656731946 "$cc0" \
+  "$cached The version the MyHealth@EU NCPeH API and Medical Imaging Report guides depend on."
+pinned_corpus fhir-packages-myhealth-eu "FHIR package closure of the MyHealth@EU guides" \
+  "the FHIR packages the MyHealth@EU guides and the HL7 Europe re-pins name beside the Patient Summary's closure" \
+  "The FHIR packages the manifests of the MyHealth@EU guides, of HL7 Europe
+Laboratory Report 2.1.0 and of Hospital Discharge Report 1.0.0 name that
+neither the Patient Summary's closure nor a committed package holds, each
+the tarball of \`packages.fhir.org\` at the exact version a manifest names.
+Every one declares CC0-1.0 in its manifest; they are kept in the cache only
+for their size (19 MB)." "" "$read_by_myhealth"
 
 say "done"
