@@ -668,6 +668,26 @@ answers ([The patient summary over FHIR](../integrate/patient-summary.md),
 list names it beside each member's own summary
 ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
+### The discharge report crosswalk
+
+The discharge report (Art 14(1)(f)) is described three ways as well: the
+eHealth Network *Guideline on Hospital Discharge Report* (Release 1.1, §4),
+the Xt-EHR `EHDSDischargeReport` logical model and the HL7 Europe Hospital
+Discharge Report composition (`hl7.fhir.eu.hdr` 1.0.0). `eehrxf` holds the
+crosswalk between them under its `discharge` feature, keyed on the Xt-EHR
+element path, as it does for the patient summary. A test fails when an
+element a producer must or should be able to populate has no row, when a row
+names an element the HDR composition lacks or a profile its section entries
+do not target, or when a row's producer obligation differs from the Xt-EHR
+obligations profile.
+
+The encounter is the composition's `encounter`, which the HDR profile
+requires, so it has no section. The model's devices and procedures of the
+patient history sit in the HDR sections for devices and past procedures,
+and its presented form in the attachments section. Building the discharge
+report from member data, its section queries and the FHIR face are planned
+([#667](https://github.com/FerroHEALTH/FerroFED/issues/667)).
+
 ## Not legal advice
 
 This page is the manufacturer's reading of the EHDS Regulation and the CRA,

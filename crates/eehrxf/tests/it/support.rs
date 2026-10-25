@@ -42,6 +42,22 @@ pub(crate) fn eps(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     )?)
 }
 
+/// The vendored `hl7.fhir.eu.hdr` 1.0.0 package, as the registry serves it.
+#[cfg(feature = "discharge")]
+pub(crate) fn hdr_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz")
+}
+
+/// Reads the profile at `url` from the vendored HDR package.
+#[cfg(feature = "discharge")]
+pub(crate) fn hdr(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    Ok(ResourceProfile::read(
+        std::fs::File::open(hdr_package())?,
+        url,
+    )?)
+}
+
 /// The vendored `hl7.fhir.eu.mpd` 1.0.0 package, as the registry serves it.
 #[cfg(any(feature = "prescription", feature = "dispensation"))]
 pub(crate) fn mpd_package() -> PathBuf {
