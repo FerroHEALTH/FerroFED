@@ -43,6 +43,7 @@
 
 - [Instructions for use](operate/instructions-for-use.md)
 - [A production deployment](operate/production.md)
+  - [Preparing each CDR](operate/preparing-a-cdr.md)
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [The container image and the quickstart](operate/container.md)
   - [The Kubernetes package](operate/kubernetes.md)
@@ -86,6 +87,7 @@
   - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
   - [Stored queries](integrate/stored-queries.md)
 - [The patient summary over FHIR](integrate/patient-summary.md)
+  - [Terminology on the FHIR face](integrate/terminology.md)
 - [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
 - [A national contact point](integrate/national-contact-point.md)
 - [Errors and status codes](integrate/errors.md)
