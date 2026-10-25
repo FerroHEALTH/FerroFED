@@ -206,14 +206,6 @@ messages! {
     SettingsSecretSetFile = "settings-secret-set-file",
     /// `Set in the file`
     SettingsSecretSetInline = "settings-secret-set-inline",
-    /// `the default`
-    SettingsSourceDefault = "settings-source-default",
-    /// `from an environment override`
-    SettingsSourceEnvironment = "settings-source-environment",
-    /// `from the configuration file`
-    SettingsSourceFile = "settings-source-file",
-    /// `from revision { $revision }`
-    SettingsSourceRevision = "settings-source-revision",
     /// `Access log`
     SettingsTabAccessLog = "settings-tab-access-log",
     /// `Authentication`

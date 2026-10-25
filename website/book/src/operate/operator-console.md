@@ -387,9 +387,12 @@ Federation behaviour, Fan-out and paging, Consent, Stored queries, Access
 log, FHIR face and Authentication. Authentication is read-only, because only
 the configuration file sets it: the audience, the operator scope, the token
 issuers and each trusted issuer, with every claim name, the correlation
-header and the added countries of a national contact point it declares. Each setting is a row with its value, where the value
-comes from (the configuration file, an environment override, the running
-revision, or the default), its configuration key, and a Next start mark
+header and the added countries of a national contact point it declares.
+Each setting is a row with its value, a mark when the value does not come
+from where the page's settings come from (From the environment, Default, or
+From the file under managed revisions; a value the running revision sets,
+or the file with revisions off, carries none), its configuration key, and a
+Next start mark
 when a change takes effect only at the next start of each replica, with
 the value that start takes once a saved change waits for it. A secret is
 named by the file it is read from, never by its value. The rows come from
