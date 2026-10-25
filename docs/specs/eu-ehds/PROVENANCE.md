@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `b102b6e1db0ec479568a97aa8ca71e2c56403d19ca16f90a1b22c35a911230fb`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 8 committed, 0 cache only, 2 needing
+  the pins): `e03a49fe736e3b5209af1a9534792fc849d9a489046cb47e6cf086c9a3478ba2`
+- Fetched: 2026-10-25, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 11 committed, 0 cache only, 2 needing
   manual retrieval
-- Files in this directory: 8 besides this one, each verbatim as the
+- Files in this directory: 11 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `9fd71ce692d52bced1dfba2cd1d6ae520c02dc94eb8f3d8a4ffae92c7a5cecac`
+  `PROVENANCE.md` excluded): `e1d032540fd5acac993047be667e68911b1618092c2e4a1b1981aa60c6096896`
 - Read by: #488 (the country research into identity resolution,
   localization, consent, addressing and authentication to nodes) and
   #519 (EHDS readiness)
@@ -27,7 +27,9 @@ Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
 eHealth Network guidelines on the Patient Summary, on ePrescription and
-eDispensation and the General Guidelines they defer to, and Commission
+eDispensation, on Laboratory Results, on Hospital Discharge Report and on
+Medical imaging studies and reports, and the General Guidelines they defer
+to, and Commission
 Decision 2011/833/EU of 12 December 2011 on the reuse of Commission
 documents, which governs the reuse of all of them.
 The Regulation, the implementing acts, the Recommendation and the Decision
@@ -95,6 +97,30 @@ Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
 - sha256: `041ee26c324c47a72564cb040865df2d9a7d7b25a5ed08e2e2568abc54c2198f`
 - Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
 - Note: The eHealth Network General Guidelines, Release 3.1, to which the Patient Summary and ePrescription guidelines defer.
+
+### `ehn-guidelines-laboratory.pdf` (committed)
+
+- Source: <https://health.ec.europa.eu/document/download/4e8d82ba-87ca-4123-a8d8-a5d895ae8ecc_en?filename=ehealth_ehn-lab-results-guideline_en.pdf>
+- Version: Release 1.1, June 2023
+- sha256: `b89e39148ec09418ef004dd615c8f39b69e8821a8674156637639adc8812f054`
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Note: The eHealth Network guideline on Laboratory Results, Release 1.1, adopted in June 2023, as its title page states; its Annex holds the dataset the laboratory crosswalk names by element id.
+
+### `ehn-guidelines-hdr.pdf` (committed)
+
+- Source: <https://health.ec.europa.eu/document/download/cbb2efd4-82b4-4127-ab58-0aaedf662df6_en?filename=ehn_hdr_guidelines_en.pdf>
+- Version: Release 1.1, November 2024
+- sha256: `349027ec35cfcbd8ae8f23e713f240c3f511e688b2cf6d2d4e28c23fa314a3e0`
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Note: The eHealth Network guideline on Hospital Discharge Report, Release 1.1, adopted in Budapest in November 2024, as its title page states; its Annex holds the dataset the discharge crosswalk names by element id.
+
+### `ehn-guidelines-imaging.pdf` (committed)
+
+- Source: <https://health.ec.europa.eu/document/download/0079ad26-8f8f-435b-9472-3cd8625f4220_en?filename=ehn_mi_guidelines_en.pdf>
+- Version: Release 1.1, November 2024
+- sha256: `694d1f8c09c8bb4705bfa93582cbd97b054546b4ea72ffbc717886fba5d267be`
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Note: The eHealth Network guideline on Medical imaging studies and reports, Release 1.1, adopted in Budapest in November 2024, as its title page states; its Annex holds the dataset the imaging crosswalk names by element id.
 
 ### `dec-eu-2011-833-en.xhtml` (committed)
 
