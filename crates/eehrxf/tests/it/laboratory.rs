@@ -49,7 +49,7 @@ fn the_laboratory_crosswalk_holds_against_the_pinned_packages() -> Result<(), Bo
 
 #[test]
 fn the_laboratory_category_carries_the_crosswalk() {
-    let crosswalk = Category::Laboratory.crosswalk();
+    let crosswalk = Category::Laboratory.crosswalks().first().copied();
     assert!(
         crosswalk.is_some_and(|crosswalk| crosswalk.root == LABORATORY.root
             && crosswalk.profile == LAB_COMPOSITION

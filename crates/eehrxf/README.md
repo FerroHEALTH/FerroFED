@@ -23,11 +23,15 @@ published proxies carry it until the Art 15(1) implementing act is adopted.
   eHealth Network element ids and to the elements and slices of the HL7
   Europe profile, with the producer obligation and the profiles a
   FHIRconnect context may map to in order to feed each. `Crosswalk::check`
-  holds the rows to the packages they name. The patient summary
+  holds the rows to the packages they name, and `Category::crosswalks`
+  names a category's crosswalks, one per dataset. The patient summary
   (`crosswalk::patient_summary`, feature `patient-summary`), the electronic
   prescription (`crosswalk::prescription`, feature `prescription`), the
   electronic dispensation (`crosswalk::dispensation`, feature
-  `dispensation`), the laboratory report (`crosswalk::laboratory`, feature
+  `dispensation`), the imaging report and the imaging study
+  (`crosswalk::imaging`, feature `imaging`, against the HL7 Europe Imaging
+  Report 1.0.0-ballot composition with its `DiagnosticReport`, and its
+  `ImagingStudy`), the laboratory report (`crosswalk::laboratory`, feature
   `laboratory`) and the discharge report (`crosswalk::discharge`, feature
   `discharge`) carry one, the two medication ones against the HL7 Europe MPD
   1.0.0 `MedicationRequest-eu-mpd` and `MedicationDispense-eu-mpd` profiles,

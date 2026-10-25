@@ -57,7 +57,7 @@ fn the_patient_summary_crosswalk_holds_against_the_pinned_packages() -> Result<(
 
 #[test]
 fn the_patient_summary_category_carries_the_crosswalk() -> Result<(), Box<dyn Error>> {
-    let crosswalk = Category::PatientSummary.crosswalk();
+    let crosswalk = Category::PatientSummary.crosswalks().first().copied();
     assert!(
         crosswalk.is_some_and(|crosswalk| crosswalk.root == PATIENT_SUMMARY.root),
         "the patient summary names its crosswalk"

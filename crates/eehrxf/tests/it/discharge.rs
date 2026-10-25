@@ -42,7 +42,7 @@ fn the_discharge_crosswalk_holds_against_the_pinned_packages() -> Result<(), Box
 
 #[test]
 fn the_discharge_category_carries_the_crosswalk() {
-    let crosswalk = Category::Discharge.crosswalk();
+    let crosswalk = Category::Discharge.crosswalks().first().copied();
     assert!(
         crosswalk
             .is_some_and(|crosswalk| crosswalk.root == DISCHARGE.root

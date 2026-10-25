@@ -18,6 +18,8 @@
 pub mod discharge;
 #[cfg(feature = "dispensation")]
 pub mod dispensation;
+#[cfg(feature = "imaging")]
+pub mod imaging;
 #[cfg(feature = "laboratory")]
 pub mod laboratory;
 #[cfg(feature = "patient-summary")]

@@ -113,31 +113,26 @@ impl Category {
             .find(|category| category.code() == code)
     }
 
-    /// Returns the crosswalk of the category's dataset, when this build
-    /// carries one: the patient summary, the electronic prescription, the
-    /// electronic dispensation, the laboratory report and the discharge
-    /// report have one.
+    /// Returns the crosswalks of the category's datasets, one per root of
+    /// [`Category::roots`] and in its order.
+    ///
+    /// Imaging has two, the imaging report and the imaging study; every
+    /// other category has one.
     #[must_use]
-    pub const fn crosswalk(self) -> Option<&'static Crosswalk<'static>> {
+    pub const fn crosswalks(self) -> &'static [&'static Crosswalk<'static>] {
         match self {
             #[cfg(feature = "patient-summary")]
-            Self::PatientSummary => Some(&crate::crosswalk::patient_summary::PATIENT_SUMMARY),
+            Self::PatientSummary => &PATIENT_SUMMARY_SET,
             #[cfg(feature = "prescription")]
-            Self::Prescription => Some(&crate::crosswalk::prescription::PRESCRIPTION),
+            Self::Prescription => &PRESCRIPTION_SET,
             #[cfg(feature = "dispensation")]
-            Self::Dispensation => Some(&crate::crosswalk::dispensation::DISPENSATION),
+            Self::Dispensation => &DISPENSATION_SET,
+            #[cfg(feature = "imaging")]
+            Self::Imaging => &IMAGING_SET,
             #[cfg(feature = "laboratory")]
-            Self::Laboratory => Some(&crate::crosswalk::laboratory::LABORATORY),
+            Self::Laboratory => &LABORATORY_SET,
             #[cfg(feature = "discharge")]
-            Self::Discharge => Some(&crate::crosswalk::discharge::DISCHARGE),
-            #[cfg_attr(
-                not(feature = "imaging"),
-                expect(
-                    unreachable_patterns,
-                    reason = "every category this build carries has a crosswalk"
-                )
-            )]
-            _ => None,
+            Self::Discharge => &DISCHARGE_SET,
         }
     }
 
@@ -188,3 +183,31 @@ impl Category {
         }
     }
 }
+
+/// The crosswalks of the `patient-summary` category.
+#[cfg(feature = "patient-summary")]
+static PATIENT_SUMMARY_SET: [&Crosswalk<'static>; 1] =
+    [&crate::crosswalk::patient_summary::PATIENT_SUMMARY];
+
+/// The crosswalks of the `prescription` category.
+#[cfg(feature = "prescription")]
+static PRESCRIPTION_SET: [&Crosswalk<'static>; 1] = [&crate::crosswalk::prescription::PRESCRIPTION];
+
+/// The crosswalks of the `dispensation` category.
+#[cfg(feature = "dispensation")]
+static DISPENSATION_SET: [&Crosswalk<'static>; 1] = [&crate::crosswalk::dispensation::DISPENSATION];
+
+/// The crosswalks of the `imaging` category.
+#[cfg(feature = "imaging")]
+static IMAGING_SET: [&Crosswalk<'static>; 2] = [
+    &crate::crosswalk::imaging::IMAGING_REPORT,
+    &crate::crosswalk::imaging::IMAGING_STUDY,
+];
+
+/// The crosswalks of the `laboratory` category.
+#[cfg(feature = "laboratory")]
+static LABORATORY_SET: [&Crosswalk<'static>; 1] = [&crate::crosswalk::laboratory::LABORATORY];
+
+/// The crosswalks of the `discharge` category.
+#[cfg(feature = "discharge")]
+static DISCHARGE_SET: [&Crosswalk<'static>; 1] = [&crate::crosswalk::discharge::DISCHARGE];
