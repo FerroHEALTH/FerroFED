@@ -2,9 +2,7 @@
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 <div align="center">
 
-<img src="assets/brand/ferrofed-icon.svg" alt="" width="72" height="72">
-
-# FerroFED
+<img src="assets/brand/ferrofed-lockup-auto.svg" alt="FerroFED" height="64">
 
 **The openEHR federation gateway: one query, answered from every organisation that holds the patient's record.**
 
