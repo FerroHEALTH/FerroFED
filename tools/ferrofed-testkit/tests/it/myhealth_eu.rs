@@ -126,6 +126,10 @@ const PINNED: &[(&str, &str, &[&str])] = &[
 
 /// The packages whose manifests must name only packages the repository
 /// holds: the MyHealth@EU guides and the two HL7 Europe re-pins of #1290.
+/// They are reference text no code loads into a validator, so their direct
+/// dependencies are the boundary the test checks; a package a validator
+/// loads is held with its whole closure (no specification governs this: our
+/// own design, #1313).
 const CLOSURE_ROOTS: &[&str] = &[
     "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
     "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",

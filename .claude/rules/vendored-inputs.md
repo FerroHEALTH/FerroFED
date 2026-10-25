@@ -202,6 +202,16 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   and fetched into `.vendor-cache/fhir-packages-myhealth-eu/` for their size
   (19 MB). The testkit's `myhealth_eu` tests fail when a package one of
   those manifests names is in neither corpus nor committed (#1306).
+- **The boundary of a package closure (#1313, decision A107).** A package
+  set code loads into a validator or a mapping is held with its whole
+  transitive closure, with a test that fails when the closure is short: the
+  Patient Summary's closure of `docs/specs/fhir-packages/`. A package
+  vendored as reference text, which decisions and the book cite and no code
+  loads (the MyHealth@EU guides, the NCPeH API, HL7 Europe Laboratory
+  Report 2.1.0 and Hospital Discharge Report 1.0.0), is held with its direct
+  dependencies alone, and the `myhealth_eu` test checks that boundary. When
+  a category's receipt or validation starts reading such a package, the
+  change that adds the reader pins the package's whole closure.
 - `docs/specs/xt-ehr-deliverables/`: every Xt-EHR deliverable and task
   outcome the joint action publishes (D1.1 to D9.3, with the T5.2 and T5.3
   outcomes), among them the closest published text of the Art 15(1)
