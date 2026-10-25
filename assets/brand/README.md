@@ -37,11 +37,12 @@ values from `tokens.css` here verbatim.
 | `ferrofed-icon.svg` | primary icon, full colour, transparent background, 64-unit viewBox at a 512 intrinsic size |
 | `ferrofed-icon-dark.svg` | the icon on a dark ground, as FerroUI's FerroFED design draws it in the console's top bar |
 | `tokens.css` | the palette as CSS custom properties |
+| `ferrofed-lockup-auto.svg` | the mark and the wordmark side by side, switching between the light and dark tones on `prefers-color-scheme`, for the README and any page that serves one file to both themes |
 | `favicon.svg` | the browser-tab icon, byte-identical to `ferrofed-icon.svg` |
 | `favicon-32.png` | the 32-pixel raster of `favicon.svg` |
 | `favicon.ico` | the 16 and 32 pixel rasters in one file, for browsers that ask for `/favicon.ico` |
 
-The lockups and the social card follow when the site needs them.
+The social card follows when the site needs it.
 
 ## Regenerating the favicon set
 

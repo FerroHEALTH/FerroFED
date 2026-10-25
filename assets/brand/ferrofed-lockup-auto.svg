@@ -1,0 +1,30 @@
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+<!-- One lockup for both themes: the media query inside the SVG switches the
+     mark and wordmark tones on prefers-color-scheme, so a README or a page
+     serves one file to a light and a dark reader. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="232" height="64" viewBox="0 0 232 64" role="img" aria-label="FerroFED">
+  <title>FerroFED</title>
+  <style>
+    .c0-fill { fill: #0369A1 }
+    .c0-stroke { stroke: #0369A1 }
+    .c1-fill { fill: #7DD3FC }
+    .wm { fill: #0F172A; }
+    @media (prefers-color-scheme: dark) {
+      .c0-fill { fill: #38BDF8 }
+      .c0-stroke { stroke: #38BDF8 }
+      .c1-fill { fill: #7DD3FC }
+      .wm { fill: #F1F5F9; }
+    }
+  </style>
+  <g>
+  <path d="M3 32 H16" class="c0-stroke" stroke-width="4.6" stroke-linecap="round"/>
+  <path d="M11 26.5 L16.5 32 L11 37.5" fill="none" class="c0-stroke" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27 32 L48 14 M27 32 L50 32 M27 32 L48 50" class="c0-stroke" stroke-width="4.2" stroke-linecap="round"/>
+  <circle cx="27" cy="32" r="8" class="c0-fill"/>
+  <rect x="45" y="7" width="14" height="14" rx="3.5" class="c1-fill"/>
+  <rect x="47" y="25" width="14" height="14" rx="3.5" class="c1-fill"/>
+  <rect x="45" y="43" width="14" height="14" rx="3.5" class="c1-fill"/>
+  </g>
+  <text class="wm" x="76" y="44" font-family="'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="30" font-weight="700" letter-spacing="-0.3">FerroFED</text>
+</svg>
