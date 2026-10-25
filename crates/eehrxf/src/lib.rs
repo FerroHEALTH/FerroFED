@@ -77,7 +77,8 @@ pub mod dataset;
     any(
         feature = "patient-summary",
         feature = "laboratory",
-        feature = "discharge"
+        feature = "discharge",
+        feature = "imaging"
     )
 ))]
 pub mod document;

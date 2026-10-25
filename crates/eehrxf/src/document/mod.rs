@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The documents of the priority categories in their HL7 Europe forms
-//! (feature `fhir-r4` with `patient-summary`, `laboratory` or `discharge`).
+//! (feature `fhir-r4` with `patient-summary`, `laboratory`, `discharge` or
+//! `imaging`).
 //!
 //! A FHIR document is a `Bundle` of type `document` whose first entry is a
 //! `Composition` and whose other entries are every resource the composition
@@ -15,8 +16,9 @@
 //! and the report a form carries beside its composition. The patient summary
 //! is written to HL7 Europe Patient Summary 1.0.0-ballot
 //! ([`PATIENT_SUMMARY_FORM`]), the laboratory report to HL7 Europe
-//! Laboratory Report 2.0.0 (`laboratory`) and the discharge report to HL7
-//! Europe Hospital Discharge Report 1.0.0 (`discharge`). What feeds each
+//! Laboratory Report 2.0.0 (`laboratory`), the discharge report to HL7
+//! Europe Hospital Discharge Report 1.0.0 (`discharge`) and the imaging report
+//! to HL7 Europe Imaging Report 1.0.0-ballot (`imaging`). What feeds each
 //! section is the caller's: this module decides no clinical content.
 
 use std::collections::BTreeSet;
@@ -37,8 +39,11 @@ use fhir_types::r4::patient::Patient;
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 
+mod assembly;
 #[cfg(feature = "discharge")]
 pub mod discharge;
+#[cfg(feature = "imaging")]
+pub mod imaging;
 #[cfg(feature = "laboratory")]
 pub mod laboratory;
 
@@ -139,6 +144,33 @@ pub struct Companion {
     pub back: &'static str,
 }
 
+/// Where a document's `Composition.type` comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// The code the form fixes, written on the report too when the form has
+    /// one.
+    Fixed(Code),
+    /// The codings of the report's `code`, or `fallback` when the report
+    /// carries none, which the report then carries too.
+    Report {
+        /// The code written when the report carries none.
+        fallback: Code,
+    },
+}
+
+/// Who a document's composition names as its authors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Authorship {
+    /// Every author the document was given ([`Document::with_author`]): the
+    /// gateway `Device` and the operator `Organization`.
+    Gateway,
+    /// The given authors that are no `Organization`, and the `Organization`s
+    /// the report names as its performers, as `BundleReportEuImaging`'s
+    /// `dr-comp-author-org` requires; the first given `Organization`, the
+    /// operator, is the composition's `custodian`.
+    ReportPerformers,
+}
+
 /// The form of one category's document: its HL7 Europe profiles, its
 /// document type and its sections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,8 +182,13 @@ pub struct Form {
     pub composition: &'static str,
     /// The canonical URL of the `Patient` profile the subject claims.
     pub patient: &'static str,
-    /// The `Composition.type` the document writes.
-    pub kind: Code,
+    /// Where the `Composition.type` the document writes comes from.
+    pub kind: Kind,
+    /// The categories the composition, and the report when the form has
+    /// one, carry.
+    pub categories: &'static [Code],
+    /// Who the composition names as its authors.
+    pub authorship: Authorship,
     /// The sections a document of the form may hold, in the order the
     /// form lists them.
     pub slots: &'static [Slot],
@@ -171,10 +208,12 @@ pub const PATIENT_SUMMARY_FORM: Form = Form {
     bundle: EPS_BUNDLE,
     composition: "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps",
     patient: EPS_PATIENT,
-    kind: Code {
+    kind: Kind::Fixed(Code {
         system: LOINC,
         code: PATIENT_SUMMARY,
-    },
+    }),
+    categories: &[],
+    authorship: Authorship::Gateway,
     slots: &SLOTS,
     report: None,
     encounter: None,
@@ -182,8 +221,8 @@ pub const PATIENT_SUMMARY_FORM: Form = Form {
 };
 
 /// The canonical URL of the HL7 Europe base `Patient` profile, the subject
-/// of the laboratory and discharge reports.
-#[cfg(any(feature = "laboratory", feature = "discharge"))]
+/// of the laboratory, discharge and imaging reports.
+#[cfg(any(feature = "laboratory", feature = "discharge", feature = "imaging"))]
 pub const EU_CORE_PATIENT: &str = "http://hl7.eu/fhir/base/StructureDefinition/patient-eu-core";
 
 /// Why a section has no entry (FHIR R4 `list-empty-reason`).
@@ -616,10 +655,7 @@ impl Document {
                 ..Identifier::default()
             }),
             status: "final".into(),
-            r#type: CodeableConcept {
-                coding: vec![coding(self.form.kind)],
-                ..CodeableConcept::default()
-            },
+            r#type: CodeableConcept::default(),
             subject: Some(reference(&subject)),
             encounter: self.encounter.as_deref().map(reference),
             date: self.timestamp.as_str().into(),
@@ -632,14 +668,14 @@ impl Document {
             section: sections,
             ..Composition::default()
         };
-        if let (Some(companion), Some((report_url, report))) = (self.form.report, &report) {
+        if let (Some(companion), Some((report_url, _))) = (self.form.report, &report) {
             composition.extension.push(Extension {
                 url: companion.link.into(),
                 value: Some(ExtensionValue::Reference(Box::new(reference(report_url)))),
                 ..Extension::default()
             });
-            composition.category.clone_from(&report.category);
         }
+        self.arrange(&mut composition, report.as_ref().map(|(_, report)| report));
         let mut entry = vec![BundleEntry {
             full_url: Some(composition_url.into()),
             resource: Some(Resource::Composition(Box::new(composition))),
@@ -675,77 +711,6 @@ impl Document {
             entry,
             ..Bundle::default()
         })
-    }
-}
-
-impl Document {
-    /// The report entry of a form that holds one, about `subject` and
-    /// naming the composition at `composition_url`.
-    fn report_written(
-        &mut self,
-        subject: &str,
-        composition_url: &str,
-    ) -> Result<Option<(String, DiagnosticReport)>, DocumentError> {
-        match (self.form.report, self.report.take()) {
-            (Some(companion), Some(report)) => Ok(Some(self.report_entry(
-                companion,
-                report,
-                subject,
-                composition_url,
-            ))),
-            (None, None) => Ok(None),
-            (Some(_), None) => Err(DocumentError::Report {
-                expected: "requires",
-            }),
-            (None, Some(_)) => Err(DocumentError::Report {
-                expected: "holds no",
-            }),
-        }
-    }
-
-    /// The `fullUrl` and the content of the report entry: `report` with the
-    /// profile of `companion`, the document's identifier, its type among the
-    /// codings, `subject`, and the extension naming the composition at
-    /// `composition_url`.
-    fn report_entry(
-        &self,
-        companion: Companion,
-        mut report: DiagnosticReport,
-        subject: &str,
-        composition_url: &str,
-    ) -> (String, DiagnosticReport) {
-        let id = report.id.clone().unwrap_or_else(|| String::from("report"));
-        report.id = Some(id.clone());
-        report
-            .meta
-            .get_or_insert_with(Meta::default)
-            .profile
-            .push(companion.profile.into());
-        let identifier = Identifier {
-            system: Some(URN_SYSTEM.into()),
-            value: Some(self.identifier.as_str().into()),
-            ..Identifier::default()
-        };
-        if !report.identifier.contains(&identifier) {
-            report.identifier.push(identifier);
-        }
-        let kind = coding(self.form.kind);
-        if !report.code.coding.contains(&kind) {
-            report.code.coding.push(kind);
-        }
-        report.subject = Some(reference(subject));
-        report.encounter = self.encounter.as_deref().map(reference);
-        report
-            .extension
-            .retain(|extension| extension.url != companion.back);
-        report.extension.push(Extension {
-            url: companion.back.into(),
-            value: Some(ExtensionValue::Reference(Box::new(reference(
-                composition_url,
-            )))),
-            ..Extension::default()
-        });
-        (self.full_url("DiagnosticReport", &id), report)
     }
 }
 
