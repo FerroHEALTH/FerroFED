@@ -57,7 +57,8 @@ It does this with care for privacy. FerroFED first looks up which
 identifier each organisation uses for the patient, through a patient index
 (a service that matches one person's identities across organisations), and
 never sends a patient's name or national number to the organisations it
-asks. Every access to patient data is logged.
+asks. FerroFED keeps no patient index of its own: it asks FerroPIX, or any
+IHE PIXm and PDQm service, as a client. Every access to patient data is logged.
 
 FerroFED works with openEHR, the open standard for structured health
 records, and with the European rules for sharing records across borders:
