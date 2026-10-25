@@ -3,6 +3,12 @@
 
 # Memory index
 
+- [Family architecture](family-architecture.md): five separate servers that
+  reach each other only over published protocols, shared crates for
+  cross-cutting work, nothing hand-written that a shared crate covers,
+  reactive consoles; FerroFORMS, the umbrella and Veredictum out of scope;
+  owner 2026-10-25
+
 ## FerroFED decisions
 
 - [Product scope](product-scope.md): the owner's product statement is the
@@ -30,8 +36,9 @@
 - [Domain ferrofed.eu](domain-ferrofed-eu.md): a Pages setting on the family
   model, never a `CNAME` file
 - [Sibling projects](sibling-projects.md): FerroEHR is the reference node and
-  publishes the `openehr-*` crates; FerroBRIDGE and FerroTERM are the
-  working-discipline template; all read-only from here
+  publishes the `openehr-*` crates; FerroPIX serves patient identity, reached
+  as a client; FerroBRIDGE owns FHIR (`eehrxf` moves there) and with
+  FerroTERM is the working-discipline template; all read-only from here
 - [openEHR crates are the model](openehr-crates-are-the-model.md): the whole
   `openehr-*` family, nothing redone (`openehr-its` facade and node client,
   `openehr-query` AQL, `openehr-sdt` scopes, `openehr-base`/`openehr-rm` ids);
@@ -87,14 +94,13 @@
 - [Forum replies short and plain](forum-replies-short-plain.md): anything the
   owner posts as themself stays short, plain, and linked
 - [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
-- [Build in FED first](build-in-fed-first.md): the identity capabilities are built here behind their seams, shaped to move to FerroPIX, because FerroPIX has nothing built; `eehrxf` belongs in FerroBRIDGE and moves there once complete and publishable (#813); owner 2026-10-01, scoped 2026-10-06
 - [End-to-end gate](e2e-gate.md): container tests run only with FERROFED_E2E=1 through the testkit harness (two FerroEHR nodes with distinct system_ids behind capturing and fault proxies, EHRbase for the node profile, the reference implementation for the differential run, images pinned by digest); every case seeds the subject on both nodes; 2026-10-01
 - [Two FerroEHR nodes](two-ferroehr-nodes.md): CI's e2e harness runs two FerroEHR instances (plus a third for three-node cases) and the quickstart runs four, all on one PostgreSQL server with a database per node; EHRbase left the federation topology because it refuses a BASE-valid namespace (not reported to EHRbase, owner 2026-10-03) and returned only for the node profile (#549); decisions A44 (owner 2026-10-02) and A47 (owner 2026-10-03)
 - [Repository in the FerroHEALTH org](repo-in-ferrohealth-org.md): FerroHEALTH/FerroFED since 2026-10-01, the board is org project 1; what the transfer changed and what stays owner-side (#123)
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
 - [No personal data in requests](no-personal-data-in-requests.md): no worker sends the owner's email or contact to an external service, User-Agent included; a neutral agent string, and a slip is reported
 - [Native issue types and fields](native-issue-types-and-priority.md): type, priority and effort are the native issue type and the FerroHEALTH Priority and Effort fields, set with scripts/gh/fields.sh; bug, enhancement and P0 to P3 retired; owner 2026-10-02 (#154)
-- [FerroUI](ferroui.md): every console draws in FerroUI; uniform design, shared components, all four consoles move in lockstep with each FerroUI release; owner 2026-10-18
+- [FerroUI](ferroui.md): every console draws in FerroUI; uniform design, shared components, reactive, every console moves in lockstep with each FerroUI release; owner 2026-10-18
 - [Release closes milestone](release-closes-milestone.md): release.yml refuses a tag whose milestone is missing or not empty and closes it after every leg; check it after a manual or recovery release; owner 2026-10-19 (#1170)
 - [Helm and Kubernetes in Podman](helm-kubernetes-in-podman.md): owner 2026-10-25, test charts locally on kind over Podman; install helm when missing; never build images locally
 - [Reactive console UI](reactive-console-ui.md): owner 2026-10-25, no full page reload for an interaction; WebAssembly is the normal path, the no-WebAssembly page the fallback (FerroUI #410)

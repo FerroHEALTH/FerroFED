@@ -199,11 +199,12 @@ Spec crates are split from the app crates, as in every Ferro product. Nothing
 is published to crates.io for now, and publishing is a one-line switch:
 `publish = false` inherited from `[workspace.package]`, with the lane, the dry
 run and the version guard built from v0.0.2 (`.claude/memory/crate-split.md`,
-`.claude/rules/crates-publishing.md`). Identity bindings are built here first,
-each as a crate that can move to FerroPIX later, because FerroPIX has nothing
-built (`.claude/memory/build-in-fed-first.md`); a capability whose home is a
-sibling that exists belongs there: `eehrxf` is built here until it is complete
-and publishable, then moves to FerroBRIDGE in one step (A76, #813).
+`.claude/rules/crates-publishing.md`). A capability whose home is another
+product belongs there (`.claude/memory/family-architecture.md`): patient
+identity and the IHE profiles are FerroPIX's, reached as a client over the
+`ihe-iti` and `nl-generic-functions` crates it publishes, and `eehrxf` is
+built here until it is complete and publishable, then moves to FerroBRIDGE in
+one step (A76, #813).
 
 ## Repo map
 
@@ -556,7 +557,11 @@ apply always. Read the relevant one before working in that area.
 
 ## Sibling projects
 
-FerroEHR (`../FerroEHR`) is the reference openEHR CDR and publishes the
+FerroFED is one of five FerroHEALTH products, each its own server reached
+only over a published protocol (`.claude/memory/family-architecture.md`).
+FerroPIX is the master patient index with the IHE profiles, which the
+gateway calls as a client for patient identity. FerroEHR (`../FerroEHR`) is
+the reference openEHR CDR and publishes the
 `openehr-*` crates this gateway builds on (`openehr-its`, `openehr-query`,
 `openehr-sdt`, `openehr-base`, `openehr-rm`); FerroTERM (`../FerroTERM`) and
 FerroBRIDGE (`../FerroBRIDGE`) carry the working discipline this repository
