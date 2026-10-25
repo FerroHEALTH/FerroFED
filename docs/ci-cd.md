@@ -396,6 +396,12 @@ No other check joins the list. A new `ci.yml` job joins `conclusion`'s
 `needs`; a new workflow that must gate a merge is a decision recorded here
 first.
 
+The ruleset lets an organisation administrator merge past the merge queue,
+and that is on purpose: the owner can land several ready pull requests at
+once and fix any breakage they cause together in one follow-up pull request.
+Such a merge can reach `main` before a lane such as e2e has finished on the
+pull request, and the CI run on `main` itself is what catches it.
+
 ## Every pin, and what watches it
 
 A pin nothing watches goes stale silently, so each class names its mechanism.
