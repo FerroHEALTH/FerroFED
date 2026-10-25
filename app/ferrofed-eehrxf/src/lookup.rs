@@ -15,7 +15,7 @@
 //! identity binding's demographics service holds
 //! ([`crate::summary::header_patient`]).
 
-use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntrySearch};
+use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::patient::Patient;
 use fhir_types::r4::resource::Resource;
@@ -127,33 +127,11 @@ pub fn searchset(
     matches: Vec<(String, Patient)>,
     outcomes: Vec<(String, OperationOutcome)>,
 ) -> Bundle {
-    let total = u32::try_from(matches.len()).ok();
-    let mode = |mode: &str| {
-        Some(BundleEntrySearch {
-            mode: Some(mode.into()),
-            ..BundleEntrySearch::default()
-        })
-    };
-    let found = matches.into_iter().map(|(url, patient)| BundleEntry {
-        full_url: Some(url.into()),
-        resource: Some(Resource::Patient(Box::new(patient))),
-        search: mode("match"),
-        ..BundleEntry::default()
-    });
-    // NOTE: FHIR R4 Bundle `search.mode`; an `outcome` entry informs about the processing
-    // of the search, here each member the lookup could not resolve the patient at.
-    let missed = outcomes.into_iter().map(|(url, outcome)| BundleEntry {
-        full_url: Some(url.into()),
-        resource: Some(Resource::OperationOutcome(Box::new(outcome))),
-        search: mode("outcome"),
-        ..BundleEntry::default()
-    });
-    Bundle {
-        r#type: "searchset".into(),
-        total: total.map(Into::into),
-        entry: found.chain(missed).collect(),
-        ..Bundle::default()
-    }
+    let matches = matches
+        .into_iter()
+        .map(|(url, patient)| (url, Resource::Patient(Box::new(patient))))
+        .collect();
+    crate::face::searchset(matches, outcomes)
 }
 
 /// Returns the `OperationOutcome` that names a member whose Query API
