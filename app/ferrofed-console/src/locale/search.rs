@@ -32,4 +32,6 @@ messages! {
     SearchTitle = "search-title",
     /// `Ask the federation in the query console`
     SearchToQuery = "search-to-query",
+    /// `The registry or the stored queries did not answer, so the find is not whole.`
+    SearchUnfinished = "search-unfinished",
 }

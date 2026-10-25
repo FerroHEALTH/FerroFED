@@ -304,6 +304,7 @@ fn rows(running: &RunningConfig, section: Section) -> Vec<AnyView> {
                     value: value_cell(setting, running.revision),
                     keys: vec![setting.key.clone()],
                     next_start: setting.restart,
+                    source: None,
                 },
                 managed,
             )
@@ -505,6 +506,7 @@ pub fn edit(loaded: &Loaded<'_>, section: Section) -> AnyView {
                     value,
                     keys: vec![setting.key.clone()],
                     next_start: setting.restart,
+                    source: None,
                 },
                 true,
             )

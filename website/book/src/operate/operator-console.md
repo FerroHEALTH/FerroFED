@@ -131,6 +131,7 @@ service worker or a URL.
   | `/stored-queries`, `/stored-queries/{name}` | every stored query by namespace with its versions, a namespace the gateway takes no write under marked read-only; one stored query with the AQL of the version shown and, on its Versions tab, every version | `GET {base}/operator/stored-queries` and `/operator/stored-queries/{name}` |
   | `/self-description` | what `OPTIONS {base}/` declares, on the tabs Federation (with the manufacturer it names), Capabilities, ITS-REST areas, Limits and Endpoints | `OPTIONS {base}/` |
   | `/search` | the organisations, nodes and stored queries the find field names | the same |
+  | `/search/answer?q=` | the same answer as JSON, which the panel under the find field reads as you type | the same |
 
   A page without a signed-in session sends the browser to `/login` before
   the gateway is asked anything, whatever the case of its path or a
@@ -441,6 +442,12 @@ read-only.
 [The Language and region tab of Your preferences in the dark theme](img/console/preferences-language-dark.png)
 
 ### Find
+
+From the second character you type, a panel under the find field shows the
+organisations, nodes, creating systems and stored queries that match, five
+of a kind. The arrow keys move through it, Enter opens a hit and Escape
+closes it. Submitting the field opens the find page, which lists every
+match.
 
 ![The answer of the find field for "node": the organisations and nodes it names.](img/console/search.png)
 
