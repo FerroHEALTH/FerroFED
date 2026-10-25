@@ -7,20 +7,23 @@
 //! A `system_id` is the creating system a record names, so it leads to its
 //! node's Routes tab. The find takes routing ids and names alone and never a
 //! patient identifier, so its words sit in the query (`GET /search?q=`) as any
-//! filter's do. The page under the top bar lists the same matches.
+//! filter's do. As you type, the panel under the field asks [`ANSWER`], the
+//! server function [`search_answer`], which answers the FerroUI search
+//! answer as JSON; the find page lists every match in the page.
 
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::view::action::ActionGroup;
-use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, SearchAnswer, Way};
-use ferrohealth_ui::view::surface::{Header, card, page_heading, stack};
+use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, SearchAnswer, Way, find_results};
+use ferrohealth_ui::view::surface::{Header, page_heading};
 use leptos::prelude::*;
+use leptos::server_fn::codec::{GetUrl, Json};
 
 use crate::app::{QUERY, STORED_QUERIES};
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::federation::Federation;
 
-/// The most hits of one kind the answer draws.
-const SHOWN: usize = 8;
+/// The route the panel under the field asks as you type.
+pub const ANSWER: &str = "/search/answer";
 
 /// The words a find's query string `search` carries, trimmed, when there
 /// are any.
@@ -44,7 +47,6 @@ fn organisation_hits(federation: &Federation, words: &str) -> Vec<Hit> {
         .iter()
         .filter(|organisation| organisation.routable())
         .filter(|organisation| holds(organisation.shown(), words) || holds(&organisation.id, words))
-        .take(SHOWN)
         .map(|organisation| Hit {
             href: organisation.href(),
             name: organisation.shown().to_owned(),
@@ -108,17 +110,19 @@ fn node_hits(federation: &Federation, words: &str) -> Vec<Hit> {
             mark: Some(Mark::Dot(node.health().tone())),
             tag: node.system_id.clone(),
         });
-        if nodes.len() == SHOWN {
-            break;
-        }
     }
     nodes
 }
 
-/// The hits of `words`, grouped by kind.
-async fn groups(words: &str) -> Vec<HitGroup> {
+/// The hits of `words`, grouped by kind, and whether a read failed, so the
+/// answer is not whole.
+async fn groups(words: &str) -> (Vec<HitGroup>, bool) {
     let mut groups = Vec::new();
-    if let Ok(federation) = crate::read::federation::read().await {
+    let mut failed = false;
+    if let Ok(federation) = crate::read::federation::read()
+        .await
+        .inspect_err(|_| failed = true)
+    {
         for (kind, hits) in [
             (
                 Msg::SearchKindOrganisations,
@@ -134,11 +138,13 @@ async fn groups(words: &str) -> Vec<HitGroup> {
             }
         }
     }
-    if let Ok(queries) = crate::pages::stored::names().await {
+    if let Ok(queries) = crate::pages::stored::names()
+        .await
+        .inspect_err(|_| failed = true)
+    {
         let hits: Vec<Hit> = queries
             .into_iter()
             .filter(|(name, _)| holds(name, words))
-            .take(SHOWN)
             .map(|(name, versions)| Hit {
                 href: crate::pages::stored::href(&name),
                 line: tr_with(Msg::SearchQueryLine, &[("count", Arg::from(versions))]),
@@ -154,34 +160,58 @@ async fn groups(words: &str) -> Vec<HitGroup> {
             });
         }
     }
-    groups
+    (groups, failed)
 }
 
-/// The answer under the find for `words`.
-pub async fn answer(words: &str) -> Option<SearchAnswer> {
-    let groups = groups(words).await;
+/// What the find holds for `words`: every match, grouped by kind.
+pub async fn answer(words: &str) -> SearchAnswer {
+    let (groups, failed) = groups(words).await;
+    let unfinished = failed.then(|| tr(Msg::SearchUnfinished));
     if groups.is_empty() {
-        return Some(SearchAnswer {
+        return SearchAnswer {
+            query: words.to_owned(),
             none: Some((
                 tr_with(Msg::SearchNothing, &[("words", words.to_owned().into())]),
                 tr(Msg::SearchNothingLine),
             )),
+            unfinished,
             more: Some(Way {
                 href: String::from(QUERY),
                 words: tr(Msg::SearchToQuery),
             }),
             ..SearchAnswer::default()
-        });
+        };
     }
-    Some(SearchAnswer {
+    SearchAnswer {
+        query: words.to_owned(),
         head: None,
         groups,
         none: None,
+        unfinished,
         more: Some(Way {
             href: String::from(STORED_QUERIES),
             words: tr(Msg::SearchAllQueries),
         }),
-    })
+    }
+}
+
+/// Answers the panel under the field: what the find holds for the words
+/// `q`, as JSON.
+///
+/// # Errors
+/// Returns the error of a request with no live session.
+#[server(prefix = "/search", endpoint = "answer", input = GetUrl, output = Json)]
+pub async fn find_answer(
+    /// The words typed.
+    q: String,
+) -> Result<SearchAnswer, ServerFnError> {
+    if crate::read::signed_in().is_err() {
+        if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
+            response.set_status(http::StatusCode::UNAUTHORIZED);
+        }
+        return Err(ServerFnError::new("no live session"));
+    }
+    Ok(answer(q.trim()).await)
 }
 
 /// The find's page: the matches of the words the query carries.
@@ -209,36 +239,12 @@ pub fn page() -> AnyView {
         )
         .into_any();
         let found = match &words {
-            Some(words) => groups(words).await,
-            None => Vec::new(),
-        };
-        let cards = if found.is_empty() {
-            view! { <p class="fui-muted">{tr(Msg::SearchNothingLine)}</p> }.into_any()
-        } else {
-            found
-                .into_iter()
-                .map(|group| {
-                    let items = group
-                        .hits
-                        .into_iter()
-                        .map(|hit| {
-                            view! {
-                                <li>
-                                    <a href=hit.href>{hit.name}</a>
-                                    " "
-                                    <span class="fui-small fui-muted">{hit.line}</span>
-                                </li>
-                            }
-                        })
-                        .collect_view();
-                    card(group.kind, view! { <ul class="fui-stack">{items}</ul> })
-                })
-                .collect_view()
-                .into_any()
+            Some(words) => find_results(answer(words).await),
+            None => view! { <p class="fui-muted">{tr(Msg::SearchNothingLine)}</p> }.into_any(),
         };
         view! {
             {heading}
-            {stack(cards)}
+            {found}
         }
     });
     view! {

@@ -401,3 +401,44 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
     assert!(!top.contains(r#"role="alert""#), "{top}");
     Ok(())
 }
+
+#[tokio::test]
+async fn the_find_answers_the_panel_as_json_and_says_when_a_read_failed()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
+    let session = state.sessions().establish(signed_in())?;
+    let (response, body) = send(&service, get_as("/search/answer?q=node-b", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    let answer: ferrohealth_ui::view::search::SearchAnswer = serde_json::from_str(&body)?;
+    assert_eq!("node-b", answer.query, "{body}");
+    assert!(
+        answer.unfinished.is_some_and(|why| !why.is_empty()),
+        "a gateway that does not answer is said, never an empty answer: {body}"
+    );
+    let (response, _body) = send(&service, get("/search/answer?q=node-b")?).await?;
+    assert_ne!(
+        StatusCode::OK,
+        response.status(),
+        "no answer without a session"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_top_bar_find_asks_the_answer_route_and_submits_to_the_find_page()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
+    let session = state.sessions().establish(signed_in())?;
+    let (_response, body) = send(&service, get_as("/search?q=node-b", &session)?).await?;
+    assert!(body.contains(r#"action="/search""#), "{body}");
+    assert!(
+        body.contains("&quot;suggest&quot;:&quot;/search/answer&quot;"),
+        "{body}"
+    );
+    let main = body.split("<main").nth(1).unwrap_or_default();
+    assert!(
+        !main.contains("fui-search-results"),
+        "never an overlay in the page: {body}"
+    );
+    Ok(())
+}

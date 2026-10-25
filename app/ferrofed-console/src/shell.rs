@@ -127,41 +127,30 @@ pub fn signed_in(content: AnyView) -> AnyView {
         let path = path.clone();
         Suspend::new(async move {
             let reads = reads(path.clone()).await;
-            let answer = match &searched {
-                Some(words) => crate::pages::search::answer(words).await,
-                None => None,
-            };
-            chrome(&path, &reads, searched, answer, content)
+            chrome(&path, &reads, searched, content)
         })
     };
     view! { <Suspense fallback=|| ()>{chrome}</Suspense> }.into_any()
 }
 
 /// The shell itself, around `content`.
-fn chrome(
-    path: &str,
-    reads: &Reads,
-    searched: Option<String>,
-    answer: Option<ferrohealth_ui::view::search::SearchAnswer>,
-    content: AnyView,
-) -> AnyView {
+fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView) -> AnyView {
     let reachable = reads.deployment.is_ok() || matches!(reads.described, Some(Ok(_)));
-    let search = search_box(
-        SearchBox {
-            id: String::from(SEARCH_ID),
-            name: String::from("q"),
-            label: tr(Msg::SearchLabel),
-            placeholder: tr(Msg::SearchPlaceholder),
-            action: String::from(SEARCH),
-            value: searched.unwrap_or_default(),
-            submit: tr(Msg::SearchSubmit).into(),
-            shortcut: Some('/'),
-            busy: false,
-            disabled: (!reachable).then(|| tr(Msg::SearchDisabled)),
-            post: false,
-        },
-        answer,
-    );
+    let search = search_box(SearchBox {
+        id: String::from(SEARCH_ID),
+        name: String::from("q"),
+        label: tr(Msg::SearchLabel),
+        placeholder: tr(Msg::SearchPlaceholder),
+        action: String::from(SEARCH),
+        value: searched.unwrap_or_default(),
+        submit: tr(Msg::SearchSubmit).into(),
+        shortcut: Some('/'),
+        busy: false,
+        disabled: (!reachable).then(|| tr(Msg::SearchDisabled)),
+        post: false,
+        suggest: Some(String::from(crate::pages::search::ANSWER)),
+        suggest_from: 2,
+    });
     let pill = status_pill(top_pill(reads)).into_any();
     let operator = crate::read::operator().unwrap_or_else(|| tr(Msg::Operator));
     let menu = user_menu(UserMenu {

@@ -127,6 +127,7 @@ fn row(label: Msg, line: Msg, value: AnyView, term: &str) -> AnyView {
             value,
             keys: vec![term.to_owned()],
             next_start: false,
+            source: None,
         },
         false,
     )
@@ -203,6 +204,7 @@ fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<AnyView
             value: replica.map_or_else(|| tr(Msg::ReplicaUnnamed).into_any(), code),
             keys: Vec::new(),
             next_start: false,
+            source: None,
         },
         false,
     ));

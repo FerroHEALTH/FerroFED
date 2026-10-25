@@ -19,4 +19,5 @@ search-query-line = { $count ->
 search-nothing = Nothing found for “{ $words }”.
 search-nothing-line = The find takes organisations, nodes, creating systems and stored queries, never a patient identifier.
 search-to-query = Ask the federation in the query console
+search-unfinished = The registry or the stored queries did not answer, so the find is not whole.
 search-all-queries = Every stored query
