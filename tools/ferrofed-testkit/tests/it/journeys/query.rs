@@ -307,22 +307,16 @@ async fn a_parameter_row_is_added_and_removed_and_the_tabs_switch_the_kind()
             .await?;
         browser.console_clean("the parameter rows").await?;
 
-        browser
-            .element(By::Css(r#"a[data-tab="stored"]"#))
-            .await?
-            .click()
-            .await?;
+        let tab = browser.element(By::Css(r#"a[data-tab="stored"]"#)).await?;
+        browser.press(&tab).await?;
         browser.at(&stack.url("/query/stored")).await?;
         browser.element(By::Id("query-name")).await?;
         assert!(
             browser.driver().find_all(By::Id("aql")).await?.is_empty(),
             "the stored tab has no AQL field"
         );
-        browser
-            .element(By::Css(r#"a[data-tab="aql"]"#))
-            .await?
-            .click()
-            .await?;
+        let tab = browser.element(By::Css(r#"a[data-tab="aql"]"#)).await?;
+        browser.press(&tab).await?;
         browser.at(&stack.url("/query")).await?;
         browser.element(By::Id("aql")).await?;
         browser.console_clean("the query kind tabs").await

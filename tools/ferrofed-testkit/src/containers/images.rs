@@ -51,16 +51,16 @@ impl PinnedImage {
 /// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
 pub const FERROEHR: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr",
-    tag: "5.3.2",
-    digest: "sha256:1cee9ad59e2e1f05eecc1cd8e2b7d2b2c86efe385944c74de509908779f7f998",
+    tag: "5.4.1",
+    digest: "sha256:b676e89db9cdd808817f7cfd46e13e79415e63c3baf92b5f249da38bd2a5e732",
 };
 
 /// The database image FerroEHR documents, which carries the role, the
 /// database and the extensions its migrations expect.
 pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr-postgres",
-    tag: "5.3.2",
-    digest: "sha256:21673ec220915824c03a78faa28b9e7f82d46b116074fde0291d1a8df2f93101",
+    tag: "5.4.1",
+    digest: "sha256:eb3a720d6245f5472fe5f70ab66ed9662fe6addfa9c543f470ebc689f2eb2cfe",
 };
 
 /// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the
@@ -117,6 +117,6 @@ pub const TEMURIN_JRE: PinnedImage = PinnedImage {
 /// written for and [`keycloak`](mod@super::keycloak) applies.
 pub const KEYCLOAK: PinnedImage = PinnedImage {
     repository: "quay.io/keycloak/keycloak",
-    tag: "26.8.0",
-    digest: "sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc",
+    tag: "26.8.1",
+    digest: "sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b",
 };
