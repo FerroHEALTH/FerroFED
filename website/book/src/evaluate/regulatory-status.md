@@ -152,7 +152,10 @@ The technical content comes from implementing acts the Commission has not
 yet adopted. The exchange format (Art 15(1)) and the common specifications
 for the essential requirements (Art 36(1)) are both due "By 26 March 2027",
 and Art 105 applies them from the same 2029 and 2031 dates by category.
-[#526](https://github.com/FerroHEALTH/FerroFED/issues/526) tracks them.
+A weekly job, `scripts/checks/ehds-acts.sh`, reads EUR-Lex and the
+Commission's "Have your say" register and files an issue for each act
+adopted; the re-checks against the exchange format and the common
+specifications wait in [#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289) and [#799](https://github.com/FerroHEALTH/FerroFED/issues/799).
 
 Two implementing acts are adopted. Both bind the national contact points
 and the cross-border authentication chain, and neither sets the content of
@@ -621,7 +624,7 @@ crosswalk above is read from, and adds these points for an EHR system:
 | §9.1.2 | results from different sources say where and when they were documented | one `Provenance` per mapped composition names the composition and the member, and each member authors the sections it feeds |
 | §9.3.2 | every section the summary supports has a narrative, and every content section keeps the guideline's contents in a flat structure, with a travel history section of its own | every section carries a generated narrative; the travel history is a crosswalk row with no section query, because the International Patient Summary template has no section for it |
 | §9.3.2, §9.3.4.1 | every section suggested to be supported carries an empty list reason, as the IPS 2.0.0 guide does, in place of the MyHealth@EU content-model null flavour | a section with no entry carries `emptyReason`, `nilknown` only when every member answered and none holds content for it, and `unavailable` otherwise |
-| §9.2.1.2 | no code system or value set is mandatory; profiles may impose some | the terminology rules prefer the eHN code systems and keep a code in no preferred system as recorded ([Terminology](../integrate/patient-summary.md#terminology)), and a received document is held to the bindings of its profiles ([Receiving documents](receiving-documents.md#the-check-against-the-profiles)) |
+| §9.2.1.2 | no code system or value set is mandatory; profiles may impose some | the terminology rules prefer the eHN code systems and keep a code in no preferred system as recorded ([Terminology](../integrate/terminology.md)), and a received document is held to the bindings of its profiles ([Receiving documents](receiving-documents.md#the-check-against-the-profiles)) |
 
 D6.1 asks nothing the gateway does not do, and changes no decision. The
 summary is read again against the adopted act

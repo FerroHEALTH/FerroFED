@@ -9,9 +9,11 @@
 #      (each type appears at most once per section: new entries merge into
 #      the existing subsection, they never append a second header);
 #   2. a subsection header outside the canonical type set
-#      (Added / Changed / Deprecated / Removed / Fixed / Security), plus any
-#      type a product adds deliberately in CHANGELOG_EXTRA_TYPES (comma-separated,
-#      empty by default; e.g. "Upgrade notes").
+#      (Added / Changed / Deprecated / Removed / Fixed / Security), plus the
+#      types a product adds deliberately in CHANGELOG_EXTRA_TYPES
+#      (comma-separated). It defaults to "Upgrade notes", the section
+#      scripts/release/changelog.sh writes first in a release, so a bare run
+#      reads CHANGELOG.md as the cut writes it; set it empty to refuse it.
 #
 # Wired into the CI changelog-guard job; runs unconditionally (the
 # `no-changelog` escape label waives the entry REQUIREMENT, never the
@@ -27,7 +29,7 @@ file="${1:-CHANGELOG.md}"
 # awk, not python: this repository ships no Python, and the check is a line scan
 # over one file, exactly what awk is for. The quote character arrives as a
 # variable because an awk string constant cannot portably escape it.
-awk -v path="$file" -v q="'" -v extra="${CHANGELOG_EXTRA_TYPES:-}" '
+awk -v path="$file" -v q="'" -v extra="${CHANGELOG_EXTRA_TYPES-Upgrade notes}" '
   BEGIN {
     allowed = "Added, Changed, Deprecated, Fixed, Removed, Security"
     n_extra = split(extra, extras, /[[:space:]]*,[[:space:]]*/)

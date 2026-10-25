@@ -62,7 +62,7 @@ own ([The medical device question](../evaluate/data-protection.md#the-medical-de
 3. **Agree the conditions of membership with each CDR's operator:** a unique
    `system_id`, version-4 UUID `ehr_id`s never reused or adopted, each
    `ehr_id` fed to the PIX Manager, and consent enforced at the CDR
-   ([Prepare each CDR](production.md#prepare-each-cdr)).
+   ([Preparing each CDR](preparing-a-cdr.md)).
 
 ## Installation
 
@@ -336,8 +336,9 @@ deployment in the EU must plan for are:
   no `ehr_id` records only its scope, so a search by the person's
   identifier does not find it
   ([A query over many patients' data](access-log.md#a-query-over-many-patients-data)).
-  The gateway offers the person no log access interface of its own
-  ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)). Each record carries a security
+  The gateway offers the person no log access interface of its own: the
+  access service finds a person's records at the repository with ITI-81 by
+  their identifier. Each record carries a security
   label per category and per origin, and the access rights by origin and
   category hold only once you configure your repository to apply them
   ([Labelling the access records](access-labels.md)).
@@ -362,7 +363,7 @@ deployment in the EU must plan for are:
   fails the summary. With no server configured, the summary keeps the code
   as recorded, as the eHealth Network Guidelines on Patient Summary,
   Release 3.4, Art 10(7) allow as an interim solution
-  ([The terminology server](../integrate/patient-summary.md#the-terminology-server)).
+  ([The terminology server](../integrate/terminology.md#the-terminology-server)).
 - **Each replica holds its own resolution bindings.** Behind several
   replicas, a follow-up write that names no node is refused `400`
   `target-required` by a replica that did not resolve the patient. Send

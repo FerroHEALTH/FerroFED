@@ -119,7 +119,7 @@ binding the packages cannot decide is asked of the terminology server's
 `ValueSet/$validate-code`; a server that refuses or does not answer refuses
 the document with `502`, and with no server configured the binding is listed
 as not evaluated
-([Terminology](../integrate/patient-summary.md#terminology)). No message
+([Terminology](../integrate/terminology.md)). No message
 quotes a value of the document.
 
 A coding that carries no display is given one by the terminology server's
