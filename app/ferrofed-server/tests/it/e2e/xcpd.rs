@@ -8,7 +8,8 @@
 //! Annex A.3; CP-5, CP-11).
 //!
 //! FerroPIX answers for one community, `2.999.50`, which serves node A, and
-//! holds the patient's record in node A's `ehr_id` domain alone, so node B is
+//! holds the patient's record in node A's `ehr_id` domain alone; node B's
+//! community, `2.999.60`, is one FerroPIX never names, so node B is
 //! `not-localized` and never asked. Every identifier is synthetic, inside the
 //! `urn:oid:2.999` example arc.
 
@@ -24,6 +25,9 @@ const COMMUNITY: &str = "2.999.50";
 
 /// FerroPIX's Responding Gateway device.
 const DEVICE: &str = "2.999.50.1";
+
+/// The community that serves node B, which FerroPIX does not answer for.
+const ELSEWHERE: &str = "2.999.60";
 
 /// The gateway's own community, the initiating community FerroPIX answers.
 const HOME: &str = "2.999.40";
@@ -60,7 +64,7 @@ async fn an_undirected_query_asks_only_the_member_ferropix_names_over_iti_55() -
         tables: format!(
             "[federation.localization]\ntimeout_ms = 5000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n\
              home_community = \"{HOME}\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nurl = \"{}\"\n\
-             device = \"{DEVICE}\"\n\n[xcpd.communities]\n\"{COMMUNITY}\" = \"node-a\"\n",
+             device = \"{DEVICE}\"\n\n[xcpd.communities]\n\"{COMMUNITY}\" = \"node-a\"\n\"{ELSEWHERE}\" = \"node-b\"\n",
             pix.xcpd_endpoint()
         ),
         ..Options::default()
