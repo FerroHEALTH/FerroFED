@@ -576,7 +576,12 @@ applies on 26 March 2027:
   once the manufacturer issues it, the CE marking and the registration.
 
 No EU declaration of conformity has been drawn up and no FerroFED release
-carries the CE marking.
+carries the CE marking. The release process says when, in a release, the
+manufacturer affixes the CE marking (Art 41) and makes or updates the EU
+database entry (Art 49), and that the entry waits on the list of data the
+Art 49(4) delegated act will set
+([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
+Before the tag, step 8).
 
 ### The patient summary crosswalk
 
