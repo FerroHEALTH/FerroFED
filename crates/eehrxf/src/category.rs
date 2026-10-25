@@ -115,7 +115,8 @@ impl Category {
 
     /// Returns the crosswalk of the category's dataset, when this build
     /// carries one: the patient summary, the electronic prescription, the
-    /// electronic dispensation and the discharge report have one.
+    /// electronic dispensation, the laboratory report and the discharge
+    /// report have one.
     #[must_use]
     pub const fn crosswalk(self) -> Option<&'static Crosswalk<'static>> {
         match self {
@@ -125,10 +126,12 @@ impl Category {
             Self::Prescription => Some(&crate::crosswalk::prescription::PRESCRIPTION),
             #[cfg(feature = "dispensation")]
             Self::Dispensation => Some(&crate::crosswalk::dispensation::DISPENSATION),
+            #[cfg(feature = "laboratory")]
+            Self::Laboratory => Some(&crate::crosswalk::laboratory::LABORATORY),
             #[cfg(feature = "discharge")]
             Self::Discharge => Some(&crate::crosswalk::discharge::DISCHARGE),
             #[cfg_attr(
-                not(any(feature = "imaging", feature = "laboratory")),
+                not(feature = "imaging"),
                 expect(
                     unreachable_patterns,
                     reason = "every category this build carries has a crosswalk"

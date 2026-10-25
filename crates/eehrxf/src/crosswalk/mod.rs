@@ -18,6 +18,8 @@
 pub mod discharge;
 #[cfg(feature = "dispensation")]
 pub mod dispensation;
+#[cfg(feature = "laboratory")]
+pub mod laboratory;
 #[cfg(feature = "patient-summary")]
 pub mod patient_summary;
 #[cfg(feature = "prescription")]
@@ -128,6 +130,11 @@ pub struct Crosswalk<'a> {
     /// The canonical URL of the exchange-format profile the rows name
     /// elements of.
     pub profile: &'static str,
+    /// The canonical URLs of the other profiles of the document whose
+    /// elements rows may name, such as the `DiagnosticReport` a laboratory
+    /// report's composition references; empty when every row names an
+    /// element of [`Crosswalk::profile`].
+    pub companions: &'a [&'static str],
     /// The id of the element of that profile whose slices are the sections,
     /// such as `Composition.section`.
     pub sliced: &'static str,
@@ -162,6 +169,23 @@ impl Crosswalk<'_> {
     /// carries its eHealth Network id.
     #[must_use]
     pub fn check(&self, dataset: Dataset<'_>, profile: &ResourceProfile) -> Vec<Defect> {
+        self.check_with(dataset, profile, &[])
+    }
+
+    /// Returns every defect of the crosswalk against `dataset`, the
+    /// exchange-format `profile` and its `companions`, as
+    /// [`Crosswalk::check`] does, where a row may name an element of any of
+    /// them.
+    ///
+    /// The companions must be the profiles [`Crosswalk::companions`] names,
+    /// in that order.
+    #[must_use]
+    pub fn check_with(
+        &self,
+        dataset: Dataset<'_>,
+        profile: &ResourceProfile,
+        companions: &[ResourceProfile],
+    ) -> Vec<Defect> {
         let mut defects = Vec::new();
         if dataset.model().url() != self.root.model
             || dataset.obligations().url() != self.root.obligations
@@ -175,12 +199,18 @@ impl Crosswalk<'_> {
                 url: profile.url().to_owned(),
             });
         }
+        let urls: Vec<&str> = companions.iter().map(ResourceProfile::url).collect();
+        if urls != self.companions {
+            defects.push(Defect::Companions {
+                urls: urls.into_iter().map(str::to_owned).collect(),
+            });
+        }
         let mut seen = BTreeSet::new();
         for row in self.rows {
             if !seen.insert(row.path) {
                 defects.push(Defect::Duplicate { path: row.path });
             }
-            self.check_row(row, dataset, profile, &mut defects);
+            self.check_row(row, dataset, profile, companions, &mut defects);
         }
         for element in dataset.producer_elements() {
             let path = element.path().as_str();
@@ -223,6 +253,7 @@ impl Crosswalk<'_> {
         row: &Row,
         dataset: Dataset<'_>,
         profile: &ResourceProfile,
+        companions: &[ResourceProfile],
         defects: &mut Vec<Defect>,
     ) {
         if dataset.model().element(row.path).is_none() {
@@ -241,7 +272,10 @@ impl Crosswalk<'_> {
                 defects.push(Defect::Ehn { path: row.path, id });
             }
         }
-        let Some(element) = profile.element(row.eps) else {
+        let Some(element) = std::iter::once(profile)
+            .chain(companions)
+            .find_map(|profile| profile.element(row.eps))
+        else {
             defects.push(Defect::Slice {
                 path: row.path,
                 eps: row.eps,
@@ -317,8 +351,18 @@ pub enum Defect {
         /// The id.
         id: &'static str,
     },
-    /// A row names an element or slice the exchange-format profile lacks.
-    #[error("the row {path} names {eps}, which the profile lacks")]
+    /// The companion profiles checked against are not the ones the
+    /// crosswalk names.
+    #[error(
+        "the crosswalk is checked against the companion profiles {urls:?}, which it does not name"
+    )]
+    Companions {
+        /// The companions' URLs, in the order given.
+        urls: Vec<String>,
+    },
+    /// A row names an element or slice the exchange-format profile and its
+    /// companions lack.
+    #[error("the row {path} names {eps}, which the profile and its companions lack")]
     Slice {
         /// The row's path.
         path: &'static str,

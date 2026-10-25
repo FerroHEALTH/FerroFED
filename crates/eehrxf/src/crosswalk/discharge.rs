@@ -33,6 +33,7 @@ pub static DISCHARGE: Crosswalk<'static> = Crosswalk {
         obligations: "http://www.xt-ehr.eu/fhir/models/StructureDefinition/EHDSDischargeReportObligations",
     },
     profile: HDR_COMPOSITION,
+    companions: &[],
     sliced: "Composition.section",
     ehn: EHN,
     rows: ROWS,
