@@ -57,7 +57,7 @@ written (#89, #95). It also carries the
 regional binding refactor: one `Binding` trait with the `binding-ihe` and
 `binding-nl` features of the server, `ihe` and `nl` of the identity crate and
 `nl` of the engine, and RFC 8414 in its own crate (#489, #551), retired onto
-`ferrohealth-smart` 0.6.0 (#1342); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
+`ferrohealth-smart` 0.7.0 (#1342); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
 the engine's onward grants under `onward::grant` beside `single_node`
 (#587, #588); mutual TLS to a node with RFC 8705 client authentication and
 certificate-bound tokens (#492, #560); DPoP proofs read from `openehr-its`
@@ -272,13 +272,13 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`,
   with `balp` and `atna` turning on their audit records, written through
   `ihe-atna`) is owned and published by FerroHEALTH/FerroPIX since #367;
-  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.50"`) and keeps
+  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.54"`) and keeps
   no copy.
 - `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`, `lrza`,
   `nuts-auth`, the FHIR-free request `authorizer` the engine implements, and
   the BSN naming systems in `identification`) is owned and published by
   FerroHEALTH/FerroPIX since #367; FerroFED pins it exactly from crates.io
-  (`nl-generic-functions = "=0.0.26"`) and keeps no copy.
+  (`nl-generic-functions = "=0.0.29"`) and keeps no copy.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (laid out by role and binding: `role/` holds

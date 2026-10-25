@@ -33,6 +33,10 @@ http.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["server", "http1"] }
 hyper-util = { workspace = true, features = ["tokio"] }
+# The ITI-55 Responding Gateway messages of FerroPIX's `ihe-iti`, which the
+# stub responding gateway reads its requests and writes its answers with
+# (#85, #367).
+ihe-iti = { workspace = true, features = ["xcpd"] }
 # The test issuer's timestamps (#80), and the clock reading the harness
 # directory stamps its answers with (#86).
 jiff.workspace = true
@@ -65,6 +69,8 @@ openehr-its = { workspace = true, features = ["json"] }
 openehr-rm.workspace = true
 # The proxy's forwarding client and the seed builder's ITS-REST client.
 reqwest.workspace = true
+# The identifier values of the stub responding gateway's answers (#367).
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 testcontainers.workspace = true
@@ -101,7 +107,6 @@ ihe-iti = { workspace = true, features = ["mcsd", "pmir", "xcpd"] }
 # Whom a client exchange is made for (`user::OnBehalfOf`), from the family's
 # audit library (FerroHEALTH/FerroAUDIT).
 ihe-atna.workspace = true
-secrecy.workspace = true
 # The browser journeys of the operator console, behind the FERROFED_JOURNEYS
 # gate (#608), each through a chromedriver of its own, which tokio starts and
 # reads the port of (#1052).

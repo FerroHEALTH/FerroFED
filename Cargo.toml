@@ -60,8 +60,8 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.52" }
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
 # forwarder's syslog connection with close_notify (#1278). Verified against
 # crates.io on 2026-10-24.
-ihe-atna = { version = "=0.2.6", default-features = false }
-ehds-logging = { version = "=0.2.6", default-features = false }
+ihe-atna = { version = "=0.2.10", default-features = false }
+ehds-logging = { version = "=0.2.10", default-features = false }
 eehrxf = { path = "crates/eehrxf", version = "0.0.36" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -187,7 +187,7 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # (#119) and the mCSD Organization and Endpoint (#74); the testkit's Manager
 # adds `resources` for the ITI-104 Patient (#47). 0.1.127 is the release
 # fhirconnect builds on, so the build carries one fhir-types (#684).
-fhir-types = { version = "0.1.127", default-features = false }
+fhir-types = { version = "0.1.128", default-features = false }
 # The FHIRconnect 1.0.0 mapping engine the European interoperability component
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
@@ -212,11 +212,11 @@ openehr-mapping-core = "=0.1.124"
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367 and pinned exactly, because its crate line
 # moves by patch.
-ihe-iti = "=0.0.50"
+ihe-iti = "=0.0.54"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and pinned exactly, because its
 # crate line moves by patch.
-nl-generic-functions = "=0.0.26"
+nl-generic-functions = "=0.0.29"
 # The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
 # crates/eehrxf is read from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -303,7 +303,7 @@ ferrohealth-ui = { version = "=0.4.0", features = ["split"] }
 # to a new version deliberately. 0.6.0 adds the RFC 8414 issuer and origin
 # rules and token introspection (#1342). Verified against crates.io on
 # 2026-10-25.
-ferrohealth-smart = { version = "=0.6.0", default-features = false, features = ["fetch", "axum", "openehr"] }
+ferrohealth-smart = { version = "=0.7.0", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

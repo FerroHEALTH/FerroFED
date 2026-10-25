@@ -140,13 +140,9 @@ skip = [
   # tracing-attributes; both are proc-macro build dependencies, so neither
   # reaches the binary. Deleted when tracing-attributes moves to syn 3.
   { crate = "syn@2", reason = "tracing-attributes still builds on syn 2" },
-  # nl-generic-functions 0.0.26 pins ferrohealth-smart =0.4.0 while the
-  # workspace is on 0.6.0 (#1342); its smart types stay inside it. Deleted
-  # when FerroPIX publishes nl-generic-functions on 0.6.0.
-  { crate = "ferrohealth-smart@0.4.0", reason = "nl-generic-functions 0.0.26 pins =0.4.0" },
-  # ferrohealth-smart 0.6.0 requires openehr-sdt 0.0.98 and fhirconnect
+  # ferrohealth-smart 0.7.0 requires openehr-sdt 0.0.98 and fhirconnect
   # 0.1.173 requires 0.0.90 (#1342). Deleted when fhirconnect moves.
-  { crate = "openehr-sdt@0.0.90", reason = "fhirconnect requires 0.0.90, ferrohealth-smart 0.6.0 requires 0.0.98" },
+  { crate = "openehr-sdt@0.0.90", reason = "fhirconnect requires 0.0.90, ferrohealth-smart 0.7.0 requires 0.0.98" },
 ]
 skip-tree = []
 

@@ -8,17 +8,23 @@
 //! Each patient, by the identifier value its request names, gets one
 //! [`Answer`]: the communities that hold it (Cases 1 and 2 of §3.55.4.2.3),
 //! no match (Case 4), a busy responder (Case 5), a SOAP fault, or silence.
-//! Every answer is a `PRPA_IN201306UV02` or a SOAP 1.2 fault shaped after
-//! the examples of §3.55, its `RelatesTo` the request's `MessageID`, and
-//! every identifier in it synthetic. The stub speaks plain `http`, so a
+//! The stub reads each request and writes each answer with the Responding
+//! Gateway messages of `ihe-iti`, FerroPIX's crate
+//! ([`ihe_iti::xcpd::responding`]): a `PRPA_IN201306UV02` whose `RelatesTo`
+//! is the request's `MessageID`, or a SOAP 1.2 fault, every identifier in it
+//! synthetic. The stub speaks plain `http`, so a
 //! client reaches it only through the development path of its configuration.
 //! No specification governs the stub: our own design.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ihe_iti::xcpd::error::DetectedIssue;
+use ihe_iti::xcpd::identifier::{HomeCommunityId, Oid};
+use ihe_iti::xcpd::responding::answer::{self, Blame, Candidate, Outcome, Responder};
+use ihe_iti::xcpd::responding::query::{self, ReceivedQuery};
+use secrecy::{ExposeSecret as _, SecretString};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
@@ -27,8 +33,11 @@ use crate::mock::Server;
 /// The path the stub serves ITI-55 on.
 pub const PATH: &str = "/RespondingGateway";
 
-/// The SOAP 1.2 media type of every answer.
-const SOAP_XML: &str = "application/soap+xml; charset=UTF-8";
+/// The stub's device, the sender of every answer.
+const DEVICE: &str = "2.999.50.1";
+
+/// The stub's own community.
+const COMMUNITY: &str = "2.999.50";
 
 /// One community that holds the patient: its `homeCommunityId` OID and the
 /// patient's identifier there.
@@ -83,7 +92,7 @@ impl RespondingGateway {
         let server = Server::start().await;
         Mock::given(method("POST"))
             .and(path(PATH))
-            .respond_with(Responder {
+            .respond_with(Answers {
                 answers: Arc::new(answers),
                 otherwise,
             })
@@ -116,72 +125,94 @@ impl RespondingGateway {
 }
 
 /// The wiremock responder behind a [`RespondingGateway`].
-struct Responder {
+struct Answers {
     answers: Arc<BTreeMap<String, Answer>>,
     otherwise: Answer,
 }
 
-impl Respond for Responder {
+impl Respond for Answers {
     fn respond(&self, request: &Request) -> ResponseTemplate {
-        let sent = String::from_utf8_lossy(&request.body);
-        let message = between(&sent, "<wsa:MessageID>", "</wsa:MessageID>").unwrap_or_default();
-        let patient = between(&sent, "<livingSubjectId>", "</livingSubjectId>")
-            .and_then(|parameter| between(parameter, "extension=\"", "\""))
-            .unwrap_or_default();
-        let answer = self.answers.get(patient).unwrap_or(&self.otherwise);
-        let (status, body) = match answer {
-            Answer::Holds(communities) => {
-                (200, response(message, "AA", "OK", &events(communities), ""))
+        let media = request
+            .headers
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok());
+        let Ok(received) = query::read(media, &request.body) else {
+            return written(400, answer::fault(Blame::Sender, "no ITI-55 query"));
+        };
+        let answer = patient(&received)
+            .and_then(|patient| self.answers.get(&patient))
+            .unwrap_or(&self.otherwise);
+        let outcome = match answer {
+            Answer::Holds(communities) => match candidates(communities) {
+                Some(candidates) => Outcome::Matched(candidates),
+                None => {
+                    return written(500, answer::fault(Blame::Receiver, "a community is no OID"));
+                }
+            },
+            Answer::NoMatch => Outcome::NoMatch,
+            Answer::Busy => Outcome::Unable(vec![DetectedIssue::ResponderBusy]),
+            Answer::Fault => {
+                return written(500, answer::fault(Blame::Receiver, "synthetic outage"));
             }
-            Answer::NoMatch => (200, response(message, "AA", "NF", "", "")),
-            Answer::Busy => (200, response(message, "AE", "AE", "", BUSY)),
-            Answer::Fault => (500, fault(message)),
             Answer::Silent => {
                 return ResponseTemplate::new(200).set_delay(Duration::from_secs(30));
             }
         };
-        ResponseTemplate::new(status).set_body_raw(body.into_bytes(), SOAP_XML)
+        let Some(responder) = responder() else {
+            return written(
+                500,
+                answer::fault(Blame::Receiver, "the stub's device is no OID"),
+            );
+        };
+        written(200, answer::envelope(&received, &responder, &outcome))
     }
 }
 
-/// The text of `haystack` between `open` and the `close` after it.
-fn between<'a>(haystack: &'a str, open: &str, close: &str) -> Option<&'a str> {
-    let start = haystack.find(open)? + open.len();
-    let end = haystack.get(start..)?.find(close)? + start;
-    haystack.get(start..end)
+/// The value of the first identifier the query names, the one the stub
+/// answers by.
+fn patient(received: &ReceivedQuery) -> Option<String> {
+    received
+        .parameters
+        .ids
+        .first()
+        .map(|id| id.value().expose_secret().to_owned())
 }
 
-/// The `reasonOf` of a busy responder (§3.55.4.2.2.7).
-const BUSY: &str = r#"<reasonOf typeCode="RSON"><detectedIssueEvent classCode="ALRT" moodCode="EVN"><code code="_ActAdministrativeDetectedIssueManagementCode" codeSystem="2.16.840.1.113883.5.4"/><mitigatedBy typeCode="MITGT"><detectedIssueManagement classCode="ACT" moodCode="EVN"><code code="ResponderBusy" codeSystem="1.3.6.1.4.1.19376.1.2.27.3"/></detectedIssueManagement></mitigatedBy></detectedIssueEvent></reasonOf>"#;
+/// One matching record per community (§3.55.4.2.2.2, §3.55.4.2.2.4), or
+/// `None` when a community or an authority is no OID.
+fn candidates(communities: &[Community]) -> Option<Vec<Candidate>> {
+    communities
+        .iter()
+        .map(|community| {
+            Some(Candidate {
+                community: HomeCommunityId::new(Oid::new(&community.home).ok()?),
+                patient_id: (
+                    Oid::new(&community.authority).ok()?,
+                    SecretString::from(community.patient.clone()),
+                ),
+                other_ids: Vec::new(),
+                names: Vec::new(),
+                gender: None,
+                birth_time: None,
+                addresses: Vec::new(),
+            })
+        })
+        .collect()
+}
 
-/// One registration event per community (§3.55.4.2.2.2, §3.55.4.2.2.4).
-fn events(communities: &[Community]) -> String {
-    let mut text = String::new();
-    for community in communities {
-        let Community {
-            home,
-            authority,
-            patient,
-        } = community;
-        // NOTE: writing to a String cannot fail, so the result is dropped.
-        let _written: std::fmt::Result = write!(
-            text,
-            r#"<subject typeCode="SUBJ"><registrationEvent classCode="REG" moodCode="EVN"><id nullFlavor="NA"/><statusCode code="active"/><subject1 typeCode="SBJ"><patient classCode="PAT"><id root="{authority}" extension="{patient}"/><statusCode code="active"/><patientPerson classCode="PSN" determinerCode="INSTANCE"><name nullFlavor="NA"/></patientPerson></patient></subject1><custodian typeCode="CST"><assignedEntity classCode="ASSIGNED"><id root="{home}"/><code code="NotHealthDataLocator" codeSystem="1.3.6.1.4.1.19376.1.2.27.2"/></assignedEntity></custodian></registrationEvent></subject>"#
-        );
+/// The stub, as its answers name it.
+fn responder() -> Option<Responder> {
+    Some(Responder {
+        device: Oid::new(DEVICE).ok()?,
+        community: HomeCommunityId::new(Oid::new(COMMUNITY).ok()?),
+    })
+}
+
+/// The answer `written` with `status`, or a `500` when it could not be
+/// written.
+fn written(status: u16, written: std::io::Result<Vec<u8>>) -> ResponseTemplate {
+    match written {
+        Ok(body) => ResponseTemplate::new(status).set_body_raw(body, answer::MEDIA_TYPE),
+        Err(_unwritten) => ResponseTemplate::new(500),
     }
-    text
-}
-
-/// A `PRPA_IN201306UV02` in its envelope, relating to `message`.
-fn response(message: &str, ack: &str, query: &str, subjects: &str, reason: &str) -> String {
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?><env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://www.w3.org/2005/08/addressing"><env:Header><wsa:Action env:mustUnderstand="1">urn:hl7-org:v3:PRPA_IN201306UV02:CrossGatewayPatientDiscovery</wsa:Action><wsa:RelatesTo>{message}</wsa:RelatesTo></env:Header><env:Body><PRPA_IN201306UV02 xmlns="urn:hl7-org:v3" ITSVersion="XML_1.0"><id root="2.999.50.1.9" extension="1"/><creationTime value="20261003120000+0000"/><interactionId root="2.16.840.1.113883.1.6" extension="PRPA_IN201306UV02"/><processingCode code="P"/><processingModeCode code="T"/><acceptAckCode code="NE"/><receiver typeCode="RCV"><device classCode="DEV" determinerCode="INSTANCE"><id root="2.999.40.1"/></device></receiver><sender typeCode="SND"><device classCode="DEV" determinerCode="INSTANCE"><id root="2.999.50.1"/></device></sender><acknowledgement><typeCode code="{ack}"/></acknowledgement><controlActProcess classCode="CACT" moodCode="EVN"><code code="PRPA_TE201306UV02" codeSystem="2.16.840.1.113883.1.6"/>{subjects}{reason}<queryAck><queryId root="2.999.40.1.9" extension="1"/><queryResponseCode code="{query}"/></queryAck></controlActProcess></PRPA_IN201306UV02></env:Body></env:Envelope>"#
-    )
-}
-
-/// A SOAP 1.2 `Receiver` fault relating to `message`.
-fn fault(message: &str) -> String {
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?><env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://www.w3.org/2005/08/addressing"><env:Header><wsa:RelatesTo>{message}</wsa:RelatesTo></env:Header><env:Body><env:Fault><env:Code><env:Value>env:Receiver</env:Value></env:Code><env:Reason><env:Text xml:lang="en">synthetic outage</env:Text></env:Reason></env:Fault></env:Body></env:Envelope>"#
-    )
 }

@@ -394,7 +394,7 @@ nothing the gateway reads: they add the PARTY builder, the caller's
 `rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
 #3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect`
 requires exactly 0.0.90, since a 0.0.x caret requirement admits one version.
-`ferrohealth-smart` 0.6.0 requires `openehr-sdt` 0.0.98 behind its `openehr`
+`ferrohealth-smart` 0.7.0 requires `openehr-sdt` 0.0.98 behind its `openehr`
 feature, so the lock holds `openehr-sdt` at both versions until `fhirconnect`
 moves (#1342).
 
@@ -409,7 +409,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.127 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.1.128 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
@@ -451,8 +451,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.2.6 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.2.6 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.2.10 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.2.10 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
