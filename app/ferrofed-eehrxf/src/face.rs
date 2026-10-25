@@ -12,10 +12,11 @@
 //! (`OperationDefinition-summary`): `identifier` names the patient as
 //! `system|value` and `profile` the composition profile the document
 //! follows. A request by the patient's logical id is not offered, since the
-//! face holds no `Patient` resource, and a request that names the patient by
-//! anything other than an identifier with its system, such as demographics,
-//! is refused, so the patient is always the one an identity service has
-//! confirmed (§5.2, N32).
+//! face keeps no `Patient` resource (the lookup of [`crate::lookup`] writes
+//! one from the identity binding for each answer), and a request that names
+//! the patient by anything other than an identifier with its system, such as
+//! demographics, is refused, so the patient is always the one an identity
+//! service has confirmed (§5.2, N32).
 
 use std::fmt;
 
@@ -180,7 +181,8 @@ impl SummaryRequest {
 /// product `product` at `version`, receiving documents as `receivers`
 /// declares and serving the categories `serving` declares.
 ///
-/// It describes a server that serves `$summary` on `Patient`, the
+/// It describes a server that serves `$summary` and the lookup by
+/// identifier on `Patient`, the
 /// `DocumentReference` search of the document list ([`crate::list`]), the
 /// `Binary` read of a member's document, the `create` of a received
 /// document on `Bundle` ([`bundle`]) only when a member receives a category,
@@ -193,19 +195,7 @@ pub fn capability(
     date: &str,
     (receivers, serving): (&Receivers, &Serving),
 ) -> CapabilityStatement {
-    let mut resource = vec![
-        CapabilityStatementRestResource {
-            r#type: "Patient".into(),
-            operation: vec![CapabilityStatementRestResourceOperation {
-                name: "summary".into(),
-                definition: SUMMARY_OPERATION.into(),
-                ..CapabilityStatementRestResourceOperation::default()
-            }],
-            ..CapabilityStatementRestResource::default()
-        },
-        documents(),
-        binary(),
-    ];
+    let mut resource = vec![patient(), documents(), binary()];
     // NOTE: FHIR R4 `capabilitystatement.html`: the statement describes what the server
     // supports, so `Bundle` create is declared only when a member receives a category.
     if !receivers.is_empty() {
@@ -229,6 +219,37 @@ pub fn capability(
             ..CapabilityStatementRest::default()
         }],
         ..CapabilityStatement::default()
+    }
+}
+
+/// The `Patient` resource of the capability statement: the `$summary`
+/// operation, and the search-type interaction of the lookup by identifier
+/// ([`crate::lookup`]), its one search parameter `identifier`.
+fn patient() -> CapabilityStatementRestResource {
+    CapabilityStatementRestResource {
+        r#type: "Patient".into(),
+        interaction: vec![CapabilityStatementRestResourceInteraction {
+            code: "search-type".into(),
+            documentation: Some(
+                "The patient lookup by identifier: one Patient, as the identity binding holds it, when a member holds the patient, and an empty searchset otherwise; a search by demographics is refused.".into(),
+            ),
+            ..CapabilityStatementRestResourceInteraction::default()
+        }],
+        search_param: vec![CapabilityStatementRestResourceSearchParam {
+            name: "identifier".into(),
+            definition: Some(crate::lookup::IDENTIFIER_PARAMETER.into()),
+            r#type: "token".into(),
+            documentation: Some(
+                "The patient, as system|value; required, one patient alone, and the only parameter taken.".into(),
+            ),
+            ..CapabilityStatementRestResourceSearchParam::default()
+        }],
+        operation: vec![CapabilityStatementRestResourceOperation {
+            name: "summary".into(),
+            definition: SUMMARY_OPERATION.into(),
+            ..CapabilityStatementRestResourceOperation::default()
+        }],
+        ..CapabilityStatementRestResource::default()
     }
 }
 

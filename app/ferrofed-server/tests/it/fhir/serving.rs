@@ -589,6 +589,9 @@ fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn E
             Request::get(format!("{FHIR}/Patient/$summary?identifier={patient}"))
                 .body(Body::empty())?
         }
+        ("Patient", "search-type") => {
+            Request::get(format!("{FHIR}/Patient?identifier={patient}")).body(Body::empty())?
+        }
         ("DocumentReference", "search-type") => Request::get(format!(
             "{FHIR}/DocumentReference?patient.identifier={patient}"
         ))

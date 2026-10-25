@@ -21,6 +21,8 @@
 //!   `OperationOutcome`;
 //! - [`list`]: the document list of that face, a `DocumentReference` search
 //!   answering the summary written on request and each member's own one;
+//! - [`lookup`]: the patient lookup of that face, a `Patient` search by
+//!   identifier answering the `Patient` the identity binding holds;
 //! - [`receive`]: a document received in the exchange format, checked and
 //!   mapped for the one member the deployment declares for its category
 //!   (Annex II 2.2 and 2.3), its required bindings held to the expansions of
@@ -57,6 +59,7 @@
 pub mod dispensations;
 pub mod face;
 pub mod list;
+pub mod lookup;
 pub mod patient_summary;
 pub mod prescriptions;
 pub mod receive;

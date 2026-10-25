@@ -10,11 +10,12 @@ interface as a FHIR R4 face on a base of its own, `{fhir-base}`, beside the
 ITS-REST face at `{base}`. No ITS-REST path changes: `{base}` stays a
 conformant ITS-REST surface (Federation Tier §4.1, N1, N28).
 
-The face answers five requests today:
+The face answers six requests today:
 
 | Request | Answer |
 |---|---|
 | `GET {fhir-base}/metadata` | the face's `CapabilityStatement` |
+| `GET {fhir-base}/Patient?identifier=system\|value` | the patient lookup: the `Patient` the identity binding holds, when a member holds the patient ([Looking a patient up](#looking-a-patient-up)) |
 | `GET` or `POST {fhir-base}/Patient/$summary` | the patient summary, an HL7 Europe Patient Summary document `Bundle` |
 | `POST {fhir-base}/Bundle` | a document received in the exchange format, written to the member its category is declared for |
 | `GET {fhir-base}/DocumentReference` | the document list: the summary the gateway writes on request and each member's own one ([The document list](#the-document-list)) |
@@ -24,6 +25,48 @@ The gate refuses every other path under `{fhir-base}`, and every other
 method, with a `403`: a variant of a path, in another letter case, with a
 percent-encoded character or a trailing or doubled slash, is refused, never
 served.
+
+## Looking a patient up
+
+Xt-EHR D5.1 §3.4.6 `api-producer-patient` asks every producer EHR system for
+"a patient lookup API sufficient for a consumer to unambiguously identify
+the patient EHR in the producer's system". The face answers it with the
+FHIR R4 `Patient` search by one parameter, `identifier`, the patient's
+identifier with its system:
+
+```http
+GET {fhir-base}/Patient?identifier=urn:oid:2.999.1|SYNTHETIC-1
+```
+
+The gateway asks the PDQm Supplier of `[pdqm]` for the patient first, as
+for a summary header, then localizes and resolves the patient as it does
+any subject, through the configured identity binding (Federation Tier
+§5.2). It asks no member anything, so no patient identifier reaches a node
+(§5.4.1, N33). When the patient resolved at a member, the answer is a
+`searchset` with one entry: a `Patient` that carries the identifier it was
+looked up by and the names, birth date, gender, addresses and telecoms the
+Supplier holds, each as the Supplier gives it, under a `urn:uuid:` full URL
+minted for the answer. A patient with no name is still answered; only a
+summary requires one. Use the identifier, not the minted id, in the requests
+that follow: the face keeps no `Patient` resource to read by id.
+
+An identifier the Supplier does not know, a patient no member holds and a
+patient every member restricts answer alike, with the empty `searchset`, so
+the answer never shows a restriction (Regulation (EU) 2025/327 Art 8;
+§11.3). Under all-or-nothing, a member the resolver could not answer for
+fails the lookup with `424`; under `partial` it is named in an `outcome`
+entry beside the `Patient`.
+
+A search by demographics, by `_id`, with a modifier, with a second
+parameter beside `identifier`, or with no `identifier` is refused with `400`
+and an `OperationOutcome` that names `identifier=system|value` as the
+parameter the face takes. FerroFED's input is an identifier, never
+demographics (§5.4.3, N32); D5.1 admits "other forms of patient identity".
+
+`metadata` declares the lookup: the `Patient` resource with the
+`search-type` interaction and the one search parameter `identifier`,
+defined by `http://hl7.org/fhir/SearchParameter/Patient-identifier`, beside
+the `$summary` operation.
 
 ## Asking for a summary
 
@@ -298,6 +341,13 @@ before any member is asked.
 The document list takes the same scopes as a summary: it names the summary
 and carries the members' own documents.
 
+The patient lookup finds whether members hold the patient's EHRs, as the
+ITS-REST read `GET {base}/ehr?subject_id=` does, so it takes what that read
+takes: the `composition-` read of every template, `user/composition-*.r`.
+A token confined to one patient looks up that patient alone; another
+patient's identifier is `403` (`patient-confinement`) before the PDQm
+Supplier is asked.
+
 A person reads their own summary through an electronic health data access
 service (Regulation (EU) 2025/327 Art 3(1), Art 4). The service holds a
 token confined to the person
@@ -325,7 +375,12 @@ so it writes one record even when it asked no member, because none is in the
 the endpoint it is asked through and by its `ehr_id`, as origins that
 contributed nothing (`fhir/list.rs`:
 `a_list_that_asked_no_member_is_recorded_once_naming_where_the_patient_resolved`).
-A list of a patient no member holds lists nothing and writes no record. The record of a person's
+A list of a patient no member holds lists nothing and writes no record.
+A lookup that finds the patient writes one record on the same ground, naming
+the members the patient resolved at, each by its `ehr_id`, with the
+category `no-category` and the resource kind `EHR`, since it reached no
+composition; a lookup that finds no patient writes none
+(`fhir/lookup.rs`). The record of a person's
 own summary names the person twice under Art 9: as the caller, the token's
 `sub` acting in person with the purpose it states, and as the data subject,
 by the identifier the service asked with and the `ehr_id` at each member.

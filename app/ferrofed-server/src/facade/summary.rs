@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ehds_logging::category::Category;
-use ehds_logging::classify::{Basis, Evidence, Queried, RootObject};
+use ehds_logging::classify::{Basis, Evidence, Queried, ResourceKind, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::{
@@ -57,6 +57,9 @@ pub(crate) const OPERATION: &str = "Patient/$summary";
 
 /// The operation an access record names for the document list.
 pub(crate) const LIST: &str = "DocumentReference";
+
+/// The operation an access record names for the patient lookup.
+pub(crate) const LOOKUP: &str = "Patient";
 
 /// The rows each endpoint answered one section query with, read before the
 /// merge.
@@ -172,11 +175,16 @@ pub(crate) enum Scope {
     /// The document list: the members that serve the summary themselves
     /// alone, since the summary the gateway writes is listed, never written.
     List,
+    /// The patient lookup: the patient located over the members, and no
+    /// member asked anything, since the answer is the `Patient` the identity
+    /// binding holds.
+    Lookup,
 }
 
 /// Runs every section query over the members for the patient
-/// `system`|`value`, as `arrived` asks, or, for `scope` [`Scope::List`],
-/// none of them.
+/// `system`|`value`, as `arrived` asks, or, for `scope` [`Scope::List`] or
+/// [`Scope::Lookup`], none of them; a lookup asks no member's own endpoint
+/// either.
 ///
 /// # Errors
 ///
@@ -197,7 +205,12 @@ pub(crate) async fn gather(
     let dispatched = targets.plan.dispatched().next().is_some();
     // NOTE: § The four identifiers, N33: a member asked at its own exchange-format endpoint by
     // its ehr_id is asked no section query, so its data are never in the mapped document too.
-    let chosen = native::chosen(federation.snapshot(), &targets);
+    let mut chosen = native::chosen(federation.snapshot(), &targets);
+    // NOTE: §5.4.1, N33: a lookup is answered from the identity binding, so no request about
+    // the patient leaves the gateway for a member.
+    if scope == Scope::Lookup {
+        chosen.clear();
+    }
     for member in &chosen {
         targets.plan = targets.plan.leaving_out(&member.via);
     }
@@ -306,9 +319,9 @@ fn concluded(
     }
     let holds = match scope {
         Scope::Summary => !gathered.reached.is_empty() || !gathered.natives.is_empty(),
-        // NOTE: §11.3, §11.4: a list naming a member the resolver could not answer for is never
-        // the empty list of a patient no member holds.
-        Scope::List => dispatched || !gathered.unresolved.is_empty(),
+        // NOTE: §11.3, §11.4: a list or a lookup naming a member the resolver could not answer
+        // for is never the empty answer of a patient no member holds.
+        Scope::List | Scope::Lookup => dispatched || !gathered.unresolved.is_empty(),
     };
     if !holds {
         let set_aside = (!gathered.set_aside.is_empty()).then(|| Box::new(gathered));
@@ -615,19 +628,23 @@ pub(crate) fn accessed(
     let natives_delivered = scope == Scope::List && delivered.is_some();
     let delivered = delivered.unwrap_or(&none);
     let log = federation.access_log()?;
-    // NOTE: Annex II 3.2 logs "every access event"; a list that lists the gateway's summary
-    // discloses that members hold the patient's record, health data (Regulation (EU) 2016/679 recital 35).
-    let listed = scope == Scope::List && !gathered.resolved.is_empty();
+    // NOTE: Annex II 3.2 logs "every access event"; a list that lists the gateway's summary, or a
+    // lookup that finds the patient, discloses that members hold the patient's record, health
+    // data (Regulation (EU) 2016/679 recital 35).
+    let listed = scope != Scope::Summary && !gathered.resolved.is_empty();
     if gathered.sent.is_empty() && gathered.set_aside.is_empty() && !listed {
         return None;
     }
-    let evidence = |objects: Vec<RootObject>| {
-        let reached = Evidence::reached(Basis::Returned, objects);
-        match scope {
-            Scope::Summary => reached.queried(gathered.queried.clone()),
-            Scope::List => reached,
+    let evidence = |objects: Vec<RootObject>| match scope {
+        Scope::Summary => Evidence::reached(Basis::Returned, objects)
+            .queried(gathered.queried.clone())
+            .constructed(Category::PatientSummary),
+        Scope::List => {
+            Evidence::reached(Basis::Returned, objects).constructed(Category::PatientSummary)
         }
-        .constructed(Category::PatientSummary)
+        // NOTE: openEHR RM EHR; a lookup reaches the fact that the patient's EHRs exist, and no
+        // composition, so it holds data of no category.
+        Scope::Lookup => Evidence::resource(ResourceKind::Ehr),
     };
     let objects = gathered
         .reached
@@ -665,6 +682,7 @@ pub(crate) fn accessed(
     let (operation, query) = match scope {
         Scope::Summary => (OPERATION, format!("identifier={system}|{value}")),
         Scope::List => (LIST, format!("patient.identifier={system}|{value}")),
+        Scope::Lookup => (LOOKUP, format!("identifier={system}|{value}")),
     };
     let documents = gathered
         .natives

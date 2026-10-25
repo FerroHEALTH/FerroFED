@@ -82,6 +82,7 @@ when you declared one, its correlation header:
 
 | Route | What it answers |
 |---|---|
+| `GET {fhir-base}/Patient?identifier=system\|value` | the patient lookup: the `Patient` the identity binding holds, or the empty `searchset` |
 | `GET {fhir-base}/Patient/$summary?identifier=system\|value` | the patient summary built from every member that holds the patient |
 | `GET {fhir-base}/DocumentReference?patient.identifier=system\|value` | the document list |
 | `GET {fhir-base}/MedicationRequest?patient.identifier=system\|value` | the patient's prescriptions at the serving members |
@@ -118,10 +119,11 @@ stay with the contact point:
 
 - **Patient identification.** The contact point identifies the patient
   against its Member State's identity services and asks FerroFED by the
-  confirmed identifier. FerroFED searches no demographics. The FHIR face
-  is to add a lookup by that identifier, `GET {fhir-base}/Patient?identifier=`,
-  which Xt-EHR D5.1 §3.4.6 asks of every producer EHR system (decision A66,
-  built on #1294).
+  confirmed identifier. FerroFED searches no demographics. The connector
+  may look the confirmed identifier up first with
+  `GET {fhir-base}/Patient?identifier=`, the patient lookup Xt-EHR D5.1
+  §3.4.6 asks of every producer EHR system and has a consumer use
+  ([Looking a patient up](patient-summary.md#looking-a-patient-up)).
 - **The eHDSI CDA.** FerroFED emits no eHDSI CDA pivot document and no
   national CDA. Regulation (EU) 2025/327 recital 26 allows different
   profiles at the level of EHR systems and of contact points, and the

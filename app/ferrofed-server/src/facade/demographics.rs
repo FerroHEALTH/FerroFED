@@ -63,8 +63,8 @@ pub(crate) enum Unheaded {
     NoMatch,
     /// The binding's answer names no one patient.
     Ambiguous(String),
-    /// The patient the binding holds has no name.
-    Unnamed,
+    /// The patient the binding holds has no name: what it holds of them.
+    Unnamed(Box<PatientHeader>),
     /// The binding could not answer: this failure, and whether it ran out of
     /// time.
     Unavailable {
@@ -111,7 +111,7 @@ pub(crate) async fn header(
     federation.requests().headed(&answer, started.elapsed());
     match answer {
         HeaderAnswer::Found(header) if header.named() => Ok(*header),
-        HeaderAnswer::Found(_) => Err(Unheaded::Unnamed),
+        HeaderAnswer::Found(header) => Err(Unheaded::Unnamed(header)),
         HeaderAnswer::Ambiguous(ambiguity) => {
             tracing::warn!(reason = %ambiguity, "the demographics service named no one patient for the summary header");
             Err(Unheaded::Ambiguous(ambiguity.to_string()))

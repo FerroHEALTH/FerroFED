@@ -285,3 +285,69 @@ async fn the_access_record_names_the_person_as_caller_and_as_data_subject() -> T
     }
     Ok(())
 }
+
+/// The claims of a person's own grant of [`own_grant`], scoped to the
+/// lookup: the read of the person's EHRs.
+fn own_lookup_grant() -> Claims {
+    let mut granted = own_grant();
+    granted.scope = Some(String::from("patient/composition-*.r"));
+    granted
+}
+
+/// `GET {fhir-base}/Patient` for the patient `namespace`|`value`.
+fn looked_up(namespace: &str, value: &str) -> Result<http::Request<axum::body::Body>, http::Error> {
+    http::Request::get(format!(
+        "{}/Patient?identifier={}%7C{value}",
+        super::FHIR,
+        namespace.replace(':', "%3A")
+    ))
+    .body(axum::body::Body::empty())
+}
+
+#[tokio::test]
+async fn a_persons_own_grant_looks_up_their_own_patient_and_is_refused_another() -> TestResult {
+    let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
+    let dir = tempfile::tempdir()?;
+    let pdq = suppliers().await?;
+    let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
+    let token = minted(&own_lookup_grant())?;
+
+    let (status, text) = call(
+        app.clone(),
+        bearing(looked_up(OTHER_NAMESPACE, OTHER)?, &token)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "§5.2: {text}");
+    let outcome: Value = serde_json::from_str(&text)?;
+    let diagnostics = outcome
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    assert!(
+        diagnostics.starts_with("patient-confinement"),
+        "the code every confined route answers: {diagnostics}"
+    );
+    assert!(
+        !text.contains(OTHER),
+        "the refusal names no patient: {text}"
+    );
+    assert_eq!(
+        0,
+        pdq.searches(),
+        "the demographics supplier is never asked about another patient"
+    );
+
+    let (status, text) = call(app, bearing(looked_up(NAMESPACE, PATIENT)?, &token)?).await?;
+    assert_eq!(StatusCode::OK, status, "Art 3(1): {text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    assert_eq!(
+        bundle.pointer("/entry/0/resource/identifier/0/value"),
+        Some(&Value::from(PATIENT)),
+        "the person's own Patient: {bundle}"
+    );
+    assert!(
+        received(&a).await?.is_empty() && received(&b).await?.is_empty(),
+        "no member is asked"
+    );
+    Ok(())
+}

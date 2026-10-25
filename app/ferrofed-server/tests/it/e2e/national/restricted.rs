@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! A member restricting the patient leaves no trace in any answer the
-//! national connector reads: the summary, the document list and the
-//! prescription search answer as they do where that member does not know the
-//! patient, and a read by id of the restricting member's prescription answers
+//! national connector reads: the lookup, the summary, the document list and
+//! the prescription search answer as they do where that member does not know
+//! the patient, a patient every member restricts is looked up as one no
+//! member holds, and a read by id of the restricting member's prescription answers
 //! as an id the face never wrote, with that member asked nothing (Regulation
 //! (EU) 2025/327 Art 8, Art 11(5); §11.3).
 //!
@@ -118,12 +119,14 @@ fn read_as(answer: &Answer) -> Result<(StatusCode, Value), Box<dyn Error>> {
     Ok((answer.status, stable(&body)))
 }
 
-/// The three answers the connector reads of one gateway by the patient's
-/// identifier: the summary, the document list and the prescription search.
+/// The four answers the connector reads of one gateway by the patient's
+/// identifier: the lookup, the summary, the document list and the
+/// prescription search.
 async fn answers(connector: &NationalConnector) -> Result<Vec<Answer>, Box<dyn Error>> {
     let held = national(&PATIENT.namespace(), &PATIENT.value());
     let patient = patient_id(&held);
     Ok(vec![
+        connector.lookup(patient).await?,
         connector.summary(patient).await?,
         connector.documents(patient).await?,
         connector.prescriptions(patient).await?,
@@ -166,7 +169,7 @@ async fn a_restricting_member_leaves_no_trace_in_any_answer() -> TestResult {
     );
     let read_unknown = answers(&unknown.connector).await?;
 
-    let labels = ["summary", "document list", "prescription search"];
+    let labels = ["lookup", "summary", "document list", "prescription search"];
     for ((label, restricted), unknown) in labels.iter().zip(&read_restricted).zip(&read_unknown) {
         assert!(
             restricted.status.is_success() || restricted.status == StatusCode::NOT_FOUND,
@@ -222,5 +225,63 @@ async fn a_restricting_member_leaves_no_trace_in_any_answer() -> TestResult {
             denied.body
         );
     }
+    Ok(())
+}
+
+/// Annex II 2.1, Art 8, Art 11(5): a patient every member restricts is looked
+/// up as an identifier no member holds, the empty searchset, and no member
+/// is asked anything (Xt-EHR D5.1 §3.4.6; §5.4.1, N33).
+// conformance: CP-26
+#[tokio::test]
+async fn a_patient_every_member_restricts_is_looked_up_as_one_no_member_holds() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let harness = Box::pin(Harness::start()).await?;
+    let restricted_dir = tempfile::tempdir()?;
+    let unknown_dir = tempfile::tempdir()?;
+    let restricted = harness
+        .gateway(
+            restricted_dir.path(),
+            &crossref(
+                &[("node-a", EHR_A), ("node-b", EHR_B)],
+                &["node-a", "node-b"],
+            ),
+        )
+        .await?;
+    let unknown = harness
+        .gateway(unknown_dir.path(), &crossref(&[], &[]))
+        .await?;
+    let held = national(&PATIENT.namespace(), &PATIENT.value());
+    let patient = patient_id(&held);
+
+    harness.clear_journals();
+    let read_restricted = restricted.connector.lookup(patient).await?;
+    let read_unknown = unknown.connector.lookup(patient).await?;
+    let asked: Vec<String> = [
+        harness.nodes.a.proxy.journal(),
+        harness.nodes.b.proxy.journal(),
+        harness.proxy_a.journal(),
+        harness.proxy_b.journal(),
+    ]
+    .iter()
+    .flatten()
+    .map(|capture| format!("{} {}", capture.method, capture.path))
+    .collect();
+    assert!(asked.is_empty(), "no member is asked: {asked:?}");
+    assert_eq!(
+        StatusCode::OK,
+        read_restricted.status,
+        "{}",
+        read_restricted.body
+    );
+    let (_, body) = read_as(&read_restricted)?;
+    assert_eq!(body.get("type"), Some(&Value::from("searchset")), "{body}");
+    assert!(body.get("entry").is_none(), "no Patient: {body}");
+    assert_eq!(
+        read_as(&read_unknown)?,
+        read_as(&read_restricted)?,
+        "a restricted patient is looked up as one no member holds"
+    );
     Ok(())
 }

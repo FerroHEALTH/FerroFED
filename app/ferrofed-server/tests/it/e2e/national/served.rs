@@ -35,7 +35,7 @@ use crate::feed_audit::SETTLE;
 use crate::support::conveyed::conveyed_claims;
 
 /// How many requests the connector sends the gateway.
-const REQUESTS: usize = 5;
+const REQUESTS: usize = 6;
 
 /// The resources of the entries of the `Bundle` `bundle` of the type
 /// `kind`.
@@ -130,6 +130,7 @@ fn told_the_relayed_caller(journal: &[Capture], at: &str) -> TestResult {
 
 /// The connector's answers the access records are joined to.
 struct Answers {
+    lookup: Answer,
     summary: Answer,
     documents: Answer,
     prescriptions: Answer,
@@ -138,7 +139,7 @@ struct Answers {
 }
 
 /// Drives the face from the connector over `harness`: the confirmation, the
-/// summary, the document list, the prescriptions, the read of node A's and
+/// lookup, the summary, the document list, the prescriptions, the read of node A's and
 /// the dispensation, each answer checked.
 async fn drive(
     harness: &Harness,
@@ -149,6 +150,26 @@ async fn drive(
     assert!(
         connector.confirm(&harness.pdq.base_url(), patient).await?,
         "the contact point confirms the identifier at its identity service (A68)"
+    );
+
+    let lookup = connector.lookup(patient).await?;
+    assert_eq!(StatusCode::OK, lookup.status, "{}", lookup.body);
+    let looked_up: Value = serde_json::from_str(&lookup.body)?;
+    let found = resources(&looked_up, "Patient");
+    let [one] = found.as_slice() else {
+        return Err(
+            format!("the lookup finds one Patient (Xt-EHR D5.1 §3.4.6): {looked_up}").into(),
+        );
+    };
+    assert_eq!(
+        one.pointer("/name/0/family"),
+        Some(&Value::from(FAMILY)),
+        "the Patient comes from the PDQm Supplier: {one}"
+    );
+    assert_eq!(
+        one.pointer("/identifier/0/system"),
+        Some(&Value::from(held.0.as_str())),
+        "the Patient carries the identifier it was looked up by: {one}"
     );
 
     let summary = connector.summary(patient).await?;
@@ -221,6 +242,7 @@ async fn drive(
         dispensed.location()
     );
     Ok(Answers {
+        lookup,
         summary,
         documents,
         prescriptions,
@@ -324,6 +346,7 @@ async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
         }
     }
     let expected: BTreeMap<String, usize> = [
+        &read.lookup,
         &read.summary,
         &read.documents,
         &read.prescriptions,
