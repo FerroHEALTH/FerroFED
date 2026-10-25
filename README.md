@@ -44,7 +44,7 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.12 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.13 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
@@ -133,8 +133,15 @@ crates. Each release scans both images and the binaries and is refused
 while a finding has no OpenVEX statement that judges it. The upgrade notes
 say what an operator changes
 ([upgrading](https://ferrofed.eu/docs/operate/upgrading.html)).
-Planned: the national contact point's connector
-([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), the logging
+v0.0.13 serves a national contact point's national connector on the FHIR
+face, held by an end-to-end test
+([a national contact point](https://ferrofed.eu/docs/integrate/national-contact-point.html)),
+looks a patient up by identifier there, validates a received document in
+full with FerroBRIDGE's `ferrobridge-validator`, and translates a summary
+code in no preferred system through the configured terminology server. It
+ships a Kubernetes package with the images pinned by digest and exports
+traces and metrics over TLS.
+Planned: the logging
 component's re-check against the Art 36(1) common specifications once
 they are adopted
 ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)), the patient

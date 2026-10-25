@@ -232,8 +232,11 @@ FerroFED does not reach another Member State itself and does not build the
 contact point's cross-border protocols. Its route to cross-border care is the
 national one: a national contact point asks its national infrastructure for
 a patient's documents, and FerroFED can answer that request from federated
-openEHR data through its interoperability component. That work is planned in
-[#524](https://github.com/FerroHEALTH/FerroFED/issues/524).
+openEHR data through its interoperability component. It does so on its
+FHIR face, where a national connector reads the patient summary, the
+document list and the prescriptions and posts a dispensation
+([A national contact point](../integrate/national-contact-point.md),
+[#524](https://github.com/FerroHEALTH/FerroFED/issues/524)).
 
 The Federation Tier specification does not say whether a federation whose
 member CDRs sit in different Member States is in scope. FerroFED neither
@@ -546,7 +549,7 @@ Seven of the manufacturer's obligations have a first answer:
 
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
-issues are in the v0.0.13 and v0.0.14 milestones, before the Regulation
+issues are in the v0.0.14 milestone, before the Regulation
 applies on 26 March 2027:
 
 - [#799](https://github.com/FerroHEALTH/FerroFED/issues/799): the European
@@ -564,8 +567,6 @@ applies on 26 March 2027:
   dispensations, serving them from openEHR medication data through a
   FHIRconnect mapping
   ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)).
-- [#524](https://github.com/FerroHEALTH/FerroFED/issues/524): serving a
-  national contact point for digital health.
 - [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
   the conformity work: the points the [Annex II checklist](annex-ii.md)
   leaves open, the EU declaration of conformity, which each release writes

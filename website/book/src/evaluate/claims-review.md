@@ -65,6 +65,7 @@ as a broken command, is fixed in the same change.
 | v0.0.11 | 2026-10-15 | this page and the clinical safety risk file | 31 and 32, below | [#962](https://github.com/FerroHEALTH/FerroFED/issues/962) |
 | v0.0.11 | 2026-10-16 | see below | 33 to 43, below | the v0.0.11 version bump, except finding 16, which stands |
 | v0.0.12 | 2026-10-24 | see below | 44 to 55, below | the v0.0.12 version bump |
+| v0.0.13 | 2026-10-25 | see below | 56 to 63, below | the v0.0.13 version bump |
 
 ### Findings of 2026-10-06
 
@@ -356,6 +357,57 @@ runs:
     reviews. The `openehr-federation` README lost the "follows in build
     order" sentence in the v0.0.10 version bump (commit `ef7e3084`), so the
     finding is closed there.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-10-25
+
+The review at the v0.0.13 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the Upgrading page and the assembled release notes.
+Every other page of the book, `SUPPORT.md`, `SECURITY.md` and the README
+of each crate was searched for "planned", "not yet", "plain gRPC" and the
+issues the v0.0.13 milestone closed next to a statement that the work is
+still to come.
+
+Against Art 28(b), a limitation left out:
+
+56. The instructions for use said a received document is not yet checked
+    in full ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)), which v0.0.13 builds, and the claims page's list of
+    limitations said nothing of the received document. Both now name what
+    stays: a constraint the validator cannot evaluate is listed as a
+    warning, not refused, and a `required` binding the packages cannot
+    decide needs the terminology server.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+57. `README.md` named v0.0.12 as current and planned the national contact
+    point's connector ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524)), which v0.0.13 serves. It now names
+    v0.0.13 and what it adds.
+58. The landing page named v0.0.12 as current and said v0.0.13 continues
+    the connector. It now names v0.0.13, has a card for it, and plans
+    v0.0.14.
+59. The claims page planned for v0.0.13 the connector and the operations
+    packaging ([#735](https://github.com/FerroHEALTH/FerroFED/issues/735), [#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#645](https://github.com/FerroHEALTH/FerroFED/issues/645)), which shipped, beside work the
+    v0.0.14 milestone holds. It now has a v0.0.13 section and plans
+    v0.0.14.
+60. The regulatory status page planned the national route in
+    [#524](https://github.com/FerroHEALTH/FerroFED/issues/524) and put the remaining EHDS issues in the v0.0.13 milestone,
+    and the rights page called the Art 7(2) route planned. Both now say
+    the FHIR face serves a national connector, and the remaining issues are
+    in the v0.0.14 milestone.
+61. The threat model called the OTLP export plain gRPC with
+    [#644](https://github.com/FerroHEALTH/FerroFED/issues/644) open, and left egress to the deployment pending
+    [#638](https://github.com/FerroHEALTH/FerroFED/issues/638). An `https://` collector is now reached over TLS with mutual
+    TLS on request, and the Kubernetes package's `egress` component
+    restricts egress; the row and both residual risks now say so.
+62. The clinical safety risk file kept I-03 open on [#808](https://github.com/FerroHEALTH/FerroFED/issues/808) and
+    [#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213), both closed by v0.0.13. The release's review row names what
+    keeps it open: the medical alert and the functional status, which no
+    openEHR content feeds yet.
+63. `llms.txt` did not name the national connector the FHIR face serves.
+    It now does.
 
 No text suggested a use outside the intended purpose, (c).
 

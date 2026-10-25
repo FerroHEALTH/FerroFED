@@ -97,6 +97,35 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.13, from v0.0.12
+
+- The Kubernetes example moved to `deploy/kubernetes/base/`: apply it with
+  `kubectl apply -k deploy/kubernetes/base` in place of
+  `kubectl apply -f deploy/kubernetes/`. Its NetworkPolicy now admits only
+  your reverse proxy's namespace (`ingress-nginx` until you edit it) and the
+  console to the gateway port, so a client inside the cluster that called
+  the gateway directly needs a peer of its own; the StatefulSet's
+  `terminationGracePeriodSeconds` is 50 and its governing Service is the
+  new `ferrofed-admin`. Kubernetes refuses a change of a StatefulSet's
+  `serviceName`, so run `kubectl delete statefulset ferrofed
+  --cascade=orphan` before you apply; the pods and their audit spool claims
+  stay, and the new StatefulSet adopts them (#638).
+- Each `[[fhir.receive]]` names, in `dependencies`, every package of its
+  `package`'s dependency closure (each a `.tgz` or an unpacked directory),
+  and the package of the MyHealth@EU value sets its profiles bind. A
+  `[[fhir.receive]]` whose packages lack one a manifest names is refused at
+  start and by `config check`, naming the missing package. For the HL7
+  Europe Patient Summary, the book's receiving page lists the packages
+  (#808).
+- The quickstart `compose.yaml` now sends the usage report by default, as
+  the release's compose file has since v0.0.12, with its instance id on the
+  new `ferrofed-state` volume. Set `FERROFED__USAGE_REPORT__ENABLED=false`,
+  and `FERROEHR__USAGE_REPORT__ENABLED=false` for the four nodes, in your
+  shell or `.env` to keep it off (#1296).
+- A bookmark of the operator console's `/configuration` now opens the
+  Federation behaviour settings tab; the members are at
+  `/configuration/members` (#1235).
+
 ### To v0.0.12, from v0.0.11
 
 - The release's compose file and the Kubernetes example now set
