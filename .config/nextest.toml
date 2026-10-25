@@ -27,6 +27,16 @@ slow-timeout = { period = "60s", terminate-after = 20 }
 filter = 'package(ferrofed-engine) & test(/^architecture::/)'
 slow-timeout = { period = "30s", terminate-after = 6 }
 
+# A test that builds the receivers of a patient summary reads the HL7 Europe
+# Patient Summary's whole package closure (#808), which FerroBRIDGE's
+# validator parses in full: some 6 seconds uninstrumented, past a minute
+# under the coverage run of the SonarQube Cloud lane. nextest runs each test
+# in a process of its own, so no process can share the parsed set with
+# another, and these tests get three minutes (#1316).
+[[profile.default.overrides]]
+filter = '(package(ferrofed-eehrxf) & test(/^receive::/)) | (package(ferrofed-server) & (test(/^fhir::receive::/) | test(/facade::receive::refusal::/)))'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).
