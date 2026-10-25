@@ -5,8 +5,9 @@
 //! member's cross-reference is asked, and only a member that knows the patient
 //! receives a query (§4.3 Variant B; N4 last sentence, N6, N8, N10).
 //!
-//! In process: three mock CDRs and the harness PIX Manager fed over ITI-104,
-//! behind a capturing proxy, so the test reads what was asked of each.
+//! In process: three mock CDRs and a PIXm Manager stub with the patient's
+//! fixed ITI-83 answer, behind a capturing proxy, so the test reads what was
+//! asked of each.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -15,9 +16,9 @@
 use std::error::Error;
 use std::fmt::Write as _;
 
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::proxy::CapturingProxy;
-use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -87,13 +88,12 @@ fn asked_for(proxy: &CapturingProxy, domain: EhrDomain) -> bool {
 #[tokio::test]
 async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_that_resolve()
 -> TestResult {
-    let pix = PixManager::start().await?;
     let feeds = [
         CrossReferenceSeed {
             patient: patient(),
             ehrs: vec![(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)],
         },
-        // NOTE: an unrelated patient makes domain C known to the Manager, so
+        // NOTE: an unrelated patient holds the only ehr_id in domain C, so
         // node C is a member that does not know this patient.
         CrossReferenceSeed {
             patient: PatientId::new(1, 47),
@@ -103,14 +103,8 @@ async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_th
             )],
         },
     ];
-    for feed in &feeds {
-        assert_eq!(
-            StatusCode::CREATED,
-            seed::feed(&pix.base_url(), feed).await?,
-            "ITI-104 creates the Patient"
-        );
-    }
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let pix = pixm_stub::manager(&feeds).await;
+    let proxy = CapturingProxy::start(pix.uri()).await?;
     let a = node_answering("a-uid::cdr-a.example.org::1").await;
     let b = node_answering("b-uid::cdr-b.example.org::1").await;
     let c = node_answering("c-uid::cdr-c.example.org::1").await;
@@ -155,7 +149,11 @@ async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_th
         "node C does not know the patient and is never asked (N8)"
     );
 
-    assert_eq!(1, pix.queries(), "one ITI-83 call covers every member");
+    assert_eq!(
+        1,
+        pixm_stub::queries(&pix).await,
+        "one ITI-83 call covers every member"
+    );
     for domain in [DOMAIN_A, DOMAIN_B, DOMAIN_C] {
         assert!(
             asked_for(&proxy, domain),

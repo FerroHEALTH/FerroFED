@@ -20,9 +20,10 @@ aws-lc-rs.workspace = true
 # The `ath` a harness DPoP check compares (#439).
 base64.workspace = true
 bytes.workspace = true
-# The FHIR R4 model of the harness PIX Manager and its ITI-104 source (#47):
-# `resources` for `Patient`, which a test device may compile and the shipped
-# IHE binding does not need yet (Annex A).
+# The FHIR R4 model of the ITI-104 source, the PIXm Manager stub's fixed
+# answers and the harness PDQm Supplier: `resources` for `Patient`, which a
+# test device may compile and the shipped IHE binding does not need yet
+# (Annex A).
 fhir-types = { workspace = true, features = ["r4", "resources"] }
 # The vendored HL7 Europe Patient Summary package the document check reads
 # its profiles from (#689).
@@ -69,7 +70,7 @@ serde_json.workspace = true
 testcontainers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
-# The harness PIX Manager's query-string decoding.
+# The ITI-104 source's request URL.
 url.workspace = true
 uuid.workspace = true
 # The mock server every suite stands its nodes and services up with, held so
@@ -93,7 +94,7 @@ openehr-its = { workspace = true, features = ["rest"] }
 ferrofed-console.workspace = true
 tempfile.workspace = true
 toml.workspace = true
-# The PIXm client the harness PIX Manager is held to (#42), the XCPD client
+# The PIXm client the seed feeds FerroPIX beside (#42), the XCPD client
 # the stub responding gateway is held to (#85), the mCSD client the harness
 # directory is held to (#86), and the PMIR subscriber and feed reader the
 # harness Patient Identity Registry is held to (#147), and the PDQm client the

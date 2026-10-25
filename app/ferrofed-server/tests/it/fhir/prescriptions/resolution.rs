@@ -10,8 +10,8 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pix::PixManager;
-use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
+use ferrofed_testkit::pixm_stub;
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use http::{Request, StatusCode};
 use serde_json::Value;
 use wiremock::matchers::any;
@@ -34,7 +34,6 @@ async fn searched_with_a_failed_resolution(
         page(searchset("https://cdr-b.example.org", &[RX_B], None)),
     )
     .await?;
-    let pix = PixManager::start().await?;
     let (domain, patient) = (EhrDomain::new(1), PatientId::new(1, 46));
     let feed = CrossReferenceSeed {
         patient,
@@ -43,11 +42,7 @@ async fn searched_with_a_failed_resolution(
             uuid::Uuid::from_u128(0x3a3a_3a3a_3a3a_4a3a_8a3a_3a3a_3a3a_3a3a),
         )],
     };
-    assert_eq!(
-        StatusCode::CREATED,
-        seed::feed(&pix.base_url(), &feed).await?,
-        "ITI-104 creates the Patient"
-    );
+    let pix = pixm_stub::manager(std::slice::from_ref(&feed)).await;
     let down = Server::start().await;
     Mock::given(any())
         .respond_with(ResponseTemplate::new(500))
@@ -56,7 +51,7 @@ async fn searched_with_a_failed_resolution(
     let resolvers = format!(
         "\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\n\
          [[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-b\" = \"urn:oid:2.999.32\"\n",
-        pix.origin(),
+        pix.uri(),
         domain.system(),
         down.uri()
     );

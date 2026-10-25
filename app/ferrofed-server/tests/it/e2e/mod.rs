@@ -7,7 +7,7 @@
 //! N7, N16, N17, N33).
 //!
 //! The gateway resolves the patient through the development cross-reference
-//! ([`crossref`]), the harness PIX Manager ([`pixm`]), or SanteMPI, a
+//! ([`crossref`]), FerroPIX, the family's PIX Manager ([`pixm`]), or SanteMPI, a
 //! deployable PIX Manager each member feeds over ITI-93 ([`santempi`]). Both
 //! nodes hold the patient's identifier on `EHR_STATUS.subject`, so a subject
 //! predicate the gateway leaked would match there, and the journals show that

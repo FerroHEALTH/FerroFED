@@ -21,7 +21,7 @@ use ferrofed_testkit::containers::ehrbase::{
 use ferrofed_testkit::containers::images::EHRBASE;
 use ferrofed_testkit::containers::{self, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode};
 use ferrofed_testkit::node_profile;
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedError, SeedPlan,
 };
@@ -212,12 +212,12 @@ async fn ehrbase_is_checked_against_the_identifier_integrity_conditions() -> Tes
         return Ok(());
     }
     let candidate = ehrbase::ehrbase(NODE_B_SYSTEM_ID).await?;
-    let pix = PixManager::start().await?;
+    let pix = pixm_stub::manager(&[]).await;
     let dir = tempfile::tempdir()?;
     let federation = federation(
         dir.path(),
         &registry(&candidate.api_root()),
-        &pix.base_url(),
+        &pixm_stub::base_url(&pix),
     )?;
 
     let report =

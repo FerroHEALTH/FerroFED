@@ -215,7 +215,11 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
     assert!(nvi.searches().await.is_empty(), "the NVI was sent nothing");
     assert_eq!([0, 0, 0], asked_counts(&servers).await?, "no dispatch");
     #[cfg(feature = "binding-ihe")]
-    assert_eq!(0, resolution.pix.queries(), "nothing was resolved");
+    assert_eq!(
+        0,
+        ferrofed_testkit::pixm_stub::queries(&resolution.pix).await,
+        "nothing was resolved"
+    );
 
     let assertions: Vec<String> = grant
         .authority

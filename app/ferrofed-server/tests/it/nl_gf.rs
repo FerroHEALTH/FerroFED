@@ -9,7 +9,7 @@
 //! node receives AQL keyed on its own `ehr_id` alone (Step 2, N33, §5.4).
 //!
 //! In process: three mock CDRs, the stub Localization Service, and the
-//! harness PIX Manager fed over ITI-104 in a build with the IHE binding or
+//! PIXm Manager stub with the patient's fixed answer in a build with the IHE binding or
 //! the development cross-reference holding the same `ehr_id`s in a build
 //! without it. Every identifier is synthetic, in the `urn:oid:2.999` example
 //! arc, which `[nl_gf.nvi] namespaces` lists as standing for the
@@ -39,10 +39,10 @@ use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::nvi::LocalizationService;
 #[cfg(feature = "binding-ihe")]
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::PatientId;
 #[cfg(feature = "binding-ihe")]
-use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain};
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain};
 use http::{Request, StatusCode};
 use openehr_federation::options::OptionsRoot;
 use uuid::Uuid;
@@ -87,35 +87,30 @@ pub(crate) fn query() -> String {
 }
 
 /// What resolves the patient at each member the NVI names (§B.7 Step 1c):
-/// the harness PIX Manager, fed over ITI-104 with the patient's `ehr_id` at
-/// node A and node B, in a build with the IHE binding, and the development
+/// a PIXm Manager stub answering with the patient's `ehr_id` at node A and
+/// node B, in a build with the IHE binding, and the development
 /// cross-reference holding the same `ehr_id`s in a build without it.
 #[derive(Debug)]
 pub(crate) struct Resolution {
     /// The configuration tables that name the resolver.
     tables: String,
-    /// The PIX Manager, whose queries a test counts.
+    /// The PIXm Manager stub, whose queries a test counts.
     #[cfg(feature = "binding-ihe")]
-    pub(crate) pix: PixManager,
+    pub(crate) pix: Server,
 }
 
 impl Resolution {
-    /// Starts the PIX Manager and feeds it the patient.
+    /// Starts the PIXm Manager stub with the patient's answer.
     #[cfg(feature = "binding-ihe")]
     pub(crate) async fn start() -> Result<Self, Box<dyn Error>> {
-        let pix = PixManager::start().await?;
-        let feed = CrossReferenceSeed {
+        let pix = pixm_stub::manager(&[CrossReferenceSeed {
             patient: patient(),
             ehrs: vec![(DOMAINS[0], EHR_A), (DOMAINS[1], EHR_B)],
-        };
-        assert_eq!(
-            StatusCode::CREATED,
-            seed::feed(&pix.base_url(), &feed).await?,
-            "ITI-104 creates the Patient"
-        );
+        }])
+        .await;
         let mut tables = format!(
             "[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n",
-            pix.base_url()
+            pixm_stub::base_url(&pix)
         );
         for (member, domain) in MEMBERS.into_iter().zip(DOMAINS) {
             writeln!(tables, "\"{member}\" = \"{}\"", domain.system())?;
@@ -397,7 +392,11 @@ async fn an_nvi_that_does_not_answer_fails_the_query_closed() -> TestResult {
         "no dispatch, no ask-all (§14.1)"
     );
     #[cfg(feature = "binding-ihe")]
-    assert_eq!(0, resolution.pix.queries(), "nothing was resolved");
+    assert_eq!(
+        0,
+        pixm_stub::queries(&resolution.pix).await,
+        "nothing was resolved"
+    );
     Ok(())
 }
 
