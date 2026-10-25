@@ -15,10 +15,12 @@ use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_eehrxf::summary::{
     Answer, Assembled, AssemblyError, Author, Covered, DATA_ABSENT_REASON, Elsewhere, Held,
-    NOT_EXHAUSTIVE, Organisation, Origin, Request, SectionAnswers, assemble,
+    NOT_EXHAUSTIVE, NOT_SUPPLIED, Organisation, Origin, Request, SectionAnswers, assemble,
 };
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use ferrofed_testkit::eps;
+
+mod medication;
 
 /// The FHIR base the test documents name their entries under.
 const BASE: &str = "https://gateway.example.org/fhir";
@@ -299,6 +301,27 @@ fn a_silent_member_is_named_and_its_sections_are_unavailable() -> Result<(), Box
         );
         let div = empty["text"]["div"].as_str().ok_or("a narrative")?;
         assert!(div.contains("Synthetic org-b (time-out)"), "{div}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_medical_alert_and_the_functional_status_are_written_as_not_supplied()
+-> Result<(), Box<dyn Error>> {
+    let assembled = document(&answers(&[], &Answer::Answered(Vec::new())))?;
+    let bundle = serde_json::to_value(&assembled.bundle)?;
+    for (code, title) in [
+        ("104605-1", "the alerts"),
+        ("47420-5", "the functional status"),
+    ] {
+        let gap = section(&bundle, code).ok_or(title)?;
+        assert_eq!(
+            gap["emptyReason"]["coding"][0]["code"], "unavailable",
+            "{title}: never nilknown and never left out"
+        );
+        assert!(gap.get("entry").is_none(), "{title} carries no entry");
+        let div = gap["text"]["div"].as_str().ok_or("a narrative")?;
+        assert!(div.contains(NOT_SUPPLIED), "{title}: {div}");
     }
     Ok(())
 }

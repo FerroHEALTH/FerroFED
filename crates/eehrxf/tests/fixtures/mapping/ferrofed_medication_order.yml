@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# A synthetic model mapping for the medication controls of the patient
+# summary: the coded medicine of the synthetic medication order's activity
+# becomes MedicationStatement.medicationCodeableConcept and its coded route
+# the dosage's route, so a patient whose medicines are recorded only as
+# orders has them in the medication summary. Every value is synthetic; no
+# clinical content.
+grammar: FHIRConnect/v1.0.0
+type: model
+metadata:
+  name: ferrofed_medication_order
+  version: 1.0.0
+spec:
+  system: FHIR
+  version: R4
+  openEhrConfig:
+    archetype: openEHR-EHR-INSTRUCTION.ferrofed_medication_order.v1
+  fhirConfig:
+    structureDefinition: http://hl7.org/fhir/StructureDefinition/MedicationStatement
+
+preprocessor:
+  openehrCondition:
+    targetRoot: $archetype
+    targetAttribute: activities[at0001]/description[at0002]/items[at0003]
+    operator: not empty
+
+mappings:
+  - name: "medicine"
+    with:
+      fhir: "$resource.medication.ofType(CodeableConcept)"
+      openehr: "$archetype/activities[at0001]/description[at0002]/items[at0003]"
+      type: "CODEABLECONCEPT"
+
+  - name: "route"
+    with:
+      fhir: "$resource.dosage.route"
+      openehr: "$archetype/activities[at0001]/description[at0002]/items[at0004]"
+      type: "CODEABLECONCEPT"
+
+  - name: "status"
+    unidirectional: "openehr->fhir"
+    with:
+      fhir: "$resource"
+    manual:
+      - name: "statusActive"
+        fhir:
+          - path: "status"
+            value: "active"
+
+  - name: "subject"
+    unidirectional: "openehr->fhir"
+    with:
+      fhir: "$resource.subject"
+    manual:
+      - name: "subjectReference"
+        fhir:
+          - path: "reference"
+            value: "Patient/synthetic-subject-1343"

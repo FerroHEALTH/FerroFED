@@ -30,7 +30,10 @@
 //!   ([`eehrxf::terminology::translation`]); with none, the code is
 //!   transferred as recorded (eHN PS Art 10(7));
 //! - a member's data are listed as mapped, beside every other member's,
-//!   never merged with them;
+//!   never merged with them, and two members' medication entries that name
+//!   the same medicine, strength and route are marked in the section's
+//!   narrative as a probable duplicate, naming both members ([`duplicates`],
+//!   hazard I-02 of the clinical safety risk file);
 //! - each section's narrative is generated and says that it is not
 //!   exhaustive, names every member that gave no answer, and counts every
 //!   composition no mapping covers, by member and template, which is
@@ -40,12 +43,18 @@
 //!   its own endpoint did not answer;
 //! - a section with no entry is `nilknown` only when every member answered,
 //!   none holds content for it and none serves its own summary, and
-//!   `unavailable` otherwise.
+//!   `unavailable` otherwise;
+//! - the medical alert and the functional status, which no openEHR content
+//!   is named to feed ([`crate::patient_summary::UNSELECTED`]), are written
+//!   in every summary as `unavailable`, with a narrative saying the gateway
+//!   does not supply them, so no reader takes their absence for "none"
+//!   (hazard I-03 of the clinical safety risk file).
 //!
 //! No specification governs how a federation authors a summary: these are
 //! our own design, against the eHealth Network guideline's header elements
 //! and the EPS composition's author, section and empty-reason elements.
 
+pub mod duplicates;
 pub mod mappings;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -57,7 +66,7 @@ use eehrxf::terminology::Terminology;
 use eehrxf::terminology::ehn;
 use eehrxf::terminology::translation::{TranslationError, Translator};
 use eehrxf::terminology::withheld::Withheld;
-use eehrxf::transformation::{Direction, Pin, Report, ReportError};
+use eehrxf::transformation::{Direction, Pin, Report, ReportError, Tally};
 use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
 use fhir_types::r4::address::Address;
 use fhir_types::r4::bundle::Bundle;
@@ -73,9 +82,11 @@ use fhir_types::r4::primitives::{Code, Date};
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
+use fhirconnect::engine::traverse::error::EngineError;
+use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run::Settings;
 
-use crate::patient_summary::Section;
+use crate::patient_summary::{Reason, Section, UNSELECTED};
 use crate::summary::mappings::{Mappings, MappingsError, slot_of};
 use crate::transformation::preferred;
 
@@ -85,6 +96,10 @@ pub const DATA_ABSENT_REASON: &str = "http://hl7.org/fhir/StructureDefinition/da
 
 /// The statement every section's narrative carries.
 pub const NOT_EXHAUSTIVE: &str = "This section is not exhaustive: it holds what the members that answered record, mapped to the European exchange format.";
+
+/// The statement the narrative of a section the gateway does not supply
+/// carries.
+pub const NOT_SUPPLIED: &str = "The gateway does not supply this section: no openEHR content is named to feed it, so the section says nothing about whether the patient has any. Ask the care providers who treat the patient.";
 
 /// An organisation as the registry names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,6 +252,12 @@ pub enum AssemblyError {
     /// The document could not be written.
     #[error(transparent)]
     Document(#[from] DocumentError),
+    /// A crosswalk gap names no EPS section slot.
+    #[error("the gap {element} names no section of the patient summary composition")]
+    Gap {
+        /// The Xt-EHR element path of the gap.
+        element: &'static str,
+    },
     /// A section answer names an origin that was not given.
     #[error("a section answer names origin {index}, which was not given")]
     Origin {
@@ -329,12 +350,74 @@ pub async fn assemble(
             .await?;
         assembly.document.with_section(section)?;
     }
+    for slot in not_supplied()? {
+        assembly.document.with_section(
+            eehrxf::document::Section::new(slot, vec![String::from(NOT_SUPPLIED)])
+                .empty_because(EmptyReason::Unavailable),
+        )?;
+    }
     Ok(Assembled {
         bundle: assembly.document.into_bundle()?,
         mapped: assembly.mapped,
         unmapped: assembly.unmapped,
         transformations: assembly.reports.into_values().collect(),
     })
+}
+
+/// The narrative line of the elements one run dropped, by path, never by
+/// value, so a loss is never silent in the document (hazard I-03 of the
+/// clinical safety risk file); `None` when it dropped none.
+fn dropped_line(dropped: &Tally) -> Option<String> {
+    if dropped.count() == 0 {
+        return None;
+    }
+    let paths: Vec<&str> = dropped.paths().keys().map(String::as_str).collect();
+    let named = if paths.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", paths.join(", "))
+    };
+    Some(format!(
+        "{} element(s) of a record could not be carried into this section{named}, so the record holds more than the section shows",
+        dropped.count()
+    ))
+}
+
+/// What one mapping run added: the `fullUrl` of the mapped resource, the
+/// narrative line of each term mapping it wrote as no coding, and the
+/// probable-duplicate key of its medication entry.
+type Run = (Option<String>, Vec<String>, Option<duplicates::Key>);
+
+/// Whether `refused` is the engine's answer that the context's own condition
+/// does not hold over the composition (FHIRconnect 1.0.0
+/// `basics/preprocessor.adoc`), which leaves the composition to the section's
+/// other mappings.
+fn not_applicable(refused: &MappingError) -> bool {
+    let MappingError::Run { source } = refused else {
+        return false;
+    };
+    let OperationError::Mapping { source } = &**source else {
+        return false;
+    };
+    matches!(**source, EngineError::NotApplicable { .. })
+}
+
+/// The slots of the sections no openEHR content is named to feed, the gaps
+/// of [`UNSELECTED`], which every summary writes as not supplied.
+fn not_supplied() -> Result<Vec<&'static eehrxf::document::Slot>, AssemblyError> {
+    UNSELECTED
+        .iter()
+        .filter(|unselected| matches!(unselected.reason, Reason::Gap { .. }))
+        .map(|unselected| {
+            eehrxf::crosswalk::patient_summary::PATIENT_SUMMARY
+                .row(unselected.element)
+                .and_then(|row| row.eps.strip_prefix("Composition.section:"))
+                .and_then(eehrxf::document::slot)
+                .ok_or(AssemblyError::Gap {
+                    element: unselected.element,
+                })
+        })
+        .collect()
 }
 
 /// The document as it is assembled, and what it took from whom.
@@ -373,6 +456,7 @@ impl Assembly {
             .collect();
         let mut uncovered: BTreeMap<(usize, String), usize> = BTreeMap::new();
         let mut withheld = Vec::new();
+        let mut keys = Vec::new();
         for (index, answer) in &answers.answers {
             let origin = origins
                 .get(*index)
@@ -395,15 +479,31 @@ impl Assembly {
                     continue;
                 }
                 let member = self.member(*index, origin)?;
+                let mut applied = false;
                 for mapping in runs {
-                    let (entry, lines) =
-                        self.run(mapping, composition, &member, translator).await?;
+                    let Some((entry, lines, key)) =
+                        self.run(mapping, composition, &member, translator).await?
+                    else {
+                        continue;
+                    };
+                    applied = true;
                     entries.extend(entry);
+                    keys.extend(key.map(|key| (origin.organisation.shown().to_owned(), key)));
                     withheld.extend(
                         lines
                             .into_iter()
                             .map(|line| format!("{line}, from {}.", origin.organisation.shown())),
                     );
+                }
+                if !applied {
+                    // NOTE: FHIRconnect 1.0.0 `basics/preprocessor.adoc`: a context whose condition
+                    // does not hold is not run, so a composition no context applies to is reported.
+                    *uncovered
+                        .entry((*index, composition.template.clone()))
+                        .or_default() += 1;
+                    self.unmapped.insert((*index, composition.uid.clone()));
+                    self.uncovered(&composition.template);
+                    continue;
                 }
                 authors.insert(member);
                 self.mapped.insert((*index, composition.uid.clone()));
@@ -412,6 +512,7 @@ impl Assembly {
         let shown = authors_shown(&authors, &self.members, origins);
         let mut paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
         paragraphs.extend(withheld);
+        paragraphs.extend(duplicates::lines(&keys));
         paragraphs.extend(covered_elsewhere(elsewhere));
         let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {
@@ -443,17 +544,25 @@ impl Assembly {
         composition: &Held,
         member: &str,
         translator: &mut Translator<'_>,
-    ) -> Result<(Option<String>, Vec<String>), AssemblyError> {
+    ) -> Result<Option<Run>, AssemblyError> {
         let context = CallContext::new()
             .with_patient(reference(&self.subject))
             .with_who(reference(&self.device))
             .with_on_behalf_of(reference(member));
-        let (answer, warnings) = mapping
-            .to_fhir_with_warnings(&composition.composition, &self.settings, context)
-            .map_err(|source| AssemblyError::Mapping {
-                template: composition.template.clone(),
-                source,
-            })?;
+        let (answer, warnings) = match mapping.to_fhir_with_warnings(
+            &composition.composition,
+            &self.settings,
+            context,
+        ) {
+            Ok(ran) => ran,
+            Err(refused) if not_applicable(&refused) => return Ok(None),
+            Err(source) => {
+                return Err(AssemblyError::Mapping {
+                    template: composition.template.clone(),
+                    source,
+                });
+            }
+        };
         let withheld = warnings
             .iter()
             .filter_map(Withheld::of)
@@ -478,14 +587,21 @@ impl Assembly {
                     })?,
             });
         }
-        self.transformed(mapping, &composition.template, &resources)?;
+        let dropped = self.transformed(mapping, &composition.template, &resources)?;
+        let mut withheld: Vec<String> = withheld;
+        withheld.extend(dropped_line(&dropped));
         // NOTE: HL7 Europe Patient Summary 1.0.0-ballot `bundle-eu-eps` slices `Bundle.entry` by the
         // document's content and names no `OperationOutcome`; the run's losses go to its report.
         let entries: Vec<Resource> = resources
             .into_iter()
             .filter(|resource| !matches!(resource, Resource::OperationOutcome(_)))
             .collect();
-        Ok((self.document.add(&entries)?.into_iter().next(), withheld))
+        let key = duplicates::Key::of(&entries);
+        Ok(Some((
+            self.document.add(&entries)?.into_iter().next(),
+            withheld,
+            key,
+        )))
     }
 
     /// Counts what `mapping` did to a composition of `template`, which it
@@ -495,7 +611,7 @@ impl Assembly {
         mapping: &Mapping,
         template: &str,
         resources: &[Resource],
-    ) -> Result<(), AssemblyError> {
+    ) -> Result<Tally, AssemblyError> {
         // NOTE: the mappings are keyed by the template their context maps, so a context
         // for `template` exists; the template alone is named should it not.
         let pin = mapping.pin(template).unwrap_or_else(|| Pin {
@@ -518,8 +634,9 @@ impl Assembly {
                 }
             }
         }
+        let dropped = report.dropped().clone();
         self.absorb(key, report);
-        Ok(())
+        Ok(dropped)
     }
 
     /// Counts one composition of `template` no mapping covers as dropped

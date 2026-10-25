@@ -145,6 +145,209 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
     .to_string()
 }
 
+/// The synthetic medication template's id
+/// (`crates/eehrxf/tests/fixtures/opt/medication.opt`).
+pub const MEDICATION_TEMPLATE: &str = "ferrofed.eehrxf.medication.v1";
+
+/// The context that maps the synthetic medication use to
+/// `MedicationStatement-eu-eps`, for every medicine that is no vaccine.
+pub const MEDICATION_CONTEXT: &str = "ferrofed_eu_medication.context";
+
+/// The context that maps the synthetic medication order to
+/// `MedicationStatement-eu-eps`.
+pub const MEDICATION_ORDER_CONTEXT: &str = "ferrofed_eu_medication_order.context";
+
+/// The context that maps the synthetic medication use whose medicine is the
+/// synthetic vaccine code to `immunization-eu-core`.
+pub const IMMUNISATION_CONTEXT: &str = "ferrofed_eu_immunisation.context";
+
+/// The synthetic vaccine code.
+///
+/// A synthetic medication use of this medicine carries the kind "vaccine"
+/// (`at0006`), which the immunisations' context maps, and every other
+/// medicine the kind "medicine" (`at0005`), which the medication summary's
+/// maps.
+pub const VACCINE: &str = "J07BB02";
+
+/// Returns the path of the synthetic medication operational template.
+#[must_use]
+pub fn medication_opt() -> PathBuf {
+    PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/opt/medication.opt")
+}
+
+/// Returns the model and context mapping files of the synthetic medication
+/// fixtures: the medication use, the medication order and the vaccination,
+/// with a context each.
+#[must_use]
+pub fn medication_mapping_files() -> Vec<PathBuf> {
+    [
+        "ferrofed_medication.yml",
+        "ferrofed_medication_order.yml",
+        "ferrofed_immunisation.yml",
+        "eu_medication.context.yml",
+        "eu_medication_order.context.yml",
+        "eu_immunisation.context.yml",
+    ]
+    .into_iter()
+    .map(|name| {
+        PathBuf::from(ROOT)
+            .join("crates/eehrxf/tests/fixtures/mapping")
+            .join(name)
+    })
+    .collect()
+}
+
+/// One synthetic medicine as a composition records it: its code in the ATC
+/// system, its display, and its route's code in the EDQM standard terms.
+#[derive(Debug, Clone, Copy)]
+pub struct Medicine<'a> {
+    /// The ATC code.
+    pub code: &'a str,
+    /// The display of the code.
+    pub display: &'a str,
+    /// The route's EDQM standard term code.
+    pub route: &'a str,
+}
+
+/// Returns a synthetic composition of the medication template with the uid
+/// `uid`: one synthetic medication use per entry of `used`, and one
+/// synthetic medication order per entry of `ordered`.
+#[must_use]
+pub fn medication_composition(
+    uid: &str,
+    used: &[Medicine<'_>],
+    ordered: &[Medicine<'_>],
+) -> String {
+    let items = |medicine: &Medicine<'_>, first: &str, second: &str| {
+        serde_json::json!([{
+            "_type": "ELEMENT",
+            "name": { "_type": "DV_TEXT", "value": "Medicine" },
+            "archetype_node_id": first,
+            "value": coded_text(medicine.display, "http://www.whocc.no/atc", medicine.code)
+        }, {
+            "_type": "ELEMENT",
+            "name": { "_type": "DV_TEXT", "value": "Route" },
+            "archetype_node_id": second,
+            "value": coded_text("Synthetic route", "urn:oid:0.4.0.127.0.16.1.1.2.1", medicine.route)
+        }])
+    };
+    let used_items = |medicine: &Medicine<'_>| {
+        let (kind, code) = if medicine.code == VACCINE {
+            ("Vaccine", "at0006")
+        } else {
+            ("Medicine", "at0005")
+        };
+        let mut listed = items(medicine, "at0002", "at0003");
+        if let Value::Array(listed) = &mut listed {
+            listed.push(serde_json::json!({
+                "_type": "ELEMENT",
+                "name": { "_type": "DV_TEXT", "value": "Kind" },
+                "archetype_node_id": "at0004",
+                "value": coded_text(kind, "local", code)
+            }));
+        }
+        listed
+    };
+    let mut content: Vec<Value> = used
+        .iter()
+        .map(|medicine| {
+            entry(
+                "EVALUATION",
+                "Synthetic medication use",
+                "openEHR-EHR-EVALUATION.ferrofed_medication.v1",
+                serde_json::json!({
+                    "data": {
+                        "_type": "ITEM_TREE",
+                        "name": { "_type": "DV_TEXT", "value": "Tree" },
+                        "archetype_node_id": "at0001",
+                        "items": used_items(medicine)
+                    }
+                }),
+            )
+        })
+        .collect();
+    content.extend(ordered.iter().map(|medicine| {
+        entry(
+            "INSTRUCTION",
+            "Synthetic medication order",
+            "openEHR-EHR-INSTRUCTION.ferrofed_medication_order.v1",
+            serde_json::json!({
+                "narrative": { "_type": "DV_TEXT", "value": "Synthetic order" },
+                "activities": [{
+                    "_type": "ACTIVITY",
+                    "name": { "_type": "DV_TEXT", "value": "Order" },
+                    "archetype_node_id": "at0001",
+                    "action_archetype_id": "openEHR-EHR-ACTION\\.medication\\.v1",
+                    "description": {
+                        "_type": "ITEM_TREE",
+                        "name": { "_type": "DV_TEXT", "value": "Tree" },
+                        "archetype_node_id": "at0002",
+                        "items": items(medicine, "at0003", "at0004")
+                    }
+                }]
+            }),
+        )
+    }));
+    serde_json::json!({
+        "_type": "COMPOSITION",
+        "name": { "_type": "DV_TEXT", "value": "Synthetic medication summary" },
+        "archetype_node_id": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1",
+        "archetype_details": {
+            "_type": "ARCHETYPED",
+            "archetype_id": { "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1" },
+            "template_id": { "_type": "TEMPLATE_ID", "value": MEDICATION_TEMPLATE },
+            "rm_version": "1.1.0"
+        },
+        "uid": { "_type": "OBJECT_VERSION_ID", "value": uid },
+        "language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
+        "territory": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }, "code_string": "NL" },
+        "category": {
+            "_type": "DV_CODED_TEXT",
+            "value": "persistent",
+            "defining_code": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "openehr" }, "code_string": "431" }
+        },
+        "composer": { "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" },
+        "content": content
+    })
+    .to_string()
+}
+
+/// A synthetic `DV_CODED_TEXT` of `code` in `system`, displayed `display`.
+fn coded_text(display: &str, system: &str, code: &str) -> Value {
+    serde_json::json!({
+        "_type": "DV_CODED_TEXT",
+        "value": display,
+        "defining_code": {
+            "_type": "CODE_PHRASE",
+            "terminology_id": { "_type": "TERMINOLOGY_ID", "value": system },
+            "code_string": code,
+            "preferred_term": display
+        }
+    })
+}
+
+/// A synthetic entry of the RM class `class`, named `name`, of the
+/// archetype `archetype`, with the attributes `body` adds.
+fn entry(class: &str, name: &str, archetype: &str, body: Value) -> Value {
+    let mut entry = serde_json::json!({
+        "_type": class,
+        "name": { "_type": "DV_TEXT", "value": name },
+        "archetype_node_id": archetype,
+        "archetype_details": {
+            "_type": "ARCHETYPED",
+            "archetype_id": { "_type": "ARCHETYPE_ID", "value": archetype },
+            "rm_version": "1.1.0"
+        },
+        "language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
+        "encoding": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "IANA_character-sets" }, "code_string": "UTF-8" },
+        "subject": { "_type": "PARTY_SELF" }
+    });
+    if let (Value::Object(entry), Value::Object(body)) = (&mut entry, body) {
+        entry.extend(body);
+    }
+    entry
+}
+
 /// Returns a synthetic patient summary document in the exchange format.
 ///
 /// It carries the five sections the EPS `Composition` profile requires,
