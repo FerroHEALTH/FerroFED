@@ -369,6 +369,21 @@ pub async fn feed(
     pix_base: &str,
     cross_reference: &CrossReferenceSeed,
 ) -> Result<StatusCode, SeedError> {
+    feed_as(pix_base, None, cross_reference).await
+}
+
+/// Feeds `cross_reference` as [`feed`] does, authenticating as the Patient
+/// Identity Source `source`, a Basic user-id and password, when one is
+/// given.
+///
+/// # Errors
+///
+/// The errors of [`feed`].
+pub async fn feed_as(
+    pix_base: &str,
+    source: Option<(&str, &str)>,
+    cross_reference: &CrossReferenceSeed,
+) -> Result<StatusCode, SeedError> {
     use fhir_types::r4::human_name::HumanName;
     use fhir_types::r4::identifier::Identifier;
     use fhir_types::r4::patient::Patient;
@@ -403,11 +418,14 @@ pub async fn feed(
     let client = reqwest::Client::builder()
         .build()
         .map_err(SeedError::Client)?;
-    let request = client
+    let mut request = client
         .put(url)
         .header(CONTENT_TYPE, "application/fhir+json")
         .header(ACCEPT, "application/fhir+json")
         .body(body);
+    if let Some((user, password)) = source {
+        request = request.basic_auth(user, Some(password));
+    }
     let answer = send(request, "PUT /Patient?identifier= (ITI-104)".to_owned()).await?;
     Ok(answer.status())
 }

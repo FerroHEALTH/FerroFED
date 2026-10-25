@@ -15,11 +15,11 @@ use std::time::{Duration, Instant};
 
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::containers;
+use ferrofed_testkit::containers::ferropix::{self, SOURCE};
 use ferrofed_testkit::national_connector::{
     Answer, COUNTRY, FAMILY as HP_FAMILY, HCP_ADDRESS, HCP_ID, HCP_NAME, HP_ID, NationalConnector,
     PERSON_ID,
 };
-use ferrofed_testkit::pix::PixManager;
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, CrossReferenceSeed};
 use http::StatusCode;
@@ -29,7 +29,7 @@ use super::{
     CREATED, FAMILY, Harness, RX_A_IDENTIFIER, TestResult, dispensation, national, patient_id,
 };
 use crate::access::{accesses, details};
-use crate::e2e::pixm::{DOMAIN_A, DOMAIN_B, pixm_resolver};
+use crate::e2e::pixm::{DOMAIN_A, DOMAIN_B, pixm_resolver_at};
 use crate::e2e::{EHR_A, EHR_B, PATIENT, assert_no_patient_identifier_on_the_wire};
 use crate::feed_audit::SETTLE;
 use crate::support::conveyed::conveyed_claims;
@@ -367,9 +367,11 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
         return Ok(());
     }
     let harness = Box::pin(Harness::start()).await?;
-    let pix = PixManager::start().await?;
-    let status = seed::feed(
-        &pix.base_url(),
+    let pix =
+        ferropix::ferropix(&[PATIENT.namespace(), DOMAIN_A.system(), DOMAIN_B.system()]).await?;
+    let status = seed::feed_as(
+        &pix.fhir_base(),
+        Some((SOURCE.user, SOURCE.password)),
         &CrossReferenceSeed {
             patient: PATIENT,
             ehrs: vec![(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)],
@@ -379,7 +381,9 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
     assert_eq!(StatusCode::CREATED, status, "ITI-104 creates the Patient");
     harness.clear_journals();
     let dir = tempfile::tempdir()?;
-    let gateway = harness.gateway(dir.path(), &pixm_resolver(&pix)).await?;
+    let gateway = harness
+        .gateway(dir.path(), &pixm_resolver_at(&pix.fhir_base()))
+        .await?;
 
     let read = drive(&harness, &gateway.connector).await?;
     members_received(&harness).await?;
