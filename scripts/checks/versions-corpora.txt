@@ -25,6 +25,7 @@ docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
 docs/specs/xt-ehr-deliverables|Xt-EHR deliverables
 docs/specs/eu-xtehr-metadata|Xt-EHR Metadata Foundation
 docs/specs/fhir-packages|FHIR package closure of the Patient Summary
+docs/specs/fhir-packages-myhealth-eu|FHIR package closure of the MyHealth@EU guides
 docs/specs/eu-hl7-base|HL7 Europe Base and Core
 docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
 docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
@@ -46,6 +47,7 @@ docs/specs/ehdsi-openncp-tm|OpenNCP Transformation Manager resources
 docs/specs/fhir-r4|FHIR R4 core specification pages
 docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-pharm-mpd|IHE Pharmacy Medication Prescription and Dispense
+docs/specs/ihe-mhd|IHE MHD FHIR package
 docs/specs/openehr-ckm-ips|openEHR CKM International Patient Summary template
 docs/specs/openehr-ckm-medication|openEHR CKM medication archetypes
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event

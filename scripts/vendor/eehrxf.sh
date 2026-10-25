@@ -14,12 +14,14 @@
 # are read against: the HL7 Europe EU Health Data API, whose code system
 # codes the priority categories of Article 14(1), the HL7 Europe Imaging
 # Report and Hospital Discharge Report guides, and the MyHealth@EU Master
-# Value Sets Catalogue. One corpus per package, each under docs/specs/.
+# Value Sets Catalogue, and the IHE MHD profile the MyHealth@EU NCPeH API
+# depends on. One corpus per package, each under docs/specs/.
 # Each package is the FHIR package registry's tarball, pinned by URL and
 # sha256 (scripts/vendor/lib/pinned.sh) and committed whole, so its sha256
 # stays the pin; each corpus row of docs/VERSIONS.md carries its pin-set
 # digest. Every package declares CC0-1.0 in its manifest, except the IHE
-# Pharmacy package, which declares CC-BY-SA-4.0.
+# Pharmacy package, which declares CC-BY-SA-4.0, and IHE MHD, which declares
+# CC-BY-4.0.
 # scripts/checks/pin-freshness.sh reads each package's registry entry.
 #
 # Usage:
@@ -109,21 +111,32 @@ pin commit hl7.fhir.eu.extensions.r4-1.3.1.tgz "1.3.1 (FHIR 4.0.1, 2026-09-12)" 
   "$registry/hl7.fhir.eu.extensions.r4/1.3.1" \
   37f3ee7ae7a2312e71a4e855e6c36f45d2bc3b13f995bcf4a9fb499ca014cff6 "$cc0" \
   "$whole The version hl7.fhir.eu.base 2.0.1 depends on."
+pin commit hl7.fhir.eu.extensions-0.1.0.tgz "0.1.0 (FHIR 4.0.1, 2024-02-20)" \
+  "$registry/hl7.fhir.eu.extensions/0.1.0" \
+  f30da1e061c6ce5917970a05f2517b11ebd37300ca5c9327d9caa8d4b789ad4e "$cc0" \
+  "$whole The package published before the .r4 name, at the version myhealth.eu.fhir.hdr 9.1.1 depends on."
 pinned_corpus eu-hl7-extensions "HL7 Europe Extensions" \
-  "the HL7 Europe Extensions hl7.fhir.eu.extensions.r4" \
+  "the HL7 Europe Extensions hl7.fhir.eu.extensions.r4 and hl7.fhir.eu.extensions" \
   "The extensions the HL7 Europe guides share, canonical
-\`http://hl7.eu/fhir/extensions\`, at both versions the pinned guides depend
-on, committed under CC0-1.0." "" "$read_by"
+\`http://hl7.eu/fhir/extensions\`, at both versions the pinned HL7 Europe
+guides depend on, and as \`hl7.fhir.eu.extensions\` 0.1.0, the package name
+before the \`.r4\` one, at the version MyHealth@EU Hospital Discharge Report
+9.1.1 depends on, committed under CC0-1.0." "" "$read_by"
 
 pin commit hl7.fhir.uv.ips-2.0.0.tgz "2.0.0, STU2 (FHIR 4.0.1, 2025-10-03)" \
   "$registry/hl7.fhir.uv.ips/2.0.0" \
   b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979 "$cc0" \
   "$whole The version hl7.fhir.eu.eps 1.0.0-ballot depends on."
+pin commit hl7.fhir.uv.ips-2.0.1.tgz "2.0.1, STU2 (FHIR 4.0.1, 2026-06-19)" \
+  "$registry/hl7.fhir.uv.ips/2.0.1" \
+  7183242b70fb2a9058aa3701fb607517a3c2fd0e3100d1d8c538d744c2adf799 "$cc0" \
+  "$whole The version hl7.fhir.eu.laboratory 2.1.0 and hl7.fhir.eu.hdr 1.0.0 depend on."
 pinned_corpus hl7-ips "HL7 International Patient Summary" \
   "the International Patient Summary Implementation Guide hl7.fhir.uv.ips" \
   "The International Patient Summary, canonical \`http://hl7.org/fhir/uv/ips\`,
-at the version the HL7 Europe Patient Summary depends on, committed under
-CC0-1.0." "" "$read_by"
+at the version the HL7 Europe Patient Summary depends on and at the version
+HL7 Europe Laboratory Report 2.1.0 and Hospital Discharge Report 1.0.0
+depend on, committed under CC0-1.0." "" "$read_by"
 
 pin commit ihe.pharm.mpd.r4-1.0.0-comment-2.tgz "1.0.0-comment-2 (FHIR 4.0.1, 2025-05-27)" \
   "$registry/ihe.pharm.mpd.r4/1.0.0-comment-2" \
@@ -137,6 +150,18 @@ canonical \`https://profiles.ihe.net/PHARM/MPD\`, in the public-comment
 version the HL7 Europe Base and Core, Patient Summary and Medication
 Prescription and Dispense guides depend on, committed under CC-BY-SA-4.0,
 which permits verbatim redistribution with attribution." "" "$read_by"
+
+pin commit ihe.iti.mhd-4.2.2.tgz "4.2.2 (FHIR 4.0.1, 2024-05-23)" \
+  "$registry/ihe.iti.mhd/4.2.2" \
+  824061df179f6ade65c29bd79dfc35f00075748fe13054c8505a6e6f3d1cd578 \
+  'CC-BY-4.0: the license of the package manifest and of the ImplementationGuide resource' \
+  "$whole The version myhealth.eu.fhir.ncp-api 9.1.1-ci depends on."
+pinned_corpus ihe-mhd "IHE MHD FHIR package" \
+  "the IHE Mobile access to Health Documents profile ihe.iti.mhd" \
+  "The IHE ITI Mobile access to Health Documents profile, canonical
+\`https://profiles.ihe.net/ITI/MHD\`, at the version the MyHealth@EU NCPeH
+API depends on, committed under CC-BY-4.0, which permits verbatim
+redistribution with attribution." "" "$read_by"
 
 read_by_categories=$'#824 (the wire form of the Article 14(1) categories, decision A81,\n  which the access record of ehds-logging writes from FerroHEALTH/FerroAUDIT\n  since #1176), and the eehrxf tests and the testkit'
 
@@ -156,10 +181,15 @@ pin commit hl7.fhir.eu.imaging-1.0.0-ballot.tgz "1.0.0-ballot (FHIR 4.0.1, 2026-
   "$registry/hl7.fhir.eu.imaging/1.0.0-ballot" \
   bb6012bd7a019ac82f5e939dd6e892e6db6b15fd2931dcf7cc445c1ad92c3d70 "$cc0" \
   "$whole Its Composition and DiagnosticReport profiles require the priority category code Medical-Imaging."
+pin commit hl7.fhir.eu.imaging-1.0.0-alpha.tgz "1.0.0-alpha (FHIR 4.0.1, 2026-02-27)" \
+  "https://hl7.eu/fhir/imaging/xtehr/package.tgz" \
+  bbc369b9aadabd96b223f4944643a9adff0c40479c61970153661a50bba73e89 "$cc0" \
+  "The tarball HL7 Europe serves at the path its package-list.json gives for 1.0.0-alpha, which the FHIR package registry does not list; the version myhealth.eu.fhir.imaging 9.1.1 depends on."
 pinned_corpus eu-hl7-imaging "HL7 Europe Imaging Report" \
   "the HL7 Europe Imaging Report R4 guide hl7.fhir.eu.imaging" \
-  "The European imaging report guide in its ballot version, canonical
-\`http://hl7.eu/fhir/imaging\`, committed under CC0-1.0." "" "$read_by_categories"
+  "The European imaging report guide in its ballot version and in the
+1.0.0-alpha preview MyHealth@EU Medical Imaging Report 9.1.1 depends on,
+canonical \`http://hl7.eu/fhir/imaging\`, committed under CC0-1.0." "" "$read_by_categories"
 
 pin commit hl7.fhir.eu.hdr-0.1.0-ballot.tgz "0.1.0-ballot (FHIR 4.0.1, 2025-06-03)" \
   "$registry/hl7.fhir.eu.hdr/0.1.0-ballot" \

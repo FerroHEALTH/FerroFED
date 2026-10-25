@@ -107,8 +107,9 @@ HL7 Europe Patient Summary	hl7.fhir.eu.eps	-
 HL7 Europe Medication Prescription and Dispense	hl7.fhir.eu.mpd	-
 HL7 Europe Laboratory Report	hl7.fhir.eu.laboratory	-
 HL7 Europe Extensions	hl7.fhir.eu.extensions.r4	the versions the pinned HL7 Europe guides depend on
-HL7 International Patient Summary	hl7.fhir.uv.ips	the version the pinned HL7 Europe Patient Summary depends on
+HL7 International Patient Summary	hl7.fhir.uv.ips	the versions the pinned HL7 Europe guides depend on
 IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version the pinned HL7 Europe guides depend on
+IHE MHD FHIR package	ihe.iti.mhd	the version the pinned MyHealth@EU NCPeH API depends on
 HL7 Europe EU Health Data API	hl7.fhir.eu.health-data-api	-
 HL7 Europe Imaging Report	hl7.fhir.eu.imaging	-
 HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-

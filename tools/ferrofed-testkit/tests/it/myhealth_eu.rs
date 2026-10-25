@@ -179,7 +179,131 @@ const PINNED: &[Pinned] = &[
         licence: "CC0-1.0",
         fhir: "4.0.1",
     },
+    Pinned {
+        path: "eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-alpha.tgz",
+        name: "hl7.fhir.eu.imaging",
+        version: "1.0.0-alpha",
+        licence: "CC0-1.0",
+        fhir: "4.0.1",
+    },
+    Pinned {
+        path: "eu-hl7-extensions/hl7.fhir.eu.extensions-0.1.0.tgz",
+        name: "hl7.fhir.eu.extensions",
+        version: "0.1.0",
+        licence: "CC0-1.0",
+        fhir: "4.0.1",
+    },
+    Pinned {
+        path: "hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz",
+        name: "hl7.fhir.uv.ips",
+        version: "2.0.1",
+        licence: "CC0-1.0",
+        fhir: "4.0.1",
+    },
+    Pinned {
+        path: "ihe-mhd/ihe.iti.mhd-4.2.2.tgz",
+        name: "ihe.iti.mhd",
+        version: "4.2.2",
+        licence: "CC-BY-4.0",
+        fhir: "4.0.1",
+    },
 ];
+
+/// The packages whose manifests must name only packages the repository
+/// holds: the MyHealth@EU guides and the two HL7 Europe re-pins of #1290.
+const CLOSURE_ROOTS: &[&str] = &[
+    "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
+    "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+    "ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz",
+    "ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz",
+    "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
+    "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
+    "ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz",
+    "ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz",
+    "ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz",
+    "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz",
+    "eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz",
+];
+
+/// The provenance files of the cache-only package corpora, whose `### `
+/// headings name each cached tarball as `<name>-<version>.tgz`.
+const CACHED_PACKAGES: &[&str] = &[
+    "fhir-packages/PROVENANCE.md",
+    "fhir-packages-myhealth-eu/PROVENANCE.md",
+];
+
+/// Every `<name>@<version>` of a package tarball committed one level under
+/// `docs/specs/`, read from its manifest.
+fn committed_packages() -> Result<BTreeSet<String>, Box<dyn Error>> {
+    let mut found = BTreeSet::new();
+    for corpus in std::fs::read_dir(vendored(""))? {
+        let corpus = corpus?.path();
+        if !corpus.is_dir() {
+            continue;
+        }
+        for file in std::fs::read_dir(&corpus)? {
+            let file = file?.path();
+            if file.extension().and_then(|extension| extension.to_str()) != Some("tgz") {
+                continue;
+            }
+            let Some(relative) = file
+                .strip_prefix(vendored(""))
+                .ok()
+                .and_then(|relative| relative.to_str())
+            else {
+                continue;
+            };
+            let package = manifest(relative)?;
+            found.insert(format!(
+                "{}@{}",
+                string(&package, "name"),
+                string(&package, "version")
+            ));
+        }
+    }
+    Ok(found)
+}
+
+/// Every tarball file name a `### ` heading of the cache-only provenance
+/// files names.
+fn cached_packages() -> Result<BTreeSet<String>, Box<dyn Error>> {
+    let mut found = BTreeSet::new();
+    for provenance in CACHED_PACKAGES {
+        for line in text(provenance)?.lines() {
+            if let Some((file, _)) = line
+                .strip_prefix("### `")
+                .and_then(|rest| rest.split_once('`'))
+            {
+                found.insert(file.to_owned());
+            }
+        }
+    }
+    Ok(found)
+}
+
+#[test]
+fn every_package_the_myhealth_guides_name_is_vendored() -> TestResult {
+    let committed = committed_packages()?;
+    let cached = cached_packages()?;
+    let mut missing = Vec::new();
+    for root in CLOSURE_ROOTS {
+        let package = manifest(root)?;
+        let dependencies = package
+            .get("dependencies")
+            .and_then(Value::as_object)
+            .ok_or_else(|| format!("{root} names no dependencies"))?;
+        for (name, version) in dependencies {
+            let version = version.as_str().unwrap_or_default();
+            let held = committed.contains(&format!("{name}@{version}"))
+                || cached.contains(&format!("{name}-{version}.tgz"));
+            if !held {
+                missing.push(format!("{root} names {name} {version}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "packages no corpus holds: {missing:#?}");
+    Ok(())
+}
 
 #[test]
 fn each_committed_package_is_the_package_and_licence_its_pin_names() -> TestResult {
