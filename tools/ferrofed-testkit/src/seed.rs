@@ -14,11 +14,11 @@
 //! `POST {api}/v1/ehr/{ehr_id}/composition`, as openEHR ITS-REST 1.1.0 names
 //! them.
 //!
-//! [`feed`] plays the Patient Identity Source of ITI-104 against the harness
-//! PIX Manager ([`crate::pix`]): one `Patient` per synthetic patient, carrying
-//! its identifier and the `ehr_id` it has at each node, each node's `ehr_id`s
-//! being one identity domain, an [`EhrDomain`], inside the example arc
-//! `urn:oid:2.999.2.<n>`.
+//! [`feed_records_as`] plays each member's Patient Identity Source of ITI-104
+//! against FerroPIX ([`ferropix`](crate::containers::ferropix)): one
+//! `Patient` per member, carrying the patient's identifier and the `ehr_id`
+//! it has at that member, each member's `ehr_id`s being one identity domain,
+//! an [`EhrDomain`], inside the example arc `urn:oid:2.999.2.<n>`.
 //!
 //! The template and the compositions are the reference implementation's
 //! demo data, vendored under `docs/specs/federation-ref/docker/demo-data/`:
@@ -348,70 +348,6 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
     Ok(report)
 }
 
-/// Feeds `cross_reference` to the PIX Manager over ITI-104.
-///
-/// The seed plays the Patient Identity Source of ITI-104 (Patient Identity
-/// Feed FHIR, IHE PIXm 3.1.0) against the Manager whose FHIR base URL, with
-/// its trailing slash, is `pix_base`: a conditional update
-/// `PUT [base]/Patient?identifier=<namespace>|<value>` of one `Patient`
-/// carrying the patient's identifier and its `ehr_id` in each node's domain,
-/// with a synthetic name, so the `Patient` holds to the `IHE.PIXm.Patient`
-/// profile. Returns the status the Manager answered: `201` when it created the
-/// `Patient`, `200` when it replaced one.
-///
-/// # Errors
-///
-/// Returns [`SeedError::PixBase`] when `pix_base` cannot be joined with
-/// `Patient`, [`SeedError::Body`] when the `Patient` cannot be serialised,
-/// [`SeedError::Send`] when the request cannot be sent, and
-/// [`SeedError::Refused`] when the Manager answers anything but success.
-pub async fn feed(
-    pix_base: &str,
-    cross_reference: &CrossReferenceSeed,
-) -> Result<StatusCode, SeedError> {
-    use fhir_types::r4::human_name::HumanName;
-    use fhir_types::r4::identifier::Identifier;
-    use fhir_types::r4::patient::Patient;
-
-    let patient = cross_reference.patient;
-    let identifier = |system: &str, value: &str| Identifier {
-        system: Some(system.into()),
-        value: Some(value.into()),
-        ..Identifier::default()
-    };
-    let mut identifiers = vec![identifier(&patient.namespace(), &patient.value())];
-    for (domain, ehr_id) in &cross_reference.ehrs {
-        identifiers.push(identifier(&domain.system(), &ehr_id.to_string()));
-    }
-    let body = Patient {
-        identifier: identifiers,
-        name: vec![HumanName {
-            family: Some("Synthetic".into()),
-            given: vec![patient.value().as_str().into()],
-            ..HumanName::default()
-        }],
-        ..Patient::default()
-    };
-    let body = serde_json::to_vec(&body).map_err(SeedError::Body)?;
-    let mut url = url::Url::parse(pix_base)
-        .and_then(|base| base.join("Patient"))
-        .map_err(PixBaseError)?;
-    url.query_pairs_mut().append_pair(
-        "identifier",
-        &format!("{}|{}", patient.namespace(), patient.value()),
-    );
-    let client = reqwest::Client::builder()
-        .build()
-        .map_err(SeedError::Client)?;
-    let request = client
-        .put(url)
-        .header(CONTENT_TYPE, "application/fhir+json")
-        .header(ACCEPT, "application/fhir+json")
-        .body(body);
-    let answer = send(request, "PUT /Patient?identifier= (ITI-104)".to_owned()).await?;
-    Ok(answer.status())
-}
-
 /// Feeds `cross_reference` as one record per member, sent as the Patient
 /// Identity Source `source`, a Basic user-id and password.
 ///
@@ -425,7 +361,11 @@ pub async fn feed(
 ///
 /// # Errors
 ///
-/// The errors of [`feed`].
+/// Returns [`SeedError::PixBase`] when `pix_base` cannot be joined with
+/// `Patient`, [`SeedError::Body`] when a `Patient` cannot be serialised,
+/// [`SeedError::Client`] when the client cannot be built,
+/// [`SeedError::Send`] when a request cannot be sent, and
+/// [`SeedError::Refused`] when the Manager answers anything but success.
 pub async fn feed_records_as(
     pix_base: &str,
     source: (&str, &str),

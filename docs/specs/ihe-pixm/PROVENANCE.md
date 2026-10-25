@@ -23,9 +23,8 @@ change the pin in docs/VERSIONS.md and re-run the script.
   `PROVENANCE.md` excluded): `9d25f84d0c21e4bf464a3d0be60df68a06b11760db885885f3152edae9f88f6e`
 - Read by: #42 (the ITI-83 client of `ihe-iti`, whose tests decode the
   examples and hold the request and response to the OperationDefinition) and
-  #47 (the harness PIX Manager of `tools/ferrofed-testkit`, whose ITI-104 feed
-  accepts the example Patients and holds every fed Patient to the Patient
-  profile, and whose ITI-83 answers are held to the OperationDefinition) and
+  #47 (the harness PIX Manager of `tools/ferrofed-testkit` until #1360
+  retired it for FerroPIX) and
   #486 (the ITI-83 audit record of `ihe-iti`, held to the Consumer's
   audit profile and its example); `ihe-iti` is owned by FerroHEALTH/FerroPIX since #367
 

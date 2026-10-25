@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Track 2, `subject` to `ehr_id` resolution, over two FerroEHR nodes with
-//! the patient resolved by the harness PIX Manager over ITI-83: each node is
+//! the patient resolved by FerroPIX over ITI-83: each node is
 //! asked by its own `ehr_id` and never receives `subject`, judged on the
 //! node-side AQL, and both patient carriers return the same rows (§16.3
 //! track 2; N3, N5, N7, N33; CP-2, CP-3, CP-4, CP-7, CP-38).

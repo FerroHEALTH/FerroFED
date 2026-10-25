@@ -4,8 +4,8 @@
 # scripts/vendor/ihe-pixm.sh
 #
 # Vendors the IHE PIXm 3.1.0 FHIR package artefacts the ITI-83 client of
-# ihe-iti (feature `pixm`, #42) and the harness PIX Manager of
-# tools/ferrofed-testkit (#47) read into docs/specs/ihe-pixm/: the `$ihe-pix`
+# ihe-iti (feature `pixm`, #42), and until #1360 the harness PIX Manager of
+# tools/ferrofed-testkit (#47), read into docs/specs/ihe-pixm/: the `$ihe-pix`
 # OperationDefinition, the Query Parameters In and Out profiles, the Consumer,
 # Manager and Source capability statements, the ImplementationGuide, the IG's
 # own ITI-83 request, response and error examples, which the client's tests
@@ -139,9 +139,8 @@ change the pin in docs/VERSIONS.md and re-run the script.
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #42 (the ITI-83 client of \`ihe-iti\`, whose tests decode the
   examples and hold the request and response to the OperationDefinition) and
-  #47 (the harness PIX Manager of \`tools/ferrofed-testkit\`, whose ITI-104 feed
-  accepts the example Patients and holds every fed Patient to the Patient
-  profile, and whose ITI-83 answers are held to the OperationDefinition) and
+  #47 (the harness PIX Manager of \`tools/ferrofed-testkit\` until #1360
+  retired it for FerroPIX) and
   #486 (the ITI-83 audit record of \`ihe-iti\`, held to the Consumer's
   audit profile and its example); \`ihe-iti\` is owned by FerroHEALTH/FerroPIX since #367
 

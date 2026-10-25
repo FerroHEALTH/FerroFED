@@ -35,7 +35,7 @@ use ferrofed_testkit::containers::{
     self, HarnessUser, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
 };
 use ferrofed_testkit::node_profile;
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrDomain, EhrSeed, PatientId, SeedPlan,
 };
@@ -310,7 +310,7 @@ managing_organisation = "org-b"
     )
 }
 
-/// The federation over `registry`, resolving through the harness PIX Manager
+/// The federation over `registry`, resolving through the PIXm Manager stub
 /// at `pix`, written into `dir` with a synthetic signing key beside it.
 fn federation(dir: &Path, registry: &str, pix: &str) -> Result<Federation, Box<dyn Error>> {
     let document = dir.join("registry.toml");
@@ -336,12 +336,12 @@ async fn ferroehr_is_checked_against_the_identifier_integrity_conditions() -> Te
         return Ok(());
     }
     let candidate = containers::ferroehr(NODE_B_SYSTEM_ID).await?;
-    let pix = PixManager::start().await?;
+    let pix = pixm_stub::manager(&[]).await;
     let dir = tempfile::tempdir()?;
     let federation = federation(
         dir.path(),
         &registry(&candidate.api_root()),
-        &pix.base_url(),
+        &pixm_stub::base_url(&pix),
     )?;
 
     let report =

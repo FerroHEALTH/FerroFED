@@ -7,8 +7,8 @@
 //! Manager that does not answer fails the query closed (N4, N10, §14.1,
 //! §14.2; CP-5).
 //!
-//! In process: three mock CDRs and the harness PIX Manager fed over ITI-104,
-//! behind a capturing and fault proxy.
+//! In process: three mock CDRs and a PIXm Manager stub with fixed ITI-83
+//! answers, behind a capturing and fault proxy.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -27,9 +27,9 @@ use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
-use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use http::{Request, StatusCode};
 use openehr_federation::options::OptionsRoot;
 use uuid::Uuid;
@@ -105,11 +105,10 @@ fn gateway_asking(
     ))
 }
 
-/// The harness PIX Manager, fed with the patient at node A and node B and an
-/// unrelated patient at node C, so node C's domain is known to it.
-async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
-    let pix = PixManager::start().await?;
-    let feeds = [
+/// A PIXm Manager stub answering with the patient at node A and node B, and
+/// with an unrelated patient at node C, so node C does not know the patient.
+async fn fed_manager() -> Server {
+    pixm_stub::manager(&[
         CrossReferenceSeed {
             patient: patient(),
             ehrs: vec![(DOMAINS[0], EHR_A), (DOMAINS[1], EHR_B)],
@@ -121,15 +120,8 @@ async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
                 Uuid::from_u128(0x7c7c_7c7c_7c7c_4c7c_8c7c_7c7c_7c7c_7c7c),
             )],
         },
-    ];
-    for feed in &feeds {
-        assert_eq!(
-            StatusCode::CREATED,
-            seed::feed(&pix.base_url(), feed).await?,
-            "ITI-104 creates the Patient"
-        );
-    }
-    Ok(pix)
+    ])
+    .await
 }
 
 async fn members() -> [Server; 3] {
@@ -151,8 +143,8 @@ async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error
 // conformance: CP-5
 #[tokio::test]
 async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_call() -> TestResult {
-    let pix = fed_manager().await?;
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let pix = fed_manager().await;
+    let proxy = CapturingProxy::start(pix.uri()).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
@@ -181,7 +173,7 @@ async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_ca
     assert_eq!([1, 1, 0], asked_counts(&servers).await?);
     assert_eq!(
         1,
-        pix.queries(),
+        pixm_stub::queries(&pix).await,
         "the localization and the resolution share one ITI-83 call"
     );
 
@@ -218,8 +210,8 @@ async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_ca
 /// §3.2.0.1).
 #[tokio::test]
 async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient() -> TestResult {
-    let pix = fed_manager().await?;
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let pix = fed_manager().await;
+    let proxy = CapturingProxy::start(pix.uri()).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway_asking(
@@ -242,7 +234,7 @@ async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient(
         "the posted ITI-83 call localizes and resolves as the GET does"
     );
     assert_eq!([1, 1, 0], asked_counts(&servers).await?);
-    assert_eq!(1, pix.queries(), "one ITI-83 call");
+    assert_eq!(1, pixm_stub::queries(&pix).await, "one ITI-83 call");
 
     let identifier = patient().value();
     let journal = proxy.journal();
@@ -288,8 +280,8 @@ async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient(
 // conformance: CP-5
 #[tokio::test]
 async fn a_pix_manager_that_does_not_answer_fails_the_query_closed() -> TestResult {
-    let pix = fed_manager().await?;
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let pix = fed_manager().await;
+    let proxy = CapturingProxy::start(pix.uri()).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
@@ -332,7 +324,11 @@ async fn a_pix_manager_that_does_not_answer_fails_the_query_closed() -> TestResu
         asked_counts(&servers).await?,
         "no dispatch, no ask-all (§14.1)"
     );
-    assert_eq!(0, pix.queries(), "the Manager was never reached");
+    assert_eq!(
+        0,
+        pixm_stub::queries(&pix).await,
+        "the Manager was never reached"
+    );
     Ok(())
 }
 
@@ -360,8 +356,8 @@ struct LocalizationDiagnostic {
 #[tokio::test]
 async fn the_localizer_error_names_the_manager_status_once_and_the_log_keeps_the_chain()
 -> TestResult {
-    let pix = fed_manager().await?;
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let pix = fed_manager().await;
+    let proxy = CapturingProxy::start(pix.uri()).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
