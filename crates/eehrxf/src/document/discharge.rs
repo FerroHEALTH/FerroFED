@@ -8,7 +8,7 @@
 //! reports on, in the language `Bundle.language` states.
 
 use crate::crosswalk::discharge::HDR_COMPOSITION;
-use crate::document::{Code, EU_CORE_PATIENT, Form, LOINC, Slot};
+use crate::document::{Authorship, Code, EU_CORE_PATIENT, Form, Kind, LOINC, Slot};
 
 /// The canonical URL of the HL7 Europe Hospital Discharge Report `Bundle`
 /// profile.
@@ -71,10 +71,12 @@ pub const DISCHARGE_REPORT_FORM: Form = Form {
     bundle: HDR_BUNDLE,
     composition: HDR_COMPOSITION,
     patient: EU_CORE_PATIENT,
-    kind: Code {
+    kind: Kind::Fixed(Code {
         system: LOINC,
         code: DISCHARGE_SUMMARY,
-    },
+    }),
+    categories: &[],
+    authorship: Authorship::Gateway,
     slots: &HDR_SLOTS,
     report: None,
     encounter: Some(HDR_ENCOUNTER),

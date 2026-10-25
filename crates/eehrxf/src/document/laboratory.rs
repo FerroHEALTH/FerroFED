@@ -6,7 +6,7 @@
 //! and `DiagnosticReport-eu-lab` each name the other.
 
 use crate::crosswalk::laboratory::{LAB_COMPOSITION, LAB_DIAGNOSTIC_REPORT};
-use crate::document::{Code, Companion, EU_CORE_PATIENT, Form, LOINC, Slot};
+use crate::document::{Authorship, Code, Companion, EU_CORE_PATIENT, Form, Kind, LOINC, Slot};
 
 /// The canonical URL of the HL7 Europe Laboratory Report `Bundle` profile.
 pub const LAB_BUNDLE: &str = "http://hl7.eu/fhir/laboratory/StructureDefinition/Bundle-eu-lab";
@@ -40,10 +40,12 @@ pub const LABORATORY_REPORT_FORM: Form = Form {
     bundle: LAB_BUNDLE,
     composition: LAB_COMPOSITION,
     patient: EU_CORE_PATIENT,
-    kind: Code {
+    kind: Kind::Fixed(Code {
         system: LOINC,
         code: LABORATORY_REPORT,
-    },
+    }),
+    categories: &[],
+    authorship: Authorship::Gateway,
     slots: &LAB_SLOTS,
     report: Some(Companion {
         profile: LAB_DIAGNOSTIC_REPORT,
