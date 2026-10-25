@@ -34,7 +34,7 @@ async fn a_member_mitz_permits_is_asked_and_its_node_still_decides() -> TestResu
     for node in [&a, &b] {
         assert_eq!(1, received(node).await?.len(), "N27: the node decides");
     }
-    let questions = mitz.questions().await;
+    let questions = mitz.questions().await?;
     assert_eq!(2, questions.len(), "one question per data holder");
     for ura in [URA_A, URA_B] {
         assert!(
@@ -176,7 +176,7 @@ async fn the_bsn_reaches_mitz_only_and_no_node_log_or_error() -> TestResult {
 
     assert_eq!(StatusCode::OK, status, "{text}");
     assert!(
-        mitz.questions().await.iter().all(|q| q.contains(PATIENT)),
+        mitz.questions().await?.iter().all(|q| q.contains(PATIENT)),
         "Mitz is asked by the patient's identifier"
     );
     for node in [&a, &b] {
@@ -216,7 +216,7 @@ async fn the_prefilter_is_declared_in_options_as_mitz() -> TestResult {
         text.contains(r#""consent_ms":1000"#),
         "§11.5: the pre-filter's budget is declared with the others: {text}"
     );
-    assert!(mitz.questions().await.is_empty(), "OPTIONS asks nothing");
+    assert!(mitz.questions().await?.is_empty(), "OPTIONS asks nothing");
     Ok(())
 }
 

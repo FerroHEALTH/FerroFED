@@ -116,7 +116,7 @@ async fn the_question_names_the_callers_professional_role_and_organisation() -> 
             soon(),
         )
         .await;
-    let questions = mitz.questions().await;
+    let questions = mitz.questions().await?;
     assert_eq!(2, questions.len());
     for question in &questions {
         assert!(
@@ -153,7 +153,7 @@ async fn a_caller_whose_token_names_no_requester_asks_nothing() -> TestResult {
         matches!(decision, ConsentDecision::NotAsked(NotAsked::CallerClaims)),
         "N27: Mitz is not asked, nothing is filtered, and each node decides: {decision:?}"
     );
-    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    assert!(mitz.questions().await?.is_empty(), "Mitz is never asked");
     Ok(())
 }
 
@@ -168,7 +168,7 @@ async fn two_callers_with_different_roles_send_different_subjects() -> TestResul
             .prefilter(&patient(BSN_ALIAS)?, Some(asking), &candidates()?, soon())
             .await;
     }
-    let questions = mitz.questions().await;
+    let questions = mitz.questions().await?;
     assert_eq!(4, questions.len());
     let by = |professional: &str, role: &str| {
         questions
@@ -214,7 +214,7 @@ async fn a_requester_the_question_does_not_take_is_not_asked_about() -> TestResu
             "no claim value is carried: {shown}"
         );
     }
-    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    assert!(mitz.questions().await?.is_empty(), "Mitz is never asked");
     Ok(())
 }
 
@@ -245,7 +245,7 @@ async fn members_of_one_holder_are_asked_about_once_and_denied_together() -> Tes
         }
         other => return Err(format!("both members share the denied holder: {other:?}").into()),
     }
-    assert_eq!(1, mitz.questions().await.len(), "one question per holder");
+    assert_eq!(1, mitz.questions().await?.len(), "one question per holder");
     Ok(())
 }
 
@@ -269,7 +269,7 @@ async fn a_permit_for_every_holder_carries_no_signal() -> TestResult {
         matches!(decision, ConsentDecision::NoSignal),
         "§14.3: a permit clears nothing, it only rules nothing out: {decision:?}"
     );
-    assert_eq!(2, mitz.questions().await.len());
+    assert_eq!(2, mitz.questions().await?.len());
     Ok(())
 }
 
@@ -291,7 +291,7 @@ async fn a_patient_named_by_a_pseudonym_is_never_sent_to_mitz() -> TestResult {
         "{decision:?}"
     );
     assert!(
-        mitz.questions().await.is_empty(),
+        mitz.questions().await?.is_empty(),
         "Mitz is asked by BSN only"
     );
     Ok(())
@@ -309,7 +309,7 @@ async fn a_patient_in_a_namespace_not_standing_for_the_bsn_is_not_asked_about() 
         matches!(decision, ConsentDecision::NotAsked(NotAsked::Namespace)),
         "§3.2.4.2: Mitz is asked by BSN, and the namespace does not stand for it: {decision:?}"
     );
-    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    assert!(mitz.questions().await?.is_empty(), "Mitz is never asked");
     Ok(())
 }
 
@@ -363,7 +363,7 @@ async fn a_passed_deadline_asks_nothing_and_is_unavailable() -> TestResult {
         ),
         "{decision:?}"
     );
-    assert_eq!(mitz.questions().await, Vec::<String>::new());
+    assert_eq!(mitz.questions().await?, Vec::<String>::new());
     Ok(())
 }
 

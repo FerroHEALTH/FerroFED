@@ -27,6 +27,23 @@ pub struct Server {
     inner: Option<MockServer>,
 }
 
+/// A mock server whose request recording is off, so what it was sent cannot
+/// be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the mock server records no requests, so what it was sent cannot be read")]
+pub struct RecordingOff;
+
+/// Returns every request `server` received, in order.
+///
+/// # Errors
+///
+/// Returns [`RecordingOff`] when the server records no requests, which a
+/// harness device never switches off; a test reading it then fails loud
+/// rather than read an empty journal as nothing sent.
+pub async fn recorded(server: &MockServer) -> Result<Vec<wiremock::Request>, RecordingOff> {
+    server.received_requests().await.ok_or(RecordingOff)
+}
+
 impl Server {
     /// Starts a `MockServer` from wiremock's pool.
     pub async fn start() -> Self {

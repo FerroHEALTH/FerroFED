@@ -118,7 +118,7 @@ async fn a_since_refresh_applies_only_the_changes() -> TestResult {
         "node A did not change: {addresses:?}"
     );
 
-    let requests = harness.requests().await;
+    let requests = harness.requests().await?;
     let searches: Vec<&String> = requests
         .iter()
         .filter(|request| !request.contains("/_history"))
@@ -413,13 +413,13 @@ async fn a_reload_keeps_the_directorys_registry() -> TestResult {
         Arc::clone(&gateway.state),
     );
     let before = gateway.addresses()?;
-    let asked_before = harness.requests().await.len();
+    let asked_before = harness.requests().await?.len();
     let applied = reloader.reload()?;
     assert_eq!(2, applied.members);
     assert_eq!(before, gateway.addresses()?);
     assert_eq!(
         asked_before,
-        harness.requests().await.len(),
+        harness.requests().await?.len(),
         "the reload did not ask the directory"
     );
     Ok(())

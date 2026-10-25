@@ -107,7 +107,7 @@ async fn a_change_reads_back_through_iti_91_alone() -> TestResult {
             .find(|endpoint| endpoint.logical_id() == Some("node-b-pub"))
             .and_then(|endpoint| endpoint.address())
     );
-    let requests = directory.requests().await;
+    let requests = directory.requests().await?;
     let searches = requests
         .iter()
         .filter(|request| !request.contains("_history"))

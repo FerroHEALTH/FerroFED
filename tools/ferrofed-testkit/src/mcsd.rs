@@ -417,26 +417,32 @@ impl HarnessDirectory {
     }
 
     /// The path and query of every request the directory received, in order.
-    pub async fn requests(&self) -> Vec<String> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn requests(&self) -> Result<Vec<String>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| match request.url.query() {
                 Some(query) => format!("{}?{query}", request.url.path()),
                 None => request.url.path().to_owned(),
             })
-            .collect()
+            .collect())
     }
 
     /// The `Authorization` header of every request the directory received,
     /// in order; `None` for a request that carried none.
-    pub async fn authorizations(&self) -> Vec<Option<String>> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn authorizations(&self) -> Result<Vec<Option<String>>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| {
                 request
@@ -445,7 +451,7 @@ impl HarnessDirectory {
                     .and_then(|value| value.to_str().ok())
                     .map(str::to_owned)
             })
-            .collect()
+            .collect())
     }
 
     fn state(&self) -> MutexGuard<'_, State> {

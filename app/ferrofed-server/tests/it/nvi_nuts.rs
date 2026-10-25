@@ -173,7 +173,7 @@ async fn the_nvi_is_asked_with_the_dpop_bound_nuts_token() -> TestResult {
         statuses(&answer)
     );
     assert_eq!(1, grant.authority.issued());
-    let [authorization] = <[String; 1]>::try_from(nvi.headers("authorization").await)
+    let [authorization] = <[String; 1]>::try_from(nvi.headers("authorization").await?)
         .map_err(|all| format!("one search, not {}", all.len()))?;
     assert!(authorization.starts_with("DPoP "), "the DPoP scheme");
     Ok(())
@@ -212,7 +212,7 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
         assert_eq!("not-localized", endpoint.status);
         assert!(endpoint.error.is_some(), "the localization error (§14.1)");
     }
-    assert!(nvi.searches().await.is_empty(), "the NVI was sent nothing");
+    assert!(nvi.searches().await?.is_empty(), "the NVI was sent nothing");
     assert_eq!([0, 0, 0], asked_counts(&servers).await?, "no dispatch");
     #[cfg(feature = "binding-ihe")]
     assert_eq!(
@@ -304,12 +304,12 @@ async fn the_nuts_token_reaches_the_nvi_alone() -> TestResult {
 
     let tokens: Vec<String> = nvi
         .headers("authorization")
-        .await
+        .await?
         .iter()
         .filter_map(|value| value.strip_prefix("DPoP ").map(str::to_owned))
         .collect();
     assert_eq!(1, tokens.len(), "the NVI was sent the token");
-    let proofs = nvi.headers(dpop::HEADER).await;
+    let proofs = nvi.headers(dpop::HEADER).await?;
     let pseudonym = patient().value();
     for server in &servers {
         let wire = wire(server).await?;

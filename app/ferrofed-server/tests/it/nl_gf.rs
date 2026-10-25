@@ -262,7 +262,7 @@ async fn the_pseudonymised_walkthrough_runs_end_to_end_and_no_node_sees_the_pseu
     );
     assert_eq!([1, 1, 0], asked_counts(&servers).await?);
 
-    let searches = nvi.searches().await;
+    let searches = nvi.searches().await?;
     assert_eq!(1, searches.len(), "one localization per query");
     assert!(
         searches
@@ -432,7 +432,7 @@ async fn a_patient_in_a_namespace_that_is_no_pseudonym_is_never_sent_to_the_nvi(
             .all(|endpoint| endpoint.status == "not-localized" && endpoint.error.is_some()),
         "the gateway never pseudonymises, so the localization fails closed (§B.7, §14.1)"
     );
-    assert!(nvi.searches().await.is_empty(), "the NVI was never asked");
+    assert!(nvi.searches().await?.is_empty(), "the NVI was never asked");
     assert_eq!([0, 0, 0], asked_counts(&servers).await?);
     Ok(())
 }

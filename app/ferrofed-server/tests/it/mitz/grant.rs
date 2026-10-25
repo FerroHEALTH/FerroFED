@@ -69,7 +69,7 @@ async fn mitz_is_asked_with_the_token_the_grant_obtained_and_reused() -> TestRes
         );
     }
     assert!(wire(&b).await?.is_empty(), "node B receives nothing");
-    assert_eq!(4, mitz.questions().await.len(), "two holders, two queries");
+    assert_eq!(4, mitz.questions().await?.len(), "two holders, two queries");
     assert_eq!(
         1,
         endpoint.issued(),
@@ -139,7 +139,7 @@ async fn a_grant_its_token_endpoint_refuses_leaves_every_candidate_to_its_node()
     let carried = consent_error(&text)?.ok_or("consent.error names the failure")?;
     assert!(!carried.contains(SECRET), "{carried}");
     assert!(
-        mitz.questions().await.is_empty(),
+        mitz.questions().await?.is_empty(),
         "no question went untokened"
     );
     Ok(())

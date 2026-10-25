@@ -29,7 +29,7 @@ async fn the_question_names_the_verified_callers_professional_and_role() -> Test
 
     let (status, text, _) = ask_as(app, Some(("professional0042", "01.016"))).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let questions = mitz.questions().await;
+    let questions = mitz.questions().await?;
     assert_eq!(2, questions.len());
     for question in &questions {
         assert!(
@@ -65,7 +65,7 @@ async fn a_token_without_the_requester_claims_asks_mitz_nothing_and_filters_no_o
 
     let (status, text, answer) = ask_as(app, None).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    assert!(mitz.questions().await?.is_empty(), "Mitz is never asked");
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "active")],
         statuses(&answer),
@@ -140,7 +140,7 @@ async fn a_requester_the_question_does_not_take_is_not_asked_and_is_no_outage() 
     drop(guard);
 
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    assert!(mitz.questions().await?.is_empty(), "Mitz is never asked");
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "active")],
         statuses(&answer),
@@ -192,7 +192,7 @@ async fn two_callers_with_different_roles_send_different_subjects() -> TestResul
 
     ask_as(app.clone(), Some(("professional0001", "01.015"))).await?;
     ask_as(app, Some(("professional0002", "30.000"))).await?;
-    let questions = mitz.questions().await;
+    let questions = mitz.questions().await?;
     assert_eq!(4, questions.len());
     let by = |professional: &str, role: &str| {
         questions

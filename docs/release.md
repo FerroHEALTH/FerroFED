@@ -478,8 +478,8 @@ next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
 
 ## The crates.io lane
 
-The library crates under `crates/` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`, `ehds-logging`, `eehrxf`) publish behind one switch: the
+The library crates under `crates/` (`openehr-federation` and `eehrxf`) publish
+behind one switch: the
 root `Cargo.toml` sets `[workspace.package] publish = false`, every `crates/*`
 member inherits it, and
 `app/*` and `tools/*` carry a hard `publish = false` of their own
@@ -510,10 +510,12 @@ without a version bump, because a published version is immutable
    reviewer and a deployment policy for `main` and `v*` tags.
 2. On crates.io, give each crate one Trusted Publisher entry: repository
    owner `FerroHEALTH`, repository `FerroFED`, workflow `publish-crates.yml`,
-   environment `crates-io`. `openehr-federation`, `ihe-iti` and
-   `nl-generic-functions` already exist (the 0.0.0 placeholders of
-   2026-10-01), and so do `eehrxf` and `ehds-logging` (those of
-   2026-10-06), so they need no first upload with a personal token.
+   environment `crates-io`. `openehr-federation` already exists (the 0.0.0
+   placeholder of 2026-10-01), and so does `eehrxf` (that of 2026-10-06), so
+   neither needs a first upload with a personal token. `ihe-iti` and
+   `nl-generic-functions` are published by FerroHEALTH/FerroPIX and
+   `ehds-logging` by FerroHEALTH/FerroAUDIT, so this lane publishes none of
+   them.
 3. Set `publish = true` in the root `[workspace.package]` in a pull request.
    The next `v*` tag publishes every library crate at its manifest version.
 

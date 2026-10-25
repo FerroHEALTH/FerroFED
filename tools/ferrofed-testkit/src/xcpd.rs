@@ -113,14 +113,17 @@ impl RespondingGateway {
     }
 
     /// The body of every request the gateway received, in order.
-    pub async fn requests(&self) -> Vec<String> {
-        self.server
-            .received_requests()
-            .await
-            .unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordingOff`](crate::mock::RecordingOff) when the device's
+    /// server records no requests.
+    pub async fn requests(&self) -> Result<Vec<String>, crate::mock::RecordingOff> {
+        Ok(crate::mock::recorded(&self.server)
+            .await?
             .iter()
             .map(|request| String::from_utf8_lossy(&request.body).into_owned())
-            .collect()
+            .collect())
     }
 }
 

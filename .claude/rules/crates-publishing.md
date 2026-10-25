@@ -11,9 +11,10 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
-implement, never `ferrofed-*` (`openehr-federation`, and the two harmonised
-software components of Regulation (EU) 2025/327, `ehds-logging` and
-`eehrxf`; `.claude/memory/published-crate-naming.md`), one crate per
+implement, never `ferrofed-*` (`openehr-federation`, and `eehrxf`, the
+interoperability software component of Regulation (EU) 2025/327, whose
+logging twin `ehds-logging` FerroHEALTH/FerroAUDIT publishes;
+`.claude/memory/published-crate-naming.md`), one crate per
 specification with a feature per layer or profile; FerroFED's own glue and
 the server binary live under `app/`, and the tools under `tools/`. The
 Regulation defines the two components as independent of each other, so they
@@ -53,10 +54,11 @@ an owner decision recorded per crate when the switch flips, never assumed.
 - **The crate line** is the `version` in each `crates/*/Cargo.toml`. It never
   adopts the product version or a specification version; it is the crates' own
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
-  before the crate has content (`openehr-federation`, `ihe-iti` and
-  `nl-generic-functions`, published on 2026-10-01), and the crate's line in
-  the workspace starts at 0.0.1, above the placeholder. `eehrxf` (#684)
-  and `ehds-logging` (#623) were claimed the same way on 2026-10-06.
+  before the crate has content (`openehr-federation`, published on
+  2026-10-01), and the crate's line in the workspace starts at 0.0.1, above
+  the placeholder. `eehrxf` (#684) was claimed the same way on 2026-10-06.
+  `ihe-iti` and `nl-generic-functions` moved to FerroHEALTH/FerroPIX and
+  `ehds-logging` to FerroHEALTH/FerroAUDIT, which publish them (#367, #1177).
 
 ## The bump rule
 
@@ -94,7 +96,7 @@ an owner decision recorded per crate when the switch flips, never assumed.
   and verifies the exact tarball an upload would send and works while the
   switch is off, then `cargo publish --dry-run` over the publishable set once
   there is one. A library that depends on another library
-  (`ehds-logging` feature `balp` on `ihe-iti`)
+  (one `crates/*` member on another)
   resolves it through a `--config patch.crates-io.<name>.path=…` patch per
   depended-on `crates/*` member, because Cargo resolves a sibling through
   its local overlay only when a target registry is known, and while the
@@ -121,10 +123,9 @@ reaches the registry.
 
 ## Owner steps when the switch is flipped
 
-Five of the six names exist on crates.io (the 0.0.0 placeholders of
-2026-10-01, and those of `eehrxf` and `ehds-logging` of 2026-10-06), so
-every later version of those can go through Trusted Publishing with no first
-upload by a personal token. Two steps, done once:
+Both names exist on crates.io (the 0.0.0 placeholder of `openehr-federation`
+of 2026-10-01 and that of `eehrxf` of 2026-10-06), so every later version can
+go through Trusted Publishing with no first upload by a personal token. Two steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and
    a deployment policy that admits `main` and `v*` tags.

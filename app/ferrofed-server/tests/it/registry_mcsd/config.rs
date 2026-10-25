@@ -46,7 +46,7 @@ async fn config_check_reads_the_registry_from_the_directory() -> TestResult {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(
-        !harness.requests().await.is_empty(),
+        !harness.requests().await?.is_empty(),
         "the check read the directory"
     );
     Ok(())
@@ -108,7 +108,7 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
     let (registry, _snapshot) =
         ferrofed_server::binding::ihe::mcsd::registry::DirectoryRegistry::open(directory)?;
     assert!(!format!("{registry:?}").contains(TOKEN));
-    let sent = harness.authorizations().await;
+    let sent = harness.authorizations().await?;
     assert_ne!(sent, Vec::<Option<String>>::new());
     assert!(
         sent.iter()
