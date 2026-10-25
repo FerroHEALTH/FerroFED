@@ -142,6 +142,24 @@ impl Mapping {
             })
     }
 
+    /// Returns the id of the archetype the context compiled for `template`
+    /// starts at, the root of each resource a run writes, or `None` when no
+    /// context maps that template or its start model names no archetype.
+    #[must_use]
+    pub fn start_archetype(&self, template: &str) -> Option<String> {
+        let program = self
+            .programs
+            .programs()
+            .iter()
+            .find(|program| program.template().id().as_str() == template)?;
+        program
+            .models()
+            .iter()
+            .find(|model| model.name() == program.start())?
+            .archetype()
+            .map(ToString::to_string)
+    }
+
     /// Returns the compiled programs, for the receive direction.
     pub(crate) const fn programs(&self) -> &ProgramSet {
         &self.programs
