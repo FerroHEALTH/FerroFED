@@ -712,6 +712,25 @@ mapping of laboratory results waits on FerroBRIDGE's FHIRconnect contexts
 for the Laboratory Report profiles
 ([FerroHEALTH/FerroBRIDGE#116](https://github.com/FerroHEALTH/FerroBRIDGE/issues/116)).
 
+### The imaging crosswalks
+
+Imaging (Art 14(1)(d)) names two things, the imaging studies and the
+imaging reports, and the Xt-EHR package models each on its own, so `eehrxf`
+carries two crosswalks under its `imaging` feature. The imaging report
+crosswalk keys on `EHDSImagingReport` and names the elements of the HL7
+Europe Imaging Report composition and the `DiagnosticReport` it names
+(`hl7.fhir.eu.imaging` 1.0.0-ballot); the imaging study crosswalk keys on
+`EHDSImagingStudy` and names the elements of its `ImagingStudy` profile.
+Both name the element ids of the eHealth Network *Guideline on Medical
+imaging studies and reports* (Release 1.1): those of the report data set
+(§4.1) and those of the imaging study manifest (§4.2). The four sections the
+composition requires (the imaging study, the order, the history and the
+procedure) each have a row, as does the study's DICOM Study Instance UID,
+the identifier the `ImagingStudy` profile requires. Building the imaging
+report from member data, referencing the studies held outside the member
+CDRs, and the FHIR face are planned
+([#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+
 ## Not legal advice
 
 This page is the manufacturer's reading of the EHDS Regulation and the CRA,

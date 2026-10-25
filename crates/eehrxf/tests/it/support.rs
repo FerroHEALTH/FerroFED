@@ -58,6 +58,23 @@ pub(crate) fn hdr(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     )?)
 }
 
+/// The vendored `hl7.fhir.eu.imaging` 1.0.0-ballot package, as the registry
+/// serves it.
+#[cfg(feature = "imaging")]
+pub(crate) fn imaging_package() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-ballot.tgz")
+}
+
+/// Reads the profile at `url` from the vendored Imaging Report package.
+#[cfg(feature = "imaging")]
+pub(crate) fn imaging(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    Ok(ResourceProfile::read(
+        std::fs::File::open(imaging_package())?,
+        url,
+    )?)
+}
+
 /// The vendored `hl7.fhir.eu.laboratory` 2.0.0 package, the version the
 /// component reads.
 #[cfg(feature = "laboratory")]

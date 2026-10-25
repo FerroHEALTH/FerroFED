@@ -23,6 +23,9 @@ mod discharge;
 #[cfg(all(feature = "openehr", feature = "patient-summary"))]
 mod document;
 #[cfg(test)]
+#[cfg(feature = "imaging")]
+mod imaging;
+#[cfg(test)]
 #[cfg(feature = "laboratory")]
 mod laboratory;
 #[cfg(test)]

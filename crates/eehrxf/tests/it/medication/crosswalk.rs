@@ -65,7 +65,7 @@ mod prescription {
 
     #[test]
     fn the_prescription_category_carries_the_crosswalk() {
-        let crosswalk = Category::Prescription.crosswalk();
+        let crosswalk = Category::Prescription.crosswalks().first().copied();
         assert!(
             crosswalk.is_some_and(|crosswalk| crosswalk.root == PRESCRIPTION.root
                 && crosswalk.profile == MPD_MEDICATION_REQUEST),
@@ -148,7 +148,7 @@ mod dispensation {
 
     #[test]
     fn the_dispensation_category_carries_the_crosswalk() {
-        let crosswalk = Category::Dispensation.crosswalk();
+        let crosswalk = Category::Dispensation.crosswalks().first().copied();
         assert!(
             crosswalk.is_some_and(|crosswalk| crosswalk.root == DISPENSATION.root
                 && crosswalk.profile == MPD_MEDICATION_DISPENSE),
