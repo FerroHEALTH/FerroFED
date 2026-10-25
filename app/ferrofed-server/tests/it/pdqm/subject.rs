@@ -15,7 +15,7 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path, query_param};
@@ -99,8 +99,8 @@ async fn the_master_identity_routes_the_read_to_the_holder_by_its_ehr_id_alone()
     let a = holder(EHR_A).await;
     let b = holder("1111bbbb-1111-4111-8111-111111111111").await;
     let pix = manager_at_a().await;
-    let pdq = super::supplier().await?;
-    let (status, text) = read(&a, &b, &pix, &pdq.base_url()).await?;
+    let pdq = super::supplier().await;
+    let (status, text) = read(&a, &b, &pix, &pdqm_stub::base_url(&pdq)).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let wire = wire(&a).await?;
     assert!(
@@ -119,9 +119,10 @@ async fn a_subject_the_supplier_knows_no_patient_for_is_the_operations_404() -> 
     let a = holder(EHR_A).await;
     let b = holder("1111bbbb-1111-4111-8111-111111111111").await;
     let pix = manager_at_a().await;
-    let pdq = PdqSupplier::start().await?;
-    pdq.add(&[(LOCAL, "SENTINEL-OTHER-5k2p"), (MASTER, MASTER_ID)], true)?;
-    let (status, text) = read(&a, &b, &pix, &pdq.base_url()).await?;
+    // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
+    // the identifier answers an empty searchset.
+    let pdq = pdqm_stub::supplier(&[]).await;
+    let (status, text) = read(&a, &b, &pix, &pdqm_stub::base_url(&pdq)).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     assert_eq!("no-destination", error_body(&text)?.code);
     Ok(())
@@ -132,12 +133,12 @@ async fn several_matched_patients_are_a_424_and_no_node_is_asked() -> TestResult
     let a = holder(EHR_A).await;
     let b = holder("1111bbbb-1111-4111-8111-111111111111").await;
     let pix = manager_at_a().await;
-    let pdq = super::supplier().await?;
-    pdq.add(
-        &[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")],
-        true,
-    )?;
-    let (status, text) = read(&a, &b, &pix, &pdq.base_url()).await?;
+    let pdq = pdqm_stub::supplier(&[
+        super::known(),
+        Entry::new(&[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")]),
+    ])
+    .await;
+    let (status, text) = read(&a, &b, &pix, &pdqm_stub::base_url(&pdq)).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
     let error = error_body(&text)?;
     assert_eq!("resolution-unavailable", error.code);

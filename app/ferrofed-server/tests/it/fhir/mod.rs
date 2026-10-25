@@ -47,7 +47,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::Request;
 use serde_json::Value;
 use wiremock::matchers::{body_string_contains, method, path};
@@ -72,28 +72,28 @@ const UID_B: &str = "7c4e1d20-0000-4000-8000-0000000000b1::cdr-b.example.org::1"
 /// The archetype only the allergies section query names.
 const ALLERGIES: &str = "openEHR-EHR-EVALUATION.adverse_reaction_risk.v1";
 
-/// The synthetic family name the harness PDQm Supplier holds the patient
-/// under.
+/// The synthetic family name the PDQm Supplier answers the patient under.
 const FAMILY: &str = "SENTINEL-FAMILY-5t2v";
 
-/// The synthetic given name the harness PDQm Supplier holds the patient
-/// under.
+/// The synthetic given name the PDQm Supplier answers the patient under.
 const GIVEN: &str = "SENTINEL-GIVEN-8m1c";
 
-/// The synthetic birth date the harness PDQm Supplier holds.
+/// The synthetic birth date the PDQm Supplier answers with.
 const BIRTH_DATE: &str = "1970-01-01";
 
 /// A PDQm Supplier base no test reaches, for a configuration that is only
 /// read.
 const UNREACHED_SUPPLIER: &str = "http://127.0.0.1:9/fhir/";
 
-/// A harness PDQm Supplier that holds the test patient under its
-/// identifier, with a synthetic name and birth date.
-async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
-    let supplier = PdqSupplier::start().await?;
-    let id = supplier.add(&[(NAMESPACE, PATIENT)], true)?;
-    supplier.describe(&id, (FAMILY, GIVEN), Some(BIRTH_DATE))?;
-    Ok(supplier)
+/// The test patient as the Supplier answers with it, under its identifier,
+/// with a synthetic name and birth date.
+fn known() -> Entry {
+    Entry::new(&[(NAMESPACE, PATIENT)]).named((FAMILY, GIVEN), Some(BIRTH_DATE))
+}
+
+/// A stub PDQm Supplier answering every search with the test patient.
+async fn supplier() -> Server {
+    pdqm_stub::supplier(&[known()]).await
 }
 
 /// The `[fhir]` tables of the face, its allergies fed by the testkit's
@@ -179,13 +179,15 @@ fn gateway_registered(
 
 /// The gateway of [`gateway_over`] over node A and node B, the patient
 /// known at both, the header asked of `pdq`.
-fn gateway(
-    dir: &Path,
-    (a, b): (&Server, &Server),
-    pdq: &PdqSupplier,
-) -> Result<Router, Box<dyn Error>> {
+fn gateway(dir: &Path, (a, b): (&Server, &Server), pdq: &Server) -> Result<Router, Box<dyn Error>> {
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
-    Ok(gateway_over(dir, (&a.uri(), &b.uri(), &pdq.base_url()), &rows, ("", ""))?.0)
+    Ok(gateway_over(
+        dir,
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(pdq)),
+        &rows,
+        ("", ""),
+    )?
+    .0)
 }
 
 /// A node answering the allergies section query with one composition of

@@ -4,7 +4,7 @@
 //! The harness national connector, offline: its token carries every
 //! attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2
 //! and a purpose of use, synthetic and inside the `urn:oid:2.999` example
-//! arc; it confirms a national identifier at the harness PDQm Supplier over
+//! arc; it confirms a national identifier at a stub PDQm Supplier over
 //! ITI-78; and each call reaches the FHIR face's route with the token and a
 //! correlation identifier of its own.
 #![allow(
@@ -26,7 +26,7 @@ use ferrofed_testkit::national_connector::{
     HCP_ID, HCP_NAME, HP_AUTHORITY, HP_ID, NationalConnector, NationalId, PERSON_ID, ROLE,
     ROLE_SYSTEM,
 };
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -118,22 +118,40 @@ fn the_declared_claim_names_are_the_ones_the_token_carries() -> TestResult {
 
 #[tokio::test]
 async fn a_national_identifier_is_confirmed_only_for_one_active_patient() -> TestResult {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(&[(PATIENT.system, PATIENT.value)], true)?;
-    supplier.add(&[(PATIENT.system, "Qz9-deprecated-39")], false)?;
+    let supplier = pdqm_stub::by_identifier(&[
+        (
+            PATIENT.value,
+            &[Entry::new(&[(PATIENT.system, PATIENT.value)])],
+        ),
+        (
+            "Qz9-deprecated-39",
+            &[Entry::new(&[(PATIENT.system, "Qz9-deprecated-39")]).deprecated()],
+        ),
+    ])
+    .await;
     let connector = connector("http://127.0.0.1:9")?;
-    assert!(connector.confirm(&supplier.base_url(), PATIENT).await?);
+    assert!(
+        connector
+            .confirm(&pdqm_stub::base_url(&supplier), PATIENT)
+            .await?
+    );
     for unconfirmed in ["Qz9-deprecated-39", "Qz9-unknown-40"] {
         let patient = NationalId {
             system: PATIENT.system,
             value: unconfirmed,
         };
         assert!(
-            !connector.confirm(&supplier.base_url(), patient).await?,
+            !connector
+                .confirm(&pdqm_stub::base_url(&supplier), patient)
+                .await?,
             "{unconfirmed}"
         );
     }
-    assert_eq!(3, supplier.searches(), "one ITI-78 search per confirmation");
+    assert_eq!(
+        3,
+        pdqm_stub::searches(&supplier).await,
+        "one ITI-78 search per confirmation"
+    );
     Ok(())
 }
 

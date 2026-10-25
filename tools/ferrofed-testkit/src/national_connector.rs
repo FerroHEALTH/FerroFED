@@ -11,7 +11,7 @@
 //! Tables 1 and 2 and a purpose of use, synthetic and inside the
 //! `urn:oid:2.999` example arc, and calls the face the way a national
 //! connector reaches a Member State's national infrastructure: it confirms
-//! the patient's national identifier at the harness PDQm Supplier over ITI-78
+//! the patient's national identifier at a PDQm Supplier over ITI-78
 //! (IHE PDQm 3.2.0 §2:3.78), then looks the patient up, asks
 //! `Patient/$summary`, the document list, the prescription list and read,
 //! and posts a dispensation, each with a correlation identifier of its own.

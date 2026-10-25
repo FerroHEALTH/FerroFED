@@ -19,7 +19,7 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
 use http::{Request, StatusCode, header};
 use serde_json::Value;
@@ -71,7 +71,7 @@ struct Members {
     own: Server,
     proxy: CapturingProxy,
     b: Server,
-    pdq: PdqSupplier,
+    pdq: Server,
 }
 
 impl Members {
@@ -84,7 +84,7 @@ impl Members {
             own,
             proxy,
             b: node_holding(UID_B).await,
-            pdq: supplier().await?,
+            pdq: supplier().await,
         })
     }
 
@@ -99,7 +99,11 @@ impl Members {
         let members = native_endpoint(self.proxy.origin(), &format!("\"{EPS_COMPOSITION}\""));
         let (app, _) = gateway_registered(
             dir,
-            (&self.a.uri(), &self.b.uri(), &self.pdq.base_url()),
+            (
+                &self.a.uri(),
+                &self.b.uri(),
+                &pdqm_stub::base_url(&self.pdq),
+            ),
             &rows,
             &members,
             (federation, ""),

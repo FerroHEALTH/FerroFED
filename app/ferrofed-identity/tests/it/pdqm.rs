@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The PDQm demographics step against the harness PDQm Supplier and stub
-//! Suppliers: one master identity resolved as the PIXm resolver resolves the
+//! The PDQm demographics step against stub Suppliers with fixed answers: one master identity resolved as the PIXm resolver resolves the
 //! client's own identifier, no match, several matches refused, an outage
 //! reported, the exchange audited, and neither identifier anywhere but the
 //! Supplier and the PIX Manager (Annex A §A.2 and §A.7, §5.2, §5.4.1, N3,
@@ -30,7 +29,7 @@ use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use ihe_atna::balp::{AuditError, AuditRecorder, Exchange};
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
@@ -89,12 +88,15 @@ fn soon() -> Instant {
     Instant::now() + Duration::from_secs(5)
 }
 
-/// A harness Supplier knowing the patient under the client's identifier and
+/// The patient the Supplier answers with, under the client's identifier and
 /// the master identifier.
-async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, MASTER_ID)], true)?;
-    Ok(supplier)
+fn known() -> Entry {
+    Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, MASTER_ID)])
+}
+
+/// A stub Supplier answering every search and match with the patient alone.
+async fn supplier() -> Server {
+    pdqm_stub::supplier(&[known()]).await
 }
 
 /// A stub Supplier answering every `$match` with `status` and `body`.
@@ -141,9 +143,9 @@ fn identified(identification: Identification) -> Result<PatientRef, String> {
 
 #[tokio::test]
 async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager() -> TestResult {
-    let supplier = supplier().await?;
+    let supplier = supplier().await;
     let master = identified(
-        step(&supplier.base_url(), Transaction::Search)
+        step(&pdqm_stub::base_url(&supplier), Transaction::Search)
             .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await,
     )?;
@@ -188,8 +190,8 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
         resolutions.get(&members[1]),
         Some(Resolution::Unknown)
     ));
-    let bodies = supplier.bodies();
-    assert_eq!(1, supplier.searches());
+    let bodies = pdqm_stub::bodies(&supplier).await;
+    assert_eq!(1, pdqm_stub::searches(&supplier).await);
     assert!(
         bodies[0].contains(CLIENT_ID),
         "the client's identifier reaches the Supplier"
@@ -204,31 +206,30 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
 
 #[tokio::test]
 async fn an_iti_119_certain_match_names_the_master_identity() -> TestResult {
-    let supplier = supplier().await?;
+    let supplier = supplier().await;
     let master = identified(
-        step(&supplier.base_url(), Transaction::Match)
+        step(&pdqm_stub::base_url(&supplier), Transaction::Match)
             .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await,
     )?;
     assert_eq!(MASTER, master.namespace().as_str());
-    assert_eq!(1, supplier.matches());
+    assert_eq!(1, pdqm_stub::matches(&supplier).await);
+    let bodies = pdqm_stub::bodies(&supplier).await;
     assert!(
-        supplier.bodies()[0].contains(r#""name":"onlyCertainMatches","valueBoolean":true"#),
+        bodies[0].contains(r#""name":"onlyCertainMatches","valueBoolean":true"#),
         "§2:3.119.4.1.2: {}",
-        supplier.bodies()[0]
+        bodies[0]
     );
     Ok(())
 }
 
 #[tokio::test]
 async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(
-        &[(LOCAL_SYSTEM, "SENTINEL-OTHER"), (MASTER, MASTER_ID)],
-        true,
-    )?;
+    // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
+    // the client's identifier answers an empty searchset.
+    let supplier = pdqm_stub::supplier(&[]).await;
     for transaction in [Transaction::Search, Transaction::Match] {
-        let answer = step(&supplier.base_url(), transaction)
+        let answer = step(&pdqm_stub::base_url(&supplier), transaction)
             .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await;
         assert!(
@@ -241,13 +242,12 @@ async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
 
 #[tokio::test]
 async fn a_match_without_a_master_identifier_is_no_match() -> TestResult {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(
-        &[(LOCAL_SYSTEM, CLIENT_ID), ("urn:oid:2.999.3", "X-1")],
-        true,
-    )?;
-    supplier.add(&[(MASTER, "SENTINEL-UNRELATED")], true)?;
-    let answer = step(&supplier.base_url(), Transaction::Search)
+    let supplier = pdqm_stub::supplier(&[Entry::new(&[
+        (LOCAL_SYSTEM, CLIENT_ID),
+        ("urn:oid:2.999.3", "X-1"),
+    ])])
+    .await;
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(matches!(answer, Identification::NoMatch), "{answer:?}");
@@ -256,12 +256,12 @@ async fn a_match_without_a_master_identifier_is_no_match() -> TestResult {
 
 #[tokio::test]
 async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult {
-    let supplier = supplier().await?;
-    supplier.add(
-        &[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")],
-        true,
-    )?;
-    let answer = step(&supplier.base_url(), Transaction::Search)
+    let supplier = pdqm_stub::supplier(&[
+        known(),
+        Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")]),
+    ])
+    .await;
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
@@ -294,12 +294,12 @@ async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult
 
 #[tokio::test]
 async fn a_deprecated_record_beside_the_active_one_is_no_second_match() -> TestResult {
-    let supplier = supplier().await?;
-    supplier.add(
-        &[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-DEPRECATED")],
-        false,
-    )?;
-    let answer = step(&supplier.base_url(), Transaction::Search)
+    let supplier = pdqm_stub::supplier(&[
+        known(),
+        Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-DEPRECATED")]).deprecated(),
+    ])
+    .await;
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     let master = identified(answer)?;
@@ -309,16 +309,13 @@ async fn a_deprecated_record_beside_the_active_one_is_no_second_match() -> TestR
 
 #[tokio::test]
 async fn a_patient_with_two_master_identifiers_is_refused() -> TestResult {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(
-        &[
-            (LOCAL_SYSTEM, CLIENT_ID),
-            (MASTER, MASTER_ID),
-            (MASTER, "SENTINEL-MASTER-2"),
-        ],
-        true,
-    )?;
-    let answer = step(&supplier.base_url(), Transaction::Search)
+    let supplier = pdqm_stub::supplier(&[Entry::new(&[
+        (LOCAL_SYSTEM, CLIENT_ID),
+        (MASTER, MASTER_ID),
+        (MASTER, "SENTINEL-MASTER-2"),
+    ])])
+    .await;
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
@@ -404,7 +401,7 @@ impl AuditRecorder for Recorder {
 
 #[tokio::test]
 async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> TestResult {
-    let supplier = supplier().await?;
+    let supplier = supplier().await;
     for (transaction, profile) in [
         (
             Transaction::Search,
@@ -417,7 +414,7 @@ async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> Tes
     ] {
         let kept = Arc::new(Recorder::default());
         let recorder: Arc<dyn AuditRecorder> = kept.clone();
-        let answer = step(&supplier.base_url(), transaction)
+        let answer = step(&pdqm_stub::base_url(&supplier), transaction)
             .audited(&recorder)
             .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await;
@@ -432,7 +429,7 @@ async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> Tes
         refuse: true,
         ..Recorder::default()
     });
-    let answer = step(&supplier.base_url(), Transaction::Search)
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .audited(&refusing)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
@@ -490,12 +487,12 @@ fn a_configuration_the_step_cannot_use_is_refused() {
 
 #[tokio::test]
 async fn no_rendering_names_the_client_or_the_master_identifier() -> TestResult {
-    let supplier = supplier().await?;
-    supplier.add(
-        &[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")],
-        true,
-    )?;
-    let searching = step(&supplier.base_url(), Transaction::Search);
+    let supplier = pdqm_stub::supplier(&[
+        known(),
+        Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")]),
+    ])
+    .await;
+    let searching = step(&pdqm_stub::base_url(&supplier), Transaction::Search);
     let mut text = format!("{searching:?}");
     let answer = searching
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
