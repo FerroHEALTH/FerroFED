@@ -70,6 +70,18 @@ pin commit ehn-guidelines-general.pdf "Release 3.1, November 2024" \
   'https://health.ec.europa.eu/document/download/d8f7955c-4a2c-4ba2-9aea-25f3044896e8_en?filename=ehealth_health-data_electronic-exchange_general-guidelines_en.pdf' \
   041ee26c324c47a72564cb040865df2d9a7d7b25a5ed08e2e2568abc54c2198f "$ec_notice" \
   'The eHealth Network General Guidelines, Release 3.1, to which the Patient Summary and ePrescription guidelines defer.'
+pin commit ehn-guidelines-laboratory.pdf "Release 1.1, June 2023" \
+  'https://health.ec.europa.eu/document/download/4e8d82ba-87ca-4123-a8d8-a5d895ae8ecc_en?filename=ehealth_ehn-lab-results-guideline_en.pdf' \
+  b89e39148ec09418ef004dd615c8f39b69e8821a8674156637639adc8812f054 "$ec_notice" \
+  'The eHealth Network guideline on Laboratory Results, Release 1.1, adopted in June 2023, as its title page states; its Annex holds the dataset the laboratory crosswalk names by element id.'
+pin commit ehn-guidelines-hdr.pdf "Release 1.1, November 2024" \
+  'https://health.ec.europa.eu/document/download/cbb2efd4-82b4-4127-ab58-0aaedf662df6_en?filename=ehn_hdr_guidelines_en.pdf' \
+  349027ec35cfcbd8ae8f23e713f240c3f511e688b2cf6d2d4e28c23fa314a3e0 "$ec_notice" \
+  'The eHealth Network guideline on Hospital Discharge Report, Release 1.1, adopted in Budapest in November 2024, as its title page states; its Annex holds the dataset the discharge crosswalk names by element id.'
+pin commit ehn-guidelines-imaging.pdf "Release 1.1, November 2024" \
+  'https://health.ec.europa.eu/document/download/0079ad26-8f8f-435b-9472-3cd8625f4220_en?filename=ehn_mi_guidelines_en.pdf' \
+  694d1f8c09c8bb4705bfa93582cbd97b054546b4ea72ffbc717886fba5d267be "$ec_notice" \
+  'The eHealth Network guideline on Medical imaging studies and reports, Release 1.1, adopted in Budapest in November 2024, as its title page states; its Annex holds the dataset the imaging crosswalk names by element id.'
 pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D0833), English" \
   https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1 \
   2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982 "$eu_act" \
@@ -91,7 +103,9 @@ Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
 eHealth Network guidelines on the Patient Summary, on ePrescription and
-eDispensation and the General Guidelines they defer to, and Commission
+eDispensation, on Laboratory Results, on Hospital Discharge Report and on
+Medical imaging studies and reports, and the General Guidelines they defer
+to, and Commission
 Decision 2011/833/EU of 12 December 2011 on the reuse of Commission
 documents, which governs the reuse of all of them.
 The Regulation, the implementing acts, the Recommendation and the Decision
