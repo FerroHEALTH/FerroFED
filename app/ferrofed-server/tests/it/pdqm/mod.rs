@@ -3,7 +3,7 @@
 
 //! The PDQm demographics step of `[pdqm]`, ahead of localization and
 //! resolution (Annex A §A.2 and §A.7): a client names the patient in a
-//! namespace the cross-reference does not map, the harness PDQm Supplier
+//! namespace the cross-reference does not map, a stub PDQm Supplier
 //! answers with the master identity, the PIX Manager resolves that, and each
 //! node is asked by its own `ehr_id` alone (§5.2, §5.4.1, N3, N6, N33). No
 //! match, several matches, an outage under the localization failure policy
@@ -25,7 +25,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
 use serde::Deserialize;
 use wiremock::matchers::{method, path, query_param};
@@ -56,12 +56,15 @@ pub(crate) fn local_query() -> String {
     )
 }
 
-/// A harness Supplier that knows the patient under the client's identifier
-/// and the master identifier.
-pub(crate) async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
-    let supplier = PdqSupplier::start().await?;
-    supplier.add(&[(LOCAL, CLIENT_ID), (MASTER, MASTER_ID)], true)?;
-    Ok(supplier)
+/// The patient the Supplier answers with, under the client's identifier and
+/// the master identifier.
+pub(crate) fn known() -> Entry {
+    Entry::new(&[(LOCAL, CLIENT_ID), (MASTER, MASTER_ID)])
+}
+
+/// A stub Supplier answering every search and match with the patient alone.
+pub(crate) async fn supplier() -> Server {
+    pdqm_stub::supplier(&[known()]).await
 }
 
 /// A PIX Manager that resolves the master identifier at node A and node B,

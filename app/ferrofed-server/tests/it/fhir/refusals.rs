@@ -32,7 +32,7 @@ fn issue(text: &str) -> Result<String, Box<dyn std::error::Error>> {
 async fn a_request_with_no_credential_is_refused_with_a_challenge() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let response = send_as_is(app, summary("")?).await?;
     let status = response.status();
@@ -54,7 +54,7 @@ async fn a_request_with_no_credential_is_refused_with_a_challenge() -> TestResul
 async fn a_caller_whose_scopes_miss_the_section_queries_is_forbidden() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let mut claims = claims();
     claims.scope = Some(String::from(
@@ -76,7 +76,7 @@ async fn a_caller_whose_scopes_miss_the_section_queries_is_forbidden() -> TestRe
 async fn a_scope_over_the_reserved_namespace_covers_the_summary() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let mut claims = claims();
     claims.scope = Some(String::from("user/aql-eu.ferrofed.eehrxf::*.s"));
@@ -94,7 +94,7 @@ async fn a_scope_over_the_reserved_namespace_covers_the_summary() -> TestResult 
 async fn a_patient_named_by_demographics_or_no_system_is_refused() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     for query in [
         String::from("?family=Synthetic&birthdate=1970-01-01"),
@@ -118,7 +118,7 @@ async fn a_patient_named_by_demographics_or_no_system_is_refused() -> TestResult
 async fn a_parameters_body_asks_as_the_query_string_does() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let body = format!(
         r#"{{"resourceType":"Parameters","parameter":[{{"name":"identifier","valueString":"{NAMESPACE}|{PATIENT}"}}]}}"#
@@ -140,7 +140,7 @@ async fn a_parameters_body_asks_as_the_query_string_does() -> TestResult {
 async fn a_path_the_face_does_not_serve_is_refused_at_the_gate() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     for path in [
         format!("{FHIR}/Patient/{PATIENT}"),
@@ -179,7 +179,7 @@ fn summary_as(
 async fn a_token_with_no_purpose_of_use_is_refused() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let mut purposeless = claims();
     purposeless.extensions = None;
@@ -194,7 +194,7 @@ async fn a_token_with_no_purpose_of_use_is_refused() -> TestResult {
 async fn a_client_that_names_no_professional_is_refused() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let mut client = claims();
     client.sub.clone_from(&client.client_id);
@@ -213,7 +213,7 @@ async fn a_client_that_names_no_professional_is_refused() -> TestResult {
 async fn no_variant_of_the_summary_path_or_method_passes_the_gate() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let identifier = format!("identifier={}%7C{PATIENT}", NAMESPACE.replace(':', "%3A"));
     let mut requests = Vec::new();
@@ -279,7 +279,7 @@ async fn no_variant_of_the_summary_path_or_method_passes_the_gate() -> TestResul
 async fn every_path_under_the_face_is_refused_with_no_credential() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     for path in [
         "/fhir/Patient/$summary",

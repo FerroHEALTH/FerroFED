@@ -15,6 +15,7 @@ use axum::body::Body;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::{Request, StatusCode};
 use serde_json::Value;
 
@@ -82,10 +83,10 @@ async fn summarised() -> Result<Recorded, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
     let tables = audit_tables(&repository, "");
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, _) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &rows,
         ("", &tables),
     )?;

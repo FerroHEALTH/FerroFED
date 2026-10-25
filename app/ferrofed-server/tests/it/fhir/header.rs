@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The patient summary header from the identity binding (eHN PS A.1.1,
-//! A.1.2): the name and birth date the harness PDQm Supplier holds are the
+//! A.1.2): the name and birth date the PDQm Supplier answers with are the
 //! document's `Patient`, no header value and no patient identifier reaches a
 //! node (§5.4.1, N33), and a patient the binding cannot name is refused
 //! before any member is asked.
@@ -10,13 +10,13 @@
 use axum::Router;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
 use serde_json::Value;
 
 use super::{
     BIRTH_DATE, FAMILY, GIVEN, TestResult, UID_A, UID_B, UNREACHED_SUPPLIER, gateway, gateway_over,
-    node_holding, resources, summary, supplier,
+    known, node_holding, resources, summary, supplier,
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, wire};
 use crate::support::call;
@@ -46,7 +46,7 @@ fn issue(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
 async fn the_header_is_the_supplier_s_and_no_header_value_reaches_a_node() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -61,7 +61,11 @@ async fn the_header_is_the_supplier_s_and_no_header_value_reaches_a_node() -> Te
         "eHN PS A.1.1.2, A.1.1.3: the name the binding holds"
     );
     assert_eq!(patient["birthDate"], BIRTH_DATE, "eHN PS A.1.1.4");
-    assert_eq!(1, pdq.searches(), "the Supplier is asked once");
+    assert_eq!(
+        1,
+        pdqm_stub::searches(&pdq).await,
+        "the Supplier is asked once"
+    );
     for node in [&a, &b] {
         let captured = wire(node).await?;
         for withheld in [PATIENT, PATIENT_TAIL, FAMILY, GIVEN] {
@@ -78,9 +82,10 @@ async fn the_header_is_the_supplier_s_and_no_header_value_reaches_a_node() -> Te
 async fn a_patient_the_binding_does_not_know_is_not_found_and_nothing_is_sent() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = PdqSupplier::start().await?;
-    pdq.add(&[(NAMESPACE, "SENTINEL-SOMEONE-ELSE")], true)?;
-    let app = gateway_asking(dir.path(), (&a, &b), &pdq.base_url())?;
+    // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
+    // the identifier answers an empty searchset.
+    let pdq = pdqm_stub::supplier(&[]).await;
+    let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     assert_eq!(issue(&text)?, "not-found");
@@ -96,9 +101,8 @@ async fn a_patient_the_binding_does_not_know_is_not_found_and_nothing_is_sent() 
 async fn a_patient_the_binding_holds_no_name_for_writes_no_document() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = PdqSupplier::start().await?;
-    pdq.add(&[(NAMESPACE, PATIENT)], true)?;
-    let app = gateway_asking(dir.path(), (&a, &b), &pdq.base_url())?;
+    let pdq = pdqm_stub::supplier(&[Entry::new(&[(NAMESPACE, PATIENT)])]).await;
+    let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
     assert_eq!(issue(&text)?, "required");
@@ -114,10 +118,12 @@ async fn a_patient_the_binding_holds_no_name_for_writes_no_document() -> TestRes
 async fn several_patients_under_the_identifier_write_no_document() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
-    let second = pdq.add(&[(NAMESPACE, PATIENT)], true)?;
-    pdq.describe(&second, ("SENTINEL-FAMILY-2", "SENTINEL-GIVEN-2"), None)?;
-    let app = gateway_asking(dir.path(), (&a, &b), &pdq.base_url())?;
+    let pdq = pdqm_stub::supplier(&[
+        known(),
+        Entry::new(&[(NAMESPACE, PATIENT)]).named(("SENTINEL-FAMILY-2", "SENTINEL-GIVEN-2"), None),
+    ])
+    .await;
+    let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
     assert_eq!(issue(&text)?, "multiple-matches");

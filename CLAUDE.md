@@ -365,9 +365,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   (`.claude/memory/e2e-gate.md`). The Connectathon scenarios themselves sit in
   `app/ferrofed-server/tests/it/e2e/` (#545). It also carries the harness
   services every binding is tested against: FerroPIX, the PIX Manager of the
-  end-to-end lane (`containers::ferropix`), with fixed ITI-83 answers for the
-  offline suites (`pixm_stub`, #1360), the PDQm Supplier,
-  XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
+  end-to-end lane (`containers::ferropix`), with fixed ITI-83, ITI-78 and
+  ITI-119 answers for the offline suites (`pixm_stub`, `pdqm_stub`, #1360),
+  the XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
   Repositories, NVI, Mitz, Nuts node, the OAuth 2.0 and FAPI 2.0
   authorization servers and a national contact point's national connector
   (`national_connector`, #735), with a mutual-TLS front. Its test binary also holds

@@ -148,7 +148,7 @@ async fn drive(
     let held = national(&PATIENT.namespace(), &PATIENT.value());
     let patient = patient_id(&held);
     assert!(
-        connector.confirm(&harness.pdq.base_url(), patient).await?,
+        connector.confirm(&harness.supplier_url(), patient).await?,
         "the contact point confirms the identifier at its identity service (A68)"
     );
 

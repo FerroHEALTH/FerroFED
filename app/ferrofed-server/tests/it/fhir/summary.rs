@@ -9,6 +9,7 @@
 use axum::body::Body;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_testkit::eps;
+use ferrofed_testkit::pdqm_stub;
 use http::{Request, StatusCode, header};
 use serde_json::Value;
 
@@ -31,7 +32,7 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(app, summary("")?).await?;
     let text = String::from_utf8(body)?;
@@ -115,10 +116,10 @@ async fn the_face_needs_no_stored_query_registry() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, state) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &rows,
         ("", ""),
     )?;
@@ -139,10 +140,10 @@ async fn a_summary_is_recorded_once_with_the_patient_summary_category() -> TestR
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
     let tables = audit_tables(&repository, "");
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, _) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &rows,
         ("", &tables),
     )?;
@@ -180,7 +181,7 @@ async fn a_silent_member_fails_the_summary_and_is_named() -> TestResult {
     let a = node_holding(UID_A).await;
     let b = node_failing(500).await;
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(app, summary("")?).await?;
     let text = String::from_utf8(body)?;
@@ -211,10 +212,10 @@ async fn under_partial_a_silent_member_is_named_in_every_section() -> TestResult
     let b = node_failing(500).await;
     let dir = tempfile::tempdir()?;
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, _) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &rows,
         ("best_effort = true\n", ""),
     )?;
@@ -251,10 +252,10 @@ async fn a_patient_no_member_holds_is_not_found_and_nothing_is_sent() -> TestRes
     let elsewhere = format!(
         "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-1\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, _) = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &[],
         ("", &elsewhere),
     )?;
@@ -273,12 +274,12 @@ async fn a_patient_no_member_holds_is_not_found_and_nothing_is_sent() -> TestRes
 async fn with_no_cross_reference_the_summary_fails_closed_and_nothing_is_sent() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     // NOTE: the face needs the demographics binding for its header, which resolves through
     // the cross-reference, so a face with no cross-reference fails closed at start.
     let refused = gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &[],
         ("", ""),
     )
@@ -289,7 +290,11 @@ async fn with_no_cross_reference_the_summary_fails_closed_and_nothing_is_sent() 
         "{refused:?}"
     );
     assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
-    assert_eq!(0, pdq.searches(), "nothing is asked of the Supplier either");
+    assert_eq!(
+        0,
+        pdqm_stub::searches(&pdq).await,
+        "nothing is asked of the Supplier either"
+    );
     Ok(())
 }
 
@@ -297,7 +302,7 @@ async fn with_no_cross_reference_the_summary_fails_closed_and_nothing_is_sent() 
 async fn the_face_answers_its_capability_statement() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(
         app,
@@ -322,7 +327,7 @@ async fn the_face_answers_its_capability_statement() -> TestResult {
 async fn an_its_rest_path_under_the_base_still_answers_as_it_did() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, headers, body) = exchange(
         app,

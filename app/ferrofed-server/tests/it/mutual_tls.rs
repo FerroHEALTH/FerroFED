@@ -22,6 +22,7 @@ use ferrofed_server::config::{self, Config};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_testkit::mcsd::HarnessDirectory;
+use ferrofed_testkit::pdqm_stub;
 use ferrofed_testkit::pmir::PatientIdentityRegistry;
 use ferrofed_testkit::tls::MutualTls;
 use http::StatusCode;
@@ -78,9 +79,9 @@ async fn pixm_and_pdqm_resolve_over_mutual_tls() -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let pix_front = MutualTls::front(&pix.uri())?;
-    let pdq_front = MutualTls::front(pdq.origin())?;
+    let pdq_front = MutualTls::front(&pdq.uri())?;
     let dir = tempfile::tempdir()?;
     let tables = format!(
         "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pdqm]\nurl = \"{}\"\nmaster = \"{}\"\ntimeout_ms = 4000\n{}\n[pdqm.namespaces]\n\"{}\" = \"{}\"\n",
@@ -88,7 +89,7 @@ async fn pixm_and_pdqm_resolve_over_mutual_tls() -> TestResult {
         tls_keys(dir.path(), "pix", &pix_front)?,
         crate::pdqm::DOMAIN_A,
         crate::pdqm::DOMAIN_B,
-        behind(&pdq_front, &pdq.base_url())?,
+        behind(&pdq_front, &pdqm_stub::base_url(&pdq))?,
         crate::pdqm::MASTER,
         tls_keys(dir.path(), "pdq", &pdq_front)?,
         crate::pdqm::LOCAL,
@@ -118,7 +119,7 @@ async fn pixm_and_pdqm_resolve_over_mutual_tls() -> TestResult {
         pix_front.handshakes() >= 1,
         "the Manager saw the client certificate"
     );
-    assert_eq!(1, pdq.searches());
+    assert_eq!(1, pdqm_stub::searches(&pdq).await);
     Ok(())
 }
 

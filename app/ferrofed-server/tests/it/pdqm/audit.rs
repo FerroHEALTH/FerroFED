@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 
 use super::{
@@ -48,14 +49,14 @@ async fn each_exchange_reaches_the_repository_beside_the_resolution_it_feeds() -
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let (app, _state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &audited(&pix, &pdq.base_url(), &repository, ""),
+        &audited(&pix, &pdqm_stub::base_url(&pdq), &repository, ""),
     )?;
     let (status, text) = call(app, post(body(&local_query())?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -83,13 +84,13 @@ async fn each_search_and_match_names_the_verified_caller_as_its_user_agent() -> 
         let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
         let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
         let pix = manager().await;
-        let pdq = supplier().await?;
+        let pdq = supplier().await;
         let repository = FeedRepository::start().await;
         let dir = tempfile::tempdir()?;
         let tables = format!(
             "{}\n{}\n{}",
             pixm(&pix.uri()),
-            pdqm(&pdq.base_url(), transaction),
+            pdqm(&pdqm_stub::base_url(&pdq), transaction),
             audit_tables(&repository, "")
         );
         let (app, _state) = gateway(
@@ -118,13 +119,13 @@ async fn the_log_destination_records_the_exchange_without_the_patient() -> TestR
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let dir = tempfile::tempdir()?;
     let (app, _state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &super::tables(&pix.uri(), &pdq.base_url(), "iti-78"),
+        &super::tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
     let logs = crate::support::Logs::default();
     let capture = ferrofed_server::telemetry::subscriber(
@@ -154,7 +155,7 @@ async fn an_exchange_the_spool_cannot_take_fails_closed_and_asks_no_member() -> 
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let repository = FeedRepository::start().await;
     repository.set_up(false);
     let dir = tempfile::tempdir()?;
@@ -162,7 +163,12 @@ async fn an_exchange_the_spool_cannot_take_fails_closed_and_asks_no_member() -> 
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &audited(&pix, &pdq.base_url(), &repository, "spool_max_events = 2"),
+        &audited(
+            &pix,
+            &pdqm_stub::base_url(&pdq),
+            &repository,
+            "spool_max_events = 2",
+        ),
     )?;
     // The master identity resolves without the step, and its ITI-83 record
     // and the record of its access fill the two places the spool has.

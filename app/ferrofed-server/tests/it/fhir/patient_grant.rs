@@ -22,13 +22,13 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{ACT_REASON, Claims, Coding};
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
 use serde_json::Value;
 
 use super::receive::{EHR_SYSTEM, OTHER, OTHER_A, OTHER_NAMESPACE, bound, rows};
 use super::{
-    FAMILY, GIVEN, TestResult, UID_A, UID_B, node_holding, resources, summary, supplier,
+    FAMILY, GIVEN, TestResult, UID_A, UID_B, known, node_holding, resources, summary,
     text_registered,
 };
 use crate::auth::{bearing, claims, minted};
@@ -63,12 +63,17 @@ fn own_grant() -> Claims {
     granted
 }
 
-/// A PDQm Supplier that holds [`PATIENT`] and [`OTHER`].
-async fn suppliers() -> Result<PdqSupplier, Box<dyn Error>> {
-    let pdq = supplier().await?;
-    let other = pdq.add(&[(OTHER_NAMESPACE, OTHER)], true)?;
-    pdq.describe(&other, (FAMILY, GIVEN), None)?;
-    Ok(pdq)
+/// A stub PDQm Supplier answering a lookup of [`PATIENT`] and one of
+/// [`OTHER`] each with that patient.
+async fn suppliers() -> Server {
+    pdqm_stub::by_identifier(&[
+        (PATIENT, &[known()]),
+        (
+            OTHER,
+            &[Entry::new(&[(OTHER_NAMESPACE, OTHER)]).named((FAMILY, GIVEN), None)],
+        ),
+    ])
+    .await
 }
 
 /// The summary gateway over node A and node B, its issuer's patient tokens
@@ -77,7 +82,7 @@ async fn suppliers() -> Result<PdqSupplier, Box<dyn Error>> {
 /// tables `tables` added.
 fn gateway(
     dir: &Path,
-    (a, b, pdq): (&Server, &Server, &PdqSupplier),
+    (a, b, pdq): (&Server, &Server, &Server),
     tables: &str,
 ) -> Result<Router, Box<dyn Error>> {
     let crossref = rows(&[
@@ -89,7 +94,7 @@ fn gateway(
     let members = [("node-a", EHR_A), ("node-b", EHR_B)];
     let text = text_registered(
         dir,
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(pdq)),
         &members,
         "",
         ("", &format!("{crossref}{tables}")),
@@ -116,7 +121,7 @@ async fn a_persons_own_grant_gets_their_summary_and_no_identifier_reaches_a_node
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = suppliers().await?;
+    let pdq = suppliers().await;
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&own_grant())?;
     let logs = Logs::default();
@@ -172,7 +177,7 @@ async fn a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = suppliers().await?;
+    let pdq = suppliers().await;
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&own_grant())?;
     let logs = Logs::default();
@@ -206,7 +211,7 @@ async fn a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone
     );
     assert_eq!(
         0,
-        pdq.searches(),
+        pdqm_stub::searches(&pdq).await,
         "the demographics supplier is never asked about another patient"
     );
     assert!(
@@ -224,12 +229,16 @@ async fn a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone
 async fn a_professional_in_the_same_deployment_is_served_as_before() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = suppliers().await?;
+    let pdq = suppliers().await;
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&claims())?;
     let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, pdq.searches(), "one header lookup, as before");
+    assert_eq!(
+        1,
+        pdqm_stub::searches(&pdq).await,
+        "one header lookup, as before"
+    );
     for node in [&a, &b] {
         assert_eq!(Section::ALL.len(), received(node).await?.len());
     }
@@ -245,7 +254,7 @@ async fn the_access_record_names_the_person_as_caller_and_as_data_subject() -> T
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
-    let pdq = suppliers().await?;
+    let pdq = suppliers().await;
     let app = gateway(dir.path(), (&a, &b, &pdq), &audit_tables(&repository, ""))?;
     let token = minted(&own_grant())?;
     let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
@@ -308,7 +317,7 @@ fn looked_up(namespace: &str, value: &str) -> Result<http::Request<axum::body::B
 async fn a_persons_own_grant_looks_up_their_own_patient_and_is_refused_another() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = suppliers().await?;
+    let pdq = suppliers().await;
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&own_lookup_grant())?;
 
@@ -333,7 +342,7 @@ async fn a_persons_own_grant_looks_up_their_own_patient_and_is_refused_another()
     );
     assert_eq!(
         0,
-        pdq.searches(),
+        pdqm_stub::searches(&pdq).await,
         "the demographics supplier is never asked about another patient"
     );
 

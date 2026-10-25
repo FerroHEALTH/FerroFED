@@ -14,6 +14,7 @@ use axum::body::Body;
 use ferrofed_eehrxf::summary::NOT_SUPPLIED;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::{Request, StatusCode};
 use serde_json::Value;
 use wiremock::matchers::any;
@@ -143,7 +144,7 @@ async fn answered_by(
     partial: bool,
 ) -> Result<(StatusCode, String, (bool, bool)), Box<dyn Error>> {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (pix_a, pix_b) = (a_crossref.start().await, b_crossref.start().await);
     let (members, served) = route.served();
     let resolvers = format!(
@@ -157,7 +158,7 @@ async fn answered_by(
     let dir = tempfile::tempdir()?;
     let text = text_registered(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &[],
         &members,
         (federation, &resolvers),

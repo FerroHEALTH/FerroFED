@@ -36,7 +36,7 @@ use ferrofed_testkit::eps;
 use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::national_connector::{CLAIMS, NationalConnector, NationalId};
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use ferrofed_testkit::proxy::CapturingProxy;
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
@@ -57,7 +57,7 @@ const FHIR: &str = "/fhir";
 /// The system each member's own FHIR endpoint names its `ehr_id` in.
 const EHR_SYSTEM: &str = "urn:oid:2.999.4.1";
 
-/// The synthetic name and birth date the harness PDQm Supplier holds the
+/// The synthetic name and birth date the stub PDQm Supplier answers the
 /// patient under, the summary header.
 const FAMILY: &str = "SENTINEL-FAMILY-3n8w";
 const GIVEN: &str = "SENTINEL-GIVEN-6p2k";
@@ -175,11 +175,11 @@ fn own_entry(id: &str, (node, organisation): (&str, &str), base: &str) -> String
 
 /// The services every gateway of a test shares: the two seeded FerroEHR
 /// nodes, each member's own FHIR endpoint behind a capturing proxy, the
-/// harness PDQm Supplier holding the patient, and the Audit Record
+/// stub PDQm Supplier answering with the patient, and the Audit Record
 /// Repository the access records reach.
 struct Harness {
     nodes: TwoNodes,
-    pdq: PdqSupplier,
+    pdq: Server,
     own_a: Server,
     own_b: Server,
     proxy_a: CapturingProxy,
@@ -188,6 +188,11 @@ struct Harness {
 }
 
 impl Harness {
+    /// Returns the FHIR base of the stub PDQm Supplier.
+    pub(crate) fn supplier_url(&self) -> String {
+        pdqm_stub::base_url(&self.pdq)
+    }
+
     /// Starts the services, the patient's record seeded at both nodes.
     async fn start() -> Result<Self, Box<dyn Error>> {
         let nodes = containers::two_nodes().await?;
@@ -206,9 +211,9 @@ impl Harness {
         .await?;
         nodes.a.proxy.clear_journal();
         nodes.b.proxy.clear_journal();
-        let pdq = PdqSupplier::start().await?;
-        let held = pdq.add(&[(&PATIENT.namespace(), &PATIENT.value())], true)?;
-        pdq.describe(&held, (FAMILY, GIVEN), Some(BIRTH_DATE))?;
+        let pdq = pdqm_stub::supplier(&[Entry::new(&[(&PATIENT.namespace(), &PATIENT.value())])
+            .named((FAMILY, GIVEN), Some(BIRTH_DATE))])
+        .await;
         let own_a = own_endpoint(RX_A, "rx-a1").await;
         let own_b = own_endpoint(RX_B, "rx-b1").await;
         let proxy_a = CapturingProxy::start(own_a.uri()).await?;
@@ -283,7 +288,7 @@ impl Harness {
             path_of(&model),
             path_of(&context),
             eps::CONTEXT,
-            self.pdq.base_url(),
+            pdqm_stub::base_url(&self.pdq),
             toml::Value::String(crate::support::signing_key_file().to_owned()),
             audit_tables(&self.repository, ""),
         );

@@ -59,9 +59,8 @@
 //!   listener and the client CA it admits a proxy by (#632);
 //! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
 //!   span the gateway exports (#437);
-//! - [`pdq`]: the harness PDQm Supplier, a test device that answers ITI-78
-//!   searches by identifier and ITI-119 matches from synthetic Patients in the
-//!   `urn:oid:2.999` example arc (#487);
+//! - [`pdqm_stub`]: fixed ITI-78 and ITI-119 answers on a `wiremock`
+//!   server for the offline suites; patient identity is FerroPIX's (#1360);
 //! - [`pixm_stub`]: fixed ITI-83 answers on a `wiremock` server for the
 //!   offline suites; patient identity is FerroPIX's (#1360);
 //! - [`pmir`]: the harness Patient Identity Registry, a test device that
@@ -100,7 +99,7 @@ pub mod nuts;
 pub mod nvi;
 pub mod oauth;
 pub mod otlp;
-pub mod pdq;
+pub mod pdqm_stub;
 pub mod pixm_stub;
 pub mod pmir;
 pub mod proxy;

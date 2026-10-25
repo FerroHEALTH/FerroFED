@@ -23,7 +23,8 @@ use ferrofed_identity::role::demographics::{Ambiguity, Demographics};
 use ferrofed_identity::role::header::{HeaderAnswer, PatientHeader};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::secret::SecretUrl;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -75,30 +76,27 @@ fn soon() -> Instant {
     Instant::now() + Duration::from_secs(5)
 }
 
-/// A Supplier that holds the patient under the client's identifier, the
-/// master identifier and an identifier no namespace maps to, with a
+/// The patient the Supplier answers with, under the client's identifier,
+/// the master identifier and an identifier no namespace maps to, with a
 /// synthetic name and birth date.
-async fn supplier() -> Result<PdqSupplier, Box<dyn Error>> {
-    let supplier = PdqSupplier::start().await?;
-    let id = supplier.add(
-        &[
-            (LOCAL_SYSTEM, CLIENT_ID),
-            (MASTER, MASTER_ID),
-            (OTHER_SYSTEM, OTHER_ID),
-        ],
-        true,
-    )?;
-    supplier.describe(&id, (FAMILY, GIVEN), Some(BIRTH_DATE))?;
-    Ok(supplier)
+fn known() -> Entry {
+    Entry::new(&[
+        (LOCAL_SYSTEM, CLIENT_ID),
+        (MASTER, MASTER_ID),
+        (OTHER_SYSTEM, OTHER_ID),
+    ])
+    .named((FAMILY, GIVEN), Some(BIRTH_DATE))
+}
+
+/// A stub Supplier answering every search and match with the patient alone.
+async fn supplier() -> Server {
+    pdqm_stub::supplier(&[known()]).await
 }
 
 /// The header answer `supplier` gives with `transaction` for the client's
 /// identifier.
-async fn ask(
-    supplier: &PdqSupplier,
-    transaction: Transaction,
-) -> Result<HeaderAnswer, Box<dyn Error>> {
-    Ok(step(&supplier.base_url(), transaction)?
+async fn ask(supplier: &Server, transaction: Transaction) -> Result<HeaderAnswer, Box<dyn Error>> {
+    Ok(step(&pdqm_stub::base_url(supplier), transaction)?
         .header(
             &patient(LOCAL_NAMESPACE, CLIENT_ID)?,
             &OnBehalfOf::Gateway,
@@ -117,10 +115,10 @@ fn found(answer: HeaderAnswer) -> Result<PatientHeader, String> {
 
 #[tokio::test]
 async fn the_supplier_s_patient_is_the_header_under_both_transactions() -> TestResult {
-    let supplier = supplier().await?;
+    let supplier = supplier().await;
     for transaction in [Transaction::Search, Transaction::Match] {
         let header = found(
-            step(&supplier.base_url(), transaction)?
+            step(&pdqm_stub::base_url(&supplier), transaction)?
                 .header(
                     &patient(LOCAL_NAMESPACE, CLIENT_ID)?,
                     &OnBehalfOf::Gateway,
@@ -134,8 +132,14 @@ async fn the_supplier_s_patient_is_the_header_under_both_transactions() -> TestR
         assert_eq!(header.birth_date.as_deref(), Some(BIRTH_DATE));
         assert!(header.named());
     }
-    assert_eq!((1, 1), (supplier.searches(), supplier.matches()));
-    let bodies = supplier.bodies().join("\n");
+    assert_eq!(
+        (1, 1),
+        (
+            pdqm_stub::searches(&supplier).await,
+            pdqm_stub::matches(&supplier).await
+        )
+    );
+    let bodies = pdqm_stub::bodies(&supplier).await.join("\n");
     assert!(
         bodies.contains(LOCAL_SYSTEM) && bodies.contains(CLIENT_ID),
         "asked in the system the namespace maps to: {bodies}"
@@ -145,8 +149,8 @@ async fn the_supplier_s_patient_is_the_header_under_both_transactions() -> TestR
 
 #[tokio::test]
 async fn a_master_or_unmapped_absolute_system_is_asked_as_it_is() -> TestResult {
-    let supplier = supplier().await?;
-    let step = step(&supplier.base_url(), Transaction::Search)?;
+    let supplier = supplier().await;
+    let step = step(&pdqm_stub::base_url(&supplier), Transaction::Search)?;
     for (namespace, value) in [(MASTER, MASTER_ID), (OTHER_SYSTEM, OTHER_ID)] {
         let header = found(
             step.header(&patient(namespace, value)?, &OnBehalfOf::Gateway, soon())
@@ -159,8 +163,8 @@ async fn a_master_or_unmapped_absolute_system_is_asked_as_it_is() -> TestResult 
 
 #[tokio::test]
 async fn a_namespace_that_names_no_system_is_not_handled() -> TestResult {
-    let supplier = supplier().await?;
-    let answer = step(&supplier.base_url(), Transaction::Search)?
+    let supplier = supplier().await;
+    let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)?
         .header(
             &patient("2.999.8", CLIENT_ID)?,
             &OnBehalfOf::Gateway,
@@ -168,15 +172,21 @@ async fn a_namespace_that_names_no_system_is_not_handled() -> TestResult {
         )
         .await;
     assert!(matches!(answer, HeaderAnswer::NotHandled), "{answer:?}");
-    assert_eq!(0, supplier.searches(), "the Supplier is never asked");
+    assert_eq!(
+        0,
+        pdqm_stub::searches(&supplier).await,
+        "the Supplier is never asked"
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
-    let supplier = supplier().await?;
+    // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
+    // the identifier answers an empty searchset.
+    let supplier = pdqm_stub::supplier(&[]).await;
     for transaction in [Transaction::Search, Transaction::Match] {
-        let answer = step(&supplier.base_url(), transaction)?
+        let answer = step(&pdqm_stub::base_url(&supplier), transaction)?
             .header(
                 &patient(LOCAL_NAMESPACE, "SENTINEL-UNKNOWN")?,
                 &OnBehalfOf::Gateway,
@@ -193,8 +203,10 @@ async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
 
 #[tokio::test]
 async fn several_matched_patients_give_no_header() -> TestResult {
-    let supplier = supplier().await?;
-    supplier.add(&[(LOCAL_SYSTEM, CLIENT_ID)], true)?;
+    // NOTE: PDQm §2:3.119.4.1.3 Case 5: several certain matches under
+    // onlyCertainMatches are answered with none, while ITI-78 returns both.
+    let supplier =
+        pdqm_stub::answering(&[known(), Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID)])], &[]).await;
     let searched = ask(&supplier, Transaction::Search).await?;
     assert!(
         matches!(
@@ -226,9 +238,9 @@ async fn an_outage_is_unavailable_never_no_match() -> TestResult {
 
 #[tokio::test]
 async fn a_header_s_debug_output_shows_no_value() -> TestResult {
-    let supplier = supplier().await?;
+    let supplier = supplier().await;
     let header = found(
-        step(&supplier.base_url(), Transaction::Search)?
+        step(&pdqm_stub::base_url(&supplier), Transaction::Search)?
             .header(
                 &patient(LOCAL_NAMESPACE, CLIENT_ID)?,
                 &OnBehalfOf::Gateway,

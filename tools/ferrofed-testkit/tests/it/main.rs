@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The testkit's own suite: the proxy, the seed builder, the harness PIX
-//! Manager, the harness PDQm Supplier and the harness care services directory
+//! The testkit's own suite: the proxy, the seed builder and the harness care
+//! services directory
 //! offline against stub nodes and the IHE clients, the operator console
 //! against a running gateway, the vendored MyHealth@EU, eHDSI and Xt-EHR
 //! material the architecture cites, the unreachable base, the container harness
@@ -23,7 +23,6 @@ mod keycloak_recipe;
 mod mcsd;
 mod myhealth_eu;
 mod national_connector;
-mod pdq;
 mod pmir;
 mod proxy;
 mod seed;

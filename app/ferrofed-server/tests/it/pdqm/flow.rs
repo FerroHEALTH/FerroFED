@@ -18,12 +18,12 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::registry::read_registry;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub::{self, Entry};
 use ferrofed_testkit::unreachable;
 use http::StatusCode;
 
 use super::{
-    ASK_ALL, CLIENT_ID, LOCAL, MASTER, MASTER_ID, demographics_state, gateway, local_query,
+    ASK_ALL, CLIENT_ID, LOCAL, MASTER, MASTER_ID, demographics_state, gateway, known, local_query,
     manager, pdqm, pixm, settings, supplier, tables,
 };
 use crate::facade::{
@@ -64,13 +64,13 @@ async fn resolves_through(transaction: &str) -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), transaction),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), transaction),
     )?;
 
     let (status, text) = call(app.clone(), post(body(&local_query())?)?).await?;
@@ -105,7 +105,10 @@ async fn resolves_through(transaction: &str) -> TestResult {
         "the client's identifier reaches the Supplier only: {at_pix}"
     );
     assert!(
-        pdq.bodies().iter().all(|sent| !sent.contains(MASTER_ID)),
+        pdqm_stub::bodies(&pdq)
+            .await
+            .iter()
+            .all(|sent| !sent.contains(MASTER_ID)),
         "the Supplier is asked by the client's identifier"
     );
     assert!(!text.contains(MASTER_ID), "the master identity stays in");
@@ -140,13 +143,13 @@ async fn an_identifier_in_a_namespace_the_step_does_not_handle_skips_it() -> Tes
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let dir = tempfile::tempdir()?;
     let (app, _state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
     assert_eq!(
         MASTER, NAMESPACE,
@@ -157,7 +160,7 @@ async fn an_identifier_in_a_namespace_the_step_does_not_handle_skips_it() -> Tes
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(
         0,
-        pdq.searches() + pdq.matches(),
+        pdqm_stub::searches(&pdq).await + pdqm_stub::matches(&pdq).await,
         "the Supplier is not asked"
     );
     assert_eq!(
@@ -174,14 +177,15 @@ async fn an_identifier_the_supplier_knows_no_patient_for_is_not_resolved_anywher
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = PdqSupplier::start().await?;
-    pdq.add(&[(LOCAL, "SENTINEL-OTHER-5k2p"), (MASTER, MASTER_ID)], true)?;
+    // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
+    // the identifier answers an empty searchset.
+    let pdq = pdqm_stub::supplier(&[]).await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
 
     let (status, text) = call(app.clone(), post(body(&local_query())?)?).await?;
@@ -215,17 +219,17 @@ async fn several_matched_patients_refuse_the_resolution_and_fail_the_query() -> 
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
-    pdq.add(
-        &[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")],
-        true,
-    )?;
+    let pdq = pdqm_stub::supplier(&[
+        known(),
+        Entry::new(&[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")]),
+    ])
+    .await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
 
     let (status, text) = call(app.clone(), post(body(&local_query())?)?).await?;
@@ -343,13 +347,13 @@ async fn neither_identifier_reaches_a_log_line_a_metric_or_a_node() -> TestResul
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), "iti-119"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-119"),
     )?;
     let logs = crate::support::Logs::default();
     let capture = ferrofed_server::telemetry::subscriber(
@@ -381,22 +385,22 @@ async fn a_reload_that_changes_the_supplier_url_asks_the_new_supplier() -> TestR
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let first = supplier().await?;
-    let second = supplier().await?;
+    let first = supplier().await;
+    let second = supplier().await;
     let dir = tempfile::tempdir()?;
     let registry = registry(&a.uri(), &b.uri(), "");
     let boot = settings(
         dir.path(),
         &registry,
         ASK_ALL,
-        &tables(&pix.uri(), &first.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&first), "iti-78"),
     )?;
     let running = Federation::load(&boot)?.ok_or("a registry is configured")?;
     let fresh = settings(
         dir.path(),
         &registry,
         ASK_ALL,
-        &tables(&pix.uri(), &second.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&second), "iti-78"),
     )?;
     let next = running
         .reloaded(&fresh, read_registry(&fresh))?
@@ -409,10 +413,14 @@ async fn a_reload_that_changes_the_supplier_url_asks_the_new_supplier() -> TestR
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(
         1,
-        second.searches(),
+        pdqm_stub::searches(&second).await,
         "the reloaded step asks the new Supplier"
     );
-    assert_eq!(0, first.searches(), "the old Supplier is no longer asked");
+    assert_eq!(
+        0,
+        pdqm_stub::searches(&first).await,
+        "the old Supplier is no longer asked"
+    );
     Ok(())
 }
 
@@ -421,13 +429,13 @@ async fn options_declares_the_steps_budget_beside_the_n38_timeouts() -> TestResu
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let dir = tempfile::tempdir()?;
     let (app, _state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &tables(&pix.uri(), &pdq.base_url(), "iti-78"),
+        &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
     let request = http::Request::options("/").body(axum::body::Body::empty())?;
     let (status, text) = call(app, request).await?;

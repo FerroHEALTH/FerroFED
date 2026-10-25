@@ -38,7 +38,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub;
 use http::{Request, StatusCode, header};
 use serde_json::Value;
 
@@ -237,13 +237,13 @@ fn allergies_query() -> String {
 fn summarising(
     dir: &std::path::Path,
     (a, b): (&Server, &Server),
-    pdq: &PdqSupplier,
+    pdq: &Server,
     tables: &str,
 ) -> Result<Router, Box<dyn Error>> {
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
     let (app, _) = gateway_over(
         dir,
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(pdq)),
         &rows,
         ("", tables),
     )?;
@@ -327,7 +327,7 @@ async fn a_summary_is_recorded_as_the_same_query_over_its_rest_is() -> TestResul
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let tables = Sink::Accepting.tables(&repository);
     let app = summarising(dir.path(), (&a, &b), &pdq, &tables)?;
     let (status, text) = call(app.clone(), summary("")?).await?;
@@ -472,7 +472,7 @@ async fn a_list_is_recorded_alike_whatever_entries_the_face_writes_of_the_docume
 #[tokio::test]
 async fn the_summary_is_the_same_document_whatever_the_access_log_sink_does() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let mut documents = Vec::new();
     // NOTE: no specification governs this: our own design; a spool is keyed by its repository,
     // so each repository lives to the end and no later one reuses its port.

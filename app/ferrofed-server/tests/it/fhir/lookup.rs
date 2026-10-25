@@ -15,7 +15,7 @@
 use axum::Router;
 use axum::body::Body;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub;
 use http::{Request, StatusCode};
 use serde_json::Value;
 
@@ -60,12 +60,12 @@ async fn over(
     dir: &std::path::Path,
     rows: &[(&str, &str)],
     tables: &str,
-) -> Result<(Router, Server, Server, PdqSupplier), Box<dyn std::error::Error>> {
+) -> Result<(Router, Server, Server, Server), Box<dyn std::error::Error>> {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let (app, _) = gateway_over(
         dir,
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         rows,
         ("", tables),
     )?;
@@ -82,7 +82,7 @@ async fn a_patient_a_member_holds_is_found_as_the_supplier_holds_it_and_no_membe
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, of_patient()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -175,7 +175,7 @@ async fn a_search_by_demographics_or_without_an_identifier_is_refused_naming_ide
 -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     for query in [
         String::new(),
@@ -209,7 +209,7 @@ async fn a_search_by_demographics_or_without_an_identifier_is_refused_naming_ide
 async fn a_lookup_with_no_credential_is_refused() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let response = send_as_is(app, of_patient()?).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, response.status(), "§13.1, N25");
@@ -221,7 +221,7 @@ async fn a_lookup_with_no_credential_is_refused() -> TestResult {
 async fn the_capability_statement_declares_the_lookup_by_identifier() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(
         app,

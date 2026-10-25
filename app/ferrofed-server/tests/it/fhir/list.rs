@@ -24,7 +24,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::health_data_api;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdq::PdqSupplier;
+use ferrofed_testkit::pdqm_stub;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
 use http::{Request, StatusCode};
 use serde_json::Value;
@@ -83,7 +83,7 @@ pub(super) struct Members {
     pub(super) own_b: Server,
     pub(super) proxy_a: CapturingProxy,
     pub(super) proxy_b: CapturingProxy,
-    pdq: PdqSupplier,
+    pdq: Server,
 }
 
 impl Members {
@@ -103,7 +103,7 @@ impl Members {
             own_b,
             proxy_a,
             proxy_b,
-            pdq: supplier().await?,
+            pdq: supplier().await,
         })
     }
 
@@ -134,7 +134,11 @@ impl Members {
         let table = format!("[fhir]\nbase = \"{FHIR}\"\n");
         let text = text_registered(
             dir,
-            (&self.a.uri(), &self.b.uri(), &self.pdq.base_url()),
+            (
+                &self.a.uri(),
+                &self.b.uri(),
+                &pdqm_stub::base_url(&self.pdq),
+            ),
             &rows,
             &members,
             (federation, tables),
@@ -358,7 +362,7 @@ async fn a_native_member_is_asked_for_the_list_by_its_ehr_id_alone() -> TestResu
 async fn with_no_native_member_the_list_holds_the_summary_written_on_request_alone() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -568,14 +572,14 @@ async fn a_list_that_asked_no_member_is_recorded_once_naming_where_the_patient_r
     use ferrofed_testkit::atna_feed::FeedRepository;
 
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let tables = audit_tables(&repository, "");
     let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
     let (app, _) = super::gateway_over(
         dir.path(),
-        (&a.uri(), &b.uri(), &pdq.base_url()),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
         &rows,
         ("", &tables),
     )?;
@@ -608,7 +612,7 @@ async fn a_list_that_asked_no_member_is_recorded_once_naming_where_the_patient_r
 async fn the_capability_statement_declares_the_document_search() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = supplier().await?;
+    let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(
         app,
@@ -694,7 +698,11 @@ async fn listed_with_a_failed_resolution(
     let dir = tempfile::tempdir()?;
     let text = text_registered(
         dir.path(),
-        (&members.a.uri(), &members.b.uri(), &members.pdq.base_url()),
+        (
+            &members.a.uri(),
+            &members.b.uri(),
+            &pdqm_stub::base_url(&members.pdq),
+        ),
         &[],
         &own,
         (federation, &resolvers),
