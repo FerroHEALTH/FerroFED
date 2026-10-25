@@ -360,7 +360,41 @@ slow one.
    ```
 
    which writes the same document with each missing value marked.
-8. **The version bump lands as its own pull request** and merges like any
+8. **The CE marking is affixed and the EU database entry made, once a
+   release is placed on the market as an EHR system.** No release does
+   either yet. They start with the first release placed on the market or put
+   into service as an EHR system under Chapter III of Regulation (EU)
+   2025/327, from the dates of its Art 105 that the
+   [regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html#the-obligations-and-their-dates)
+   page lists, and both are the manufacturer's: Cadasto B.V., through the
+   owner, never the working session.
+
+   - **The CE marking** (Art 30(1)(f), Art 41) is affixed only by the
+     manufacturer (Regulation (EC) No 765/2008 Art 30(1)), only once the
+     release's EU declaration of conformity is issued (step 7), and before
+     the release is published (Art 41(2)). It goes "visibly, legibly and
+     indelibly" on the accompanying documents (Art 41(1)): the information
+     sheet and the instructions for use the release attaches, and the
+     declaration. One marking covers Regulation (EU) 2024/2847 as well,
+     whose Art 30(1) has software carry it on the declaration or on its
+     accompanying website, and whose Art 30(5) has it show conformity with
+     both acts. The version-bump pull request adds it to the two book pages,
+     so the copies the lane attaches carry it.
+   - **The EU database entry** (Art 30(1)(h), Art 49(2)) is made for the
+     first such release, and updated for every later one, before the
+     release is published: the data Art 49(4) lists, with the results of
+     the European digital testing environment (Art 40). The owner enters
+     it, or the authorised representative where one is appointed, and keeps
+     the database's confirmation with the release's archive copy (§ After
+     the tag, step 5).
+
+   The step cannot be completed yet. The Commission establishes the
+   database (Art 49(1)), and the list of data to enter is a delegated act
+   under Art 49(4) that is not adopted. The weekly `ehds-acts` job of
+   `pin-freshness.yml` watches Art 49(4) (`WATCHED_ARTICLES` in
+   `scripts/checks/ehds-acts.sh`) and files an issue when an act under it
+   is adopted, and this step is completed then.
+9. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`). Run
@@ -591,7 +625,7 @@ planned under, so step 1 moves that milestone on by one.
    no merge queue, so merge it once `conclusion` is green.
 5. **The version bump lands on the branch** from a `release/vX.Y.Z` branch,
    in a pull request into `release/0.0.x`, following § Before the tag steps 2
-   to 8 with the patch's version:
+   to 9 with the patch's version:
    - the version files move to the patch version;
    - `scripts/release/changelog.sh --assemble X.Y.Z YYYY-MM-DD` on the
      branch finds only the fix's fragments, so the section it writes holds
