@@ -94,7 +94,7 @@ fn patient_id(id: &(String, String)) -> NationalId<'_> {
 /// patient the test patient in a contained `Patient`.
 fn dispensation() -> String {
     format!(
-        r##"{{"resourceType":"MedicationDispense","meta":{{"profile":["{MPD_MEDICATION_DISPENSE}"]}},"extension":[{{"url":"http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded","valueDateTime":"2026-10-24T10:00:00Z"}}],"contained":[{{"resourceType":"Patient","id":"pat","identifier":[{{"system":"{}","value":"{}"}}]}}],"status":"completed","medicationCodeableConcept":{{"text":"Synthetic medicine A"}},"subject":{{"reference":"#pat"}},"performer":[{{"actor":{{"display":"Synthetic pharmacist"}}}}],"authorizingPrescription":[{{"identifier":{{"system":"urn:oid:2.999.5.1","value":"{RX_A_IDENTIFIER}"}}}}],"quantity":{{"value":30,"unit":"tablet"}}}}"##,
+        r##"{{"resourceType":"MedicationDispense","meta":{{"profile":["{MPD_MEDICATION_DISPENSE}"]}},"extension":[{{"url":"http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded","valueDateTime":"2026-10-24T10:00:00Z"}}],"contained":[{{"resourceType":"Patient","id":"pat","identifier":[{{"system":"{}","value":"{}"}}]}}],"status":"completed","medicationCodeableConcept":{{"text":"Synthetic medicine A"}},"identifier":[{{"system":"urn:oid:2.999.6.1","value":"SYNTHETIC-MD-NATIONAL-1"}}],"subject":{{"reference":"#pat"}},"performer":[{{"actor":{{"display":"Synthetic pharmacist"}}}}],"authorizingPrescription":[{{"identifier":{{"system":"urn:oid:2.999.5.1","value":"{RX_A_IDENTIFIER}"}}}}],"quantity":{{"value":30,"unit":"tablet"}}}}"##,
         PATIENT.namespace(),
         PATIENT.value()
     )
@@ -119,8 +119,9 @@ fn searchset(base: &str, resources: &[&str]) -> String {
     )
 }
 
-/// A member's own FHIR endpoint holding `prescription`, its id `id`, and
-/// creating a dispensation as [`CREATED`].
+/// A member's own FHIR endpoint holding `prescription`, its id `id`, holding
+/// no dispensation of the patient yet, and creating a dispensation as
+/// [`CREATED`].
 async fn own_endpoint(prescription: &'static str, id: &str) -> Server {
     let server = Server::start().await;
     let json = |body: String| {
@@ -134,6 +135,12 @@ async fn own_endpoint(prescription: &'static str, id: &str) -> Server {
     Mock::given(method("GET"))
         .and(path(format!("/fhir/MedicationRequest/{id}")))
         .respond_with(json(prescription.to_owned()))
+        .mount(&server)
+        .await;
+    // The patient's dispensations the duplicate check reads: none yet.
+    Mock::given(method("GET"))
+        .and(path("/fhir/MedicationDispense"))
+        .respond_with(json(searchset(&server.uri(), &[])))
         .mount(&server)
         .await;
     Mock::given(method("POST"))

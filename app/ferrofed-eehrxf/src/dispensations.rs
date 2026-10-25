@@ -15,7 +15,11 @@
 //! contained `Patient` its local reference names), and each prescription it
 //! was dispensed against (`authorizingPrescription`, the dataset's
 //! `relatedRequest`), by its business identifier, beside which the literal
-//! reference the face wrote may stand. The resource itself travels on as its
+//! reference the face wrote may stand, and its own business identifier
+//! (`MedicationDispense.identifier`), which the face reads the owner's
+//! dispensations by before it writes, so a dispensation a client sends again
+//! after a time-out is refused, never written twice (hazard I-12 of the
+//! clinical safety risk file). The resource itself travels on as its
 //! text, never rewritten, so a prescription named by the face's reference
 //! alone, which the member cannot resolve, is refused. Which parts route it
 //! is our own design: no specification governs it.
@@ -56,13 +60,17 @@ impl std::fmt::Debug for Named {
 
 /// A received dispensation, read for its routing.
 ///
-/// `Debug` shows how many identifiers and prescriptions it names, never one.
+/// `Debug` shows how many identifiers and prescriptions it names, and that it
+/// carries a business identifier, never one.
 #[derive(Clone)]
 pub struct Received {
     /// Each identifier of the patient with both a system and a value.
     pub patient: Vec<(String, String)>,
     /// Each prescription it was dispensed against, in its order.
     pub named: Vec<Named>,
+    /// Its business identifier, the first `identifier` with both a system
+    /// and a value.
+    pub identifier: (String, String),
     /// Every constraint of the profiles the check did not evaluate.
     pub unevaluated: Vec<Unevaluated>,
 }
@@ -72,6 +80,7 @@ impl std::fmt::Debug for Received {
         f.debug_struct("Received")
             .field("patient", &self.patient.len())
             .field("named", &self.named.len())
+            .field("identifier", &!self.identifier.1.is_empty())
             .field("unevaluated", &self.unevaluated.len())
             .finish()
     }
@@ -110,6 +119,13 @@ pub enum Unread {
         "an authorizingPrescription names its prescription by neither an identifier nor a reference"
     )]
     Unnamed,
+    /// The dispensation carries no business identifier with both a system
+    /// and a value, by which a dispensation sent again is told from a new
+    /// one.
+    #[error(
+        "the dispensation carries no identifier with a system and a value in MedicationDispense.identifier, by which the gateway refuses one written twice"
+    )]
+    NoIdentifier,
     /// An `authorizingPrescription` names its prescription by a reference
     /// alone, which the member the dispensation reaches unchanged cannot
     /// resolve.
@@ -179,6 +195,13 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
     if named.iter().any(|one| one.identifier.is_none()) {
         return Err(Unread::ReferenceOnly);
     }
+    // NOTE: no specification governs this: our own design; MPD 1.0.0 leaves the identifier
+    // optional, and without it a dispensation sent again cannot be told from a new one.
+    let identifier = dispense
+        .identifier
+        .iter()
+        .find_map(pair)
+        .ok_or(Unread::NoIdentifier)?;
     Ok(Received {
         patient: dispense
             .subject
@@ -186,6 +209,7 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
             .map(|subject| patient(subject, &dispense.contained))
             .unwrap_or_default(),
         named,
+        identifier,
         unevaluated: conformance.unevaluated().to_vec(),
     })
 }
@@ -319,6 +343,7 @@ mod tests {
     const DISPENSE: &str = r##"{"resourceType":"MedicationDispense","meta":{"profile":["http://hl7.eu/fhir/mpd/StructureDefinition/MedicationDispense-eu-mpd"]},
       "extension":[{"url":"http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded","valueDateTime":"2026-10-16T10:00:00Z"}],
       "contained":[{"resourceType":"Patient","id":"pat","identifier":[{"system":"urn:oid:2.999.1","value":"SYNTHETIC-1"}]}],
+      "identifier":[{"system":"urn:oid:2.999.6.1","value":"SYNTHETIC-MD-1"}],
       "status":"completed","medicationCodeableConcept":{"text":"Synthetic medicine A"},
       "subject":{"reference":"#pat"},
       "performer":[{"actor":{"display":"Synthetic pharmacist"}}],
@@ -328,6 +353,10 @@ mod tests {
     #[test]
     fn a_dispensation_names_its_patient_and_its_prescription() {
         let received = read(DISPENSE, &mpd()).unwrap();
+        assert_eq!(
+            received.identifier,
+            ("urn:oid:2.999.6.1".to_owned(), "SYNTHETIC-MD-1".to_owned())
+        );
         assert_eq!(
             received.patient,
             [("urn:oid:2.999.1".to_owned(), "SYNTHETIC-1".to_owned())]
@@ -350,6 +379,26 @@ mod tests {
         for text in ["[]", "{", r#"{"resourceType":"MedicationRequest"}"#] {
             assert!(read(text, &mpd()).unwrap_err().is_form(), "{text}");
         }
+    }
+
+    #[test]
+    fn a_dispensation_with_no_business_identifier_is_refused() {
+        let unidentified = DISPENSE.replace(
+            r#""identifier":[{"system":"urn:oid:2.999.6.1","value":"SYNTHETIC-MD-1"}],"#,
+            "",
+        );
+        assert!(matches!(
+            read(&unidentified, &mpd()),
+            Err(Unread::NoIdentifier)
+        ));
+        let no_system = DISPENSE.replace(
+            r#"{"system":"urn:oid:2.999.6.1","value":"SYNTHETIC-MD-1"}"#,
+            r#"{"value":"SYNTHETIC-MD-1"}"#,
+        );
+        assert!(matches!(
+            read(&no_system, &mpd()),
+            Err(Unread::NoIdentifier)
+        ));
     }
 
     #[test]

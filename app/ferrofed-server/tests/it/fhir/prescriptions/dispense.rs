@@ -35,6 +35,12 @@ use crate::support::{call, send};
 const SERVED_BOTH: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
      [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n";
 
+/// The system of the business identifier of every test dispensation.
+pub(in crate::fhir) const DISPENSATION_SYSTEM: &str = "urn:oid:2.999.6.1";
+
+/// The value of the business identifier of every test dispensation.
+pub(in crate::fhir) const DISPENSATION_VALUE: &str = "SYNTHETIC-MD-1";
+
 /// The member's own id of the dispensation it creates.
 pub(super) const CREATED: &str = "md-1";
 
@@ -45,6 +51,7 @@ pub(in crate::fhir) fn dispensation(authorizing: &str) -> String {
         r##"{{"resourceType":"MedicationDispense","meta":{{"profile":["{MPD_MEDICATION_DISPENSE}"]}},
   "extension":[{{"url":"http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded","valueDateTime":"2026-10-16T10:00:00Z"}}],
   "contained":[{{"resourceType":"Patient","id":"pat","identifier":[{{"system":"{NAMESPACE}","value":"{PATIENT}"}}]}}],
+  "identifier":[{{"system":"{DISPENSATION_SYSTEM}","value":"{DISPENSATION_VALUE}"}}],
   "status":"completed","medicationCodeableConcept":{{"text":"Synthetic medicine A"}},
   "subject":{{"reference":"#pat"}},
   "performer":[{{"actor":{{"display":"Synthetic pharmacist"}}}}],
@@ -107,6 +114,14 @@ pub(super) async fn members(
         Mock::given(method("POST"))
             .and(path("/fhir/MedicationDispense"))
             .respond_with(created.clone())
+            .mount(own)
+            .await;
+        // The patient's dispensations the duplicate check reads: none, below
+        // the priority of any read a test mounts.
+        Mock::given(method("GET"))
+            .and(path("/fhir/MedicationDispense"))
+            .respond_with(page(searchset("https://cdr.example.org", &[], None)))
+            .with_priority(10)
             .mount(own)
             .await;
     }
@@ -703,4 +718,122 @@ mod recorded {
         );
         Ok(())
     }
+}
+
+/// Node A's own endpoint answering the patient's dispensations with
+/// `answer`, above the default answer of none.
+async fn dispensations_at_a(members: &Members, answer: ResponseTemplate) {
+    Mock::given(method("GET"))
+        .and(path("/fhir/MedicationDispense"))
+        .respond_with(answer)
+        .with_priority(1)
+        .mount(&members.own_a)
+        .await;
+}
+
+/// A dispensation node A already holds, under the test dispensation's
+/// business identifier.
+fn already_held() -> String {
+    format!(
+        r#"{{"resourceType":"MedicationDispense","id":"md-0","status":"completed","identifier":[{{"system":"{DISPENSATION_SYSTEM}","value":"{DISPENSATION_VALUE}"}}],"medicationCodeableConcept":{{"text":"Synthetic medicine A"}},"subject":{{"reference":"Patient/p-a"}}}}"#
+    )
+}
+
+#[tokio::test]
+async fn a_dispensation_the_owner_already_holds_is_refused_as_a_duplicate_with_nothing_written()
+-> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    dispensations_at_a(
+        &members,
+        page(searchset(
+            "https://cdr-a.example.org",
+            &[&already_held()],
+            None,
+        )),
+    )
+    .await;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(
+        gateway(&members, dir.path())?,
+        post(&dispensation(BY_IDENTIFIER))?,
+    )
+    .await?;
+    assert_eq!(StatusCode::CONFLICT, status, "{text}");
+    assert!(text.contains("\"code\":\"duplicate\""), "{text}");
+    let held = face_id("node-a-mpd", EHR_A, "md-0")?;
+    assert!(
+        text.contains(&format!("MedicationDispense/{held}")),
+        "the refusal names the dispensation already written: {text}"
+    );
+    assert!(none_written(&members).await?, "nothing is written twice");
+    for capture in members.proxy_a.journal() {
+        let outside = format!(
+            "{} {}",
+            capture.path,
+            capture.query.as_deref().unwrap_or_default()
+        );
+        assert!(
+            !outside.contains(DISPENSATION_VALUE),
+            "N33: the identifier is matched at the gateway, never sent: {outside}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn another_dispensation_of_the_patient_is_no_duplicate_and_is_written() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    let other = already_held().replace(DISPENSATION_VALUE, "SYNTHETIC-MD-OTHER");
+    dispensations_at_a(
+        &members,
+        page(searchset("https://cdr-a.example.org", &[&other], None)),
+    )
+    .await;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(
+        gateway(&members, dir.path())?,
+        post(&dispensation(BY_IDENTIFIER))?,
+    )
+    .await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    assert_eq!(1, creates(&members.own_a).await?.len(), "one create");
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_owner_that_does_not_answer_the_duplicate_check_writes_nothing() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    dispensations_at_a(&members, ResponseTemplate::new(503)).await;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(
+        gateway(&members, dir.path())?,
+        post(&dispensation(BY_IDENTIFIER))?,
+    )
+    .await?;
+    assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status, "{text}");
+    assert!(
+        text.contains("cannot be ruled out"),
+        "a read that fails is never taken as no duplicate: {text}"
+    );
+    assert!(none_written(&members).await?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_dispensation_with_no_business_identifier_is_refused_naming_the_element() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    let dir = tempfile::tempdir()?;
+    let unidentified = dispensation(BY_IDENTIFIER).replace(
+        &format!(
+            r#"  "identifier":[{{"system":"{DISPENSATION_SYSTEM}","value":"{DISPENSATION_VALUE}"}}],
+"#
+        ),
+        "",
+    );
+    assert!(!unidentified.contains(DISPENSATION_VALUE));
+    let (status, text) = call(gateway(&members, dir.path())?, post(&unidentified)?).await?;
+    assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
+    assert!(text.contains("MedicationDispense.identifier"), "{text}");
+    assert!(none_written(&members).await?);
+    Ok(())
 }

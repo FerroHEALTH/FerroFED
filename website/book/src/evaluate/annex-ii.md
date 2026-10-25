@@ -51,7 +51,7 @@ not-applicable.
 
 | Point | Requirement | Evidence | Status | Issue |
 |---|---|---|---|---|
-| 1.1 | "shall achieve the performance intended by its manufacturer" | the clinical safety risk file: [the logging component](clinical-safety.md#the-logging-component), [the interoperability component](clinical-safety.md#the-interoperability-component), [overall residual risk](clinical-safety.md#overall-residual-risk) | partial | [#1345](https://github.com/FerroHEALTH/FerroFED/issues/1345), [#1346](https://github.com/FerroHEALTH/FerroFED/issues/1346), [#1350](https://github.com/FerroHEALTH/FerroFED/issues/1350) |
+| 1.1 | "shall achieve the performance intended by its manufacturer" | the clinical safety risk file: [the logging component](clinical-safety.md#the-logging-component), [the interoperability component](clinical-safety.md#the-interoperability-component), [overall residual risk](clinical-safety.md#overall-residual-risk) | partial | [#1345](https://github.com/FerroHEALTH/FerroFED/issues/1345), [#1350](https://github.com/FerroHEALTH/FerroFED/issues/1350) |
 | 1.2 | "can be supplied and installed, taking into account the instructions and information provided by the manufacturer" | [Installation](../operate/instructions-for-use.md#installation); [Check, start and admit](../operate/production.md#9-check-start-and-admit); [the compatibility policy](../operate/upgrading.md#the-compatibility-policy); `scripts/checks/production-guide.sh` | met | - |
 | 1.3 | "its interoperability, safety and security features uphold the rights of natural persons" | [Rights of natural persons](natural-person-rights.md#summary); [Art 8: restricting access](natural-person-rights.md#art-8-restricting-access); [Art 9: information on access](natural-person-rights.md#art-9-information-on-access); `app/ferrofed-server/tests/it/consent_withheld/mod.rs` (`a_withheld_exclusion_reads_exactly_as_a_member_that_does_not_know_the_patient`); `app/ferrofed-server/tests/it/access/search.rs` (`the_persons_search_finds_every_access_to_their_data`); `app/ferrofed-server/tests/it/fhir/receive/write.rs` (`a_caller_confined_to_one_patient_writes_only_into_its_ehr`); `app/ferrofed-server/tests/it/access/emergency.rs` (`a_declared_emergency_purpose_marks_the_record`); [Art 5: inserting information](natural-person-rights.md#art-5-inserting-information); `app/ferrofed-server/tests/it/fhir/receive/inserted.rs` (`a_persons_own_document_is_marked_as_inserted_by_them_with_no_identifier_added`) | partial | [#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#666](https://github.com/FerroHEALTH/FerroFED/issues/666), [#667](https://github.com/FerroHEALTH/FerroFED/issues/667), [#668](https://github.com/FerroHEALTH/FerroFED/issues/668) |
 | 1.4 | "interoperability and compatibility are reliable and secure" | [B2: gateway to member node](threat-model.md#b2-gateway-to-member-node); `scripts/checks/fhir-validator.sh`; `app/ferrofed-server/tests/it/fhir/summary.rs` (`the_summary_is_an_eps_document_from_both_members_and_no_identifier_reaches_a_node`) | partial | [#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289), [#675](https://github.com/FerroHEALTH/FerroFED/issues/675) |
@@ -90,8 +90,8 @@ of the access log page.
 - **1.1:** the [risk file](clinical-safety.md#overall-residual-risk) leaves
   the repository's part of hazard L-07 of the logging component, keeping
   each record for its period and limiting who reads it, at S3, P2 with the
-  deployment, and I-03 and I-12 of the interoperability component open
-  until the controls their rows name are built, so that component is
+  deployment, and I-03 of the interoperability component open until the
+  controls its row names are built, so that component is
   not offered for its Annex II purpose.
 - **1.3:** [Rights of natural persons](natural-person-rights.md) holds
   each right of Chapter II to the components. Restriction (Art 8), the
@@ -112,12 +112,12 @@ of the access log page.
   dispensations from members that serve them in the HL7 Europe MPD
   profiles
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)),
-  with hazards I-03 and I-12 of the interoperability component open.
+  with hazard I-03 of the interoperability component open.
   Imaging, test results and
   discharge reports have no interface.
 - **2.2 and 2.3:** a release receives patient summaries, and dispensations,
-  written to the member that owns their prescription, with hazard I-12
-  open. Prescriptions are served,
+  written to the member that owns their prescription. Prescriptions are
+  served,
   never received, and imaging, test results and discharge reports cannot
   be received.
 - **3.4:** each record states its retention period by its origins and
