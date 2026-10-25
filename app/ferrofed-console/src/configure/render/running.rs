@@ -12,12 +12,13 @@
 //! (`GET /admin/config/running`), never from a revision's text, so a
 //! secret is named by the file it is read from and never by a value.
 
-use ferrofed_registry::revision::RevisionId;
 use ferrofed_registry::running::{RunningConfig, Section, Setting, Source};
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{INPUT, SELECT, described_by};
-use ferrohealth_ui::view::template::settings::{Setting as Row, setting_row, settings_panel};
+use ferrohealth_ui::view::template::settings::{
+    Setting as Row, ValueSource, setting_row, settings_panel,
+};
 use leptos::prelude::*;
 
 use crate::configure::render::Loaded;
@@ -237,25 +238,21 @@ fn tag(item: &toml::Value) -> String {
     }
 }
 
-/// Where the value of a setting comes from, in words.
-fn source(setting: &Setting, revision: Option<RevisionId>) -> String {
+/// Where the value of `setting` comes from, when it is not where the page
+/// says the settings come from: the running revision of a managed
+/// configuration, the file of one that is not.
+fn marker(setting: &Setting, managed: bool) -> Option<ValueSource> {
     match setting.source {
-        Source::File => tr(Msg::SettingsSourceFile),
-        Source::Environment => tr(Msg::SettingsSourceEnvironment),
-        Source::Revision => tr_with(
-            Msg::SettingsSourceRevision,
-            &[(
-                "revision",
-                revision.map(|id| id.to_string()).unwrap_or_default().into(),
-            )],
-        ),
-        _ => tr(Msg::SettingsSourceDefault),
+        Source::Environment => Some(ValueSource::Environment),
+        Source::Default => Some(ValueSource::Default),
+        Source::File => managed.then_some(ValueSource::File),
+        _ => None,
     }
 }
 
 /// The value cell of `setting` as it runs: the value or the secret's
-/// reference, the value the next start takes, and where it comes from.
-fn value_cell(setting: &Setting, revision: Option<RevisionId>) -> AnyView {
+/// reference, and the value the next start takes.
+fn value_cell(setting: &Setting) -> AnyView {
     let value = match (&setting.secret, &setting.value) {
         (Some(secret), _) if secret.set => match &secret.reference {
             Some(file) => view! {
@@ -284,8 +281,6 @@ fn value_cell(setting: &Setting, revision: Option<RevisionId>) -> AnyView {
     view! {
         {value}
         {next}
-        " "
-        <span class="fui-small fui-muted">{source(setting, revision)}</span>
     }
     .into_any()
 }
@@ -301,10 +296,10 @@ fn rows(running: &RunningConfig, section: Section) -> Vec<AnyView> {
                 Row {
                     label: tr(label),
                     description: tr(description),
-                    value: value_cell(setting, running.revision),
+                    value: value_cell(setting),
                     keys: vec![setting.key.clone()],
                     next_start: setting.restart,
-                    source: None,
+                    source: marker(setting, managed),
                 },
                 managed,
             )
@@ -493,7 +488,7 @@ pub fn edit(loaded: &Loaded<'_>, section: Section) -> AnyView {
                 drawn
             } else {
                 view! {
-                    {value_cell(setting, running.revision)}
+                    {value_cell(setting)}
                     " "
                     <span class="fui-small fui-muted">{tr(Msg::SettingsReadOnlyHere)}</span>
                 }
@@ -506,7 +501,7 @@ pub fn edit(loaded: &Loaded<'_>, section: Section) -> AnyView {
                     value,
                     keys: vec![setting.key.clone()],
                     next_start: setting.restart,
-                    source: None,
+                    source: marker(setting, true),
                 },
                 true,
             )

@@ -74,7 +74,13 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
     assert!(body.contains("Per-node timeout"), "{body}");
     assert!(body.contains("5,000 ms"), "{body}");
     assert!(body.contains("5,500 ms at the next start"), "{body}");
-    assert!(body.contains("from revision 1"), "{body}");
+    assert_eq!(
+        1,
+        body.matches(r#"class="fui-setting-source""#).count(),
+        "a value the running revision sets is the page's own source, unmarked; the one \
+         nothing sets says Default: {body}"
+    );
+    assert!(body.contains("Default"), "{body}");
     assert!(body.contains("federation.per_node_timeout_ms"), "{body}");
     assert!(body.contains("Next start"), "{body}");
     assert!(body.contains("localized</code>"), "{body}");
@@ -94,10 +100,7 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
 
     let consent = page(&service, &session, "/configuration/consent").await?;
     assert!(consent.contains("Disclose exclusions"), "{consent}");
-    assert!(
-        consent.contains("from an environment override"),
-        "{consent}"
-    );
+    assert!(consent.contains("From the environment"), "{consent}");
 
     let stored = page(&service, &session, "/configuration/stored-queries").await?;
     assert!(
@@ -224,7 +227,13 @@ async fn with_revisions_off_the_settings_tabs_show_alone_and_read_only()
     let body = page(&service, &session, "/configuration").await?;
     assert!(body.contains("Revisions are off on this gateway"), "{body}");
     assert!(body.contains("Per-node timeout"), "{body}");
-    assert!(body.contains("from the configuration file"), "{body}");
+    assert_eq!(
+        1,
+        body.matches(r#"class="fui-setting-source""#).count(),
+        "with revisions off the file is the page's own source, unmarked; the one \
+         nothing sets says Default: {body}"
+    );
+    assert!(!body.contains("From the file"), "{body}");
     assert!(!body.contains(r#"href="/configuration/members""#), "{body}");
     assert!(!body.contains("/edit\""), "{body}");
     assert!(!body.contains("Save as"), "{body}");
@@ -281,7 +290,7 @@ async fn the_authentication_tab_shows_the_national_contact_point_read_only()
         "XA",
         "Introspection secret",
         "/run/secrets/synthetic-introspection",
-        "from the configuration file",
+        "From the file",
     ] {
         assert!(body.contains(shown), "{shown}: {body}");
     }
