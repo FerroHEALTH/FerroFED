@@ -24,6 +24,225 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-10-25
+
+Security fixes until 2031-10-25, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- The Kubernetes example moved to `deploy/kubernetes/base/`: apply it with
+  `kubectl apply -k deploy/kubernetes/base` in place of
+  `kubectl apply -f deploy/kubernetes/`. Its NetworkPolicy now admits only
+  your reverse proxy's namespace (`ingress-nginx` until you edit it) and the
+  console to the gateway port, so a client inside the cluster that called
+  the gateway directly needs a peer of its own; the StatefulSet's
+  `terminationGracePeriodSeconds` is 50 and its governing Service is the
+  new `ferrofed-admin`. Kubernetes refuses a change of a StatefulSet's
+  `serviceName`, so run `kubectl delete statefulset ferrofed
+  --cascade=orphan` before you apply; the pods and their audit spool claims
+  stay, and the new StatefulSet adopts them (#638).
+- Each `[[fhir.receive]]` names, in `dependencies`, every package of its
+  `package`'s dependency closure (each a `.tgz` or an unpacked directory),
+  and the package of the MyHealth@EU value sets its profiles bind. A
+  `[[fhir.receive]]` whose packages lack one a manifest names is refused at
+  start and by `config check`, naming the missing package. For the HL7
+  Europe Patient Summary, the book's receiving page lists the packages
+  (#808).
+
+### Added
+
+- The three medication clusters of the openEHR international Clinical
+  Knowledge Manager that the medication order's slots admit,
+  `CLUSTER.medication_authorisation`, `CLUSTER.medication_order_summary` and
+  `CLUSTER.medication_supply_amount` (all DRAFT v0), vendored under CC BY-SA
+  by `scripts/vendor/openehr-ckm.sh` for the openEHR mapping of
+  prescriptions (#1043).
+- The console is ready for more languages: every string it draws, its
+  handlers' plain-text answers and a revision diff's change words among
+  them, comes from its catalog, and the stray-literal check runs with an
+  empty baseline. A pseudo-locale, `[server] locale = "qps"`, draws every
+  word accented and two fifths longer, and a browser journey holds every
+  page to fitting 1440 and 390 px in it (#1162).
+- The patient summary the FHIR face writes translates a code in no preferred
+  code system through the terminology server `[eehrxf.terminology]` names:
+  each `equivalent` or `equal` match of `ConceptMap/$translate` into a
+  preferred system is added after the original coding, and a translation the
+  server refuses or does not answer fails the summary. With no server
+  configured, the code is kept as recorded, under Art 10(7) of the eHealth
+  Network Guidelines on Patient Summary
+  ([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
+- `OPTIONS {base}/` reports `latency_ms_p50` and `latency_ms_p95` for each
+  member endpoint, the median and the 95th percentile of the last 100
+  requests the gateway sent it, and leaves both out for an endpoint it has
+  not asked; the operator console shows the two side by side on the node,
+  endpoint and self-description lists and in the topology (#1220).
+- The admin listener answers the running configuration at
+  `GET /admin/config/running`, behind the operator scope: each
+  deployment-wide setting with the value the replica runs, where it comes
+  from (the file, an environment override, the running revision or the
+  default), its default, and whether a change waits for the next start,
+  with the value that start takes. A secret is named by its file, never by
+  its value. Under `config.ui = "managed"`, `PUT /admin/config/settings`
+  saves a revision with named settings changed, applied as any revision
+  (#1235).
+- The running configuration of the admin listener and the operator
+  console's new Authentication tab show who may call: the audience, the
+  operator scope, each token issuer and each trusted issuer, with every claim
+  name, the correlation header and the added countries of a national contact
+  point the file declares. The tab is read-only, since only the file sets
+  `[auth]` and `[trust]`, and a secret is named by its file alone (#1269).
+- The public MyHealth@EU, eHDSI and Xt-EHR material is vendored with its
+  provenance: the MyHealth@EU FHIR guides (core, Patient Summary,
+  ePrescription and eDispensation, laboratory, discharge and imaging reports,
+  vaccination), the NCPeH API guide at its current build 9.1.1-ci, the OpenNCP
+  Transformation Manager's CDA Schematrons and eHDSI coded element list, the
+  newer HL7 Europe laboratory (2.1.0) and discharge report (1.0.0) releases,
+  the Xt-EHR models 0.3.0 the MyHealth@EU guides use, and the Xt-EHR Metadata
+  Foundation guide; the eHDSI CDA reference test documents and every published
+  Xt-EHR deliverable are cached, since they state no licence. Decisions A51,
+  A60 to A72, A81 and A102 are re-checked against them, and A66 adds a patient
+  lookup by identifier on the FHIR face, which Xt-EHR D5.1 asks of every
+  producer EHR system (#1290).
+- The FHIR face looks a patient up by identifier, `GET {fhir-base}/Patient?identifier=system|value`, as Xt-EHR D5.1
+  §3.4.6 asks of a producer EHR system: the patient is resolved at the gateway and no member is asked, the answer is
+  a `searchset` with the `Patient` the PDQm Supplier holds when a member holds the patient, an identifier no member
+  holds and a restricted patient both answer the empty `searchset`, a search by demographics is refused, a lookup
+  that finds the patient is recorded in the access log, and `metadata` declares the search (#1294).
+- Vendored the packages the MyHealth@EU guides and HL7 Europe Laboratory Report 2.1.0 and Hospital Discharge
+  Report 1.0.0 depend on and the repository lacked: HL7 Europe Imaging Report 1.0.0-alpha, HL7 Europe Extensions
+  0.1.0, IHE MHD 4.2.2 and International Patient Summary 2.0.1, committed, and HL7 Terminology 7.2.0 and 7.4.0 and
+  the R5 to R4 cross-version extensions 0.0.1-snapshot-2, pinned in the cache, with a test that fails when one of
+  those manifests names a package no corpus holds (#1306).
+- `deploy/kubernetes/` is a kustomize package, and every release attaches
+  it as `ferrofed-vX.Y.Z-kubernetes.tar.gz` with the gateway and console
+  images pinned by digest. Its base adds a `preStop` sleep matching the
+  drain delay, topology spread over zones and nodes, a headless Service for
+  the admin listeners and a NetworkPolicy that admits the reverse proxy,
+  the scraper and the console alone; its components add the operator
+  console, an Ingress or a Gateway API route for each, a Prometheus
+  Operator ServiceMonitor and an egress policy. The book's Kubernetes page
+  says how a changed configuration is reloaded without a restart (#638).
+- `telemetry.otlp_endpoint` and `metrics.otlp_endpoint` take an `https://`
+  collector, reached over TLS with the platform's trust roots, and
+  `[telemetry.otlp_tls]` and `[metrics.otlp_tls]` add `trust_roots_file`
+  and a client identity (`client_identity` or `client_identity_file`) for
+  mutual TLS, each read and checked at start, so a remote collector needs
+  no forwarder beside the gateway (#644).
+- A national contact point's national connector end to end: the harness
+  national connector in `ferrofed-testkit`, with synthetic Implementing
+  Regulation (EU) 2026/2099 Annex attributes, reads the patient summary, the
+  document list and the prescriptions over two FerroEHR nodes and posts a
+  dispensation, behind `FERROFED_E2E`, and a restricting member leaves no
+  trace in any answer. The book's new page, A national contact point, says
+  how to connect and configure one and what stays with the contact point
+  (#735, #524).
+- A document received on the FHIR face is validated in full by
+  FerroBRIDGE's `ferrobridge-validator`: every constraint of its category's
+  profiles and of the profile each entry claims or its slice names, every
+  invariant and terminology binding included. An error refuses the document
+  with `422`, each warning is returned in the outcome of the write, and
+  every constraint the validator did not evaluate is named there. A
+  `required` binding the packages cannot decide is asked of the
+  `[eehrxf.terminology]` server, and one it does not answer refuses the
+  document with `502`. `scripts/vendor/fhir-packages.sh` fetches the
+  packages of the Patient Summary's dependency closure that the repository
+  does not commit (#808).
+
+### Changed
+
+- Moved the quickstart and the end-to-end harness to FerroEHR 5.4.1 and Keycloak 26.8.1, pinned by digest, and the CI tools to zizmor 1.31.1,
+  promtool 3.15.1, the HL7 FHIR Validator 7.0.3 and Chrome for Testing 156.0.8078.47, with the W3C DID Resolution draft of 2026-10-24
+  vendored (#1164).
+- The console's configuration page opens on the deployment-wide settings,
+  one tab per section as FerroUI's design draws them (Federation
+  behaviour, Fan-out and paging, Consent, Stored queries, Access log and
+  FHIR face), each setting with its value, its source, its key and its
+  Next start mark, read from the gateway's running configuration. Edit on
+  a tab saves the changed settings as a revision with a plain form post.
+  With configuration revisions off, the settings tabs show read-only.
+  `/configuration` now opens Federation behaviour; the members are at
+  `/configuration/members` (#1235).
+- Decisions A67 to A72 on the national contact point are re-checked against
+  the Xt-EHR deliverables D6.1 and D6.2, the closest published text of the
+  exchange format while the Commission has published no draft act, and each
+  is confirmed. The deliverables are pinned by `scripts/vendor/xt-ehr.sh`
+  (cache only, no licence statement), and the book's page A national contact
+  point names the sources and records that the MyHealth@EU Requirements
+  Catalogue 9.0.0 is behind EU Login and not read (#1265).
+- `SECURITY.md` states the response times every product of the Ferro family
+  states: an acknowledgement within about 5 business days in place of seven
+  days, an initial assessment within about 10 business days, both best
+  effort, and a fixed release published within 7 days of the confirmed
+  assessment for a Critical vulnerability, 30 days for High, 90 days for
+  Medium and with the next release for Low (#645).
+- The interoperability component asks its terminology server
+  (`[eehrxf.terminology]`) through FerroBRIDGE's published
+  `ferrobridge-term` 0.1.131 in place of FerroFED's own client: the same
+  `$translate`, `$lookup` and `$validate-code` in FHIR R4, over the same
+  credential and TLS material, mutual TLS and private trust roots included.
+  A code the server does not know is now named as such rather than by the
+  HTTP status it came with, and every other refusal still carries the
+  server's status. `eehrxf` 0.0.28 changes its terminology seam:
+  `TerminologyServer` takes the system, code, target, value set and
+  candidate it asks about and answers the matches, the display or the
+  result, in place of the operations' whole `Parameters`, and
+  `TerminologyError` gains `NotFound`; an implementation of the seam
+  outside FerroFED changes with it
+  ([#925](https://github.com/FerroHEALTH/FerroFED/issues/925)).
+
+### Fixed
+
+- `scripts/gh/project.sh updates` finds the FerroFED Roadmap again: it looks
+  the board up through `repositoryOwner(login:)`, which resolves an
+  organisation project, in place of `user(login:)`, which cannot (#1229).
+- The compose file every release carries runs the operator console beside
+  the gateway under a `console` profile (`docker compose --profile console
+  up`), from `ghcr.io/ferrohealth/ferrofed-console` at the release's
+  version, with the gateway's hardening, bound to 127.0.0.1, its OIDC
+  client secret read as a file secret (#1258).
+- A read of a prescription or a dispensation by its locator id on the FHIR
+  face is held to the consent pre-filter as the search is: the gateway names
+  the patient behind the id's `ehr_id` in the `[access_log]
+  patient_namespaces`, and a member the pre-filter denies is asked nothing
+  and answers as an id the face never wrote, with no trace of the
+  restriction. Before, the read went to that member (#1270).
+- A document list on the FHIR face that lists the gateway's summary writes
+  one access record even when it asked no member, naming the members the
+  patient resolved at and the `ehr_id` at each, since the list tells the
+  caller that they hold the patient's record (Regulation (EU) 2025/327
+  Annex II 3.2). Before, it wrote none (#1271).
+- An ITI-20 syslog record the gateway wrote just before it ended its
+  connection to the Audit Record Repository could be lost: the connection
+  was dropped with the repository's TLS session tickets unread, so the
+  socket was reset. The gateway now stops every audit trail on its `SIGTERM`
+  drain, and each forwarder closes its connection with a TLS `close_notify`
+  first (RFC 5425 §4.4), as it now does before it reconnects. `ihe-atna`
+  and `ehds-logging` move to 0.2.6 and `ihe-iti` to 0.0.50 (#1278).
+- A received dispensation's answer named as not evaluated only the
+  invariants of `MedicationDispense-eu-mpd`'s root element, and none of its
+  `required` bindings, so the invariants of every other element it carries
+  and every binding were passed in silence. Each invariant of an element the
+  dispensation carries or a slice it fills, and each `required` binding of
+  the profile and of `Medication-eu-mpd`, is now listed as a `warning` of
+  type `not-supported` (FHIR R4 conformance-rules.html §2.1.0.6,
+  terminologies.html §4.1.5.1, #1291).
+- The quickstart `compose.yaml` sends the usage report by default, as every
+  FerroHEALTH compose file does, with its instance id on a new
+  `ferrofed-state` volume: `FERROFED__USAGE_REPORT__ENABLED=false`, and
+  `FERROEHR__USAGE_REPORT__ENABLED=false` for the four nodes, in your shell
+  or `.env` stop it. `scripts/checks/usage-report-off.sh` holds test lanes
+  alone again and no longer reads the compose file (#1296).
+- The end-to-end harness's SanteMPI no longer fails a run on SanteMPI's
+  transient `IOException` from its publish-and-subscribe queue. Provisioning
+  a security application or an identity domain, and an ITI-93 feed, are
+  tried again a bounded number of times with a backoff. A record SanteMPI
+  already holds is not created again, and any other refusal still fails at
+  once (#1302).
+- The end-to-end harness's SanteMPI reads the identity domains it holds
+  from `ASGN_AUT_TBL`, the table of the pinned 2.5 line, where it read a
+  SanteDB 3 table that image lacks and stopped every run that provisions
+  SanteMPI (#1308).
+
 ## [0.0.12] - 2026-10-24
 
 Security fixes until 2031-10-24, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -5530,7 +5749,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...HEAD
+[0.0.13]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...v0.0.10

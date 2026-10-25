@@ -37,7 +37,7 @@ This page is not legal advice.
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
 | Art 6, rectification | the access service and the controller | routes the controller's correction | not the gateway's |
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
-| Art 7(2), cross-border transmission | the national contact point | the national route is planned | partial |
+| Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, and prescriptions and dispensations where members serve them | partial |
 | Art 7(3), transmission to social security | the healthcare provider | outside the intended purpose | not the gateway's |
 | Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries, and dispensations where members serve them | partial |
 | Art 8, restricting access | the person, the consent service and the member | carries the restriction out and hides its fact | met |
@@ -248,9 +248,11 @@ relays, and the record names the professional of the other Member State
 ([A request a national contact point relays](../operate/access-log.md#a-request-a-national-contact-point-relays);
 `access/relayed.rs`:
 `the_record_names_the_relayed_professional_and_provider_as_asserted`).
-Answering a contact point's request for a patient's documents is planned
-([Cross-border access](regulatory-status.md#cross-border-access),
-[#524](https://github.com/FerroHEALTH/FerroFED/issues/524)).
+It answers a contact point's request for a patient's documents on the
+FHIR face: the patient summary, the document list and the prescriptions,
+and a dispensation the contact point posts
+([A national contact point](../integrate/national-contact-point.md),
+[Cross-border access](regulatory-status.md#cross-border-access)).
 
 Art 7(3): persons may request "a healthcare provider to transmit a part of
 their personal electronic health data to a clearly identified recipient in

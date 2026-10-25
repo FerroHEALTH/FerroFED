@@ -422,23 +422,61 @@ Released on 2026-10-24.
   changes, says why the fix did not ship alone
   ([#1237](https://github.com/FerroHEALTH/FerroFED/issues/1237)).
 
+### v0.0.13: the national contact point, and full validation of a received document
+
+Released on 2026-10-25.
+
+- A national contact point's national connector served on the FHIR face:
+  it reads the patient summary, the document list and the prescriptions
+  and posts a dispensation, held by an end-to-end test over two FerroEHR
+  nodes with a harness connector, and a restricting member leaves no trace
+  in any answer
+  ([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735),
+  [A national contact point](../integrate/national-contact-point.md)).
+  Decisions A67 to A72 re-checked against the Xt-EHR deliverables and the
+  public MyHealth@EU material, vendored with its provenance
+  ([#1265](https://github.com/FerroHEALTH/FerroFED/issues/1265), [#1290](https://github.com/FerroHEALTH/FerroFED/issues/1290), [#1306](https://github.com/FerroHEALTH/FerroFED/issues/1306)).
+- A patient looked up by identifier on the FHIR face, resolved at the
+  gateway with no member asked, and recorded in the access log when it
+  finds the patient
+  ([#1294](https://github.com/FerroHEALTH/FerroFED/issues/1294)).
+- A received document validated in full by FerroBRIDGE's
+  `ferrobridge-validator`: every invariant, binding and entry profile, with
+  each constraint it did not evaluate named in the outcome
+  ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808), [#1291](https://github.com/FerroHEALTH/FerroFED/issues/1291),
+  [Receiving a document](receiving-documents.md)).
+- A summary code in no preferred code system translated through the
+  configured terminology server, asked through FerroBRIDGE's
+  `ferrobridge-term`
+  ([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213), [#925](https://github.com/FerroHEALTH/FerroFED/issues/925)).
+- A read by locator id held to the consent pre-filter, a document list
+  that asked no member recorded as an access, and an ITI-20 record no
+  longer lost when the gateway ends its repository connection
+  ([#1270](https://github.com/FerroHEALTH/FerroFED/issues/1270), [#1271](https://github.com/FerroHEALTH/FerroFED/issues/1271), [#1278](https://github.com/FerroHEALTH/FerroFED/issues/1278)).
+- The Kubernetes package, with the gateway and console images pinned by
+  digest; the OTLP export over TLS; the 95th percentile latency beside the
+  median; the running configuration on the admin listener with the
+  console's settings and Authentication tabs; and the operator console in
+  the release's compose file
+  ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#1220](https://github.com/FerroHEALTH/FerroFED/issues/1220), [#1235](https://github.com/FerroHEALTH/FerroFED/issues/1235), [#1269](https://github.com/FerroHEALTH/FerroFED/issues/1269), [#1258](https://github.com/FerroHEALTH/FerroFED/issues/1258),
+  [The Kubernetes package](../operate/kubernetes.md)).
+
 ## Planned
 
 Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.13: the national contact point's connector, with a harness connector
-and its end-to-end test, which waits on a published FerroPIX image
-([#524](https://github.com/FerroHEALTH/FerroFED/issues/524), [#735](https://github.com/FerroHEALTH/FerroFED/issues/735)); the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the other priority categories of the interoperability component
-and prescriptions from openEHR medication data through a FHIRconnect
-mapping ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
-conformity work ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)); and
-operations packaging ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#645](https://github.com/FerroHEALTH/FerroFED/issues/645)). The changelog fragments in
+v0.0.14: the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the other priority
+categories of the interoperability component and prescriptions from openEHR
+medication data through a FHIRconnect mapping
+([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
+conformity work ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)). The
+changelog fragments in
 [`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
 list what is merged on `main` for the next release.
 
-v0.0.14: the patient summary, built, re-checked against the Art 15(1)
+Also in v0.0.14: the patient summary, built, re-checked against the Art 15(1)
 implementing act once it is adopted
 ([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)); the logging
 component, built, re-checked against the Art 36(1)
@@ -532,6 +570,12 @@ These are the ones to know before you deploy FerroFED; the
   committed `COMPOSITION` reaches its node byte for byte, a `DV_IDENTIFIER`
   inside it included (§5.4, N22;
   [Where the patient identifier stops](../how-it-works/identifier-hygiene.md#what-the-outbound-gate-reads)).
+- **A received document is checked only as far as the validator can
+  evaluate it.** A constraint `ferrobridge-validator` cannot evaluate is
+  listed in the outcome of the write as a `warning`, not refused, and a
+  `required` binding the packages cannot decide is listed as not evaluated
+  when no terminology server is configured
+  ([The check against the profiles](receiving-documents.md#the-check-against-the-profiles)).
 - **Part of ITS-REST is not served.** The gateway never federates the
   DEMOGRAPHIC area: it answers `501` there unless you name one member to
   serve it, and `501` for any ITS-REST path it does not serve

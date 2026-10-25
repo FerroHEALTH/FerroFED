@@ -296,6 +296,7 @@ event, and its frequency is the event's:
 | Confirm a prescription member's contract | at admission, and when a member declared in `[[fhir.serve]]` changes its CDR product or version | [The member contract](../integrate/prescriptions.md#the-member-contract) |
 | Settle a prescription identifier collision | when the `PrescriptionIdentifierCollision` integrity incident is raised: two members hold one prescription identifier, and every dispensation for it is refused `409`, so agree with both members' operators which one owns it | [Every answer](../integrate/prescriptions.md#every-answer), [Integrity incidents](registry.md#integrity-incidents) |
 | Export the identity state | before a system that replaces FerroFED takes over, on each replica | [Exporting the identity state](identity-state-export.md), [Decommissioning](decommissioning.md) |
+| Keep each receiving category's packages complete | when you move a `[[fhir.receive]]` `package` or one of its dependencies to a new version: name every package of its dependency closure in `dependencies`, which `config check` holds to the manifests | [Receiving a document](../evaluate/receiving-documents.md) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its
@@ -345,10 +346,15 @@ deployment in the EU must plan for are:
   issuer's tokens state them, and an assurance level only for an issuer
   with `[trust.issuer.assurance]`
   ([The person behind an access](access-log.md#the-person-behind-an-access)).
-- **A received document is not yet checked in full.** Its profiles'
-  invariants, its bindings and each entry's own profile are not all
-  evaluated, and the constraints the check cannot evaluate are listed
-  ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)).
+- **A received document is checked only as far as the validator can
+  evaluate it.** Every invariant, binding and entry profile is evaluated,
+  and a constraint the validator cannot evaluate (an invariant whose
+  expression calls a function it cannot answer, a value set no package
+  carries, a reference outside the document) is listed in the outcome of the
+  write as a `warning`, not refused. A `required` binding the packages
+  cannot decide is asked of your terminology server; with no server
+  configured it is listed as not evaluated
+  ([The check against the profiles](../evaluate/receiving-documents.md#the-check-against-the-profiles)).
 - **A code in no preferred code system is translated only through your
   terminology server.** With `[eehrxf.terminology]` set, the patient summary
   the gateway writes adds each `equivalent` or `equal` translation after the

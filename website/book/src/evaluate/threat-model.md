@@ -153,7 +153,7 @@ front of it.
 | I | a patient identifier or a caller in a log line, a metric or a span | P6 | the request log carries no body, AQL text, header value or path; labels come from closed sets; spans carry route templates, ids and counts; the trace id is the gateway's own | `app/ferrofed-server/tests/it/request_log.rs`, `metrics/hygiene.rs`, `traces/`; `track10` asserts the logs clean |
 | I | the audit spool read on disk | P9 | the spool is `0700` with files `0600`, and the gateway refuses to start when it is open to other users | `app/ferrofed-server/tests/it/audit_repository.rs`; **carried by the deployment:** an encrypted volume |
 | T, R | audit records lost with a spool | P9 | records are delivered in order from disk; a lost spool loses them for good, and `audit_feed` or `audit_repository` reads `degraded` while records wait | [Losing a spool](../operate/container.md#losing-a-spool); **carried by the deployment:** durable storage per replica |
-| I | metrics or spans pushed in cleartext | P3 | OTLP is plain gRPC: run the collector beside the gateway; a credential in the URL is refused outside development | **open:** [#644](https://github.com/FerroHEALTH/FerroFED/issues/644) |
+| I | metrics or spans pushed in cleartext | P3 | an `https://` collector is reached over TLS with the platform's roots, and `[telemetry.otlp_tls]` and `[metrics.otlp_tls]` add private trust roots and a client identity for mutual TLS; an `http://` collector is plain gRPC, so run it beside the gateway; a credential in an `http://` URL is refused outside development | `app/ferrofed-server/tests/it/traces/tls.rs` (`a_span_reaches_a_mutual_tls_collector_only_with_the_identity_and_the_roots`); **carried by the deployment:** an `https://` collector for one off the host ([Tracing](../operate/tracing.md#a-remote-collector-over-tls)) |
 | R | no record of which caller read which EHR | P2 | every federated query, stored-query execution, routed read and routed write that reached a node is recorded with the verified caller, the patient, each `ehr_id` and each endpoint asked; the record is stored before the answer leaves, and an access whose record cannot be stored is `503 access-unrecorded` with none of the data; outside development a gateway with a registry refuses every `[audit] destination` but `repository`; the node audits the conveyed caller too (N24) | [The access log](../operate/access-log.md); `[audit]`, `[access_log]`; `app/ferrofed-server/tests/it/access/`, `feed_audit/config.rs` |
 
 ## B7: the callers' issuers
@@ -213,9 +213,10 @@ control from you, or an issue that is open:
     expires, and a refresh is
     [#643](https://github.com/FerroHEALTH/FerroFED/issues/643); its
     sign-in has no per-client rate limit of its own.
-11. **Telemetry export** is plain gRPC to the collector
-    ([#644](https://github.com/FerroHEALTH/FerroFED/issues/644)).
-12. **Egress.** The Kubernetes example leaves egress open so the gateway
-    reaches its members and services wherever they are; restricting it is
-    yours ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638) covers
-    the packaging).
+11. **Telemetry export** is plain gRPC to an `http://` collector; name
+    an `https://` one for a collector off the host
+    ([A remote collector over TLS](../operate/tracing.md#a-remote-collector-over-tls)).
+12. **Egress.** The Kubernetes package's base leaves egress open so the
+    gateway reaches its members and services wherever they are; its
+    `egress` component restricts it to the destinations you list, which
+    are yours to fill in ([Kubernetes](../operate/kubernetes.md)).
