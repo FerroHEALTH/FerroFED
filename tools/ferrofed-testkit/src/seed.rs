@@ -412,6 +412,70 @@ pub async fn feed(
     Ok(answer.status())
 }
 
+/// Feeds `cross_reference` as one record per member, sent as the Patient
+/// Identity Source `source`, a Basic user-id and password.
+///
+/// Each member's record is a conditional update
+/// `PUT [base]/Patient?identifier=<member domain>|<ehr_id>` of a `Patient`
+/// carrying that `ehr_id` and the patient's identifier.
+///
+/// A Manager such as FerroPIX links the records through the patient's
+/// identifier when its domain is an authoritative one. Returns the status
+/// of each feed, in the order of the members.
+///
+/// # Errors
+///
+/// The errors of [`feed`].
+pub async fn feed_records_as(
+    pix_base: &str,
+    source: (&str, &str),
+    cross_reference: &CrossReferenceSeed,
+) -> Result<Vec<StatusCode>, SeedError> {
+    use fhir_types::r4::human_name::HumanName;
+    use fhir_types::r4::identifier::Identifier;
+    use fhir_types::r4::patient::Patient;
+
+    let patient = cross_reference.patient;
+    let identifier = |system: &str, value: &str| Identifier {
+        system: Some(system.into()),
+        value: Some(value.into()),
+        ..Identifier::default()
+    };
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(SeedError::Client)?;
+    let mut statuses = Vec::with_capacity(cross_reference.ehrs.len());
+    for (domain, ehr_id) in &cross_reference.ehrs {
+        let body = Patient {
+            identifier: vec![
+                identifier(&domain.system(), &ehr_id.to_string()),
+                identifier(&patient.namespace(), &patient.value()),
+            ],
+            name: vec![HumanName {
+                family: Some("Synthetic".into()),
+                given: vec![patient.value().as_str().into()],
+                ..HumanName::default()
+            }],
+            ..Patient::default()
+        };
+        let body = serde_json::to_vec(&body).map_err(SeedError::Body)?;
+        let mut url = url::Url::parse(pix_base)
+            .and_then(|base| base.join("Patient"))
+            .map_err(PixBaseError)?;
+        url.query_pairs_mut()
+            .append_pair("identifier", &format!("{}|{ehr_id}", domain.system()));
+        let request = client
+            .put(url)
+            .basic_auth(source.0, Some(source.1))
+            .header(CONTENT_TYPE, "application/fhir+json")
+            .header(ACCEPT, "application/fhir+json")
+            .body(body);
+        let answer = send(request, "PUT /Patient?identifier= (ITI-104)".to_owned()).await?;
+        statuses.push(answer.status());
+    }
+    Ok(statuses)
+}
+
 /// Sends `request` and returns its answer when the node accepted it.
 async fn send(
     request: reqwest::RequestBuilder,

@@ -12,7 +12,8 @@
 //! `docs/specs/ihe-pixm/`, and it decides nothing a Manager decides on
 //! demographics: it cross-references the identifiers one fed `Patient` carries
 //! together, and the identifiers of every `Patient` that shares one of them.
-//! A FerroPIX instance replaces it in a differential run once one exists.
+//! It serves the offline suites; the end-to-end PIXm cases resolve through
+//! FerroPIX itself ([`ferropix`](crate::containers::ferropix)).
 //!
 //! - **ITI-104, Patient Identity Feed FHIR:** `PUT [base]/Patient?identifier=
 //!   <system>|<value>`, a conditional update (`CapabilityStatement-IHE.PIXm

@@ -79,6 +79,23 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
     digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
 };
 
+/// FerroPIX, the FerroHEALTH master patient index, whose PIXm Manager
+/// answers ITI-83 and takes the ITI-104 feed: the PIX Manager the end-to-end
+/// lane resolves patients through.
+pub const FERROPIX: PinnedImage = PinnedImage {
+    repository: "ghcr.io/ferrohealth/ferropix",
+    tag: "0.0.4",
+    digest: "sha256:7568cdb740fe3938d99ad51bdda47c464e10042a103e6d30b0f64d03496fbc73",
+};
+
+/// The PostgreSQL FerroPIX keeps its cross-reference in: the release FerroPIX
+/// 0.0.4 pins for its own tests and quickstart, PostgreSQL 18.
+pub const FERROPIX_POSTGRES: PinnedImage = PinnedImage {
+    repository: "postgres",
+    tag: "18.6",
+    digest: "sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6",
+};
+
 /// SanteMPI, SanteSuite's open-source master patient index, which answers
 /// PIXm ITI-83 and takes the PMIR ITI-93 feed: the deployable PIX Manager
 /// the identity binding is verified against.

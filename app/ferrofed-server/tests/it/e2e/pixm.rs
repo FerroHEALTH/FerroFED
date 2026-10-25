@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The federated query over two FerroEHR nodes, the patient resolved through
-//! the harness PIX Manager over ITI-83: only a member that knows the patient
-//! is asked, by its own `ehr_id` (§11.1; N7, N8, N33).
+//! FerroPIX, the family's PIX Manager, over ITI-83: only a member that knows
+//! the patient is asked, by its own `ehr_id` (§11.1; N7, N8, N33).
 
 use std::error::Error;
 
 use ferrofed_testkit::containers;
-use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::containers::ferropix::{self, CONSUMER, FerroPix, SOURCE};
+use ferrofed_testkit::proxy::CapturingProxy;
 use ferrofed_testkit::seed::{self, CrossReferenceSeed, DemoComposition, EhrDomain, PatientId};
 use http::StatusCode;
 use uuid::Uuid;
@@ -19,15 +20,49 @@ use crate::e2e::{
 };
 use crate::support::call;
 
-/// The `ehr_id` domains of node A and node B at the harness PIX Manager.
+/// The `ehr_id` domains of node A and node B at the PIX Manager.
 pub(crate) const DOMAIN_A: EhrDomain = EhrDomain::new(1);
 pub(crate) const DOMAIN_B: EhrDomain = EhrDomain::new(2);
 
-/// The two nodes, seeded, and the harness PIX Manager fed over ITI-104 with
-/// the patient at `ehrs`, plus an unrelated patient so both domains are known.
+/// The unrelated patient fed beside [`PATIENT`], so both domains are known.
+const OTHER: PatientId = PatientId::new(1, 39);
+
+/// FerroPIX with a capturing proxy in front of it, which counts the ITI-83
+/// calls the gateway makes.
+pub(crate) struct Pix {
+    /// FerroPIX and its database.
+    manager: FerroPix,
+    /// The proxy the gateway reaches FerroPIX through.
+    proxy: CapturingProxy,
+}
+
+impl Pix {
+    /// Returns the FHIR base the gateway asks, through the proxy.
+    pub(crate) fn base_url(&self) -> String {
+        format!("{}/fhir/", self.proxy.origin())
+    }
+
+    /// Returns FerroPIX's own origin, for a scenario that puts a proxy of its
+    /// own in front of it.
+    pub(crate) fn origin(&self) -> &str {
+        self.manager.origin()
+    }
+
+    /// Returns how many ITI-83 calls reached FerroPIX through the proxy.
+    pub(crate) fn queries(&self) -> usize {
+        self.proxy
+            .journal()
+            .iter()
+            .filter(|capture| capture.path.ends_with("/Patient/$ihe-pix"))
+            .count()
+    }
+}
+
+/// The two nodes, seeded, and FerroPIX fed over ITI-104 with the patient at
+/// `ehrs`, plus an unrelated patient so both domains are known.
 pub(crate) async fn nodes_and_pix(
     ehrs: Vec<(EhrDomain, Uuid)>,
-) -> Result<(containers::TwoNodes, PixManager), Box<dyn Error>> {
+) -> Result<(containers::TwoNodes, Pix), Box<dyn Error>> {
     let nodes = containers::two_nodes().await?;
     seed::seed(
         &nodes.a.api_root(),
@@ -41,14 +76,18 @@ pub(crate) async fn nodes_and_pix(
     .await?;
     nodes.a.proxy.clear_journal();
     nodes.b.proxy.clear_journal();
-    let pix = PixManager::start().await?;
+    let mut namespaces = vec![PATIENT.namespace()];
+    if OTHER.namespace() != PATIENT.namespace() {
+        namespaces.push(OTHER.namespace());
+    }
+    let manager = ferropix::ferropix(&namespaces, &[DOMAIN_A.system(), DOMAIN_B.system()]).await?;
     let fed = [
         CrossReferenceSeed {
             patient: PATIENT,
             ehrs,
         },
         CrossReferenceSeed {
-            patient: PatientId::new(1, 39),
+            patient: OTHER,
             ehrs: vec![
                 (
                     DOMAIN_A,
@@ -62,25 +101,37 @@ pub(crate) async fn nodes_and_pix(
         },
     ];
     for cross_reference in &fed {
-        let status = seed::feed(&pix.base_url(), cross_reference).await?;
-        assert_eq!(StatusCode::CREATED, status, "ITI-104 creates the Patient");
+        let statuses = seed::feed_records_as(
+            &manager.fhir_base(),
+            (SOURCE.user, SOURCE.password),
+            cross_reference,
+        )
+        .await?;
+        assert!(
+            statuses.iter().all(|status| *status == StatusCode::CREATED),
+            "ITI-104 creates each member's record: {statuses:?}"
+        );
     }
-    Ok((nodes, pix))
+    let proxy = CapturingProxy::start(manager.origin()).await?;
+    Ok((nodes, Pix { manager, proxy }))
 }
 
-/// The resolver configuration over the harness PIX Manager, under the
+/// The resolver configuration over FerroPIX, through its proxy, under the
 /// development profile, the only one that admits its plain `http`.
-pub(crate) fn pixm_resolver(pix: &PixManager) -> String {
+pub(crate) fn pixm_resolver(pix: &Pix) -> String {
     pixm_resolver_at(&pix.base_url())
 }
 
 /// The resolver configuration of [`pixm_resolver`], the Manager reached at
-/// `url`, for a scenario that puts a capturing proxy in front of it.
+/// `url`, for a scenario that puts a capturing proxy of its own in front of
+/// it. The gateway asks as FerroPIX's PIXm Consumer.
 pub(crate) fn pixm_resolver_at(url: &str) -> String {
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials]\nuser = \"{}\"\npassword = \"{}\"\n",
         DOMAIN_A.system(),
-        DOMAIN_B.system()
+        DOMAIN_B.system(),
+        CONSUMER.user,
+        CONSUMER.password
     )
 }
 

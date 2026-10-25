@@ -20,6 +20,10 @@
 //! The node profile also runs against a second CDR product, EHRbase, which
 //! [`ehrbase`] starts on its own pinned database image.
 //!
+//! The end-to-end lane resolves patients through FerroPIX, the family's
+//! PIX Manager, which [`ferropix`](mod@ferropix) starts on its own pinned
+//! database image.
+//!
 //! The identity binding runs against a deployable PIX Manager, SanteMPI,
 //! which [`santempi`](mod@santempi) starts and provisions on its own pinned
 //! database image.
@@ -42,6 +46,7 @@ use images::FERROEHR;
 
 pub mod database;
 pub mod ehrbase;
+pub mod ferropix;
 pub mod images;
 pub mod keycloak;
 pub mod restricted;
