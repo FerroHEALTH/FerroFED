@@ -36,7 +36,7 @@ use http::{HeaderMap, StatusCode};
 
 use crate::e2e::scenario::seed_both;
 use crate::e2e::{
-    Answer, TestResult, assert_no_patient_identifier_on_the_wire, dev_resolver, patient_query,
+    Answer, TestResult, assert_no_patient_identifier_on_the_wire, fixed_resolver, patient_query,
     query, registry_document,
 };
 use crate::support::{Logs, error_body, send_as_is};
@@ -64,7 +64,7 @@ fn gateway(
     let key_file = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
         "{}\n\n[server]\nbase_path = \"/fed\"\npublic_url = \"https://gateway.example.org/fed\"\n\n[signing]\nkey_file = {key_file}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
-        dev_resolver(),
+        fixed_resolver(),
         recipe.auth_against(idp.origin())
     );
     let resolved =

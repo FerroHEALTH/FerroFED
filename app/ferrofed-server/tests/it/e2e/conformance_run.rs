@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! `ferrofed conformance run` against the two FerroEHR nodes of the harness,
-//! configured as an operator configures a deployment: the development
+//! configured as an operator configures a deployment: the test kit's fixed
 //! cross-reference naming the patient at both, a stored-query registry, the
 //! gateway started in-process from the file, and the run seeding its own
 //! fixture through each node's ITS-REST writes.
@@ -21,7 +21,7 @@ use ferrofed_server::conformance::catalogue::{CATALOGUE, Kind, Scenario};
 use ferrofed_testkit::containers;
 use ferrofed_testkit::seed::DemoComposition;
 
-use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult, dev_resolver, registry_document};
+use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult, fixed_resolver, registry_document};
 use crate::support::{auth_toml, signing_toml, token};
 
 /// The live scenarios whose precondition the harness does not meet: both
@@ -142,14 +142,14 @@ fn configuration(
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
         "{}\n\n[server]\nrequest_timeout_ms = 60000\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[stored_queries]\npath = {}\n{}{}",
-        dev_resolver(),
+        fixed_resolver(),
         quoted(&document),
         quoted(&dir.join("definitions.redb")),
         signing_toml(),
         auth_toml()
     );
     let file = dir.join("ferrofed.toml");
-    std::fs::write(&file, text)?;
+    std::fs::write(&file, crate::support::injected(&text))?;
     Ok(file.display().to_string())
 }
 
