@@ -25,13 +25,14 @@ use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_smart::client::cache::TokenSource;
+use ferrohealth_smart::client::{ClientCredentials, Endpoint};
 use ihe_iti::pixm::Invocation;
-use openehr_its::rest::client::{
-    Credentials, CredentialsError, CredentialsProvider, InvalidCredentials,
-};
+use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
+use url::Url;
 use wiremock::matchers::{body_string_contains, header, method, path, query_param};
-use wiremock::{Mock, ResponseTemplate};
+use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
 use crate::support::registry;
 
@@ -418,26 +419,47 @@ async fn a_namespace_with_no_pix_domain_asks_nobody() {
     );
 }
 
-/// A grant's provider that hands out `token-1`, `token-2`, … and counts the
-/// tokens the Manager refused.
+/// A token endpoint that issues `token-1`, `token-2`, … with the
+/// client-credentials grant (RFC 6749 §4.4.3), one per request.
 #[derive(Debug, Default)]
-struct Tokens {
-    issued: AtomicUsize,
-    refused: AtomicUsize,
+struct Issuing(AtomicUsize);
+
+impl Respond for Issuing {
+    fn respond(&self, _request: &Request) -> ResponseTemplate {
+        let issued = self.0.fetch_add(1, Ordering::SeqCst) + 1;
+        ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": format!("token-{issued}"),
+            "token_type": "Bearer",
+            "expires_in": 300,
+        }))
+    }
 }
 
-#[async_trait::async_trait]
-impl CredentialsProvider for Tokens {
-    async fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        let issued = self.issued.fetch_add(1, Ordering::SeqCst) + 1;
-        Ok(Credentials::bearer(SecretString::from(format!(
-            "token-{issued}"
-        ))))
-    }
+/// The token endpoint of [`Issuing`], and a source of its tokens.
+async fn tokens() -> (Server, TokenSource) {
+    let endpoint = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(Issuing::default())
+        .mount(&endpoint)
+        .await;
+    let url = Url::parse(&format!("{}/token", endpoint.uri())).expect("the stub's URL");
+    let source = TokenSource::new(ClientCredentials::new(
+        Endpoint::Token(url),
+        "ferrofed".to_owned(),
+        SecretString::from("synthetic-client-secret"),
+    ))
+    .expect("the token client builds");
+    (endpoint, source)
+}
 
-    fn refused(&self) {
-        self.refused.fetch_add(1, Ordering::SeqCst);
-    }
+/// How many tokens `endpoint` issued.
+async fn issued(endpoint: &Server) -> usize {
+    endpoint
+        .received_requests()
+        .await
+        .expect("recording is on")
+        .len()
 }
 
 #[tokio::test]
@@ -459,11 +481,11 @@ async fn a_grant_token_the_manager_refuses_is_replaced_once() {
         .with_priority(2)
         .mount(&server)
         .await;
-    let tokens = Arc::new(Tokens::default());
+    let (endpoint, source) = tokens().await;
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Grant(tokens.clone()),
+            Authentication::Grant(source),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -476,18 +498,21 @@ async fn a_grant_token_the_manager_refuses_is_replaced_once() {
         resolved_at(&resolutions, "node-a"),
         "the refused token is replaced and the request sent once more (IUA ITI-72 §3.72.4.3): {resolutions:?}"
     );
-    assert_eq!(1, tokens.refused.load(Ordering::SeqCst));
-    assert_eq!(2, tokens.issued.load(Ordering::SeqCst));
+    assert_eq!(
+        2,
+        issued(&endpoint).await,
+        "the refused token is dropped and a new one obtained"
+    );
 }
 
 #[tokio::test]
 async fn a_grant_the_manager_keeps_refusing_leaves_the_member_unavailable() {
     let server = stub(401, "").await;
-    let tokens = Arc::new(Tokens::default());
+    let (endpoint, source) = tokens().await;
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Grant(tokens.clone()),
+            Authentication::Grant(source),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -505,6 +530,11 @@ async fn a_grant_the_manager_keeps_refusing_leaves_the_member_unavailable() {
             .expect("recording is on")
             .len(),
         "one ITI-83 call, sent at most twice"
+    );
+    assert_eq!(
+        2,
+        issued(&endpoint).await,
+        "the refused token is replaced once, and the second refusal ends it"
     );
 }
 

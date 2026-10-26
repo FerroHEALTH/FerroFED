@@ -106,13 +106,13 @@ pub fn service_authentication(
     let Some(Scheme::Oauth { grant, .. }) = scheme else {
         return Ok(authentication(section, scheme)?);
     };
-    let token = crate::upstream::UpstreamToken::provider(ClientCredentials::clone(grant)).map_err(
-        |source| ServiceAuthError::TokenTransport {
-            section: section.to_owned(),
-            source: Box::new(source),
-        },
-    )?;
-    Ok(Authentication::Grant(token))
+    let source =
+        ferrohealth_smart::client::cache::TokenSource::new(ClientCredentials::clone(grant))
+            .map_err(|source| ServiceAuthError::TokenTransport {
+                section: section.to_owned(),
+                source: Box::new(source),
+            })?;
+    Ok(Authentication::Grant(source))
 }
 
 /// The TLS material the table at `key` names: the client `identity` and the
