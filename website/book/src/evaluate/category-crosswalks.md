@@ -132,8 +132,19 @@ both and is checked against both: the orders and their supporting
 information sit in the `ServiceRequest` the report is based on, the
 specimens in `specimen`, and the results in `result`, each an
 `Observation-resultslab-eu-lab`. The same test holds it to the packages as
-it does the discharge report's. Building the laboratory report from member
-data and the FHIR face are planned
+it does the discharge report's.
+
+One stored query selects the laboratory reports,
+`eu.ferrofed.eehrxf::laboratory-report`, held beside the patient summary's
+and in their shape: every whole composition that contains an
+`openEHR-EHR-OBSERVATION.laboratory_test_result.v1`, the entry the openEHR
+international Clinical Knowledge Manager's template "Generic lab test result
+example simple" names (CKM cid `1013.26.408`, asset version 3). That
+template is a DRAFT CKM has not reviewed or published, so a reviewed
+template that names other entries would change the query; it is vendored
+by `scripts/vendor/openehr-ckm.sh` with its status recorded. A test holds the
+query to the template's entries. Building the laboratory report from the
+members' answers and the FHIR face are planned
 ([#666](https://github.com/FerroHEALTH/FerroFED/issues/666)), and the
 mapping of laboratory results waits on FerroBRIDGE's FHIRconnect contexts
 for the Laboratory Report profiles

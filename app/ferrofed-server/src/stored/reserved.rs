@@ -44,15 +44,16 @@ pub struct Reserved {
 }
 
 impl Reserved {
-    /// Wraps `store`, adding the patient summary's section queries.
+    /// Wraps `store`, adding the patient summary's section queries and the
+    /// laboratory report's query.
     ///
     /// # Errors
     ///
-    /// [`StoreError::Corrupt`] when a section query has no qualified name,
-    /// which no section meets.
+    /// [`StoreError::Corrupt`] when a query has no qualified name, which no
+    /// query meets.
     pub fn new(store: Box<dyn DefinitionStore>) -> Result<Self, StoreError> {
-        let held = ferrofed_eehrxf::patient_summary::definitions()
-            .map_err(|refused| StoreError::Corrupt(Box::new(refused)))?;
+        let held =
+            reserved::definitions().map_err(|refused| StoreError::Corrupt(Box::new(refused)))?;
         Ok(Self { store, held })
     }
 
@@ -170,7 +171,10 @@ mod tests {
         store.0.lock().unwrap().push(held("org.example::mine"));
         let reserved = Reserved::new(Box::new(store)).unwrap();
         let loaded = reserved.load().unwrap();
-        assert_eq!(Section::ALL.len() + 1, loaded.len());
+        assert_eq!(
+            ferrofed_eehrxf::reserved::definitions().unwrap().len() + 1,
+            loaded.len()
+        );
         let problems = Section::Problems.name().unwrap();
         let named = reserved.load_named(&problems).unwrap();
         assert_eq!(1, named.len());
@@ -206,7 +210,10 @@ mod tests {
             .insert_if_absent(&held("eu.ferrofed.eehrxf::patient-summary-problems"))
             .unwrap_err();
         assert!(matches!(refused, StoreError::ReadOnly), "{refused:?}");
-        assert_eq!(Section::ALL.len(), reserved.load().unwrap().len());
+        assert_eq!(
+            ferrofed_eehrxf::reserved::definitions().unwrap().len(),
+            reserved.load().unwrap().len()
+        );
         assert_eq!(
             Insertion::Stored,
             reserved

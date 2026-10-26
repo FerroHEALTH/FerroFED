@@ -102,7 +102,19 @@ async fn the_section_queries_are_listed_and_read_at_their_immutable_version() ->
     let (status, text) = call(app.clone(), get(&format!("{}::", reserved::NAMESPACE))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let listed: Vec<StoredQuery> = serde_json::from_str(&text)?;
-    assert_eq!(Section::ALL.len(), listed.len(), "§12.7: one per section");
+    assert_eq!(
+        reserved::definitions()?.len(),
+        listed.len(),
+        "§12.7: one per section and the laboratory report's"
+    );
+    let laboratory = ferrofed_eehrxf::laboratory::name()?;
+    assert!(
+        listed
+            .iter()
+            .any(|held| held.name == laboratory.as_str()
+                && held.q == ferrofed_eehrxf::laboratory::aql()),
+        "{laboratory} is listed with its text"
+    );
     for section in Section::ALL {
         let name = section.name()?;
         let held = listed
@@ -166,7 +178,11 @@ async fn a_put_into_the_reserved_namespace_is_refused_and_the_held_text_stands()
     let (status, text) = call(app.clone(), get(&format!("{}::", reserved::NAMESPACE))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let listed: Vec<StoredQuery> = serde_json::from_str(&text)?;
-    assert_eq!(Section::ALL.len(), listed.len(), "nothing was added");
+    assert_eq!(
+        reserved::definitions()?.len(),
+        listed.len(),
+        "nothing was added"
+    );
     let (status, text) = call(app, get(&format!("{problems}/1.0.0"))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let read: StoredQuery = serde_json::from_str(&text)?;

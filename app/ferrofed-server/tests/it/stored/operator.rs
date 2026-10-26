@@ -46,7 +46,7 @@ async fn an_operator_lists_every_held_version_with_its_text() -> TestResult {
         .collect();
     assert_eq!(vec![(NAME, "1.0.0"), (NAME, "1.1.0")], versions);
     assert_eq!(
-        Section::ALL.len(),
+        reserved::definitions()?.len(),
         own.len(),
         "the gateway's own section queries are listed beside them"
     );
@@ -106,7 +106,7 @@ async fn the_listing_marks_the_gateways_own_versions_read_only_and_a_stored_one_
                 .starts_with(&format!("{}::", reserved::NAMESPACE))
         })
         .collect();
-    assert_eq!(Section::ALL.len(), own.len(), "{text}");
+    assert_eq!(reserved::definitions()?.len(), own.len(), "{text}");
     assert!(own.iter().all(|entry| entry.read_only), "{text}");
     let held: Vec<&Listed> = page
         .items

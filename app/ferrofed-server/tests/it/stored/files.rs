@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::reserved;
 use ferrofed_registry::definition::store::StoreError;
 use ferrofed_registry::operator::{Page, StoredVersion};
@@ -395,7 +394,7 @@ fn an_empty_definition_directory_offers_an_empty_registry() -> TestResult {
     let state = AppState::build(&settings)?;
     let held = state.definitions().ok_or("the registry is offered")?;
     assert_eq!(
-        Section::ALL.len(),
+        reserved::definitions()?.len(),
         held.len(),
         "the gateway's own section queries alone"
     );

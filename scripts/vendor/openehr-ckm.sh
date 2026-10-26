@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/openehr-ckm.sh
 #
-# Vendors two corpora from the openEHR international Clinical Knowledge
+# Vendors three corpora from the openEHR international Clinical Knowledge
 # Manager (CKM). The first is the International Patient Summary template: the
 # template source (OET), the operational template CKM generates from it
 # (OPT), and CKM's record of the template, which states its status and asset
 # version. The patient summary's stored section queries select compositions
 # by the archetypes this template names for each section, and their test
-# reads the OET. The second is the medication archetypes an openEHR mapping
+# reads the OET. The second is the laboratory test result template
+# 1013.26.408, in the same three forms, which the laboratory report's stored
+# query selects compositions by. The third is the medication archetypes an openEHR mapping
 # of prescriptions and dispensations reads,
 # openEHR-EHR-INSTRUCTION.medication_order.v3 and
 # openEHR-EHR-ACTION.medication.v1, with the three clusters the order's
@@ -78,6 +80,35 @@ licenses archetypes and templates hosted in CKM under CC BY-SA
 archetype the template names declares the Creative Commons
 Attribution-ShareAlike 4.0 International License in its own \`licence\`
 field; the template's own \`licence\` field is empty. Committed verbatim with
+attribution, as CC BY-SA permits." "" "$read_by"
+
+laboratory=https://ckm.openehr.org/ckm/rest/v1/templates/1013.26.408
+version='CKM cid 1013.26.408, asset version 3, DRAFT (2021-10-18)'
+read_by=$'#666 (the stored section query of the laboratory report,\n  app/ferrofed-eehrxf)'
+
+pin commit generic-lab-test-result.oet "$version" "$laboratory/oet" \
+  3811e80486c9fa526881e1ec891ba320b92547794ffec5447618ee9cb0216ec3 "$licence" \
+  'The template source as CKM serves it.'
+pin commit generic-lab-test-result.opt "$version" "$laboratory/opt" \
+  544c7f87ef86262ea50144e9955019af5850f3e422bcbd20e1a1a54edbd0f325 "$licence" \
+  'The operational template CKM generates from the source.'
+pin commit generic-lab-test-result.ckm.xml "$version" "$laboratory" \
+  983bf7c3251b3f4b6bb9367d8ca56ad07839ba3c347a15a8f1dc2e3831efcbb4 "$licence" \
+  'CKM'"'"'s record of the template: its id, status, asset version and project.'
+pinned_corpus openehr-ckm-laboratory "openEHR CKM laboratory test result template" \
+  "the openEHR CKM laboratory test result template" \
+  "The template \"Generic lab test result example simple\" of the openEHR
+international Clinical Knowledge Manager, <https://ckm.openehr.org/ckm/>,
+template \`0ce44071-d6e5-4fa2-9a41-046f9b4aea66\`, CKM cid \`1013.26.408\`,
+in the project \"Laboratory test order & results reporting\" (CKM cid
+\`1013.30.26\`), at asset version 3 and status DRAFT: CKM has not reviewed or
+published it, and a later asset version fails the sha256 check. It is
+rooted at \`openEHR-EHR-COMPOSITION.report-result.v1\` and holds
+\`openEHR-EHR-OBSERVATION.laboratory_test_result.v1\` with
+\`openEHR-EHR-CLUSTER.laboratory_test_analyte.v1\`. The openEHR Foundation
+licenses archetypes and templates hosted in CKM under CC BY-SA
+(<https://openehr.org/governance/#licensing>, \"Clinical models\"); the
+template's own \`licence\` field is empty. Committed verbatim with
 attribution, as CC BY-SA permits." "" "$read_by"
 
 order=https://ckm.openehr.org/ckm/rest/v1/archetypes/1013.1.5946

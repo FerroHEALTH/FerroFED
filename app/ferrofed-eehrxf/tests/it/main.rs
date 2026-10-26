@@ -17,6 +17,7 @@
 )]
 
 mod crosswalk;
+mod laboratory;
 mod query;
 mod receive;
 mod sheet;

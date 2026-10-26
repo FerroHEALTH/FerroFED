@@ -8,8 +8,9 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use ferrofed_eehrxf::patient_summary::{ISSUER, PATIENT, Section, definitions};
+use ferrofed_eehrxf::patient_summary::{Section, definitions};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
+use ferrofed_eehrxf::section_query::{ISSUER, PATIENT};
 use openehr_query::ast::{ColumnExpr, IdentifiedExpr, Terminal, WhereExpr};
 use openehr_query::parser;
 

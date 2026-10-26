@@ -10,9 +10,11 @@
 //!
 //! - [`reserved`]: the namespace the gateway reserves for its own stored
 //!   queries, which no `PUT` stores into and no store may hold;
-//! - [`patient_summary`]: one stored query per patient summary section,
-//!   selecting the whole compositions that feed it, each with its template
-//!   id, from every member (Federation Tier §12.7, N44);
+//! - [`section_query`]: the shape every stored section query shares, the
+//!   whole compositions that contain one of a set of archetypes, each with
+//!   its template id, from every member (Federation Tier §12.7, N44);
+//! - [`patient_summary`]: one stored query per patient summary section;
+//! - [`laboratory`]: the stored query of the laboratory report;
 //! - [`summary`]: the patient summary document assembled from what the
 //!   members answer to the section queries, each composition mapped by the
 //!   FHIRconnect mappings the deployment supplies;
@@ -58,12 +60,14 @@
 
 pub mod dispensations;
 pub mod face;
+pub mod laboratory;
 pub mod list;
 pub mod lookup;
 pub mod patient_summary;
 pub mod prescriptions;
 pub mod receive;
 pub mod reserved;
+pub mod section_query;
 pub mod serving;
 pub mod summary;
 pub mod terminology;

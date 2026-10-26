@@ -2403,8 +2403,9 @@ flowchart LR
 ```
 
 `app/ferrofed-eehrxf` holds the patient summary's stored section queries
-(#776), which the server's stored-query registry holds read-only beside a
-deployment's own definitions, and assembles the patient summary document
+(#776) and the laboratory report's query (#666), all in the one shape of
+`section_query`, which the server's stored-query registry holds read-only
+beside a deployment's own definitions, and assembles the patient summary document
 from what the members answer to them (#809): it compiles the deployment's
 FHIRconnect mappings, holds each to the crosswalk, maps each composition and
 writes the document through `eehrxf`'s `document`, and reads the FHIR face's

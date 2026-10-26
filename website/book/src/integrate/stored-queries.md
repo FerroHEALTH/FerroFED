@@ -143,8 +143,9 @@ Wherever the registry is offered, it also holds the gateway's own stored
 queries, read-only, under the namespace `eu.ferrofed.eehrxf` at the one
 version `1.0.0`. ITS-REST names a stored query `[{namespace}::]{query-name}`,
 the namespace "in a form of a reverse domain name", so the gateway's sits
-under the reverse of `ferrofed.eu`. Today they are the patient summary's
-section queries, one per section openEHR content feeds:
+under the reverse of `ferrofed.eu`. They are the laboratory report's query,
+`eu.ferrofed.eehrxf::laboratory-report`, and the patient summary's section
+queries, one per section openEHR content feeds:
 `eu.ferrofed.eehrxf::patient-summary-{section}`, where `{section}` is
 `allergies-and-intolerances`, `problems`, `medication-summary`,
 `medical-devices-and-implants`, `procedures`, `immunisations`,
