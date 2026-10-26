@@ -112,6 +112,10 @@ impl PatientRef {
     }
 
     /// The identifier value, for a cross-reference lookup inside this crate.
+    #[cfg_attr(
+        not(any(feature = "ihe", feature = "nl")),
+        expect(dead_code, reason = "only the IHE and Dutch adapters send the value")
+    )]
     pub(crate) fn value(&self) -> &str {
         self.value.expose_secret()
     }

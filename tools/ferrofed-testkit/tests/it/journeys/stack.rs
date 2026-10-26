@@ -60,7 +60,7 @@ pub(crate) const SECOND_TEXT: &str = "SELECT c/name/value FROM EHR e CONTAINS CO
 /// the second version of [`VERSIONED`], and its own read-only section
 /// queries, more than a page of the stored-query view.
 pub(crate) fn held() -> Result<u64, Box<dyn Error>> {
-    let own = u64::try_from(ferrofed_eehrxf::patient_summary::Section::ALL.len())?;
+    let own = u64::try_from(ferrofed_eehrxf::reserved::definitions()?.len())?;
     Ok(STORED + 1 + own)
 }
 

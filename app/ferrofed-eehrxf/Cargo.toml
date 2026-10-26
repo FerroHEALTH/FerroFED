@@ -22,6 +22,7 @@ publish = false
 # component itself links nothing of FerroFED.
 eehrxf = { workspace = true, features = [
   "patient-summary",
+  "laboratory",
   "prescription",
   "dispensation",
   "openehr",

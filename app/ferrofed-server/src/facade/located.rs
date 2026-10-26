@@ -17,7 +17,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ferrofed_eehrxf::patient_summary::{ISSUER, PATIENT, Section};
+use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::section_query::{ISSUER, PATIENT};
 use ferrofed_engine::fanout::{Completion, FanOutError};
 use http::HeaderMap;
 use openehr_federation::aql::Analysis;

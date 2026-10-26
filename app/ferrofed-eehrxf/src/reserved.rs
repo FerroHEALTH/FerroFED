@@ -14,7 +14,7 @@
 //! deployment can never shadow one. No specification governs the
 //! reservation: our own design.
 
-use ferrofed_registry::definition::{QueryName, QueryVersion};
+use ferrofed_registry::definition::{QueryName, QueryNameError, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
 
 /// The reserved namespace, a reverse domain name under `ferrofed.eu`.
@@ -27,6 +27,18 @@ pub const VERSION: QueryVersion = QueryVersion::new(1, 0, 0);
 /// version was fixed, 2026-10-06T00:00:00Z, so the answer does not change
 /// from one start to the next.
 pub const SAVED: Timestamp = Timestamp::constant(1_791_244_800, 0);
+
+/// Every stored query the gateway holds in the reserved namespace: the
+/// patient summary's section queries, then the laboratory report's.
+///
+/// # Errors
+///
+/// The [`QueryNameError`] of a query's name, which no query meets.
+pub fn definitions() -> Result<Vec<StoredDefinition>, QueryNameError> {
+    let mut held = crate::patient_summary::definitions()?;
+    held.push(crate::laboratory::definition()?);
+    Ok(held)
+}
 
 /// Whether `name` sits in the reserved namespace or one nested under it,
 /// ASCII case ignored, so no spelling of it can be stored beside the

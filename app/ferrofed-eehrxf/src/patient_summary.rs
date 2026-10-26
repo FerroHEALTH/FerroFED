@@ -5,62 +5,27 @@
 //!
 //! Each [`Section`] of the patient summary crosswalk that openEHR content
 //! feeds has one stored query, held read-only under the reserved namespace
-//! at [`VERSION`] (§12.7, N44). It selects, once
-//! per member, every whole composition that contains one of the section's
-//! archetypes, with its uid and its template id, because a FHIRconnect
-//! mapping is chosen per template:
-//!
-//! ```text
-//! SELECT DISTINCT c AS composition, c/uid/value AS uid,
-//!   c/archetype_details/template_id/value AS template_id
-//! FROM EHR e CONTAINS COMPOSITION c
-//!   CONTAINS (EVALUATION a0[openEHR-EHR-EVALUATION.adverse_reaction_risk.v1] OR …)
-//! WHERE e/ehr_status/subject/external_ref/id/value = $patient
-//!   AND e/ehr_status/subject/external_ref/namespace = $namespace
-//! ```
+//! at [`VERSION`] (§12.7, N44), in the shape of [`section_query`]: every
+//! whole composition that contains one of the section's archetypes, with
+//! its uid and its template id.
 //!
 //! The archetypes of a section are the ones the openEHR International
 //! Patient Summary template of the openEHR international Clinical Knowledge
 //! Manager names in the template section, or sections, that carry it (CKM cid
-//! `1013.26.376`, asset version 1). `DISTINCT` returns a composition once
-//! however many of its entries match (AQL §DISTINCT). The patient is a
-//! parameter, so the text holds no identifier, and the rewrite replaces the
-//! two predicates with each member's own `ehr_id` (§7.1, §5.4.1, N33).
+//! `1013.26.376`, asset version 1).
 //!
 //! The crosswalk sections no query feeds are listed in [`UNSELECTED`], each
 //! with the reason, for the clinical safety review.
 
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
-use openehr_query::ast::{
-    ArchetypePredicate, ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint,
-    ContainsExpr, IdentifiedExpr, IdentifiedPath, ObjectPath, PathPart, PathPredicate,
-    SelectClause, SelectExpr, SelectQuery, Terminal, WhereExpr,
-};
-use openehr_query::lexer::CompOp;
+use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
-
-/// The parameter that carries the patient identifier, as its
-/// `query_parameters` key names it.
-pub const PATIENT: &str = "patient";
-
-/// The parameter that carries the namespace that issued the identifier
-/// (§5.2), as its `query_parameters` key names it.
-pub const ISSUER: &str = "namespace";
+use crate::section_query::{self, Archetype};
 
 /// The stem of every section query's name, before the section.
 pub const STEM: &str = "patient-summary-";
-
-/// One archetype a section selects compositions by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Archetype {
-    /// The RM class of the archetype's root, the class the `CONTAINS`
-    /// expression names.
-    pub class: &'static str,
-    /// The archetype id.
-    pub id: &'static str,
-}
 
 /// A patient summary section with a stored query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -369,39 +334,18 @@ impl Section {
     }
 
     /// Returns the section query as an AQL syntax tree.
+    ///
+    /// # Panics
+    ///
+    /// Never: every section names at least one archetype.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "every arm of Section::archetypes names at least one archetype, which a test holds"
+    )]
     pub fn query(self) -> SelectQuery {
-        let column = |path: IdentifiedPath, alias: &str| SelectExpr {
-            column: ColumnExpr::Path(path),
-            alias: Some(alias.to_owned()),
-        };
-        SelectQuery {
-            select: SelectClause {
-                distinct: true,
-                top: None,
-                columns: vec![
-                    column(identified("c", &[]), "composition"),
-                    column(identified("c", &["uid", "value"]), "uid"),
-                    column(
-                        identified("c", &["archetype_details", "template_id", "value"]),
-                        "template_id",
-                    ),
-                ],
-            },
-            from: contained(
-                class("EHR", "e", None),
-                Some(contained(
-                    class("COMPOSITION", "c", None),
-                    Some(self.entries()),
-                )),
-            ),
-            where_: Some(WhereExpr::And(
-                Box::new(subject(&["id", "value"], PATIENT)),
-                Box::new(subject(&["namespace"], ISSUER)),
-            )),
-            order_by: Vec::new(),
-            limit: None,
-        }
+        section_query::query(self.archetypes())
+            .expect("a section should name at least one archetype")
     }
 
     /// Returns the section query as AQL text, printed from its syntax tree.
@@ -424,33 +368,6 @@ impl Section {
             SAVED,
         ))
     }
-
-    /// The `CONTAINS` expression under the composition: one class expression
-    /// per archetype, joined by `OR`.
-    #[expect(
-        clippy::expect_used,
-        reason = "every arm of Section::archetypes names at least one archetype, which a test holds"
-    )]
-    fn entries(self) -> ContainsExpr {
-        let (first, rest) = self
-            .archetypes()
-            .split_first()
-            .expect("a section should name at least one archetype");
-        rest.iter()
-            .zip(1_usize..)
-            .fold(leaf(first, 0), |joined, (archetype, index)| {
-                ContainsExpr::Or(Box::new(joined), Box::new(leaf(archetype, index)))
-            })
-    }
-}
-
-/// The class expression of `archetype`, bound to the variable `a{index}`.
-fn leaf(archetype: &Archetype, index: usize) -> ContainsExpr {
-    let predicate = PathPredicate::Archetype(ArchetypePredicate::Hrid(archetype.id.to_owned()));
-    contained(
-        class(archetype.class, &format!("a{index}"), Some(predicate)),
-        None,
-    )
 }
 
 /// Every section query as the registry holds it, in [`Section::ALL`] order.
@@ -460,52 +377,4 @@ fn leaf(archetype: &Archetype, index: usize) -> ContainsExpr {
 /// The [`QueryNameError`] of [`Section::name`].
 pub fn definitions() -> Result<Vec<StoredDefinition>, QueryNameError> {
     Section::ALL.into_iter().map(Section::definition).collect()
-}
-
-/// The path `root/part/…`, with no predicate.
-fn identified(root: &str, parts: &[&str]) -> IdentifiedPath {
-    let path = (!parts.is_empty()).then(|| ObjectPath {
-        parts: parts
-            .iter()
-            .map(|name| PathPart {
-                name: (*name).to_owned(),
-                predicate: None,
-            })
-            .collect(),
-    });
-    IdentifiedPath::new(root.to_owned(), None, path)
-}
-
-/// The class expression `rm_type variable[predicate]`.
-fn class(rm_type: &str, variable: &str, predicate: Option<PathPredicate>) -> ClassExprOperand {
-    ClassExprOperand::Class {
-        rm_type: rm_type.to_owned(),
-        variable: Some(variable.to_owned()),
-        predicate,
-    }
-}
-
-/// `operand`, containing `inner` when given.
-fn contained(operand: ClassExprOperand, inner: Option<ContainsExpr>) -> ContainsExpr {
-    ContainsExpr::Contained {
-        operand,
-        contains: inner.map(|expr| {
-            Box::new(ContainsConstraint {
-                negated: false,
-                expr,
-            })
-        }),
-    }
-}
-
-/// `e/ehr_status/subject/external_ref/{tail} = ${parameter}`, the AST
-/// holding a parameter with its `$` as the lexer reads it.
-fn subject(tail: &[&str], parameter: &str) -> WhereExpr {
-    let mut parts = vec!["ehr_status", "subject", "external_ref"];
-    parts.extend_from_slice(tail);
-    WhereExpr::identified(IdentifiedExpr::Compare {
-        lhs: CompareOperand::Path(identified("e", &parts)),
-        op: CompOp::Eq,
-        rhs: Terminal::Parameter(format!("${parameter}")),
-    })
 }

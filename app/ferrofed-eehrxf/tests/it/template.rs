@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
 
-use ferrofed_eehrxf::patient_summary::{Archetype, Section};
+use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::section_query::Archetype;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
