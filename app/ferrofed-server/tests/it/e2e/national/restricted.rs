@@ -12,7 +12,7 @@
 //! The restriction is the consent pre-filter's denial of node B (§14,
 //! Step 1). The IHE binding carries no pre-filter of its own, so this test
 //! resolves the patient through the development cross-reference, whose
-//! `[[dev.consent_denied]]` row carries the denial.
+//! `[[testkit.consent_denied]]` row carries the denial.
 
 use std::error::Error;
 
@@ -27,7 +27,7 @@ use super::{Harness, TestResult, national, patient_id};
 use crate::e2e::{EHR_A, EHR_B, PATIENT};
 
 /// The development cross-reference knowing the patient at the members
-/// `rows` name, with the `[[dev.consent_denied]]` rows of `denied`.
+/// `rows` name, with the `[[testkit.consent_denied]]` rows of `denied`.
 fn crossref(rows: &[(&str, uuid::Uuid)], denied: &[&str]) -> String {
     let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
     let mut text = String::from("profile = \"development\"\n");
@@ -43,10 +43,10 @@ fn crossref(rows: &[(&str, uuid::Uuid)], denied: &[&str]) -> String {
     text
 }
 
-/// One `[[dev.crossref]]` row knowing the patient at `member`.
+/// One `[[testkit.crossref]]` row knowing the patient at `member`.
 fn crossref_row(namespace: &str, value: &str, member: &str, ehr_id: uuid::Uuid) -> String {
     format!(
-        "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
     )
 }
 
@@ -56,10 +56,10 @@ fn namespaces_table(namespace: &str) -> String {
     format!("\n[access_log]\npatient_namespaces = [\"{namespace}\"]\n")
 }
 
-/// One `[[dev.consent_denied]]` row denying the patient at `member`.
+/// One `[[testkit.consent_denied]]` row denying the patient at `member`.
 fn denied_row(namespace: &str, value: &str, member: &str) -> String {
     format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\n"
+        "\n[[testkit.consent_denied]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\n"
     )
 }
 

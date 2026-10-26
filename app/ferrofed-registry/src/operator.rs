@@ -404,25 +404,19 @@ pub enum DeploymentMode {
     Production,
     /// A deployment marked for development and testing,
     /// `profile = "development"`, which admits what production refuses,
-    /// such as the static cross-reference and cleartext credentials.
+    /// such as cleartext credentials to a loopback service.
     Development,
 }
 
 /// The body of `GET {base}/operator/deployment`: how this process is
 /// deployed, so a console can warn that it reads a development gateway.
 ///
-/// It names the profile, whether patients resolve through the static
-/// development cross-reference, the product and its version, and the
-/// replica. It carries no setting value, URL, credential or identifier.
+/// It names the profile, the product and its version, and the replica. It carries no setting value, URL, credential or identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeploymentReport {
     /// The deployment profile the process started with, which only a
     /// restart changes.
     pub mode: DeploymentMode,
-    /// Whether the federation resolves patients through the static
-    /// development cross-reference (`[dev]`), which only the development
-    /// profile admits.
-    pub development_crossref: bool,
     /// The product name, as `GET {base}/` reports it.
     pub product: String,
     /// The product version, as `GET {base}/` reports it.

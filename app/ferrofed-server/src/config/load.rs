@@ -105,6 +105,9 @@ impl Config {
         for (name, raw) in environment {
             apply_override(&mut table, name, raw)?;
         }
+        if table.contains_key("dev") {
+            return Err(Error::DevRemoved);
+        }
         let deprecated = deprecated::apply(&mut table, deprecated::RENAMED)?;
         // The merged tree is written back and re-read so every refusal carries
         // the key and its position, which a `Table` alone cannot report.

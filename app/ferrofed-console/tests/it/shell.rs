@@ -340,20 +340,18 @@ async fn top_of(gateway: &MockServer) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| "the navigation".into())
 }
 
-// A development gateway is named in a banner under the top bar, with its
-// cross-reference when that is in service, and the pill names the product
-// version and the replica.
+// A development gateway is named in a banner under the top bar, and the pill
+// names the product version and the replica.
 #[tokio::test]
 async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill()
 -> Result<(), Box<dyn Error>> {
     let development = deployed(
         200,
-        r#"{"mode":"development","development_crossref":true,"product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
+        r#"{"mode":"development","product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
     )
     .await?;
     let top = top_of(&development).await?;
     assert!(top.contains("Development deployment"), "{top}");
-    assert!(top.contains("cross-reference"), "{top}");
     assert!(
         top.contains("FerroFED 0.0.11 · answered by replica gateway-0"),
         "{top}"
@@ -364,12 +362,11 @@ async fn a_development_gateway_is_named_in_a_banner_and_its_version_in_the_pill(
 
     let plain = deployed(
         200,
-        r#"{"mode":"development","development_crossref":false,"product":"FerroFED","version":"0.0.11","replica":"unnamed"}"#,
+        r#"{"mode":"development","product":"FerroFED","version":"0.0.11","replica":"unnamed"}"#,
     )
     .await?;
     let top = top_of(&plain).await?;
     assert!(top.contains("Development deployment"), "{top}");
-    assert!(!top.contains("cross-reference"), "{top}");
     assert!(
         !top.contains("answered by replica"),
         "an unnamed replica is not named: {top}"
@@ -384,7 +381,7 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
 {
     let production = deployed(
         200,
-        r#"{"mode":"production","development_crossref":false,"product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
+        r#"{"mode":"production","product":"FerroFED","version":"0.0.11","replica":"gateway-0"}"#,
     )
     .await?;
     let top = top_of(&production).await?;

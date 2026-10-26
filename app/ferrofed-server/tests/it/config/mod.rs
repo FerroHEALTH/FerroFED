@@ -74,8 +74,9 @@ fn everything(error: &Error) -> String {
     rendered
 }
 
-/// A malformed `[dev]` row whose identifier is a sentinel, one row per
-/// way a row can be broken.
+/// A malformed row of the removed `[dev]` table, as a configuration written
+/// for an older release may carry, whose identifier is a sentinel, one row
+/// per way a row can be broken.
 const BROKEN_DEV_ROWS: [&str; 3] = [
     // An unterminated string.
     "profile = \"development\"\n[[dev.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"SENTINEL-7319\nmember = \"node-a\"\n",

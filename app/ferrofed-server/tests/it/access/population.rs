@@ -104,7 +104,7 @@ fn keys(max: usize) -> String {
 fn cross_reference() -> String {
     let row = |value: &str, member: &str, ehr_id: &str| {
         format!(
-            "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{value}\"\n\
+            "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{value}\"\n\
              member = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
         )
     };

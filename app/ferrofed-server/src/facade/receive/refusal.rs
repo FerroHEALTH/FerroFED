@@ -356,8 +356,8 @@ managing_organisation = "org-a"
             "profile = \"development\"\n\n[server]\npublic_url = \"https://gw.example.org\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\n\n\
-             [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\n\
-             member = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[audit]\ndestination = \"log\"\n\n\
+             [[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n\
+             [pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\n[audit]\ndestination = \"log\"\n\n\
              [signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
              [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{NAMESPACE}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\n\

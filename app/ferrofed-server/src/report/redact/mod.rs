@@ -19,10 +19,8 @@
 //! - a string under one of [`KEPT`] that has the shape that key takes: a
 //!   socket address, a path of plain segments, or a short token.
 //!
-//! Everything else is [`REDACTED`], and so is every value under `[dev]`,
-//! whose cross-reference pairs patient identifiers with `ehr_id`s (§5.4.1,
-//! N33). A key added to the configuration later is therefore redacted until
-//! it joins these lists. No specification governs the report: our own
+//! Everything else is [`REDACTED`]. A key added to the configuration later
+//! is therefore redacted until it joins these lists. No specification governs the report: our own
 //! design.
 
 use std::net::SocketAddr;
@@ -50,10 +48,6 @@ const CREDENTIAL_WORDS: &[&str] = &[
     "token",
 ];
 
-/// The section whose every value is replaced: the development
-/// cross-reference, which pairs patient identifiers with `ehr_id`s.
-const DEVELOPMENT: &str = "dev";
-
 /// The longest token a [`KEPT`] key other than `listen` and `base_path`
 /// keeps.
 const TOKEN_LENGTH: usize = 40;
@@ -62,12 +56,11 @@ const TOKEN_LENGTH: usize = 40;
 /// know to be safe replaced by [`REDACTED`].
 #[must_use]
 pub fn redact(tree: &toml::Table) -> toml::Table {
-    redact_table(tree, false, false)
+    redact_table(tree, false)
 }
 
-/// Returns `table` redacted; `data_keyed` when its keys are data, and
-/// `development` when it sits under `[dev]`.
-fn redact_table(table: &toml::Table, data_keyed: bool, development: bool) -> toml::Table {
+/// Returns `table` redacted; `data_keyed` when its keys are data.
+fn redact_table(table: &toml::Table, data_keyed: bool) -> toml::Table {
     table
         .iter()
         .enumerate()
@@ -77,11 +70,10 @@ fn redact_table(table: &toml::Table, data_keyed: bool, development: bool) -> tom
             } else {
                 key.clone()
             };
-            let development = development || words(key) == [DEVELOPMENT];
             let value = if data_keyed {
-                redact_value(REDACTED, value, development)
+                redact_value(REDACTED, value)
             } else {
-                redact_value(key, value, development)
+                redact_value(key, value)
             };
             (shown, value)
         })
@@ -89,20 +81,15 @@ fn redact_table(table: &toml::Table, data_keyed: bool, development: bool) -> tom
 }
 
 /// Returns `value`, held under `key`, redacted.
-fn redact_value(key: &str, value: &toml::Value, development: bool) -> toml::Value {
+fn redact_value(key: &str, value: &toml::Value) -> toml::Value {
     match value {
         toml::Value::Table(table) => {
-            toml::Value::Table(redact_table(table, DATA_KEYED.contains(&key), development))
+            toml::Value::Table(redact_table(table, DATA_KEYED.contains(&key)))
         }
-        toml::Value::Array(items) => toml::Value::Array(
-            items
-                .iter()
-                .map(|item| redact_value(key, item, development))
-                .collect(),
-        ),
-        _ if development || !KNOWN_KEYS.contains(&key) || credential_key(key) || path_key(key) => {
-            redacted()
+        toml::Value::Array(items) => {
+            toml::Value::Array(items.iter().map(|item| redact_value(key, item)).collect())
         }
+        _ if !KNOWN_KEYS.contains(&key) || credential_key(key) || path_key(key) => redacted(),
         toml::Value::Boolean(_) => value.clone(),
         toml::Value::Integer(_) | toml::Value::Float(_) if NUMBERS.contains(&key) => value.clone(),
         toml::Value::String(text) if URLS.contains(&key) => {
@@ -228,7 +215,8 @@ mod tests {
     /// A configuration with a canary in every form the gateway reads a
     /// credential, a personal name, a namespace or a patient identifier: as
     /// a value, as a map key, inside a URL, in an inline table, in an array
-    /// of tables and under `[dev]`.
+    /// of tables and under a table no list knows, such as the `[dev]` an
+    /// older configuration carried.
     const CONFIGURATION: &str = r#"
 profile = "development"
 
@@ -332,22 +320,10 @@ count = 7
             assert!(!written.contains(canary), "{canary} leaked: {written}");
         }
         let redacted: toml::Table = toml::from_str(&written).expect("the output reads back");
-        let dev = &redacted["dev"]["crossref"][0];
         assert!(
-            dev.get("count").is_none(),
-            "a key no list knows is never shown"
+            !redacted.contains_key("dev"),
+            "a table no list knows is never shown by name: {written}"
         );
-        let dev = dev.as_table().expect("a table");
-        for key in ["namespace", "value", "ehr_id", "member"] {
-            assert!(dev.contains_key(key), "dev.crossref.{key} is shown");
-        }
-        for (key, value) in dev {
-            assert_eq!(
-                "***",
-                value.as_str().expect("a string"),
-                "dev.crossref.{key}"
-            );
-        }
         let credentials = redacted["credentials"].as_table().expect("a table");
         assert_eq!(
             vec!["***1", "***2"],

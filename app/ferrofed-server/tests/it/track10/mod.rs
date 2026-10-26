@@ -133,7 +133,7 @@ impl Topology<'_> {
         for (member, ehr_id) in [("node-a", self.a.ehr_id), ("node-b", self.b.ehr_id)] {
             write!(
                 config,
-                "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             )?;
         }
         let resolved =

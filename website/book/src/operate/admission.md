@@ -193,7 +193,7 @@ Who provides it, the node, its organisation's MPI or a regional service, does
 not matter.
 
 **What the check does:** for each test EHR it asks the configured
-cross-reference (`[dev]` or `[pixm]`) which `ehr_id` the synthetic subject has
+cross-reference (`[pixm]`) which `ehr_id` the synthetic subject has
 at the node.
 
 - It passes when the answer is the `ehr_id` the node created.
@@ -202,9 +202,8 @@ at the node.
 - It is `cannot-check` when the cross-reference does not know the subject, or
   does not answer for it.
 
-The gateway writes to no cross-reference. The `[dev]` table is static
-configuration, and a PIX Manager learns patients from its own identity
-sources. The round trip therefore passes only where the node's environment
+The gateway writes to no cross-reference: a PIX Manager learns patients from
+its own identity sources. The round trip therefore passes only where the node's environment
 registers a new EHR's subject with the cross-reference by itself. Where it
 does not, which is common, the report says `cannot-check`, and you verify the
 exchange with a test patient your environment registers.

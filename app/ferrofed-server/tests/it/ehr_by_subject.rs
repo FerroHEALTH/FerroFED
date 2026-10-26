@@ -102,7 +102,7 @@ fn resolving(
 /// A development gateway whose cross-reference knows only another patient.
 fn knowing_another(dir: &Path, a: &str, b: &str) -> Result<Router, Box<dyn Error>> {
     let rows = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL-OTHER-71xw\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL-OTHER-71xw\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     gateway(dir, &registry(a, b, ""), "profile = \"development\"", &rows)
 }
@@ -278,7 +278,7 @@ async fn short_subject(
     let b = node(SYSTEM_B, EHR_B).await;
     let dir = tempfile::tempdir()?;
     let rows = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{SHORT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{SHORT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     let app = gateway(
         dir.path(),
@@ -581,7 +581,7 @@ async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
     let b = node(SYSTEM_B, EHR_B).await;
     let dir = tempfile::tempdir()?;
     let rows = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL+PLUS-38kq\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL PLUS-38kq\"\nmember = \"node-b\"\nehr_id = \"{EHR_B}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL+PLUS-38kq\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL PLUS-38kq\"\nmember = \"node-b\"\nehr_id = \"{EHR_B}\"\n"
     );
     let app = gateway(
         dir.path(),

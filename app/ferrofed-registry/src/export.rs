@@ -155,9 +155,6 @@ pub enum NotExported {
     /// The `ehr_id` index: one entry per patient's EHR, a hint that the
     /// ask-all probe of §12.5.1 step 4 rebuilds.
     EhrIdIndex,
-    /// The development cross-reference, which is configuration, and never
-    /// used in production.
-    DevelopmentCrossReference,
     /// The membership document, which the operator reviews and holds.
     Membership,
     /// The stored queries, which their backend holds and the operator
@@ -167,10 +164,9 @@ pub enum NotExported {
 
 impl NotExported {
     /// Every kind of state an export leaves out, in the order it lists them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 4] = [
         Self::ResolutionBindings,
         Self::EhrIdIndex,
-        Self::DevelopmentCrossReference,
         Self::Membership,
         Self::StoredQueries,
     ];

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access, FINISHED, RELOAD};
 use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
 use http::{Request, StatusCode, header};

@@ -24,7 +24,6 @@
 //! the running roles. No specification governs the module layout: our own
 //! design.
 
-pub mod development;
 #[cfg(feature = "binding-ihe")]
 pub mod ihe;
 #[cfg(feature = "test-seam")]
@@ -52,9 +51,7 @@ use crate::localization::LocalizationError;
 /// Every binding this build compiles, in the order the gateway wires them.
 ///
 /// A regional binding comes before the international one, so its sections
-/// are resolved and reported first, and the development binding comes last:
-/// its cross-reference is the localizer of last resort, under the
-/// development profile alone.
+/// are resolved and reported first.
 static COMPILED: &[&dyn Binding] = &[
     #[cfg(feature = "binding-nl")]
     &nl::Nl,
@@ -62,7 +59,6 @@ static COMPILED: &[&dyn Binding] = &[
     &ihe::Ihe,
     #[cfg(feature = "test-seam")]
     &injected::Injected,
-    &development::Development,
 ];
 
 /// The configuration sections every reload applies whatever the bindings:
@@ -480,7 +476,7 @@ pub fn localizer_list() -> String {
 }
 
 /// Returns how an error that needs a cross-reference resolver names every
-/// compiled one, in name order: `[dev] or [pixm]`, or `none in this build`.
+/// compiled one, in name order, such as `[pixm]`, or `none in this build`.
 #[must_use]
 pub fn resolver_list() -> String {
     let mut all: Vec<&str> = compiled()
@@ -648,9 +644,9 @@ mod tests {
     #[test]
     fn an_error_that_needs_a_resolver_names_only_the_compiled_ones() {
         let expected = if cfg!(feature = "binding-ihe") {
-            "[dev] or [pixm]"
+            "[pixm]"
         } else {
-            "[dev]"
+            "none in this build"
         };
         assert_eq!(expected, resolver_list());
     }

@@ -419,9 +419,9 @@ the federation" (N34, §5.5). When the MPI you have does not answer ITI-83:
 - **A Manager per organization.** Each `[[pixm.manager]]` names the members
   it resolves, so each member's own organization can run its own Manager.
 
-The development table, `[dev]`, is refused outside `profile =
-"development"` and is no answer in production. Without any of these, every
-patient query fails `424`, as [Choosing one](#choosing-one) says.
+FerroFED keeps no patient index of its own, in any profile. Without a PIX
+Manager, every patient query fails `424`, as
+[Choosing one](#choosing-one) says.
 
 ## Demographics first: `[pdqm]`
 
@@ -458,9 +458,8 @@ password_file = "/run/secrets/pdq-password"
   `onlyCertainMatches` set (§2:3.119.4.1.2); declare it only where the
   Supplier offers `$match`.
 - `master` is the identifier system of the master domain. The master
-  identifier is resolved in the namespace of the same name, so `[pixm]` or
-  `[dev]` must resolve it; `[pdqm]` without either refuses the
-  configuration.
+  identifier is resolved in the namespace of the same name, so `[pixm]`
+  must resolve it; `[pdqm]` without it refuses the configuration.
 - `url`, the credentials and the `http` rule are those of a PIX Manager: the
   Supplier is sent the patient identifier, so plain `http` is refused,
   naming `pdqm.url`, unless the profile is `development`. No redirect is
@@ -494,47 +493,37 @@ state shows as `demographics` on
 [`GET {base}/operator/dependencies`](health.md#the-dependency-report), and each call is counted in
 `ferrofed_demographics_requests_total` ([Metrics](metrics.md)).
 
-## The development cross-reference: `[dev]`
+## No patient index: `[dev]` is refused
 
-For a laptop or a test, the gateway can resolve from a static table in the
-configuration instead. It binds nothing, it is no identity binding of N3, and
-it is accepted only in a configuration that declares itself for development
-(no specification governs this: our own design):
+FerroFED keeps no table of patient identifiers, not even for a laptop or a
+test (no specification governs this: our own design). Earlier releases read
+a static cross-reference, `[[dev.crossref]]`, under `profile =
+"development"`. A configuration that still sets `[dev]` is refused at load:
 
-```toml
-profile = "development"
-
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-a"
-ehr_id = "aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+```text
+ferrofed: cannot start: [dev] is no longer read: FerroFED keeps no patient index, so it resolves every patient through a PIX Manager; remove [dev] and configure [[pixm.manager]]
 ```
 
-Each row maps one synthetic patient to its `ehr_id` at one member; a patient
-with no row at a member is `not-resolved` there. Under any other `profile`,
-`[dev]` refuses the configuration. A development deployment prints a red
-notice in its [startup banner](configuration.md#the-startup-banner) that it
-must not hold or reach real patient data. The
-[quickstart](container.md#the-quickstart) runs on this table.
+The refusal quotes no row of the table. To try FerroFED with synthetic
+patients, run the [quickstart](container.md#the-quickstart): it starts
+FerroPIX, seeds it with the synthetic patients over ITI-104, and resolves
+through `[[pixm.manager]]`.
 
 ## Choosing one
 
-Set `[pixm]` or `[dev]`, never both: both refuse the configuration. With
-neither, the gateway still starts, and every patient query fails closed: each
+Set `[pixm]` to resolve patients. Without it, the gateway still starts, and every patient query fails closed: each
 member is `not-resolved` with "no cross-reference service is configured",
 and the query is a `424`. A query that names no patient needs no resolution
 and runs as written.
 
-Both sections take effect on a
+The section takes effect on a
 [reload](registry.md#reloading-the-registry). `GET {base}/operator/dependencies`
 reports the resolver's last observed state
 ([Health probes](health.md)).
 
-Under `federation.node_selection = "localized"` the `[dev]` table is also the
-localizer: it names the members that hold a row for the patient, and every
-other member is `not-localized`
-([Node selection](registry.md#node-selection)).
+Under `federation.node_selection = "localized"`, `[pixm]` is also the
+localizer ([`[pixm]` as the localizer](#pixm-as-the-localizer),
+[Node selection](registry.md#node-selection)).
 
 ## The identity feed: `[pmir]`
 

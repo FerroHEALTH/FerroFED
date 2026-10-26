@@ -60,19 +60,17 @@
 //! - [`fhir`]: the one HTTP client build every outbound client of this crate
 //!   uses, with its [`Authentication`](fhir::Authentication) and its one
 //!   [`Tls`](fhir::Tls) type;
-//! - [`dev`]: the static development cross-reference and consent pre-filter,
-//!   FerroFED's own testing devices, enabled only under the development
-//!   profile.
+//! - [`profile`]: the deployment profile a server configuration declares.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
 //! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
-pub mod dev;
 pub mod fhir;
 #[cfg(feature = "balp")]
 pub mod ihe;
 #[cfg(feature = "nl")]
 pub mod nl;
+pub mod profile;
 pub mod role;
 pub mod session;

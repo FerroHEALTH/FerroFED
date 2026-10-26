@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
 use ferrofed_registry::operator::DeploymentMode;
 use ferrofed_registry::replica::Replica;

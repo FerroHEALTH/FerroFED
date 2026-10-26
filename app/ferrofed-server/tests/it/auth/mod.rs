@@ -71,7 +71,7 @@ impl Gateway {
     }
 
     /// The gateway of [`Gateway::with`], its cross-reference also holding
-    /// the `[[dev.crossref]]` rows `extra`.
+    /// the `[[testkit.crossref]]` rows `extra`.
     pub(crate) async fn with_rows(auth: AuthSettings, extra: &str) -> Result<Self, Box<dyn Error>> {
         let a = node_answering("8849182c-82ad-4088-a07f-48ead4180515::node-a::1").await;
         let b = node_answering("6cb19121-4307-4a29-9c1c-b6d6a2ab3b77::node-b::1").await;

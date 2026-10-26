@@ -27,7 +27,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-#[cfg(feature = "binding-ihe")]
 use ferrofed_server::binding::Role;
 use ferrofed_server::binding::nl::nvi::NL_GF_NVI;
 use ferrofed_server::config::settings::Settings;
@@ -38,10 +37,8 @@ use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::nvi::LocalizationService;
-#[cfg(feature = "binding-ihe")]
 use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::PatientId;
-#[cfg(feature = "binding-ihe")]
 use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain};
 use http::{Request, StatusCode};
 use openehr_federation::options::OptionsRoot;
@@ -60,7 +57,6 @@ const MEMBERS: [&str; 3] = ["node-a", "node-b", "node-c"];
 pub(crate) const URAS: [&str; 3] = ["ura-test-0001", "ura-test-0002", "ura-test-0003"];
 
 /// The `ehr_id` domains of the three members at the PIX Manager.
-#[cfg(feature = "binding-ihe")]
 const DOMAINS: [EhrDomain; 3] = [EhrDomain::new(21), EhrDomain::new(22), EhrDomain::new(23)];
 
 /// The patient's `ehr_id` at node A and node B, unrelated values (§B.7 Step
@@ -88,20 +84,17 @@ pub(crate) fn query() -> String {
 
 /// What resolves the patient at each member the NVI names (§B.7 Step 1c):
 /// a PIXm Manager stub answering with the patient's `ehr_id` at node A and
-/// node B, in a build with the IHE binding, and the development
-/// cross-reference holding the same `ehr_id`s in a build without it.
+/// node B; `binding-nl` turns on `binding-ihe`, which resolves.
 #[derive(Debug)]
 pub(crate) struct Resolution {
     /// The configuration tables that name the resolver.
     tables: String,
     /// The PIXm Manager stub, whose queries a test counts.
-    #[cfg(feature = "binding-ihe")]
     pub(crate) pix: Server,
 }
 
 impl Resolution {
     /// Starts the PIXm Manager stub with the patient's answer.
-    #[cfg(feature = "binding-ihe")]
     pub(crate) async fn start() -> Result<Self, Box<dyn Error>> {
         let pix = pixm_stub::manager(&[CrossReferenceSeed {
             patient: patient(),
@@ -116,28 +109,6 @@ impl Resolution {
             writeln!(tables, "\"{member}\" = \"{}\"", domain.system())?;
         }
         Ok(Self { tables, pix })
-    }
-
-    /// Writes the development cross-reference of the patient, ready at once.
-    #[cfg(not(feature = "binding-ihe"))]
-    pub(crate) fn start() -> impl Future<Output = Result<Self, Box<dyn Error>>> {
-        std::future::ready(Self::dev())
-    }
-
-    /// The development cross-reference of the patient.
-    #[cfg(not(feature = "binding-ihe"))]
-    fn dev() -> Result<Self, Box<dyn Error>> {
-        let patient = patient();
-        let mut tables = String::new();
-        for (member, ehr_id) in [("node-a", EHR_A), ("node-b", EHR_B)] {
-            write!(
-                tables,
-                "\n[[dev.crossref]]\nnamespace = \"{}\"\nvalue = \"{}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n",
-                patient.namespace(),
-                patient.value()
-            )?;
-        }
-        Ok(Self { tables })
     }
 
     /// The configuration tables that name the resolver.
@@ -391,7 +362,6 @@ async fn an_nvi_that_does_not_answer_fails_the_query_closed() -> TestResult {
         asked_counts(&servers).await?,
         "no dispatch, no ask-all (§14.1)"
     );
-    #[cfg(feature = "binding-ihe")]
     assert_eq!(
         0,
         pixm_stub::queries(&resolution.pix).await,
@@ -522,7 +492,6 @@ fn the_nvi_under_the_ask_all_selection_refuses_to_boot() -> TestResult {
     }
 }
 
-#[cfg(feature = "binding-ihe")]
 #[test]
 fn the_nvi_and_xcpd_together_refuse_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;

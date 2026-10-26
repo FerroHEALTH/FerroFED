@@ -11,7 +11,7 @@
 //! refusal comes before the configuration's nodes are asked anything. No
 //! specification governs the refusals: our own design.
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 
 use crate::conformance::fixture::{EXAMPLE_ARC, PatientError};
 
@@ -76,7 +76,7 @@ pub fn profile(profile: Profile, acknowledged: bool) -> Result<(), Refusal> {
 #[cfg(test)]
 mod tests {
     use super::{Refusal, profile, writes};
-    use ferrofed_identity::dev::Profile;
+    use ferrofed_identity::profile::Profile;
 
     #[test]
     fn a_run_is_refused_unless_writes_are_allowed() {

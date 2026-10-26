@@ -27,7 +27,6 @@ The export leaves out:
 |---|---|
 | The resolution bindings of each caller | They are scoped to one client session and expire after their time to live. A replacement asks the identifier cross-reference (the PIX Manager or the NVI) itself, which is the source of truth. A binding is pseudonymous personal data, and the export carries none. |
 | The `ehr_id` index | It holds one entry per patient's EHR and is a hint: the next read that names no node asks every member and finds the owner again (§12.5.1). |
-| The development cross-reference | It is `[[dev.crossref]]` configuration, used only under `profile = "development"`. |
 | The membership | The [registry document](registry.md) is the record, and you already hold it. |
 | The stored queries | Their backend holds them, and `GET {base}/operator/stored-queries` reads them ([Client authentication](authentication.md#the-operator-surface)). |
 

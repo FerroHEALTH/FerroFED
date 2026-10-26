@@ -42,7 +42,7 @@ use crate::facade::{
     Answer as Federated, NAMESPACE, PATIENT, body, node_answering, patient_query, post, received,
     schema, settings_with_room, statuses, wire,
 };
-use crate::support::call;
+use crate::support::{call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -81,7 +81,7 @@ fn config(
         )?;
         write!(
             rows,
-            "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+            "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
         )?;
         writeln!(communities, "\"{community}\" = \"{member}\"")?;
     }
@@ -340,11 +340,11 @@ fn an_http_gateway_outside_development_refuses_to_boot_naming_its_key() -> TestR
         "production",
         "",
     )?
-    .split("\n[[dev.crossref]]")
+    .split("\n[[testkit.crossref]]")
     .next()
     .unwrap_or_default()
     .to_owned();
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Cleartext(refused)) => {
             assert_eq!("xcpd.gateway[0].url", refused.site.url_key);
             Ok(())
@@ -412,7 +412,7 @@ fn an_assertion_that_is_no_saml_assertion_refuses_to_boot_naming_its_key() -> Te
 #[test]
 fn xcpd_without_a_registry_refuses_to_boot() -> TestResult {
     let text = "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
-    match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "registry.document" => Ok(()),
         other => Err(format!("refused for its missing registry: {other:?}").into()),
     }
@@ -439,7 +439,7 @@ fn xcpd_without_an_audit_destination_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = unreachable_config(dir.path(), "development", "audit = \"log\"")?
         .replace("audit = \"log\"", "");
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "xcpd.audit" => Ok(()),
         other => Err(format!("the audit destination is declared (§3.55.5.1): {other:?}").into()),
     }
@@ -449,11 +449,11 @@ fn xcpd_without_an_audit_destination_refuses_to_boot() -> TestResult {
 fn audit_off_outside_development_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = unreachable_config(dir.path(), "production", "audit = \"off\"")?
-        .split("\n[[dev.crossref]]")
+        .split("\n[[testkit.crossref]]")
         .next()
         .unwrap_or_default()
         .to_owned();
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Binding(error::binding::BindingFault::AuditOff { key }))
             if key == "xcpd.audit" =>
         {
@@ -592,13 +592,13 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
     for (member, ehr_id) in MEMBERS.into_iter().zip(EHR_IDS) {
         write!(
             text,
-            "\n[[dev.crossref]]\nnamespace = \"{EHR_SYSTEM}\"\nvalue = \"{}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n",
+            "\n[[testkit.crossref]]\nnamespace = \"{EHR_SYSTEM}\"\nvalue = \"{}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n",
             EHR_IDS[0]
         )?;
     }
     write!(
         text,
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{OTHER}\"\nmember = \"node-a\"\nehr_id = \"4444dddd-4444-4444-8444-444444444444\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{OTHER}\"\nmember = \"node-a\"\nehr_id = \"4444dddd-4444-4444-8444-444444444444\"\n"
     )?;
     let (app, token) = confined_gateway(&text)?;
     let logs = crate::support::Logs::default();

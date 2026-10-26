@@ -42,7 +42,7 @@ use crate::facade::{
     Answer, PATIENT, body, crossref, patient_query, post, registry, schema, settings_with_room,
     statuses,
 };
-use crate::support::{CLIENT_TOKEN, Logs, call};
+use crate::support::{CLIENT_TOKEN, Logs, call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -108,7 +108,7 @@ fn gateway(dir: &Path, a: &str, b: &str, tables: &str) -> Result<Router, Box<dyn
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{tables}",
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")])
     );
-    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let settings = Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
     Ok(ferrofed_server::router(
         Arc::new(AppState::with_federation(federation)),
@@ -447,7 +447,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         format!("[signing]\nkey_file = {key}\njwks_uri = \"{JWKS_URI}\"\n{extra}\n")
     };
     let resolve = |text: &str| -> Result<ConfigError, Box<dyn Error>> {
-        match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+        match Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve() {
             Ok(_) => Err(format!("accepted: {text}").into()),
             Err(error) => Ok(error),
         }

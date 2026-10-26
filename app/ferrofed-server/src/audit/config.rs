@@ -41,7 +41,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::secret::Secret;
 use ihe_atna::atna::spool::Bounds;
 use ihe_atna::balp::{NetworkAddress, Observer};

@@ -17,6 +17,7 @@
 )]
 
 mod console;
+mod crossref;
 mod e2e;
 mod journeys;
 mod keycloak_recipe;

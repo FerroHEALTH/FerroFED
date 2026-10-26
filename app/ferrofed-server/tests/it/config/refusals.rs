@@ -106,6 +106,26 @@ fn a_malformed_dev_row_never_echoes_its_identifier() -> Result<(), Box<dyn StdEr
     Ok(())
 }
 
+/// FerroFED keeps no patient index (#1377): a configuration that still
+/// sets the removed `[dev]` cross-reference is refused naming the table and
+/// what replaces it, and never echoes a row's identifier.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_dev_table_is_refused_naming_the_key() -> Result<(), Box<dyn StdError>> {
+    let error = refusal(
+        "profile = \"development\"\n\n[[dev.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"SENTINEL-7320\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n",
+    )?;
+    assert!(matches!(error, Error::DevRemoved), "{error}");
+    let shown = error.to_string();
+    assert!(shown.contains("[dev]"), "{shown}");
+    assert!(shown.contains("[[pixm.manager]]"), "{shown}");
+    assert!(!everything(&error).contains("SENTINEL-7320"));
+    Ok(())
+}
+
 #[test]
 #[expect(
     clippy::panic_in_result_fn,

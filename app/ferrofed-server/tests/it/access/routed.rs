@@ -216,7 +216,7 @@ async fn a_read_by_subject_records_the_patient_the_route_resolved() -> TestResul
     let dir = tempfile::tempdir()?;
     let idle = format!("{}/node-b", node.uri());
     let crossref = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PLUS_PATIENT}\"\n\
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PLUS_PATIENT}\"\n\
          member = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     let app = gateway_with(

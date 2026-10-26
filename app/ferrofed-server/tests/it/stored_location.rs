@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};

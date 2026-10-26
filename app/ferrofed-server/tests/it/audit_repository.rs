@@ -45,7 +45,7 @@ use crate::facade::{
 };
 use crate::feed_audit::SETTLE;
 use crate::metrics::{count, holds_series, parse};
-use crate::support::call;
+use crate::support::{call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -96,7 +96,7 @@ fn config(
         if profile == "development" {
             write!(
                 rows,
-                "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             )?;
         }
         writeln!(communities, "\"{community}\" = \"{member}\"")?;
@@ -483,7 +483,7 @@ fn plain_tcp_outside_development_refuses_to_boot_naming_its_key() -> TestResult 
         "production",
         &format!("url = \"tcp://arr.example.org:601\"\nspool_dir = {spool}"),
     )?;
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Cleartext(refused)) => {
             assert_eq!("xcpd.audit_repository.url", refused.site.url_key);
             Ok(())
@@ -520,7 +520,7 @@ fn a_repository_audit_without_a_home_community_refuses_to_boot_naming_the_key() 
 fn a_spool_in_memory_outside_development_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = unreachable(dir.path(), "production", "url = \"tls://arr.example.org\"")?;
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "xcpd.audit_repository.spool_dir" => Ok(()),
         other => Err(format!("a restart would lose the spool: {other:?}").into()),
     }
@@ -534,7 +534,7 @@ fn a_spool_write_timeout_of_zero_refuses_to_load_naming_its_key() -> TestResult 
         "development",
         "url = \"tls://arr.example.org\"\nspool_write_timeout_ms = 0",
     )?;
-    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Zero { key })
             if key == "xcpd.audit_repository.spool_write_timeout_ms" =>
         {
@@ -549,7 +549,7 @@ fn the_repository_table_and_the_destination_go_together() -> TestResult {
     let dir = tempfile::tempdir()?;
     let unused = unreachable(dir.path(), "development", "url = \"tls://arr.example.org\"")?
         .replace("audit = \"repository\"", "audit = \"log\"");
-    match Config::from_sources(Some(&unused), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&unused)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Binding(error::binding::BindingFault::AuditRepositoryUnused)) => {}
         other => return Err(format!("a table no message reaches: {other:?}").into()),
     }
@@ -559,7 +559,7 @@ fn the_repository_table_and_the_destination_go_together() -> TestResult {
         .next()
         .ok_or("the table")?
         .to_owned();
-    match Config::from_sources(Some(&missing), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(&missing)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "xcpd.audit_repository" => Ok(()),
         other => Err(format!("audit = \"repository\" names its table: {other:?}").into()),
     }

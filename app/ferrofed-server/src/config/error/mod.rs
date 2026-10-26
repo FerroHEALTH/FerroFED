@@ -41,8 +41,8 @@ pub enum Error {
     /// value of the wrong type.
     ///
     /// It carries a [`ParseFault`] in place of the TOML reader's error: that
-    /// error quotes the offending source line, and a line of `[dev]` holds a
-    /// patient identifier, a line of `[credentials]` a secret (§5.4.1, N33).
+    /// error quotes the offending source line, and a line of `[credentials]`
+    /// holds a secret (§5.4.1, N33).
     #[error("{fault}")]
     Parse {
         /// Where the fault is and what kind it is, with no source text.
@@ -68,6 +68,12 @@ pub enum Error {
         /// The variable that was read.
         name: String,
     },
+    /// The configuration sets `[dev]`, the static cross-reference FerroFED
+    /// no longer has: it keeps no patient index (#1377).
+    #[error(
+        "[dev] is no longer read: FerroFED keeps no patient index, so it resolves every patient through a PIX Manager; remove [dev] and configure [[pixm.manager]]"
+    )]
+    DevRemoved,
     /// A deprecated key and the key that replaces it are both set.
     #[error("{from} is deprecated and replaced by {to}, and both are set; keep {to}")]
     Renamed {

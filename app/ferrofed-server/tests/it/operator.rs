@@ -410,25 +410,20 @@ fn deployed(dir: &std::path::Path, text: &str) -> Result<Router, Box<dyn Error>>
     std::fs::write(&document, REGISTRY)?;
     let document = toml::Value::String(document.display().to_string());
     let text = text.replace("{registry}", &document.to_string());
-    let settings = Config::from_sources(Some(&crate::support::unseamed(&text)), &BTreeMap::new())?
-        .resolve()?;
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     Ok(ferrofed_server::router(
         Arc::new(AppState::build(&settings)?),
         &settings_with_room(),
     ))
 }
 
-/// A development gateway over [`REGISTRY`], with a `[dev]` row when
-/// `crossref` is set.
-fn development(dir: &std::path::Path, crossref: bool) -> Result<Router, Box<dyn Error>> {
-    let mut text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {{registry}}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[server]\nreplica = \"{REPLICA}\"\n"
+/// A development gateway over [`REGISTRY`], resolving one patient through
+/// the test kit's fixed cross-reference.
+fn development(dir: &std::path::Path) -> Result<Router, Box<dyn Error>> {
+    let text = format!(
+        "profile = \"development\"\n\n[registry]\ndocument = {{registry}}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[server]\nreplica = \"{REPLICA}\"\n\n[[testkit.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"synthetic-12345\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );
-    if crossref {
-        text.push_str(
-            "\n[[dev.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"synthetic-12345\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n",
-        );
-    }
     deployed(dir, &text)
 }
 
@@ -441,20 +436,19 @@ async fn deployment(app: Router) -> Result<DeploymentReport, Box<dyn Error>> {
     Ok(serde_json::from_str(&text)?)
 }
 
-/// The report names exactly the profile, the cross-reference, the product,
-/// its version and the replica, and nothing a setting holds.
+/// The report names exactly the profile, the product, its version and the
+/// replica, and nothing a setting holds.
 #[tokio::test]
-async fn the_deployment_report_has_exactly_its_five_members() -> TestResult {
+async fn the_deployment_report_has_exactly_its_four_members() -> TestResult {
     let dir = tempfile::tempdir()?;
     let (status, text) = answer(
-        development(dir.path(), true)?,
+        development(dir.path())?,
         get("/operator/deployment", &operator_bearer()?)?,
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let exact: ExactDeployment = serde_json::from_str(&text)?;
     assert_eq!("development", exact.mode, "{text}");
-    assert!(exact.development_crossref, "{text}");
     assert_eq!("FerroFED", exact.product, "{text}");
     assert_eq!(env!("CARGO_PKG_VERSION"), exact.version, "{text}");
     assert_eq!(REPLICA, exact.replica, "{text}");
@@ -467,35 +461,24 @@ async fn the_deployment_report_has_exactly_its_five_members() -> TestResult {
 #[serde(deny_unknown_fields)]
 struct ExactDeployment {
     mode: String,
-    development_crossref: bool,
     product: String,
     version: String,
     replica: String,
 }
 
 #[tokio::test]
-async fn a_development_gateway_with_the_static_crossref_says_so() -> TestResult {
+async fn a_development_gateway_says_so() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let report = deployment(development(dir.path(), true)?).await?;
+    let report = deployment(development(dir.path())?).await?;
     assert_eq!(
         DeploymentReport {
             mode: DeploymentMode::Development,
-            development_crossref: true,
             product: String::from("FerroFED"),
             version: String::from(env!("CARGO_PKG_VERSION")),
             replica: String::from(REPLICA),
         },
         report
     );
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_development_gateway_without_the_static_crossref_says_so() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let report = deployment(development(dir.path(), false)?).await?;
-    assert_eq!(DeploymentMode::Development, report.mode);
-    assert!(!report.development_crossref, "{report:?}");
     Ok(())
 }
 
@@ -508,7 +491,6 @@ async fn a_production_gateway_reports_production() -> TestResult {
     )?)
     .await?;
     assert_eq!(DeploymentMode::Production, report.mode);
-    assert!(!report.development_crossref, "{report:?}");
     assert_eq!("ferrofed-3", report.replica);
     assert_eq!(env!("CARGO_PKG_VERSION"), report.version);
     Ok(())
@@ -527,19 +509,19 @@ fn the_modes_are_named_as_the_profile_is_written() -> TestResult {
     Ok(())
 }
 
-/// The deployment report tells a reader whether patients resolve from a
-/// static table, so a caller who is no operator learns none of it.
+/// The deployment report tells a reader how the gateway is deployed, so a
+/// caller who is no operator learns none of it.
 #[tokio::test]
 async fn no_deployment_report_reaches_a_caller_who_is_no_operator() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let app = development(dir.path(), true)?;
+    let app = development(dir.path())?;
     let unauthenticated = Request::get("/operator/deployment").body(Body::empty())?;
     let (status, text) = answer(app.clone(), unauthenticated).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
-    assert!(!text.contains("development_crossref"), "{text}");
+    assert!(!text.contains("\"mode\""), "{text}");
     let (status, text) = answer(app, get("/operator/deployment", &bearer()?)?).await?;
     assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
     assert_eq!("scope-insufficient", error_body(&text)?.code);
-    assert!(!text.contains("development_crossref"), "{text}");
+    assert!(!text.contains("\"mode\""), "{text}");
     Ok(())
 }

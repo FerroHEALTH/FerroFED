@@ -272,9 +272,8 @@ page: our own design.
 - [ ] **Verify what you run.** Pin the image by digest and check its
   attestation with `gh attestation verify`, and verify a release tarball the
   same way ([The container image](container.md#kubernetes)).
-- [ ] **Never run the development profile near real data.** It admits the
-  static cross-reference and cleartext credentials, and its banner says so
-  in red.
+- [ ] **Never run the development profile near real data.** It admits
+  cleartext credentials to loopback services, and its banner says so in red.
 - [ ] **Check every configuration before it ships.** Run
   `ferrofed config check` in your deployment pipeline; a refused file exits
   `78` naming the key.

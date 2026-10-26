@@ -89,19 +89,9 @@ keeps it for every purpose. `"pass-to-node"` needs at least one
 `[[access_log.emergency_purpose]]`, or the configuration is refused.
 `OPTIONS {base}/` declares the setting as `federation.consent.emergency`.
 
-For development, rows under `[[dev.consent_denied]]` beside the
-cross-reference are a static pre-filter, accepted only under
-`profile = "development"` and declared as `development-static`:
-
-```toml
-[[dev.consent_denied]]
-namespace = "urn:oid:2.999.1.1"
-value = "ffd-test-0001"
-member = "node-b"        # this patient's consent denies asking node-b
-```
-
-In the Netherlands the pre-filter is Mitz, below. Set `[[dev.consent_denied]]`
-rows or `[nl_gf.mitz]`, never both: both refuse the configuration.
+In the Netherlands the pre-filter is Mitz, below. FerroFED holds no consent
+table of its own, so without `[nl_gf.mitz]` no pre-filter runs and release
+stays each node's decision.
 
 ## Dutch consent: `[nl_gf.mitz]`
 

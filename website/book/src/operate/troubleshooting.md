@@ -404,7 +404,7 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `the registry document … could not be loaded`, `the registry could not be read from the care services directory`, `set registry.document or [registry.mcsd], not both` | Correct the registry source; `config check` names the rule the document breaks ([The registry](registry.md#the-registry-document)). |
 | `set federation.node_selection …`, `set federation.id …`, `the OPTIONS {base}/ self-description cannot be built` | A gateway with a registry declares both ([Node selection](registry.md#node-selection), [Federation id](registry.md#federation-id)). |
 | `… are both …; set one`, `… are all …; set one` | Two sections fill one role, such as two resolvers; keep one ([Choosing one](identity.md#choosing-one)). |
-| `the [dev] table is not valid`, `the [dev] cross-reference …` | Correct `[[dev.crossref]]`, which needs a registry ([The development cross-reference](identity.md#the-development-cross-reference-dev)). |
+| `[dev] is no longer read` | Remove `[dev]` and resolve patients through `[[pixm.manager]]` ([No patient index](identity.md#no-patient-index-dev-is-refused)). |
 | `the [pixm] resolver …`, `pixm.…`, `… needs a cross-reference resolver …` | Correct `[pixm]`; a patient grant and `[pdqm]` need a resolver ([A PIX Manager](identity.md#a-pix-manager-pixm)). |
 | `pdqm.…`, `the [pdqm] demographics step cannot be enabled` | Correct `[pdqm]` ([Demographics first](identity.md#demographics-first-pdqm)). |
 | `the PMIR …`, `… must be a path that starts with /, …` | Correct `[pmir]` ([The identity feed](identity.md#the-identity-feed-pmir)). |

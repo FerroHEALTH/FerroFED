@@ -290,7 +290,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `ihe` implies and the server always enables (#697); `nl/`, behind feature `nl`, the NVI localizer and the Mitz
   pre-filter over `nl-generic-functions`; and at the top `session`, the
   resolution bindings per verified caller, `fhir`, the one IHE FHIR client
-  and TLS type, and `dev`, the development cross-reference),
+  and TLS type, and `profile`, the deployment profile),
   `ferrofed-eehrxf` (the interoperability component's federation half:
   the patient summary's stored section queries, read-only under the
   reserved namespace `eu.ferrofed.eehrxf`, which the server's registry

@@ -134,9 +134,9 @@ source and run on a terminal with the development configuration of
                    credentials.node-c-query
                    credentials.node-d-query
 
-  DEVELOPMENT: this deployment runs the development profile, which may resolve
-  patients from a static development table. It must not hold or reach real
-  patient data.
+  DEVELOPMENT: this deployment runs the development profile, which relaxes
+  checks a production deployment must pass, such as encryption to a loopback
+  service. It must not hold or reach real patient data.
 ```
 
 The `Support` line of a release from v0.0.10 on says that only the newest
@@ -188,14 +188,14 @@ The sections, and the page that covers each:
 
 | Key or section | What it sets | Page |
 |---|---|---|
-| `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
+| `profile` | `production`, the default, or `development`, which relaxes the transport rules below | [What must travel encrypted](#what-must-travel-encrypted) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
 | `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `federation.offset_strategy`, `federation.max_offset_window`, `federation.max_node_rows` | paging across nodes, and the most rows read of one node for a query with no `LIMIT`, 9999 by default (a node is asked for one row more, so set it one under the largest page your nodes serve) | [Queries and API areas](queries-and-areas.md#paging-with-offset) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]`, `[config]` | the admin listener and the OTLP push; `config.ui`, `off` by default, and the store of the configuration revisions the admin listener serves under `managed` | [Metrics](metrics.md), [Configuration revisions](configuration-revisions.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from; a member's own exchange-format endpoint is an `hl7-fhir-rest` endpoint of the document | [The registry](registry.md), [A member's own exchange-format endpoint](registry.md#a-members-own-exchange-format-endpoint) |
-| `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
+| `[pixm]` | the cross-reference; a `[dev]` table is refused | [Identity resolution](identity.md) |
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |
 | `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](localization.md#xcpd-localization-xcpd), [The audit repository](localization.md#the-audit-repository) |
 | `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](localization.md#dutch-localization-nl_gfnvi) |
@@ -215,10 +215,9 @@ each binding is one Cargo feature of the `ferrofed-server` crate:
 
 | Feature | Binding | Sections |
 |---|---|---|
-| always built | development | `[dev]` |
 | always built | the access log, no binding | `[access_log]`, `[audit]` |
 | `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, and `registry.format = "fhir"`, which reads the document with the mCSD reader |
-| `binding-nl` | Dutch Generic Functions, Annex B | `[nl_gf]` (`[nl_gf.nvi]`, `[nl_gf.mitz]`), `[credentials."<id>".nuts]` |
+| `binding-nl` | Dutch Generic Functions, Annex B; it turns on `binding-ihe`, which resolves patients | `[nl_gf]` (`[nl_gf.nvi]`, `[nl_gf.mitz]`), `[credentials."<id>".nuts]` |
 
 Both features are on by default, so the released binary and the container
 image carry every binding. A build without one, such as
@@ -493,9 +492,8 @@ clear would let anyone on the network substitute keys and forge callers.
 
 **The profile takes a restart.** A reload whose file changes `profile` is
 refused (class `profile`), and the running configuration stays. Every
-decision the development profile admits, these transport rules, the
-development cross-reference and consent table, and an `http` XCPD gateway,
-reads the profile the process started with.
+decision the development profile admits, these transport rules and an
+`http` XCPD gateway, reads the profile the process started with.
 
 The specification assumes a protected transport and leaves it to the
 security profiles (§2.2, §13); no specification governs these rules, which
@@ -522,8 +520,8 @@ revision: checked as `config check` checks the file, kept in history with a
 diff, applied atomically or marked pending a restart, and rolled back in one
 step. Operators read and save revisions through the admin listener's API;
 [Configuration revisions](configuration-revisions.md) describes it. The
-listen address, the profile, `[server]`, `[metrics]`, `[auth]`, `[config]`
-and `[dev]` stay file-only, and a revision holds only `_file` references,
+listen address, the profile, `[server]`, `[metrics]`, `[auth]` and
+`[config]` stay file-only, and a revision holds only `_file` references,
 never a secret. With `off`, the default, nothing changes.
 
 The console manages members and stored queries (#577), and onward
@@ -575,7 +573,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `GET {base}/health` | `200` while the process is up |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
 | `GET {base}/operator/dependencies` | to a caller with the operator scope, always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `degraded`, `failing`, `down` or `unknown`, with `directory_fault` while the directory is `degraded`; endpoint ids, states, the fault's class and the [replica name](#the-replica-name) only |
-| `GET {base}/operator/deployment` | to a caller with the operator scope, always `200`, with the profile the process started with, whether patients resolve through the `[dev]` cross-reference, the product version and the [replica name](#the-replica-name); no setting value |
+| `GET {base}/operator/deployment` | to a caller with the operator scope, always `200`, with the profile the process started with, the product version and the [replica name](#the-replica-name); no setting value |
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |

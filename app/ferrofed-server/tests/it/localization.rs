@@ -29,12 +29,12 @@ use axum::body::Body;
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError, OnFailure};
 use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
-use ferrofed_server::binding::development::DEVELOPMENT_STATIC;
 use ferrofed_server::config::Config;
 use ferrofed_server::facade::options::{LOCALIZATION_MODE, LOCALIZATION_MS};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::localization::{LocalizationError, LocalizationPolicy};
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::crossref::MODE;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use openehr_federation::headers;
@@ -128,7 +128,7 @@ fn registry(urls: [&str; 3]) -> String {
     text
 }
 
-/// The `[dev]` rows resolving the patient at each member of `at`.
+/// The `[testkit]` rows resolving the patient at each member of `at`.
 fn crossref(at: &[&str]) -> String {
     MEMBERS
         .into_iter()
@@ -138,7 +138,7 @@ fn crossref(at: &[&str]) -> String {
             // NOTE: writing to a String cannot fail, so the result is dropped.
             let _written: std::fmt::Result = write!(
                 text,
-                "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             );
             text
         })
@@ -323,8 +323,7 @@ async fn a_member_the_localizer_does_not_name_is_not_localized_and_never_asked()
 
 // conformance: CP-5
 #[tokio::test]
-async fn the_development_cross_reference_localizes_to_the_members_that_know_the_patient()
--> TestResult {
+async fn the_fixed_cross_reference_localizes_to_the_members_that_know_the_patient() -> TestResult {
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let [a, b, c] = urls(&servers);
@@ -609,7 +608,7 @@ async fn options_declares_the_localizer_its_failure_policy_and_its_budget() -> T
     let localization = &options.federation.localization;
     assert_eq!("closed", localization.on_failure);
     assert_eq!(
-        Some(format!("\"{DEVELOPMENT_STATIC}\"").as_str()),
+        Some(format!("\"{MODE}\"").as_str()),
         localization
             .extra
             .get(LOCALIZATION_MODE)

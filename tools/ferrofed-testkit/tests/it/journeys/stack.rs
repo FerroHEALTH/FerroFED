@@ -23,6 +23,8 @@ use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use ferrofed_server::state::AppState;
 use ferrofed_server::stored::embedded::RedbStore;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pixm_stub;
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -62,12 +64,19 @@ pub(crate) fn held() -> Result<u64, Box<dyn Error>> {
     Ok(STORED + 1 + own)
 }
 
-/// The synthetic patient the query journeys name, visibly synthetic, under
-/// the example OID arc.
-pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";
+/// The synthetic patient the query journeys name, under the example OID
+/// arc: the value of [`SEEDED`].
+pub(crate) const PATIENT: &str = "ffd-test-0038";
 
-/// The issuing namespace of [`PATIENT`].
-pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1";
+/// The issuing namespace of [`PATIENT`]: the namespace of [`SEEDED`].
+pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1.1";
+
+/// The patient the stub PIX Manager knows, which [`PATIENT`] and
+/// [`NAMESPACE`] spell.
+const SEEDED: PatientId = PatientId::new(1, 38);
+
+/// The `ehr_id` domains of node A and node B at the stub PIX Manager.
+const DOMAINS: [EhrDomain; 2] = [EhrDomain::new(1), EhrDomain::new(2)];
 
 /// The patient's `ehr_id` at node A and at node B.
 const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";
@@ -92,6 +101,9 @@ pub(crate) struct Stack {
     _answering: Server,
     /// The node that fails, kept so it outlives the gateway.
     _failing: Server,
+    /// The PIX Manager the gateway resolves the patient through, kept so it
+    /// outlives the gateway.
+    _pix: Server,
     /// The registry, the signing key and the stored queries.
     _dir: tempfile::TempDir,
     /// The test OpenID Provider.
@@ -131,7 +143,18 @@ impl Stack {
         let failing = node(500, r#"{"message":"synthetic node failure"}"#).await;
         let dir = tempfile::tempdir()?;
         let provider = Provider::start().await?;
-        let gateway = gateway(dir.path(), (&answering.uri(), &failing.uri()), &provider).await?;
+        let pix = pixm_stub::manager(&[CrossReferenceSeed {
+            patient: SEEDED,
+            ehrs: vec![(DOMAINS[0], EHR_A.parse()?), (DOMAINS[1], EHR_B.parse()?)],
+        }])
+        .await;
+        let gateway = gateway(
+            dir.path(),
+            (&answering.uri(), &failing.uri()),
+            &pixm_stub::base_url(&pix),
+            &provider,
+        )
+        .await?;
 
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let console = format!("http://{}", listener.local_addr()?);
@@ -164,6 +187,7 @@ impl Stack {
         Ok(Self {
             _answering: answering,
             _failing: failing,
+            _pix: pix,
             _dir: dir,
             provider,
             console,
@@ -276,13 +300,18 @@ fn stored_queries(definitions: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Starts the gateway over the nodes at `a` and `b`, trusting the operator's
-/// token `provider` issues, and returns its base URL.
+/// Starts the gateway over the nodes at `a` and `b`, resolving through the
+/// PIX Manager at `pix` and trusting the operator's token `provider` issues,
+/// and returns its base URL.
 async fn gateway(
     dir: &Path,
     (a, b): (&str, &str),
+    pix: &str,
     provider: &Provider,
 ) -> Result<String, Box<dyn Error>> {
+    if SEEDED.value() != PATIENT || SEEDED.namespace() != NAMESPACE {
+        return Err("the journey patient is the one the PIX Manager knows".into());
+    }
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b))?;
     let key_file = dir.join("signing-key.pem");
@@ -302,14 +331,14 @@ async fn gateway(
          [auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\
          product_scope = \"{OPERATOR_SCOPE}\"\n"
     );
-    for (member, ehr_id) in [("node-a", EHR_A), ("node-b", EHR_B)] {
-        // NOTE: writing to a String cannot fail, so the result is dropped.
-        let _written: std::fmt::Result = write!(
-            text,
-            "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\n\
-             member = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
-        );
-    }
+    // NOTE: writing to a String cannot fail, so the result is dropped.
+    let _written: std::fmt::Result = write!(
+        text,
+        "\n[[pixm.manager]]\nurl = \"{pix}\"\n\n[pixm.manager.members]\n\
+         \"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+        DOMAINS[0].system(),
+        DOMAINS[1].system()
+    );
     let settings =
         ferrofed_server::config::Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let state = AppState::build(&settings)?;

@@ -29,9 +29,9 @@ use serde_json::Value;
 
 use super::receive::{issue, untouched};
 use super::{FHIR, TestResult, UNREACHED_SUPPLIER, gateway_registered, text_registered};
-use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT};
+use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, registry};
 use crate::run::binary;
-use crate::support::call;
+use crate::support::{call, unasked_pixm};
 
 /// The `[[fhir.serve]]` tables declaring node A for both categories.
 const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\"]\n\n\
@@ -526,9 +526,19 @@ fn checked(members: &str, tables: &str) -> Result<String, Box<dyn Error>> {
             "http://b.example.org",
             UNREACHED_SUPPLIER,
         ),
-        &[("node-a", EHR_A)],
+        &[],
         members,
-        ("", tables),
+        (
+            "",
+            &format!(
+                "{tables}{}",
+                unasked_pixm(&registry(
+                    "http://a.example.org",
+                    "http://b.example.org",
+                    members
+                ))
+            ),
+        ),
     )?;
     let output = binary(&["config", "check"], &text)?;
     let stdout = String::from_utf8(output.stdout)?;

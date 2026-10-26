@@ -268,7 +268,7 @@ async fn a_consent_denial_drops_the_callers_binding_and_no_signal_keeps_it() -> 
     );
 
     let denied = format!(
-        "{rows}\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\n"
+        "{rows}\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\n"
     );
     gateway.write_config("", &denied)?;
     gateway.reloader.reload()?;

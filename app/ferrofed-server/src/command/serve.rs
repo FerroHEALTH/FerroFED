@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use tokio::net::TcpListener;
 
 use crate::auth::trust::Trust;

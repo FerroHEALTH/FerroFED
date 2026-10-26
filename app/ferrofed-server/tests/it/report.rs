@@ -26,11 +26,11 @@ use http::header;
 use tokio::net::TcpListener;
 
 use crate::run::binary;
-use crate::support::{auth_toml, bearer, operator_bearer, unseamed};
+use crate::support::{auth_toml, bearer, operator_bearer, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The synthetic patient the development cross-reference resolves.
+/// The synthetic patient the test kit's fixed cross-reference resolves.
 const PATIENT: &str = "SENTINEL-PATIENT-r705";
 
 /// The namespace of [`PATIENT`], an example OID.
@@ -106,10 +106,10 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> String {
          [registry]\ndocument = {document}\n\n\
          [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\
          [credentials.\"node-a-pub\"]\nuser = \"{professional}\"\npassword = \"{professional_password}\"\n\n\
-         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}",
+         [[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}",
         auth_toml()
     );
-    unseamed(&text)
+    signed(&text)
 }
 
 /// Reads every file of the archive at `path`, by its path below the root.
@@ -270,10 +270,6 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
     nothing_leaks(&out, &files)?;
     let configuration = String::from_utf8(files["configuration.toml"].clone())?;
     assert!(
-        configuration.contains("[[dev.crossref]]"),
-        "{configuration}"
-    );
-    assert!(
         configuration.contains("node_selection = \"ask-all\""),
         "{configuration}"
     );
@@ -296,7 +292,7 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     let out = dir.path().join("report.tar");
     let out_arg = out.display().to_string();
     // A data-keyed table and a URL with a path, in the PIXm
-    // binding, beside a bearer token, a namespace and the cross-reference.
+    // binding, beside a bearer token and a namespace.
     let pixm = if cfg!(feature = "binding-ihe") {
         "\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/SENTINEL-PIX-PATH\"\n\n\
          [pixm.manager.members]\n\"SENTINEL-MEMBER\" = \"urn:oid:2.999.7777\"\n"
@@ -306,8 +302,7 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     let toml = format!(
         "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:9\"\n\n\
          [federation]\ndefault_namespace = \"urn:oid:2.999.4242\"\n\n\
-         [credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"SENTINEL-TOKEN-r705\"\n\n\
-         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{pixm}"
+         [credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"SENTINEL-TOKEN-r705\"\n{pixm}"
     );
     let output = tokio::task::spawn_blocking(move || {
         binary(&["report", "--out", &out_arg], &toml).map_err(|error| error.to_string())

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::running::{RunningConfig, Source};
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;

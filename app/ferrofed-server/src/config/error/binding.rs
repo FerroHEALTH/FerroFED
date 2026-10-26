@@ -1,20 +1,12 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The refusals of the identity bindings and the development cross-reference.
+//! The refusals of the identity bindings.
 
 /// An identity binding's value the server refuses to start on.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum BindingFault {
-    /// The `[dev]` table does not have the shape of `[[dev.crossref]]` rows.
-    ///
-    /// The reader's own message is not kept: it may quote a row's value, and
-    /// a row's value is a patient identifier.
-    #[error(
-        "the [dev] table is not valid: every [[dev.crossref]] row names namespace, value, member and ehr_id, and nothing else"
-    )]
-    DevTable,
     /// Audit messages are turned off outside a configuration marked for
     /// development.
     #[error(

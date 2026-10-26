@@ -188,8 +188,10 @@ ferrobridge-validator.workspace = true
 # ITI-81 search test (#818).
 ferrofed-testkit.workspace = true
 # The server itself with its test-seam injection point, which the test
-# support injects the test kit's fixed cross-reference through (#1377).
-ferrofed-server = { workspace = true, features = ["test-seam"] }
+# support injects the test kit's fixed cross-reference through (#1377). A
+# path of its own, without the default features: the workspace entry turns
+# them on, which would build every feature leg's tests with both bindings.
+ferrofed-server = { path = ".", default-features = false, features = ["test-seam"] }
 jsonschema.workspace = true
 # The JWK Set the gateway publishes, read as the onward tests verify it (#81).
 jsonwebtoken.workspace = true

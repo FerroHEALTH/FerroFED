@@ -484,10 +484,10 @@ async fn with_disclosure_a_read_by_subject_only_a_denied_member_holds_stays_cons
     Ok(())
 }
 
-/// The `[[dev.consent_denied]]` row denying asking node B about the patient.
+/// The `[[testkit.consent_denied]]` row denying asking node B about the patient.
 fn denied_at_b() -> String {
     format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n"
+        "\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n"
     )
 }
 

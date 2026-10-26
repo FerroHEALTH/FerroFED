@@ -26,8 +26,7 @@ The run needs four things beside the configuration file.
   the example arc `urn:oid:2.999` that ITU-T X.660 reserves for examples, such
   as namespace `urn:oid:2.999.1.1` and value `ffd-test-0038`, and register it
   in your cross-reference at the members you want scored, each with an
-  `ehr_id` no node holds yet. In a development profile that is a
-  `[[dev.crossref]]` row per member; with a PIX Manager it is a `Patient` your
+  `ehr_id` no node holds yet. With a PIX Manager it is a `Patient` your
   identity source feeds. The run refuses a namespace outside the arc, and a
   value other than ASCII letters, digits, `.`, `_` and `-`.
 - **A caller token.** A file holding a bearer access token your gateway's

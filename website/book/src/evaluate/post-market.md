@@ -364,9 +364,8 @@ credential and no file, and only when it is one of these:
 
 Every other value is `***`. That covers secrets in any casing, file paths
 (which can name a person's home directory), dates, namespaces, user names,
-`ehr_id`s, and every value under `[dev]`, whose cross-reference pairs
-patient identifiers with `ehr_id`s. A key the configuration gains later is
-redacted until the redactor is taught it.
+and `ehr_id`s. A key the configuration gains later is redacted until the
+redactor is taught it.
 
 The live files keep only the fields that carry states, counts, kinds, times
 and routing ids:

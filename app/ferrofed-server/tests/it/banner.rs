@@ -15,7 +15,7 @@ use std::io::Write as _;
 use std::net::TcpListener;
 use std::process::Command;
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_server::banner::{DEVELOPMENT_NOTICE, Deployment, Registry, WORDMARK, prints, render};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::stored_queries::{Backend, Store};
@@ -472,7 +472,7 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n\
          [credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{SECRET}-client-secret\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"{SECRET}-user\"\npassword = \"{SECRET}-password\"\n\n\
-         [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
+         [[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

@@ -30,6 +30,7 @@ use jsonwebtoken::jwk::JwkSet;
 use secrecy::SecretString;
 
 use crate::facade::{crossref, registry, settings_with_room};
+use crate::support::injected;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -64,7 +65,7 @@ fn text(dir: &Path, signing: &str) -> Result<String, Box<dyn Error>> {
 
 /// The error the configuration `text` is refused with.
 fn refused(text: &str) -> Result<ConfigError, Box<dyn Error>> {
-    match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve() {
         Ok(_) => Err("the configuration was accepted".into()),
         Err(error) => Ok(error),
     }
@@ -73,7 +74,7 @@ fn refused(text: &str) -> Result<ConfigError, Box<dyn Error>> {
 /// The JWK Set the gateway `text` configures serves, and the `kid` of the
 /// key it signs with.
 async fn served(text: &str) -> Result<(JwkSet, String), Box<dyn Error>> {
-    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    let settings = Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve()?;
     let signing_kid = settings
         .signing
         .as_ref()

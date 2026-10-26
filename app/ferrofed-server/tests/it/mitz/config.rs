@@ -11,7 +11,6 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_identity::nl::mitz::MitzConfigError;
-use ferrofed_server::binding::Role;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error, transport};
 use ferrofed_server::federation::Federation;
@@ -21,7 +20,7 @@ use super::{
     ORGANISATION_CLAIM, ORGANISATION_TYPE_CLAIM, PROFESSIONAL_CLAIM, TestResult, URA_B, holders,
     mitz_table,
 };
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, crossref, registry};
+use crate::facade::registry;
 
 /// The configuration of the gateway under `profile`, with `mitz` as the Mitz
 /// table, its registry document written into `dir`.
@@ -32,7 +31,7 @@ fn configuration(dir: &Path, profile: &str, mitz: &str) -> Result<String, Box<dy
         registry("https://a.example.org", "https://b.example.org", ""),
     )?;
     let document = toml::Value::String(document.display().to_string());
-    Ok(crate::support::unseamed(&format!(
+    Ok(crate::support::signed(&format!(
         "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{mitz}"
     )))
 }
@@ -202,29 +201,6 @@ fn a_holder_naming_no_member_refuses_to_boot() -> TestResult {
             Ok(())
         }
         other => Err(format!("a holder names a registry member: {other:?}").into()),
-    }
-}
-
-#[test]
-fn development_consent_rows_and_mitz_together_refuse_to_boot() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let rows = format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n"
-    );
-    let tables = format!(
-        "{}{rows}{}",
-        crossref(&[("node-a", EHR_A)]),
-        mitz_table("https://mitz.example.org/vraag", &holders())
-    );
-    let text = configuration(dir.path(), "development", &tables)?;
-    match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Conflict(conflict))
-            if conflict.role == Role::ConsentPrefilter
-                && conflict.sections == ["[nl_gf.mitz]", "[[dev.consent_denied]]"] =>
-        {
-            Ok(())
-        }
-        other => Err(format!("N27a: at most one pre-filter is active: {other:?}").into()),
     }
 }
 

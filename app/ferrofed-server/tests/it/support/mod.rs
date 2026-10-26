@@ -624,17 +624,62 @@ pub(crate) fn signing_key_file() -> &'static str {
 /// 2025/327 Annex II 3.2): [`DEVELOPMENT_AUDIT_TOML`] under the development
 /// profile, and the [`audit_toml`] tables under any other.
 ///
-/// The `[dev]` rows `text` writes become the test kit's fixed
+/// The `[testkit]` rows `text` writes become the test kit's fixed
 /// cross-reference, injected through the server's `test-seam` point and
 /// removed from the text (#1377).
 pub(crate) fn signed(text: &str) -> String {
-    unseamed(&injected(text))
+    sign(&injected(text))
 }
 
-/// `text` without its `[dev]` table, whose rows are injected as the test
+/// [`signed`] for a gateway in a child process, which no injection reaches:
+/// the `[testkit]` rows are dropped, so a child that has to resolve a
+/// patient is configured with a PIX Manager of its own.
+pub(crate) fn spawned(text: &str) -> String {
+    sign(&ferrofed_testkit::crossref::take(text).0)
+}
+
+/// A `[[pixm.manager]]` that resolves every node of the registry document
+/// `registry` and is never asked, for a spawned `config check`, which needs
+/// a resolver configured and resolves no patient.
+///
+/// # Panics
+///
+/// When `registry` is no registry document, which fails the test.
+#[cfg(feature = "binding-ihe")]
+#[expect(
+    clippy::expect_used,
+    reason = "a test helper over the suite's own registry documents"
+)]
+pub(crate) fn unasked_pixm(registry: &str) -> String {
+    use std::fmt::Write as _;
+
+    let snapshot = ferrofed_registry::snapshot::RegistrySnapshot::from_toml_str(registry)
+        .expect("the test's registry document loads");
+    let members = snapshot
+        .nodes()
+        .enumerate()
+        .fold(String::new(), |mut members, (index, node)| {
+            // NOTE: writing to a String cannot fail, so the result is dropped.
+            let _written: std::fmt::Result = writeln!(
+                members,
+                "\"{}\" = \"urn:oid:2.999.2.{}\"",
+                node.id(),
+                index + 1
+            );
+            members
+        });
+    format!(
+        "\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n{members}"
+    )
+}
+
+/// `text` without its `[testkit]` table, whose rows are injected as the test
 /// kit's fixed cross-reference, or with the injection cleared when it has
-/// none.
-fn injected(text: &str) -> String {
+/// none; nothing else is added, for a test that writes its own `[signing]`
+/// and `[audit]`.
+pub(crate) fn injected(text: &str) -> String {
+    use ferrofed_identity::role::consent::ConsentPrefilter;
+    use ferrofed_identity::role::localizer::Localizer;
     use ferrofed_server::binding::injected::{Injection, PrefilterFactory, inject};
     use ferrofed_server::binding::seam::ResolverSeam;
     use ferrofed_testkit::crossref::{Fixture, MODE, take};
@@ -642,14 +687,16 @@ fn injected(text: &str) -> String {
     let (text, fixture) = take(text);
     inject(fixture.map(|fixture: Fixture| {
         let consent = fixture.clone();
-        let prefilter = fixture
-            .denies()
-            .then(|| -> PrefilterFactory { Arc::new(move |snapshot| consent.prefilter(snapshot)) });
+        let prefilter = fixture.denies().then(|| -> PrefilterFactory {
+            Arc::new(move |snapshot| {
+                let prefilter: Arc<dyn ConsentPrefilter> = consent.prefilter(snapshot)?;
+                Ok(prefilter)
+            })
+        });
         Injection {
             resolver: Arc::new(move |snapshot| {
                 let resolver = fixture.resolver(snapshot)?;
-                let localizer: Arc<dyn ferrofed_identity::role::localizer::Localizer> =
-                    resolver.clone();
+                let localizer: Arc<dyn Localizer> = resolver.clone();
                 Ok(ResolverSeam {
                     resolver,
                     localizer: Some((localizer, MODE)),
@@ -661,11 +708,8 @@ fn injected(text: &str) -> String {
     text
 }
 
-/// [`signed`] without the injection: the `[dev]` rows stay in the text for
-/// the gateway's own development binding, for a spawned binary, which no
-/// injection reaches, and for a test of how the gateway treats those rows.
-// TODO(#1377): remove with the [dev] cross-reference, once a spawned binary resolves through a PIXm stub.
-pub(crate) fn unseamed(text: &str) -> String {
+/// `text` with the tables of [`signed`] appended, as written otherwise.
+fn sign(text: &str) -> String {
     let mut text = text.to_owned();
     if text.contains("[registry") && !text.contains("[signing]") {
         text.push_str(&signing_toml());
