@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+name: Restore the FHIR package closure
+description: >-
+  Restore the cache-only FHIR packages of the Patient Summary's and the
+  MyHealth@EU guides' dependency closures into .vendor-cache/fhir-packages,
+  where ferrofed_testkit::fhir_packages reads them, and save the directory
+  after the job when the key missed. The key is the two PROVENANCE.md files
+  that pin each package by URL and sha256, so a re-pin starts a new cache.
+  With the cache restored the tests fetch nothing from packages.fhir.org, so
+  a resolver gap on the runner fails no test (#1381). The testkit still
+  holds a fetched package to its pinned sha256. This is a test lane's cache:
+  no release reads it. The calling job checks out the repository first.
+runs:
+  using: composite
+  steps:
+    - name: Restore the FHIR package closure
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .vendor-cache/fhir-packages
+        key: fhir-packages-${{ hashFiles('docs/specs/fhir-packages/PROVENANCE.md', 'docs/specs/fhir-packages-myhealth-eu/PROVENANCE.md') }}

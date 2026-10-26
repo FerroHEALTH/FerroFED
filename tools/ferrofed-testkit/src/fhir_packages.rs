@@ -36,20 +36,20 @@ const CACHE: &str = ".vendor-cache/fhir-packages";
 const STALE: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// The `curl` options of a fetch. `--retry` alone retries a timeout and an
-/// HTTP 408, 429 or 5xx, never a failed name lookup (curl(1), `--retry`), so
-/// one resolver miss on a runner would fail the test that fetched;
-/// `--retry-all-errors` retries that too, and the pinned sha256 still holds
-/// the bytes (curl(1), `--retry-all-errors`).
+/// HTTP 408, 429 or 5xx, never a failed name lookup (curl(1), `--retry`);
+/// `--retry-all-errors` retries that too, eight times ten seconds apart, so
+/// a resolver gap on a runner of over a minute passes, and the pinned sha256
+/// still holds the bytes (curl(1), `--retry-all-errors`, `--retry-delay`).
 const CURL: [&str; 11] = [
     "--proto",
     "=https",
     "--tlsv1.2",
     "-fsSL",
     "--retry",
-    "5",
+    "8",
     "--retry-all-errors",
     "--retry-delay",
-    "3",
+    "10",
     "-m",
     "300",
 ];
