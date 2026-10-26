@@ -294,7 +294,7 @@ async fn a_refresh_that_deletes_a_member_the_cross_reference_names_is_refused() 
     let RefreshOutcome::Refused(error) = &outcome else {
         return Err(format!("the refresh is refused: {outcome:?}").into());
     };
-    assert_eq!("dev-cross-reference", error.class());
+    assert_eq!("injected-cross-reference", error.class());
     assert_eq!(before, gateway.addresses()?);
     Ok(())
 }
@@ -405,7 +405,10 @@ async fn a_reload_keeps_the_directorys_registry() -> TestResult {
     ))?;
     let dir = tempfile::tempdir()?;
     let config = dir.path().join("ferrofed.toml");
-    std::fs::write(&config, super::config(&harness.base(), 5_000))?;
+    std::fs::write(
+        &config,
+        crate::support::signed(&super::config(&harness.base(), 5_000)),
+    )?;
     let gateway = Gateway::boot(&harness, 5_000)?;
     let reloader = ferrofed_server::reload::Reloader::new(
         Some(config),
@@ -598,7 +601,7 @@ async fn a_change_the_configuration_does_not_fit_shows_a_configuration_mismatch(
     let RefreshOutcome::Refused(error) = &outcome else {
         return Err(format!("the refresh is refused: {outcome:?}").into());
     };
-    assert_eq!("dev-cross-reference", error.class());
+    assert_eq!("injected-cross-reference", error.class());
     assert_eq!(
         DirectoryHealth::of("degraded", Some("configuration-mismatch")),
         directory_health(&gateway).await?.0

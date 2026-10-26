@@ -27,7 +27,7 @@ use opentelemetry_proto::tonic::trace::v1::Span;
 
 use super::{NAMESPACE, TestResult, resolving};
 use crate::facade::{body, node_answering, registry};
-use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, signed};
+use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, unseamed};
 
 /// The synthetic patient identifier, under the example OID arc, with letters
 /// so no timing or count a span records can spell it (#1198).
@@ -154,7 +154,7 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
     let dir = tempfile::tempdir()?;
     let document = dir.path().join("registry.toml");
     std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
-    let config = signed(&format!(
+    let config = unseamed(&format!(
         "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{}{}",
         collector.endpoint(),
         toml::Value::String(document.display().to_string()),

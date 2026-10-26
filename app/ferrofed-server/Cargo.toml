@@ -47,6 +47,11 @@ binding-nl = [
   "ferrofed-identity/nl",
   "ferrofed-engine/nl",
 ]
+# The injection point of a test's fixed cross-reference
+# (src/binding/injected.rs), which ferrofed-testkit enables and no shipped
+# build carries: a production build exposes no injection point and keeps no
+# patient index (#1377).
+test-seam = []
 # The PostgreSQL backend of the stored-query registry, for several replicas
 # sharing one store (#268). Off by default, so a single gateway carries no
 # PostgreSQL client (no specification governs this: our own design).

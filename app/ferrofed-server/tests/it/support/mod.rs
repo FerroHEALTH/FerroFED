@@ -623,7 +623,19 @@ pub(crate) fn signing_key_file() -> &'static str {
 /// it configures a registry and no `[audit]` of its own (Regulation (EU)
 /// 2025/327 Annex II 3.2): [`DEVELOPMENT_AUDIT_TOML`] under the development
 /// profile, and the [`audit_toml`] tables under any other.
+///
+/// The `[dev]` rows `text` writes become the test kit's fixed
+/// cross-reference, injected through the server's `test-seam` point and
+/// removed from the text (#1377).
 pub(crate) fn signed(text: &str) -> String {
+    unseamed(&ferrofed_testkit::crossref::inject_from(text))
+}
+
+/// [`signed`] without the injection: the `[dev]` rows stay in the text for
+/// the gateway's own development binding, for a spawned binary, which no
+/// injection reaches, and for a test of how the gateway treats those rows.
+// TODO(#1377): remove with the [dev] cross-reference, once a spawned binary resolves through a PIXm stub.
+pub(crate) fn unseamed(text: &str) -> String {
     let mut text = text.to_owned();
     if text.contains("[registry") && !text.contains("[signing]") {
         text.push_str(&signing_toml());

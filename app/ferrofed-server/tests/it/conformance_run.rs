@@ -35,7 +35,7 @@ use secrecy::SecretString;
 use wiremock::matchers::any;
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{Logs, asked, auth_toml, signed};
+use crate::support::{Logs, asked, auth_toml, unseamed};
 
 /// A token no part of a run may print, log or forward.
 const SENTINEL: &str = "sentinel-token-that-never-appears";
@@ -100,7 +100,7 @@ fn deployment(dir: &Path, a: &Server, b: &Server, top: &str) -> Result<String, B
         auth_toml()
     );
     let file = dir.join("ferrofed.toml");
-    std::fs::write(&file, signed(&text))?;
+    std::fs::write(&file, unseamed(&text))?;
     Ok(file.display().to_string())
 }
 

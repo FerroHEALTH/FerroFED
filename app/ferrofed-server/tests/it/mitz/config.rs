@@ -32,7 +32,7 @@ fn configuration(dir: &Path, profile: &str, mitz: &str) -> Result<String, Box<dy
         registry("https://a.example.org", "https://b.example.org", ""),
     )?;
     let document = toml::Value::String(document.display().to_string());
-    Ok(crate::support::signed(&format!(
+    Ok(crate::support::unseamed(&format!(
         "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{mitz}"
     )))
 }

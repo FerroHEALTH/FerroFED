@@ -75,6 +75,11 @@ pub enum FederationError {
     /// The static cross-reference refuses its rows or the profile.
     #[error("the [dev] cross-reference cannot be enabled")]
     DevCrossRef(#[source] DevCrossRefError),
+    /// The cross-reference a test injected refuses the registry, its reason
+    /// in the test kit's words (`test-seam` builds only).
+    #[cfg(feature = "test-seam")]
+    #[error("the injected cross-reference cannot be enabled: {0}")]
+    Injected(String),
     /// `federation.demographic_endpoint` is set but no registry is, neither
     /// `registry.document` nor `[registry.mcsd]`, so it names an endpoint
     /// that does not exist.
