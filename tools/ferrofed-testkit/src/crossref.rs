@@ -6,11 +6,11 @@
 //! FerroFED keeps no patient index: a deployment resolves patients through a
 //! PIX Manager. A test still needs a fixed answer, so it writes the rows it
 //! needs as `[[dev.crossref]]` (and `[[dev.consent_denied]]`) tables in the
-//! configuration text it builds, and [`inject_from`] takes them out of the
-//! text and injects the [`StaticResolver`] and [`StaticConsentPrefilter`]
-//! they describe through the server's `test-seam` injection point. A
-//! production build has no such point. No specification governs the
-//! fixture: our own design.
+//! configuration text it builds, and [`take`] reads them out of the text
+//! into a [`Fixture`], which builds the [`StaticResolver`] and
+//! [`StaticConsentPrefilter`] they describe. The server's tests inject those
+//! through its `test-seam` injection point, which a production build does
+//! not compile. No specification governs the fixture: our own design.
 //!
 //! As a resolver the fixture answers `Resolved` for a row of the table and
 //! `Unknown` for every other member asked; as a localizer it names the
@@ -31,8 +31,6 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::{Identification, Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrofed_server::binding::injected::{Injection, PrefilterFactory, inject};
-use ferrofed_server::binding::seam::ResolverSeam;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
@@ -70,12 +68,61 @@ struct Rows {
     consent_denied: Vec<ConsentDoc>,
 }
 
-/// Takes the `[dev]` table out of the configuration `text` and injects the
-/// fixture its rows describe, or clears the injection when `text` has none.
+/// The fixed cross-reference and consent rows a test wrote.
+#[derive(Clone)]
+pub struct Fixture {
+    crossref: Vec<EntryDoc>,
+    consent: Vec<ConsentDoc>,
+}
+
+impl fmt::Debug for Fixture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fixture")
+            .field("crossref", &self.crossref.len())
+            .field("consent", &self.consent.len())
+            .finish()
+    }
+}
+
+impl Fixture {
+    /// The resolver, which also localizes, over the rows, each naming a
+    /// member of `registry`.
+    ///
+    /// # Errors
+    ///
+    /// The reason when a row names no member of `registry`, or two rows map
+    /// one patient at one member to two EHRs.
+    pub fn resolver(&self, registry: &RegistrySnapshot) -> Result<Arc<StaticResolver>, String> {
+        StaticResolver::new(&self.crossref, registry).map(Arc::new)
+    }
+
+    /// Whether the test wrote a consent row, so the fixture has a consent
+    /// pre-filter.
+    #[must_use]
+    pub fn denies(&self) -> bool {
+        !self.consent.is_empty()
+    }
+
+    /// The consent pre-filter over the consent rows.
+    ///
+    /// # Errors
+    ///
+    /// The reason when a row names no member of `registry`.
+    pub fn prefilter(
+        &self,
+        registry: &RegistrySnapshot,
+    ) -> Result<Arc<dyn ConsentPrefilter>, String> {
+        let prefilter = StaticConsentPrefilter::new(&self.consent, registry)?;
+        Ok(Arc::new(prefilter))
+    }
+}
+
+/// Takes the `[dev]` table out of the configuration `text`, with the
+/// fixture its rows describe.
 ///
-/// Returns the text without the table. A text that is no TOML is returned as
-/// it is, with the injection cleared, so a test of a refused configuration
-/// reads its own error.
+/// A text with no `[dev]` table, or one that is no TOML, comes back as it
+/// is with no fixture, so a test of a refused configuration reads its own
+/// error.
 ///
 /// # Panics
 ///
@@ -85,40 +132,22 @@ struct Rows {
     clippy::expect_used,
     reason = "a toml::Table parsed from text always serialises back to text"
 )]
-pub fn inject_from(text: &str) -> String {
+pub fn take(text: &str) -> (String, Option<Fixture>) {
     let Ok(mut table) = text.parse::<toml::Table>() else {
-        inject(None);
-        return text.to_owned();
+        return (text.to_owned(), None);
     };
     let Some(dev) = table.remove("dev") else {
-        inject(None);
-        return text.to_owned();
+        return (text.to_owned(), None);
     };
     let Ok(rows) = dev.try_into::<Rows>() else {
-        inject(None);
-        return text.to_owned();
+        return (text.to_owned(), None);
     };
-    let crossref = rows.crossref;
-    let consent = rows.consent_denied;
-    let prefilter = (!consent.is_empty()).then(|| {
-        let factory: PrefilterFactory = Arc::new(move |snapshot: &RegistrySnapshot| {
-            StaticConsentPrefilter::new(&consent, snapshot)
-                .map(|prefilter| -> Arc<dyn ConsentPrefilter> { Arc::new(prefilter) })
-        });
-        factory
-    });
-    inject(Some(Injection {
-        resolver: Arc::new(move |snapshot: &RegistrySnapshot| {
-            let resolver = Arc::new(StaticResolver::new(&crossref, snapshot)?);
-            let localizer: Arc<dyn Localizer> = resolver.clone();
-            Ok(ResolverSeam {
-                resolver,
-                localizer: Some((localizer, MODE)),
-            })
-        }),
-        prefilter,
-    }));
-    toml::to_string(&table).expect("a parsed table should write back as TOML")
+    let fixture = Fixture {
+        crossref: rows.crossref,
+        consent: rows.consent_denied,
+    };
+    let text = toml::to_string(&table).expect("a parsed table should write back as TOML");
+    (text, Some(fixture))
 }
 
 /// One row of the fixture.

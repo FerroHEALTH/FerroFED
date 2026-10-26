@@ -628,7 +628,37 @@ pub(crate) fn signing_key_file() -> &'static str {
 /// cross-reference, injected through the server's `test-seam` point and
 /// removed from the text (#1377).
 pub(crate) fn signed(text: &str) -> String {
-    unseamed(&ferrofed_testkit::crossref::inject_from(text))
+    unseamed(&injected(text))
+}
+
+/// `text` without its `[dev]` table, whose rows are injected as the test
+/// kit's fixed cross-reference, or with the injection cleared when it has
+/// none.
+fn injected(text: &str) -> String {
+    use ferrofed_server::binding::injected::{Injection, PrefilterFactory, inject};
+    use ferrofed_server::binding::seam::ResolverSeam;
+    use ferrofed_testkit::crossref::{Fixture, MODE, take};
+
+    let (text, fixture) = take(text);
+    inject(fixture.map(|fixture: Fixture| {
+        let consent = fixture.clone();
+        let prefilter = fixture
+            .denies()
+            .then(|| -> PrefilterFactory { Arc::new(move |snapshot| consent.prefilter(snapshot)) });
+        Injection {
+            resolver: Arc::new(move |snapshot| {
+                let resolver = fixture.resolver(snapshot)?;
+                let localizer: Arc<dyn ferrofed_identity::role::localizer::Localizer> =
+                    resolver.clone();
+                Ok(ResolverSeam {
+                    resolver,
+                    localizer: Some((localizer, MODE)),
+                })
+            }),
+            prefilter,
+        }
+    }));
+    text
 }
 
 /// [`signed`] without the injection: the `[dev]` rows stay in the text for

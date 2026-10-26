@@ -1651,6 +1651,7 @@ dependencies = [
  "ferrofed-engine",
  "ferrofed-identity",
  "ferrofed-registry",
+ "ferrofed-server",
  "ferrofed-testkit",
  "ferrohealth-smart",
  "fhir-types",

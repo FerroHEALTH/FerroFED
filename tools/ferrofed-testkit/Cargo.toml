@@ -71,9 +71,6 @@ openehr-rm.workspace = true
 reqwest.workspace = true
 # The identifier values of the stub responding gateway's answers (#367).
 secrecy.workspace = true
-# The server's test-seam injection point, which the fixed cross-reference
-# of crossref.rs is injected through; no shipped build carries it (#1377).
-ferrofed-server = { workspace = true, features = ["test-seam"] }
 # The configuration text the fixed cross-reference's rows are read from.
 toml.workspace = true
 serde.workspace = true
@@ -93,6 +90,7 @@ wiremock.workspace = true
 # check of the gateway and reads the registry's refusal before it admits a
 # candidate node (#91), and runs the gateway's node profile checks against
 # its CDR products over a node client (#93, #573).
+ferrofed-server.workspace = true
 # The gateway's own read-only stored queries, which the console's stored-query
 # view lists beside the deployment's (#776).
 ferrofed-eehrxf.workspace = true

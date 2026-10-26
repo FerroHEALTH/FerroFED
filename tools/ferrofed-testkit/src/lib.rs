@@ -15,7 +15,7 @@
 //! - [`containers`]: the two CDR products and the deployable PIX Manager,
 //!   SanteMPI, behind the `FERROFED_E2E` gate, pinned by digest;
 //! - [`crossref`]: the fixed cross-reference a test writes as `[dev]` rows,
-//!   injected through the server's `test-seam` point (#1377);
+//!   which the server's tests inject through its `test-seam` point (#1377);
 //! - [`proxy`]: the capturing and fault proxy in front of each node, whose
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every
