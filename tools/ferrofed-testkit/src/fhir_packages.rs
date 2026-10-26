@@ -35,6 +35,25 @@ const CACHE: &str = ".vendor-cache/fhir-packages";
 /// lock over.
 const STALE: std::time::Duration = std::time::Duration::from_secs(600);
 
+/// The `curl` options of a fetch. `--retry` alone retries a timeout and an
+/// HTTP 408, 429 or 5xx, never a failed name lookup (curl(1), `--retry`), so
+/// one resolver miss on a runner would fail the test that fetched;
+/// `--retry-all-errors` retries that too, and the pinned sha256 still holds
+/// the bytes (curl(1), `--retry-all-errors`).
+const CURL: [&str; 11] = [
+    "--proto",
+    "=https",
+    "--tlsv1.2",
+    "-fsSL",
+    "--retry",
+    "5",
+    "--retry-all-errors",
+    "--retry-delay",
+    "3",
+    "-m",
+    "300",
+];
+
 /// The committed packages of the closure besides the Patient Summary
 /// itself: the versions its manifest and its dependencies' manifests name,
 /// and the MyHealth@EU value sets its profiles bind.
@@ -220,16 +239,7 @@ fn fetch(pinned: &Pinned, cache: &Path, path: &Path) -> Result<(), FhirPackagesE
     std::fs::create_dir_all(cache).map_err(io(cache))?;
     let partial = cache.join(format!("{}.{}.part", pinned.file, std::process::id()));
     let status = Command::new("curl")
-        .args([
-            "--proto",
-            "=https",
-            "--tlsv1.2",
-            "-fsSL",
-            "--retry",
-            "2",
-            "-m",
-            "300",
-        ])
+        .args(CURL)
         .args(["-A", "ferrofed-testkit", "-o"])
         .arg(&partial)
         .arg(&pinned.url)
@@ -257,4 +267,19 @@ fn fetch(pinned: &Pinned, cache: &Path, path: &Path) -> Result<(), FhirPackagesE
         });
     }
     std::fs::rename(&partial, path).map_err(io(path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CURL;
+
+    #[test]
+    fn a_failed_name_lookup_is_retried() {
+        assert!(CURL.contains(&"--retry-all-errors"), "{CURL:?}");
+        assert!(
+            CURL.windows(2)
+                .any(|pair| pair[0] == "--retry" && pair[1].parse::<u8>().is_ok_and(|n| n > 0)),
+            "{CURL:?}"
+        );
+    }
 }
